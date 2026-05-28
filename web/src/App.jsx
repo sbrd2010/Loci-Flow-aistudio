@@ -118,8 +118,8 @@ export default function App() {
             onOpenAddTask={openAddTask}
           />
         )}
-        {activeTab === "coach" && <CoachTab />}
-        {activeTab === "mentor" && <MentorTab />}
+        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} />}
+        {activeTab === "mentor" && <MentorTab payload={payload} savePayload={savePayload} />}
       </main>
 
       {/* Floating Action Button (Only show on Today & Roadmap screens) */}
