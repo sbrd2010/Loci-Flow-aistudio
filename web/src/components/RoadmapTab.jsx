@@ -97,6 +97,10 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
   };
 
   const handleDelete = (task) => {
+    // Fix #20: require confirmation before deleting
+    const confirmed = window.confirm(`Delete "${task.title}"?\n\nThis cannot be undone.`);
+    if (!confirmed) return;
+
     const updatedTasks = tasks.map((t) => {
       if (t.uuid === task.uuid) {
         return {
@@ -126,9 +130,10 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
 
       <div className="roadmap-scroll-container">
         {columns.map((col) => {
-          const colTasks = tasks.filter(
-            (t) => t.horizonLevel === col.key && !t.isDeleted && !t.isCompleted
-          );
+          const colTasks = tasks
+            .filter((t) => t.horizonLevel === col.key && !t.isDeleted && !t.isCompleted)
+            // Fix #19: sort by orderIndex for consistent display order
+            .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
 
           return (
             <div key={col.key} className="roadmap-column">
@@ -138,16 +143,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
                   <span className="column-count">{colTasks.length}</span>
                   <button
                     onClick={() => onOpenAddTask(col.key)}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "var(--accent-light)",
-                      fontSize: "14px",
-                      cursor: "pointer",
-                      fontWeight: "bold",
-                      padding: "2px 6px",
-                      borderRadius: "4px"
-                    }}
+                    className="column-add-btn"
                     title={`Add task directly to ${col.label}`}
                   >
                     +
