@@ -149,6 +149,7 @@ export function useSync(email) {
                 lastUpdated: Date.now()
               }
             ],
+            brainDump: [],
             timestamp: Date.now()
           };
 

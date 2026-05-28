@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function TaskRow({ task, onToggleComplete, onPin, onDelete }) {
+export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown }) {
   const { title, concreteStep, priority, isCompleted, isNowFocus } = task;
 
   return (
@@ -31,6 +31,25 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete }) {
 
       {/* Action Buttons */}
       <div className="task-actions">
+        {!isCompleted && (onMoveUp || onMoveDown) && (
+          <div className="reorder-btns">
+            {onMoveUp && (
+              <button className="action-btn-reorder" onClick={() => onMoveUp(task)} title="Move up">↑</button>
+            )}
+            {onMoveDown && (
+              <button className="action-btn-reorder" onClick={() => onMoveDown(task)} title="Move down">↓</button>
+            )}
+          </div>
+        )}
+        {!isCompleted && onEdit && (
+          <button
+            className="action-btn"
+            onClick={() => onEdit(task)}
+            title="Edit task"
+          >
+            ✏
+          </button>
+        )}
         {!isCompleted && onPin && (
           <button
             className={`action-btn action-btn-pin ${isNowFocus ? "active" : ""}`}

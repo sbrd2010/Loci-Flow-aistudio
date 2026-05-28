@@ -96,6 +96,35 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
     setSelectedTask(null);
   };
 
+  const handleTriageBrainDump = (item, horizon) => {
+    const userId = payload.userId || payload.config?.userId || "";
+    const freshTask = {
+      id: Date.now(),
+      userId,
+      uuid: crypto.randomUUID(),
+      title: item.text,
+      concreteStep: "Do first tiny step",
+      horizonLevel: horizon,
+      priority: "P3",
+      category: "Personal",
+      timeEstimateMinutes: 25,
+      deadlineTimestamp: null,
+      isCompleted: false,
+      isParked: false,
+      isNowFocus: false,
+      orderIndex: tasks.filter(t => t.horizonLevel === horizon && !t.isDeleted).length,
+      dateCompletedString: null,
+      isDeleted: false,
+      lastUpdated: Date.now()
+    };
+    const updatedDump = (payload.brainDump || []).filter(d => d.id !== item.id);
+    savePayload({ ...payload, tasks: [...tasks, freshTask], brainDump: updatedDump });
+  };
+
+  const handleDeleteBrainDump = (item) => {
+    savePayload({ ...payload, brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) });
+  };
+
   const handleDelete = (task) => {
     // Fix #20: require confirmation before deleting
     const confirmed = window.confirm(`Delete "${task.title}"?\n\nThis cannot be undone.`);
@@ -121,6 +150,36 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
 
   return (
     <div className="roadmap-container">
+      {(payload.brainDump || []).length > 0 && (
+        <section className="card" style={{marginBottom:"4px"}}>
+          <h2 style={{fontSize:"15px", fontWeight:"800", fontFamily:"var(--font-display)", color:"var(--text-primary)", marginBottom:"4px"}}>
+            📥 Brain Dump Inbox
+          </h2>
+          <p style={{fontSize:"11.5px", color:"var(--text-secondary)", marginBottom:"12px"}}>
+            {(payload.brainDump || []).length} unprocessed idea{(payload.brainDump || []).length !== 1 ? "s" : ""}. Send each to the right horizon.
+          </p>
+          <div style={{display:"flex", flexDirection:"column", gap:"8px"}}>
+            {(payload.brainDump || []).map(item => (
+              <div key={item.id} style={{background:"var(--bg-secondary)", border:"1px solid var(--border)", borderRadius:"var(--radius-sm)", padding:"10px 12px"}}>
+                <p style={{fontSize:"13px", fontWeight:"600", color:"var(--text-primary)", marginBottom:"8px"}}>{item.text}</p>
+                <div style={{display:"flex", gap:"6px", flexWrap:"wrap"}}>
+                  {[["today","→ Today"],["week","→ Week"],["month","→ Month"],["quarter","→ Quarter"]].map(([h, label]) => (
+                    <button key={h} className="btn" onClick={() => handleTriageBrainDump(item, h)}
+                      style={{fontSize:"11px", padding:"5px 10px", background:"var(--bg-card)", color:"var(--accent)", border:"1px solid var(--accent)"}}>
+                      {label}
+                    </button>
+                  ))}
+                  <button onClick={() => handleDeleteBrainDump(item)}
+                    style={{fontSize:"11px", padding:"5px 10px", background:"none", border:"1px solid var(--border)", borderRadius:"var(--radius-sm)", color:"var(--danger)", cursor:"pointer"}}>
+                    🗑
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <div>
         <h2 className="roadmap-board-title">Horizon Planning Board</h2>
         <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
