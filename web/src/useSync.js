@@ -106,7 +106,7 @@ export function useSync(email) {
               totalXp: 150,
               intentionMessage: "Start tiny. One action. Right now.",
               isLowEnergyMode: false,
-              isOnboardingCompleted: true,
+              isOnboardingCompleted: false,
               eveningGuardWindowActive: true,
               lastUpdated: Date.now()
             },
