@@ -25,11 +25,11 @@ export default function MentorTab({ payload, savePayload }) {
     setEditedChallenge(config.challengeType || "starting");
   }, [config]);
 
-  // Challenge options exactly as specified
+  // Challenge options matching the specific original layout, text, descriptions, and icons
   const challengeOptions = [
-    { key: "starting", label: "Overcoming Inertia" },
-    { key: "focusing", label: "Protecting Focus Sessions" },
-    { key: "execution", label: "Action over Perfectionism" }
+    { key: "starting", label: "Overcoming Inertia", desc: "Struggling to start new tasks or clear executive freeze.", icon: "🏁" },
+    { key: "focusing", label: "Protecting Focus", desc: "Getting distracted midway, multi-tasking, or losing tracking.", icon: "🔵" },
+    { key: "execution", label: "Action over Planning", desc: "Falling into \"productive procrastination\" through excessive planning lists.", icon: "⚡" }
   ];
 
   // 2. AI Mentor Chat (exclusively synced with Firebase Realtime Database)
@@ -55,10 +55,13 @@ export default function MentorTab({ payload, savePayload }) {
   const [chatLoading, setChatLoading] = useState(false);
   const chatBottomRef = useRef(null);
 
-  // Smooth scroll chat to bottom
+  // Smooth scroll chat to bottom inside its container (prevents full window scrolling)
   useEffect(() => {
     if (chatBottomRef.current) {
-      chatBottomRef.current.scrollIntoView({ behavior: "smooth" });
+      const container = chatBottomRef.current.parentElement;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
     }
   }, [chatHistory, chatLoading]);
 
@@ -200,17 +203,20 @@ Respond in the voice of ${config.mentorName || 'Mentor'}. Be direct, wise, conci
                   key={opt.key}
                   className={`challenge-option ${editedChallenge === opt.key ? "selected" : ""}`}
                   onClick={() => setEditedChallenge(opt.key)}
-                  style={{ display: "flex", alignItems: "center", gap: "10px" }}
+                  style={{ 
+                    display: "grid", 
+                    gridTemplateColumns: "120px 1fr", 
+                    alignItems: "center", 
+                    gap: "16px",
+                    cursor: "pointer",
+                    padding: "12px 16px"
+                  }}
                 >
-                  <input 
-                    type="radio" 
-                    name="challenge-radio"
-                    checked={editedChallenge === opt.key}
-                    onChange={() => setEditedChallenge(opt.key)}
-                    style={{ cursor: "pointer" }}
-                  />
-                  <span className="challenge-title" style={{ fontSize: "13px", fontWeight: "600" }}>
-                    {opt.label}
+                  <span className="challenge-title" style={{ fontSize: "13px", fontWeight: "700", display: "flex", alignItems: "center", gap: "6px", color: "var(--text-primary)" }}>
+                    {opt.icon} {opt.label}
+                  </span>
+                  <span style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: "1.4", textAlign: "left" }}>
+                    {opt.desc}
                   </span>
                 </div>
               ))}
@@ -243,16 +249,22 @@ Respond in the voice of ${config.mentorName || 'Mentor'}. Be direct, wise, conci
             />
           </div>
 
-          <div className="toggle-row">
+          <div 
+            className="toggle-row" 
+            onClick={() => setEditedEveningGuard(!editedEveningGuard)}
+            style={{ cursor: "pointer", padding: "4px 0" }}
+          >
             <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-              <span className="challenge-title" style={{ fontSize: "13px", fontWeight: "700" }}>Evening Guard</span>
-              <p style={{ fontSize: "11px", color: "var(--text-secondary)" }}>Protects evening focus time.</p>
+              <span className="challenge-title" style={{ fontSize: "13.5px", fontWeight: "700" }}>🌙 Evening Guard Window</span>
+              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", lineHeight: "1.3" }}>
+                Protects the last hour of your day from high-stress tasks.
+              </p>
             </div>
             <input 
               type="checkbox" 
               className="pill-toggle"
               checked={editedEveningGuard}
-              onChange={() => setEditedEveningGuard(!editedEveningGuard)}
+              readOnly
             />
           </div>
 
