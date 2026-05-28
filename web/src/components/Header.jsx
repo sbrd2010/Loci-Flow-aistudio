@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function Header({ email, onSwitchUser }) {
+export default function Header({ email, onSwitchUser, onGoHome }) {
   // Truncate email if too long
   const truncatedEmail = email && email.length > 18 
     ? `${email.substring(0, 15)}...` 
@@ -8,7 +8,7 @@ export default function Header({ email, onSwitchUser }) {
 
   return (
     <header className="app-header">
-      <div className="app-brand">
+      <div className="app-brand" onClick={onGoHome} style={{ cursor: "pointer" }}>
         <span>🧠 Loci</span>
       </div>
       <div className="header-right">
