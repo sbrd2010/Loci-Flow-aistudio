@@ -4,7 +4,7 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
   const { tasks = [], config = {} } = payload;
 
   // User's personal key overrides the default embedded key
-  const apiKey = localStorage.getItem("loci_gemini_key") || import.meta.env.VITE_GEMINI_KEY || "";
+  const apiKey = localStorage.getItem("loci_gemini_key") || (import.meta.env.VITE_GEMINI_KEY ? import.meta.env.VITE_GEMINI_KEY.trim() : "") || "";
 
   // ── Morning Ritual ────────────────────────────────────────────────────────
   const [ritualActive, setRitualActive] = useState(false);
