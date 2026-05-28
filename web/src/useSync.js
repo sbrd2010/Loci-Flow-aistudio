@@ -12,6 +12,8 @@ export function useSync(email) {
 
   const payloadRef = useRef(null);
   const timeoutRef = useRef(null);
+  // Stores the most recent remote snapshot that arrived while a local save was pending
+  const pendingRemoteRef = useRef(null);
 
   useEffect(() => {
     if (!dbRefPath) {
@@ -31,6 +33,7 @@ export function useSync(email) {
         if (data) {
           setPayload(data);
           payloadRef.current = data;
+          pendingRemoteRef.current = null;
         } else {
           // Initialize default pre-seeded payload matching Entities.kt if none exists
           const defaultPayload = {
@@ -133,6 +136,11 @@ export function useSync(email) {
           payloadRef.current = defaultPayload;
           set(ref(db, dbRefPath), defaultPayload);
         }
+      } else {
+        // A local write is in-flight — store this remote snapshot for deferred merge
+        if (data) {
+          pendingRemoteRef.current = data;
+        }
       }
       setLoading(false);
     }, (error) => {
@@ -177,6 +185,16 @@ export function useSync(email) {
           })
           .finally(() => {
             timeoutRef.current = null;
+            // Fix #15: if a remote snapshot arrived while we were writing,
+            // apply it now only if it's newer than what we just wrote.
+            if (pendingRemoteRef.current) {
+              const remote = pendingRemoteRef.current;
+              pendingRemoteRef.current = null;
+              if ((remote.timestamp || 0) > (payloadRef.current?.timestamp || 0)) {
+                setPayload(remote);
+                payloadRef.current = remote;
+              }
+            }
           });
       }
     }, 1500);
