@@ -151,6 +151,10 @@ export default function TodayTab({ payload, savePayload }) {
   const [streakOpen, setStreakOpen] = useState(false);
   const [xpOpen, setXpOpen] = useState(false);
 
+  // Undo delete
+  const [undoTask, setUndoTask] = useState(null);
+  const undoTimeoutRef = useRef(null);
+
   const handleBrainDumpSubmit = (e) => {
     e.preventDefault();
     if (!brainDumpText.trim()) return;
@@ -256,19 +260,23 @@ export default function TodayTab({ payload, savePayload }) {
   };
 
   const handleDeleteTask = (task) => {
-    if (!window.confirm(`Delete "${task.title}"?\n\nThis cannot be undone.`)) return;
+    const updatedTasks = tasks.map((t) =>
+      t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t
+    );
+    savePayload({ ...payload, tasks: updatedTasks });
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    setUndoTask(task);
+    undoTimeoutRef.current = setTimeout(() => setUndoTask(null), 5000);
+  };
 
-    const updatedTasks = tasks.map((t) => {
-      if (t.uuid === task.uuid) {
-        return { ...t, isDeleted: true, lastUpdated: Date.now() };
-      }
-      return t;
-    });
-
-    savePayload({
-      ...payload,
-      tasks: updatedTasks
-    });
+  const handleUndoDelete = () => {
+    if (!undoTask) return;
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    const updatedTasks = tasks.map((t) =>
+      t.uuid === undoTask.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t
+    );
+    savePayload({ ...payload, tasks: updatedTasks });
+    setUndoTask(null);
   };
 
   const handlePomodoroCompletion = () => {
