@@ -8,6 +8,52 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
   const [priority, setPriority] = useState("P3");
   const [category, setCategory] = useState("Personal");
   const [estimateMinutes, setEstimateMinutes] = useState(25);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+
+  const apiKey = localStorage.getItem("loci_gemini_key") || import.meta.env.VITE_GEMINI_KEY || "";
+
+  const handleAiSuggest = async () => {
+    if (!title.trim()) { setAiError("Type a rough task idea first, then tap Ask AI."); return; }
+    if (!apiKey) { setAiError("No AI key available."); return; }
+    setAiLoading(true);
+    setAiError("");
+    const config = payload.config || {};
+    const challengeLabel =
+      config.challengeType === "starting" ? "Overcoming Inertia" :
+      config.challengeType === "focusing" ? "Protecting Focus" : "Action over Planning";
+    const prompt = `You are an ADHD productivity coach. The user typed this rough task idea: "${title.trim()}".
+
+Improve it into a clear, actionable task. Respond with ONLY valid JSON (no markdown, no code block), exactly:
+{"title":"<clear task title, max 60 chars>","microStep":"<the single smallest first physical action, max 60 chars>","priority":"P2","estimateMinutes":25}
+
+Rules:
+- priority: P1 (urgent+important), P2 (important), P3 (normal), P4 (easy quick-win)
+- estimateMinutes: one of 15, 25, 45, 60
+- User's challenge: ${challengeLabel}
+- Keep title and microStep concise and concrete`;
+
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
+      );
+      if (!res.ok) throw new Error(`${res.status}`);
+      const data = await res.json();
+      const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const cleaned = raw.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      if (parsed.title) setTitle(parsed.title);
+      if (parsed.microStep) setConcreteStep(parsed.microStep);
+      if (["P1","P2","P3","P4"].includes(parsed.priority)) setPriority(parsed.priority);
+      if ([15,25,45,60].includes(Number(parsed.estimateMinutes))) setEstimateMinutes(Number(parsed.estimateMinutes));
+    } catch (err) {
+      setAiError("AI suggestion failed — fill in manually.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const horizons = [
     { key: "today", label: "Today" },
@@ -74,14 +120,14 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">Pin Strategic Path Action</h2>
+          <h2 className="modal-title">Add Task</h2>
           <button className="close-btn" onClick={onClose}>✕</button>
         </div>
 
         <form onSubmit={handleSubmit} className="modal-body">
-          {/* Title */}
+          {/* Title + Ask AI */}
           <div className="form-group">
-            <label className="form-label">WHAT COMMIT TO FOCUS ON? (REQUIRED)</label>
+            <label className="form-label">WHAT DO YOU WANT TO DO? (REQUIRED)</label>
             <input
               type="text"
               className="text-input"
@@ -91,11 +137,30 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
               required
               autoFocus
             />
+            {apiKey && (
+              <button
+                type="button"
+                onClick={handleAiSuggest}
+                disabled={aiLoading}
+                style={{
+                  marginTop: "8px", width: "100%", padding: "9px",
+                  background: "var(--accent-ring)", color: "var(--accent)",
+                  border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)",
+                  fontSize: "13px", fontWeight: "700", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: "6px"
+                }}
+              >
+                {aiLoading ? "✨ Thinking…" : "✨ Ask AI to improve this task"}
+              </button>
+            )}
+            {aiError && (
+              <p style={{ fontSize: "11.5px", color: "var(--danger)", marginTop: "4px" }}>{aiError}</p>
+            )}
           </div>
 
           {/* Concrete Step */}
           <div className="form-group">
-            <label className="form-label">MICRO ACTION (FIRST TINY ACTION STEP)</label>
+            <label className="form-label">MICRO ACTION (FIRST TINY STEP)</label>
             <input
               type="text"
               className="text-input"

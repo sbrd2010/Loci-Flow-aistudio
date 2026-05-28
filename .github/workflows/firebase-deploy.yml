@@ -18,6 +18,8 @@ jobs:
 
       - name: Install and build web
         working-directory: web
+        env:
+          VITE_GEMINI_KEY: ${{ secrets.VITE_GEMINI_KEY }}
         run: |
           npm ci
           npm run build

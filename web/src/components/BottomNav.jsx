@@ -4,7 +4,7 @@ export default function BottomNav({ activeTab, onTabSelect }) {
   const tabs = [
     { id: "today", label: "Today", icon: "📋" },
     { id: "roadmap", label: "Roadmap", icon: "🗺️" },
-    { id: "coach", label: "Coach", icon: "🎯" },
+    { id: "coach", label: "AI Coach", icon: "🤖" },
     { id: "settings", label: "Settings", icon: "⚙️" }
   ];
 
