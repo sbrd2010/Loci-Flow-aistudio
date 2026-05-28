@@ -35,8 +35,6 @@ export default function CoachTab({ payload, savePayload }) {
       timerIntervalRef.current = setInterval(() => {
         setRitualSecondsLeft((prev) => {
           if (prev <= 1) {
-            clearInterval(timerIntervalRef.current);
-            handleAdvanceStep();
             return 0;
           }
           return prev - 1;
@@ -53,7 +51,14 @@ export default function CoachTab({ payload, savePayload }) {
         clearInterval(timerIntervalRef.current);
       }
     };
-  }, [ritualActive, ritualStepIndex, ritualSecondsLeft]);
+  }, [ritualActive, ritualStepIndex, ritualSecondsLeft > 0]);
+
+  // Handle Morning Calibration Timer Advancements Side-Effect
+  useEffect(() => {
+    if (ritualActive && ritualStepIndex >= 0 && ritualSecondsLeft === 0) {
+      handleAdvanceStep();
+    }
+  }, [ritualSecondsLeft, ritualActive, ritualStepIndex]);
 
   // Handle auto-advancing or manual skip
   const handleAdvanceStep = () => {
@@ -200,10 +205,10 @@ Give 3 specific task recommendations with brief reasoning. Be direct and motivat
         onMouseEnter={(e) => e.currentTarget.style.filter = "brightness(0.95)"}
         onMouseLeave={(e) => e.currentTarget.style.filter = "none"}
       >
-        <span style={{ fontSize: "10px", fontWeight: "700", letterSpacing: "0.05em", color: "rgba(255, 255, 255, 0.75)" }}>
+        <span style={{ fontSize: "10px", fontWeight: "700", letterSpacing: "0.05em", color: "var(--btn-text, #ffffff)", opacity: 0.8 }}>
           TODAY'S INTENTION
         </span>
-        <p style={{ fontSize: "16px", fontWeight: "700", color: "#ffffff", lineHeight: "1.4" }}>
+        <p style={{ fontSize: "16px", fontWeight: "700", color: "var(--btn-text, #ffffff)", lineHeight: "1.4" }}>
           "{config.intentionMessage || "Focus on what matters most today."}"
         </p>
       </section>
