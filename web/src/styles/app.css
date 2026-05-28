@@ -2293,61 +2293,48 @@ html[data-theme="glassy"] .theme-dropdown {
   color: var(--bg-card);
 }
 
-/* ── Mobile-first tweaks (iPhone 11 Pro / 375–390px) ───────────────────── */
-@media (max-width: 390px) {
-  .screen-content {
-    padding: 14px 14px 96px 14px;
-    gap: 14px;
-  }
+/* ── Collapsible panel (streak, XP stats) ──────────────────────────────── */
+.collapsible-panel {
+  padding: 14px 16px;
+}
 
-  .card {
-    padding: 14px;
-  }
+.collapsible-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+}
 
-  /* Tighter section headings */
-  .card h2 {
-    font-size: 15px !important;
-  }
+/* ── Inline task edit card ─────────────────────────────────────────────── */
+.task-edit-card {
+  background: var(--bg-card);
+  border: 1.5px solid var(--accent-ring);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
 
-  /* Nav labels slightly smaller */
-  .nav-item {
-    font-size: 10px;
-  }
+/* ── Reorder buttons ────────────────────────────────────────────────────── */
+.reorder-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
 
-  /* Ensure all tap targets are at least 44px tall */
-  .btn,
-  .action-btn,
-  .nav-item,
-  .toggle-row,
-  .challenge-option {
-    min-height: 44px;
-  }
+.action-btn-reorder {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 1px 4px;
+  line-height: 1;
+  border-radius: 3px;
+}
 
-  /* Task rows: slightly more compact */
-  .task-row {
-    padding: 10px 0;
-  }
-
-  /* Focus block card inner padding */
-  .focus-block-card {
-    padding: 14px;
-  }
-
-  /* Chat input row: stack on very small width */
-  .chat-input-row {
-    flex-wrap: wrap;
-  }
-  .chat-input-row input {
-    min-width: 0;
-    flex: 1 1 auto;
-  }
-
-  /* Roadmap columns: full width on small phones */
-  .roadmap-columns {
-    flex-direction: column;
-  }
-  .roadmap-column {
-    min-width: unset;
-    width: 100%;
-  }
+.action-btn-reorder:hover {
+  color: var(--accent);
+  background: var(--bg-secondary);
 }
