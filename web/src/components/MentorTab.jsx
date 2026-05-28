@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 
-export default function MentorTab({ payload, savePayload }) {
+export default function MentorTab({ payload, savePayload, saveSubPath }) {
   const { tasks = [], config = {} } = payload;
 
   // Hybrid API key resolution
@@ -90,6 +90,11 @@ export default function MentorTab({ payload, savePayload }) {
     alert("Settings saved and synced to Firebase Realtime Database!");
   };
 
+  /**
+   * FIX (Step 6): handleSendChat now uses saveSubPath() for atomic chatHistory writes.
+   * This prevents the AI reply (arriving 3-5s later) from overwriting any task/config 
+   * changes made by the user during that window.
+   */
   const handleSendChat = async (e) => {
     e.preventDefault();
     if (!chatInput.trim() || !apiKey || chatLoading) return;
@@ -97,9 +102,9 @@ export default function MentorTab({ payload, savePayload }) {
     const userText = chatInput.trim();
     setChatInput("");
 
-    // Append user message
-    const updatedHistory = [...chatHistory, { text: userText, isUser: true }];
-    savePayload({ ...payload, chatHistory: updatedHistory });
+    // Append user message directly to sub-path (safe merge — won't stomp tasks)
+    const withUserMessage = [...chatHistory, { text: userText, isUser: true }];
+    saveSubPath("chatHistory", withUserMessage);
     setChatLoading(true);
 
     // AI Configuration and Prompt Construction exactly as specified
@@ -135,15 +140,10 @@ Respond in the voice of ${config.mentorName || 'Mentor'}. Be direct, wise, conci
       const data = await response.json();
       const mentorReply = data.candidates?.[0]?.content?.parts?.[0]?.text || "I hear you. Keep going.";
 
-      savePayload({
-        ...payload,
-        chatHistory: [...updatedHistory, { text: mentorReply.trim(), isUser: false }]
-      });
+      // Write reply directly to chatHistory sub-path — safe from task write races
+      saveSubPath("chatHistory", [...withUserMessage, { text: mentorReply.trim(), isUser: false }]);
     } catch (err) {
-      savePayload({
-        ...payload,
-        chatHistory: [...updatedHistory, { text: `Error connecting to AI: ${err.message}`, isUser: false }]
-      });
+      saveSubPath("chatHistory", [...withUserMessage, { text: `Error connecting to AI: ${err.message}`, isUser: false }]);
     } finally {
       setChatLoading(false);
     }
@@ -291,7 +291,7 @@ Respond in the voice of ${config.mentorName || 'Mentor'}. Be direct, wise, conci
             <button
               onClick={() => {
                 if (window.confirm("Are you sure you want to clear your chat history?")) {
-                  savePayload({ ...payload, chatHistory: null });
+                  saveSubPath("chatHistory", null);
                 }
               }}
               style={{
@@ -357,11 +357,18 @@ Respond in the voice of ${config.mentorName || 'Mentor'}. Be direct, wise, conci
         )}
       </section>
 
-      {/* 3. Gemini API Key Settings Section */}
+      {/* 3. Gemini API Key Settings Section — BYOK Local Mode (Step 7) */}
       <section className="card">
-        <h3 className="challenge-title" style={{ fontSize: "15px", fontWeight: "700", marginBottom: "8px" }}>
-          API Key Configuration
-        </h3>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+          <h3 className="challenge-title" style={{ fontSize: "15px", fontWeight: "700" }}>
+            🔑 Bring Your Own Key (BYOK) — Local Mode
+          </h3>
+        </div>
+        <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "8px", padding: "10px 12px", marginBottom: "12px", fontSize: "11.5px", color: "var(--text-secondary)", lineHeight: "1.5" }}>
+          <strong>🔒 Privacy Note:</strong> Your API key is stored exclusively in <em>this browser's localStorage</em>. It is never sent to any Loci server — only to Google's Generative Language API on your behalf. Clearing browser data removes the key.
+          <br/>
+          <span style={{ color: "var(--text-muted)", fontSize: "10.5px" }}>Step 8 note: The key is sent as a URL query parameter to the Gemini REST API, which is standard for client-side BYOK apps. Use a project-scoped key from AI Studio to limit exposure.</span>
+        </div>
         <p style={{ fontSize: "11px", color: "var(--text-secondary)", marginBottom: "12px", lineHeight: "1.4" }}>
           Get a free Gemini API key at <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontWeight: "600" }}>https://aistudio.google.com</a>
         </p>
@@ -374,15 +381,12 @@ Respond in the voice of ${config.mentorName || 'Mentor'}. Be direct, wise, conci
               type="password" 
               value={keyInput} 
               onChange={(e) => setKeyInput(e.target.value)} 
-              placeholder="AI Studio API Key"
+              placeholder="AIzaSy... (from AI Studio)"
               required
             />
           </div>
-          <p style={{ fontSize: "10px", color: "var(--text-muted)", lineHeight: "1.3" }}>
-            Your key is stored locally in your browser only. Never shared.
-          </p>
           <button className="btn" type="submit" style={{ width: "100%", marginTop: "4px" }}>
-            Save Key
+            Save Key Locally
           </button>
         </form>
       </section>
