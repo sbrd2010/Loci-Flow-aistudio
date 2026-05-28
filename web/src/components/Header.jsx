@@ -1,9 +1,9 @@
 import React from "react";
+import ThemeSwitcher from "./ThemeSwitcher";
 
-export default function Header({ email, onSwitchUser }) {
-  // Truncate email if too long
-  const truncatedEmail = email && email.length > 18 
-    ? `${email.substring(0, 15)}...` 
+export default function Header({ email, onSwitchUser, theme, onThemeChange }) {
+  const truncatedEmail = email && email.length > 18
+    ? `${email.substring(0, 15)}...`
     : email;
 
   return (
@@ -12,6 +12,7 @@ export default function Header({ email, onSwitchUser }) {
         <span>🧠 Loci</span>
       </div>
       <div className="header-right">
+        <ThemeSwitcher theme={theme} onThemeChange={onThemeChange} />
         <span className="user-badge" title={email}>
           {truncatedEmail}
         </span>
