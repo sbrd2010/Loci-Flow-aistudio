@@ -6,8 +6,8 @@ export default function TodayTab({ payload, savePayload }) {
 
   // Local state for pomodoro timer
   const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [timerSecondsLeft, setTimerSecondsLeft] = useState(config.pomodoroDurationMinutes * 60);
-  const [timerMaxSeconds, setTimerMaxSeconds] = useState(config.pomodoroDurationMinutes * 60);
+  const [timerSecondsLeft, setTimerSecondsLeft] = useState((config.pomodoroDurationMinutes || 25) * 60);
+  const [timerMaxSeconds, setTimerMaxSeconds] = useState((config.pomodoroDurationMinutes || 25) * 60);
   const timerIntervalRef = useRef(null);
 
   // Active focus task (if any)
@@ -37,10 +37,6 @@ export default function TodayTab({ payload, savePayload }) {
       timerIntervalRef.current = setInterval(() => {
         setTimerSecondsLeft((prev) => {
           if (prev <= 1) {
-            clearInterval(timerIntervalRef.current);
-            setIsTimerRunning(false);
-            // Completed Pomodoro session bonus
-            handlePomodoroCompletion();
             return 0;
           }
           return prev - 1;
@@ -58,6 +54,14 @@ export default function TodayTab({ payload, savePayload }) {
       }
     };
   }, [isTimerRunning]);
+
+  // Handle Pomodoro Timer Completion Side-Effect
+  useEffect(() => {
+    if (isTimerRunning && timerSecondsLeft === 0) {
+      setIsTimerRunning(false);
+      handlePomodoroCompletion();
+    }
+  }, [timerSecondsLeft, isTimerRunning]);
 
   // Dopamine Affirmations state
   const affirmations = [
@@ -393,7 +397,7 @@ export default function TodayTab({ payload, savePayload }) {
             <h2 className="level-title">{levelTitle}</h2>
             <span className="xp-label">{xpInLevel}/200 XP to next level</span>
           </div>
-          <div className="commit-badge" style={{ color: "var(--accent)", background: "rgba(217, 119, 87, 0.1)" }}>
+          <div className="commit-badge" style={{ color: "var(--accent)", background: "var(--accent-ring)" }}>
             {todayTasksFiltered.length > 0
               ? `${Math.floor((completedTasks.length / todayTasksFiltered.length) * 100)}% Committed`
               : "0% Committed"}
@@ -408,7 +412,7 @@ export default function TodayTab({ payload, savePayload }) {
         {/* traditional XP, streak metrics row */}
         <div className="metrics-row">
           <div className="metric-box">
-            <div className="metric-circle" style={{ background: "rgba(217, 119, 87, 0.12)", color: "var(--accent)" }}>⚡</div>
+            <div className="metric-circle" style={{ background: "var(--accent-ring)", color: "var(--accent)" }}>⚡</div>
             <div className="metric-content">
               <span className="metric-name">XP Balance</span>
               <span className="metric-val">{currentXp} XP</span>
