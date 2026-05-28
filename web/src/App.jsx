@@ -8,6 +8,7 @@ import RoadmapTab from "./components/RoadmapTab";
 import CoachTab from "./components/CoachTab";
 import MentorTab from "./components/MentorTab";
 import AddTaskDialog from "./components/AddTaskDialog";
+import OnboardingWizard from "./components/OnboardingWizard";
 
 export default function App() {
   const [email, setEmail] = useState(localStorage.getItem("loci_email") || "");
@@ -90,6 +91,11 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  // Render onboarding wizard overlay if onboarding not completed
+  if (payload.config && !payload.config.isOnboardingCompleted) {
+    return <OnboardingWizard payload={payload} savePayload={savePayload} />;
   }
 
   return (
