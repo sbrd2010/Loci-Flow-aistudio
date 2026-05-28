@@ -88,7 +88,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
       tasks: updatedTasks,
       config: {
         ...config,
-        totalXp: config.totalXp + 100,
+        totalXp: (Number(config.totalXp) || 0) + 100,
         lastUpdated: Date.now()
       },
       contributions: incrementContribution([...contributions], todayDateStr)
