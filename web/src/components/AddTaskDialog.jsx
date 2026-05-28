@@ -4,6 +4,7 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
   const [title, setTitle] = useState("");
   const [concreteStep, setConcreteStep] = useState("");
   const [horizonLevel, setHorizonLevel] = useState(defaultHorizon || "today");
+  const [saved, setSaved] = useState(false);
   const [priority, setPriority] = useState("P3");
   const [category, setCategory] = useState("Personal");
   const [estimateMinutes, setEstimateMinutes] = useState(25);
@@ -65,7 +66,8 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
       tasks: updatedTasks
     });
 
-    onClose();
+    setSaved(true);
+    setTimeout(onClose, 900);
   };
 
   return (
@@ -173,12 +175,20 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
 
           {/* Footer controls */}
           <div className="modal-footer" style={{ padding: "0", marginTop: "8px" }}>
-            <button type="button" className="btn btn-cancel" onClick={onClose} style={{ flex: 1 }}>
-              Cancel
-            </button>
-            <button type="submit" className="btn" style={{ flex: 1 }}>
-              Add Task
-            </button>
+            {saved ? (
+              <div style={{ flex: 1, textAlign: "center", padding: "12px", background: "var(--success)", borderRadius: "var(--radius-sm)", color: "#fff", fontWeight: "700", fontSize: "14px" }}>
+                ✓ Task added!
+              </div>
+            ) : (
+              <>
+                <button type="button" className="btn btn-cancel" onClick={onClose} style={{ flex: 1 }}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn" style={{ flex: 1 }}>
+                  Add Task
+                </button>
+              </>
+            )}
           </div>
         </form>
       </div>
