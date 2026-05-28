@@ -317,7 +317,7 @@ export default function TodayTab({ payload, savePayload }) {
         tasks: updatedTasks,
         config: {
           ...config,
-          totalXp: config.totalXp + 120, // 100 base + 20 pomodoro bonus
+          totalXp: (Number(config.totalXp) || 0) + 120, // 100 base + 20 pomodoro bonus
           lastUpdated: Date.now()
         },
         contributions: incrementContribution([...contributions], todayDateStr)
@@ -328,7 +328,7 @@ export default function TodayTab({ payload, savePayload }) {
         ...payload,
         config: {
           ...config,
-          totalXp: config.totalXp + 50,
+          totalXp: (Number(config.totalXp) || 0) + 50,
           lastUpdated: Date.now()
         }
       });
