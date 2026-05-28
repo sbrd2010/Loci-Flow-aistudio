@@ -79,7 +79,7 @@ export default function CoachTab({ payload, savePayload }) {
   // Safe useEffect to grant +80 XP to avoid stale closures with setInterval
   useEffect(() => {
     if (ritualDone) {
-      const newXp = (config.totalXp || 0) + 80;
+      const newXp = (Number(config.totalXp) || 0) + 80;
       const updated = { ...config, totalXp: newXp };
       savePayload({ ...payload, config: updated });
       setRitualDone(false);
@@ -124,6 +124,17 @@ export default function CoachTab({ payload, savePayload }) {
 
   // Bad Day Reset Button Action
   const handleBadDayReset = () => {
+    const pendingTasks = tasks.filter(
+      (t) => !t.isCompleted && !t.isDeleted && (t.priority === "P1" || t.priority === "P2" || t.priority === "P3")
+    );
+    if (pendingTasks.length === 0) {
+      alert("No high-priority tasks to park. Your list is already clear! 💪");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Bad Day Reset will park ${pendingTasks.length} high-priority task(s) (P1–P3) and show only P4 quick wins.\n\nYou can restore them anytime from the Parked Archive below.\n\nConfirm reset?`
+    );
+    if (!confirmed) return;
     const updatedTasks = tasks.map((task) => {
       if (!task.isCompleted && !task.isDeleted && (task.priority === "P1" || task.priority === "P2" || task.priority === "P3")) {
         return { ...task, isParked: true, isNowFocus: false };
@@ -339,6 +350,70 @@ Give 3 specific task recommendations with brief reasoning. Be direct and motivat
           </div>
         )}
       </section>
+
+      {/* 6. Parked Archive — Un-park Recovery Flow (Step 11) */}
+      {(() => {
+        const parkedTasks = tasks.filter((t) => t.isParked && !t.isDeleted && !t.isCompleted);
+        if (parkedTasks.length === 0) return null;
+        return (
+          <section className="card">
+            <h3 className="challenge-title" style={{ fontSize: "15px", fontWeight: "700", marginBottom: "4px" }}>
+              📦 Parked Task Archive ({parkedTasks.length})
+            </h3>
+            <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "12px", lineHeight: "1.4" }}>
+              Tasks parked by Bad Day Reset. Tap Un-park to restore them to your active Today list.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {parkedTasks.map((task) => (
+                <div
+                  key={task.uuid}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "10px 12px",
+                    background: "var(--bg-secondary)",
+                    borderRadius: "var(--radius-sm)",
+                    border: "1px solid var(--border)",
+                    gap: "10px"
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+                      <span
+                        className={`priority-badge ${task.priority.toLowerCase()}`}
+                        style={{ fontSize: "10px", padding: "2px 6px" }}
+                      >
+                        {task.priority}
+                      </span>
+                      <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", lineHeight: "1.3" }}>
+                        {task.title}
+                      </span>
+                    </div>
+                    {task.concreteStep && (
+                      <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>⚡ {task.concreteStep}</span>
+                    )}
+                  </div>
+                  <button
+                    className="btn"
+                    style={{ flexShrink: 0, padding: "6px 12px", fontSize: "11px", background: "var(--success)" }}
+                    onClick={() => {
+                      const updatedTasks = tasks.map((t) =>
+                        t.uuid === task.uuid
+                          ? { ...t, isParked: false, lastUpdated: Date.now() }
+                          : t
+                      );
+                      savePayload({ ...payload, tasks: updatedTasks });
+                    }}
+                  >
+                    Un-park ↑
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      })()}
     </div>
   );
 }
