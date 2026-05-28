@@ -24,26 +24,14 @@
             "value": "no-cache, no-store, must-revalidate"
           }
         ]
-      },
-      {
-        "source": "/",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
       }
     ],
     "rewrites": [
       {
-        "regex": "^(?!/assets/).*$",
+        "source": "**",
         "destination": "/index.html"
       }
     ],
     "cleanUrls": true
-  },
-  "database": {
-    "rules": "database.rules.json"
   }
 }
