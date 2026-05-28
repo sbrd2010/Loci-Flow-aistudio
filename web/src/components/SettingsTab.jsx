@@ -67,7 +67,16 @@ export default function SettingsTab({ payload, savePayload, saveSubPath }) {
     return `${Math.floor(mins / 60)}h ago`;
   };
 
-  const hasApiKey = !!localStorage.getItem("loci_gemini_key");
+  const personalKey = localStorage.getItem("loci_gemini_key");
+  const defaultKey = import.meta.env.VITE_GEMINI_KEY || "";
+  const hasPersonalKey = !!personalKey;
+  const hasDefaultKey = !!defaultKey;
+  const hasAnyKey = hasPersonalKey || hasDefaultKey;
+  const keyStatusLabel = hasPersonalKey
+    ? "✓ Your personal key active"
+    : hasDefaultKey
+    ? "✓ Default AI key active (shared)"
+    : "✗ No key — AI features disabled";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -178,12 +187,12 @@ export default function SettingsTab({ payload, savePayload, saveSubPath }) {
         <div style={{
           display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px",
           padding: "8px 12px", borderRadius: "var(--radius-sm)",
-          background: hasApiKey ? "rgba(52, 211, 153, 0.08)" : "rgba(248, 113, 113, 0.08)",
-          border: `1px solid ${hasApiKey ? "var(--success)" : "var(--danger)"}`,
+          background: hasAnyKey ? "rgba(52, 211, 153, 0.08)" : "rgba(248, 113, 113, 0.08)",
+          border: `1px solid ${hasAnyKey ? "var(--success)" : "var(--danger)"}`,
           fontSize: "12px", fontWeight: "600",
-          color: hasApiKey ? "var(--success)" : "var(--danger)"
+          color: hasAnyKey ? "var(--success)" : "var(--danger)"
         }}>
-          {hasApiKey ? "✓ API key connected" : "✗ No key — AI features disabled"}
+          {keyStatusLabel}
         </div>
 
         <form onSubmit={handleSaveKey} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
