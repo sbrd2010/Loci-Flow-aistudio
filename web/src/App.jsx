@@ -6,7 +6,7 @@ import BottomNav from "./components/BottomNav";
 import TodayTab from "./components/TodayTab";
 import RoadmapTab from "./components/RoadmapTab";
 import CoachTab from "./components/CoachTab";
-import MentorTab from "./components/MentorTab";
+import SettingsTab from "./components/SettingsTab";
 import AddTaskDialog from "./components/AddTaskDialog";
 import OnboardingWizard from "./components/OnboardingWizard";
 
@@ -148,8 +148,8 @@ export default function App() {
             onOpenAddTask={openAddTask}
           />
         )}
-        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} />}
-        {activeTab === "mentor" && <MentorTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} />}
+        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} />}
+        {activeTab === "settings" && <SettingsTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} />}
       </main>
 
       {/* Floating Action Button (Only show on Today & Roadmap screens) */}

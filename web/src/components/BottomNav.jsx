@@ -5,7 +5,7 @@ export default function BottomNav({ activeTab, onTabSelect }) {
     { id: "today", label: "Today", icon: "📋" },
     { id: "roadmap", label: "Roadmap", icon: "🗺️" },
     { id: "coach", label: "Coach", icon: "🎯" },
-    { id: "mentor", label: "Mentor", icon: "🧠" }
+    { id: "settings", label: "Settings", icon: "⚙️" }
   ];
 
   return (
