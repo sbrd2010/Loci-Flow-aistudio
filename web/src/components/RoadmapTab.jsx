@@ -198,7 +198,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
                 <span className={`priority-badge ${selectedTask.priority.toLowerCase()}`} style={{ marginBottom: "6px", display: "inline-block" }}>
                   {selectedTask.priority}
                 </span>
-                <h4 style={{ fontSize: "15px", fontWeight: "600", color: "#fff", lineHeight: "1.4" }}>
+                <h4 style={{ fontSize: "15px", fontWeight: "600", color: "var(--text-primary)", lineHeight: "1.4" }}>
                   {selectedTask.title}
                 </h4>
                 <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
@@ -212,14 +212,14 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
               <button
                 className="btn"
                 onClick={() => handleMarkDone(selectedTask)}
-                style={{ background: "linear-gradient(135deg, var(--success) 0%, #047857 100%)", boxShadow: "0 4px 12px rgba(16, 185, 129, 0.2)" }}
+                style={{ background: "var(--success)" }}
               >
                 ✓ Mark Done (+100 XP)
               </button>
               <button
                 className="btn btn-cancel"
                 onClick={() => handleDelete(selectedTask)}
-                style={{ color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.2)" }}
+                style={{ color: "var(--danger)", border: "1.5px solid var(--border)" }}
               >
                 🗑 Delete Task
               </button>
