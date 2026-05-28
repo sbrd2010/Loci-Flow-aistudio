@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ref, onValue, set } from "firebase/database";
+import { ref, onValue, set, update } from "firebase/database";
 import { db } from "./firebase";
 
 export function useSync(email) {
@@ -148,13 +148,17 @@ export function useSync(email) {
     };
   }, [dbRefPath, email]);
 
+  /**
+   * savePayload — full-payload write with optimistic local update + 1.5s debounce.
+   * Used for task/config mutations where we have the full updated object.
+   */
   const savePayload = (updatedPayload) => {
     const nextPayload = {
       ...updatedPayload,
       timestamp: Date.now()
     };
 
-    //snappy local UI update
+    // Snappy local UI update
     setPayload(nextPayload);
     payloadRef.current = nextPayload;
 
@@ -178,5 +182,19 @@ export function useSync(email) {
     }, 1500);
   };
 
-  return { payload, loading, savePayload };
+  /**
+   * saveSubPath — granular sub-path write that DOES NOT overwrite the full payload.
+   * Use this for isolated fields like chatHistory to avoid stomping concurrent task writes.
+   * @param {string} subPath  - relative path under the user's dbRefPath (e.g. "chatHistory")
+   * @param {*}      value    - the value to write at that sub-path
+   */
+  const saveSubPath = (subPath, value) => {
+    if (!dbRefPath) return;
+    const updates = { [`${dbRefPath}/${subPath}`]: value, [`${dbRefPath}/timestamp`]: Date.now() };
+    update(ref(db), updates)
+      .then(() => console.log(`Sub-path write OK: ${subPath}`))
+      .catch((err) => console.error(`Sub-path write failed (${subPath}):`, err));
+  };
+
+  return { payload, loading, savePayload, saveSubPath };
 }
