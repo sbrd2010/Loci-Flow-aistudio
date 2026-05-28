@@ -673,7 +673,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .control-btn-done:hover {
-  background: #246341;
+  background: #1f5938;
   transform: scale(1.05);
 }
 
@@ -1271,7 +1271,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .priority-selector-btn.selected.p1 { background: var(--p1-bg); color: var(--p1-text); border-color: var(--danger); }
 .priority-selector-btn.selected.p2 { background: var(--p2-bg); color: var(--p2-text); border-color: var(--warning); }
-.priority-selector-btn.selected.p3 { background: var(--p3-bg); color: var(--p3-text); border-color: #5b63ad; }
+.priority-selector-btn.selected.p3 { background: var(--p3-bg); color: var(--p3-text); border-color: var(--p3-text); }
 .priority-selector-btn.selected.p4 { background: var(--p4-bg); color: var(--p4-text); border-color: var(--text-muted); }
 
 .modal-footer {
