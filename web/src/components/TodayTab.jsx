@@ -138,6 +138,14 @@ export default function TodayTab({ payload, savePayload }) {
     e.preventDefault();
     if (!brainDumpText.trim()) return;
 
+    // Evening Guard window block logic
+    const now = new Date();
+    const hour = now.getHours();
+    if (config.eveningGuardWindowActive && hour >= 20) {
+      alert("Evening Guard is ACTIVE: To protect your evening recovery and sleep, new tasks cannot be added after 8:00 PM. Go rest! 🌙");
+      return;
+    }
+
     const todayTasksCount = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted).length;
 
     const freshTask = {
@@ -334,10 +342,10 @@ export default function TodayTab({ payload, savePayload }) {
     levelNum === 4 ? "Strategic Executer (L4)" :
     "Master of Loci (L5+)";
 
-  // Filter today tasks list based on active Level Energy Filters
-  const todayTasksAll = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted);
+  // Filter today tasks list based on active Level Energy Filters (excluding parked tasks)
+  const todayTasksAll = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isParked);
   const todayTasksFiltered = config.isLowEnergyMode
-    ? todayTasksAll.filter((t) => t.priority === "P4" || t.timeEstimateMinutes <= 20)
+    ? todayTasksAll.filter((t) => t.priority === "P4")
     : todayTasksAll;
 
   const remainingTasks = todayTasksFiltered
