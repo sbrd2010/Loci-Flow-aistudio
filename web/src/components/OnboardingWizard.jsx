@@ -23,10 +23,11 @@ export default function OnboardingWizard({ payload, savePayload }) {
       mentorName: selectedMentor,
       challengeType: selectedChallenge,
       isOnboardingCompleted: true,
-      pomodoroDurationMinutes: 25,
-      reminderNagIntervalMinutes: 15,
-      eveningGuardWindowActive: true,
-      totalXp: 150, // Initial XP boost
+      pomodoroDurationMinutes: config.pomodoroDurationMinutes || 25,
+      reminderNagIntervalMinutes: config.reminderNagIntervalMinutes || 15,
+      eveningGuardWindowActive: config.eveningGuardWindowActive !== undefined ? config.eveningGuardWindowActive : true,
+      // Step 12: Preserve existing XP — only set 150 if truly a fresh account (XP is 0 or missing)
+      totalXp: (Number(config.totalXp) > 0) ? Number(config.totalXp) : 150,
       lastUpdated: Date.now()
     };
 
