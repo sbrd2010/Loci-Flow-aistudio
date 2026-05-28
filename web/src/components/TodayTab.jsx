@@ -407,7 +407,7 @@ export default function TodayTab({ payload, savePayload }) {
             </div>
           </div>
           <div className="metric-box">
-            <div className="metric-circle" style={{ background: "#FEF3E8", color: "#C17D2A" }}>🔥</div>
+            <div className="metric-circle" style={{ background: "var(--p2-bg)", color: "var(--p2-text)" }}>🔥</div>
             <div className="metric-content">
               <span className="metric-name">Streak</span>
               <span className="metric-val">{config.visitStreakCount || 1} Days</span>
