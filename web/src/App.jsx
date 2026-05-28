@@ -24,7 +24,7 @@ export default function App() {
   }, [theme]);
 
   // Load the sync payload from RTDB
-  const { payload, loading, savePayload, saveSubPath } = useSync(email);
+  const { payload, loading, error, savePayload, saveSubPath } = useSync(email);
 
   // Handle local sign-in
   const handleSignIn = (e) => {
@@ -86,6 +86,22 @@ export default function App() {
     );
   }
 
+  // If Firebase connection failed, show an actionable error screen
+  if (error) {
+    return (
+      <div className="signin-overlay">
+        <div className="signin-card card" style={{ padding: "40px 20px" }}>
+          <span className="signin-emoji">⚠️</span>
+          <h2 style={{ fontFamily: "var(--font-display)", fontWeight: "800" }}>Sync Error</h2>
+          <p style={{ color: "var(--text-muted)", fontSize: "13px", marginTop: "8px" }}>{error}</p>
+          <button className="btn" onClick={() => window.location.reload()} style={{ marginTop: "20px" }}>
+            Retry Connection
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // If loading sync data, show beautiful dark load screen
   if (loading || !payload) {
     return (
@@ -138,7 +154,11 @@ export default function App() {
 
       {/* Floating Action Button (Only show on Today & Roadmap screens) */}
       {(activeTab === "today" || activeTab === "roadmap") && (
-        <button className="fab" onClick={() => openAddTask("today")} title="Add Focus Commit">
+        <button
+          className="fab"
+          onClick={() => openAddTask(activeTab === "roadmap" ? "week" : "today")}
+          title="Add Focus Commit"
+        >
           +
         </button>
       )}

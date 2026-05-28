@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 const THEMES = [
   { id: "glassy",    label: "Dark Glass",  emoji: "🔮", desc: "Deep navy glassmorphism" },
@@ -12,6 +12,18 @@ const THEMES = [
 export default function ThemeSwitcher({ theme, onThemeChange }) {
   const [open, setOpen] = useState(false);
   const current = THEMES.find(t => t.id === theme) || THEMES[0];
+
+  // Close dropdown on scroll or touch-scroll so it doesn't stay pinned on mobile
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("scroll", close, { passive: true });
+    window.addEventListener("touchmove", close, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", close);
+      window.removeEventListener("touchmove", close);
+    };
+  }, [open]);
 
   return (
     <div className="theme-switcher">

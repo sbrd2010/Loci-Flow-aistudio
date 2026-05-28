@@ -32,7 +32,7 @@ export default function TodayTab({ payload, savePayload }) {
         setTimerSecondsLeft(defaultSecs);
       }
     }
-  }, [activeTask?.uuid, config.pomodoroDurationMinutes]);
+  }, [activeTask?.uuid, activeTask?.timeEstimateMinutes, config.pomodoroDurationMinutes]);
 
   // Pomodoro countdown timer logic
   useEffect(() => {
@@ -177,7 +177,7 @@ export default function TodayTab({ payload, savePayload }) {
 
     const freshTask = {
       id: Date.now(),
-      userId: payload.userId,
+      userId: payload.userId || payload.config?.userId || "",
       uuid: crypto.randomUUID(),
       title: text,
       concreteStep: "Do first tiny step",
@@ -431,8 +431,8 @@ export default function TodayTab({ payload, savePayload }) {
 
   const bentoDays = getBentoDays();
 
-  // Timer SVG configuration
-  const progressRatio = timerSecondsLeft / timerMaxSeconds;
+  // Timer SVG configuration — guard against division-by-zero when timerMaxSeconds is 0
+  const progressRatio = timerMaxSeconds > 0 ? timerSecondsLeft / timerMaxSeconds : 0;
   const strokeDashoffset = 439.8 * (1 - progressRatio);
 
   const formatTimerMinutes = Math.floor(timerSecondsLeft / 60);
@@ -641,8 +641,9 @@ export default function TodayTab({ payload, savePayload }) {
         <div className="tasks-list">
           {todayTasksFiltered.length === 0 ? (
             <div style={{ textAlign: "center", padding: "24px 10px", color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
-              <p style={{ fontSize: "13px" }}>
-                0 focused commits today. Enter a brain dump or click the floating action button to commit.
+              <p style={{ fontSize: "13px", fontWeight: "600" }}>No tasks for today.</p>
+              <p style={{ fontSize: "12px", marginTop: "6px", lineHeight: "1.5" }}>
+                Pull one from your Roadmap, use the Brain Dump above, or tap the + button to add a commit.
               </p>
             </div>
           ) : (
