@@ -14,12 +14,6 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("today");
   const [showAddTask, setShowAddTask] = useState(false);
   const [preselectedHorizon, setPreselectedHorizon] = useState("today");
-  const [theme, setTheme] = useState(() => localStorage.getItem("loci_theme") || "glassy");
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("loci_theme", theme);
-  }, [theme]);
 
   // Load the sync payload from RTDB
   const { payload, loading, savePayload } = useSync(email);
@@ -100,7 +94,7 @@ export default function App() {
   return (
     <div className="app-container">
       {/* Header top bar */}
-      <Header email={email} onSwitchUser={handleSwitchUser} theme={theme} onThemeChange={setTheme} />
+      <Header email={email} onSwitchUser={handleSwitchUser} />
 
       {/* Main Tab Screen Router */}
       <main className="screen-content">
