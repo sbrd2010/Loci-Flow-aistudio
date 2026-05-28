@@ -2292,3 +2292,62 @@ html[data-theme="glassy"] .theme-dropdown {
   background: var(--accent-light);
   color: var(--bg-card);
 }
+
+/* ── Mobile-first tweaks (iPhone 11 Pro / 375–390px) ───────────────────── */
+@media (max-width: 390px) {
+  .screen-content {
+    padding: 14px 14px 96px 14px;
+    gap: 14px;
+  }
+
+  .card {
+    padding: 14px;
+  }
+
+  /* Tighter section headings */
+  .card h2 {
+    font-size: 15px !important;
+  }
+
+  /* Nav labels slightly smaller */
+  .nav-item {
+    font-size: 10px;
+  }
+
+  /* Ensure all tap targets are at least 44px tall */
+  .btn,
+  .action-btn,
+  .nav-item,
+  .toggle-row,
+  .challenge-option {
+    min-height: 44px;
+  }
+
+  /* Task rows: slightly more compact */
+  .task-row {
+    padding: 10px 0;
+  }
+
+  /* Focus block card inner padding */
+  .focus-block-card {
+    padding: 14px;
+  }
+
+  /* Chat input row: stack on very small width */
+  .chat-input-row {
+    flex-wrap: wrap;
+  }
+  .chat-input-row input {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  /* Roadmap columns: full width on small phones */
+  .roadmap-columns {
+    flex-direction: column;
+  }
+  .roadmap-column {
+    min-width: unset;
+    width: 100%;
+  }
+}
