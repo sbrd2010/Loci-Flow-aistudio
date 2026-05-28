@@ -99,8 +99,9 @@ export default function App() {
     );
   }
 
-  // Render onboarding wizard overlay if onboarding not completed
-  if (payload.config && !payload.config.isOnboardingCompleted) {
+  // Render onboarding wizard overlay only for new web users.
+  // Use strict === false so existing Android users (isOnboardingCompleted === undefined) skip it.
+  if (payload.config && payload.config.isOnboardingCompleted === false) {
     return <OnboardingWizard payload={payload} savePayload={savePayload} />;
   }
 

@@ -285,13 +285,11 @@ export default function TodayTab({ payload, savePayload }) {
   };
 
   const handlePinTask = (task) => {
-    // Unpin all other tasks first
+    const now = Date.now();
     const updatedTasks = tasks.map((t) => {
-      return {
-        ...t,
-        isNowFocus: t.uuid === task.uuid,
-        lastUpdated: Date.now()
-      };
+      const newFocus = t.uuid === task.uuid;
+      if (t.isNowFocus === newFocus) return t;
+      return { ...t, isNowFocus: newFocus, lastUpdated: now };
     });
 
     savePayload({
@@ -301,13 +299,11 @@ export default function TodayTab({ payload, savePayload }) {
   };
 
   const handleDeleteTask = (task) => {
+    if (!window.confirm(`Delete "${task.title}"?\n\nThis cannot be undone.`)) return;
+
     const updatedTasks = tasks.map((t) => {
       if (t.uuid === task.uuid) {
-        return {
-          ...t,
-          isDeleted: true,
-          lastUpdated: Date.now()
-        };
+        return { ...t, isDeleted: true, lastUpdated: Date.now() };
       }
       return t;
     });
