@@ -148,6 +148,14 @@ export default function CoachTab({ payload, savePayload }) {
   // AI Weekly Review Action
   const handleAiReview = async () => {
     if (!apiKey) return;
+
+    // Fix #21: Guard empty backlog — don't waste an API call if there's nothing to review
+    const backlogTasks = tasks.filter(t => !t.isDeleted && !t.isCompleted);
+    if (backlogTasks.length === 0) {
+      setReviewResult("🎉 Your backlog is empty — you have no pending tasks! Add some goals on the Roadmap tab and come back for a review.");
+      return;
+    }
+
     setReviewLoading(true);
     setReviewResult("");
 
