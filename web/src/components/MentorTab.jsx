@@ -32,30 +32,28 @@ export default function MentorTab({ payload, savePayload }) {
     { key: "execution", label: "Action over Perfectionism" }
   ];
 
-  // 2. AI Mentor Chat States
-  const [chatHistory, setChatHistory] = useState([]); // Array of { text, isUser }
+  // 2. AI Mentor Chat (exclusively synced with Firebase Realtime Database)
+  const challengeLabel =
+    config.challengeType === "starting"
+      ? "Overcoming Inertia"
+      : config.challengeType === "focusing"
+      ? "Protecting Focus Sessions"
+      : "Action over Perfectionism";
+
+  const defaultWelcome = [
+    {
+      text: `Hello ${config.userName || "my friend"}. I am ${config.mentorName || "Mentor"}. As you struggle with "${challengeLabel}", how can I guide your focus today?`,
+      isUser: false
+    }
+  ];
+
+  const chatHistory = payload.chatHistory && payload.chatHistory.length > 0
+    ? payload.chatHistory
+    : defaultWelcome;
+
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const chatBottomRef = useRef(null);
-
-  // Synchronize initial welcome message
-  useEffect(() => {
-    if (chatHistory.length === 0) {
-      const challengeLabel =
-        config.challengeType === "starting"
-          ? "Overcoming Inertia"
-          : config.challengeType === "focusing"
-          ? "Protecting Focus Sessions"
-          : "Action over Perfectionism";
-
-      setChatHistory([
-        {
-          text: `Hello ${config.userName || "my friend"}. I am ${config.mentorName || "Mentor"}. As you struggle with "${challengeLabel}", how can I guide your focus today?`,
-          isUser: false
-        }
-      ]);
-    }
-  }, [config.userName, config.mentorName, config.challengeType, chatHistory.length]);
 
   // Smooth scroll chat to bottom
   useEffect(() => {
@@ -91,7 +89,7 @@ export default function MentorTab({ payload, savePayload }) {
 
     // Append user message
     const updatedHistory = [...chatHistory, { text: userText, isUser: true }];
-    setChatHistory(updatedHistory);
+    savePayload({ ...payload, chatHistory: updatedHistory });
     setChatLoading(true);
 
     // AI Configuration and Prompt Construction exactly as specified
@@ -127,12 +125,15 @@ Respond in the voice of ${config.mentorName || 'Mentor'}. Be direct, wise, conci
       const data = await response.json();
       const mentorReply = data.candidates?.[0]?.content?.parts?.[0]?.text || "I hear you. Keep going.";
 
-      setChatHistory((prev) => [...prev, { text: mentorReply.trim(), isUser: false }]);
+      savePayload({
+        ...payload,
+        chatHistory: [...updatedHistory, { text: mentorReply.trim(), isUser: false }]
+      });
     } catch (err) {
-      setChatHistory((prev) => [
-        ...prev,
-        { text: `Error connecting to AI: ${err.message}`, isUser: false }
-      ]);
+      savePayload({
+        ...payload,
+        chatHistory: [...updatedHistory, { text: `Error connecting to AI: ${err.message}`, isUser: false }]
+      });
     } finally {
       setChatLoading(false);
     }
@@ -263,9 +264,31 @@ Respond in the voice of ${config.mentorName || 'Mentor'}. Be direct, wise, conci
 
       {/* 2. AI Mentor Chat Section */}
       <section className="card">
-        <h3 className="challenge-title" style={{ fontSize: "15px", fontWeight: "700", marginBottom: "12px" }}>
-          Chat with {config.mentorName || "Mentor"}...
-        </h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+          <h3 className="challenge-title" style={{ fontSize: "15px", fontWeight: "700" }}>
+            Chat with {config.mentorName || "Mentor"}...
+          </h3>
+          {payload.chatHistory && payload.chatHistory.length > 0 && (
+            <button
+              onClick={() => {
+                if (window.confirm("Are you sure you want to clear your chat history?")) {
+                  savePayload({ ...payload, chatHistory: null });
+                }
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--danger)",
+                fontSize: "11px",
+                fontWeight: "700",
+                cursor: "pointer",
+                padding: "2px 6px"
+              }}
+            >
+              🗑️ Clear Chat
+            </button>
+          )}
+        </div>
 
         <div className="chat-window">
           {chatHistory.map((m, idx) => (
