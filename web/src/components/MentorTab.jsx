@@ -1,79 +1,85 @@
 import React, { useState, useEffect, useRef } from "react";
 
 export default function MentorTab({ payload, savePayload }) {
-  const { config = {} } = payload;
+  const { tasks = [], config = {} } = payload;
 
-  // 1. Profile Settings Local States
-  const [userName, setUserName] = useState(config.userName || "");
-  const [mentorName, setMentorName] = useState(config.mentorName || "Yoda");
-  const [challengeType, setChallengeType] = useState(config.challengeType || "Overcoming Inertia");
-  const [pomodoroDuration, setPomodoroDuration] = useState(config.pomodoroDurationMinutes || 25);
-  const [eveningGuard, setEveningGuard] = useState(!!config.eveningGuardWindowActive);
+  // Hybrid API key resolution
+  const DEFAULT_GEMINI_KEY = ""; // Baked-in fallback key placeholder
+  const apiKey = localStorage.getItem("loci_gemini_key") || DEFAULT_GEMINI_KEY;
 
-  // Synchronize state when config from Firebase sync triggers
+  // 1. Profile Settings Form States
+  const [editedName, setEditedName] = useState(config.userName || "Anonymous");
+  const [editedMentor, setEditedMentor] = useState(config.mentorName || "Mentor");
+  const [editedPomodoro, setEditedPomodoro] = useState(config.pomodoroDurationMinutes || 25);
+  const [editedNagInterval, setEditedNagInterval] = useState(config.reminderNagIntervalMinutes || 15);
+  const [editedEveningGuard, setEditedEveningGuard] = useState(!!config.eveningGuardWindowActive);
+  const [editedChallenge, setEditedChallenge] = useState(config.challengeType || "starting");
+
+  // Sync form states with Firebase payload updates
   useEffect(() => {
-    setUserName(config.userName || "");
-    setMentorName(config.mentorName || "Yoda");
-    setChallengeType(config.challengeType || "Overcoming Inertia");
-    setPomodoroDuration(config.pomodoroDurationMinutes || 25);
-    setEveningGuard(!!config.eveningGuardWindowActive);
+    setEditedName(config.userName || "Anonymous");
+    setEditedMentor(config.mentorName || "Mentor");
+    setEditedPomodoro(config.pomodoroDurationMinutes || 25);
+    setEditedNagInterval(config.reminderNagIntervalMinutes || 15);
+    setEditedEveningGuard(!!config.eveningGuardWindowActive);
+    setEditedChallenge(config.challengeType || "starting");
   }, [config]);
 
+  // Challenge options exactly as specified
+  const challengeOptions = [
+    { key: "starting", label: "Overcoming Inertia" },
+    { key: "focusing", label: "Protecting Focus Sessions" },
+    { key: "execution", label: "Action over Perfectionism" }
+  ];
+
   // 2. AI Mentor Chat States
+  const [chatHistory, setChatHistory] = useState([]); // Array of { text, isUser }
   const [chatInput, setChatInput] = useState("");
-  const [messages, setMessages] = useState([
-    {
-      sender: "mentor",
-      text: `Hello ${config.userName || "my friend"}. I am ${config.mentorName || "Yoda"}. As you work on "${config.challengeType || "Overcoming Inertia"}", how can I guide your focus today?`
-    }
-  ]);
   const [chatLoading, setChatLoading] = useState(false);
   const chatBottomRef = useRef(null);
 
-  // Sync initial welcome message if settings change
+  // Synchronize initial welcome message
   useEffect(() => {
-    if (messages.length === 1) {
-      setMessages([
+    if (chatHistory.length === 0) {
+      const challengeLabel =
+        config.challengeType === "starting"
+          ? "Overcoming Inertia"
+          : config.challengeType === "focusing"
+          ? "Protecting Focus Sessions"
+          : "Action over Perfectionism";
+
+      setChatHistory([
         {
-          sender: "mentor",
-          text: `Hello ${userName || "my friend"}. I am ${mentorName}. As you work on "${challengeType}", how can I guide your focus today?`
+          text: `Hello ${config.userName || "my friend"}. I am ${config.mentorName || "Mentor"}. As you struggle with "${challengeLabel}", how can I guide your focus today?`,
+          isUser: false
         }
       ]);
     }
-  }, [userName, mentorName, challengeType]);
+  }, [config.userName, config.mentorName, config.challengeType, chatHistory.length]);
 
-  // Auto scroll to chat bottom
+  // Smooth scroll chat to bottom
   useEffect(() => {
     if (chatBottomRef.current) {
       chatBottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, chatLoading]);
+  }, [chatHistory, chatLoading]);
 
-  // 3. API Key local states
-  const [apiKey, setApiKey] = useState(localStorage.getItem("loci_gemini_key") || "");
-  const [tempKey, setTempKey] = useState(localStorage.getItem("loci_gemini_key") || "");
+  // 3. API Key Connection Local States
+  const [keyInput, setKeyInput] = useState(localStorage.getItem("loci_gemini_key") || "");
 
   const handleSaveSettings = (e) => {
     e.preventDefault();
-    savePayload({
-      ...payload,
-      config: {
-        ...config,
-        userName,
-        mentorName,
-        challengeType,
-        pomodoroDurationMinutes: Number(pomodoroDuration),
-        eveningGuardWindowActive: eveningGuard
-      }
-    });
-    alert("Profile settings synchronized and saved to Firebase Realtime Database!");
-  };
-
-  const handleSaveKey = (e) => {
-    e.preventDefault();
-    localStorage.setItem("loci_gemini_key", tempKey.trim());
-    setApiKey(tempKey.trim());
-    alert("Gemini API Key saved locally in browser storage.");
+    const updated = {
+      ...config,
+      userName: editedName,
+      mentorName: editedMentor,
+      challengeType: editedChallenge,
+      pomodoroDurationMinutes: parseInt(editedPomodoro) || 25,
+      reminderNagIntervalMinutes: parseInt(editedNagInterval) || 15,
+      eveningGuardWindowActive: editedEveningGuard
+    };
+    savePayload({ ...payload, config: updated });
+    alert("Settings saved and synced to Firebase Realtime Database!");
   };
 
   const handleSendChat = async (e) => {
@@ -82,100 +88,105 @@ export default function MentorTab({ payload, savePayload }) {
 
     const userText = chatInput.trim();
     setChatInput("");
-    
+
     // Append user message
-    const updatedMessages = [...messages, { sender: "user", text: userText }];
-    setMessages(updatedMessages);
+    const updatedHistory = [...chatHistory, { text: userText, isUser: true }];
+    setChatHistory(updatedHistory);
     setChatLoading(true);
 
-    // Format tasks context
-    const activeTodayTasks = (payload.tasks || []).filter(
-      (t) => t.horizonLevel === "today" && !t.isCompleted && !t.isDeleted
-    );
-    const tasksSummary = activeTodayTasks.map((t) => t.title).join(", ");
+    // AI Configuration and Prompt Construction exactly as specified
+    const challengeDesc = {
+      starting: "Overcoming inertia and getting started",
+      focusing: "Protecting deep focus sessions",
+      execution: "Favoring action over perfectionism"
+    }[config.challengeType] || "managing focus";
 
-    // Dialogue history serialization for continuous memory
-    const historyContext = updatedMessages
-      .slice(-6) // take last few messages for token economy & context
-      .map((m) => `${m.sender === "user" ? userName || "User" : mentorName}: ${m.text}`)
-      .join("\n");
+    const systemPrompt = `You are ${config.mentorName || 'Mentor'}, speaking to ${config.userName || 'Anonymous'}. They struggle with ${challengeDesc}. 
+Respond in the voice of ${config.mentorName || 'Mentor'}. Be direct, wise, concise. Max 2-3 sentences. No flowery text.`;
 
-    const systemPrompt = `You are ${mentorName}, a direct, wise, empathetic, and ADHD-friendly advisor speaking to ${userName || "User"}.
-Their active ADHD challenge: ${challengeType}.
-Their target commitments for today: ${tasksSummary || "None committed yet"}.
+    const prompt = `${systemPrompt}\n\nUser message: "${userText}"\n\nRespond now:`;
 
-Instructions: Respond to the user's message in the voice, cadence, and personality of ${mentorName}. Keep your answer extremely brief, direct, and actionable — 2 to 3 sentences maximum. Focus on encouraging physical action and reducing cognitive freeze. Never break character.
-
-Conversation history:
-${historyContext}
-${mentorName}:`;
+    const body = {
+      contents: [{ parts: [{ text: prompt }] }]
+    };
 
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: systemPrompt }] }]
-        })
-      });
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`Chat error: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
-      const answer = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      
-      if (answer) {
-        setMessages((prev) => [...prev, { sender: "mentor", text: answer.trim() }]);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { sender: "mentor", text: "I struggled to process that. Please try rephrasing." }
-        ]);
-      }
+      const mentorReply = data.candidates?.[0]?.content?.parts?.[0]?.text || "I hear you. Keep going.";
+
+      setChatHistory((prev) => [...prev, { text: mentorReply.trim(), isUser: false }]);
     } catch (err) {
-      setMessages((prev) => [
+      setChatHistory((prev) => [
         ...prev,
-        { sender: "mentor", text: `Connection failure: ${err.message}` }
+        { text: `Error connecting to AI: ${err.message}`, isUser: false }
       ]);
     } finally {
       setChatLoading(false);
     }
   };
 
+  const handleSaveKey = (e) => {
+    e.preventDefault();
+    localStorage.setItem("loci_gemini_key", keyInput.trim());
+    alert("Key saved ✓");
+    window.location.reload(); // Refresh to update hybrid fallback resolving state
+  };
+
+  const formatRelativeTime = (timestamp) => {
+    if (!timestamp) return "Never";
+    const diff = Date.now() - timestamp;
+    const secs = Math.floor(diff / 1000);
+    if (secs < 60) return "just now";
+    const mins = Math.floor(secs / 60);
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    return `${hours}h ago`;
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      <h2 className="section-title">🧠 Mentor Settings & AI Dialogue</h2>
-
-      {/* 1. Profile Settings Card */}
+      {/* 1. Profile Settings Form Section */}
       <section className="card">
-        <h3 style={{ fontSize: "15px", fontWeight: "700", marginBottom: "14px" }}>👤 Profile Settings</h3>
+        <h3 className="challenge-title" style={{ fontSize: "15px", fontWeight: "700", marginBottom: "14px" }}>
+          Profile & Mentor Settings
+        </h3>
         <form onSubmit={handleSaveSettings} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           
           <div className="form-group">
-            <label className="form-label" htmlFor="username-input">Your Name</label>
+            <label className="form-label" htmlFor="name-input">Your Name</label>
             <input 
-              id="username-input"
+              id="name-input"
               className="text-input" 
               type="text" 
-              value={userName} 
-              onChange={(e) => setUserName(e.target.value)} 
-              placeholder="e.g. Rohan"
+              value={editedName} 
+              onChange={(e) => setEditedName(e.target.value)} 
+              placeholder="Your Name"
               required
             />
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="mentorname-input">Mentor Avatar</label>
+            <label className="form-label" htmlFor="mentor-input">Mentor Name</label>
             <input 
-              id="mentorname-input"
+              id="mentor-input"
               className="text-input" 
               type="text" 
-              value={mentorName} 
-              onChange={(e) => setMentorName(e.target.value)} 
-              placeholder="e.g. Yoda, Marcus Aurelius, Iron Man"
+              value={editedMentor} 
+              onChange={(e) => setEditedMentor(e.target.value)} 
+              placeholder="Mentor Name"
               required
             />
           </div>
@@ -183,88 +194,96 @@ ${mentorName}:`;
           <div className="form-group">
             <label className="form-label">ADHD Focus Challenge</label>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <div 
-                className={`challenge-option ${challengeType === "Overcoming Inertia" ? "selected" : ""}`}
-                onClick={() => setChallengeType("Overcoming Inertia")}
-              >
-                <span className="challenge-title">🏁 Overcoming Inertia</span>
-                <span className="challenge-desc">Struggling to start new tasks or clear executive freeze.</span>
-              </div>
-              <div 
-                className={`challenge-option ${challengeType === "Protecting Focus" ? "selected" : ""}`}
-                onClick={() => setChallengeType("Protecting Focus")}
-              >
-                <span className="challenge-title">🛡️ Protecting Focus</span>
-                <span className="challenge-desc">Getting distracted midway, multi-tasking, or losing tracking.</span>
-              </div>
-              <div 
-                className={`challenge-option ${challengeType === "Action over Planning" ? "selected" : ""}`}
-                onClick={() => setChallengeType("Action over Planning")}
-              >
-                <span className="challenge-title">⚡ Action over Planning</span>
-                <span className="challenge-desc">Falling into "productive procrastination" through excessive planning lists.</span>
-              </div>
+              {challengeOptions.map((opt) => (
+                <div 
+                  key={opt.key}
+                  className={`challenge-option ${editedChallenge === opt.key ? "selected" : ""}`}
+                  onClick={() => setEditedChallenge(opt.key)}
+                  style={{ display: "flex", alignItems: "center", gap: "10px" }}
+                >
+                  <input 
+                    type="radio" 
+                    name="challenge-radio"
+                    checked={editedChallenge === opt.key}
+                    onChange={() => setEditedChallenge(opt.key)}
+                    style={{ cursor: "pointer" }}
+                  />
+                  <span className="challenge-title" style={{ fontSize: "13px", fontWeight: "600" }}>
+                    {opt.label}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="pomodoro-input">Default Pomodoro (Minutes)</label>
+            <label className="form-label" htmlFor="pomodoro-duration-input">Pomodoro (min)</label>
             <input 
-              id="pomodoro-input"
+              id="pomodoro-duration-input"
               className="text-input" 
               type="number" 
-              min="5" 
-              max="120"
-              value={pomodoroDuration} 
-              onChange={(e) => setPomodoroDuration(e.target.value)} 
+              min="1"
+              value={editedPomodoro} 
+              onChange={(e) => setEditedPomodoro(e.target.value)} 
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="nag-interval-input">Nag Interval (min)</label>
+            <input 
+              id="nag-interval-input"
+              className="text-input" 
+              type="number" 
+              min="1"
+              value={editedNagInterval} 
+              onChange={(e) => setEditedNagInterval(e.target.value)} 
               required
             />
           </div>
 
           <div className="toggle-row">
             <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-              <span className="challenge-title" style={{ fontSize: "13px" }}>🌙 Evening Guard Window</span>
-              <p style={{ fontSize: "11px", color: "var(--text-secondary)" }}>Protects the last hour of your day from high-stress tasks.</p>
+              <span className="challenge-title" style={{ fontSize: "13px", fontWeight: "700" }}>Evening Guard</span>
+              <p style={{ fontSize: "11px", color: "var(--text-secondary)" }}>Protects evening focus time.</p>
             </div>
-            <label className="pill-toggle">
-              <input 
-                type="checkbox" 
-                checked={eveningGuard} 
-                onChange={() => setEveningGuard(!eveningGuard)} 
-              />
-              <span className="pill-slider"></span>
-            </label>
+            <input 
+              type="checkbox" 
+              className="pill-toggle"
+              checked={editedEveningGuard}
+              onChange={() => setEditedEveningGuard(!editedEveningGuard)}
+            />
           </div>
 
           <button className="btn" type="submit" style={{ width: "100%", marginTop: "4px" }}>
-            Save Profile Settings
+            Save Settings
           </button>
         </form>
       </section>
 
-      {/* 2. AI Mentor Chat */}
+      {/* 2. AI Mentor Chat Section */}
       <section className="card">
-        <h3 style={{ fontSize: "15px", fontWeight: "700", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
-          <span>💬 Dialogue: {mentorName}</span>
-          <span style={{ fontSize: "11px", fontWeight: "500", color: "var(--accent)", background: "rgba(217, 119, 87, 0.08)", padding: "2px 8px", borderRadius: "10px" }}>AI Mentor</span>
+        <h3 className="challenge-title" style={{ fontSize: "15px", fontWeight: "700", marginBottom: "12px" }}>
+          Chat with {config.mentorName || "Mentor"}...
         </h3>
 
         <div className="chat-window">
-          {messages.map((m, idx) => (
+          {chatHistory.map((m, idx) => (
             <div 
               key={idx} 
-              className={`chat-bubble ${m.sender === "user" ? "chat-bubble-user" : "chat-bubble-mentor"}`}
+              className={`chat-bubble ${m.isUser ? "chat-bubble-user" : "chat-bubble-mentor"}`}
+              style={{ alignSelf: m.isUser ? "flex-end" : "flex-start" }}
             >
               <span>{m.text}</span>
-              <span className="chat-sender">
-                {m.sender === "user" ? userName || "You" : mentorName}
-              </span>
+              <div className="chat-sender" style={{ color: m.isUser ? "rgba(255,255,255,0.7)" : "var(--text-muted)" }}>
+                {m.isUser ? "You" : config.mentorName || "Mentor"}
+              </div>
             </div>
           ))}
 
           {chatLoading && (
-            <div className="chat-bubble chat-bubble-mentor" style={{ fontStyle: "italic", color: "var(--text-muted)", display: "flex", flexDirection: "row", gap: "4px" }}>
-              <span>{mentorName} is formulating wisdom...</span>
+            <div className="chat-bubble chat-bubble-mentor" style={{ fontStyle: "italic", color: "var(--text-muted)", alignSelf: "flex-start" }}>
+              <span>{config.mentorName || "Mentor"} is typing...</span>
             </div>
           )}
           <div ref={chatBottomRef} />
@@ -272,7 +291,7 @@ ${mentorName}:`;
 
         {!apiKey ? (
           <div style={{ background: "rgba(217, 119, 87, 0.06)", border: "1px solid var(--accent-light)", padding: "12px", borderRadius: "8px", fontSize: "12px", color: "var(--accent-dark)", textAlign: "center" }}>
-            Enter your Gemini API key below to chat with your mentor.
+            🔑 Add your Gemini API key below to chat with your mentor.
           </div>
         ) : (
           <form onSubmit={handleSendChat} className="chat-input-row">
@@ -281,46 +300,63 @@ ${mentorName}:`;
               type="text" 
               value={chatInput} 
               onChange={(e) => setChatInput(e.target.value)} 
-              placeholder={`Speak to ${mentorName}...`} 
+              placeholder={`Speak to ${config.mentorName || "Mentor"}...`} 
               disabled={chatLoading}
               required
             />
-            <button className="btn" type="submit" disabled={chatLoading} style={{ padding: "12px 18px" }}>
-              Send
-            </button>
+            {chatLoading ? (
+              <span style={{ fontSize: "12px", color: "var(--text-muted)", padding: "0 10px" }}>Sending...</span>
+            ) : (
+              <button className="btn" type="submit" disabled={chatLoading || !chatInput.trim()}>
+                Send
+              </button>
+            )}
           </form>
         )}
       </section>
 
-      {/* 3. Gemini API Key Settings */}
+      {/* 3. Gemini API Key Settings Section */}
       <section className="card">
-        <h3 style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px" }}>🔑 Gemini API Connection</h3>
+        <h3 className="challenge-title" style={{ fontSize: "15px", fontWeight: "700", marginBottom: "8px" }}>
+          API Key Configuration
+        </h3>
         <p style={{ fontSize: "11px", color: "var(--text-secondary)", marginBottom: "12px", lineHeight: "1.4" }}>
-          Loci Web runs local requests directly to Google Gemini Flash. Your key stays in this browser and is never uploaded anywhere. Get a free key at <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontWeight: "600" }}>aistudio.google.com</a>.
+          Get a free Gemini API key at <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontWeight: "600" }}>https://aistudio.google.com</a>
         </p>
-        <form onSubmit={handleSaveKey} style={{ display: "flex", gap: "10px" }}>
-          <input 
-            className="text-input" 
-            type="password" 
-            value={tempKey} 
-            onChange={(e) => setTempKey(e.target.value)} 
-            placeholder="AI Studio API Key (AIzaSy...)"
-            required
-          />
-          <button className="btn" type="submit" style={{ padding: "12px 20px" }}>
+        <form onSubmit={handleSaveKey} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <div className="form-group">
+            <label className="form-label" htmlFor="gemini-key-input">Gemini API Key</label>
+            <input 
+              id="gemini-key-input"
+              className="text-input" 
+              type="password" 
+              value={keyInput} 
+              onChange={(e) => setKeyInput(e.target.value)} 
+              placeholder="AI Studio API Key"
+              required
+            />
+          </div>
+          <p style={{ fontSize: "10px", color: "var(--text-muted)", lineHeight: "1.3" }}>
+            Your key is stored locally in your browser only. Never shared.
+          </p>
+          <button className="btn" type="submit" style={{ width: "100%", marginTop: "4px" }}>
             Save Key
           </button>
         </form>
       </section>
 
-      {/* 4. Sync Status */}
-      <section className="card" style={{ display: "flex", alignItems: "center", gap: "12px", background: "linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%)" }}>
-        <span style={{ fontSize: "24px" }}>🔄</span>
-        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-          <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--text-primary)" }}>Active Sync Engine Connected</span>
-          <p style={{ fontSize: "11px", color: "var(--text-muted)", lineHeight: "1.3" }}>
-            Your changes sync automatically with Firebase Realtime Database. All updates stay in sync with your Android app.
-          </p>
+      {/* 4. Sync Status Info Section */}
+      <section className="card" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <h3 className="challenge-title" style={{ fontSize: "14px", fontWeight: "700" }}>
+          Data Sync Status
+        </h3>
+        <div style={{ fontSize: "12px", color: "var(--text-primary)", lineHeight: "1.6", whiteSpace: "pre-line" }}>
+          ✓ All your tasks, settings, and focus state sync automatically via Firebase.
+          
+          <strong>Email:</strong> {config.userId || "Active Sync User"}
+          <strong>Last sync:</strong> {formatRelativeTime(payload.timestamp)}
+          
+          Changes on Android and Web stay in sync instantly.
         </div>
       </section>
     </div>
