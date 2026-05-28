@@ -385,7 +385,7 @@ export default function TodayTab({ payload, savePayload }) {
             <h2 className="level-title">{levelTitle}</h2>
             <span className="xp-label">{xpInLevel}/200 XP to next level</span>
           </div>
-          <div className="commit-badge" style={{ color: "var(--accent)", background: "rgba(124, 58, 237, 0.1)" }}>
+          <div className="commit-badge" style={{ color: "var(--accent)", background: "rgba(217, 119, 87, 0.1)" }}>
             {todayTasksFiltered.length > 0
               ? `${Math.floor((completedTasks.length / todayTasksFiltered.length) * 100)}% Committed`
               : "0% Committed"}
@@ -400,21 +400,21 @@ export default function TodayTab({ payload, savePayload }) {
         {/* traditional XP, streak metrics row */}
         <div className="metrics-row">
           <div className="metric-box">
-            <div className="metric-circle" style={{ background: "rgba(124, 58, 237, 0.12)", color: "var(--accent)" }}>⚡</div>
+            <div className="metric-circle" style={{ background: "rgba(217, 119, 87, 0.12)", color: "var(--accent)" }}>⚡</div>
             <div className="metric-content">
               <span className="metric-name">XP Balance</span>
               <span className="metric-val">{currentXp} XP</span>
             </div>
           </div>
           <div className="metric-box">
-            <div className="metric-circle" style={{ background: "#E8F2D0", color: "#6B8A30" }}>🔥</div>
+            <div className="metric-circle" style={{ background: "#FEF3E8", color: "#C17D2A" }}>🔥</div>
             <div className="metric-content">
               <span className="metric-name">Streak</span>
               <span className="metric-val">{config.visitStreakCount || 1} Days</span>
             </div>
           </div>
           <div className="metric-box">
-            <div className="metric-circle" style={{ background: "rgba(16, 185, 129, 0.15)", color: "var(--success)" }}>✓</div>
+            <div className="metric-circle" style={{ background: "rgba(46, 125, 82, 0.12)", color: "var(--success)" }}>✓</div>
             <div className="metric-content">
               <span className="metric-name">Task Ratio</span>
               <span className="metric-val">{completedTasks.length}/{todayTasksFiltered.length}</span>
@@ -564,7 +564,7 @@ export default function TodayTab({ payload, savePayload }) {
               className="stuck-btn"
               onClick={handleEnergyToggle}
               style={{
-                background: config.isLowEnergyMode ? "var(--success)" : "rgba(255, 255, 255, 0.05)",
+                background: config.isLowEnergyMode ? "var(--success)" : "var(--bg-secondary)",
                 color: config.isLowEnergyMode ? "#fff" : "var(--text-secondary)"
               }}
             >
@@ -578,7 +578,7 @@ export default function TodayTab({ payload, savePayload }) {
 
         <div className="tasks-list">
           {todayTasksFiltered.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "24px 10px", color: "var(--text-muted)", background: "var(--glass)", border: "1px solid var(--glass-border)", borderRadius: "12px" }}>
+            <div style={{ textAlign: "center", padding: "24px 10px", color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
               <p style={{ fontSize: "13px" }}>
                 0 focused commits today. Enter a brain dump or click the floating action button to commit.
               </p>
