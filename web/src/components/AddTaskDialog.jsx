@@ -25,6 +25,14 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
     e.preventDefault();
     if (!title.trim()) return;
 
+    // Evening Guard window block logic
+    const now = new Date();
+    const hour = now.getHours();
+    if (payload.config?.eveningGuardWindowActive && hour >= 20) {
+      alert("Evening Guard is ACTIVE: To protect your evening recovery and sleep, new tasks cannot be added after 8:00 PM. Go rest! 🌙");
+      return;
+    }
+
     // Calculate orderIndex as size of active level tasks
     const currentLevelTasks = (payload.tasks || []).filter(
       (t) => t.horizonLevel === horizonLevel && !t.isDeleted
