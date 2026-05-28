@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    LOCI DESIGN SYSTEM — MULTI-THEME
    Default: Dark Glassy (user's favourite, Option 5)
    ============================================================ */
@@ -2057,6 +2057,137 @@ html[data-theme="glassy"] .theme-dropdown {
   gap: 8px;
   align-items: center;
   margin-top: 8px;
+
+
+/* Round 4 CSS Additions */
+
+/* Toggle switch (checkbox styled as pill) */
+.pill-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 52px;
+  height: 28px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+  position: relative;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+.pill-toggle:checked {
+  background: var(--accent);
+  border-color: var(--accent-dark);
+}
+.pill-toggle::after {
+  content: '';
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background: white;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: left 0.3s;
+}
+.pill-toggle:checked::after {
+  left: 26px;
+}
+
+/* Ritual step card */
+.ritual-step-card {
+  padding: 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Ritual timer display */
+.ritual-timer-display {
+  font-size: 32px;
+  font-weight: 800;
+  font-family: var(--font-display);
+  color: var(--accent);
+  text-align: center;
+  letter-spacing: -0.02em;
+}
+
+/* Challenge option buttons */
+.challenge-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.challenge-option:hover {
+  border-color: var(--accent-light);
+}
+.challenge-option.selected {
+  border-color: var(--accent);
+  background: var(--accent-ring);
+}
+.challenge-option input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+/* Chat window */
+.chat-window {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+}
+
+/* Chat bubbles */
+.chat-bubble {
+  max-width: 80%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+.chat-bubble-user {
+  background: var(--accent);
+  color: var(--btn-text, #fff);
+  align-self: flex-end;
+  border-bottom-right-radius: 3px;
+}
+.chat-bubble-mentor {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  align-self: flex-start;
+  border-bottom-left-radius: 3px;
+}
+
+.chat-sender {
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  padding-left: 4px;
+}
+
+/* Chat input row */
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
 }
 .chat-input-row .text-input {
   flex: 1;
@@ -2070,3 +2201,93 @@ html[data-theme="glassy"] .theme-dropdown {
   gap: 12px;
 }
 
+/* Fix #26: Utility classes to replace common repeated inline styles */
+
+/* Flex helpers */
+.flex-row {
+  display: flex;
+  align-items: center;
+}
+.flex-row-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+.flex-col-gap-sm { display: flex; flex-direction: column; gap: 8px; }
+.flex-col-gap-md { display: flex; flex-direction: column; gap: 14px; }
+.flex-col-gap-lg { display: flex; flex-direction: column; gap: 20px; }
+
+/* Text utilities */
+.text-secondary-sm {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.text-muted-xs {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+.section-description {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+.section-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+/* Info/note box */
+.info-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.warning-box {
+  background: rgba(217, 119, 87, 0.06);
+  border: 1px solid var(--accent-light);
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--accent-dark);
+  text-align: center;
+}
+
+/* Full-width button util */
+.btn-full { width: 100%; }
+
+/* Bottom nav button reset — Fix #25 */
+.bottom-nav .nav-item {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* Column add button — used in Roadmap */
+.column-add-btn {
+  background: none;
+  border: none;
+  color: var(--accent-light);
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.column-add-btn:hover {
+  background: var(--accent-light);
+  color: var(--bg-card);
+}
