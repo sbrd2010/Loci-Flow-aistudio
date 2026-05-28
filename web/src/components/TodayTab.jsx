@@ -229,11 +229,24 @@ export default function TodayTab({ payload, savePayload }) {
     });
 
     // 2. Adjust XP balance and Streak contributions
-    let nextXp = config.totalXp;
+    let nextXp = Number(config.totalXp) || 0;
     let nextContributions = [...contributions];
     if (isCompleted) {
+      // Task checked: +100 XP and add contribution
       nextXp += 100;
       nextContributions = incrementContribution(nextContributions, todayDateStr);
+    } else {
+      // Task unchecked: deduct 100 XP (floor 0) and reverse contribution
+      nextXp = Math.max(0, nextXp - 100);
+      // Decrement contribution count if present
+      const contrIdx = nextContributions.findIndex((c) => c.dateString === todayDateStr);
+      if (contrIdx !== -1 && nextContributions[contrIdx].count > 0) {
+        nextContributions[contrIdx] = {
+          ...nextContributions[contrIdx],
+          count: nextContributions[contrIdx].count - 1,
+          lastUpdated: Date.now()
+        };
+      }
     }
 
     savePayload({
@@ -334,7 +347,7 @@ export default function TodayTab({ payload, savePayload }) {
   };
 
   // Today Statistics & level calculation rules
-  const currentXp = config.totalXp || 0;
+  const currentXp = Number(config.totalXp) || 0;
   const levelNum = Math.floor(currentXp / 200) + 1;
   const xpInLevel = currentXp % 200;
   const levelProgress = (xpInLevel / 200) * 100;
