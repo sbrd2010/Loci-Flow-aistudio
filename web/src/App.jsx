@@ -101,7 +101,7 @@ export default function App() {
   return (
     <div className="app-container">
       {/* Header top bar */}
-      <Header email={email} onSwitchUser={handleSwitchUser} />
+      <Header email={email} onSwitchUser={handleSwitchUser} onGoHome={() => setActiveTab("today")} />
 
       {/* Main Tab Screen Router */}
       <main className="screen-content">
