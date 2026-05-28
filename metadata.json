@@ -1,0 +1,6 @@
+{
+  "name": "Loci",
+  "description": "ADHD native Android productivity application focusing on overcoming inertia, action over detail, time-blindness mitigation, consistency streaks and bento grids.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
