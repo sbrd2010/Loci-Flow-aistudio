@@ -543,7 +543,7 @@ export default function TodayTab({ payload, savePayload }) {
             <span className="slot-label">Current Block</span>
             <span className="slot-task">{activeTask ? activeTask.title : "No active focus"}</span>
           </div>
-          <div className="timeline-slot" style={{ borderLeft: "1px solid #e2e8f0", paddingLeft: "12px" }}>
+          <div className="timeline-slot" style={{ borderLeft: "1px solid var(--border)", paddingLeft: "12px" }}>
             <span className="slot-label">Upcoming Block</span>
             <span className="slot-task">
               {remainingTasks.find((t) => !t.isNowFocus)?.title || "Day commitments complete ✓"}
