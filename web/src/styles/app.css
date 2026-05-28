@@ -11,6 +11,7 @@
   --accent: #D97757;            /* primary coral/terracotta */
   --accent-light: #F2C4A8;      /* soft coral for backgrounds */
   --accent-dark: #B85C35;       /* darker coral for hover states */
+  --accent-ring: rgba(217, 119, 87, 0.08); /* soft coral accent ring/background */
 
   /* Text */
   --text-primary: #1A1915;      /* near black, warm tint */
