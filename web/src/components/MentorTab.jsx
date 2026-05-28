@@ -23,7 +23,14 @@ export default function MentorTab({ payload, savePayload }) {
     setEditedNagInterval(config.reminderNagIntervalMinutes || 15);
     setEditedEveningGuard(!!config.eveningGuardWindowActive);
     setEditedChallenge(config.challengeType || "starting");
-  }, [config]);
+  }, [
+    config.userName,
+    config.mentorName,
+    config.pomodoroDurationMinutes,
+    config.reminderNagIntervalMinutes,
+    config.eveningGuardWindowActive,
+    config.challengeType
+  ]);
 
   // Challenge options matching the specific original layout, text, descriptions, and icons
   const challengeOptions = [
