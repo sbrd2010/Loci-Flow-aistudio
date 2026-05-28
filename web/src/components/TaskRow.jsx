@@ -35,10 +35,10 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete }) {
           <button
             className={`action-btn action-btn-pin ${isNowFocus ? "active" : ""}`}
             onClick={() => onPin(task)}
-            title={isNowFocus ? "Currently Focused" : "Pin to Focus Block"}
+            title={isNowFocus ? "Unpin from Focus Block" : "Pin to Focus Block"}
             style={isNowFocus ? { color: "var(--warning)" } : {}}
           >
-            📌
+            {isNowFocus ? "📍" : "📌"}
           </button>
         )}
         <button
