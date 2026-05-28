@@ -1,0 +1,15 @@
+{
+  "rules": {
+    "sync": {
+      "$userId": {
+        ".read": true,
+        ".write": true,
+        ".validate": "newData.hasChildren(['userId', 'tasks', 'config'])"
+      }
+    },
+    "$other": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}
