@@ -16,14 +16,17 @@ export default function TodayTab({ payload, savePayload }) {
   // Synchronize timer duration if active task estimate changes or is pinned
   useEffect(() => {
     if (activeTask) {
-      const taskSecs = activeTask.timeEstimateMinutes * 60;
+      // Fix #16: guard against NaN/0 from missing timeEstimateMinutes
+      const rawMins = Number(activeTask.timeEstimateMinutes);
+      const taskSecs = (rawMins > 0 ? rawMins : 25) * 60;
       setTimerMaxSeconds(taskSecs);
       // Reset timer countdown if not already running
       if (!isTimerRunning) {
         setTimerSecondsLeft(taskSecs);
       }
     } else {
-      const defaultSecs = config.pomodoroDurationMinutes * 60;
+      const rawMins = Number(config.pomodoroDurationMinutes);
+      const defaultSecs = (rawMins > 0 ? rawMins : 25) * 60;
       setTimerMaxSeconds(defaultSecs);
       if (!isTimerRunning) {
         setTimerSecondsLeft(defaultSecs);
@@ -59,6 +62,8 @@ export default function TodayTab({ payload, savePayload }) {
   useEffect(() => {
     if (isTimerRunning && timerSecondsLeft === 0) {
       setIsTimerRunning(false);
+      // Fix #17: Pomodoro finished — alert user but do NOT auto-complete the task
+      // The user may have stopped the focus block without finishing the actual task.
       handlePomodoroCompletion();
     }
   }, [timerSecondsLeft, isTimerRunning]);
@@ -150,17 +155,35 @@ export default function TodayTab({ payload, savePayload }) {
       return;
     }
 
-    const todayTasksCount = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted).length;
+    // Fix #18: Smart keyword parsing — detect time-horizon and category from text
+    const text = brainDumpText.trim();
+    const lower = text.toLowerCase();
+
+    let horizon = "today";
+    let category = "Personal";
+
+    // Horizon detection (checked in order of specificity)
+    if (/\bthis week\b|\bweek\b/.test(lower)) horizon = "week";
+    else if (/\bthis month\b|\bmonth\b/.test(lower)) horizon = "month";
+    else if (/\bquarter\b|\bq[1-4]\b/.test(lower)) horizon = "quarter";
+    else if (/\b6 months?\b|\bhalf.?year\b/.test(lower)) horizon = "halfyear";
+
+    // Category detection
+    if (/\bwork\b|\boffice\b|\bmeet(?:ing)?\b|\bclient\b|\bproject\b/.test(lower)) category = "Work";
+    else if (/\bcareer\b|\bresume\b|\bjob\b|\binterview\b|\blinkedin\b/.test(lower)) category = "Career";
+    else if (/\bhealth\b|\bworkout\b|\bexercise\b|\bwalk\b|\bgym\b|\bsleep\b|\bmeditat\b/.test(lower)) category = "Health";
+
+    const todayTasksCount = tasks.filter((t) => t.horizonLevel === horizon && !t.isDeleted).length;
 
     const freshTask = {
       id: Date.now(),
       userId: payload.userId,
       uuid: crypto.randomUUID(),
-      title: brainDumpText.trim(),
+      title: text,
       concreteStep: "Do first tiny step",
-      horizonLevel: "today",
+      horizonLevel: horizon,
       priority: "P3",
-      category: "Personal",
+      category,
       timeEstimateMinutes: 25,
       deadlineTimestamp: null,
       isCompleted: false,
@@ -297,33 +320,51 @@ export default function TodayTab({ payload, savePayload }) {
 
   const handlePomodoroCompletion = () => {
     if (activeTask) {
-      // Complete focused task immediately + give 120 XP Pomodoro Bonus!
       const todayDateStr = getTodayDateString();
-      const updatedTasks = tasks.map((t) => {
-        if (t.uuid === activeTask.uuid) {
-          return {
-            ...t,
-            isCompleted: true,
-            isNowFocus: false,
-            dateCompletedString: todayDateStr,
-            lastUpdated: Date.now()
-          };
-        }
-        return t;
-      });
 
-      savePayload({
-        ...payload,
-        tasks: updatedTasks,
-        config: {
-          ...config,
-          totalXp: (Number(config.totalXp) || 0) + 120, // 100 base + 20 pomodoro bonus
-          lastUpdated: Date.now()
-        },
-        contributions: incrementContribution([...contributions], todayDateStr)
-      });
+      // Fix #17: Don't silently auto-complete the task — ask the user first
+      const didFinish = window.confirm(
+        `⏱️ Focus block complete!\n\nDid you fully finish:\n"${activeTask.title}"?\n\nOK = Mark task done (+120 XP)\nCancel = Keep task active (+50 XP focus reward)`
+      );
+
+      if (didFinish) {
+        // User confirms task is done — complete it and give full bonus XP
+        const updatedTasks = tasks.map((t) => {
+          if (t.uuid === activeTask.uuid) {
+            return {
+              ...t,
+              isCompleted: true,
+              isNowFocus: false,
+              dateCompletedString: todayDateStr,
+              lastUpdated: Date.now()
+            };
+          }
+          return t;
+        });
+
+        savePayload({
+          ...payload,
+          tasks: updatedTasks,
+          config: {
+            ...config,
+            totalXp: (Number(config.totalXp) || 0) + 120, // 100 base + 20 pomodoro bonus
+            lastUpdated: Date.now()
+          },
+          contributions: incrementContribution([...contributions], todayDateStr)
+        });
+      } else {
+        // User says task not done — reward focus XP only, keep task active
+        savePayload({
+          ...payload,
+          config: {
+            ...config,
+            totalXp: (Number(config.totalXp) || 0) + 50,
+            lastUpdated: Date.now()
+          }
+        });
+      }
     } else {
-      // Just reward some baseline dopamine XP if no task was pinned
+      // No active task — just reward baseline focus XP
       savePayload({
         ...payload,
         config: {
