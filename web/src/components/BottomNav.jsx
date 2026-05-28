@@ -9,16 +9,20 @@ export default function BottomNav({ activeTab, onTabSelect }) {
   ];
 
   return (
-    <nav className="bottom-nav">
+    <nav className="bottom-nav" role="navigation" aria-label="Main navigation">
       {tabs.map((tab) => (
-        <div
+        /* Fix #25: Use <button> instead of <div> for keyboard/ARIA accessibility */
+        <button
           key={tab.id}
           className={`nav-item ${activeTab === tab.id ? "active" : ""}`}
           onClick={() => onTabSelect(tab.id)}
+          aria-current={activeTab === tab.id ? "page" : undefined}
+          aria-label={tab.label}
+          type="button"
         >
-          <span className="nav-item-icon">{tab.icon}</span>
+          <span className="nav-item-icon" aria-hidden="true">{tab.icon}</span>
           <span>{tab.label}</span>
-        </div>
+        </button>
       ))}
     </nav>
   );
