@@ -29,9 +29,11 @@
     "rewrites": [
       {
         "source": "**",
-        "destination": "/index.html"
+        "destination": "/index.html",
+        "regex": "^(?!/assets/).*$"
       }
-    ]
+    ],
+    "cleanUrls": true
   },
   "database": {
     "rules": "database.rules.json"
