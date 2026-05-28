@@ -1,0 +1,232 @@
+import React, { useState } from "react";
+
+export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
+  const { tasks = [], config = {}, contributions = [] } = payload;
+
+  const columns = [
+    { key: "week", label: "This Week" },
+    { key: "month", label: "Month" },
+    { key: "quarter", label: "Quarter" },
+    { key: "halfyear", label: "6 Months" },
+    { key: "office", label: "Work" }
+  ];
+
+  // Active task selected for overlay details menu
+  const [selectedTask, setSelectedTask] = useState(null);
+
+  // Helper: Format date as YYYY-MM-DD
+  const getTodayDateString = () => {
+    const d = new Date();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}-${month}-${day}`;
+  };
+
+  // Update contribution count inside the payload
+  const incrementContribution = (newContributions, dateStr) => {
+    const index = newContributions.findIndex((c) => c.dateString === dateStr);
+    const compositeKey = `${payload.userId}_${dateStr}`;
+    if (index === -1) {
+      newContributions.push({
+        compositeKey,
+        userId: payload.userId,
+        dateString: dateStr,
+        count: 1,
+        lastUpdated: Date.now()
+      });
+    } else {
+      newContributions[index] = {
+        ...newContributions[index],
+        count: newContributions[index].count + 1,
+        lastUpdated: Date.now()
+      };
+    }
+    return newContributions;
+  };
+
+  const handleMoveToToday = (task) => {
+    // 1. Calculate new orderIndex for Today tasks
+    const todayTasksCount = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted).length;
+
+    const updatedTasks = tasks.map((t) => {
+      if (t.uuid === task.uuid) {
+        return {
+          ...t,
+          horizonLevel: "today",
+          orderIndex: todayTasksCount,
+          lastUpdated: Date.now()
+        };
+      }
+      return t;
+    });
+
+    savePayload({
+      ...payload,
+      tasks: updatedTasks
+    });
+    setSelectedTask(null);
+  };
+
+  const handleMarkDone = (task) => {
+    const todayDateStr = getTodayDateString();
+
+    const updatedTasks = tasks.map((t) => {
+      if (t.uuid === task.uuid) {
+        return {
+          ...t,
+          isCompleted: true,
+          isNowFocus: false,
+          dateCompletedString: todayDateStr,
+          lastUpdated: Date.now()
+        };
+      }
+      return t;
+    });
+
+    savePayload({
+      ...payload,
+      tasks: updatedTasks,
+      config: {
+        ...config,
+        totalXp: config.totalXp + 100,
+        lastUpdated: Date.now()
+      },
+      contributions: incrementContribution([...contributions], todayDateStr)
+    });
+    setSelectedTask(null);
+  };
+
+  const handleDelete = (task) => {
+    const updatedTasks = tasks.map((t) => {
+      if (t.uuid === task.uuid) {
+        return {
+          ...t,
+          isDeleted: true,
+          lastUpdated: Date.now()
+        };
+      }
+      return t;
+    });
+
+    savePayload({
+      ...payload,
+      tasks: updatedTasks
+    });
+    setSelectedTask(null);
+  };
+
+  return (
+    <div className="roadmap-container">
+      <div>
+        <h2 className="roadmap-board-title">Horizon Planning Board</h2>
+        <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+          Map your goals strategically across time-horizons. Tap a card to edit.
+        </p>
+      </div>
+
+      <div className="roadmap-scroll-container">
+        {columns.map((col) => {
+          const colTasks = tasks.filter(
+            (t) => t.horizonLevel === col.key && !t.isDeleted && !t.isCompleted
+          );
+
+          return (
+            <div key={col.key} className="roadmap-column">
+              <div className="column-header">
+                <span className="column-title">{col.label}</span>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <span className="column-count">{colTasks.length}</span>
+                  <button
+                    onClick={() => onOpenAddTask(col.key)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "var(--accent-light)",
+                      fontSize: "14px",
+                      cursor: "pointer",
+                      fontWeight: "bold",
+                      padding: "2px 6px",
+                      borderRadius: "4px"
+                    }}
+                    title={`Add task directly to ${col.label}`}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <div className="column-tasks-list">
+                {colTasks.length === 0 ? (
+                  <div className="roadmap-empty-state">
+                    No tasks here. Add some via + button.
+                  </div>
+                ) : (
+                  colTasks.map((task) => (
+                    <div
+                      key={task.uuid}
+                      className="roadmap-task-card"
+                      onClick={() => setSelectedTask(task)}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "6px" }}>
+                        <span className="roadmap-task-title">{task.title}</span>
+                        <span className={`priority-badge ${task.priority.toLowerCase()}`} style={{ flexShrink: 0 }}>
+                          {task.priority}
+                        </span>
+                      </div>
+                      {task.concreteStep && (
+                        <span className="roadmap-task-step">⚡ {task.concreteStep}</span>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Task Interaction Overlay Menu Dialog */}
+      {selectedTask && (
+        <div className="modal-overlay" onClick={() => setSelectedTask(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "360px" }}>
+            <div className="modal-header">
+              <h2 className="modal-title" style={{ fontSize: "16px" }}>Manage Commitment</h2>
+              <button className="close-btn" onClick={() => setSelectedTask(null)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div style={{ marginBottom: "8px" }}>
+                <span className={`priority-badge ${selectedTask.priority.toLowerCase()}`} style={{ marginBottom: "6px", display: "inline-block" }}>
+                  {selectedTask.priority}
+                </span>
+                <h4 style={{ fontSize: "15px", fontWeight: "600", color: "var(--text-primary)", lineHeight: "1.4" }}>
+                  {selectedTask.title}
+                </h4>
+                <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                  Micro step: {selectedTask.concreteStep}
+                </p>
+              </div>
+
+              <button className="btn" onClick={() => handleMoveToToday(selectedTask)}>
+                🚀 Move to Today
+              </button>
+              <button
+                className="btn"
+                onClick={() => handleMarkDone(selectedTask)}
+                style={{ background: "var(--success)" }}
+              >
+                ✓ Mark Done (+100 XP)
+              </button>
+              <button
+                className="btn btn-cancel"
+                onClick={() => handleDelete(selectedTask)}
+                style={{ color: "var(--danger)", border: "1.5px solid var(--border)" }}
+              >
+                🗑 Delete Task
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
