@@ -166,7 +166,7 @@ export default function OnboardingWizard({ payload, savePayload }) {
                 <span style={{ color: "var(--text-primary)", fontWeight: "700" }}>{userName}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ color: "var(--text-muted)", fontWeight: "600" }}>Focus Focus:</span>
+                <span style={{ color: "var(--text-muted)", fontWeight: "600" }}>Focus Challenge:</span>
                 <span style={{ color: "var(--text-primary)", fontWeight: "700" }}>
                   {selectedChallenge === "starting" ? "Getting started" : selectedChallenge === "focusing" ? "Staying focused" : selectedChallenge === "execution" ? "Following through" : "Tracking time"}
                 </span>

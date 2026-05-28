@@ -156,6 +156,19 @@ export function useSync(email) {
     };
   }, [dbRefPath, email]);
 
+  // Flush any pending debounced write immediately when the tab is closed.
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (timeoutRef.current && dbRefPath && payloadRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+        set(ref(db, dbRefPath), payloadRef.current);
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [dbRefPath]);
+
   /**
    * savePayload — full-payload write with optimistic local update + 1.5s debounce.
    * Used for task/config mutations where we have the full updated object.

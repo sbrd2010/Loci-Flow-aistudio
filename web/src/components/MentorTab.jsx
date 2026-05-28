@@ -412,14 +412,26 @@ Respond in the voice of ${config.mentorName || 'Mentor'}. Be direct, wise, conci
         <h3 className="challenge-title" style={{ fontSize: "14px", fontWeight: "700" }}>
           Data Sync Status
         </h3>
-        <div style={{ fontSize: "12px", color: "var(--text-primary)", lineHeight: "1.6", whiteSpace: "pre-line" }}>
-          ✓ All your tasks, settings, and focus state sync automatically via Firebase.
-          
-          <strong>Email:</strong> {config.userId || "Active Sync User"}
-          <strong>Last sync:</strong> {formatRelativeTime(payload.timestamp)}
-          
-          Changes on Android and Web stay in sync instantly.
+        <p style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: "1.5" }}>
+          ✓ All tasks, settings, and focus state sync automatically via Firebase Realtime Database.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "12px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: "var(--text-muted)", fontWeight: "600" }}>Email</span>
+            <span style={{ color: "var(--text-primary)", fontWeight: "700" }}>{config.userId || "Active User"}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: "var(--text-muted)", fontWeight: "600" }}>Last Sync</span>
+            <span style={{ color: "var(--text-primary)", fontWeight: "700" }}>{formatRelativeTime(payload.timestamp)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: "var(--text-muted)", fontWeight: "600" }}>Tasks</span>
+            <span style={{ color: "var(--text-primary)", fontWeight: "700" }}>{(payload.tasks || []).filter(t => !t.isDeleted).length} active</span>
+          </div>
         </div>
+        <p style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+          Changes on Android and Web stay in sync instantly.
+        </p>
       </section>
     </div>
   );
