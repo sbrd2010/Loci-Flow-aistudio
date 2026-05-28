@@ -428,142 +428,7 @@ export default function TodayTab({ payload, savePayload }) {
 
   return (
     <>
-      {/* 1. Statistics Row Bento block */}
-      <section className="card stats-header-card collapsible-panel">
-        <div className="collapsible-panel-header" onClick={() => setXpOpen(!xpOpen)} style={{cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center"}}>
-          <div>
-            <h2 className="level-title" style={{margin:0, fontSize:"14px"}}>{levelTitle}</h2>
-            <span style={{fontSize:"11px", color:"var(--text-muted)"}}>{currentXp} XP · {xpInLevel}/200 to next level</span>
-          </div>
-          <span style={{color:"var(--text-muted)", fontSize:"13px"}}>{xpOpen ? "▾" : "▸"}</span>
-        </div>
-        {xpOpen && (
-          <>
-            <div className="progress-track" style={{marginTop:"12px"}}>
-              <div className="progress-bar" style={{ width: `${levelProgress}%` }}></div>
-            </div>
-            <div className="metrics-row" style={{marginTop:"12px"}}>
-              <div className="metric-box">
-                <div className="metric-circle" style={{ background: "var(--accent-ring)", color: "var(--accent)" }}>⚡</div>
-                <div className="metric-content">
-                  <span className="metric-name">XP Balance</span>
-                  <span className="metric-val">{currentXp} XP</span>
-                </div>
-              </div>
-              <div className="metric-box">
-                <div className="metric-circle" style={{ background: "var(--p2-bg)", color: "var(--p2-text)" }}>🔥</div>
-                <div className="metric-content">
-                  <span className="metric-name">Streak</span>
-                  <span className="metric-val">{config.visitStreakCount || 1} Days</span>
-                </div>
-              </div>
-              <div className="metric-box">
-                <div className="metric-circle" style={{ background: "rgba(46, 125, 82, 0.12)", color: "var(--success)" }}>✓</div>
-                <div className="metric-content">
-                  <span className="metric-name">Today</span>
-                  <span className="metric-val">{completedTasks.length}/{todayTasksFiltered.length}</span>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-      </section>
-
-      {/* 2. Dopamine Affirmation Banner */}
-      <div className="affirmation-banner" onClick={handleAffirmationTap}>
-        <span style={{ fontSize: "14px" }}>💖</span>
-        <span className="affirmation-text">
-          {showAffirmation ? randomAffirmation : "Tap here for your daily Dopamine Affirmation..."}
-        </span>
-      </div>
-
-      {/* 3. Brain Dump Instant Capture */}
-      <section className="braindump-card">
-        <h2 className="section-title" style={{fontSize:"15px"}}>📝 Brain Dump</h2>
-        <form className="braindump-form" onSubmit={handleBrainDumpSubmit}>
-          <input
-            type="text"
-            className="braindump-input"
-            placeholder="Dump anything — 'workout today', 'read code this week'..."
-            value={brainDumpText}
-            onChange={(e) => setBrainDumpText(e.target.value)}
-          />
-          <button type="submit" className="braindump-submit">➔</button>
-        </form>
-      </section>
-
-      {/* 4. Active Focus Card Hero */}
-      <section className="card focus-card">
-        <div className="focus-top-bar">
-          <div className="focus-live-indicator">
-            <div className="live-dot"></div>
-            ACTIVE FOCUS NOW
-          </div>
-          <button className="stuck-btn" onClick={() => setShowRescue(true)}>
-            Stuck?
-          </button>
-        </div>
-
-        {activeTask ? (
-          <div style={{ textAlign: "center", marginTop: "16px" }}>
-            <h3 className="focus-title">{activeTask.title}</h3>
-            <div className="step-badge">
-              <span>⚡</span> First small step: {activeTask.concreteStep}
-            </div>
-
-            {/* Circular Timer Ring */}
-            <div className="timer-circle-container">
-              <svg className="timer-svg" viewBox="0 0 160 160">
-                <circle className="timer-ring-bg" cx="80" cy="80" r="70" strokeWidth="8" />
-                <circle
-                  className="timer-ring-progress"
-                  cx="80"
-                  cy="80"
-                  r="70"
-                  strokeWidth="8"
-                  style={{ strokeDashoffset }}
-                />
-              </svg>
-              <div className="timer-text-container">
-                <span className="timer-time">
-                  {formatTimerMinutes}:{formatTimerSeconds}
-                </span>
-                <span className="timer-est">EST: {activeTask.timeEstimateMinutes} MIN</span>
-              </div>
-            </div>
-
-            {/* Play, check actions */}
-            <div className="timer-controls">
-              <button
-                className="control-btn control-btn-play"
-                onClick={() => setIsTimerRunning(!isTimerRunning)}
-              >
-                {isTimerRunning ? "⏸" : "▶"}
-              </button>
-              <button
-                className="control-btn control-btn-done"
-                onClick={() => handleToggleComplete(activeTask)}
-              >
-                ✓
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div style={{ textAlign: "center", padding: "30px 10px", color: "var(--text-muted)" }}>
-            <p style={{ fontSize: "14px", fontWeight: "600" }}>No focus commit running.</p>
-            <p style={{ fontSize: "12px", marginTop: "4px" }}>
-              Pick one tiny action below and click the pin icon (📌) to activate Focus Mode!
-            </p>
-          </div>
-        )}
-
-        <div className="focus-coach-divider"></div>
-        <p className="coach-statement">
-          "{config.intentionMessage}" — {config.mentorName || "Marcus Aurelius"}
-        </p>
-      </section>
-
-      {/* 5. Day Horizon timeline progress bar */}
+      {/* 1 ── Day Horizon Timeline */}
       <section className="timeline-card">
         <div className="timeline-header">
           <div className="timeline-title">
@@ -571,7 +436,6 @@ export default function TodayTab({ payload, savePayload }) {
           </div>
           <span className="timeline-clock">{currentTimeStr}</span>
         </div>
-
         <div className="timeline-progress-track">
           <div className="timeline-labels">
             <span className="timeline-label">7 am</span>
@@ -581,7 +445,6 @@ export default function TodayTab({ payload, savePayload }) {
           </div>
           <div className="timeline-progress-fill" style={{ width: `${timelineProgress * 100}%` }}></div>
         </div>
-
         <div className="timeline-slots">
           <div className="timeline-slot">
             <span className="slot-label">Current Block</span>
@@ -590,23 +453,36 @@ export default function TodayTab({ payload, savePayload }) {
           <div className="timeline-slot" style={{ borderLeft: "1px solid var(--border)", paddingLeft: "12px" }}>
             <span className="slot-label">Upcoming Block</span>
             <span className="slot-task">
-              {remainingTasks.find((t) => !t.isNowFocus)?.title || "Day commitments complete ✓"}
+              {remainingTasks.find(t => !t.isNowFocus)?.title || "All done for today ✓"}
             </span>
           </div>
         </div>
       </section>
 
-      {/* 6. Today Commitments Stack */}
+      {/* 2 ── Dopamine Affirmation */}
+      <div className="affirmation-banner" onClick={handleAffirmationTap}>
+        <span style={{ fontSize: "14px" }}>💖</span>
+        <span className="affirmation-text">
+          {showAffirmation ? randomAffirmation : "Tap for your daily Dopamine Affirmation..."}
+        </span>
+      </div>
+
+      {/* 3 ── Today's Focus (primary section) */}
       <section className="tasks-section" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         <div className="section-header">
           <h2 className="section-title">
             Today's Focus
-            {config.isLowEnergyMode && " (Low Energy)"}
+            {config.isLowEnergyMode && (
+              <span style={{ color: "var(--warning)", fontSize: "11px", fontWeight: "700", marginLeft: "8px" }}>
+                ⚡ LOW ENERGY
+              </span>
+            )}
           </h2>
           <div className="section-header-right" style={{ display: "flex", gap: "8px", alignItems: "center" }}>
             <button
               className="stuck-btn"
               onClick={handleEnergyToggle}
+              title="Toggle Low Energy mode — shows only easy P4 quick wins"
               style={{
                 background: config.isLowEnergyMode ? "var(--success)" : "var(--bg-secondary)",
                 color: config.isLowEnergyMode ? "#fff" : "var(--text-secondary)"
@@ -621,34 +497,47 @@ export default function TodayTab({ payload, savePayload }) {
         </div>
 
         <div className="tasks-list">
-          {todayTasksFiltered.length === 0 ? (
+          {todayTasksAll.length === 0 && (
             <div style={{ textAlign: "center", padding: "24px 10px", color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
               <p style={{ fontSize: "13px", fontWeight: "600" }}>No tasks for today.</p>
               <p style={{ fontSize: "12px", marginTop: "6px", lineHeight: "1.5" }}>
-                Pull one from your Roadmap, use the Brain Dump above, or tap the + button to add a commit.
+                Pull one from your Roadmap, use Brain Dump below, or tap + to add a task.
               </p>
             </div>
-          ) : (
+          )}
+          {todayTasksAll.length > 0 && todayTasksFiltered.length === 0 && config.isLowEnergyMode && (
+            <div style={{ textAlign: "center", padding: "24px 10px", color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
+              <p style={{ fontSize: "13px", fontWeight: "600" }}>No easy wins available right now.</p>
+              <p style={{ fontSize: "12px", marginTop: "6px", lineHeight: "1.5" }}>
+                All your tasks need more energy today. Try <strong>Bad Day Reset</strong> on the AI Coach tab, or turn off Low Energy mode.
+              </p>
+            </div>
+          )}
+          {todayTasksFiltered.length > 0 && (
             <>
-              {/* Remaining Tasks */}
               {remainingTasks.map((task, idx) => (
                 editingTaskUuid === task.uuid ? (
                   <div className="task-edit-card" key={task.uuid}>
-                    <input className="text-input" value={editFields.title} onChange={e => setEditFields(f => ({...f, title: e.target.value}))} placeholder="Task title" style={{marginBottom:"8px"}} />
-                    <input className="text-input" value={editFields.concreteStep} onChange={e => setEditFields(f => ({...f, concreteStep: e.target.value}))} placeholder="Micro step (optional)" style={{marginBottom:"8px"}} />
-                    <div style={{display:"flex", gap:"6px", marginBottom:"12px"}}>
+                    <input className="text-input" value={editFields.title}
+                      onChange={e => setEditFields(f => ({ ...f, title: e.target.value }))}
+                      placeholder="Task title" style={{ marginBottom: "8px" }} />
+                    <input className="text-input" value={editFields.concreteStep}
+                      onChange={e => setEditFields(f => ({ ...f, concreteStep: e.target.value }))}
+                      placeholder="Micro step (optional)" style={{ marginBottom: "8px" }} />
+                    <div style={{ display: "flex", gap: "6px", marginBottom: "12px" }}>
                       {["P1","P2","P3","P4"].map(p => (
                         <button key={p} type="button"
                           className={`priority-badge ${p.toLowerCase()}`}
-                          onClick={() => setEditFields(f => ({...f, priority: p}))}
-                          style={{border: editFields.priority === p ? "2px solid var(--accent)" : "2px solid transparent", cursor:"pointer", padding:"4px 10px", opacity: editFields.priority === p ? 1 : 0.55}}>
+                          onClick={() => setEditFields(f => ({ ...f, priority: p }))}
+                          style={{ border: editFields.priority === p ? "2px solid var(--accent)" : "2px solid transparent", cursor: "pointer", padding: "4px 10px", opacity: editFields.priority === p ? 1 : 0.55 }}>
                           {p}
                         </button>
                       ))}
                     </div>
-                    <div style={{display:"flex", gap:"8px"}}>
-                      <button className="btn" onClick={handleSaveEdit} style={{flex:1}}>Save</button>
-                      <button className="btn" onClick={handleCancelEdit} style={{flex:1, background:"var(--bg-secondary)", color:"var(--text-primary)", border:"1px solid var(--border)"}}>Cancel</button>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button className="btn" onClick={handleSaveEdit} style={{ flex: 1 }}>Save</button>
+                      <button className="btn" onClick={handleCancelEdit}
+                        style={{ flex: 1, background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>Cancel</button>
                     </div>
                   </div>
                 ) : (
@@ -659,23 +548,18 @@ export default function TodayTab({ payload, savePayload }) {
                     onPin={handlePinTask}
                     onDelete={handleDeleteTask}
                     onEdit={handleStartEdit}
-                    onMoveUp={idx > 0 ? (t) => handleMoveTask(t, "up") : undefined}
-                    onMoveDown={idx < remainingTasks.length - 1 ? (t) => handleMoveTask(t, "down") : undefined}
+                    onMoveUp={idx > 0 ? t => handleMoveTask(t, "up") : undefined}
+                    onMoveDown={idx < remainingTasks.length - 1 ? t => handleMoveTask(t, "down") : undefined}
                   />
                 )
               ))}
-
-              {/* Completed Section Title */}
               {completedTasks.length > 0 && (
                 <>
-                  <div className="completed-section-title">Completed Commits</div>
-                  {completedTasks.map((task) => (
-                    <TaskRow
-                      key={task.uuid}
-                      task={task}
+                  <div className="completed-section-title">Completed</div>
+                  {completedTasks.map(task => (
+                    <TaskRow key={task.uuid} task={task}
                       onToggleComplete={handleToggleComplete}
-                      onDelete={handleDeleteTask}
-                    />
+                      onDelete={handleDeleteTask} />
                   ))}
                 </>
               )}
@@ -684,59 +568,141 @@ export default function TodayTab({ payload, savePayload }) {
         </div>
       </section>
 
-      {/* 7. Streak Bento contribution map */}
-      <section className="bento-card collapsible-panel">
-        <div className="collapsible-panel-header" onClick={() => setStreakOpen(!streakOpen)} style={{cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center"}}>
-          <h3 className="bento-title" style={{margin:0}}>📊 7-Day Streak</h3>
-          <span style={{color:"var(--text-muted)", fontSize:"13px"}}>{streakOpen ? "▾" : "▸"}</span>
-        </div>
-        {streakOpen && (
-          <>
-            <p style={{fontSize:"11px", color:"var(--text-muted)", margin:"8px 0 10px"}}>
-              Each cell = tasks completed that day. Darker = more done.
-            </p>
-            <div className="bento-grid">
-              {bentoDays.map((day) => {
-                const levelClass =
-                  day.count === 0 ? "" :
-                  day.count === 1 ? "active-lvl-1" :
-                  day.count === 2 ? "active-lvl-2" :
-                  day.count === 3 ? "active-lvl-3" :
-                  "active-lvl-4";
-
-                return (
-                  <div
-                    key={day.dateStr}
-                    className={`bento-cell ${levelClass}`}
-                    title={`${day.count} task${day.count === 1 ? "" : "s"} on ${day.dateStr}`}
-                  >
-                    <span className="bento-cell-date">{day.label}</span>
-                    {day.count > 0 && <span style={{ fontSize: "9px", fontWeight: "700", marginTop: "2px" }}>{day.count}</span>}
-                  </div>
-                );
-              })}
+      {/* 4 ── Active Focus Block — only visible when a task is pinned */}
+      {activeTask && (
+        <section className="card focus-card">
+          <div className="focus-top-bar">
+            <div className="focus-live-indicator">
+              <div className="live-dot"></div>
+              ACTIVE FOCUS NOW
             </div>
-          </>
-        )}
+            <button className="stuck-btn" onClick={() => setShowRescue(true)}>Stuck?</button>
+          </div>
+          <div style={{ textAlign: "center", marginTop: "16px" }}>
+            <h3 className="focus-title">{activeTask.title}</h3>
+            <div className="step-badge">
+              <span>⚡</span> First small step: {activeTask.concreteStep}
+            </div>
+            <div className="timer-circle-container">
+              <svg className="timer-svg" viewBox="0 0 160 160">
+                <circle className="timer-ring-bg" cx="80" cy="80" r="70" strokeWidth="8" />
+                <circle className="timer-ring-progress" cx="80" cy="80" r="70" strokeWidth="8"
+                  style={{ strokeDashoffset }} />
+              </svg>
+              <div className="timer-text-container">
+                <span className="timer-time">{formatTimerMinutes}:{formatTimerSeconds}</span>
+                <span className="timer-est">EST: {activeTask.timeEstimateMinutes} MIN</span>
+              </div>
+            </div>
+            <div className="timer-controls">
+              <button className="control-btn control-btn-play" onClick={() => setIsTimerRunning(!isTimerRunning)}>
+                {isTimerRunning ? "⏸" : "▶"}
+              </button>
+              <button className="control-btn control-btn-done" onClick={() => handleToggleComplete(activeTask)}>✓</button>
+            </div>
+          </div>
+          <div className="focus-coach-divider"></div>
+          <p className="coach-statement">
+            "{config.intentionMessage}" — {config.mentorName || "Marcus Aurelius"}
+          </p>
+        </section>
+      )}
+
+      {/* 5 ── Brain Dump Quick Capture */}
+      <section className="braindump-card">
+        <h2 className="section-title" style={{ fontSize: "15px" }}>📝 Brain Dump</h2>
+        <form className="braindump-form" onSubmit={handleBrainDumpSubmit}>
+          <input type="text" className="braindump-input"
+            placeholder="Anything on your mind — sort it to the Roadmap later..."
+            value={brainDumpText}
+            onChange={e => setBrainDumpText(e.target.value)} />
+          <button type="submit" className="braindump-submit">➔</button>
+        </form>
       </section>
 
-      {/* Stuck Rescue Modal Window Overlay */}
+      {/* 6+7 ── Streak + XP Stats — compact side-by-side at bottom */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+
+        {/* 7-Day Streak */}
+        <section className="bento-card" style={{ padding: "12px 10px" }}>
+          <h3 style={{ fontSize: "11px", fontWeight: "800", color: "var(--text-secondary)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            📊 7-Day Streak
+          </h3>
+          <div className="bento-grid">
+            {bentoDays.map(day => {
+              const levelClass =
+                day.count === 0 ? "" :
+                day.count === 1 ? "active-lvl-1" :
+                day.count === 2 ? "active-lvl-2" :
+                day.count === 3 ? "active-lvl-3" : "active-lvl-4";
+              return (
+                <div key={day.dateStr} className={`bento-cell ${levelClass}`}
+                  title={`${day.count} task${day.count === 1 ? "" : "s"} on ${day.dateStr}`}>
+                  <span className="bento-cell-date">{day.label}</span>
+                  {day.count > 0 && <span style={{ fontSize: "9px", fontWeight: "700", marginTop: "2px" }}>{day.count}</span>}
+                </div>
+              );
+            })}
+          </div>
+          <p style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "6px", lineHeight: "1.4" }}>
+            Each cell = tasks done that day
+          </p>
+        </section>
+
+        {/* XP / Level Progress */}
+        <section className="card" style={{ padding: "12px 10px" }}>
+          <h3 style={{ fontSize: "11px", fontWeight: "800", color: "var(--text-secondary)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            ⚡ Progress
+          </h3>
+          <div style={{ fontSize: "12px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "6px", lineHeight: "1.3" }}>
+            {levelTitle}
+          </div>
+          <div className="progress-track" style={{ height: "5px", marginBottom: "8px" }}>
+            <div className="progress-bar" style={{ width: `${levelProgress}%` }}></div>
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: "3px" }}>
+            <span>⚡ {currentXp} XP · {xpInLevel}/200 next</span>
+            <span>🔥 {config.visitStreakCount || 1} day streak</span>
+            <span>✓ {completedTasks.length}/{todayTasksFiltered.length} today</span>
+          </div>
+        </section>
+
+      </div>
+
+      {/* ── Undo Delete Toast */}
+      {undoTask && (
+        <div style={{
+          position: "fixed", bottom: "76px", left: "50%", transform: "translateX(-50%)",
+          background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "20px",
+          padding: "10px 16px", display: "flex", alignItems: "center", gap: "12px",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.35)", zIndex: 200,
+          fontSize: "12.5px", whiteSpace: "nowrap", maxWidth: "90vw"
+        }}>
+          <span style={{ color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis" }}>
+            "{undoTask.title.length > 28 ? undoTask.title.substring(0, 28) + "…" : undoTask.title}" deleted
+          </span>
+          <button onClick={handleUndoDelete}
+            style={{ background: "var(--accent)", color: "var(--btn-text, #fff)", border: "none",
+              borderRadius: "12px", padding: "5px 14px", fontSize: "12px", fontWeight: "700",
+              cursor: "pointer", flexShrink: 0 }}>
+            Undo
+          </button>
+        </div>
+      )}
+
+      {/* ── Stuck Rescue Modal */}
       {showRescue && (
         <div className="rescue-overlay" onClick={() => setShowRescue(false)}>
-          <div className="rescue-card card" onClick={(e) => e.stopPropagation()}>
+          <div className="rescue-card card" onClick={e => e.stopPropagation()}>
             <span className="rescue-icon">⚠️</span>
             <h3 className="rescue-title">Executive Freeze Rescue Pod</h3>
-            <span className="rescue-step-badge">
-              Step {rescueStepIndex + 1} of {rescueSteps.length}
-            </span>
+            <span className="rescue-step-badge">Step {rescueStepIndex + 1} of {rescueSteps.length}</span>
             <p className="rescue-step-text">{rescueSteps[rescueStepIndex]}</p>
             <button className="btn" onClick={handleNextRescueStep} style={{ width: "100%", marginTop: "10px" }}>
-              {rescueStepIndex === rescueSteps.length - 1
-                ? "I am ready to move the needle!"
-                : "Next Step"}
+              {rescueStepIndex === rescueSteps.length - 1 ? "I am ready to move the needle!" : "Next Step"}
             </button>
             <button className="btn btn-cancel" onClick={() => setShowRescue(false)} style={{ width: "100%" }}>
-              Close pod
+              Close
             </button>
           </div>
         </div>
