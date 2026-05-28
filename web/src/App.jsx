@@ -24,7 +24,7 @@ export default function App() {
   }, [theme]);
 
   // Load the sync payload from RTDB
-  const { payload, loading, savePayload } = useSync(email);
+  const { payload, loading, savePayload, saveSubPath } = useSync(email);
 
   // Handle local sign-in
   const handleSignIn = (e) => {
@@ -132,7 +132,7 @@ export default function App() {
           />
         )}
         {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} />}
-        {activeTab === "mentor" && <MentorTab payload={payload} savePayload={savePayload} />}
+        {activeTab === "mentor" && <MentorTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} />}
       </main>
 
       {/* Floating Action Button (Only show on Today & Roadmap screens) */}
