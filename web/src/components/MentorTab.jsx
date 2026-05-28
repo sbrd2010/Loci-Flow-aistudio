@@ -102,8 +102,14 @@ export default function MentorTab({ payload, savePayload, saveSubPath }) {
     const userText = chatInput.trim();
     setChatInput("");
 
+    // Fix #22: Cap chat history at 40 messages to prevent unbounded payload growth
+    const MAX_CHAT_HISTORY = 40;
+    const trimmedHistory = chatHistory.length >= MAX_CHAT_HISTORY
+      ? chatHistory.slice(chatHistory.length - MAX_CHAT_HISTORY + 1)
+      : chatHistory;
+
     // Append user message directly to sub-path (safe merge — won't stomp tasks)
-    const withUserMessage = [...chatHistory, { text: userText, isUser: true }];
+    const withUserMessage = [...trimmedHistory, { text: userText, isUser: true }];
     saveSubPath("chatHistory", withUserMessage);
     setChatLoading(true);
 
@@ -117,7 +123,15 @@ export default function MentorTab({ payload, savePayload, saveSubPath }) {
     const systemPrompt = `You are ${config.mentorName || 'Mentor'}, speaking to ${config.userName || 'Anonymous'}. They struggle with ${challengeDesc}. 
 Respond in the voice of ${config.mentorName || 'Mentor'}. Be direct, wise, concise. Max 2-3 sentences. No flowery text.`;
 
-    const prompt = `${systemPrompt}\n\nUser message: "${userText}"\n\nRespond now:`;
+    // Fix #23: Include last 6 messages for conversation memory
+    const recentHistory = withUserMessage.slice(-7, -1); // last 6 before the current message
+    const historyContext = recentHistory.length > 0
+      ? "\n\nRecent conversation:\n" + recentHistory
+          .map(m => `${m.isUser ? config.userName || 'User' : config.mentorName || 'Mentor'}: ${m.text}`)
+          .join("\n")
+      : "";
+
+    const prompt = `${systemPrompt}${historyContext}\n\nUser message: "${userText}"\n\nRespond now:`;
 
     const body = {
       contents: [{ parts: [{ text: prompt }] }]
@@ -231,27 +245,29 @@ Respond in the voice of ${config.mentorName || 'Mentor'}. Be direct, wise, conci
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="pomodoro-duration-input">Pomodoro (min)</label>
+            <label className="form-label" htmlFor="pomodoro-duration-input">Pomodoro (min) — max 120</label>
             <input 
               id="pomodoro-duration-input"
               className="text-input" 
               type="number" 
               min="1"
+              max="120"
               value={editedPomodoro} 
-              onChange={(e) => setEditedPomodoro(e.target.value)} 
+              onChange={(e) => setEditedPomodoro(Math.min(120, Math.max(1, Number(e.target.value) || 25)))} 
               required
             />
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="nag-interval-input">Nag Interval (min)</label>
+            <label className="form-label" htmlFor="nag-interval-input">Nag Interval (min) — max 60</label>
             <input 
               id="nag-interval-input"
               className="text-input" 
               type="number" 
               min="1"
+              max="60"
               value={editedNagInterval} 
-              onChange={(e) => setEditedNagInterval(e.target.value)} 
+              onChange={(e) => setEditedNagInterval(Math.min(60, Math.max(1, Number(e.target.value) || 15)))} 
               required
             />
           </div>
