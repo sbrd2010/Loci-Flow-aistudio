@@ -72,6 +72,33 @@ export default function TodayTab({ payload, savePayload }) {
     }
   }, [timerSecondsLeft, isTimerRunning]);
 
+  // Morning Ritual timer
+  useEffect(() => {
+    if (ritualActive && ritualStepIndex >= 0 && ritualSecondsLeft > 0) {
+      ritualIntervalRef.current = setInterval(() => {
+        setRitualSecondsLeft(prev => prev <= 1 ? 0 : prev - 1);
+      }, 1000);
+    } else {
+      clearInterval(ritualIntervalRef.current);
+    }
+    return () => clearInterval(ritualIntervalRef.current);
+  }, [ritualActive, ritualStepIndex, ritualSecondsLeft > 0]);
+
+  useEffect(() => {
+    if (ritualActive && ritualStepIndex >= 0 && ritualSecondsLeft === 0) {
+      handleAdvanceRitualStep();
+    }
+  }, [ritualSecondsLeft, ritualActive, ritualStepIndex]);
+
+  useEffect(() => {
+    if (ritualDone) {
+      savePayload({ ...payload, config: { ...config, totalXp: (Number(config.totalXp) || 0) + 80, lastUpdated: Date.now() } });
+      setRitualDone(false);
+      setRitualSuccess(true);
+      setTimeout(() => setRitualSuccess(false), 3500);
+    }
+  }, [ritualDone]);
+
   // Rotating quotes — change every 2 hours
   const QUOTES = [
     { quote: "Done is better than perfect.", author: "Sheryl Sandberg" },
@@ -95,16 +122,19 @@ export default function TodayTab({ payload, savePayload }) {
   // Timeline progress calculations
   const [timelineProgress, setTimelineProgress] = useState(0.5);
   const [currentTimeStr, setCurrentTimeStr] = useState("");
+  const [currentDateStr, setCurrentDateStr] = useState("");
 
   const updateTimeline = () => {
     const now = new Date();
     const hour = now.getHours();
     const minute = now.getMinutes();
+    const second = now.getSeconds();
 
     // Formatting display clock
     const displayHour = hour % 12 === 0 ? 12 : hour % 12;
     const amPmStr = hour >= 12 ? "PM" : "AM";
-    setCurrentTimeStr(`${displayHour}:${String(minute).padStart(2, "0")} ${amPmStr}`);
+    setCurrentTimeStr(`${displayHour}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")} ${amPmStr}`);
+    setCurrentDateStr(now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }));
 
     // Day boundary progress: 7 AM to 2 AM next day (19 hours total)
     const startHour = 7;
@@ -119,34 +149,23 @@ export default function TodayTab({ payload, savePayload }) {
 
   useEffect(() => {
     updateTimeline();
-    const interval = setInterval(updateTimeline, 60000);
+    const interval = setInterval(updateTimeline, 1000);
     return () => clearInterval(interval);
   }, []);
 
   // Rescue Mode v2 + Quick menu
   const [rescueActive, setRescueActive] = useState(false);
   const [rescueTask, setRescueTask]     = useState(null);
-  const [showQuickMenu, setShowQuickMenu] = useState(false);
-  const quickMenuRef = useRef(null);
-
-  // Close quick menu on outside click
-  useEffect(() => {
-    if (!showQuickMenu) return;
-    const handler = (e) => { if (quickMenuRef.current && !quickMenuRef.current.contains(e.target)) setShowQuickMenu(false); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showQuickMenu]);
+  const [progressDetailOpen, setProgressDetailOpen] = useState(false);
 
   const openRescueMode = () => {
     const pinned = tasks.find(t => !t.isDeleted && !t.isCompleted && t.isNowFocus);
     const first  = tasks.find(t => !t.isDeleted && !t.isCompleted);
     setRescueTask(pinned || first || null);
     setRescueActive(true);
-    setShowQuickMenu(false);
   };
 
   const handleBadDayReset = () => {
-    setShowQuickMenu(false);
     setConfirmDialog({
       message: "Park all active tasks for today?\n\nYou can restore them from the AI Coach tab.",
       confirmLabel: "Park all", cancelLabel: "Cancel",
@@ -186,6 +205,14 @@ export default function TodayTab({ payload, savePayload }) {
   // Undo delete
   const [undoTask, setUndoTask] = useState(null);
   const undoTimeoutRef = useRef(null);
+
+  // Morning Ritual
+  const [ritualActive, setRitualActive] = useState(false);
+  const [ritualStepIndex, setRitualStepIndex] = useState(-1);
+  const [ritualSecondsLeft, setRitualSecondsLeft] = useState(0);
+  const [ritualDone, setRitualDone] = useState(false);
+  const [ritualSuccess, setRitualSuccess] = useState(false);
+  const ritualIntervalRef = useRef(null);
 
   const handleBrainDumpSubmit = (e) => {
     e.preventDefault();
@@ -393,6 +420,45 @@ export default function TodayTab({ payload, savePayload }) {
       return t;
     });
     savePayload({ ...payload, tasks: updatedTasks });
+  };
+
+  // Morning Ritual steps & handlers
+  const ritualSteps = [
+    { name: "Hydrate — drink a full glass of water", seconds: 60 },
+    { name: "Stand & Stretch (touch toes)", seconds: 90 },
+    { name: "Box Breathing (4-hold-4 cycle)", seconds: 90 },
+    { name: "Write ONE intention for today", seconds: 60 },
+    { name: "Scan your task list — pick 3 priorities", seconds: 30 },
+    { name: "Pick your very first action NOW", seconds: 30 }
+  ];
+
+  const formatRitualTime = secs => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+
+  const handleAdvanceRitualStep = () => {
+    if (ritualStepIndex < ritualSteps.length - 1) {
+      const next = ritualStepIndex + 1;
+      setRitualStepIndex(next);
+      setRitualSecondsLeft(ritualSteps[next].seconds);
+    } else {
+      setRitualActive(false);
+      setRitualStepIndex(-1);
+      setRitualSecondsLeft(0);
+      setRitualDone(true);
+    }
+  };
+
+  const handleBeginRitual = () => {
+    setRitualActive(true);
+    setRitualStepIndex(0);
+    setRitualSecondsLeft(ritualSteps[0].seconds);
+    setRitualDone(false);
+  };
+
+  const handleAbortRitual = () => {
+    clearInterval(ritualIntervalRef.current);
+    setRitualActive(false);
+    setRitualStepIndex(-1);
+    setRitualSecondsLeft(0);
   };
 
   // Filter today tasks list based on active Level Energy Filters (excluding parked tasks)

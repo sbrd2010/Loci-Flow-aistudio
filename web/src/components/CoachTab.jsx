@@ -7,82 +7,7 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
   const { groqKey, geminiKey } = getAIKeys();
   const hasAnyKey = !!(groqKey || geminiKey);
 
-  // ── Morning Ritual ────────────────────────────────────────────────────────
-  const [ritualActive, setRitualActive] = useState(false);
-  const [ritualStepIndex, setRitualStepIndex] = useState(-1);
-  const [ritualSecondsLeft, setRitualSecondsLeft] = useState(0);
-  const [ritualMaxSeconds, setRitualMaxSeconds] = useState(0);
-  const [ritualDone, setRitualDone] = useState(false);
-  const [ritualSuccess, setRitualSuccess] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(null);
-  const timerIntervalRef = useRef(null);
-
-  const ritualSteps = [
-    { name: "Hydrate — drink a full glass of water", seconds: 60 },
-    { name: "Stand & Stretch (touch toes)", seconds: 90 },
-    { name: "Box Breathing (4-hold-4 cycle)", seconds: 90 },
-    { name: "Write ONE intention for today", seconds: 60 },
-    { name: "Scan your task list — pick 3 priorities", seconds: 30 },
-    { name: "Pick your very first action NOW", seconds: 30 }
-  ];
-
-  useEffect(() => {
-    if (ritualActive && ritualStepIndex >= 0 && ritualSecondsLeft > 0) {
-      timerIntervalRef.current = setInterval(() => {
-        setRitualSecondsLeft(prev => prev <= 1 ? 0 : prev - 1);
-      }, 1000);
-    } else {
-      clearInterval(timerIntervalRef.current);
-    }
-    return () => clearInterval(timerIntervalRef.current);
-  }, [ritualActive, ritualStepIndex, ritualSecondsLeft > 0]);
-
-  useEffect(() => {
-    if (ritualActive && ritualStepIndex >= 0 && ritualSecondsLeft === 0) {
-      handleAdvanceStep();
-    }
-  }, [ritualSecondsLeft, ritualActive, ritualStepIndex]);
-
-  useEffect(() => {
-    if (ritualDone) {
-      const newXp = (Number(config.totalXp) || 0) + 80;
-      savePayload({ ...payload, config: { ...config, totalXp: newXp } });
-      setRitualDone(false);
-      setRitualSuccess(true);
-      setTimeout(() => setRitualSuccess(false), 3500);
-    }
-  }, [ritualDone]);
-
-  const handleAdvanceStep = () => {
-    if (ritualStepIndex < ritualSteps.length - 1) {
-      const next = ritualStepIndex + 1;
-      setRitualStepIndex(next);
-      setRitualSecondsLeft(ritualSteps[next].seconds);
-      setRitualMaxSeconds(ritualSteps[next].seconds);
-    } else {
-      setRitualActive(false);
-      setRitualStepIndex(-1);
-      setRitualSecondsLeft(0);
-      setRitualDone(true);
-    }
-  };
-
-  const handleBeginRitual = () => {
-    setRitualActive(true);
-    setRitualStepIndex(0);
-    setRitualSecondsLeft(ritualSteps[0].seconds);
-    setRitualMaxSeconds(ritualSteps[0].seconds);
-    setRitualDone(false);
-  };
-
-  const handleAbortRitual = () => {
-    clearInterval(timerIntervalRef.current);
-    setRitualActive(false);
-    setRitualStepIndex(-1);
-    setRitualSecondsLeft(0);
-  };
-
-  const formatTime = secs => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
 
   // ── Task context builder ──────────────────────────────────────────────────
   const buildTaskContext = (allTasks) => {
@@ -262,12 +187,6 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
 
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
 
-      {ritualSuccess && (
-        <div style={{ position: "fixed", top: "80px", left: "50%", transform: "translateX(-50%)", background: "var(--success)", color: "#fff", padding: "12px 24px", borderRadius: "20px", fontWeight: "700", fontSize: "14px", zIndex: 300, boxShadow: "0 4px 20px rgba(0,0,0,0.3)", whiteSpace: "nowrap" }}>
-          🎉 Morning Ritual complete! +80 XP
-        </div>
-      )}
-
       {/* 1 ── AI Mentor Chat */}
       <section className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
@@ -323,42 +242,6 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
               : <button className="btn" type="submit" disabled={!chatInput.trim()} style={{ padding: "10px 16px", fontSize: "13px" }}>Send</button>
             }
           </form>
-        )}
-      </section>
-
-      {/* 3 ── Morning Ritual */}
-      <section className="card">
-        <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "4px", color: "var(--text-primary)" }}>
-          Morning Ritual <span style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-muted)" }}>7 min · +80 XP</span>
-        </h2>
-        <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "14px", lineHeight: "1.5" }}>
-          6 micro-habits to clear executive fog and build momentum before you open your task list.
-        </p>
-
-        {!ritualActive ? (
-          <button className="btn" onClick={handleBeginRitual} style={{ width: "100%" }}>
-            Begin Morning Ritual
-          </button>
-        ) : (
-          <div className="ritual-step-card">
-            <span style={{ fontSize: "10px", fontWeight: "800", color: "var(--text-muted)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-              STEP {ritualStepIndex + 1} OF {ritualSteps.length}
-            </span>
-            <h4 style={{ fontSize: "15px", fontWeight: "700", color: "var(--text-primary)", marginTop: "6px" }}>
-              {ritualSteps[ritualStepIndex].name}
-            </h4>
-            <div className="ritual-timer-display">{formatTime(ritualSecondsLeft)}</div>
-            <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
-              <button className="btn" onClick={handleAdvanceStep}
-                style={{ flex: 1, background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
-                Skip
-              </button>
-              <button className="btn" onClick={handleAbortRitual}
-                style={{ flex: 1, background: "var(--danger)", color: "#fff" }}>
-                Stop
-              </button>
-            </div>
-          </div>
         )}
       </section>
 
