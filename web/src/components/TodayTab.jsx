@@ -72,15 +72,25 @@ export default function TodayTab({ payload, savePayload }) {
     }
   }, [timerSecondsLeft, isTimerRunning]);
 
-  // Dopamine Affirmations state
-  const affirmations = [
-    "You are fully capable of doing this. Break it down to 1 minute.",
-    "One small physical action is better than a perfect layout plan.",
-    "Your focus is your sovereign power. Protect it right now.",
-    "Action builds dopamine. Clarity follows the work.",
-    "Progress is compounding. Breathe in, pick one task, start."
+  // Rotating quotes — change every 2 hours
+  const QUOTES = [
+    { quote: "Done is better than perfect.", author: "Sheryl Sandberg" },
+    { quote: "Action cures fear.", author: "David J. Schwartz" },
+    { quote: "Absorb what is useful.", author: "Bruce Lee" },
+    { quote: "Deep work creates rare value.", author: "Cal Newport" },
+    { quote: "Start before you feel ready.", author: "Marie Forleo" },
+    { quote: "Clarity before speed.", author: "Anonymous" },
+    { quote: "One task. Full attention.", author: "Anonymous" },
+    { quote: "Progress beats perfection.", author: "Anonymous" },
+    { quote: "Begin. The rest is easy.", author: "Seneca" },
+    { quote: "Ship it. Learn. Improve.", author: "Anonymous" },
+    { quote: "Your focus is your power.", author: "Anonymous" },
+    { quote: "Do it now, not later.", author: "Anonymous" },
+    { quote: "Momentum follows action.", author: "Anonymous" },
+    { quote: "Execution is the strategy.", author: "Anonymous" },
+    { quote: "Simplify, then execute.", author: "Steve Jobs" },
   ];
-  const dailyAffirmation = affirmations[new Date().getDay() % affirmations.length];
+  const currentQuote = QUOTES[Math.floor(Date.now() / (2 * 3600 * 1000)) % QUOTES.length];
 
   // Timeline progress calculations
   const [timelineProgress, setTimelineProgress] = useState(0.5);
@@ -429,17 +439,20 @@ export default function TodayTab({ payload, savePayload }) {
 
   return (
     <>
-      {/* 1 ── Daily Motivation Quote (no label) */}
+      {/* 1 ── Rotating Motivation Quote */}
       <section style={{
         background: "var(--accent)", borderRadius: "var(--radius)",
         padding: "12px 16px", textAlign: "center"
       }}>
         <p style={{
-          fontSize: "14px", fontWeight: "700",
-          color: "var(--btn-text, #fff)", lineHeight: "1.45",
+          fontSize: "15px", fontWeight: "800",
+          color: "var(--btn-text, #fff)", lineHeight: "1.4",
           fontStyle: "italic", margin: 0
         }}>
-          "{dailyAffirmation}"
+          "{currentQuote.quote}"
+        </p>
+        <p style={{ fontSize: "11px", fontWeight: "600", color: "rgba(255,255,255,0.72)", margin: "4px 0 0", letterSpacing: "0.04em" }}>
+          — {currentQuote.author}
         </p>
       </section>
 
@@ -494,11 +507,12 @@ export default function TodayTab({ payload, savePayload }) {
                 onClick={() => setShowQuickMenu(o => !o)}
                 title="More options"
                 style={{
-                  background: "none", border: "none", cursor: "pointer",
-                  fontSize: "20px", color: "var(--text-muted)", padding: "4px 6px",
-                  borderRadius: "6px", lineHeight: 1
+                  background: "var(--bg-secondary)", border: "1.5px solid var(--border)",
+                  cursor: "pointer", fontSize: "14px", fontWeight: "900",
+                  color: "var(--text-secondary)", padding: "5px 9px",
+                  borderRadius: "8px", lineHeight: 1, letterSpacing: "0.05em"
                 }}
-              >⋮</button>
+              >•••</button>
               {showQuickMenu && (
                 <div style={{
                   position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 200,

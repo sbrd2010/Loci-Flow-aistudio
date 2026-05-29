@@ -129,10 +129,22 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="settings-mentor">AI Mentor Name</label>
+            <label className="form-label" htmlFor="settings-mentor">AI Coach Name</label>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
+              {["Mark", "Steve", "Dianna", "Jenny"].map(name => (
+                <button key={name} type="button" onClick={() => setEditedMentor(name)}
+                  style={{
+                    padding: "5px 16px", borderRadius: "20px", fontSize: "12.5px", fontWeight: "700",
+                    cursor: "pointer", transition: "all 0.15s",
+                    background: editedMentor === name ? "var(--accent)" : "var(--bg-secondary)",
+                    color: editedMentor === name ? "var(--btn-text, #fff)" : "var(--text-secondary)",
+                    border: editedMentor === name ? "2px solid var(--accent)" : "1.5px solid var(--border)"
+                  }}>{name}</button>
+              ))}
+            </div>
             <input id="settings-mentor" className="text-input" type="text"
               value={editedMentor} onChange={e => setEditedMentor(e.target.value)}
-              placeholder="e.g. Marcus Aurelius" required />
+              placeholder="Or type any name…" required />
           </div>
 
           <div className="form-group">

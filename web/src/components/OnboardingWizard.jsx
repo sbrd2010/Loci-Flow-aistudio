@@ -5,7 +5,8 @@ export default function OnboardingWizard({ payload, savePayload }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [userName, setUserName] = useState("");
   const [selectedChallenge, setSelectedChallenge] = useState("starting");
-  const [selectedMentor, setSelectedMentor] = useState("Marcus Aurelius");
+  const [selectedMentor, setSelectedMentor] = useState("Mark");
+  const [customMentor, setCustomMentor] = useState("");
 
   const challenges = [
     { key: "starting", label: "Starting Inertia (Getting started on tasks)" },
@@ -14,13 +15,14 @@ export default function OnboardingWizard({ payload, savePayload }) {
     { key: "tracking", label: "Calendar Overload (Keeping track of time)" }
   ];
 
-  const mentors = ["Marcus Aurelius", "Yoda", "Seneca", "David Goggins"];
+  const mentors = ["Mark", "Steve", "Dianna", "Jenny"];
+  const effectiveMentor = customMentor.trim() || selectedMentor;
 
   const handleFinish = () => {
     const updatedConfig = {
       ...config,
       userName: userName.trim(),
-      mentorName: selectedMentor,
+      mentorName: effectiveMentor,
       challengeType: selectedChallenge,
       isOnboardingCompleted: true,
       pomodoroDurationMinutes: config.pomodoroDurationMinutes || 25,
@@ -119,29 +121,40 @@ export default function OnboardingWizard({ payload, savePayload }) {
 
         {currentStep === 3 && (
           <div style={{ display: "flex", flexDirection: "column", gap: "16px", width: "100%" }}>
-            <h2 style={{ fontSize: "19px", fontWeight: "800", textAlign: "center" }}>Choose your coaching mentor</h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
+            <h2 style={{ fontSize: "19px", fontWeight: "800", textAlign: "center" }}>Name your AI coach</h2>
+            <p style={{ color: "var(--text-secondary)", fontSize: "12.5px", textAlign: "center", marginTop: "-8px" }}>
+              Pick one or type your own below.
+            </p>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "center" }}>
               {mentors.map((name) => (
-                <div
+                <button
                   key={name}
-                  className={`challenge-option ${selectedMentor === name ? "selected" : ""}`}
-                  onClick={() => setSelectedMentor(name)}
-                  style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%" }}
-                >
-                  <input
-                    type="radio"
-                    name="onboard-mentor"
-                    checked={selectedMentor === name}
-                    onChange={() => setSelectedMentor(name)}
-                    style={{ cursor: "pointer" }}
-                  />
-                  <span className="challenge-title" style={{ fontSize: "13px", fontWeight: "600" }}>
-                    {name}
-                  </span>
-                </div>
+                  type="button"
+                  onClick={() => { setSelectedMentor(name); setCustomMentor(""); }}
+                  style={{
+                    padding: "10px 20px", borderRadius: "24px", fontSize: "14px", fontWeight: "700",
+                    cursor: "pointer", transition: "all 0.15s",
+                    background: selectedMentor === name && !customMentor ? "var(--accent)" : "var(--bg-secondary)",
+                    color: selectedMentor === name && !customMentor ? "var(--btn-text, #fff)" : "var(--text-secondary)",
+                    border: selectedMentor === name && !customMentor ? "2px solid var(--accent)" : "1.5px solid var(--border)"
+                  }}
+                >{name}</button>
               ))}
             </div>
-            <div style={{ display: "flex", gap: "10px", marginTop: "8px", width: "100%" }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Or type a custom name</label>
+              <input
+                type="text"
+                className="text-input"
+                placeholder="e.g. Alex, Mentor, Seneca…"
+                value={customMentor}
+                onChange={e => setCustomMentor(e.target.value)}
+              />
+            </div>
+            <p style={{ fontSize: "12px", color: "var(--accent)", fontWeight: "700", textAlign: "center" }}>
+              Your coach will be: <strong>{effectiveMentor}</strong>
+            </p>
+            <div style={{ display: "flex", gap: "10px", marginTop: "4px", width: "100%" }}>
               <button className="btn" onClick={() => setCurrentStep(2)} style={{ flex: 1, background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
                 Back
               </button>
@@ -172,8 +185,8 @@ export default function OnboardingWizard({ payload, savePayload }) {
                 </span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ color: "var(--text-muted)", fontWeight: "600" }}>Personal Mentor:</span>
-                <span style={{ color: "var(--text-primary)", fontWeight: "700" }}>{selectedMentor}</span>
+                <span style={{ color: "var(--text-muted)", fontWeight: "600" }}>AI Coach:</span>
+                <span style={{ color: "var(--text-primary)", fontWeight: "700" }}>{effectiveMentor}</span>
               </div>
             </div>
 

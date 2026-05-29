@@ -53,13 +53,15 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
             onClick={() => setMenuOpen(o => !o)}
             aria-label="Task options"
             style={{
-              background: "none", border: "none", cursor: "pointer",
-              fontSize: "20px", color: "var(--text-muted)", lineHeight: 1,
-              padding: "8px 4px", borderRadius: "6px",
-              minWidth: "32px", minHeight: "44px",
-              display: "flex", alignItems: "center", justifyContent: "center"
+              background: "var(--bg-secondary)", border: "1.5px solid var(--border)",
+              cursor: "pointer", fontSize: "16px", fontWeight: "900",
+              color: "var(--text-secondary)", lineHeight: 1,
+              padding: "5px 9px", borderRadius: "8px",
+              minWidth: "34px", minHeight: "34px",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              letterSpacing: "0.05em"
             }}
-          >⋮</button>
+          >•••</button>
           {menuOpen && (
             <div style={{
               position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 300,
