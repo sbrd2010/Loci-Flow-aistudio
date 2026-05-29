@@ -609,32 +609,32 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: center;
   color: var(--text-muted);
   cursor: pointer;
-  transition: var(--transition);
-  font-size: 11px;
+  transition: opacity 0.18s ease, color 0.18s ease;
+  font-size: 10.5px;
   font-weight: 600;
   font-family: var(--font-sans);
   height: 100%;
   width: 25%;
   position: relative;
-  gap: 4px;
+  gap: 3px;
 }
 
 .nav-item-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  transition: var(--transition);
-  opacity: 0.55;
+  width: 46px;
+  height: 28px;
+  border-radius: 14px;
+  transition: background 0.2s ease, opacity 0.2s ease, transform 0.18s ease;
 }
 
 .nav-item:hover .nav-item-icon {
-  opacity: 0.8;
+  opacity: 0.65 !important;
 }
 
 .nav-item.active .nav-item-icon {
-  opacity: 1;
+  opacity: 1 !important;
 }
 
 .nav-item:hover {
@@ -642,18 +642,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .nav-item.active {
-  color: var(--accent);
-}
-
-.nav-item.active::after {
-  content: '';
-  position: absolute;
-  bottom: 6px;
-  width: 16px;
-  height: 3px;
-  background: var(--accent);
-  border-radius: 4px;
-  box-shadow: 0 0 6px var(--accent-glow);
+  color: inherit;
 }
 
 /* Elegant Cards */
