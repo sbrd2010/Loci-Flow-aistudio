@@ -24,7 +24,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   const hasActions = !isCompleted && (onEdit || onPin || onMoveUp || onMoveDown || onDelete);
 
   return (
-    <div className={`task-row ${isCompleted ? "completed" : ""}`}>
+    <div className={`task-row ${isCompleted ? "completed" : ""}`} style={menuOpen ? { zIndex: 400, position: "relative" } : undefined}>
       {/* Checkbox */}
       <div className="checkbox-container" onClick={() => onToggleComplete(task)}>
         <div className={`custom-checkbox ${isCompleted ? "checked" : ""}`}>

@@ -196,7 +196,7 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
           {/* Priority */}
           <div className="form-group">
             <label className="form-label">PRIORITY</label>
-            <div className="responsive-4col" style={{ gap: "6px" }}>
+            <div style={{ display: "flex", gap: "6px" }}>
               {priorities.map((p) => (
                 <button
                   key={p}
