@@ -42,11 +42,11 @@ Respond with ONLY valid JSON (no markdown, no code blocks), exactly this structu
 {"title":"<specific outcome-oriented title, max 60 chars>","microStep":"<single door-handle action, max 60 chars>","priority":"P2","estimateMinutes":25}
 
 priority options: P1 (urgent+must do today), P2 (important this week), P3 (normal queue), P4 (easy quick-win, under 15 min)
-estimateMinutes options: 15, 25, 45, 60`;
+estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
 
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
         { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
       );
@@ -58,7 +58,8 @@ estimateMinutes options: 15, 25, 45, 60`;
       if (parsed.title) setTitle(parsed.title);
       if (parsed.microStep) setConcreteStep(parsed.microStep);
       if (["P1","P2","P3","P4"].includes(parsed.priority)) setPriority(parsed.priority);
-      if ([15,25,45,60].includes(Number(parsed.estimateMinutes))) setEstimateMinutes(Number(parsed.estimateMinutes));
+      const est = Number(parsed.estimateMinutes);
+      if ([15,25,45,60,120,240,360].includes(est)) setEstimateMinutes(est);
     } catch (err) {
       setAiError("AI suggestion failed — fill in manually.");
     } finally {
@@ -77,7 +78,10 @@ estimateMinutes options: 15, 25, 45, 60`;
 
   const priorities = ["P1", "P2", "P3", "P4"];
   const categories = ["Career", "Health", "Work", "Personal"];
-  const estimates = [15, 25, 45, 60];
+  const estimates = [
+    { min: 15, label: "15m" }, { min: 25, label: "25m" }, { min: 45, label: "45m" },
+    { min: 60, label: "1h" }, { min: 120, label: "2h" }, { min: 240, label: "4h" }, { min: 360, label: "6h" }
+  ];
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -184,12 +188,13 @@ estimateMinutes options: 15, 25, 45, 60`;
           {/* Horizon Level */}
           <div className="form-group">
             <label className="form-label">HORIZON</label>
-            <div className="horizons-grid">
+            <div className="horizons-grid" style={{ gap: "6px" }}>
               {horizons.map((h) => (
                 <button
                   key={h.key}
                   type="button"
                   className={`selector-btn ${horizonLevel === h.key ? "selected" : ""}`}
+                  style={{ padding: "6px 4px", fontSize: "11.5px" }}
                   onClick={() => setHorizonLevel(h.key)}
                 >
                   {h.label}
@@ -201,12 +206,13 @@ estimateMinutes options: 15, 25, 45, 60`;
           {/* Priority */}
           <div className="form-group">
             <label className="form-label">PRIORITY</label>
-            <div className="responsive-4col">
+            <div className="responsive-4col" style={{ gap: "6px" }}>
               {priorities.map((p) => (
                 <button
                   key={p}
                   type="button"
                   className={`priority-selector-btn ${priority === p ? `selected ${p.toLowerCase()}` : ""}`}
+                  style={{ padding: "7px 4px", fontSize: "12px" }}
                   onClick={() => setPriority(p)}
                 >
                   {p}
@@ -215,7 +221,7 @@ estimateMinutes options: 15, 25, 45, 60`;
             </div>
           </div>
 
-          {/* Category — hidden behind Advanced toggle */}
+          {/* Advanced toggle — Category + Time Estimate */}
           <div style={{ marginBottom: "4px" }}>
             <button type="button" onClick={() => setAdvancedOpen(o => !o)}
               style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: "12px", cursor: "pointer", padding: "4px 0", display: "flex", alignItems: "center", gap: "4px" }}>
@@ -223,34 +229,36 @@ estimateMinutes options: 15, 25, 45, 60`;
             </button>
           </div>
           {advancedOpen && (
-            <div className="form-group">
-              <label className="form-label">CATEGORY</label>
-              <div className="btn-group">
-                {categories.map((c) => (
-                  <button key={c} type="button"
-                    className={`selector-btn ${category === c ? "selected" : ""}`}
-                    onClick={() => setCategory(c)}>{c}</button>
-                ))}
+            <>
+              <div className="form-group">
+                <label className="form-label">TIME ESTIMATE</label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px" }}>
+                  {estimates.map((est) => (
+                    <button
+                      key={est.min}
+                      type="button"
+                      className={`selector-btn ${estimateMinutes === est.min ? "selected" : ""}`}
+                      style={{ padding: "6px 4px", fontSize: "11.5px" }}
+                      onClick={() => setEstimateMinutes(est.min)}
+                    >
+                      {est.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+              <div className="form-group">
+                <label className="form-label">CATEGORY</label>
+                <div className="btn-group" style={{ gap: "6px" }}>
+                  {categories.map((c) => (
+                    <button key={c} type="button"
+                      className={`selector-btn ${category === c ? "selected" : ""}`}
+                      style={{ padding: "6px 4px", fontSize: "11.5px" }}
+                      onClick={() => setCategory(c)}>{c}</button>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
-
-          {/* Time Estimate */}
-          <div className="form-group">
-            <label className="form-label">TIME ESTIMATE</label>
-            <div className="responsive-4col">
-              {estimates.map((est) => (
-                <button
-                  key={est}
-                  type="button"
-                  className={`selector-btn ${estimateMinutes === est ? "selected" : ""}`}
-                  onClick={() => setEstimateMinutes(est)}
-                >
-                  {est}m
-                </button>
-              ))}
-            </div>
-          </div>
 
           {/* Footer controls */}
           <div className="modal-footer" style={{ padding: "0", marginTop: "8px" }}>

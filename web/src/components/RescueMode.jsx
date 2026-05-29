@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=";
 
 const REASONS = [
   { id: "overwhelmed", emoji: "😵", label: "Too much going on",     color: "#f59e0b" },
@@ -60,6 +60,7 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
   const [timerSecs, setTimerSecs] = useState(null);
   const endRef  = useRef(null);
   const inputRef = useRef(null);
+  const chatStarted = useRef(false);
 
   useEffect(() => { document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = ""; }; }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
@@ -97,6 +98,8 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
   };
 
   const openChat = (r) => {
+    if (chatStarted.current) return;
+    chatStarted.current = true;
     setStep("chat");
     if (!key) {
       setMessages([{ role: "ai", text: `Hey ${firstName || "friend"}, I'm here with you. What's going on right now?` }]);

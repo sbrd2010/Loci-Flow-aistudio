@@ -1286,13 +1286,6 @@ h1, h2, h3, h4, h5, h6 {
   margin-top: 10px;
 }
 
-.section-title {
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 800;
-  color: var(--text-primary);
-}
-
 .section-count-badge {
   font-size: 11px;
   font-weight: 700;
@@ -1551,11 +1544,6 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 @media (max-width: 480px) {
-  .fab {
-    right: 20px;
-  }
-}
-@media (min-width: 768px) and (max-width: 720px) {
   .fab {
     right: 20px;
   }
@@ -2388,15 +2376,6 @@ html[data-theme="glassy"] .theme-dropdown {
   padding-left: 4px;
 }
 
-/* Chat input row */
-.chat-input-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-top: 8px;
-}
-
-
 /* Round 4 CSS Additions */
 
 /* Toggle switch (checkbox styled as pill) */
@@ -2577,6 +2556,7 @@ html[data-theme="glassy"] .theme-dropdown {
   line-height: 1.4;
 }
 .section-title {
+  font-family: var(--font-display);
   font-size: 15px;
   font-weight: 800;
   margin-bottom: 8px;
