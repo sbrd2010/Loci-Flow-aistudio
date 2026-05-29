@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-import RescueMode from "./RescueMode";
 
 export default function CoachTab({ payload, savePayload, saveSubPath }) {
   const { tasks = [], config = {} } = payload;
@@ -249,21 +248,6 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
     }
   };
 
-  const [rescueActive, setRescueActive] = useState(false);
-  const [rescueTask, setRescueTask] = useState(null);
-
-  // ── Bad Day Reset ─────────────────────────────────────────────────────────
-  const handleBadDayReset = () => {
-    const pending = tasks.filter(t => !t.isCompleted && !t.isDeleted && ["P1","P2","P3"].includes(t.priority));
-    if (pending.length === 0) { alert("No high-priority tasks to park — your list is already light! 💪"); return; }
-    if (!window.confirm(`Bad Day Reset will park ${pending.length} high-priority task(s) (P1–P3) and show only easy P4 quick wins.\n\nYou can restore them from Parked Archive below.\n\nConfirm?`)) return;
-    savePayload({ ...payload, tasks: tasks.map(t =>
-      !t.isCompleted && !t.isDeleted && ["P1","P2","P3"].includes(t.priority)
-        ? { ...t, isParked: true, isNowFocus: false }
-        : t
-    )});
-    alert("Reset done. P4 quick wins unlocked. Start small. 💪");
-  };
 
   // ── Render ────────────────────────────────────────────────────────────────
   const parkedTasks = tasks.filter(t => t.isParked && !t.isDeleted && !t.isCompleted);
@@ -364,28 +348,7 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
         )}
       </section>
 
-      {/* 4 ── Rescue Buttons */}
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-        <button
-          className="btn"
-          style={{ background: "var(--danger)", color: "#fff" }}
-          onClick={() => {
-            const stuck = tasks.filter(t => !t.isDeleted && !t.isCompleted && t.isNowFocus);
-            const fallback = tasks.filter(t => !t.isDeleted && !t.isCompleted)[0] || null;
-            setRescueTask(stuck[0] || fallback);
-            setRescueActive(true);
-          }}
-        >
-          🚨 Rescue Mode
-        </button>
-        <button className="btn"
-          style={{ background: "var(--bg-card)", color: "var(--danger)", border: "1.5px solid var(--border)", fontSize: "13px", minHeight: "52px" }}
-          onClick={handleBadDayReset}>
-          🌪️ Bad Day Reset
-        </button>
-      </section>
-
-      {/* 5 ── AI Weekly Review */}
+      {/* 4 ── AI Weekly Review */}
       <section className="card">
         <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "4px", color: "var(--text-primary)" }}>
           AI Horizon Review
