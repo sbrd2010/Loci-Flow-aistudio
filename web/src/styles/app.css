@@ -2537,3 +2537,7 @@ html[data-theme="glassy"] .theme-dropdown {
   color: var(--accent);
   background: var(--bg-secondary);
 }
+
+@media (max-width: 640px) {
+  .reorder-btns { display: none; }
+}

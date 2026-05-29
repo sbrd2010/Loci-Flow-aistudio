@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import TaskRow from "./TaskRow";
 import RescueMode from "./RescueMode";
+import ConfirmDialog from "./ConfirmDialog";
 
 export default function TodayTab({ payload, savePayload }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
+
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   // Local state for pomodoro timer
   const [isTimerRunning, setIsTimerRunning] = useState(false);
@@ -134,8 +137,15 @@ export default function TodayTab({ payload, savePayload }) {
 
   const handleBadDayReset = () => {
     setShowQuickMenu(false);
-    if (!window.confirm("Park all active tasks for today? You can restore them from the AI Coach tab.")) return;
-    savePayload({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, isNowFocus: false } : t) });
+    setConfirmDialog({
+      message: "Park all active tasks for today?\n\nYou can restore them from the AI Coach tab.",
+      confirmLabel: "Park all", cancelLabel: "Cancel",
+      onConfirm: () => {
+        savePayload({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, isNowFocus: false } : t) });
+        setConfirmDialog(null);
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
   };
 
   // Legacy rescue pod (kept for pinned-task Stuck? button)
@@ -170,8 +180,10 @@ export default function TodayTab({ payload, savePayload }) {
   const handleBrainDumpSubmit = (e) => {
     e.preventDefault();
     if (!brainDumpText.trim()) return;
+    const currentDump = payload.brainDump || [];
+    if (currentDump.length >= 50) return;
     const newItem = { id: crypto.randomUUID(), text: brainDumpText.trim(), createdAt: Date.now() };
-    savePayload({ ...payload, brainDump: [...(payload.brainDump || []), newItem] });
+    savePayload({ ...payload, brainDump: [...currentDump, newItem] });
     setBrainDumpText("");
   };
 
@@ -294,57 +306,38 @@ export default function TodayTab({ payload, savePayload }) {
   const handlePomodoroCompletion = () => {
     if (activeTask) {
       const todayDateStr = getTodayDateString();
+      const task = activeTask;
 
-      // Fix #17: Don't silently auto-complete the task — ask the user first
-      const didFinish = window.confirm(
-        `⏱️ Focus block complete!\n\nDid you fully finish:\n"${activeTask.title}"?\n\nOK = Mark task done (+120 XP)\nCancel = Keep task active (+50 XP focus reward)`
-      );
-
-      if (didFinish) {
-        // User confirms task is done — complete it and give full bonus XP
-        const updatedTasks = tasks.map((t) => {
-          if (t.uuid === activeTask.uuid) {
-            return {
-              ...t,
-              isCompleted: true,
-              isNowFocus: false,
-              dateCompletedString: todayDateStr,
-              lastUpdated: Date.now()
-            };
-          }
-          return t;
-        });
-
-        savePayload({
-          ...payload,
-          tasks: updatedTasks,
-          config: {
-            ...config,
-            totalXp: (Number(config.totalXp) || 0) + 120, // 100 base + 20 pomodoro bonus
-            lastUpdated: Date.now()
-          },
-          contributions: incrementContribution([...contributions], todayDateStr)
-        });
-      } else {
-        // User says task not done — reward focus XP only, keep task active
-        savePayload({
-          ...payload,
-          config: {
-            ...config,
-            totalXp: (Number(config.totalXp) || 0) + 50,
-            lastUpdated: Date.now()
-          }
-        });
-      }
+      setConfirmDialog({
+        message: `⏱️ Focus block complete!\n\nDid you fully finish:\n"${task.title}"?`,
+        confirmLabel: "Done! +120 XP",
+        cancelLabel: "+50 XP, keep going",
+        onConfirm: () => {
+          const updatedTasks = tasks.map((t) =>
+            t.uuid === task.uuid
+              ? { ...t, isCompleted: true, isNowFocus: false, dateCompletedString: todayDateStr, lastUpdated: Date.now() }
+              : t
+          );
+          savePayload({
+            ...payload,
+            tasks: updatedTasks,
+            config: { ...config, totalXp: (Number(config.totalXp) || 0) + 120, lastUpdated: Date.now() },
+            contributions: incrementContribution([...contributions], todayDateStr)
+          });
+          setConfirmDialog(null);
+        },
+        onCancel: () => {
+          savePayload({
+            ...payload,
+            config: { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() }
+          });
+          setConfirmDialog(null);
+        }
+      });
     } else {
-      // No active task — just reward baseline focus XP
       savePayload({
         ...payload,
-        config: {
-          ...config,
-          totalXp: (Number(config.totalXp) || 0) + 50,
-          lastUpdated: Date.now()
-        }
+        config: { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() }
       });
     }
   };
@@ -655,13 +648,26 @@ export default function TodayTab({ payload, savePayload }) {
 
       {/* 5 ── Brain Dump Quick Capture */}
       <section className="braindump-card">
-        <h2 className="section-title" style={{ fontSize: "15px" }}>📝 Brain Dump</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+          <h2 className="section-title" style={{ fontSize: "15px", margin: 0 }}>📝 Brain Dump</h2>
+          {(payload.brainDump || []).length > 0 && (
+            <span style={{ fontSize: "11px", color: (payload.brainDump || []).length >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700" }}>
+              {(payload.brainDump || []).length}/50
+            </span>
+          )}
+        </div>
+        {(payload.brainDump || []).length >= 50 && (
+          <p style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "8px", fontWeight: "600" }}>
+            Inbox full (50/50). Go to the Roadmap tab to triage items first.
+          </p>
+        )}
         <form className="braindump-form" onSubmit={handleBrainDumpSubmit}>
           <input type="text" className="braindump-input"
             placeholder="Anything on your mind — sort it to the Roadmap later..."
             value={brainDumpText}
-            onChange={e => setBrainDumpText(e.target.value)} />
-          <button type="submit" className="braindump-submit">➔</button>
+            onChange={e => setBrainDumpText(e.target.value)}
+            disabled={(payload.brainDump || []).length >= 50} />
+          <button type="submit" className="braindump-submit" disabled={(payload.brainDump || []).length >= 50}>➔</button>
         </form>
       </section>
 
@@ -816,6 +822,8 @@ export default function TodayTab({ payload, savePayload }) {
           }}
         />
       )}
+
+      {confirmDialog && <ConfirmDialog {...confirmDialog} />}
     </>
   );
 }

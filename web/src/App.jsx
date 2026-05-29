@@ -32,6 +32,24 @@ export default function App() {
   // Load the sync payload from RTDB
   const { payload, loading, error, savePayload, saveSubPath } = useSync(user?.uid || null, user?.email || null);
 
+  // Auto-increment visit streak on first open each day
+  useEffect(() => {
+    if (!payload?.config || !user) return;
+    const cfg = payload.config;
+    const todayStr = new Date().toISOString().split("T")[0];
+    if (cfg.lastVisitDate === todayStr) return;
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split("T")[0];
+    const newStreak = cfg.lastVisitDate === yesterdayStr ? (cfg.visitStreakCount || 0) + 1 : 1;
+
+    savePayload({
+      ...payload,
+      config: { ...cfg, visitStreakCount: newStreak, lastVisitDate: todayStr, lastUpdated: Date.now() }
+    });
+  }, [payload?.config?.lastVisitDate, user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Firebase auth state listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
