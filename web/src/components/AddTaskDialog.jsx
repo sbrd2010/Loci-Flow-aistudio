@@ -226,8 +226,13 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
           {/* Advanced toggle — Category + Time Estimate */}
           <div style={{ marginBottom: "4px" }}>
             <button type="button" onClick={() => setAdvancedOpen(o => !o)}
-              style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: "12px", cursor: "pointer", padding: "4px 0", display: "flex", alignItems: "center", gap: "4px" }}>
-              {advancedOpen ? "▾" : "▸"} Advanced options
+              style={{
+                background: "var(--bg-secondary)", border: "1.5px solid var(--border)",
+                color: "var(--text-secondary)", fontSize: "12.5px", fontWeight: "700",
+                cursor: "pointer", padding: "8px 14px", borderRadius: "8px",
+                display: "flex", alignItems: "center", gap: "6px", width: "100%"
+              }}>
+              {advancedOpen ? "▾" : "▸"} Advanced options (time estimate, category)
             </button>
           </div>
           {advancedOpen && (

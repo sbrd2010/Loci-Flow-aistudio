@@ -542,7 +542,6 @@ h1, h2, h3, h4, h5, h6 {
   .header-initials-badge { display: flex; }
   .header-right { gap: 6px; }
   .switch-btn { font-size: 10px; }
-  .header-subtitle { display: none; }
 }
 
 .user-badge {
@@ -1302,12 +1301,13 @@ h1, h2, h3, h4, h5, h6 {
 .task-row {
   background: var(--bg-card);
   border: 1.5px solid var(--border);
+  border-left: 3px solid var(--accent);
   box-shadow: var(--shadow-md);
   border-radius: 12px;
-  padding: 12px 12px 12px 16px;
+  padding: 10px 10px 10px 12px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   transition: var(--transition);
   position: relative;
 }
@@ -1322,7 +1322,7 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  min-width: 44px;
+  min-width: 36px;
   min-height: 44px;
   flex-shrink: 0;
 }
