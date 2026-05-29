@@ -1081,7 +1081,7 @@ h1, h2, h3, h4, h5, h6 {
 .section-title {
   font-family: var(--font-display);
   font-size: 18px;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--text-primary);
 }
 
