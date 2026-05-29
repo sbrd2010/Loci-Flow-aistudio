@@ -505,19 +505,25 @@ export default function TodayTab({ payload, savePayload }) {
 
   return (
     <>
+      {ritualSuccess && (
+        <div style={{ position: "fixed", top: "80px", left: "50%", transform: "translateX(-50%)", background: "var(--success)", color: "#fff", padding: "12px 24px", borderRadius: "20px", fontWeight: "700", fontSize: "14px", zIndex: 300, boxShadow: "0 4px 20px rgba(0,0,0,0.3)", whiteSpace: "nowrap" }}>
+          🎉 Morning Ritual complete! +80 XP
+        </div>
+      )}
+
       {/* 1 ── Rotating Motivation Quote */}
       <section style={{
-        background: "var(--accent)", borderRadius: "var(--radius)",
-        padding: "12px 16px", textAlign: "center"
+        background: "var(--accent)", borderRadius: "var(--radius-sm)",
+        padding: "8px 14px", display: "flex", alignItems: "center", gap: "10px"
       }}>
         <p style={{
-          fontSize: "15px", fontWeight: "800",
-          color: "var(--btn-text, #fff)", lineHeight: "1.4",
-          fontStyle: "italic", margin: 0
+          fontSize: "13px", fontWeight: "700",
+          color: "var(--btn-text, #fff)", lineHeight: "1.3",
+          fontStyle: "italic", margin: 0, flex: 1
         }}>
           "{currentQuote.quote}"
         </p>
-        <p style={{ fontSize: "11px", fontWeight: "600", color: "rgba(255,255,255,0.72)", margin: "4px 0 0", letterSpacing: "0.04em" }}>
+        <p style={{ fontSize: "10px", fontWeight: "600", color: "rgba(255,255,255,0.75)", margin: 0, flexShrink: 0, letterSpacing: "0.03em" }}>
           — {currentQuote.author}
         </p>
       </section>
@@ -528,7 +534,10 @@ export default function TodayTab({ payload, savePayload }) {
           <div className="timeline-title">
             <h2 className="section-title" style={{ fontSize: "15px", marginBottom: 0 }}>⏰ Day Horizon</h2>
           </div>
-          <span className="timeline-clock">{currentTimeStr}</span>
+          <div style={{ textAlign: "right" }}>
+            <div className="timeline-clock">{currentTimeStr}</div>
+            <div style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600", marginTop: "1px" }}>{currentDateStr}</div>
+          </div>
         </div>
         <div className="timeline-progress-track">
           <div className="timeline-labels">
@@ -539,6 +548,50 @@ export default function TodayTab({ payload, savePayload }) {
           </div>
           <div className="timeline-progress-fill" style={{ width: `${timelineProgress * 100}%` }}></div>
         </div>
+      </section>
+
+      {/* Morning Ritual — compact strip */}
+      <section style={{
+        background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
+        padding: "10px 14px", display: "flex", flexDirection: "column", gap: "10px"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <span style={{ fontSize: "18px" }}>🌅</span>
+          <div style={{ flex: 1 }}>
+            <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>Morning Ritual</span>
+            <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "8px" }}>7 min · +80 XP</span>
+          </div>
+          {!ritualActive ? (
+            <button className="btn" onClick={handleBeginRitual}
+              style={{ padding: "6px 16px", fontSize: "12px", fontWeight: "700" }}>
+              Begin
+            </button>
+          ) : (
+            <button onClick={handleAbortRitual}
+              style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
+              Stop
+            </button>
+          )}
+        </div>
+        {ritualActive && (
+          <div style={{ background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", padding: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
+            <span style={{ fontSize: "10px", fontWeight: "800", color: "var(--text-muted)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+              STEP {ritualStepIndex + 1} OF {ritualSteps.length}
+            </span>
+            <p style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0 }}>
+              {ritualSteps[ritualStepIndex].name}
+            </p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: "20px", fontWeight: "800", color: "var(--accent)", fontFamily: "var(--font-display)" }}>
+                {formatRitualTime(ritualSecondsLeft)}
+              </span>
+              <button className="btn" onClick={handleAdvanceRitualStep}
+                style={{ padding: "5px 14px", fontSize: "12px", background: "var(--bg-card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                Skip →
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* 3 ── Today's Focus (primary section) */}
@@ -567,41 +620,6 @@ export default function TodayTab({ payload, savePayload }) {
             <span className="section-count-badge">
               {completedTasks.length}/{todayTasksFiltered.length}
             </span>
-            {/* ⋮ Quick-access menu — Rescue Mode & Bad Day Reset */}
-            <div ref={quickMenuRef} style={{ position: "relative" }}>
-              <button
-                onClick={() => setShowQuickMenu(o => !o)}
-                title="More options"
-                style={{
-                  background: "var(--bg-secondary)", border: "1.5px solid var(--border)",
-                  cursor: "pointer", fontSize: "14px", fontWeight: "900",
-                  color: "var(--text-secondary)", padding: "5px 9px",
-                  borderRadius: "8px", lineHeight: 1, letterSpacing: "0.05em"
-                }}
-              >•••</button>
-              {showQuickMenu && (
-                <div style={{
-                  position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 200,
-                  background: "var(--bg-card)", border: "1px solid var(--border)",
-                  borderRadius: "10px", boxShadow: "var(--shadow-lg)",
-                  minWidth: "170px", overflow: "hidden"
-                }}>
-                  <button onClick={openRescueMode} style={{
-                    display: "flex", alignItems: "center", gap: "10px", width: "100%",
-                    background: "none", border: "none", padding: "12px 16px",
-                    cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "700",
-                    color: "var(--danger)"
-                  }}>🚨 Rescue Mode</button>
-                  <div style={{ height: "1px", background: "var(--border)" }} />
-                  <button onClick={handleBadDayReset} style={{
-                    display: "flex", alignItems: "center", gap: "10px", width: "100%",
-                    background: "none", border: "none", padding: "12px 16px",
-                    cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "600",
-                    color: "var(--text-secondary)"
-                  }}>🌪️ Bad Day Reset</button>
-                </div>
-              )}
-            </div>
           </div>
         </div>
 
