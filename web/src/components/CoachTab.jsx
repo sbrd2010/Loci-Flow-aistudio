@@ -409,25 +409,6 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
         </section>
       )}
 
-      {rescueActive && (
-        <RescueMode
-          task={rescueTask}
-          apiKey={apiKey}
-          firstName={firstName}
-          onDismiss={() => setRescueActive(false)}
-          onAccept={() => {
-            setRescueActive(false);
-            if (rescueTask) {
-              savePayload({
-                ...payload,
-                tasks: tasks.map(t =>
-                  t.uuid === rescueTask.uuid ? { ...t, isNowFocus: true } : t
-                )
-              });
-            }
-          }}
-        />
-      )}
     </div>
   );
 }
