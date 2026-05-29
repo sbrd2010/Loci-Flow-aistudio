@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ref, onValue, set, update, runTransaction } from "firebase/database";
+import { ref, onValue, set, update, runTransaction, get } from "firebase/database";
 import { db } from "./firebase";
 
 // Retry a Firebase set() up to `retries` times with exponential backoff (500ms, 1s, 2s).
@@ -15,13 +15,12 @@ async function writeWithRetry(dbRef, data, retries = 3) {
   }
 }
 
-export function useSync(email) {
+export function useSync(uid, email) {
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const safeUserId = email ? email.replace(/\./g, "_") : null;
-  const dbRefPath = safeUserId ? `sync/${safeUserId}` : null;
+  const dbRefPath = uid ? `sync/${uid}` : null;
 
   const payloadRef = useRef(null);
   const timeoutRef = useRef(null);
@@ -182,7 +181,7 @@ export function useSync(email) {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [dbRefPath, email]);
+  }, [dbRefPath, uid, email]);
 
   // Flush any pending debounced write immediately when the tab is closed.
   useEffect(() => {
@@ -196,6 +195,27 @@ export function useSync(email) {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [dbRefPath]);
+
+  // One-time migration: copy data from legacy email path to uid path
+  useEffect(() => {
+    if (!uid || !email) return;
+    const legacyId = email.replace(/\./g, "_");
+    const legacyPath = `sync/${legacyId}`;
+    if (legacyId === uid) return; // already on uid path, skip
+
+    get(ref(db, legacyPath)).then(snapshot => {
+      const legacyData = snapshot.val();
+      if (!legacyData) return; // no legacy data, nothing to migrate
+      const uidPath = `sync/${uid}`;
+      get(ref(db, uidPath)).then(uidSnap => {
+        if (uidSnap.val()) return; // uid path already has data, don't overwrite
+        // Copy legacy data to uid path
+        set(ref(db, uidPath), { ...legacyData, userId: uid }).then(() => {
+          console.log("Migration: legacy data copied to uid path");
+        }).catch(err => console.error("Migration write failed:", err));
+      });
+    }).catch(() => {}); // silent fail if legacy path unreadable
+  }, [uid, email]);
 
   /**
    * savePayload — full-payload write with optimistic local update + 1.5s debounce.

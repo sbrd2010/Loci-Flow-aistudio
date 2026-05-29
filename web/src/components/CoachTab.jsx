@@ -459,6 +459,8 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
       {rescueActive && (
         <RescueMode
           task={rescueTask}
+          apiKey={apiKey}
+          firstName={firstName}
           onDismiss={() => setRescueActive(false)}
           onAccept={() => {
             setRescueActive(false);

@@ -1,5 +1,6 @@
-// CI/CD Deployment Trigger to resolve GHA race condition - v4
 import React, { useState, useEffect } from "react";
+import { auth } from "./firebase";
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { useSync } from "./useSync";
 import Header from "./components/Header";
 import BottomNav from "./components/BottomNav";
@@ -11,8 +12,8 @@ import AddTaskDialog from "./components/AddTaskDialog";
 import OnboardingWizard from "./components/OnboardingWizard";
 
 export default function App() {
-  const [email, setEmail] = useState(localStorage.getItem("loci_email") || "");
-  const [inputEmail, setInputEmail] = useState("");
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("today");
   const [showAddTask, setShowAddTask] = useState(false);
   const [preselectedHorizon, setPreselectedHorizon] = useState("today");
@@ -24,25 +25,23 @@ export default function App() {
   }, [theme]);
 
   // Load the sync payload from RTDB
-  const { payload, loading, error, savePayload, saveSubPath } = useSync(email);
+  const { payload, loading, error, savePayload, saveSubPath } = useSync(user?.uid || null, user?.email || null);
 
-  // Handle local sign-in
-  const handleSignIn = (e) => {
-    e.preventDefault();
-    if (inputEmail && inputEmail.includes("@")) {
-      const cleanEmail = inputEmail.trim().toLowerCase();
-      localStorage.setItem("loci_email", cleanEmail);
-      setEmail(cleanEmail);
-    }
-  };
+  // Firebase auth state listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setAuthLoading(false);
+    });
+    return unsubscribe;
+  }, []);
 
   // Handle sign-out / switch user
   const handleSwitchUser = () => {
-    localStorage.removeItem("loci_email");
-    setEmail("");
-    setInputEmail("");
-    setActiveTab("today");
-    window.location.reload();
+    signOut(auth).then(() => {
+      setUser(null);
+      setActiveTab("today");
+    });
   };
 
   // Open the Add Task dialog
@@ -51,37 +50,43 @@ export default function App() {
     setShowAddTask(true);
   };
 
-  // If no email, render full-screen Sign-In Overlay
-  if (!email) {
+  if (authLoading) {
     return (
       <div className="signin-overlay">
-        <form className="signin-card card" onSubmit={handleSignIn}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
+          <span style={{ fontSize: "40px" }}>🧠</span>
+          <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>Loading…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="signin-overlay">
+        <div className="signin-card card">
           <div className="signin-title-container">
             <span className="signin-emoji">🧠</span>
             <h1 className="signin-title">Loci Focus</h1>
-            <p className="signin-subtitle">
-              Enter your email to sync your tasks.
-            </p>
+            <p className="signin-subtitle">Your daily focus companion.</p>
           </div>
-          <div className="form-group">
-            <label className="form-label" htmlFor="email-input">Email Address</label>
-            <input
-              id="email-input"
-              className="text-input"
-              type="email"
-              placeholder="you@example.com"
-              value={inputEmail}
-              onChange={(e) => setInputEmail(e.target.value)}
-              required
-            />
-          </div>
-          <button className="btn" type="submit" disabled={!inputEmail.includes("@")}>
-            Start My Focus Journey
+          <button
+            className="btn"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", fontSize: "15px", padding: "14px 20px" }}
+            onClick={() => signInWithPopup(auth, new GoogleAuthProvider()).catch(err => console.error("Sign-in failed:", err))}
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+              <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+              <path d="M3.964 10.706A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.038l3.007-2.332z" fill="#FBBC05"/>
+              <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.962L3.964 6.294C4.672 4.167 6.656 3.58 9 3.58z" fill="#EA4335"/>
+            </svg>
+            Continue with Google
           </button>
           <span className="signin-note">
-            Your tasks sync across all your devices using your email as the key.
+            Your tasks sync across your devices. Sign in with Google to begin.
           </span>
-        </form>
+        </div>
       </div>
     );
   }
@@ -124,9 +129,9 @@ export default function App() {
   return (
     <div className="app-container">
       {/* Header top bar */}
-      <Header 
-        email={email} 
-        onSwitchUser={handleSwitchUser} 
+      <Header
+        email={user.email}
+        onSwitchUser={handleSwitchUser}
         onGoHome={() => setActiveTab("today")} 
         theme={theme} 
         onThemeChange={setTheme} 
@@ -169,7 +174,7 @@ export default function App() {
       {/* Modal Add Task Dialog */}
       {showAddTask && (
         <AddTaskDialog
-          email={email}
+          email={user.email}
           payload={payload}
           savePayload={savePayload}
           defaultHorizon={preselectedHorizon}

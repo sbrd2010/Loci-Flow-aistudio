@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
+import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDKCF2WcJk9kI1YovHBTPrWj2QSdmrjUx0",
@@ -11,8 +12,6 @@ const firebaseConfig = {
   appId: "1:862993748883:web:loci-web-app"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-
-// Initialize Realtime Database and export
 export const db = getDatabase(app);
+export const auth = getAuth(app);
