@@ -13,6 +13,7 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
+  const [formError, setFormError] = useState("");
 
   const { groqKey, geminiKey } = getAIKeys();
   const hasAnyKey = !!(groqKey || geminiKey);
@@ -91,9 +92,10 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
     const now = new Date();
     const hour = now.getHours();
     if (payload.config?.eveningGuardWindowActive && hour >= 20) {
-      alert("Evening Guard is ACTIVE: To protect your evening recovery and sleep, new tasks cannot be added after 8:00 PM. Go rest! 🌙");
+      setFormError("🌙 Evening Guard is active — no new tasks after 8 PM. Go rest!");
       return;
     }
+    setFormError("");
 
     // Calculate orderIndex as size of active level tasks
     const currentLevelTasks = (payload.tasks || []).filter(
@@ -261,6 +263,11 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
           )}
 
           {/* Footer controls */}
+          {formError && (
+            <p style={{ fontSize: "12.5px", color: "var(--danger)", fontWeight: "700", textAlign: "center", padding: "8px 12px", background: "rgba(248,113,113,0.08)", borderRadius: "var(--radius-sm)", border: "1px solid var(--danger)" }}>
+              {formError}
+            </p>
+          )}
           <div className="modal-footer" style={{ padding: "0", marginTop: "8px" }}>
             {saved ? (
               <div style={{ flex: 1, textAlign: "center", padding: "12px", background: "var(--success)", borderRadius: "var(--radius-sm)", color: "#fff", fontWeight: "700", fontSize: "14px" }}>
