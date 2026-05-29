@@ -56,7 +56,7 @@ export default function OnboardingWizard({ payload, savePayload }) {
             <span className="signin-emoji" style={{ fontSize: "40px" }}>🧠</span>
             <h2 style={{ fontSize: "20px", fontWeight: "800" }}>Welcome to Loci Focus</h2>
             <p style={{ color: "var(--text-secondary)", fontSize: "13px", lineHeight: "1.5" }}>
-              A premium, mindful workspace specifically designed for ADHD brains.
+              A premium, mindful workspace for focus-driven people.
             </p>
             <div className="form-group">
               <label className="form-label" htmlFor="onboard-name-input">What should Loci call you?</label>
@@ -157,7 +157,7 @@ export default function OnboardingWizard({ payload, savePayload }) {
             <span className="signin-emoji" style={{ fontSize: "40px" }}>🎉</span>
             <h2 style={{ fontSize: "20px", fontWeight: "800" }}>You're all set, {userName}!</h2>
             <p style={{ color: "var(--text-secondary)", fontSize: "13px", lineHeight: "1.5" }}>
-              Your personalized ADHD workspace is calibrated and ready.
+              Your personalized focus workspace is calibrated and ready.
             </p>
 
             <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px", display: "flex", flexDirection: "column", gap: "10px", width: "100%", fontSize: "12.5px", textAlign: "left" }}>
