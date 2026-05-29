@@ -31,11 +31,12 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
   // Update contribution count inside the payload
   const incrementContribution = (newContributions, dateStr) => {
     const index = newContributions.findIndex((c) => c.dateString === dateStr);
-    const compositeKey = `${payload.userId}_${dateStr}`;
+    const uid = payload.userId || payload.config?.userId || "";
+    const compositeKey = `${uid}_${dateStr}`;
     if (index === -1) {
       newContributions.push({
         compositeKey,
-        userId: payload.userId,
+        userId: uid,
         dateString: dateStr,
         count: 1,
         lastUpdated: Date.now()
