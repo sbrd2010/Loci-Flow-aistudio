@@ -28,7 +28,10 @@ export default function ThemeSwitcher({ theme, onThemeChange }) {
   return (
     <div className="theme-switcher">
       <button className="theme-btn" onClick={() => setOpen(!open)} title="Switch theme">
-        {current.emoji}
+        <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0px" }}>
+          <span style={{ fontSize: "16px", lineHeight: "1" }}>{current.emoji}</span>
+          <span style={{ fontSize: "8px", fontWeight: "700", letterSpacing: "0.04em", color: "var(--text-muted)", textTransform: "uppercase" }}>Theme</span>
+        </span>
       </button>
       {open && (
         <>

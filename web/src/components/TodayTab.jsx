@@ -76,19 +76,7 @@ export default function TodayTab({ payload, savePayload }) {
     "Action builds dopamine. Clarity follows the work.",
     "Progress is compounding. Breathe in, pick one task, start."
   ];
-  const [showAffirmation, setShowAffirmation] = useState(false);
-  const [randomAffirmation, setRandomAffirmation] = useState("");
-
-  useEffect(() => {
-    setRandomAffirmation(affirmations[Math.floor(Math.random() * affirmations.length)]);
-  }, []);
-
-  const handleAffirmationTap = () => {
-    setShowAffirmation(!showAffirmation);
-    if (!showAffirmation) {
-      setRandomAffirmation(affirmations[Math.floor(Math.random() * affirmations.length)]);
-    }
-  };
+  const dailyAffirmation = affirmations[new Date().getDay() % affirmations.length];
 
   // Timeline progress calculations
   const [timelineProgress, setTimelineProgress] = useState(0.5);
@@ -147,9 +135,8 @@ export default function TodayTab({ payload, savePayload }) {
   const [editingTaskUuid, setEditingTaskUuid] = useState(null);
   const [editFields, setEditFields] = useState({ title: "", concreteStep: "", priority: "P2" });
 
-  // Collapsible panels
-  const [streakOpen, setStreakOpen] = useState(false);
-  const [xpOpen, setXpOpen] = useState(false);
+  // Bar chart selected day
+  const [selectedDay, setSelectedDay] = useState(null);
 
   // Undo delete
   const [undoTask, setUndoTask] = useState(null);
@@ -379,19 +366,6 @@ export default function TodayTab({ payload, savePayload }) {
     savePayload({ ...payload, tasks: updatedTasks });
   };
 
-  // Today Statistics & level calculation rules
-  const currentXp = Number(config.totalXp) || 0;
-  const levelNum = Math.floor(currentXp / 200) + 1;
-  const xpInLevel = currentXp % 200;
-  const levelProgress = (xpInLevel / 200) * 100;
-
-  const levelTitle = 
-    levelNum === 1 ? "Mindful Catalyst (L1)" :
-    levelNum === 2 ? "Inertia Crusher (L2)" :
-    levelNum === 3 ? "Deep Flow Initiate (L3)" :
-    levelNum === 4 ? "Strategic Executer (L4)" :
-    "Master of Loci (L5+)";
-
   // Filter today tasks list based on active Level Energy Filters (excluding parked tasks)
   const todayTasksAll = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isParked);
   const todayTasksFiltered = config.isLowEnergyMode
@@ -455,12 +429,10 @@ export default function TodayTab({ payload, savePayload }) {
         </div>
       </section>
 
-      {/* 2 ── Dopamine Affirmation */}
-      <div className="affirmation-banner" onClick={handleAffirmationTap}>
-        <span style={{ fontSize: "14px" }}>💖</span>
-        <span className="affirmation-text">
-          {showAffirmation ? randomAffirmation : "Tap for today's motivation ✨"}
-        </span>
+      {/* 2 ── Daily Motivation */}
+      <div className="affirmation-banner" style={{ cursor: "default" }}>
+        <span style={{ fontSize: "14px" }}>💬</span>
+        <span className="affirmation-text" style={{ fontStyle: "italic" }}>{dailyAffirmation}</span>
       </div>
 
       {/* 3 ── Today's Focus (primary section) */}
@@ -626,61 +598,69 @@ export default function TodayTab({ payload, savePayload }) {
         </form>
       </section>
 
-      {/* 6+7 ── Streak + XP Stats — compact side-by-side at bottom */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-
-        {/* 7-Day Streak */}
-        <section className="bento-card" style={{ padding: "12px 10px" }}>
-          <h3 style={{ fontSize: "11px", fontWeight: "800", color: "var(--text-secondary)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            📊 7-Day Progress
-          </h3>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "6px" }}>
-            {bentoDays.map((day, i) => {
-              const isToday = i === 6;
-              const done = day.count > 0;
-              return (
-                <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
-                  <span style={{
-                    fontSize: "8px", fontWeight: "700", color: isToday ? "var(--accent)" : "var(--text-muted)",
-                    textTransform: "uppercase", letterSpacing: "0.04em"
-                  }}>{day.label}</span>
-                  <div style={{
-                    width: "28px", height: "28px", borderRadius: "50%",
-                    background: done ? (isToday ? "var(--accent)" : "var(--success, #22c55e)") : "var(--bg-secondary)",
-                    border: isToday ? "2px solid var(--accent)" : "2px solid transparent",
-                    display: "flex", alignItems: "center", justifyContent: "center"
-                  }}>
-                    {done && <span style={{ fontSize: "10px", fontWeight: "800", color: "#fff" }}>{day.count}</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <p style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "6px", lineHeight: "1.4" }}>
-            Green = tasks completed · Today is highlighted
-          </p>
-        </section>
-
-        {/* XP / Level Progress */}
-        <section className="card" style={{ padding: "12px 10px" }}>
-          <h3 style={{ fontSize: "11px", fontWeight: "800", color: "var(--text-secondary)", marginBottom: "2px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            ⚡ XP & Level
-          </h3>
-          <p style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "6px" }}>Earn XP by completing tasks</p>
-          <div style={{ fontSize: "12px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "6px", lineHeight: "1.3" }}>
-            {levelTitle}
-          </div>
-          <div className="progress-track" style={{ height: "5px", marginBottom: "8px" }}>
-            <div className="progress-bar" style={{ width: `${levelProgress}%` }}></div>
-          </div>
-          <div style={{ fontSize: "11px", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: "3px" }}>
-            <span>⚡ {currentXp} XP · {xpInLevel}/200 next</span>
-            <span>🔥 {config.visitStreakCount || 1} day streak</span>
-            <span>✓ {completedTasks.length}/{todayTasksFiltered.length} today</span>
-          </div>
-        </section>
-
-      </div>
+      {/* 6 ── 7-Day Progress */}
+      <section className="bento-card" style={{ padding: "12px 14px" }}>
+        <h3 style={{ fontSize: "11px", fontWeight: "800", color: "var(--text-secondary)", marginBottom: "10px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          📊 7-Day Progress
+        </h3>
+        {/* SVG bar chart */}
+        {(() => {
+          const maxCount = Math.max(...bentoDays.map(d => d.count), 1);
+          const BAR_HEIGHT = 56;
+          return (
+            <div>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: "4px", height: `${BAR_HEIGHT + 24}px` }}>
+                {bentoDays.map((day, i) => {
+                  const isToday = i === 6;
+                  const barH = day.count > 0 ? Math.max(8, Math.round((day.count / maxCount) * BAR_HEIGHT)) : 4;
+                  const isSelected = selectedDay === day.dateStr;
+                  const barColor = isToday
+                    ? "var(--accent)"
+                    : day.count > 0
+                    ? "var(--success, #22c55e)"
+                    : "var(--bg-secondary)";
+                  return (
+                    <div
+                      key={day.dateStr}
+                      onClick={() => setSelectedDay(isSelected ? null : day.dateStr)}
+                      style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer", gap: "4px" }}
+                    >
+                      {/* Tap tooltip */}
+                      {isSelected && day.count > 0 && (
+                        <div style={{
+                          fontSize: "10px", fontWeight: "800", color: "var(--btn-text, #fff)",
+                          background: "var(--accent)", borderRadius: "6px", padding: "2px 5px",
+                          marginBottom: "2px", whiteSpace: "nowrap"
+                        }}>{day.count} task{day.count !== 1 ? "s" : ""}</div>
+                      )}
+                      {/* Spacer to align bars to bottom */}
+                      <div style={{ flex: 1 }} />
+                      {/* Bar */}
+                      <div style={{
+                        width: "100%", height: `${barH}px`,
+                        background: barColor,
+                        borderRadius: "4px 4px 2px 2px",
+                        border: isSelected ? "2px solid var(--accent)" : isToday ? "2px solid var(--accent)" : "none",
+                        boxSizing: "border-box",
+                        transition: "height 0.2s ease"
+                      }} />
+                      {/* Day label */}
+                      <span style={{
+                        fontSize: "9px", fontWeight: isToday ? "900" : "600",
+                        color: isToday ? "var(--accent)" : "var(--text-muted)",
+                        textTransform: "uppercase"
+                      }}>{day.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "6px" }}>
+                Tap a bar to see count · Green = completed · Today highlighted
+              </p>
+            </div>
+          );
+        })()}
+      </section>
 
       {/* ── Undo Delete Toast */}
       {undoTask && (

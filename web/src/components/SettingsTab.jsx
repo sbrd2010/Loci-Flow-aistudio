@@ -3,6 +3,17 @@ import React, { useState, useEffect } from "react";
 export default function SettingsTab({ payload, savePayload, saveSubPath }) {
   const { config = {} } = payload;
 
+  // ── XP / Progress computed values ────────────────────────────────────────
+  const tasks = payload.tasks || [];
+  const contributions = payload.contributions || [];
+  const completedTotal = tasks.filter(t => t.isCompleted && !t.isDeleted).length;
+  const currentXp = Number(config.totalXp) || 0;
+  const xpInLevel = currentXp % 200;
+  const levelNum = Math.floor(currentXp / 200) + 1;
+  const levelProgress = (xpInLevel / 200) * 100;
+  const levelTitles = ["Focus Seed", "Inertia Crusher", "Momentum Builder", "Flow Finder", "Deep Worker", "Focus Master"];
+  const levelTitle = `${levelTitles[Math.min(levelNum - 1, levelTitles.length - 1)]} (L${levelNum})`;
+
   // ── Profile form state ────────────────────────────────────────────────────
   const [editedName, setEditedName] = useState(config.userName || "");
   const [editedMentor, setEditedMentor] = useState(config.mentorName || "Marcus Aurelius");
@@ -106,26 +117,44 @@ export default function SettingsTab({ payload, savePayload, saveSubPath }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Your Biggest ADHD Challenge</label>
+            <label className="form-label" style={{ fontSize: "11px", fontWeight: "900", letterSpacing: "0.1em", color: "var(--text-primary)" }}>
+              YOUR BIGGEST ADHD CHALLENGE
+            </label>
             <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "-4px 0 10px" }}>
               Your AI coach adapts its advice based on this selection.
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {challengeOptions.map(opt => (
-                <div
-                  key={opt.key}
-                  className={`challenge-option ${editedChallenge === opt.key ? "selected" : ""}`}
-                  onClick={() => setEditedChallenge(opt.key)}
-                  style={{ cursor: "pointer", padding: "10px 14px" }}
-                >
-                  <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>
-                    {opt.icon} {opt.label}
-                  </span>
-                  <span style={{ fontSize: "11.5px", color: "var(--text-secondary)", display: "block", marginTop: "2px" }}>
-                    {opt.desc}
-                  </span>
-                </div>
-              ))}
+              {challengeOptions.map(opt => {
+                const isSelected = editedChallenge === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setEditedChallenge(opt.key)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "12px",
+                      padding: "12px 14px", borderRadius: "var(--radius-sm)",
+                      border: isSelected ? "2px solid var(--accent)" : "1.5px solid var(--border)",
+                      background: isSelected ? "var(--accent-ring)" : "var(--bg-secondary)",
+                      cursor: "pointer", textAlign: "left", width: "100%",
+                      transition: "all 0.15s ease"
+                    }}
+                  >
+                    <span style={{ fontSize: "20px", flexShrink: 0 }}>{opt.icon}</span>
+                    <div>
+                      <div style={{
+                        fontSize: "13px", fontWeight: "800",
+                        color: isSelected ? "var(--accent)" : "var(--text-primary)",
+                        marginBottom: "2px"
+                      }}>{opt.label}</div>
+                      <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{opt.desc}</div>
+                    </div>
+                    {isSelected && (
+                      <span style={{ marginLeft: "auto", color: "var(--accent)", fontWeight: "800", fontSize: "16px" }}>✓</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -164,6 +193,38 @@ export default function SettingsTab({ payload, savePayload, saveSubPath }) {
             {savedProfile ? "✓ Saved!" : "Save Profile"}
           </button>
         </form>
+      </section>
+
+      {/* ── Your Progress ── */}
+      <section className="card">
+        <h2 className="section-title">Your Progress</h2>
+        <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "14px" }}>
+          XP earned by completing tasks. Levels reset every 200 XP.
+        </p>
+        <div style={{ marginBottom: "10px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+            <span style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-primary)" }}>{levelTitle}</span>
+            <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{xpInLevel}/200 XP</span>
+          </div>
+          <div className="progress-track" style={{ height: "6px" }}>
+            <div className="progress-bar" style={{ width: `${levelProgress}%` }} />
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginTop: "12px" }}>
+          {[
+            { label: "Total XP", value: `⚡ ${currentXp}` },
+            { label: "Completed", value: `✓ ${completedTotal}` },
+            { label: "Day Streak", value: `🔥 ${config.visitStreakCount || 1}` }
+          ].map(stat => (
+            <div key={stat.label} style={{
+              background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)",
+              padding: "10px 8px", textAlign: "center"
+            }}>
+              <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "2px" }}>{stat.value}</div>
+              <div style={{ fontSize: "10px", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{stat.label}</div>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* ── AI API Key ───────────────────────────────────────────────────── */}
