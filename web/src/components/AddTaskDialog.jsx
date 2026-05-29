@@ -175,18 +175,6 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
             )}
           </div>
 
-          {/* Concrete Step */}
-          <div className="form-group">
-            <label className="form-label">MICRO ACTION (FIRST TINY STEP)</label>
-            <input
-              type="text"
-              className="text-input"
-              placeholder="e.g. Open Google Doc and write greeting line"
-              value={concreteStep}
-              onChange={(e) => setConcreteStep(e.target.value)}
-            />
-          </div>
-
           {/* Horizon Level */}
           <div className="form-group">
             <label className="form-label">HORIZON</label>
@@ -232,11 +220,21 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
                 cursor: "pointer", padding: "8px 14px", borderRadius: "8px",
                 display: "flex", alignItems: "center", gap: "6px", width: "100%"
               }}>
-              {advancedOpen ? "▾" : "▸"} Advanced options (time estimate, category)
+              {advancedOpen ? "▾" : "▸"} Advanced options
             </button>
           </div>
           {advancedOpen && (
             <>
+              <div className="form-group">
+                <label className="form-label">MICRO ACTION (FIRST TINY STEP)</label>
+                <input
+                  type="text"
+                  className="text-input"
+                  placeholder="e.g. Open Google Doc and write greeting line"
+                  value={concreteStep}
+                  onChange={(e) => setConcreteStep(e.target.value)}
+                />
+              </div>
               <div className="form-group">
                 <label className="form-label">TIME ESTIMATE</label>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px" }}>
