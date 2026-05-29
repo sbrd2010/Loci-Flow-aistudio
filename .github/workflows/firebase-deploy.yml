@@ -25,6 +25,11 @@ jobs:
           npm ci
           npm run build
 
+      - name: Deploy Database Rules
+        run: npx firebase-tools@latest deploy --only database --project loci-flow --token "$FIREBASE_TOKEN"
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:

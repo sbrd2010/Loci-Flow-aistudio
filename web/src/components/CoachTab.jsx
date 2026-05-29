@@ -170,7 +170,7 @@ COACHING RULES:
 - NEVER say you cannot see their tasks — you CAN see the full list above.
 - If they ask "what should I do?" or "what are my tasks?", answer from the list above directly.
 
-SESSION: ${timeOfDay}, ${config.currentStreak || 0}-day streak, ${todayActive.length} active tasks today.`;
+SESSION: ${timeOfDay}, ${config.visitStreakCount || 0}-day streak, ${todayActive.length} active tasks today.`;
 
     const messages = withUser.map(m => ({ role: m.isUser ? "user" : "assistant", content: m.text }));
 
@@ -214,7 +214,7 @@ USER PROFILE:
 - Name: ${config.userName || "friend"}
 - Core challenge: ${challengeDesc}
 - Time of day: ${timeOfDay} (${hour}:00) — ${hour < 12 ? "peak cognitive energy window" : hour < 15 ? "post-lunch dip, use easier tasks" : hour < 18 ? "second wind window" : "low energy, protect recovery"}
-- Streak: ${config.currentStreak || 0} days
+- Streak: ${config.visitStreakCount || 0} days
 - Today's task count: ${todayTasks.length}
 - Urgent P1 tasks today: ${overdueTasks.length}
 

@@ -542,6 +542,7 @@ h1, h2, h3, h4, h5, h6 {
   .header-initials-badge { display: flex; }
   .header-right { gap: 6px; }
   .switch-btn { font-size: 10px; }
+  .header-subtitle { display: none; }
 }
 
 .user-badge {
@@ -1261,8 +1262,8 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--accent);
   font-size: 18px;
   cursor: pointer;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1550,6 +1551,10 @@ h1, h2, h3, h4, h5, h6 {
     right: calc(50% - 340px);
   }
 }
+@media (min-width: 1024px) {
+  .fab { right: calc(50% - 530px); }
+  .bottom-nav { max-width: 1100px; }
+}
 
 .fab:hover {
   transform: rotate(90deg) scale(1.05);
@@ -1582,7 +1587,7 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 20px;
   box-shadow: var(--shadow-lg);
   overflow-y: auto;
-  max-height: 90vh;
+  max-height: 90dvh;
   display: flex;
   flex-direction: column;
 }
@@ -1637,6 +1642,9 @@ h1, h2, h3, h4, h5, h6 {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
+}
+@media (max-width: 390px) {
+  .horizons-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* 4-item selectors: 4 columns on tablet+, 2 columns on narrow phones */
@@ -1715,7 +1723,7 @@ h1, h2, h3, h4, h5, h6 {
     max-width: 100%;
     width: 100%;
     border-radius: 20px 20px 0 0;
-    max-height: 88vh;
+    max-height: 88dvh;
     min-height: 0;
   }
   .modal-header {
@@ -1784,7 +1792,7 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
-  max-height: 70vh;
+  max-height: 70dvh;
 }
 
 @media (min-width: 768px) {
@@ -2329,85 +2337,6 @@ html[data-theme="glassy"] .theme-dropdown {
   accent-color: var(--accent);
 }
 
-/* Round 4 CSS Additions */
-
-/* Toggle switch (checkbox styled as pill) */
-.pill-toggle {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 52px;
-  height: 28px;
-  background: var(--bg-secondary);
-  border: 1.5px solid var(--border);
-  border-radius: 14px;
-  cursor: pointer;
-  position: relative;
-  transition: var(--transition);
-  flex-shrink: 0;
-}
-.pill-toggle:checked {
-  background: var(--accent);
-  border-color: var(--accent-dark);
-}
-.pill-toggle::after {
-  content: '';
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  background: white;
-  border-radius: 50%;
-  top: 2px;
-  left: 2px;
-  transition: left 0.3s;
-}
-.pill-toggle:checked::after {
-  left: 26px;
-}
-
-/* Ritual step card */
-.ritual-step-card {
-  padding: 14px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* Ritual timer display */
-.ritual-timer-display {
-  font-size: 32px;
-  font-weight: 800;
-  font-family: var(--font-display);
-  color: var(--accent);
-  text-align: center;
-  letter-spacing: -0.02em;
-}
-
-/* Challenge option buttons */
-.challenge-option {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  border: 1.5px solid var(--border);
-  background: var(--bg-card);
-  cursor: pointer;
-  transition: var(--transition);
-}
-.challenge-option:hover {
-  border-color: var(--accent-light);
-}
-.challenge-option.selected {
-  border-color: var(--accent);
-  background: var(--accent-ring);
-}
-.challenge-option input[type="radio"] {
-  accent-color: var(--accent);
-}
-
 /* Chat window */
 .chat-window {
   display: flex;
@@ -2597,9 +2526,9 @@ html[data-theme="glassy"] .theme-dropdown {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 14px;
   cursor: pointer;
-  padding: 1px 4px;
+  padding: 10px 8px;
   line-height: 1;
   border-radius: 3px;
 }

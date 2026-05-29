@@ -764,7 +764,7 @@ export default function TodayTab({ payload, savePayload }) {
       {/* ── Undo Delete Toast */}
       {undoTask && (
         <div style={{
-          position: "fixed", bottom: "76px", left: "50%", transform: "translateX(-50%)",
+          position: "fixed", bottom: "calc(76px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)",
           background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "20px",
           padding: "10px 16px", display: "flex", alignItems: "center", gap: "12px",
           boxShadow: "0 4px 20px rgba(0,0,0,0.35)", zIndex: 200,
