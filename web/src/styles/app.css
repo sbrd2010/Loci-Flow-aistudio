@@ -12,6 +12,15 @@
   --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+@keyframes pulse-cyan {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 240, 255, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(0, 240, 255, 0.8); }
+}
+@keyframes pulse-amethyst {
+  0%, 100% { box-shadow: 0 0 8px rgba(206, 189, 255, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(206, 189, 255, 0.8); }
+}
+
 /* ---- THEME 1: Dark Glassy (DEFAULT) ---- */
 :root,
 html[data-theme="glassy"] {
@@ -242,6 +251,162 @@ html[data-theme="editorial"] {
   --bento-l2: rgba(0, 88, 187, 0.28);
   --bento-l3: rgba(0, 88, 187, 0.55);
   --btn-text: #ffffff;
+}
+
+/* ---- THEME 7: Midnight Neon ---- */
+html[data-theme="midnight-neon"] {
+  --radius: 14px;
+  --radius-sm: 8px;
+  --font-display: 'Inter', system-ui, sans-serif;
+  --bg-primary: #131314;
+  --bg-card: rgba(28, 27, 28, 0.75);
+  --bg-card-hover: rgba(42, 42, 43, 0.85);
+  --bg-secondary: rgba(255, 255, 255, 0.04);
+  --bg-input: rgba(255, 255, 255, 0.07);
+  --accent: #00f0ff;
+  --accent-light: rgba(0, 240, 255, 0.15);
+  --accent-dark: #00dbe9;
+  --accent-secondary: #a4cddb;
+  --text-primary: #e5e2e3;
+  --text-secondary: #b9cacb;
+  --text-muted: #849495;
+  --border: #222224;
+  --border-focus: #00f0ff;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --p1-bg: rgba(248, 113, 113, 0.15); --p1-text: #fca5a5;
+  --p2-bg: rgba(251, 191, 36, 0.15);  --p2-text: #fcd34d;
+  --p3-bg: rgba(0, 240, 255, 0.12);   --p3-text: #00f0ff;
+  --p4-bg: rgba(255, 255, 255, 0.04); --p4-text: #849495;
+  --shadow-sm: 0 1px 4px rgba(0,0,0,0.5), 0 0 8px rgba(0,240,255,0.06);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.6), 0 0 20px rgba(0,240,255,0.1);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.7), 0 0 40px rgba(0,240,255,0.15);
+  --accent-glow: rgba(0, 240, 255, 0.5);
+  --accent-ring: rgba(0, 240, 255, 0.15);
+  --overlay-bg: rgba(0, 0, 0, 0.82);
+  --affirmation-bg: rgba(0, 240, 255, 0.06);
+  --bento-l1: rgba(0, 240, 255, 0.15);
+  --bento-l2: rgba(0, 240, 255, 0.35);
+  --bento-l3: rgba(0, 240, 255, 0.6);
+  --btn-text: #00363a;
+}
+
+/* ---- THEME 8: Solar Ember ---- */
+html[data-theme="solar-ember"] {
+  --radius: 20px;
+  --radius-sm: 12px;
+  --font-display: 'Outfit', system-ui, sans-serif;
+  --bg-primary: #fcf9f3;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f6f3ed;
+  --bg-secondary: #f0eee8;
+  --bg-input: #ffffff;
+  --accent: #fd8b00;
+  --accent-light: rgba(253, 139, 0, 0.15);
+  --accent-dark: #904d00;
+  --accent-secondary: #992f0e;
+  --text-primary: #1c1c18;
+  --text-secondary: #55423d;
+  --text-muted: #89726c;
+  --border: #dcc1b9;
+  --border-focus: #fd8b00;
+  --success: #2E7D52;
+  --warning: #C17D2A;
+  --danger: #ba1a1a;
+  --p1-bg: rgba(186, 26, 26, 0.12); --p1-text: #ba1a1a;
+  --p2-bg: rgba(253, 139, 0, 0.15); --p2-text: #904d00;
+  --p3-bg: rgba(153, 47, 14, 0.12); --p3-text: #992f0e;
+  --p4-bg: #f0eee8;                 --p4-text: #89726c;
+  --shadow-sm: 0 1px 3px rgba(111,36,10,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(111,36,10,0.10), 0 0 20px rgba(253,139,0,0.08);
+  --shadow-lg: 0 8px 24px rgba(111,36,10,0.14), 0 0 40px rgba(253,139,0,0.12);
+  --accent-glow: rgba(253, 139, 0, 0.4);
+  --accent-ring: rgba(253, 139, 0, 0.15);
+  --overlay-bg: rgba(26, 25, 21, 0.55);
+  --affirmation-bg: linear-gradient(135deg, #fef3e8, #fdecea);
+  --bento-l1: rgba(253, 139, 0, 0.2);
+  --bento-l2: rgba(253, 139, 0, 0.45);
+  --bento-l3: rgba(253, 139, 0, 0.72);
+  --btn-text: #ffffff;
+}
+
+/* ---- THEME 9: Arctic Frost ---- */
+html[data-theme="arctic-frost"] {
+  --radius: 16px;
+  --radius-sm: 10px;
+  --font-display: 'Outfit', system-ui, sans-serif;
+  --bg-primary: #f7f9fb;
+  --bg-card: rgba(255, 255, 255, 0.55);
+  --bg-card-hover: #e6e8ea;
+  --bg-secondary: #f2f4f6;
+  --bg-input: #ffffff;
+  --accent: #41627d;
+  --accent-light: rgba(65, 98, 125, 0.15);
+  --accent-dark: #284a64;
+  --accent-secondary: #bcdefe;
+  --text-primary: #191c1e;
+  --text-secondary: #44474e;
+  --text-muted: #74777f;
+  --border: #c4c6cf;
+  --border-focus: #41627d;
+  --success: #2E7D52;
+  --warning: #C17D2A;
+  --danger: #ba1a1a;
+  --p1-bg: rgba(186, 26, 26, 0.10); --p1-text: #ba1a1a;
+  --p2-bg: rgba(65, 98, 125, 0.10); --p2-text: #284a64;
+  --p3-bg: rgba(188, 222, 254, 0.4);--p3-text: #41627d;
+  --p4-bg: #f2f4f6;                 --p4-text: #74777f;
+  --shadow-sm: 0 1px 3px rgba(25,28,30,0.06), 0 1px 2px rgba(0,0,0,0.03);
+  --shadow-md: 0 4px 12px rgba(25,28,30,0.08), 0 0 15px rgba(188,222,254,0.3);
+  --shadow-lg: 0 8px 24px rgba(25,28,30,0.10), 0 0 30px rgba(188,222,254,0.4);
+  --accent-glow: rgba(65, 98, 125, 0.3);
+  --accent-ring: rgba(188, 222, 254, 0.5);
+  --overlay-bg: rgba(25, 28, 30, 0.5);
+  --affirmation-bg: rgba(188, 222, 254, 0.35);
+  --bento-l1: rgba(65, 98, 125, 0.15);
+  --bento-l2: rgba(65, 98, 125, 0.35);
+  --bento-l3: rgba(65, 98, 125, 0.6);
+  --btn-text: #ffffff;
+}
+
+/* ---- THEME 10: Regal Amethyst ---- */
+html[data-theme="regal-amethyst"] {
+  --radius: 18px;
+  --radius-sm: 10px;
+  --font-display: 'Outfit', system-ui, sans-serif;
+  --bg-primary: #1a0b2e;
+  --bg-card: rgba(61, 46, 82, 0.15);
+  --bg-card-hover: rgba(65, 50, 87, 0.25);
+  --bg-secondary: rgba(255, 255, 255, 0.04);
+  --bg-input: rgba(255, 255, 255, 0.07);
+  --accent: #cebdff;
+  --accent-light: rgba(206, 189, 255, 0.15);
+  --accent-dark: #9d7bff;
+  --accent-secondary: #e2b5ff;
+  --text-primary: #eddcff;
+  --text-secondary: #cbc3d5;
+  --text-muted: #948e9f;
+  --border: rgba(255, 255, 255, 0.12);
+  --border-focus: #cebdff;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #ffb4ab;
+  --p1-bg: rgba(255, 180, 171, 0.15); --p1-text: #ffb4ab;
+  --p2-bg: rgba(251, 191, 36, 0.15);  --p2-text: #fcd34d;
+  --p3-bg: rgba(206, 189, 255, 0.15); --p3-text: #cebdff;
+  --p4-bg: rgba(255, 255, 255, 0.04); --p4-text: #948e9f;
+  --shadow-sm: 0 1px 4px rgba(0,0,0,0.5), 0 0 10px rgba(206,189,255,0.08);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.6), 0 0 20px rgba(206,189,255,0.15);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,0.7), 0 0 40px rgba(206,189,255,0.22);
+  --accent-glow: rgba(206, 189, 255, 0.4);
+  --accent-ring: rgba(206, 189, 255, 0.15);
+  --overlay-bg: rgba(0, 0, 0, 0.78);
+  --affirmation-bg: rgba(206, 189, 255, 0.08);
+  --bento-l1: rgba(206, 189, 255, 0.12);
+  --bento-l2: rgba(206, 189, 255, 0.32);
+  --bento-l3: rgba(206, 189, 255, 0.62);
+  --btn-text: #21005e;
 }
 
 /* Global Reset & Base */

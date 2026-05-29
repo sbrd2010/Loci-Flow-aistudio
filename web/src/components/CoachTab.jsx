@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import RescueMode from "./RescueMode";
 
 export default function CoachTab({ payload, savePayload, saveSubPath }) {
   const { tasks = [], config = {} } = payload;
@@ -248,6 +249,9 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
     }
   };
 
+  const [rescueActive, setRescueActive] = useState(false);
+  const [rescueTask, setRescueTask] = useState(null);
+
   // ── Bad Day Reset ─────────────────────────────────────────────────────────
   const handleBadDayReset = () => {
     const pending = tasks.filter(t => !t.isCompleted && !t.isDeleted && ["P1","P2","P3"].includes(t.priority));
@@ -372,10 +376,17 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
 
       {/* 4 ── Rescue Buttons */}
       <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-        <button className="btn"
-          style={{ background: "var(--bg-card)", color: "var(--accent)", border: "1.5px solid var(--accent)", fontSize: "13px", minHeight: "52px" }}
-          onClick={() => alert("STUCK RESCUE:\n\n1. Take 3 deep breaths\n2. Pick the SMALLEST physical action\n3. Do it for just 2 minutes\n\nAction builds dopamine. Go.")}>
-          🚨 Stuck? Rescue
+        <button
+          className="btn"
+          style={{ background: "var(--danger)", color: "#fff" }}
+          onClick={() => {
+            const stuck = tasks.filter(t => !t.isDeleted && !t.isCompleted && t.isNowFocus);
+            const fallback = tasks.filter(t => !t.isDeleted && !t.isCompleted)[0] || null;
+            setRescueTask(stuck[0] || fallback);
+            setRescueActive(true);
+          }}
+        >
+          🚨 Rescue Mode
         </button>
         <button className="btn"
           style={{ background: "var(--bg-card)", color: "var(--danger)", border: "1.5px solid var(--border)", fontSize: "13px", minHeight: "52px" }}
@@ -445,6 +456,23 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
         </section>
       )}
 
+      {rescueActive && (
+        <RescueMode
+          task={rescueTask}
+          onDismiss={() => setRescueActive(false)}
+          onAccept={() => {
+            setRescueActive(false);
+            if (rescueTask) {
+              savePayload({
+                ...payload,
+                tasks: tasks.map(t =>
+                  t.uuid === rescueTask.uuid ? { ...t, isNowFocus: true } : t
+                )
+              });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

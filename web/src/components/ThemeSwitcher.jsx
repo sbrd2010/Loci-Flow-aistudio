@@ -7,6 +7,10 @@ const THEMES = [
   { id: "sage",      label: "Zen Sage",    emoji: "🍃", desc: "Soft sage green" },
   { id: "polymer",   label: "Research",    emoji: "🔬", desc: "Warm cream lab" },
   { id: "editorial", label: "Editorial",   emoji: "📰", desc: "Black & white serif" },
+  { id: "midnight-neon", label: "Midnight Neon", emoji: "⚡", desc: "Electric cyan on pure black" },
+  { id: "solar-ember",   label: "Solar Ember",   emoji: "🔥", desc: "Warm amber, terracotta light" },
+  { id: "arctic-frost",  label: "Arctic Frost",  emoji: "❄️", desc: "Cool blue, clinical clarity" },
+  { id: "regal-amethyst",label: "Regal Amethyst",emoji: "💜", desc: "Deep purple glassmorphism" },
 ];
 
 export default function ThemeSwitcher({ theme, onThemeChange }) {
