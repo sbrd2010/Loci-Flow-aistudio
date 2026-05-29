@@ -429,11 +429,26 @@ export default function TodayTab({ payload, savePayload }) {
         </div>
       </section>
 
-      {/* 2 ── Daily Motivation */}
-      <div className="affirmation-banner" style={{ cursor: "default" }}>
-        <span style={{ fontSize: "14px" }}>💬</span>
-        <span className="affirmation-text" style={{ fontStyle: "italic" }}>{dailyAffirmation}</span>
-      </div>
+      {/* 2 ── Today's Intention */}
+      <section style={{
+        background: "var(--accent)", borderRadius: "var(--radius)",
+        padding: "14px 16px", textAlign: "center"
+      }}>
+        <p style={{
+          fontSize: "9px", fontWeight: "700", letterSpacing: "0.08em",
+          color: "var(--btn-text, #fff)", opacity: 0.75,
+          textTransform: "uppercase", marginBottom: "5px"
+        }}>
+          Today's Intention
+        </p>
+        <p style={{
+          fontSize: "14px", fontWeight: "700",
+          color: "var(--btn-text, #fff)", lineHeight: "1.45",
+          fontStyle: "italic"
+        }}>
+          "{dailyAffirmation}"
+        </p>
+      </section>
 
       {/* 3 ── Today's Focus (primary section) */}
       <section className="tasks-section" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>

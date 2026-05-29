@@ -677,30 +677,6 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Dopamine Affirmation Banner */
-.affirmation-banner {
-  background: var(--affirmation-bg);
-  border: 1px solid var(--accent-light);
-  color: var(--accent-dark);
-  border-radius: 12px;
-  padding: 10px 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.affirmation-banner:hover {
-  border-color: var(--accent);
-}
-
-.affirmation-text {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  line-height: 1.4;
-  flex: 1;
-}
 
 /* Active Focus Now Card — warm cream with coral left border */
 .focus-card {
@@ -1421,6 +1397,7 @@ h1, h2, h3, h4, h5, h6 {
   flex-direction: column;
   gap: 16px;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -1495,6 +1472,7 @@ h1, h2, h3, h4, h5, h6 {
     width: 100%;
     border-radius: 20px 20px 0 0;
     max-height: 88vh;
+    min-height: 0;
   }
   .modal-header {
     position: sticky;
@@ -1504,6 +1482,7 @@ h1, h2, h3, h4, h5, h6 {
   }
   .modal-body {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
