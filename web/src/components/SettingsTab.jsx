@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-export default function SettingsTab({ payload, savePayload, saveSubPath }) {
+export default function SettingsTab({ payload, savePayload, saveSubPath, onSignOut }) {
   const { config = {} } = payload;
 
   // ── XP / Progress computed values ────────────────────────────────────────
@@ -118,7 +118,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath }) {
 
           <div className="form-group">
             <label className="form-label" style={{ fontSize: "11px", fontWeight: "900", letterSpacing: "0.1em", color: "var(--text-primary)" }}>
-              YOUR BIGGEST ADHD CHALLENGE
+              YOUR FOCUS CHALLENGE
             </label>
             <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "-4px 0 10px" }}>
               Your AI coach adapts its advice based on this selection.
@@ -304,13 +304,12 @@ export default function SettingsTab({ payload, savePayload, saveSubPath }) {
           className="btn"
           style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--danger)", border: "1.5px solid var(--border)", boxShadow: "none" }}
           onClick={() => {
-            if (window.confirm("Sign out? Your data stays saved in Firebase.")) {
-              localStorage.removeItem("loci_email");
-              window.location.reload();
+            if (window.confirm("Sign out? Your data stays saved.")) {
+              onSignOut?.();
             }
           }}
         >
-          Sign Out
+          Sign out of Loci
         </button>
       </section>
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import TaskRow from "./TaskRow";
+import RescueMode from "./RescueMode";
 
 export default function TodayTab({ payload, savePayload }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
@@ -109,23 +110,46 @@ export default function TodayTab({ payload, savePayload }) {
     return () => clearInterval(interval);
   }, []);
 
-  // Stuck Rescue pod modal states
+  // Rescue Mode v2 + Quick menu
+  const [rescueActive, setRescueActive] = useState(false);
+  const [rescueTask, setRescueTask]     = useState(null);
+  const [showQuickMenu, setShowQuickMenu] = useState(false);
+  const quickMenuRef = useRef(null);
+
+  // Close quick menu on outside click
+  useEffect(() => {
+    if (!showQuickMenu) return;
+    const handler = (e) => { if (quickMenuRef.current && !quickMenuRef.current.contains(e.target)) setShowQuickMenu(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showQuickMenu]);
+
+  const openRescueMode = () => {
+    const pinned = tasks.find(t => !t.isDeleted && !t.isCompleted && t.isNowFocus);
+    const first  = tasks.find(t => !t.isDeleted && !t.isCompleted);
+    setRescueTask(pinned || first || null);
+    setRescueActive(true);
+    setShowQuickMenu(false);
+  };
+
+  const handleBadDayReset = () => {
+    setShowQuickMenu(false);
+    if (!window.confirm("Park all active tasks for today? You can restore them from the AI Coach tab.")) return;
+    savePayload({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, isNowFocus: false } : t) });
+  };
+
+  // Legacy rescue pod (kept for pinned-task Stuck? button)
   const [showRescue, setShowRescue] = useState(false);
   const [rescueStepIndex, setRescueStepIndex] = useState(0);
   const rescueSteps = [
-    "Take one deep breath. Closed eyes. Breathe in for 4, hold for 4, out for 4.",
-    "What is the absolute, laughably smallest first step? Writing a single sentence counts as a step.",
-    "Close all browser tabs that aren't this single task right now.",
-    "Commit to doing this tiny action for just 2 minutes. If you want to stop then, you can."
+    "Take one deep breath. Breathe in for 4, hold for 4, out for 4.",
+    "What is the laughably smallest first step? A single sentence counts.",
+    "Close all tabs that aren't this task right now.",
+    "Commit to just 2 minutes. You can stop after that."
   ];
-
   const handleNextRescueStep = () => {
-    if (rescueStepIndex < rescueSteps.length - 1) {
-      setRescueStepIndex(rescueStepIndex + 1);
-    } else {
-      setShowRescue(false);
-      setRescueStepIndex(0);
-    }
+    if (rescueStepIndex < rescueSteps.length - 1) { setRescueStepIndex(rescueStepIndex + 1); }
+    else { setShowRescue(false); setRescueStepIndex(0); }
   };
 
   // Brain Dump capture field
@@ -459,7 +483,7 @@ export default function TodayTab({ payload, savePayload }) {
             <button
               className="stuck-btn"
               onClick={handleEnergyToggle}
-              title="Toggle Low Energy mode — shows only easy P4 quick wins"
+              title="Toggle Low Energy mode"
               style={{
                 background: config.isLowEnergyMode ? "var(--success)" : "var(--bg-secondary)",
                 color: config.isLowEnergyMode ? "#fff" : "var(--text-secondary)"
@@ -470,6 +494,40 @@ export default function TodayTab({ payload, savePayload }) {
             <span className="section-count-badge">
               {completedTasks.length}/{todayTasksFiltered.length}
             </span>
+            {/* ⋮ Quick-access menu — Rescue Mode & Bad Day Reset */}
+            <div ref={quickMenuRef} style={{ position: "relative" }}>
+              <button
+                onClick={() => setShowQuickMenu(o => !o)}
+                title="More options"
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  fontSize: "20px", color: "var(--text-muted)", padding: "4px 6px",
+                  borderRadius: "6px", lineHeight: 1
+                }}
+              >⋮</button>
+              {showQuickMenu && (
+                <div style={{
+                  position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 200,
+                  background: "var(--bg-card)", border: "1px solid var(--border)",
+                  borderRadius: "10px", boxShadow: "var(--shadow-lg)",
+                  minWidth: "170px", overflow: "hidden"
+                }}>
+                  <button onClick={openRescueMode} style={{
+                    display: "flex", alignItems: "center", gap: "10px", width: "100%",
+                    background: "none", border: "none", padding: "12px 16px",
+                    cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "700",
+                    color: "var(--danger)"
+                  }}>🚨 Rescue Mode</button>
+                  <div style={{ height: "1px", background: "var(--border)" }} />
+                  <button onClick={handleBadDayReset} style={{
+                    display: "flex", alignItems: "center", gap: "10px", width: "100%",
+                    background: "none", border: "none", padding: "12px 16px",
+                    cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "600",
+                    color: "var(--text-secondary)"
+                  }}>🌪️ Bad Day Reset</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -740,6 +798,22 @@ export default function TodayTab({ payload, savePayload }) {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Rescue Mode v2 — triggered from ⋮ menu */}
+      {rescueActive && (
+        <RescueMode
+          task={rescueTask}
+          firstName={(config.userName || "").split(" ")[0] || "friend"}
+          apiKey={localStorage.getItem("loci_gemini_key") || import.meta.env.VITE_GEMINI_KEY || ""}
+          onDismiss={() => setRescueActive(false)}
+          onAccept={() => {
+            setRescueActive(false);
+            if (rescueTask) {
+              savePayload({ ...payload, tasks: tasks.map(t => t.uuid === rescueTask.uuid ? { ...t, isNowFocus: true } : t) });
+            }
+          }}
+        />
       )}
     </>
   );

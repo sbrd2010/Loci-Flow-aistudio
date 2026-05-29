@@ -130,11 +130,10 @@ export default function App() {
     <div className="app-container">
       {/* Header top bar */}
       <Header
-        email={user.email}
-        onSwitchUser={handleSwitchUser}
-        onGoHome={() => setActiveTab("today")} 
-        theme={theme} 
-        onThemeChange={setTheme} 
+        userName={payload?.config?.userName || user.displayName || user.email}
+        onGoHome={() => setActiveTab("today")}
+        theme={theme}
+        onThemeChange={setTheme}
       />
 
       {/* Main Tab Screen Router */}
@@ -154,7 +153,7 @@ export default function App() {
           />
         )}
         {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} />}
-        {activeTab === "settings" && <SettingsTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} />}
+        {activeTab === "settings" && <SettingsTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} onSignOut={handleSwitchUser} />}
       </main>
 
       {/* Floating Action Button (Only show on Today & Roadmap screens) */}
