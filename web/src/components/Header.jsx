@@ -9,9 +9,12 @@ export default function Header({ email, onSwitchUser, onGoHome, theme, onThemeCh
 
   return (
     <header className="app-header">
-      <div className="app-brand" onClick={onGoHome} style={{ cursor: "pointer" }}>
-        <span style={{ fontSize: "26px" }}>🧠</span>
-        <span style={{ fontSize: "24px", fontWeight: "900", fontFamily: "var(--font-display)" }}>Loci</span>
+      <div className="app-brand" onClick={onGoHome} style={{ cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <span style={{ fontSize: "26px" }}>🧠</span>
+          <span style={{ fontSize: "24px", fontWeight: "900", fontFamily: "var(--font-display)" }}>Loci</span>
+        </div>
+        <span style={{ fontSize: "10px", fontWeight: "500", color: "var(--text-muted)", letterSpacing: "0.03em", marginLeft: "2px", lineHeight: "1" }}>Your daily focus companion.</span>
       </div>
       <div className="header-right">
         <ThemeSwitcher theme={theme} onThemeChange={onThemeChange} />
