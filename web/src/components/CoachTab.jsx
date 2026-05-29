@@ -86,8 +86,9 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
     config.challengeType === "focusing"  ? "Protecting Focus Sessions" :
     "Action over Perfectionism";
 
+  const firstName = (config.userName || "").split(" ")[0] || "friend";
   const defaultWelcome = [{
-    text: `Hello ${config.userName || "my friend"}. I am ${config.mentorName || "your mentor"}. You're working on "${challengeLabel}". How can I help you stay on track today?`,
+    text: `Hey ${firstName}! I'm ${config.mentorName || "your AI coach"} 👋 You're working on ${challengeLabel}. What's on your mind — stuck on a task, feeling overwhelmed, or just need a nudge to start?`,
     isUser: false
   }];
 
@@ -146,7 +147,7 @@ COACHING TECHNIQUES YOU ALWAYS APPLY:
 RESPONSE RULES:
 - Max 3 sentences unless listing steps (then max 3 bullets)
 - Never say "Great question!", "Absolutely!", or "Of course!"
-- Use ${config.userName || "the user"}'s name once per response maximum
+- Address the user as "${(config.userName || "").split(" ")[0] || "friend"}" (their first name). Use their name naturally in the first sentence of your response.
 - Warm and direct — not clinical, not cheerleader
 - If user celebrates, celebrate back briefly and immediately redirect to next action
 

@@ -494,10 +494,20 @@ export default function TodayTab({ payload, savePayload }) {
 
         <div className="tasks-list">
           {todayTasksAll.length === 0 && (
-            <div style={{ textAlign: "center", padding: "24px 10px", color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
-              <p style={{ fontSize: "13px", fontWeight: "600" }}>No tasks for today.</p>
-              <p style={{ fontSize: "12px", marginTop: "6px", lineHeight: "1.5" }}>
-                Pull one from your Roadmap, use Brain Dump below, or tap + to add a task.
+            <div style={{
+              textAlign: "center", padding: "24px 16px",
+              background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)",
+              border: "1px dashed var(--border)"
+            }}>
+              <div style={{ fontSize: "32px", marginBottom: "10px" }}>🧠</div>
+              <p style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "6px" }}>
+                Welcome to Loci!
+              </p>
+              <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: "1.6", marginBottom: "14px" }}>
+                Loci helps you capture tasks, prioritize them with AI, and build daily focus habits — designed for ADHD brains.
+              </p>
+              <p style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: "1.5" }}>
+                Tap the <strong style={{ color: "var(--accent)" }}>+</strong> button below to add your first task. The AI will help you break it down.
               </p>
             </div>
           )}
@@ -624,24 +634,30 @@ export default function TodayTab({ payload, savePayload }) {
           <h3 style={{ fontSize: "11px", fontWeight: "800", color: "var(--text-secondary)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
             📊 7-Day Progress
           </h3>
-          <div className="bento-grid">
-            {bentoDays.map(day => {
-              const levelClass =
-                day.count === 0 ? "" :
-                day.count === 1 ? "active-lvl-1" :
-                day.count === 2 ? "active-lvl-2" :
-                day.count === 3 ? "active-lvl-3" : "active-lvl-4";
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "6px" }}>
+            {bentoDays.map((day, i) => {
+              const isToday = i === 6;
+              const done = day.count > 0;
               return (
-                <div key={day.dateStr} className={`bento-cell ${levelClass}`}
-                  title={`${day.count} task${day.count === 1 ? "" : "s"} on ${day.dateStr}`}>
-                  <span className="bento-cell-date">{day.label}</span>
-                  {day.count > 0 && <span style={{ fontSize: "9px", fontWeight: "700", marginTop: "2px" }}>{day.count}</span>}
+                <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                  <span style={{
+                    fontSize: "8px", fontWeight: "700", color: isToday ? "var(--accent)" : "var(--text-muted)",
+                    textTransform: "uppercase", letterSpacing: "0.04em"
+                  }}>{day.label}</span>
+                  <div style={{
+                    width: "28px", height: "28px", borderRadius: "50%",
+                    background: done ? (isToday ? "var(--accent)" : "var(--success, #22c55e)") : "var(--bg-secondary)",
+                    border: isToday ? "2px solid var(--accent)" : "2px solid transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center"
+                  }}>
+                    {done && <span style={{ fontSize: "10px", fontWeight: "800", color: "#fff" }}>{day.count}</span>}
+                  </div>
                 </div>
               );
             })}
           </div>
           <p style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "6px", lineHeight: "1.4" }}>
-            Each cell = tasks done that day
+            Green = tasks completed · Today is highlighted
           </p>
         </section>
 
