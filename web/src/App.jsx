@@ -79,7 +79,7 @@ export default function App() {
             Start My Focus Journey
           </button>
           <span className="signin-note">
-            Your tasks sync privately across all your devices.
+            Your tasks sync across all your devices using your email as the key.
           </span>
         </form>
       </div>

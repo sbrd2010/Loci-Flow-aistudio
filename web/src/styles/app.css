@@ -422,6 +422,7 @@ body {
   color: var(--text-primary);
   font-family: var(--font-sans);
   min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
 }
 
@@ -437,6 +438,7 @@ h1, h2, h3, h4, h5, h6 {
   max-width: 480px;
   margin: 0 auto;
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg-primary);
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
@@ -449,6 +451,12 @@ h1, h2, h3, h4, h5, h6 {
 @media (min-width: 768px) {
   .app-container {
     max-width: 720px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-container {
+    max-width: 1100px;
   }
 }
 
@@ -502,6 +510,38 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* Header subtitle — hidden on narrow phones to free up space */
+.header-subtitle {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+  margin-left: 2px;
+  line-height: 1;
+}
+
+/* Initials badge shows on narrow phones, email badge hides */
+.header-initials-badge {
+  display: none;
+  width: 32px;
+  height: 32px;
+  padding: 0 !important;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 50% !important;
+  flex-shrink: 0;
+}
+
+@media (max-width: 430px) {
+  .header-subtitle { display: none; }
+  .header-email-badge { display: none; }
+  .header-initials-badge { display: flex; }
+  .header-right { gap: 6px; }
+  .switch-btn { font-size: 10px; }
 }
 
 .user-badge {
@@ -641,6 +681,7 @@ h1, h2, h3, h4, h5, h6 {
   left: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: var(--bg-primary);
   display: flex;
   justify-content: center;
@@ -1274,6 +1315,9 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
 }
 
 .custom-checkbox {
@@ -1368,12 +1412,13 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 16px;
   cursor: pointer;
   transition: var(--transition);
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .action-btn:hover {
@@ -1515,6 +1560,7 @@ h1, h2, h3, h4, h5, h6 {
   left: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: var(--overlay-bg);
   backdrop-filter: blur(4px);
   display: flex;
@@ -1752,7 +1798,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Mobile roadmap: vertical accordion */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .roadmap-scroll-container {
     flex-direction: column;
     overflow-x: visible;
@@ -1868,6 +1914,7 @@ h1, h2, h3, h4, h5, h6 {
   left: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: var(--overlay-bg);
   backdrop-filter: blur(6px);
   display: flex;
@@ -2066,8 +2113,8 @@ html[data-theme="glassy"] .signin-overlay {
 }
 
 .theme-btn {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -2172,6 +2219,30 @@ html[data-theme="glassy"] .theme-dropdown {
   color: var(--accent);
   font-size: 13px;
   font-weight: 700;
+}
+
+/* Theme picker: bottom sheet on mobile */
+@media (max-width: 640px) {
+  .theme-backdrop {
+    background: rgba(0, 0, 0, 0.4);
+  }
+  .theme-dropdown {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    max-height: 60vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 16px 16px 0 0;
+    border-bottom: none;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    z-index: 1000;
+  }
+  .theme-option {
+    padding: 12px 20px;
+  }
 }
 
 
