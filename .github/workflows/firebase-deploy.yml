@@ -25,6 +25,11 @@ jobs:
           npm ci
           npm run build
 
+      - name: Deploy Database Rules
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW }}' > /tmp/sa.json
+          GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json npx firebase-tools@latest deploy --only database --project loci-flow
+
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:

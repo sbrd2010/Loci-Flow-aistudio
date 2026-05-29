@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { auth } from "./firebase";
-import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
+import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { useSync } from "./useSync";
 import Header from "./components/Header";
 import BottomNav from "./components/BottomNav";
@@ -23,6 +23,11 @@ export default function App() {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("loci_theme", theme);
   }, [theme]);
+
+  // Handle redirect sign-in result (iOS Safari / popup-blocked fallback)
+  useEffect(() => {
+    getRedirectResult(auth).catch(() => {});
+  }, []);
 
   // Load the sync payload from RTDB
   const { payload, loading, error, savePayload, saveSubPath } = useSync(user?.uid || null, user?.email || null);
@@ -73,7 +78,11 @@ export default function App() {
           <button
             className="btn"
             style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", fontSize: "15px", padding: "14px 20px" }}
-            onClick={() => signInWithPopup(auth, new GoogleAuthProvider()).catch(err => console.error("Sign-in failed:", err))}
+            onClick={() => signInWithPopup(auth, new GoogleAuthProvider()).catch(err => {
+              if (err.code === "auth/popup-blocked" || err.code === "auth/popup-closed-by-user") {
+                signInWithRedirect(auth, new GoogleAuthProvider());
+              }
+            })}
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
