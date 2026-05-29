@@ -55,6 +55,15 @@ export function useSync(uid, email) {
               .map(s => s.charAt(0).toUpperCase() + s.slice(1))
               .join(" ") || rawName;
 
+          const toDateStr = (d) => {
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            const day = String(d.getDate()).padStart(2, "0");
+            return `${d.getFullYear()}-${m}-${day}`;
+          };
+          const todayStr = toDateStr(new Date());
+          const d1 = new Date(); d1.setDate(d1.getDate() - 1); const yStr = toDateStr(d1);
+          const d2 = new Date(); d2.setDate(d2.getDate() - 2); const d2Str = toDateStr(d2);
+
           const defaultPayload = {
             userId: email,
             tasks: [
@@ -123,8 +132,8 @@ export function useSync(uid, email) {
               challengeType: "starting",
               pomodoroDurationMinutes: 25,
               reminderNagIntervalMinutes: 15,
-              visitStreakCount: 5,
-              lastVisitedTimestamp: Date.now(),
+              visitStreakCount: 1,
+              lastVisitDate: todayStr,
               totalXp: 150,
               intentionMessage: "Start tiny. One action. Right now.",
               isLowEnergyMode: false,
@@ -134,16 +143,16 @@ export function useSync(uid, email) {
             },
             contributions: [
               {
-                compositeKey: `${email}_2026-05-27`,
+                compositeKey: `${email}_${yStr}`,
                 userId: email,
-                dateString: "2026-05-27",
+                dateString: yStr,
                 count: 3,
                 lastUpdated: Date.now()
               },
               {
-                compositeKey: `${email}_2026-05-26`,
+                compositeKey: `${email}_${d2Str}`,
                 userId: email,
-                dateString: "2026-05-26",
+                dateString: d2Str,
                 count: 1,
                 lastUpdated: Date.now()
               }
