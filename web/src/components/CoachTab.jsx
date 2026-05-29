@@ -121,17 +121,56 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
     saveSubPath("chatHistory", withUser);
     setChatLoading(true);
 
-    const recentCtx = withUser.slice(-7, -1)
-      .map(m => `${m.isUser ? config.userName || "User" : config.mentorName || "Mentor"}: ${m.text}`)
+    const now = new Date();
+    const hour = now.getHours();
+    const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+    const todayTasks = tasks.filter(t => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted);
+    const pinnedTask = todayTasks.find(t => t.isNowFocus);
+    const streak = config.currentStreak || 0;
+    const totalXp = config.totalXp || 0;
+
+    const systemInstruction = `You are ${config.mentorName || "an ADHD coach"}, a certified ADHD productivity coach specializing in executive dysfunction, task initiation, and dopamine regulation. Your client is ${config.userName || "a user"}, who specifically struggles with "${challengeLabel}".
+
+COACHING TECHNIQUES YOU ALWAYS APPLY:
+- Task initiation block: Give ONE physical action for the next 2 minutes. Not 5 steps — just the door-handle move.
+- Overwhelm: Acknowledge briefly, then triage ruthlessly. "Let's park everything except this ONE thing."
+- Distraction/lost focus: Re-anchor gently. "You're back. What were you doing before?" No shame.
+- Procrastination: Name the real blocker (fear of failure, perfectionism, unclear first step) then shrink the task.
+- Bad days: Validate fully first, then offer the smallest possible win to rebuild momentum.
+- Transitions (finished a task): Celebrate briefly, then point to the next smallest action.
+- Overwhelm from deadline: "What's the one thing that would make tomorrow easier? Do that now."
+- Perfectionism spiral: "Done and imperfect beats perfect and unfinished. Ship it."
+- Body doubling: Narrate the task with them. "Open the doc. I'll wait."
+- Emotional dysregulation: Validate the feeling first, always. Then reframe.
+
+RESPONSE RULES:
+- Max 3 sentences unless listing steps (then max 3 bullets)
+- Never say "Great question!", "Absolutely!", or "Of course!"
+- Use ${config.userName || "the user"}'s name once per response maximum
+- Warm and direct — not clinical, not cheerleader
+- If user celebrates, celebrate back briefly and immediately redirect to next action
+
+USER CONTEXT RIGHT NOW:
+- Time: ${timeOfDay} (${hour}:00)
+- Streak: ${streak} days in a row
+- Total XP earned: ${totalXp}
+- Today's remaining tasks: ${todayTasks.length > 0 ? todayTasks.slice(0,5).map(t => `[${t.priority}] ${t.title}`).join(", ") : "none"}
+- Currently focused on: ${pinnedTask ? pinnedTask.title : "nothing pinned yet"}`;
+
+    const recentCtx = withUser.slice(-6, -1)
+      .map(m => `${m.isUser ? config.userName || "User" : config.mentorName || "Coach"}: ${m.text}`)
       .join("\n");
 
-    const prompt = `You are ${config.mentorName || "a wise mentor"} speaking to ${config.userName || "a user"} who struggles with ${challengeLabel}. Be direct, warm, concise — max 2–3 sentences. No flowery filler.${recentCtx ? `\n\nRecent conversation:\n${recentCtx}` : ""}\n\nUser: "${userText}"\n\nRespond now:`;
+    const userMessage = `${recentCtx ? `Recent conversation:\n${recentCtx}\n\n` : ""}${config.userName || "User"}: "${userText}"`;
 
     try {
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
         { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            contents: [{ role: "user", parts: [{ text: userMessage }] }]
+          }) }
       );
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = await res.json();
@@ -158,10 +197,40 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
     setReviewLoading(true);
     setReviewResult("");
     const challengeDesc =
-      config.challengeType === "starting" ? "Overcoming Inertia" :
-      config.challengeType === "focusing" ? "Protecting Focus Sessions" :
-      "Action over Perfectionism";
-    const prompt = `You are ${config.mentorName || "a wise mentor"}. Review this person's task backlog and recommend 3 priority tasks to focus on TODAY.\n\nUser: ${config.userName || "friend"}\nChallenge: ${challengeDesc}\n\nBACKLOG:\n${backlog.map(t => `[${t.priority}] ${t.title} (${t.horizonLevel}) — est ${t.timeEstimateMinutes}min`).join("\n")}\n\nGive 3 specific recommendations with brief reasoning. Be direct and motivating.`;
+      config.challengeType === "starting" ? "Overcoming Inertia (struggles to start tasks)" :
+      config.challengeType === "focusing" ? "Protecting Focus Sessions (gets distracted mid-task)" :
+      "Action over Perfectionism (overthinks and delays finishing)";
+    const now = new Date();
+    const hour = now.getHours();
+    const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+    const todayTasks = backlog.filter(t => t.horizonLevel === "today");
+    const overdueTasks = backlog.filter(t => t.horizonLevel === "today" && t.priority === "P1");
+    const prompt = `You are ${config.mentorName || "an ADHD coach"}, an expert ADHD productivity coach. Review this person's task list and pick the 3 best tasks to do TODAY based on ADHD-friendly prioritization.
+
+USER PROFILE:
+- Name: ${config.userName || "friend"}
+- Core challenge: ${challengeDesc}
+- Time of day: ${timeOfDay} (${hour}:00) — ${hour < 12 ? "peak cognitive energy window" : hour < 15 ? "post-lunch dip, use easier tasks" : hour < 18 ? "second wind window" : "low energy, protect recovery"}
+- Streak: ${config.currentStreak || 0} days
+- Today's task count: ${todayTasks.length}
+- Urgent P1 tasks today: ${overdueTasks.length}
+
+FULL TASK LIST:
+${backlog.map(t => `[${t.priority}] ${t.title} | horizon: ${t.horizonLevel} | est: ${t.timeEstimateMinutes}min | category: ${t.category || "–"}`).join("\n")}
+
+ADHD PRIORITIZATION RULES (apply in this order):
+1. Urgent + short tasks first if procrastination is the challenge
+2. Energy-matched tasks for current time of day
+3. Tasks with momentum value — completing it makes OTHER things easier
+4. Never recommend more than one P1 to avoid overwhelm
+
+FOR EACH OF YOUR 3 PICKS, PROVIDE:
+• **Task title**
+• Why to do it NOW (1 sentence — energy match, urgency, or momentum reason)
+• The door-handle move: the single first physical action to START it (max 10 words)
+
+End with one sentence of encouragement. Be direct and specific — no generic productivity advice.`;
+
     try {
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,

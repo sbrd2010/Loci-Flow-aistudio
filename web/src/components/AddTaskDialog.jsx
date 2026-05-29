@@ -18,20 +18,29 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
     if (!apiKey) { setAiError("No AI key available."); return; }
     setAiLoading(true);
     setAiError("");
-    const config = payload.config || {};
+    const cfg = payload.config || {};
     const challengeLabel =
-      config.challengeType === "starting" ? "Overcoming Inertia" :
-      config.challengeType === "focusing" ? "Protecting Focus" : "Action over Planning";
-    const prompt = `You are an ADHD productivity coach. The user typed this rough task idea: "${title.trim()}".
+      cfg.challengeType === "starting" ? "struggles to start tasks (task initiation block)" :
+      cfg.challengeType === "focusing" ? "gets distracted mid-task (focus protection)" :
+      "overthinks and delays finishing (perfectionism/action paralysis)";
+    const existingTasks = (payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).slice(0, 8)
+      .map(t => `[${t.priority}] ${t.title}`).join(", ") || "none yet";
+    const prompt = `You are an expert ADHD productivity coach. The user typed this rough task idea: "${title.trim()}".
 
-Improve it into a clear, actionable task. Respond with ONLY valid JSON (no markdown, no code block), exactly:
-{"title":"<clear task title, max 60 chars>","microStep":"<the single smallest first physical action, max 60 chars>","priority":"P2","estimateMinutes":25}
+Transform it into a well-structured, ADHD-friendly task. The user's core challenge: ${challengeLabel}.
 
-Rules:
-- priority: P1 (urgent+important), P2 (important), P3 (normal), P4 (easy quick-win)
-- estimateMinutes: one of 15, 25, 45, 60
-- User's challenge: ${challengeLabel}
-- Keep title and microStep concise and concrete`;
+ADHD TASK DESIGN RULES:
+- Title must be specific and outcome-oriented (not vague verbs like "work on" or "think about")
+- microStep is the DOOR-HANDLE move — the single physical action that takes under 2 minutes and removes the initiation barrier
+- Priority should account for the user's challenge: if they struggle to start, lean P3/P4 to reduce pressure
+- Time estimate should be honest — ADHD tasks often take 1.5x expected time
+- Their current tasks for context: ${existingTasks}
+
+Respond with ONLY valid JSON (no markdown, no code blocks), exactly this structure:
+{"title":"<specific outcome-oriented title, max 60 chars>","microStep":"<single door-handle action, max 60 chars>","priority":"P2","estimateMinutes":25}
+
+priority options: P1 (urgent+must do today), P2 (important this week), P3 (normal queue), P4 (easy quick-win, under 15 min)
+estimateMinutes options: 15, 25, 45, 60`;
 
     try {
       const res = await fetch(
