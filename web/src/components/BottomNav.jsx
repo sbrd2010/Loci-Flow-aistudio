@@ -17,9 +17,9 @@ const PlanIcon = () => (
 const CoachIcon = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-    <line x1="9" y1="10" x2="9" y2="10"/>
-    <line x1="12" y1="10" x2="12" y2="10"/>
-    <line x1="15" y1="10" x2="15" y2="10"/>
+    <circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"/>
+    <circle cx="12" cy="10" r="1" fill="currentColor" stroke="none"/>
+    <circle cx="15" cy="10" r="1" fill="currentColor" stroke="none"/>
   </svg>
 );
 
@@ -30,29 +30,45 @@ const SettingsIcon = () => (
   </svg>
 );
 
-export default function BottomNav({ activeTab, onTabSelect }) {
-  const tabs = [
-    { id: "today",    label: "Home",     Icon: HomeIcon    },
-    { id: "roadmap",  label: "Plan",     Icon: PlanIcon    },
-    { id: "coach",    label: "AI Coach", Icon: CoachIcon   },
-    { id: "settings", label: "Settings", Icon: SettingsIcon }
-  ];
+const TABS = [
+  { id: "today",    label: "Home",     Icon: HomeIcon,     color: "#3b82f6" },
+  { id: "roadmap",  label: "Plan",     Icon: PlanIcon,     color: "#10b981" },
+  { id: "coach",    label: "AI Coach", Icon: CoachIcon,    color: "#8b5cf6" },
+  { id: "settings", label: "Settings", Icon: SettingsIcon, color: "#f59e0b" },
+];
 
+export default function BottomNav({ activeTab, onTabSelect }) {
   return (
     <nav className="bottom-nav" role="navigation" aria-label="Main navigation">
-      {tabs.map(({ id, label, Icon }) => (
-        <button
-          key={id}
-          className={`nav-item ${activeTab === id ? "active" : ""}`}
-          onClick={() => onTabSelect(id)}
-          aria-current={activeTab === id ? "page" : undefined}
-          aria-label={label}
-          type="button"
-        >
-          <span className="nav-item-icon" aria-hidden="true"><Icon /></span>
-          <span>{label}</span>
-        </button>
-      ))}
+      {TABS.map(({ id, label, Icon, color }) => {
+        const isActive = activeTab === id;
+        return (
+          <button
+            key={id}
+            className={`nav-item ${isActive ? "active" : ""}`}
+            onClick={() => onTabSelect(id)}
+            aria-current={isActive ? "page" : undefined}
+            aria-label={label}
+            type="button"
+          >
+            <span
+              className="nav-item-icon"
+              aria-hidden="true"
+              style={{
+                color: color,
+                opacity: isActive ? 1 : 0.38,
+                background: isActive ? `${color}22` : "transparent",
+                transform: isActive ? "scale(1.08)" : "scale(1)",
+              }}
+            >
+              <Icon />
+            </span>
+            <span style={{ color: isActive ? color : undefined, fontWeight: isActive ? 700 : 600 }}>
+              {label}
+            </span>
+          </button>
+        );
+      })}
     </nav>
   );
 }
