@@ -199,7 +199,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
       )}
 
       <div>
-        <h2 className="roadmap-board-title">Horizon Planning Board</h2>
+        <h2 className="roadmap-board-title">Horizon Planning</h2>
         <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
           Map your goals strategically across time-horizons. Tap a card to edit.
         </p>
@@ -231,7 +231,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
                   >
                     +
                   </button>
-                  <span style={{ fontSize: "12px", color: "var(--text-muted)", transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
+                  <span style={{ fontSize: "18px", color: "var(--text-primary)", fontWeight: "700", transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
                 </div>
               </div>
 
