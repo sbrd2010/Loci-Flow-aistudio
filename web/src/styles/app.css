@@ -1393,6 +1393,7 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: space-between;
   align-items: center;
   background: var(--bg-card);
+  flex-shrink: 0;
 }
 
 .modal-title {
@@ -1419,6 +1420,8 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  flex: 1;
+  overflow-y: auto;
 }
 
 .btn-group {
@@ -1481,6 +1484,39 @@ h1, h2, h3, h4, h5, h6 {
   gap: 12px;
 }
 
+/* Mobile: bottom-sheet pattern for Add Task dialog */
+@media (max-width: 640px) {
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .modal-card {
+    max-width: 100%;
+    width: 100%;
+    border-radius: 20px 20px 0 0;
+    max-height: 88vh;
+  }
+  .modal-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    flex-shrink: 0;
+  }
+  .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  .modal-footer {
+    position: sticky;
+    bottom: 0;
+    background: var(--bg-card);
+    padding-bottom: env(safe-area-inset-bottom, 8px);
+    flex-shrink: 0;
+  }
+}
+
 .btn-cancel {
   background: transparent;
   border: 1.5px solid var(--border);
@@ -1538,6 +1574,43 @@ h1, h2, h3, h4, h5, h6 {
   .roadmap-column {
     flex: unset;
     max-height: unset;
+  }
+}
+
+/* Mobile roadmap: vertical accordion */
+@media (max-width: 768px) {
+  .roadmap-scroll-container {
+    flex-direction: column;
+    overflow-x: visible;
+    gap: 10px;
+  }
+  .roadmap-column {
+    flex: none;
+    width: 100%;
+    min-width: unset;
+  }
+  .column-tasks-list.col-collapsed {
+    display: none;
+  }
+  .column-tasks-list.col-expanded {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 60vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding: 12px;
+  }
+}
+
+/* Desktop: keep all columns open, no collapse */
+@media (min-width: 769px) {
+  .column-tasks-list.col-collapsed,
+  .column-tasks-list.col-expanded {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
 }
 

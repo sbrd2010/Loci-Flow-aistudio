@@ -14,6 +14,9 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
   // Active task selected for overlay details menu
   const [selectedTask, setSelectedTask] = useState(null);
 
+  // Mobile accordion: which column is expanded
+  const [expandedCol, setExpandedCol] = useState("week");
+
   // Helper: Format date as YYYY-MM-DD
   const getTodayDateString = () => {
     const d = new Date();
@@ -194,23 +197,30 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
             // Fix #19: sort by orderIndex for consistent display order
             .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
 
+          const isExpanded = expandedCol === col.key;
+
           return (
-            <div key={col.key} className="roadmap-column">
-              <div className="column-header">
+            <div key={col.key} className={`roadmap-column${isExpanded ? " expanded" : ""}`}>
+              <div
+                className="column-header"
+                onClick={() => setExpandedCol(isExpanded ? "" : col.key)}
+                style={{ cursor: "pointer", userSelect: "none" }}
+              >
                 <span className="column-title">{col.label}</span>
-                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <span className="column-count">{colTasks.length}</span>
                   <button
-                    onClick={() => onOpenAddTask(col.key)}
                     className="column-add-btn"
+                    onClick={(e) => { e.stopPropagation(); onOpenAddTask(col.key); }}
                     title={`Add task directly to ${col.label}`}
                   >
                     +
                   </button>
+                  <span style={{ fontSize: "12px", color: "var(--text-muted)", transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
                 </div>
               </div>
 
-              <div className="column-tasks-list">
+              <div className={`column-tasks-list${isExpanded ? " col-expanded" : " col-collapsed"}`}>
                 {colTasks.length === 0 ? (
                   <div className="roadmap-empty-state">
                     No tasks here. Add some via + button.
