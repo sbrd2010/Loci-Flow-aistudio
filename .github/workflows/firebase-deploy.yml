@@ -19,6 +19,7 @@ jobs:
       - name: Install and build web
         working-directory: web
         env:
+          VITE_GROQ_KEY: ${{ secrets.VITE_GROQ_KEY }}
           VITE_GEMINI_KEY: ${{ secrets.VITE_GEMINI_KEY }}
         run: |
           npm ci

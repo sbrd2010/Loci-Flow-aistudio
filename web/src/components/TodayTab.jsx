@@ -804,6 +804,7 @@ export default function TodayTab({ payload, savePayload }) {
       {rescueActive && (
         <RescueMode
           task={rescueTask}
+          allTasks={tasks}
           firstName={(config.userName || "").split(" ")[0] || "friend"}
           apiKey={localStorage.getItem("loci_gemini_key") || import.meta.env.VITE_GEMINI_KEY || ""}
           onDismiss={() => setRescueActive(false)}

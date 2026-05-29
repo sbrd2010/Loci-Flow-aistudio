@@ -80,6 +80,31 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
 
   const formatTime = secs => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
 
+  // ── Task context builder ──────────────────────────────────────────────────
+  const buildTaskContext = (allTasks) => {
+    const active = (allTasks || []).filter(t => !t.isDeleted && !t.isCompleted);
+    const horizonOrder = ["today", "week", "month", "quarter", "halfyear", "office"];
+    const horizonLabels = { today: "TODAY", week: "THIS WEEK", month: "THIS MONTH", quarter: "QUARTER", halfyear: "6 MONTHS", office: "WORK" };
+    const lines = [];
+    let total = 0;
+    for (const h of horizonOrder) {
+      const hTasks = active.filter(t => t.horizonLevel === h);
+      if (hTasks.length === 0) continue;
+      total += hTasks.length;
+      lines.push(`${horizonLabels[h]} (${hTasks.length}):`);
+      hTasks.slice(0, 6).forEach(t => {
+        const focus = t.isNowFocus ? " [NOW FOCUS]" : "";
+        lines.push(`  • [${t.priority}]${focus} ${t.title}${t.timeEstimateMinutes ? ` (${t.timeEstimateMinutes}min)` : ""}`);
+      });
+      if (hTasks.length > 6) lines.push(`  … +${hTasks.length - 6} more`);
+    }
+    const completed = (allTasks || []).filter(t => t.isCompleted && !t.isDeleted);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const doneToday = completed.filter(t => t.dateCompletedString === todayStr).length;
+    if (doneToday > 0) lines.push(`\nCOMPLETED TODAY: ${doneToday} task${doneToday > 1 ? "s" : ""}`);
+    return total === 0 ? "No active tasks yet." : lines.join("\n");
+  };
+
   // ── AI Mentor Chat ────────────────────────────────────────────────────────
   const challengeLabel =
     config.challengeType === "starting"  ? "Overcoming Inertia" :
@@ -126,16 +151,26 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
     const now = new Date();
     const hour = now.getHours();
     const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
-    const todayTasks = tasks.filter(t => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted);
-    const pinnedTask = todayTasks.find(t => t.isNowFocus);
+    const todayActive = tasks.filter(t => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted);
+    const taskContext = buildTaskContext(tasks);
 
-    const systemInstruction = `You are ${config.mentorName || "an ADHD coach"}, a certified ADHD productivity coach. Your client is ${config.userName || "a user"}, struggling with "${challengeLabel}".
+    const systemInstruction = `You are ${config.mentorName || "an ADHD coach"}, a certified ADHD productivity coach embedded inside Loci Focus — an ADHD-friendly task management app.
 
-TECHNIQUES: Give ONE physical action for initiation blocks. Acknowledge overwhelm briefly, then triage to one task. Re-anchor distraction gently ("You're back. What were you doing?"). Validate bad days first, then smallest win. Shrink perfectionism spirals ("Done beats perfect").
+Your client: ${config.userName || "a user"} (call them "${firstName}"), core challenge: "${challengeLabel}".
 
-RULES: Max 3 sentences. No "Great question!" or "Absolutely!". Address as "${firstName}". Warm and direct.
+THEIR FULL TASK LIST — you can see ALL of this and MUST reference specific task names in your replies:
+${taskContext}
 
-CONTEXT: ${timeOfDay}, streak ${config.currentStreak || 0} days, ${todayTasks.length} tasks today, focused on: ${pinnedTask ? pinnedTask.title : "nothing pinned"}.`;
+COACHING RULES:
+- Max 3 sentences per reply. No filler phrases ("Great!", "Absolutely!", "Of course!").
+- Address as "${firstName}". Be warm, specific, and action-oriented.
+- For overwhelm: name ONE specific task from their list and give its door-handle step (under 30 seconds to start).
+- For initiation blocks: use the [NOW FOCUS] task if present, else pick the top P1 or P2.
+- For distraction: re-anchor — "You were working on [task name], open it and read the first line."
+- NEVER say you cannot see their tasks — you CAN see the full list above.
+- If they ask "what should I do?" or "what are my tasks?", answer from the list above directly.
+
+SESSION: ${timeOfDay}, ${config.currentStreak || 0}-day streak, ${todayActive.length} active tasks today.`;
 
     const messages = withUser.map(m => ({ role: m.isUser ? "user" : "assistant", content: m.text }));
 
@@ -262,7 +297,7 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
 
         {!hasAnyKey ? (
           <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px", fontSize: "12px", color: "var(--text-secondary)", textAlign: "center", marginTop: "8px" }}>
-            🔑 Add your Gemini API key in <strong>Settings</strong> to enable AI chat.
+            🔑 Add an AI key in <strong>Settings → AI Keys</strong> to enable chat.
           </div>
         ) : (
           <form onSubmit={handleSendChat} className="chat-input-row" style={{ marginTop: "8px" }}>
@@ -325,7 +360,7 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
 
         {!hasAnyKey ? (
           <div style={{ background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", padding: "12px", fontSize: "12px", color: "var(--text-secondary)", textAlign: "center" }}>
-            🔑 Add your Gemini API key in Settings to enable this.
+            🔑 Add an AI key in <strong>Settings → AI Keys</strong> to enable this.
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>

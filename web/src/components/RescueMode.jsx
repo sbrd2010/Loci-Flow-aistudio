@@ -34,15 +34,34 @@ const OPTIONS = {
 
 const TIMER_DURATIONS = { break: 5 * 60, water: 2 * 60, breathe: 2 * 60, pomodoro: 25 * 60 };
 
-function getRescuePrompt(reason, firstName, task) {
+function buildRescueTaskList(allTasks) {
+  const active = (allTasks || []).filter(t => !t.isDeleted && !t.isCompleted);
+  if (active.length === 0) return null;
+  const todayTasks = active.filter(t => t.horizonLevel === "today");
+  const focusTask = todayTasks.find(t => t.isNowFocus);
+  const lines = [];
+  if (focusTask) lines.push(`NOW FOCUS: [${focusTask.priority}] ${focusTask.title}`);
+  const others = todayTasks.filter(t => !t.isNowFocus).slice(0, 5);
+  if (others.length) lines.push(`TODAY: ${others.map(t => `[${t.priority}] ${t.title}`).join(" | ")}`);
+  const weekTasks = active.filter(t => t.horizonLevel === "week").slice(0, 3);
+  if (weekTasks.length) lines.push(`WEEK: ${weekTasks.map(t => t.title).join(" | ")}`);
+  return lines.join("\n");
+}
+
+function getRescuePrompt(reason, firstName, task, allTasks) {
   const name = firstName || "friend";
-  const ctx = task ? `The user is stuck on: "${task.title}".` : "The user has tasks to do but is stuck.";
-  const base = `You are a compassionate ADHD rescue coach. ${ctx} Keep ALL replies under 3 sentences. Be warm, not clinical. No bullet lists. Ask at most one short question per message. Address the user as ${name}.`;
+  const taskList = buildRescueTaskList(allTasks);
+  const ctx = task
+    ? `The user is stuck on: "${task.title}".`
+    : taskList
+      ? `The user has these tasks in Loci Focus (an ADHD app):\n${taskList}`
+      : "The user has tasks to do but is stuck.";
+  const base = `You are a compassionate ADHD rescue coach embedded in Loci Focus. ${ctx} Keep ALL replies under 3 sentences. Be warm, not clinical. No bullet lists. Ask at most one short question per message. Address the user as ${name}. You CAN see their tasks — reference them by name.`;
   return {
-    overwhelmed: `${base} ${name} is overwhelmed by too many things. Help them pick ONE task right now and name the single door-handle first step (something so small it takes 30 seconds).`,
-    tired: `${base} ${name} is low energy or brain fog. Validate it — this is a real ADHD symptom. Suggest a physical reset (water, 2 deep breaths) OR the absolute smallest task start.`,
-    anxious: `${base} ${name} is anxious and frozen. Validate their feeling in one sentence. Ask one gentle question like "What feels scary about starting?" — nothing more.`,
-    distracted: `${base} ${name} got distracted — completely normal for ADHD. Be non-judgmental. Give one specific re-entry instruction like "Open the task and read the first line right now."`,
+    overwhelmed: `${base} ${name} is overwhelmed. Pick ONE specific task from their list above and name the single door-handle step (30 seconds max to start).`,
+    tired: `${base} ${name} is low energy / brain fog. Validate it — this is a real ADHD symptom. Suggest a physical reset (water, 2 deep breaths) then the easiest task on their list.`,
+    anxious: `${base} ${name} is anxious and frozen. Validate in one sentence. Ask one gentle question like "What feels scary about starting [task name]?" — nothing more.`,
+    distracted: `${base} ${name} got distracted — completely normal for ADHD. Be non-judgmental. Re-anchor: "You were working on [task name] — open it and read the first line right now."`,
   }[reason] || base;
 }
 
@@ -50,7 +69,7 @@ function fmt(secs) {
   return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
 }
 
-export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstName }) {
+export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstName, allTasks }) {
   const [step, setStep]       = useState("triage"); // triage | options | chat | timer
   const [reason, setReason]   = useState(null);
   const [messages, setMessages] = useState([]);
@@ -88,7 +107,7 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
       const reply = await callAI({
         groqKey,
         geminiKey: geminiKey || (apiKey || "").trim(),
-        systemPrompt: getRescuePrompt(r, firstName, task),
+        systemPrompt: getRescuePrompt(r, firstName, task, allTasks),
         messages: messages.length > 0 ? messages : [{ role: "user", content: "I'm stuck and need help." }],
         maxTokens: 200
       });
