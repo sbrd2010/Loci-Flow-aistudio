@@ -411,7 +411,21 @@ export default function TodayTab({ payload, savePayload }) {
 
   return (
     <>
-      {/* 1 ── Day Horizon Timeline */}
+      {/* 1 ── Daily Motivation Quote (no label) */}
+      <section style={{
+        background: "var(--accent)", borderRadius: "var(--radius)",
+        padding: "12px 16px", textAlign: "center"
+      }}>
+        <p style={{
+          fontSize: "14px", fontWeight: "700",
+          color: "var(--btn-text, #fff)", lineHeight: "1.45",
+          fontStyle: "italic", margin: 0
+        }}>
+          "{dailyAffirmation}"
+        </p>
+      </section>
+
+      {/* 2 ── Day Horizon Timeline */}
       <section className="timeline-card">
         <div className="timeline-header">
           <div className="timeline-title">
@@ -428,27 +442,6 @@ export default function TodayTab({ payload, savePayload }) {
           </div>
           <div className="timeline-progress-fill" style={{ width: `${timelineProgress * 100}%` }}></div>
         </div>
-      </section>
-
-      {/* 2 ── Today's Intention */}
-      <section style={{
-        background: "var(--accent)", borderRadius: "var(--radius)",
-        padding: "14px 16px", textAlign: "center"
-      }}>
-        <p style={{
-          fontSize: "9px", fontWeight: "700", letterSpacing: "0.08em",
-          color: "var(--btn-text, #fff)", opacity: 0.75,
-          textTransform: "uppercase", marginBottom: "5px"
-        }}>
-          Today's Intention
-        </p>
-        <p style={{
-          fontSize: "14px", fontWeight: "700",
-          color: "var(--btn-text, #fff)", lineHeight: "1.45",
-          fontStyle: "italic"
-        }}>
-          "{dailyAffirmation}"
-        </p>
       </section>
 
       {/* 3 ── Today's Focus (primary section) */}
@@ -642,7 +635,7 @@ export default function TodayTab({ payload, savePayload }) {
             <div style={{ textAlign: "center" }}>
               {/* Big streak number */}
               <div style={{ marginBottom: "14px" }}>
-                <span style={{ fontSize: "48px", fontWeight: "900", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-display)" }}>
+                <span style={{ fontSize: "clamp(28px, 8vw, 44px)", fontWeight: "900", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-display)" }}>
                   {streak}
                 </span>
                 <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "2px" }}>

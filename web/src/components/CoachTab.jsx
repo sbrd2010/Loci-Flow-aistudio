@@ -271,17 +271,7 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
-      {/* 1 ── Today's Intention */}
-      <section className="card" style={{ background: "var(--accent)", textAlign: "center" }}>
-        <p style={{ fontSize: "10px", fontWeight: "700", letterSpacing: "0.06em", color: "var(--btn-text, #fff)", opacity: 0.75, textTransform: "uppercase", marginBottom: "6px" }}>
-          Today's Intention
-        </p>
-        <p style={{ fontSize: "15px", fontWeight: "700", color: "var(--btn-text, #fff)", lineHeight: "1.4" }}>
-          "{config.intentionMessage || "Focus on what matters most today."}"
-        </p>
-      </section>
-
-      {/* 2 ── AI Mentor Chat */}
+      {/* 1 ── AI Mentor Chat */}
       <section className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
           <div>

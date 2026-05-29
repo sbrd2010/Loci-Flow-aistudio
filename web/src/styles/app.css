@@ -478,8 +478,9 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Header Component */
 .app-header {
-  height: 64px;
-  padding: 0 20px;
+  min-height: 60px;
+  height: auto;
+  padding: 10px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -537,7 +538,6 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 @media (max-width: 430px) {
-  .header-subtitle { display: none; }
   .header-email-badge { display: none; }
   .header-initials-badge { display: flex; }
   .header-right { gap: 6px; }
@@ -672,6 +672,16 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .screen-content {
+    padding: 12px 14px calc(90px + env(safe-area-inset-bottom, 0px)) 14px;
+    gap: 12px;
+  }
+  .card {
+    padding: 14px;
+  }
 }
 
 /* Sign-In Overlay Component */
@@ -1221,15 +1231,21 @@ h1, h2, h3, h4, h5, h6 {
 
 .braindump-input {
   background: var(--bg-primary);
-  border: 1.5px solid var(--border);
+  border: 1.5px solid var(--accent);
   color: var(--text-primary);
   padding: 12px 48px 12px 16px;
   border-radius: 12px;
   font-size: 13px;
   font-family: var(--font-sans);
+  font-weight: 500;
   outline: none;
   transition: var(--transition);
   width: 100%;
+}
+
+.braindump-input::placeholder {
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .braindump-input:focus {
