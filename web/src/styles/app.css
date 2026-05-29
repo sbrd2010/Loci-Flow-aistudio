@@ -620,9 +620,21 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .nav-item-icon {
-  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   transition: var(--transition);
-  filter: grayscale(30%);
+  opacity: 0.55;
+}
+
+.nav-item:hover .nav-item-icon {
+  opacity: 0.8;
+}
+
+.nav-item.active .nav-item-icon {
+  opacity: 1;
 }
 
 .nav-item:hover {
@@ -631,10 +643,6 @@ h1, h2, h3, h4, h5, h6 {
 
 .nav-item.active {
   color: var(--accent);
-}
-
-.nav-item.active .nav-item-icon {
-  filter: grayscale(0%);
 }
 
 .nav-item.active::after {
