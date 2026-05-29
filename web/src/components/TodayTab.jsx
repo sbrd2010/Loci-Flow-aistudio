@@ -137,6 +137,7 @@ export default function TodayTab({ payload, savePayload }) {
 
   // Bar chart selected day
   const [selectedDay, setSelectedDay] = useState(null);
+  const [vizMode, setVizMode] = useState(() => localStorage.getItem("loci_viz") || "streak");
 
   // Undo delete
   const [undoTask, setUndoTask] = useState(null);
@@ -615,66 +616,98 @@ export default function TodayTab({ payload, savePayload }) {
 
       {/* 6 ── 7-Day Progress */}
       <section className="bento-card" style={{ padding: "12px 14px" }}>
-        <h3 style={{ fontSize: "11px", fontWeight: "800", color: "var(--text-secondary)", marginBottom: "10px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-          📊 7-Day Progress
-        </h3>
-        {/* SVG bar chart */}
-        {(() => {
-          const maxCount = Math.max(...bentoDays.map(d => d.count), 1);
-          const BAR_HEIGHT = 56;
+        {/* Header + view toggle */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+          <h3 style={{ fontSize: "11px", fontWeight: "800", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", margin: 0 }}>
+            📊 7-Day Progress
+          </h3>
+          <div style={{ display: "flex", gap: "4px" }}>
+            {[{ id: "streak", label: "🔥" }, { id: "dots", label: "●" }].map(v => (
+              <button key={v.id} onClick={() => { setVizMode(v.id); localStorage.setItem("loci_viz", v.id); }}
+                style={{
+                  padding: "3px 10px", fontSize: "12px", border: "1px solid var(--border)",
+                  borderRadius: "20px", cursor: "pointer", fontWeight: "700",
+                  background: vizMode === v.id ? "var(--accent)" : "var(--bg-secondary)",
+                  color: vizMode === v.id ? "var(--btn-text, #fff)" : "var(--text-muted)",
+                  transition: "all 0.15s"
+                }}>{v.label}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── VIEW A: Streak-First (🔥) ── */}
+        {vizMode === "streak" && (() => {
+          const streak = config.visitStreakCount || 0;
           return (
-            <div>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: "4px", height: `${BAR_HEIGHT + 24}px` }}>
+            <div style={{ textAlign: "center" }}>
+              {/* Big streak number */}
+              <div style={{ marginBottom: "14px" }}>
+                <span style={{ fontSize: "48px", fontWeight: "900", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-display)" }}>
+                  {streak}
+                </span>
+                <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "2px" }}>
+                  {streak === 1 ? "day streak" : "day streak"} 🔥
+                </div>
+              </div>
+              {/* 7 dots */}
+              <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginBottom: "8px" }}>
                 {bentoDays.map((day, i) => {
                   const isToday = i === 6;
-                  const barH = day.count > 0 ? Math.max(8, Math.round((day.count / maxCount) * BAR_HEIGHT)) : 4;
-                  const isSelected = selectedDay === day.dateStr;
-                  const barColor = isToday
-                    ? "var(--accent)"
-                    : day.count > 0
-                    ? "var(--success, #22c55e)"
-                    : "var(--bg-secondary)";
+                  const done = day.count > 0;
                   return (
-                    <div
-                      key={day.dateStr}
-                      onClick={() => setSelectedDay(isSelected ? null : day.dateStr)}
-                      style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer", gap: "4px" }}
-                    >
-                      {/* Tap tooltip */}
-                      {isSelected && day.count > 0 && (
-                        <div style={{
-                          fontSize: "10px", fontWeight: "800", color: "var(--btn-text, #fff)",
-                          background: "var(--accent)", borderRadius: "6px", padding: "2px 5px",
-                          marginBottom: "2px", whiteSpace: "nowrap"
-                        }}>{day.count} task{day.count !== 1 ? "s" : ""}</div>
-                      )}
-                      {/* Spacer to align bars to bottom */}
-                      <div style={{ flex: 1 }} />
-                      {/* Bar */}
+                    <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
                       <div style={{
-                        width: "100%", height: `${barH}px`,
-                        background: barColor,
-                        borderRadius: "4px 4px 2px 2px",
-                        border: isSelected ? "2px solid var(--accent)" : isToday ? "2px solid var(--accent)" : "none",
-                        boxSizing: "border-box",
-                        transition: "height 0.2s ease"
+                        width: isToday ? "28px" : "22px",
+                        height: isToday ? "28px" : "22px",
+                        borderRadius: "50%",
+                        background: done ? "var(--accent)" : "var(--bg-secondary)",
+                        border: isToday ? "2px solid var(--accent)" : "2px solid var(--border)",
+                        transition: "all 0.2s"
                       }} />
-                      {/* Day label */}
-                      <span style={{
-                        fontSize: "9px", fontWeight: isToday ? "900" : "600",
-                        color: isToday ? "var(--accent)" : "var(--text-muted)",
-                        textTransform: "uppercase"
-                      }}>{day.label}</span>
+                      <span style={{ fontSize: "8px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>
+                        {day.label}
+                      </span>
                     </div>
                   );
                 })}
               </div>
-              <p style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "6px" }}>
-                Tap a bar to see count · Green = completed · Today highlighted
-              </p>
+              <p style={{ fontSize: "9px", color: "var(--text-muted)" }}>Filled = tasks done that day</p>
             </div>
           );
         })()}
+
+        {/* ── VIEW B: Habit Dots (●) ── */}
+        {vizMode === "dots" && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              {bentoDays.map((day, i) => {
+                const isToday = i === 6;
+                const done = day.count > 0;
+                return (
+                  <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "5px", flex: 1 }}>
+                    <span style={{ fontSize: "9px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>
+                      {day.label}
+                    </span>
+                    <div style={{
+                      width: isToday ? "32px" : "26px",
+                      height: isToday ? "32px" : "26px",
+                      borderRadius: "50%",
+                      background: done ? "var(--success, #22c55e)" : "var(--bg-secondary)",
+                      border: isToday ? "2.5px solid var(--accent)" : done ? "none" : "2px solid var(--border)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      transition: "all 0.2s"
+                    }}>
+                      {done && <span style={{ fontSize: "12px" }}>✓</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "4px" }}>
+              Green ✓ = showed up · Today highlighted
+            </p>
+          </div>
+        )}
       </section>
 
       {/* ── Undo Delete Toast */}
