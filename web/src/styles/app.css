@@ -512,6 +512,15 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 20px;
   border: 1px solid var(--border);
   font-weight: 550;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .user-badge {
+    max-width: 90px;
+  }
 }
 
 .switch-btn {
@@ -531,7 +540,8 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Bottom Navigation Component */
 .bottom-nav {
-  height: 72px;
+  height: calc(72px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   background: var(--bg-card);
   border-top: 1px solid var(--border);
   display: flex;
@@ -617,7 +627,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Main Screens Layout */
 .screen-content {
   flex: 1;
-  padding: 20px 20px 100px 20px;
+  padding: 20px 20px calc(100px + env(safe-area-inset-bottom, 0px)) 20px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -1458,7 +1468,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Floating Action Button (Add Task Dialog Launcher) */
 .fab {
   position: fixed;
-  bottom: 88px;
+  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   right: calc(50% - 220px);
   width: 56px;
   height: 56px;
@@ -1570,6 +1580,25 @@ h1, h2, h3, h4, h5, h6 {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
+}
+
+/* 6-item horizon selector: 3 columns × 2 rows on all screen sizes */
+.horizons-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+/* 4-item selectors: 4 columns on tablet+, 2 columns on narrow phones */
+.responsive-4col {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+@media (max-width: 480px) {
+  .responsive-4col {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .selector-btn {
@@ -1712,12 +1741,13 @@ h1, h2, h3, h4, h5, h6 {
   .roadmap-scroll-container {
     overflow-x: visible;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 16px;
   }
   .roadmap-column {
     flex: unset;
     max-height: unset;
+    -webkit-overflow-scrolling: touch;
   }
 }
 

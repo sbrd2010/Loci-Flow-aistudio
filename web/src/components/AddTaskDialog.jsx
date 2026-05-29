@@ -184,7 +184,7 @@ estimateMinutes options: 15, 25, 45, 60`;
           {/* Horizon Level */}
           <div className="form-group">
             <label className="form-label">HORIZON</label>
-            <div className="btn-group">
+            <div className="horizons-grid">
               {horizons.map((h) => (
                 <button
                   key={h.key}
@@ -201,7 +201,7 @@ estimateMinutes options: 15, 25, 45, 60`;
           {/* Priority */}
           <div className="form-group">
             <label className="form-label">PRIORITY</label>
-            <div className="btn-group">
+            <div className="responsive-4col">
               {priorities.map((p) => (
                 <button
                   key={p}
@@ -238,7 +238,7 @@ estimateMinutes options: 15, 25, 45, 60`;
           {/* Time Estimate */}
           <div className="form-group">
             <label className="form-label">TIME ESTIMATE</label>
-            <div className="btn-group">
+            <div className="responsive-4col">
               {estimates.map((est) => (
                 <button
                   key={est}
