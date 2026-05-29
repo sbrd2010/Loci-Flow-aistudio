@@ -453,25 +453,13 @@ export default function TodayTab({ payload, savePayload }) {
           </div>
           <div className="timeline-progress-fill" style={{ width: `${timelineProgress * 100}%` }}></div>
         </div>
-        <div className="timeline-slots">
-          <div className="timeline-slot">
-            <span className="slot-label">Current Block</span>
-            <span className="slot-task">{activeTask ? activeTask.title : "No active focus"}</span>
-          </div>
-          <div className="timeline-slot" style={{ borderLeft: "1px solid var(--border)", paddingLeft: "12px" }}>
-            <span className="slot-label">Upcoming Block</span>
-            <span className="slot-task">
-              {remainingTasks.find(t => !t.isNowFocus)?.title || "All done for today ✓"}
-            </span>
-          </div>
-        </div>
       </section>
 
       {/* 2 ── Dopamine Affirmation */}
       <div className="affirmation-banner" onClick={handleAffirmationTap}>
         <span style={{ fontSize: "14px" }}>💖</span>
         <span className="affirmation-text">
-          {showAffirmation ? randomAffirmation : "Tap for your daily Dopamine Affirmation..."}
+          {showAffirmation ? randomAffirmation : "Tap for today's motivation ✨"}
         </span>
       </div>
 
@@ -634,7 +622,7 @@ export default function TodayTab({ payload, savePayload }) {
         {/* 7-Day Streak */}
         <section className="bento-card" style={{ padding: "12px 10px" }}>
           <h3 style={{ fontSize: "11px", fontWeight: "800", color: "var(--text-secondary)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            📊 7-Day Streak
+            📊 7-Day Progress
           </h3>
           <div className="bento-grid">
             {bentoDays.map(day => {
@@ -659,9 +647,10 @@ export default function TodayTab({ payload, savePayload }) {
 
         {/* XP / Level Progress */}
         <section className="card" style={{ padding: "12px 10px" }}>
-          <h3 style={{ fontSize: "11px", fontWeight: "800", color: "var(--text-secondary)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            ⚡ Progress
+          <h3 style={{ fontSize: "11px", fontWeight: "800", color: "var(--text-secondary)", marginBottom: "2px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            ⚡ XP & Level
           </h3>
+          <p style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "6px" }}>Earn XP by completing tasks</p>
           <div style={{ fontSize: "12px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "6px", lineHeight: "1.3" }}>
             {levelTitle}
           </div>

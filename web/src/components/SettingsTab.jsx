@@ -107,6 +107,9 @@ export default function SettingsTab({ payload, savePayload, saveSubPath }) {
 
           <div className="form-group">
             <label className="form-label">Your Biggest ADHD Challenge</label>
+            <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "-4px 0 10px" }}>
+              Your AI coach adapts its advice based on this selection.
+            </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {challengeOptions.map(opt => (
                 <div

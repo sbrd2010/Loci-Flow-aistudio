@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 
+
 export default function AddTaskDialog({ email, payload, savePayload, defaultHorizon, onClose }) {
   const [title, setTitle] = useState("");
   const [concreteStep, setConcreteStep] = useState("");
@@ -8,6 +9,7 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
   const [priority, setPriority] = useState("P3");
   const [category, setCategory] = useState("Personal");
   const [estimateMinutes, setEstimateMinutes] = useState(25);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
 
@@ -181,7 +183,7 @@ estimateMinutes options: 15, 25, 45, 60`;
 
           {/* Horizon Level */}
           <div className="form-group">
-            <label className="form-label">STRATEGIC PLANNING HORIZON</label>
+            <label className="form-label">HORIZON</label>
             <div className="btn-group">
               {horizons.map((h) => (
                 <button
@@ -198,7 +200,7 @@ estimateMinutes options: 15, 25, 45, 60`;
 
           {/* Priority */}
           <div className="form-group">
-            <label className="form-label">ADHD TASK PRIORITY INDEX</label>
+            <label className="form-label">PRIORITY</label>
             <div className="btn-group">
               {priorities.map((p) => (
                 <button
@@ -213,26 +215,29 @@ estimateMinutes options: 15, 25, 45, 60`;
             </div>
           </div>
 
-          {/* Category */}
-          <div className="form-group">
-            <label className="form-label">LIFE HORIZON CATEGORY</label>
-            <div className="btn-group">
-              {categories.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className={`selector-btn ${category === c ? "selected" : ""}`}
-                  onClick={() => setCategory(c)}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
+          {/* Category — hidden behind Advanced toggle */}
+          <div style={{ marginBottom: "4px" }}>
+            <button type="button" onClick={() => setAdvancedOpen(o => !o)}
+              style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: "12px", cursor: "pointer", padding: "4px 0", display: "flex", alignItems: "center", gap: "4px" }}>
+              {advancedOpen ? "▾" : "▸"} Advanced options
+            </button>
           </div>
+          {advancedOpen && (
+            <div className="form-group">
+              <label className="form-label">CATEGORY</label>
+              <div className="btn-group">
+                {categories.map((c) => (
+                  <button key={c} type="button"
+                    className={`selector-btn ${category === c ? "selected" : ""}`}
+                    onClick={() => setCategory(c)}>{c}</button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Time Estimate */}
           <div className="form-group">
-            <label className="form-label">DOPAMINE POMODORO ESTIMATE (MINUTES)</label>
+            <label className="form-label">TIME ESTIMATE</label>
             <div className="btn-group">
               {estimates.map((est) => (
                 <button
