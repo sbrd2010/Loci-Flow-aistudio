@@ -198,11 +198,12 @@ export default function TodayTab({ payload, savePayload }) {
   // Update contribution count inside the payload
   const incrementContribution = (newContributions, dateStr) => {
     const index = newContributions.findIndex((c) => c.dateString === dateStr);
-    const compositeKey = `${payload.userId}_${dateStr}`;
+    const uid = payload.userId || payload.config?.userId || "";
+    const compositeKey = `${uid}_${dateStr}`;
     if (index === -1) {
       newContributions.push({
         compositeKey,
-        userId: payload.userId,
+        userId: uid,
         dateString: dateStr,
         count: 1,
         lastUpdated: Date.now()
@@ -703,7 +704,7 @@ export default function TodayTab({ payload, savePayload }) {
                   {streak}
                 </span>
                 <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "2px" }}>
-                  {streak === 1 ? "day streak" : "day streak"} 🔥
+                  day streak 🔥
                 </div>
               </div>
               {/* 7 dots */}
