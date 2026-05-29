@@ -32,9 +32,9 @@ const SettingsIcon = () => (
 
 export default function BottomNav({ activeTab, onTabSelect }) {
   const tabs = [
-    { id: "today",    label: "Today",    Icon: HomeIcon    },
+    { id: "today",    label: "Home",     Icon: HomeIcon    },
     { id: "roadmap",  label: "Plan",     Icon: PlanIcon    },
-    { id: "coach",    label: "Coach",    Icon: CoachIcon   },
+    { id: "coach",    label: "AI Coach", Icon: CoachIcon   },
     { id: "settings", label: "Settings", Icon: SettingsIcon }
   ];
 
