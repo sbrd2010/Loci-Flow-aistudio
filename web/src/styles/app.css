@@ -485,7 +485,7 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--border);
-  background: var(--bg-card);
+  background: var(--bg-primary);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -582,7 +582,7 @@ h1, h2, h3, h4, h5, h6 {
 .bottom-nav {
   height: calc(72px + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: var(--bg-card);
+  background: var(--bg-primary);
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: space-around;
@@ -2071,19 +2071,15 @@ html[data-theme="glassy"] .rescue-card {
   -webkit-backdrop-filter: blur(20px);
 }
 
-/* Glass header and bottom nav */
+/* Solid header and bottom nav for glassy theme */
 html[data-theme="glassy"] .app-header {
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  background: rgba(11, 19, 38, 0.72);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: #0b1326;
+  border-color: rgba(255, 255, 255, 0.10);
 }
 
 html[data-theme="glassy"] .bottom-nav {
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  background: rgba(11, 19, 38, 0.72);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: #0b1326;
+  border-color: rgba(255, 255, 255, 0.10);
 }
 
 /* Teal + purple brand gradient for dark theme */
