@@ -276,7 +276,7 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
               🤖 Chat with {config.mentorName || "your Mentor"}
             </h2>
             <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
-              Your AI ADHD coach — ask anything about focus, tasks, or momentum.
+              Your AI focus coach — ask anything about tasks, focus, or momentum.
             </p>
           </div>
           {payload.chatHistory && payload.chatHistory.length > 0 && (

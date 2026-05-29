@@ -92,12 +92,16 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
     return `${Math.floor(mins / 60)}h ago`;
   };
 
-  const groqKey      = localStorage.getItem("loci_groq_key") || "";
-  const personalKey  = localStorage.getItem("loci_gemini_key") || "";
-  const defaultKey   = import.meta.env.VITE_GEMINI_KEY || "";
-  const hasAnyKey    = !!(groqKey || personalKey || defaultKey);
-  const keyStatusLabel = groqKey
-    ? "✓ Groq AI active — fast & free (Llama 4)"
+  const groqPersonalKey = localStorage.getItem("loci_groq_key") || "";
+  const groqBuiltinKey  = import.meta.env.VITE_GROQ_KEY || "";
+  const groqKey         = groqPersonalKey || groqBuiltinKey;
+  const personalKey     = localStorage.getItem("loci_gemini_key") || "";
+  const defaultKey      = import.meta.env.VITE_GEMINI_KEY || "";
+  const hasAnyKey       = !!(groqKey || personalKey || defaultKey);
+  const keyStatusLabel  = groqPersonalKey
+    ? "✓ Groq AI active — personal key"
+    : groqBuiltinKey
+    ? "✓ Groq AI active — built-in key (all users)"
     : personalKey
     ? "✓ Gemini AI active (personal key)"
     : defaultKey

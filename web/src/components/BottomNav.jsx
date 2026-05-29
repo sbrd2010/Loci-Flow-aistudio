@@ -56,14 +56,14 @@ export default function BottomNav({ activeTab, onTabSelect }) {
               aria-hidden="true"
               style={{
                 color: color,
-                opacity: isActive ? 1 : 0.38,
+                opacity: isActive ? 1 : 0.6,
                 background: isActive ? `${color}22` : "transparent",
                 transform: isActive ? "scale(1.08)" : "scale(1)",
               }}
             >
               <Icon />
             </span>
-            <span style={{ color: isActive ? color : undefined, fontWeight: isActive ? 700 : 600 }}>
+            <span style={{ color: isActive ? color : "var(--text-secondary)", fontWeight: isActive ? 700 : 600 }}>
               {label}
             </span>
           </button>
