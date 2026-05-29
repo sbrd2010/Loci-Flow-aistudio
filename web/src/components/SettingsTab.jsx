@@ -35,7 +35,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
   const challengeOptions = [
     { key: "starting",   label: "Overcoming Inertia",    desc: "Can't get started on tasks.", icon: "🏁" },
     { key: "focusing",   label: "Protecting Focus",       desc: "Getting distracted mid-task.", icon: "🔵" },
-    { key: "execution",  label: "Action over Planning",   desc: "Over-planning, under-doing.", icon: "⚡" }
+    { key: "execution",  label: "Action over Planning",   desc: "Over-planning, under-doing.", icon: "⚡" },
+    { key: "tracking",   label: "Time Awareness",         desc: "Losing track of time and deadlines.", icon: "🕐" }
   ];
 
   const [savedProfile, setSavedProfile] = useState(false);

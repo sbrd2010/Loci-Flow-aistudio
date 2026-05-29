@@ -84,6 +84,7 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
   const challengeLabel =
     config.challengeType === "starting"  ? "Overcoming Inertia" :
     config.challengeType === "focusing"  ? "Protecting Focus Sessions" :
+    config.challengeType === "tracking"  ? "Time Awareness & Calendar Management" :
     "Action over Perfectionism";
 
   const firstName = (config.userName || "").split(" ")[0] || "friend";
@@ -200,6 +201,7 @@ USER CONTEXT RIGHT NOW:
     const challengeDesc =
       config.challengeType === "starting" ? "Overcoming Inertia (struggles to start tasks)" :
       config.challengeType === "focusing" ? "Protecting Focus Sessions (gets distracted mid-task)" :
+      config.challengeType === "tracking" ? "Time Awareness (loses track of time, misses deadlines)" :
       "Action over Perfectionism (overthinks and delays finishing)";
     const now = new Date();
     const hour = now.getHours();
