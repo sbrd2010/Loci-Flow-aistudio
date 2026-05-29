@@ -59,6 +59,16 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
     setTimeout(() => setSavedProfile(false), 2000);
   };
 
+  // ── Groq API key ──────────────────────────────────────────────────────────
+  const [groqInput, setGroqInput] = useState(localStorage.getItem("loci_groq_key") || "");
+  const [savedGroq, setSavedGroq] = useState(false);
+  const handleSaveGroq = (e) => {
+    e.preventDefault();
+    localStorage.setItem("loci_groq_key", groqInput.trim());
+    setSavedGroq(true);
+    setTimeout(() => { setSavedGroq(false); window.location.reload(); }, 1200);
+  };
+
   // ── Gemini API key ────────────────────────────────────────────────────────
   const [keyInput, setKeyInput] = useState(localStorage.getItem("loci_gemini_key") || "");
   const [savedKey, setSavedKey] = useState(false);
@@ -79,16 +89,17 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
     return `${Math.floor(mins / 60)}h ago`;
   };
 
-  const personalKey = localStorage.getItem("loci_gemini_key");
-  const defaultKey = import.meta.env.VITE_GEMINI_KEY || "";
-  const hasPersonalKey = !!personalKey;
-  const hasDefaultKey = !!defaultKey;
-  const hasAnyKey = hasPersonalKey || hasDefaultKey;
-  const keyStatusLabel = hasPersonalKey
-    ? "✓ Your personal key active"
-    : hasDefaultKey
-    ? "✓ Default AI key active (shared)"
-    : "✗ No key — AI features disabled";
+  const groqKey      = localStorage.getItem("loci_groq_key") || "";
+  const personalKey  = localStorage.getItem("loci_gemini_key") || "";
+  const defaultKey   = import.meta.env.VITE_GEMINI_KEY || "";
+  const hasAnyKey    = !!(groqKey || personalKey || defaultKey);
+  const keyStatusLabel = groqKey
+    ? "✓ Groq AI active — fast & free (Llama 4)"
+    : personalKey
+    ? "✓ Gemini AI active (personal key)"
+    : defaultKey
+    ? "✓ Gemini AI active (default key)"
+    : "✗ No AI key — add Groq or Gemini below";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -228,29 +239,18 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
         </div>
       </section>
 
-      {/* ── AI API Key ───────────────────────────────────────────────────── */}
+      {/* ── AI Keys ─────────────────────────────────────────────────────── */}
       <section className="card">
         <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "4px", color: "var(--text-primary)" }}>
-          🔑 AI Mentor Key
+          🤖 AI Keys
         </h2>
-        <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "4px" }}>
-          The AI mentor chat on the Coach tab uses Gemini. Add your free API key from{" "}
-          <a href="https://aistudio.google.com" target="_blank" rel="noreferrer"
-            style={{ color: "var(--accent)", fontWeight: "600" }}>
-            aistudio.google.com
-          </a>
+        <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "12px" }}>
+          Keys are stored only in this browser — never sent to Loci servers.
         </p>
 
+        {/* Active status */}
         <div style={{
-          background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)",
-          padding: "10px 12px", marginBottom: "14px",
-          fontSize: "11px", color: "var(--text-muted)", lineHeight: "1.5"
-        }}>
-          🔒 Stored only in <em>this browser</em>. Never sent to Loci servers — only to Google's API on your behalf.
-        </div>
-
-        <div style={{
-          display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px",
+          display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px",
           padding: "8px 12px", borderRadius: "var(--radius-sm)",
           background: hasAnyKey ? "rgba(52, 211, 153, 0.08)" : "rgba(248, 113, 113, 0.08)",
           border: `1px solid ${hasAnyKey ? "var(--success)" : "var(--danger)"}`,
@@ -260,17 +260,49 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
           {keyStatusLabel}
         </div>
 
-        <form onSubmit={handleSaveKey} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          <div className="form-group">
-            <label className="form-label" htmlFor="gemini-key">Gemini API Key</label>
-            <input id="gemini-key" className="text-input" type="password"
+        {/* Groq — recommended */}
+        <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+            <span style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-primary)" }}>
+              🚀 Groq <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--success)", background: "rgba(52,211,153,0.12)", padding: "2px 6px", borderRadius: "4px", marginLeft: "4px" }}>RECOMMENDED</span>
+            </span>
+          </div>
+          <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
+            Sub-200ms responses, 14,400 free requests/day. Get a key at{" "}
+            <a href="https://console.groq.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontWeight: "600" }}>
+              console.groq.com
+            </a> (free, no card needed).
+          </p>
+          <form onSubmit={handleSaveGroq} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <input className="text-input" type="password"
+              value={groqInput} onChange={e => setGroqInput(e.target.value)}
+              placeholder="gsk_... (from Groq Console)" />
+            <button className="btn" type="submit" style={{ width: "100%" }}>
+              {savedGroq ? "✓ Groq key saved — reloading..." : "Save Groq Key"}
+            </button>
+          </form>
+        </div>
+
+        {/* Gemini — fallback */}
+        <div>
+          <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>
+            Gemini (fallback)
+          </span>
+          <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
+            Free key from{" "}
+            <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontWeight: "600" }}>
+              aistudio.google.com
+            </a> — used if no Groq key is set.
+          </p>
+          <form onSubmit={handleSaveKey} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <input className="text-input" type="password"
               value={keyInput} onChange={e => setKeyInput(e.target.value)}
               placeholder="AIzaSy... (from AI Studio)" />
-          </div>
-          <button className="btn" type="submit" style={{ width: "100%" }}>
-            {savedKey ? "✓ Key saved — reloading..." : "Save Key"}
-          </button>
-        </form>
+            <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
+              {savedKey ? "✓ Gemini key saved — reloading..." : "Save Gemini Key"}
+            </button>
+          </form>
+        </div>
       </section>
 
       {/* ── Data Sync ────────────────────────────────────────────────────── */}

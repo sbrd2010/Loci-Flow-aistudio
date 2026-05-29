@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=";
+import { callAI, getAIKeys } from "../utils/aiCall";
 
 const REASONS = [
   { id: "overwhelmed", emoji: "😵", label: "Too much going on",     color: "#f59e0b" },
@@ -74,27 +73,29 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
     return () => clearTimeout(t);
   }, [timerSecs]);
 
-  const key = (apiKey || import.meta.env.VITE_GEMINI_KEY || "").trim();
+  const { groqKey, geminiKey } = getAIKeys();
+  const hasKey = !!(groqKey || geminiKey || (apiKey || "").trim());
 
   const aiCall = async (r, history) => {
     setLoading(true);
     try {
-      const res = await fetch(`${GEMINI_URL}${key}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: getRescuePrompt(r, firstName, task) }] },
-          contents: history,
-        }),
+      // history is [{role: "user"|"ai", text}] — convert to OpenAI format
+      const messages = history.map(m => ({
+        role: m.role === "ai" ? "assistant" : "user",
+        content: m.text || m.parts?.[0]?.text || ""
+      })).filter(m => m.content);
+
+      const reply = await callAI({
+        groqKey,
+        geminiKey: geminiKey || (apiKey || "").trim(),
+        systemPrompt: getRescuePrompt(r, firstName, task),
+        messages: messages.length > 0 ? messages : [{ role: "user", content: "I'm stuck and need help." }],
+        maxTokens: 200
       });
-      if (!res.ok) throw new Error(`${res.status}`);
-      const data = await res.json();
-      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      if (!reply) throw new Error("empty");
       setMessages(prev => [...prev, { role: "ai", text: reply }]);
     } catch (err) {
-      const hint = err.message === "429" ? " (rate limit — wait a moment)" : err.message === "503" ? " (server busy — try again)" : "";
-      setMessages(prev => [...prev, { role: "ai", text: `AI unavailable${hint}. ${firstName || "friend"}, what's the tiniest next step you could take right now?` }]);
+      const hint = err.message === "429" ? " (rate limit — wait a moment)" : err.message === "503" ? " (server busy)" : "";
+      setMessages(prev => [...prev, { role: "ai", text: `AI unavailable${hint}. ${firstName || "friend"}, what's one tiny step you can take right now?` }]);
     } finally {
       setLoading(false);
       sendingRef.current = false;
@@ -105,12 +106,12 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
     if (chatStarted.current) return;
     chatStarted.current = true;
     setStep("chat");
-    if (!key) {
+    if (!hasKey) {
       setMessages([{ role: "ai", text: `Hey ${firstName || "friend"}, I'm here with you. What's going on right now?` }]);
       return;
     }
     sendingRef.current = true;
-    aiCall(r, [{ role: "user", parts: [{ text: "I'm stuck and need help." }] }]);
+    aiCall(r, [{ role: "user", text: "I'm stuck and need help." }]);
   };
 
   const handleSend = async () => {
@@ -120,8 +121,8 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
     setInput("");
     const updated = [...messages, { role: "user", text: msg }];
     setMessages(updated);
-    if (!key) { sendingRef.current = false; return; }
-    await aiCall(reason, updated.map(m => ({ role: m.role === "ai" ? "model" : "user", parts: [{ text: m.text }] })));
+    if (!hasKey) { sendingRef.current = false; return; }
+    await aiCall(reason, updated);
   };
 
   const handleOption = (optId) => {

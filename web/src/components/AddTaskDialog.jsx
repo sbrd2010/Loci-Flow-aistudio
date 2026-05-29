@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { callAI, getAIKeys } from "../utils/aiCall";
 
 
 export default function AddTaskDialog({ email, payload, savePayload, defaultHorizon, onClose }) {
@@ -13,11 +14,12 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
 
-  const apiKey = localStorage.getItem("loci_gemini_key") || import.meta.env.VITE_GEMINI_KEY || "";
+  const { groqKey, geminiKey } = getAIKeys();
+  const hasAnyKey = !!(groqKey || geminiKey);
 
   const handleAiSuggest = async () => {
     if (!title.trim()) { setAiError("Type a rough task idea first, then tap Ask AI."); return; }
-    if (!apiKey) { setAiError("No AI key available."); return; }
+    if (!hasAnyKey) { setAiError("No AI key — add one in Settings."); return; }
     setAiLoading(true);
     setAiError("");
     const cfg = payload.config || {};
@@ -45,14 +47,12 @@ priority options: P1 (urgent+must do today), P2 (important this week), P3 (norma
 estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
 
     try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
-        { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
-      );
-      if (!res.ok) throw new Error(`${res.status}`);
-      const data = await res.json();
-      const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const raw = await callAI({
+        groqKey, geminiKey,
+        systemPrompt: "You are an ADHD productivity coach. Respond ONLY with valid JSON, no markdown.",
+        messages: [{ role: "user", content: prompt }],
+        maxTokens: 200
+      });
       const cleaned = raw.replace(/```json|```/g, "").trim();
       const parsed = JSON.parse(cleaned);
       if (parsed.title) setTitle(parsed.title);
@@ -152,7 +152,7 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
               required
               autoFocus
             />
-            {apiKey && (
+            {hasAnyKey && (
               <button
                 type="button"
                 onClick={handleAiSuggest}

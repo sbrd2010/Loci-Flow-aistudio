@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
+import { callAI, getAIKeys } from "../utils/aiCall";
 
 export default function CoachTab({ payload, savePayload, saveSubPath }) {
   const { tasks = [], config = {} } = payload;
-
-  // User's personal key overrides the default embedded key
-  const apiKey = localStorage.getItem("loci_gemini_key") || (import.meta.env.VITE_GEMINI_KEY ? import.meta.env.VITE_GEMINI_KEY.trim() : "") || "";
+  const { groqKey, geminiKey } = getAIKeys();
+  const hasAnyKey = !!(groqKey || geminiKey);
 
   // ── Morning Ritual ────────────────────────────────────────────────────────
   const [ritualActive, setRitualActive] = useState(false);
@@ -109,12 +109,12 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
 
   const handleSendChat = async (e) => {
     e.preventDefault();
-    if (!chatInput.trim() || !apiKey || chatLoading) return;
+    if (!chatInput.trim() || !hasAnyKey || chatLoading) return;
 
     const userText = chatInput.trim();
     setChatInput("");
 
-    const MAX_HISTORY = 40;
+    const MAX_HISTORY = 20;
     const trimmed = chatHistory.length >= MAX_HISTORY
       ? chatHistory.slice(chatHistory.length - MAX_HISTORY + 1)
       : chatHistory;
@@ -128,58 +128,22 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
     const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
     const todayTasks = tasks.filter(t => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted);
     const pinnedTask = todayTasks.find(t => t.isNowFocus);
-    const streak = config.currentStreak || 0;
-    const totalXp = config.totalXp || 0;
 
-    const systemInstruction = `You are ${config.mentorName || "an ADHD coach"}, a certified ADHD productivity coach specializing in executive dysfunction, task initiation, and dopamine regulation. Your client is ${config.userName || "a user"}, who specifically struggles with "${challengeLabel}".
+    const systemInstruction = `You are ${config.mentorName || "an ADHD coach"}, a certified ADHD productivity coach. Your client is ${config.userName || "a user"}, struggling with "${challengeLabel}".
 
-COACHING TECHNIQUES YOU ALWAYS APPLY:
-- Task initiation block: Give ONE physical action for the next 2 minutes. Not 5 steps — just the door-handle move.
-- Overwhelm: Acknowledge briefly, then triage ruthlessly. "Let's park everything except this ONE thing."
-- Distraction/lost focus: Re-anchor gently. "You're back. What were you doing before?" No shame.
-- Procrastination: Name the real blocker (fear of failure, perfectionism, unclear first step) then shrink the task.
-- Bad days: Validate fully first, then offer the smallest possible win to rebuild momentum.
-- Transitions (finished a task): Celebrate briefly, then point to the next smallest action.
-- Overwhelm from deadline: "What's the one thing that would make tomorrow easier? Do that now."
-- Perfectionism spiral: "Done and imperfect beats perfect and unfinished. Ship it."
-- Body doubling: Narrate the task with them. "Open the doc. I'll wait."
-- Emotional dysregulation: Validate the feeling first, always. Then reframe.
+TECHNIQUES: Give ONE physical action for initiation blocks. Acknowledge overwhelm briefly, then triage to one task. Re-anchor distraction gently ("You're back. What were you doing?"). Validate bad days first, then smallest win. Shrink perfectionism spirals ("Done beats perfect").
 
-RESPONSE RULES:
-- Max 3 sentences unless listing steps (then max 3 bullets)
-- Never say "Great question!", "Absolutely!", or "Of course!"
-- Address the user as "${(config.userName || "").split(" ")[0] || "friend"}" (their first name). Use their name naturally in the first sentence of your response.
-- Warm and direct — not clinical, not cheerleader
-- If user celebrates, celebrate back briefly and immediately redirect to next action
+RULES: Max 3 sentences. No "Great question!" or "Absolutely!". Address as "${firstName}". Warm and direct.
 
-USER CONTEXT RIGHT NOW:
-- Time: ${timeOfDay} (${hour}:00)
-- Streak: ${streak} days in a row
-- Total XP earned: ${totalXp}
-- Today's remaining tasks: ${todayTasks.length > 0 ? todayTasks.slice(0,5).map(t => `[${t.priority}] ${t.title}`).join(", ") : "none"}
-- Currently focused on: ${pinnedTask ? pinnedTask.title : "nothing pinned yet"}`;
+CONTEXT: ${timeOfDay}, streak ${config.currentStreak || 0} days, ${todayTasks.length} tasks today, focused on: ${pinnedTask ? pinnedTask.title : "nothing pinned"}.`;
 
-    const recentCtx = withUser.slice(-6, -1)
-      .map(m => `${m.isUser ? config.userName || "User" : config.mentorName || "Coach"}: ${m.text}`)
-      .join("\n");
-
-    const userMessage = `${recentCtx ? `Recent conversation:\n${recentCtx}\n\n` : ""}${config.userName || "User"}: "${userText}"`;
+    const messages = withUser.map(m => ({ role: m.isUser ? "user" : "assistant", content: m.text }));
 
     try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
-        { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemInstruction }] },
-            contents: [{ role: "user", parts: [{ text: userMessage }] }]
-          }) }
-      );
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const data = await res.json();
-      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "Keep going. I'm with you.";
+      const reply = await callAI({ groqKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens: 300 });
       saveSubPath("chatHistory", [...withUser, { text: reply.trim(), isUser: false }]);
     } catch (err) {
-      const hint = err.message === "429" ? "Rate limit hit — wait 30 seconds and try again." : err.message === "503" ? "AI server busy — try again in a moment." : `AI error: ${err.message}`;
+      const hint = err.message === "429" ? "Rate limit — wait 30 sec and retry." : err.message === "503" ? "AI server busy — try again." : err.message === "no_key" ? "Add an AI key in Settings." : `AI error ${err.message}`;
       saveSubPath("chatHistory", [...withUser, { text: hint, isUser: false }]);
     } finally {
       setChatLoading(false);
@@ -191,7 +155,7 @@ USER CONTEXT RIGHT NOW:
   const [reviewResult, setReviewResult] = useState("");
 
   const handleAiReview = async () => {
-    if (!apiKey) return;
+    if (!hasAnyKey) return;
     const backlog = tasks.filter(t => !t.isDeleted && !t.isCompleted);
     if (backlog.length === 0) {
       setReviewResult("🎉 Your backlog is empty — nothing to review! Add goals on the Roadmap tab and come back.");
@@ -236,14 +200,13 @@ FOR EACH OF YOUR 3 PICKS, PROVIDE:
 End with one sentence of encouragement. Be direct and specific — no generic productivity advice.`;
 
     try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
-        { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
-      );
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const data = await res.json();
-      setReviewResult(data.candidates?.[0]?.content?.parts?.[0]?.text || "No response from AI.");
+      const reply = await callAI({
+        groqKey, geminiKey,
+        systemPrompt: `You are ${config.mentorName || "an ADHD coach"}, an expert ADHD productivity coach.`,
+        messages: [{ role: "user", content: prompt }],
+        maxTokens: 600
+      });
+      setReviewResult(reply);
     } catch (err) {
       setReviewResult(`AI Review failed: ${err.message}`);
     } finally {
@@ -297,7 +260,7 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
           <div ref={chatBottomRef} />
         </div>
 
-        {!apiKey ? (
+        {!hasAnyKey ? (
           <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px", fontSize: "12px", color: "var(--text-secondary)", textAlign: "center", marginTop: "8px" }}>
             🔑 Add your Gemini API key in <strong>Settings</strong> to enable AI chat.
           </div>
@@ -360,7 +323,7 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
           Your mentor scans your full backlog and recommends the 3 most important tasks to do today.
         </p>
 
-        {!apiKey ? (
+        {!hasAnyKey ? (
           <div style={{ background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", padding: "12px", fontSize: "12px", color: "var(--text-secondary)", textAlign: "center" }}>
             🔑 Add your Gemini API key in Settings to enable this.
           </div>
