@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import ConfirmDialog from "./ConfirmDialog";
 
 export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
@@ -16,6 +17,8 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
 
   // Mobile accordion: which column is expanded
   const [expandedCol, setExpandedCol] = useState("week");
+
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   // Helper: Format date as YYYY-MM-DD
   const getTodayDateString = () => {
@@ -129,37 +132,48 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
   };
 
   const handleDelete = (task) => {
-    // Fix #20: require confirmation before deleting
-    const confirmed = window.confirm(`Delete "${task.title}"?\n\nThis cannot be undone.`);
-    if (!confirmed) return;
-
-    const updatedTasks = tasks.map((t) => {
-      if (t.uuid === task.uuid) {
-        return {
-          ...t,
-          isDeleted: true,
-          lastUpdated: Date.now()
-        };
-      }
-      return t;
+    setConfirmDialog({
+      message: `Delete "${task.title}"?\n\nThis cannot be undone.`,
+      confirmLabel: "Delete", cancelLabel: "Cancel", danger: true,
+      onConfirm: () => {
+        const updatedTasks = tasks.map((t) =>
+          t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t
+        );
+        savePayload({ ...payload, tasks: updatedTasks });
+        setSelectedTask(null);
+        setConfirmDialog(null);
+      },
+      onCancel: () => setConfirmDialog(null)
     });
+  };
 
-    savePayload({
-      ...payload,
-      tasks: updatedTasks
+  const handleClearAllBrainDump = () => {
+    setConfirmDialog({
+      message: `Clear all ${(payload.brainDump || []).length} brain dump items?\n\nThis cannot be undone.`,
+      confirmLabel: "Clear all", cancelLabel: "Cancel", danger: true,
+      onConfirm: () => {
+        savePayload({ ...payload, brainDump: [] });
+        setConfirmDialog(null);
+      },
+      onCancel: () => setConfirmDialog(null)
     });
-    setSelectedTask(null);
   };
 
   return (
     <div className="roadmap-container">
       {(payload.brainDump || []).length > 0 && (
         <section className="card" style={{marginBottom:"4px"}}>
-          <h2 style={{fontSize:"15px", fontWeight:"800", fontFamily:"var(--font-display)", color:"var(--text-primary)", marginBottom:"4px"}}>
-            📥 Brain Dump Inbox
-          </h2>
-          <p style={{fontSize:"11.5px", color:"var(--text-secondary)", marginBottom:"12px"}}>
-            {(payload.brainDump || []).length} unprocessed idea{(payload.brainDump || []).length !== 1 ? "s" : ""}. Send each to the right horizon.
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"4px"}}>
+            <h2 style={{fontSize:"15px", fontWeight:"800", fontFamily:"var(--font-display)", color:"var(--text-primary)", margin:0}}>
+              📥 Brain Dump Inbox
+            </h2>
+            <button onClick={handleClearAllBrainDump}
+              style={{fontSize:"11px", padding:"4px 10px", background:"none", border:"1px solid var(--border)", borderRadius:"var(--radius-sm)", color:"var(--danger)", cursor:"pointer", fontWeight:"700"}}>
+              Clear all
+            </button>
+          </div>
+          <p style={{fontSize:"11.5px", color:(payload.brainDump || []).length >= 50 ? "var(--danger)" : "var(--text-secondary)", marginBottom:"12px", fontWeight:(payload.brainDump || []).length >= 50 ? "700" : "400"}}>
+            {(payload.brainDump || []).length}/50 {(payload.brainDump || []).length >= 50 ? "— inbox full! Triage before adding more." : `unprocessed idea${(payload.brainDump || []).length !== 1 ? "s" : ""}. Send each to the right horizon.`}
           </p>
           <div style={{display:"flex", flexDirection:"column", gap:"8px"}}>
             {(payload.brainDump || []).map(item => (
@@ -292,6 +306,8 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
           </div>
         </div>
       )}
+
+      {confirmDialog && <ConfirmDialog {...confirmDialog} />}
     </div>
   );
 }

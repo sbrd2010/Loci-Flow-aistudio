@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import ConfirmDialog from "./ConfirmDialog";
 
 export default function SettingsTab({ payload, savePayload, saveSubPath, onSignOut }) {
   const { config = {} } = payload;
@@ -38,6 +39,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
     { key: "execution",  label: "Action over Planning",   desc: "Over-planning, under-doing.", icon: "⚡" },
     { key: "tracking",   label: "Time Awareness",         desc: "Losing track of time and deadlines.", icon: "🕐" }
   ];
+
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   const [savedProfile, setSavedProfile] = useState(false);
   const handleSaveSettings = (e) => {
@@ -336,16 +339,18 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
         <button
           className="btn"
           style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--danger)", border: "1.5px solid var(--border)", boxShadow: "none" }}
-          onClick={() => {
-            if (window.confirm("Sign out? Your data stays saved.")) {
-              onSignOut?.();
-            }
-          }}
+          onClick={() => setConfirmDialog({
+            message: "Sign out? Your data stays saved.",
+            confirmLabel: "Sign out", cancelLabel: "Cancel",
+            onConfirm: () => { setConfirmDialog(null); onSignOut?.(); },
+            onCancel: () => setConfirmDialog(null)
+          })}
         >
           Sign out of Loci
         </button>
       </section>
 
+      {confirmDialog && <ConfirmDialog {...confirmDialog} />}
     </div>
   );
 }

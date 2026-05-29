@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { callAI, getAIKeys } from "../utils/aiCall";
+import ConfirmDialog from "./ConfirmDialog";
 
 export default function CoachTab({ payload, savePayload, saveSubPath }) {
   const { tasks = [], config = {} } = payload;
@@ -12,6 +13,8 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
   const [ritualSecondsLeft, setRitualSecondsLeft] = useState(0);
   const [ritualMaxSeconds, setRitualMaxSeconds] = useState(0);
   const [ritualDone, setRitualDone] = useState(false);
+  const [ritualSuccess, setRitualSuccess] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState(null);
   const timerIntervalRef = useRef(null);
 
   const ritualSteps = [
@@ -45,7 +48,8 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
       const newXp = (Number(config.totalXp) || 0) + 80;
       savePayload({ ...payload, config: { ...config, totalXp: newXp } });
       setRitualDone(false);
-      alert("Morning Ritual complete! +80 XP 🎉");
+      setRitualSuccess(true);
+      setTimeout(() => setRitualSuccess(false), 3500);
     }
   }, [ritualDone]);
 
@@ -256,6 +260,14 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
+      {confirmDialog && <ConfirmDialog {...confirmDialog} />}
+
+      {ritualSuccess && (
+        <div style={{ position: "fixed", top: "80px", left: "50%", transform: "translateX(-50%)", background: "var(--success)", color: "#fff", padding: "12px 24px", borderRadius: "20px", fontWeight: "700", fontSize: "14px", zIndex: 300, boxShadow: "0 4px 20px rgba(0,0,0,0.3)", whiteSpace: "nowrap" }}>
+          🎉 Morning Ritual complete! +80 XP
+        </div>
+      )}
+
       {/* 1 ── AI Mentor Chat */}
       <section className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
@@ -269,7 +281,7 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
           </div>
           {payload.chatHistory && payload.chatHistory.length > 0 && (
             <button
-              onClick={() => { if (window.confirm("Clear chat history?")) saveSubPath("chatHistory", null); }}
+              onClick={() => setConfirmDialog({ message: "Clear all chat history with your coach?", confirmLabel: "Clear", danger: true, onConfirm: () => { saveSubPath("chatHistory", null); setConfirmDialog(null); }, onCancel: () => setConfirmDialog(null) })}
               style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "11px", fontWeight: "700", cursor: "pointer", padding: "4px 8px", flexShrink: 0 }}
             >
               Clear
