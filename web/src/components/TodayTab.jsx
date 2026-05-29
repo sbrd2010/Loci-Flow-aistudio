@@ -678,7 +678,7 @@ export default function TodayTab({ payload, savePayload }) {
         )}
         <form className="braindump-form" onSubmit={handleBrainDumpSubmit}>
           <input type="text" className="braindump-input"
-            placeholder="Anything on your mind — sort it to the Roadmap later..."
+            placeholder="Add anything on your mind."
             value={brainDumpText}
             onChange={e => setBrainDumpText(e.target.value)}
             disabled={(payload.brainDump || []).length >= 50} />
@@ -690,7 +690,7 @@ export default function TodayTab({ payload, savePayload }) {
       <section className="bento-card" style={{ padding: "12px 14px" }}>
         {/* Header + view toggle */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-          <h3 style={{ fontSize: "11px", fontWeight: "800", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", margin: 0 }}>
+          <h3 style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", margin: 0 }}>
             📊 7-Day Progress
           </h3>
           <div style={{ display: "flex", gap: "4px" }}>
@@ -743,7 +743,7 @@ export default function TodayTab({ payload, savePayload }) {
                   );
                 })}
               </div>
-              <p style={{ fontSize: "9px", color: "var(--text-muted)" }}>Filled = tasks done that day</p>
+              <p style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600" }}>Filled = tasks done that day</p>
             </div>
           );
         })()}
@@ -775,7 +775,7 @@ export default function TodayTab({ payload, savePayload }) {
                 );
               })}
             </div>
-            <p style={{ fontSize: "9px", color: "var(--text-muted)", marginTop: "4px" }}>
+            <p style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600", marginTop: "4px" }}>
               Green ✓ = showed up · Today highlighted
             </p>
           </div>

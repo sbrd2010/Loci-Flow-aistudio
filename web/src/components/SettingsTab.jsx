@@ -41,6 +41,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
   ];
 
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [aiKeysOpen, setAiKeysOpen] = useState(false);
+  const [challengeOpen, setChallengeOpen] = useState(false);
 
   const [savedProfile, setSavedProfile] = useState(false);
   const handleSaveSettings = (e) => {
@@ -148,45 +150,61 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
           </div>
 
           <div className="form-group">
-            <label className="form-label" style={{ fontSize: "11px", fontWeight: "900", letterSpacing: "0.1em", color: "var(--text-primary)" }}>
-              YOUR FOCUS CHALLENGE
-            </label>
-            <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "-4px 0 10px" }}>
-              Your AI coach adapts its advice based on this selection.
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {challengeOptions.map(opt => {
-                const isSelected = editedChallenge === opt.key;
-                return (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => setEditedChallenge(opt.key)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: "12px",
-                      padding: "12px 14px", borderRadius: "var(--radius-sm)",
-                      border: isSelected ? "2px solid var(--accent)" : "1.5px solid var(--border)",
-                      background: isSelected ? "var(--accent-ring)" : "var(--bg-secondary)",
-                      cursor: "pointer", textAlign: "left", width: "100%",
-                      transition: "all 0.15s ease"
-                    }}
-                  >
-                    <span style={{ fontSize: "20px", flexShrink: 0 }}>{opt.icon}</span>
-                    <div>
-                      <div style={{
-                        fontSize: "13px", fontWeight: "800",
-                        color: isSelected ? "var(--accent)" : "var(--text-primary)",
-                        marginBottom: "2px"
-                      }}>{opt.label}</div>
-                      <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{opt.desc}</div>
-                    </div>
-                    {isSelected && (
-                      <span style={{ marginLeft: "auto", color: "var(--accent)", fontWeight: "800", fontSize: "16px" }}>✓</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            <button
+              type="button"
+              onClick={() => setChallengeOpen(o => !o)}
+              style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                width: "100%", background: "var(--bg-secondary)", border: "1.5px solid var(--border)",
+                borderRadius: "var(--radius-sm)", padding: "12px 14px", cursor: "pointer",
+                textAlign: "left"
+              }}
+            >
+              <div>
+                <div style={{ fontSize: "11px", fontWeight: "900", letterSpacing: "0.1em", color: "var(--text-primary)", textTransform: "uppercase" }}>
+                  Your Focus Challenge
+                </div>
+                <div style={{ fontSize: "12px", color: "var(--accent)", fontWeight: "700", marginTop: "2px" }}>
+                  {challengeOptions.find(o => o.key === editedChallenge)?.icon} {challengeOptions.find(o => o.key === editedChallenge)?.label}
+                </div>
+              </div>
+              <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: challengeOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
+            </button>
+            {challengeOpen && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
+                {challengeOptions.map(opt => {
+                  const isSelected = editedChallenge === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => { setEditedChallenge(opt.key); setChallengeOpen(false); }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: "12px",
+                        padding: "12px 14px", borderRadius: "var(--radius-sm)",
+                        border: isSelected ? "2px solid var(--accent)" : "1.5px solid var(--border)",
+                        background: isSelected ? "var(--accent-ring)" : "var(--bg-secondary)",
+                        cursor: "pointer", textAlign: "left", width: "100%",
+                        transition: "all 0.15s ease"
+                      }}
+                    >
+                      <span style={{ fontSize: "20px", flexShrink: 0 }}>{opt.icon}</span>
+                      <div>
+                        <div style={{
+                          fontSize: "13px", fontWeight: "800",
+                          color: isSelected ? "var(--accent)" : "var(--text-primary)",
+                          marginBottom: "2px"
+                        }}>{opt.label}</div>
+                        <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{opt.desc}</div>
+                      </div>
+                      {isSelected && (
+                        <span style={{ marginLeft: "auto", color: "var(--accent)", fontWeight: "800", fontSize: "16px" }}>✓</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -260,68 +278,84 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
 
       {/* ── AI Keys ─────────────────────────────────────────────────────── */}
       <section className="card">
-        <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "4px", color: "var(--text-primary)" }}>
-          🤖 AI Keys
-        </h2>
-        <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "12px" }}>
-          Keys are stored only in this browser — never sent to Loci servers.
-        </p>
-
-        {/* Active status */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px",
-          padding: "8px 12px", borderRadius: "var(--radius-sm)",
-          background: hasAnyKey ? "rgba(52, 211, 153, 0.08)" : "rgba(248, 113, 113, 0.08)",
-          border: `1px solid ${hasAnyKey ? "var(--success)" : "var(--danger)"}`,
-          fontSize: "12px", fontWeight: "600",
-          color: hasAnyKey ? "var(--success)" : "var(--danger)"
-        }}>
-          {keyStatusLabel}
-        </div>
-
-        {/* Groq — recommended */}
-        <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid var(--border)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-            <span style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-primary)" }}>
-              🚀 Groq <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--success)", background: "rgba(52,211,153,0.12)", padding: "2px 6px", borderRadius: "4px", marginLeft: "4px" }}>RECOMMENDED</span>
-            </span>
+        <button
+          type="button"
+          onClick={() => setAiKeysOpen(o => !o)}
+          style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            width: "100%", background: "none", border: "none", cursor: "pointer",
+            textAlign: "left", padding: 0, marginBottom: aiKeysOpen ? "12px" : 0
+          }}
+        >
+          <div>
+            <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
+              🤖 AI Keys
+            </h2>
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              padding: "4px 10px", borderRadius: "var(--radius-sm)",
+              background: hasAnyKey ? "rgba(52, 211, 153, 0.08)" : "rgba(248, 113, 113, 0.08)",
+              border: `1px solid ${hasAnyKey ? "var(--success)" : "var(--danger)"}`,
+              fontSize: "11.5px", fontWeight: "600",
+              color: hasAnyKey ? "var(--success)" : "var(--danger)"
+            }}>
+              {keyStatusLabel}
+            </div>
           </div>
-          <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
-            Sub-200ms responses, 14,400 free requests/day. Get a key at{" "}
-            <a href="https://console.groq.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontWeight: "600" }}>
-              console.groq.com
-            </a> (free, no card needed).
-          </p>
-          <form onSubmit={handleSaveGroq} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <input className="text-input" type="password"
-              value={groqInput} onChange={e => setGroqInput(e.target.value)}
-              placeholder="gsk_... (from Groq Console)" />
-            <button className="btn" type="submit" style={{ width: "100%" }}>
-              {savedGroq ? "✓ Groq key saved — reloading..." : "Save Groq Key"}
-            </button>
-          </form>
-        </div>
+          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: aiKeysOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
+        </button>
 
-        {/* Gemini — fallback */}
-        <div>
-          <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>
-            Gemini (fallback)
-          </span>
-          <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
-            Free key from{" "}
-            <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontWeight: "600" }}>
-              aistudio.google.com
-            </a> — used if no Groq key is set.
-          </p>
-          <form onSubmit={handleSaveKey} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <input className="text-input" type="password"
-              value={keyInput} onChange={e => setKeyInput(e.target.value)}
-              placeholder="AIzaSy... (from AI Studio)" />
-            <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
-              {savedKey ? "✓ Gemini key saved — reloading..." : "Save Gemini Key"}
-            </button>
-          </form>
-        </div>
+        {aiKeysOpen && (
+          <>
+            <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "12px" }}>
+              Keys are stored only in this browser — never sent to Loci servers.
+            </p>
+
+            {/* Groq — recommended */}
+            <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-primary)" }}>
+                  🚀 Groq <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--success)", background: "rgba(52,211,153,0.12)", padding: "2px 6px", borderRadius: "4px", marginLeft: "4px" }}>RECOMMENDED</span>
+                </span>
+              </div>
+              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
+                Sub-200ms responses, 14,400 free requests/day. Get a key at{" "}
+                <a href="https://console.groq.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontWeight: "600" }}>
+                  console.groq.com
+                </a> (free, no card needed).
+              </p>
+              <form onSubmit={handleSaveGroq} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <input className="text-input" type="password"
+                  value={groqInput} onChange={e => setGroqInput(e.target.value)}
+                  placeholder="gsk_... (from Groq Console)" />
+                <button className="btn" type="submit" style={{ width: "100%" }}>
+                  {savedGroq ? "✓ Groq key saved — reloading..." : "Save Groq Key"}
+                </button>
+              </form>
+            </div>
+
+            {/* Gemini — fallback */}
+            <div>
+              <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>
+                Gemini (fallback)
+              </span>
+              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
+                Free key from{" "}
+                <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontWeight: "600" }}>
+                  aistudio.google.com
+                </a> — used if no Groq key is set.
+              </p>
+              <form onSubmit={handleSaveKey} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <input className="text-input" type="password"
+                  value={keyInput} onChange={e => setKeyInput(e.target.value)}
+                  placeholder="AIzaSy... (from AI Studio)" />
+                <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
+                  {savedKey ? "✓ Gemini key saved — reloading..." : "Save Gemini Key"}
+                </button>
+              </form>
+            </div>
+          </>
+        )}
       </section>
 
       {/* ── Data Sync ────────────────────────────────────────────────────── */}

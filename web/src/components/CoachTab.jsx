@@ -316,7 +316,8 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
             <input className="text-input" type="text" value={chatInput}
               onChange={e => setChatInput(e.target.value)}
               placeholder={`Ask ${config.mentorName || "your mentor"}…`}
-              disabled={chatLoading} />
+              disabled={chatLoading}
+              style={{ background: "var(--accent-ring)", border: "1.5px solid var(--accent-light)" }} />
             {chatLoading
               ? <span style={{ fontSize: "12px", color: "var(--text-muted)", padding: "0 10px" }}>…</span>
               : <button className="btn" type="submit" disabled={!chatInput.trim()} style={{ padding: "10px 16px", fontSize: "13px" }}>Send</button>
