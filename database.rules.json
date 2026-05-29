@@ -2,13 +2,13 @@
   "rules": {
     "sync": {
       "$userId": {
-        ".read": true,
-        ".write": true,
+        ".read":  "auth != null && auth.uid === $userId",
+        ".write": "auth != null && auth.uid === $userId",
         ".validate": "newData.hasChildren(['userId', 'tasks', 'config'])"
       }
     },
     "$other": {
-      ".read": false,
+      ".read":  false,
       ".write": false
     }
   }
