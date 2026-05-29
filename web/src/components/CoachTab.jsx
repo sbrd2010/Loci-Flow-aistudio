@@ -167,7 +167,7 @@ USER CONTEXT RIGHT NOW:
 
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
         { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -179,7 +179,8 @@ USER CONTEXT RIGHT NOW:
       const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "Keep going. I'm with you.";
       saveSubPath("chatHistory", [...withUser, { text: reply.trim(), isUser: false }]);
     } catch (err) {
-      saveSubPath("chatHistory", [...withUser, { text: `Could not reach AI: ${err.message}`, isUser: false }]);
+      const hint = err.message === "429" ? "Rate limit hit — wait 30 seconds and try again." : err.message === "503" ? "AI server busy — try again in a moment." : `AI error: ${err.message}`;
+      saveSubPath("chatHistory", [...withUser, { text: hint, isUser: false }]);
     } finally {
       setChatLoading(false);
     }
@@ -236,7 +237,7 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
 
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
         { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
       );

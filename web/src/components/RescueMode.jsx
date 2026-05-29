@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=";
 
 const REASONS = [
   { id: "overwhelmed", emoji: "😵", label: "Too much going on",     color: "#f59e0b" },
@@ -58,9 +58,10 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
   const [input, setInput]     = useState("");
   const [loading, setLoading] = useState(false);
   const [timerSecs, setTimerSecs] = useState(null);
-  const endRef  = useRef(null);
-  const inputRef = useRef(null);
+  const endRef      = useRef(null);
+  const inputRef    = useRef(null);
   const chatStarted = useRef(false);
+  const sendingRef  = useRef(false);
 
   useEffect(() => { document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = ""; }; }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
@@ -75,7 +76,7 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
 
   const key = (apiKey || import.meta.env.VITE_GEMINI_KEY || "").trim();
 
-  const aiCall = async (r, history, openingMsg) => {
+  const aiCall = async (r, history) => {
     setLoading(true);
     try {
       const res = await fetch(`${GEMINI_URL}${key}`, {
@@ -86,14 +87,17 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
           contents: history,
         }),
       });
+      if (!res.ok) throw new Error(`${res.status}`);
       const data = await res.json();
-      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text
-        || `Hey ${firstName || "friend"}, I'm here. What's happening right now?`;
+      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      if (!reply) throw new Error("empty");
       setMessages(prev => [...prev, { role: "ai", text: reply }]);
-    } catch {
-      setMessages(prev => [...prev, { role: "ai", text: `I'm here, ${firstName || "friend"}. What's one tiny thing you could do right now?` }]);
+    } catch (err) {
+      const hint = err.message === "429" ? " (rate limit — wait a moment)" : err.message === "503" ? " (server busy — try again)" : "";
+      setMessages(prev => [...prev, { role: "ai", text: `AI unavailable${hint}. ${firstName || "friend"}, what's the tiniest next step you could take right now?` }]);
     } finally {
       setLoading(false);
+      sendingRef.current = false;
     }
   };
 
@@ -105,16 +109,18 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
       setMessages([{ role: "ai", text: `Hey ${firstName || "friend"}, I'm here with you. What's going on right now?` }]);
       return;
     }
-    aiCall(r, [{ role: "user", parts: [{ text: "I'm stuck and need help." }] }], true);
+    sendingRef.current = true;
+    aiCall(r, [{ role: "user", parts: [{ text: "I'm stuck and need help." }] }]);
   };
 
   const handleSend = async () => {
-    if (!input.trim() || loading) return;
+    if (!input.trim() || sendingRef.current) return;
+    sendingRef.current = true;
     const msg = input.trim();
     setInput("");
     const updated = [...messages, { role: "user", text: msg }];
     setMessages(updated);
-    if (!key) return;
+    if (!key) { sendingRef.current = false; return; }
     await aiCall(reason, updated.map(m => ({ role: m.role === "ai" ? "model" : "user", parts: [{ text: m.text }] })));
   };
 
