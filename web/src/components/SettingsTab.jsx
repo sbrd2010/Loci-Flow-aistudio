@@ -26,6 +26,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
   const [editedDayEnd, setEditedDayEnd] = useState(config.dayEndHour ?? 26);
   const [editedHeaderStyle, setEditedHeaderStyle] = useState(config.headerStyle || "full");
   const [editedToolsStyle, setEditedToolsStyle] = useState(config.toolsStyle || "inline");
+  const [editedRoadmapStyle, setEditedRoadmapStyle] = useState(config.roadmapStyle || "compact");
   const [editedDeadlineLabel, setEditedDeadlineLabel] = useState(config.deadlineLabel || "");
   const [editedDeadlineDate, setEditedDeadlineDate] = useState(config.deadlineDate || "");
 
@@ -40,12 +41,13 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
     setEditedDayEnd(config.dayEndHour ?? 26);
     setEditedHeaderStyle(config.headerStyle || "full");
     setEditedToolsStyle(config.toolsStyle || "inline");
+    setEditedRoadmapStyle(config.roadmapStyle || "compact");
     setEditedDeadlineLabel(config.deadlineLabel || "");
     setEditedDeadlineDate(config.deadlineDate || "");
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
       config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType,
       config.dayStartHour, config.dayEndHour, config.headerStyle, config.toolsStyle,
-      config.deadlineLabel, config.deadlineDate]);
+      config.roadmapStyle, config.deadlineLabel, config.deadlineDate]);
 
   const challengeOptions = [
     { key: "starting",   label: "Overcoming Inertia",    desc: "Can't get started on tasks.", icon: "🏁" },
@@ -78,6 +80,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
         dayEndHour: editedDayEnd,
         headerStyle: editedHeaderStyle,
         toolsStyle: editedToolsStyle,
+        roadmapStyle: editedRoadmapStyle,
         deadlineLabel: editedDeadlineLabel.trim(),
         deadlineDate: editedDeadlineDate,
         lastUpdated: Date.now()
@@ -313,6 +316,28 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
                     background: editedToolsStyle === key ? "var(--accent)" : "var(--bg-secondary)",
                     color: editedToolsStyle === key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
                     border: editedToolsStyle === key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
+                  }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Plan Page Layout</label>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
+              {[
+                { key: "compact", label: "Compact (pills)" },
+                { key: "grid",    label: "Grid (columns)" }
+              ].map(({ key, label }) => (
+                <button key={key} type="button"
+                  onClick={() => setEditedRoadmapStyle(key)}
+                  style={{
+                    padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700",
+                    cursor: "pointer", transition: "all 0.15s",
+                    background: editedRoadmapStyle === key ? "var(--accent)" : "var(--bg-secondary)",
+                    color: editedRoadmapStyle === key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
+                    border: editedRoadmapStyle === key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
                   }}>
                   {label}
                 </button>

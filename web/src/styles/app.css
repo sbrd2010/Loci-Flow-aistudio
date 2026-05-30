@@ -1945,6 +1945,23 @@ h1, h2, h3, h4, h5, h6 {
   gap: 10px;
 }
 
+/* Compact pill layout — always visible, used on all screen sizes when roadmapStyle=compact */
+.roadmap-compact-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (min-width: 768px) {
+  .roadmap-compact-layout .horizon-pill {
+    font-size: 13px;
+    padding: 8px 16px;
+  }
+  .roadmap-compact-layout .horizon-panel {
+    max-height: 72vh;
+  }
+}
+
 .horizon-pills {
   display: flex;
   gap: 6px;
