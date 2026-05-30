@@ -1,6 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getDatabase } from "firebase/database";
-import { forceLongPolling } from "@firebase/database";
+import { getDatabase, forceLongPolling } from "firebase/database";
 import { getAuth } from "firebase/auth";
 
 // Use HTTP long-polling instead of WebSockets so RTDB works even when
