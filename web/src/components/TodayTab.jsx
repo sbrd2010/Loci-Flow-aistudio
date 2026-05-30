@@ -737,6 +737,12 @@ export default function TodayTab({ payload, savePayload }) {
               ACTIVE FOCUS NOW
             </div>
             <button className="stuck-btn" onClick={() => setShowRescue(true)}>Stuck?</button>
+            <button
+              className="stuck-btn"
+              onClick={() => { setIsTimerRunning(false); handlePinTask(activeTask); }}
+              title="Unpin and close timer"
+              style={{ color: "var(--text-muted)", background: "var(--bg-secondary)", border: "1px solid var(--border)" }}
+            >✕ Unpin</button>
           </div>
           <div style={{ textAlign: "center", marginTop: "16px" }}>
             <h3 className="focus-title">{activeTask.title}</h3>

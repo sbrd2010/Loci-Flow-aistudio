@@ -78,6 +78,11 @@ export default function App() {
         return;
       }
       console.error("Sign-in failed:", err.code, err.message);
+      // auth/internal-error on Android is almost always Brave Shields blocking Google's auth scripts
+      if (err.code === "auth/internal-error" || err.code === "auth/network-request-failed") {
+        setSignInError("Sign-in blocked. If you're using Brave, tap the lion icon in the address bar → disable Shields for this site, then try again.");
+        return;
+      }
       setSignInError("Sign-in failed. Please try again.");
     });
   };
