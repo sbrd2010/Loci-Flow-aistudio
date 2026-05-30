@@ -542,6 +542,7 @@ h1, h2, h3, h4, h5, h6 {
   .header-initials-badge { display: flex; }
   .header-right { gap: 6px; }
   .switch-btn { font-size: 10px; }
+  .header-subtitle { display: none; }
 }
 
 .user-badge {
