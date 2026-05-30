@@ -26,6 +26,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
   const [editedDayEnd, setEditedDayEnd] = useState(config.dayEndHour ?? 26);
   const [editedHeaderStyle, setEditedHeaderStyle] = useState(config.headerStyle || "full");
   const [editedToolsStyle, setEditedToolsStyle] = useState(config.toolsStyle || "inline");
+  const [editedDeadlineLabel, setEditedDeadlineLabel] = useState(config.deadlineLabel || "");
+  const [editedDeadlineDate, setEditedDeadlineDate] = useState(config.deadlineDate || "");
 
   useEffect(() => {
     setEditedName(config.userName || "");
@@ -38,9 +40,12 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
     setEditedDayEnd(config.dayEndHour ?? 26);
     setEditedHeaderStyle(config.headerStyle || "full");
     setEditedToolsStyle(config.toolsStyle || "inline");
+    setEditedDeadlineLabel(config.deadlineLabel || "");
+    setEditedDeadlineDate(config.deadlineDate || "");
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
       config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType,
-      config.dayStartHour, config.dayEndHour, config.headerStyle, config.toolsStyle]);
+      config.dayStartHour, config.dayEndHour, config.headerStyle, config.toolsStyle,
+      config.deadlineLabel, config.deadlineDate]);
 
   const challengeOptions = [
     { key: "starting",   label: "Overcoming Inertia",    desc: "Can't get started on tasks.", icon: "🏁" },
@@ -73,6 +78,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
         dayEndHour: editedDayEnd,
         headerStyle: editedHeaderStyle,
         toolsStyle: editedToolsStyle,
+        deadlineLabel: editedDeadlineLabel.trim(),
+        deadlineDate: editedDeadlineDate,
         lastUpdated: Date.now()
       }
     });
@@ -311,6 +318,25 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">📅 Key Deadline (home screen countdown)</label>
+            <input className="text-input" type="text"
+              value={editedDeadlineLabel}
+              onChange={e => setEditedDeadlineLabel(e.target.value)}
+              placeholder="e.g. Get a job · Exam · Birthday"
+              style={{ marginBottom: "8px" }} />
+            <input className="text-input" type="date"
+              value={editedDeadlineDate}
+              onChange={e => setEditedDeadlineDate(e.target.value)} />
+            {editedDeadlineDate && (
+              <button type="button"
+                onClick={() => { setEditedDeadlineDate(""); setEditedDeadlineLabel(""); }}
+                style={{ marginTop: "6px", fontSize: "11px", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                ✕ Clear deadline
+              </button>
+            )}
           </div>
 
           <div

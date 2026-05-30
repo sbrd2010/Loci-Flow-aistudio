@@ -542,6 +542,32 @@ export default function TodayTab({ payload, savePayload }) {
         );
       })()}
 
+      {/* ── Key Deadline countdown strip */}
+      {config.deadlineDate && (() => {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const target = new Date(config.deadlineDate + "T00:00:00");
+        const days = Math.round((target - today) / 86400000);
+        if (days < 0) return null;
+        const label = (config.deadlineLabel || "Deadline").trim();
+        const color = days === 0 ? "var(--danger)" : days <= 14 ? "var(--danger)" : days <= 45 ? "var(--warning)" : "var(--accent)";
+        const bg = days === 0 ? "rgba(248,113,113,0.13)" : days <= 14 ? "rgba(248,113,113,0.10)" : days <= 45 ? "rgba(251,191,36,0.10)" : "var(--accent-light)";
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", background: bg, border: `1px solid ${color}`, borderRadius: "var(--radius-sm)", padding: "10px 14px" }}>
+            <span style={{ fontSize: "22px", fontWeight: "900", color, fontFamily: "var(--font-display)", fontVariantNumeric: "tabular-nums", lineHeight: 1, flexShrink: 0 }}>
+              {days === 0 ? "TODAY" : `${days}d`}
+            </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "1px", minWidth: 0 }}>
+              <span style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.1em", textTransform: "uppercase", color }}>
+                KEY DEADLINE
+              </span>
+              <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {label}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Today's Focus — tasks dominate the screen */}
       <section className="tasks-section" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         <div className="section-header">
