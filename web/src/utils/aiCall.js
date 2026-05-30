@@ -58,8 +58,8 @@ export async function callAI({ groqKey, geminiKey, systemPrompt, messages, maxTo
 
 export function getAIKeys() {
   return {
-    groqKey:   (localStorage.getItem("loci_groq_key")   || import.meta.env.VITE_GROQ_KEY   || "").trim(),
-    geminiKey: (localStorage.getItem("loci_gemini_key") || import.meta.env.VITE_GEMINI_KEY || "").trim(),
+    groqKey:   (localStorage.getItem("loci_groq_key")   || "").trim(),
+    geminiKey: (localStorage.getItem("loci_gemini_key") || "").trim(),
   };
 }
 

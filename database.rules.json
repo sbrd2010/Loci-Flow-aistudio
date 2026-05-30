@@ -4,7 +4,44 @@
       "$userId": {
         ".read":  "auth != null && auth.uid === $userId",
         ".write": "auth != null && auth.uid === $userId",
-        ".validate": "newData.hasChildren(['userId', 'tasks', 'config'])"
+        ".validate": "newData.hasChildren(['userId', 'tasks', 'config'])",
+        "tasks": {
+          "$taskIdx": {
+            ".validate": "newData.hasChildren(['id', 'title', 'userId'])",
+            "title": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 300"
+            },
+            "concreteStep": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 300)"
+            },
+            "$other": { ".validate": true }
+          }
+        },
+        "config": {
+          ".validate": "newData.hasChildren(['userId'])",
+          "intentionMessage": {
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 500)"
+          },
+          "userName": {
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 100)"
+          },
+          "mentorName": {
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 100)"
+          },
+          "deadlineLabel": {
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 100)"
+          },
+          "$other": { ".validate": true }
+        },
+        "chatHistory": {
+          "$msgIdx": {
+            "content": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 5000)"
+            },
+            "$other": { ".validate": true }
+          }
+        },
+        "$other": { ".validate": true }
       }
     },
     "$other": {
