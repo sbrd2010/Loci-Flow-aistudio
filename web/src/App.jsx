@@ -6,6 +6,7 @@ import Header from "./components/Header";
 import BottomNav from "./components/BottomNav";
 import TodayTab from "./components/TodayTab";
 import RoadmapTab from "./components/RoadmapTab";
+import MindBoxTab from "./components/MindBoxTab";
 import CoachTab from "./components/CoachTab";
 import SettingsTab from "./components/SettingsTab";
 import AddTaskDialog from "./components/AddTaskDialog";
@@ -78,6 +79,11 @@ export default function App() {
         return;
       }
       console.error("Sign-in failed:", err.code, err.message);
+      // auth/internal-error on Android is almost always Brave Shields blocking Google's auth scripts
+      if (err.code === "auth/internal-error" || err.code === "auth/network-request-failed") {
+        setSignInError("Sign-in blocked. If you're using Brave, tap the lion icon in the address bar → disable Shields for this site, then try again.");
+        return;
+      }
       setSignInError("Sign-in failed. Please try again.");
     });
   };
@@ -233,6 +239,7 @@ export default function App() {
             onOpenAddTask={openAddTask}
           />
         )}
+        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} />}
         {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} />}
         {activeTab === "settings" && <SettingsTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} onSignOut={handleSwitchUser} />}
       </main>
