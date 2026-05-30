@@ -14,6 +14,14 @@ export default function TodayTab({ payload, savePayload }) {
   const [timerMaxSeconds, setTimerMaxSeconds] = useState((config.pomodoroDurationMinutes || 25) * 60);
   const timerIntervalRef = useRef(null);
 
+  // Morning Ritual — declared here so useEffects below can reference them
+  const [ritualActive, setRitualActive] = useState(false);
+  const [ritualStepIndex, setRitualStepIndex] = useState(-1);
+  const [ritualSecondsLeft, setRitualSecondsLeft] = useState(0);
+  const [ritualDone, setRitualDone] = useState(false);
+  const [ritualSuccess, setRitualSuccess] = useState(false);
+  const ritualIntervalRef = useRef(null);
+
   // Active focus task (if any)
   const activeTask = tasks.find((t) => t.isNowFocus && !t.isDeleted && !t.isCompleted);
 
