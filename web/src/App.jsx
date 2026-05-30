@@ -18,16 +18,38 @@ export default function App() {
   const [showAddTask, setShowAddTask] = useState(false);
   const [preselectedHorizon, setPreselectedHorizon] = useState("today");
   const [theme, setTheme] = useState(() => localStorage.getItem("loci_theme") || "glassy");
+  const [signingIn, setSigningIn] = useState(false);
+  const [signInError, setSignInError] = useState("");
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("loci_theme", theme);
   }, [theme]);
 
-  // Handle redirect sign-in result (iOS Safari / popup-blocked fallback)
+  // Handle redirect sign-in result (iOS Safari / mobile fallback)
   useEffect(() => {
-    getRedirectResult(auth).catch(() => {});
+    getRedirectResult(auth).catch((err) => {
+      if (err?.code && err.code !== "auth/no-current-user") {
+        setSignInError("Sign-in was interrupted. Please try again.");
+      }
+    });
   }, []);
+
+  const handleSignIn = () => {
+    setSigningIn(true);
+    setSignInError("");
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    if (isMobile) {
+      signInWithRedirect(auth, new GoogleAuthProvider());
+      return;
+    }
+    signInWithPopup(auth, new GoogleAuthProvider()).catch((err) => {
+      const intentional = err.code === "auth/popup-closed-by-user" || err.code === "auth/cancelled-popup-request";
+      if (intentional) { setSigningIn(false); return; }
+      // Any other popup failure: fall back to redirect
+      signInWithRedirect(auth, new GoogleAuthProvider());
+    });
+  };
 
   // Load the sync payload from RTDB
   const { payload, loading, error, savePayload, saveSubPath } = useSync(user?.uid || null, user?.email || null);
@@ -96,12 +118,9 @@ export default function App() {
           </div>
           <button
             className="btn"
-            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", fontSize: "15px", padding: "14px 20px" }}
-            onClick={() => signInWithPopup(auth, new GoogleAuthProvider()).catch(err => {
-              if (err.code === "auth/popup-blocked") {
-                signInWithRedirect(auth, new GoogleAuthProvider());
-              }
-            })}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", fontSize: "15px", padding: "14px 20px", opacity: signingIn ? 0.7 : 1 }}
+            onClick={handleSignIn}
+            disabled={signingIn}
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
@@ -109,8 +128,11 @@ export default function App() {
               <path d="M3.964 10.706A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.038l3.007-2.332z" fill="#FBBC05"/>
               <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.962L3.964 6.294C4.672 4.167 6.656 3.58 9 3.58z" fill="#EA4335"/>
             </svg>
-            Continue with Google
+            {signingIn ? "Redirecting to Google…" : "Continue with Google"}
           </button>
+          {signInError && (
+            <p style={{ fontSize: "12px", color: "var(--danger)", marginTop: "8px", textAlign: "center" }}>{signInError}</p>
+          )}
           <span className="signin-note">
             Your tasks sync across your devices. Sign in with Google to begin.
           </span>
