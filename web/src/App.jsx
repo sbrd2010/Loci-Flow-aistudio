@@ -26,15 +26,14 @@ export default function App() {
     localStorage.setItem("loci_theme", theme);
   }, [theme]);
 
-  // Handle redirect sign-in result (iOS Safari / mobile fallback)
+  // Handle redirect sign-in result (mobile only — iOS Safari / Android)
   useEffect(() => {
     const redirectPending = localStorage.getItem("loci_redirect_pending");
     localStorage.removeItem("loci_redirect_pending");
     getRedirectResult(auth).catch((err) => {
-      // Only surface the error if we actually initiated a redirect this session
       if (redirectPending && err?.code) {
         console.error("Redirect sign-in failed:", err.code, err.message);
-        setSignInError(`Sign-in failed (${err.code}). Please try again.`);
+        setSignInError("Sign-in was interrupted. Please try again.");
       }
     });
   }, []);
@@ -48,11 +47,16 @@ export default function App() {
       signInWithRedirect(auth, new GoogleAuthProvider());
       return;
     }
+    // Desktop: popup only — redirect fails in Brave/privacy browsers (sessionStorage cleared between hops)
     signInWithPopup(auth, new GoogleAuthProvider()).catch((err) => {
-      const intentional = err.code === "auth/popup-closed-by-user" || err.code === "auth/cancelled-popup-request";
-      if (intentional) { setSigningIn(false); return; }
-      localStorage.setItem("loci_redirect_pending", "1");
-      signInWithRedirect(auth, new GoogleAuthProvider());
+      setSigningIn(false);
+      if (err.code === "auth/popup-closed-by-user" || err.code === "auth/cancelled-popup-request") return;
+      if (err.code === "auth/popup-blocked") {
+        setSignInError("Popup blocked. Please allow popups for this site, then try again.");
+        return;
+      }
+      // Brave shields or other privacy browsers can block the popup auth flow
+      setSignInError("Sign-in failed. If you're using Brave, disable Shields for this site and try again.");
     });
   };
 
