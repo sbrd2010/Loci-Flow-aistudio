@@ -25,8 +25,9 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
     setAiError("");
     const cfg = payload.config || {};
     const challengeLabel =
-      cfg.challengeType === "starting" ? "struggles to start tasks (task initiation block)" :
-      cfg.challengeType === "focusing" ? "gets distracted mid-task (focus protection)" :
+      cfg.challengeType === "starting"  ? "struggles to start tasks (task initiation block)" :
+      cfg.challengeType === "focusing"  ? "gets distracted mid-task (focus protection)" :
+      cfg.challengeType === "tracking"  ? "has trouble tracking progress and staying accountable (needs visible checkpoints)" :
       "overthinks and delays finishing (perfectionism/action paralysis)";
     const existingTasks = (payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).slice(0, 8)
       .map(t => `[${t.priority}] ${t.title}`).join(", ") || "none yet";

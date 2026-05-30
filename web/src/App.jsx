@@ -36,12 +36,13 @@ export default function App() {
   useEffect(() => {
     if (!payload?.config || !user) return;
     const cfg = payload.config;
-    const todayStr = new Date().toISOString().split("T")[0];
+    const toLocalDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    const todayStr = toLocalDateStr(new Date());
     if (cfg.lastVisitDate === todayStr) return;
 
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split("T")[0];
+    const yesterdayStr = toLocalDateStr(yesterday);
     const newStreak = cfg.lastVisitDate === yesterdayStr ? (cfg.visitStreakCount || 0) + 1 : 1;
 
     savePayload({
@@ -97,7 +98,7 @@ export default function App() {
             className="btn"
             style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", fontSize: "15px", padding: "14px 20px" }}
             onClick={() => signInWithPopup(auth, new GoogleAuthProvider()).catch(err => {
-              if (err.code === "auth/popup-blocked" || err.code === "auth/popup-closed-by-user") {
+              if (err.code === "auth/popup-blocked") {
                 signInWithRedirect(auth, new GoogleAuthProvider());
               }
             })}
