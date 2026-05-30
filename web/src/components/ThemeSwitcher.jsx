@@ -11,6 +11,12 @@ const THEMES = [
   { id: "solar-ember",   label: "Solar Ember",   emoji: "🔥", desc: "Warm amber, terracotta light" },
   { id: "arctic-frost",  label: "Arctic Frost",  emoji: "❄️", desc: "Cool blue, clinical clarity" },
   { id: "regal-amethyst",label: "Regal Amethyst",emoji: "💜", desc: "Deep purple glassmorphism" },
+  { id: "option-a-amie",    label: "Amie Glass",   emoji: "🌸", desc: "Translucent, soft and glassy pastel" },
+  { id: "option-b-linear",  label: "Linear Dark",  emoji: "🛸", desc: "Industrial high-precision dark mode" },
+  { id: "option-c-zen",     label: "Zen Canvas",   emoji: "🕊️", desc: "Elegant serif with vast whitespace" },
+  { id: "option-d-bento",    label: "Bento Grid",   emoji: "🍱", desc: "Apple iOS compartmental bento design" },
+  { id: "option-e-slate",    label: "Slate Notebook", emoji: "📓", desc: "Notion-minimal dark notebook feel" },
+  { id: "option-f-chronos",  label: "Chronos Time", emoji: "⏳", desc: "Time-flow gradient workspace" },
 ];
 
 export default function ThemeSwitcher({ theme, onThemeChange }) {
