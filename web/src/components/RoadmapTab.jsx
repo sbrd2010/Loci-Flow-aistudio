@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import ConfirmDialog from "./ConfirmDialog";
+import { safeUUID } from "../utils/uuid";
 
 export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
@@ -7,8 +8,8 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
   const columns = [
     { key: "week",     label: "This Week",  shortLabel: "Week"  },
     { key: "month",    label: "Month",      shortLabel: "Month" },
-    { key: "quarter",  label: "Quarter",    shortLabel: "Qtr"   },
-    { key: "halfyear", label: "6 Months",   shortLabel: "6M"    },
+    { key: "quarter",  label: "Quarter",    shortLabel: "Quarter"  },
+    { key: "halfyear", label: "6 Months",   shortLabel: "6 Months" },
     { key: "office",   label: "Work",       shortLabel: "Work"  }
   ];
 
@@ -62,7 +63,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
     const userId = payload.userId || payload.config?.userId || "";
     const freshTask = {
       id: Date.now(), userId,
-      uuid: crypto.randomUUID(),
+      uuid: safeUUID(),
       title: item.text,
       concreteStep: "Do first tiny step",
       horizonLevel: horizon,
@@ -128,110 +129,88 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
 
   const brainDump = payload.brainDump || [];
   const currentCol = columns.find(c => c.key === expandedCol);
+  const useCompact = (config.roadmapStyle || "compact") !== "grid";
 
-  return (
-    <div className="roadmap-container">
-      <div>
-        <h2 className="roadmap-board-title">Horizon Planning</h2>
-        <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-          Map your goals strategically across time horizons. Tap a card to manage.
-        </p>
+  // ── Shared: pill + panel layout (compact mode, works at all screen sizes) ──
+  const renderCompactLayout = () => (
+    <div className="roadmap-compact-layout">
+      <div className="horizon-pills" role="tablist">
+        {brainDump.length > 0 && (
+          <button role="tab" className={`horizon-pill${expandedCol === "inbox" ? " active" : ""}`} onClick={() => setExpandedCol("inbox")}>
+            📥 Inbox <span className="pill-badge">{brainDump.length}</span>
+          </button>
+        )}
+        {columns.map(col => {
+          const count = tasks.filter(t => t.horizonLevel === col.key && !t.isDeleted && !t.isCompleted).length;
+          return (
+            <button key={col.key} role="tab"
+              className={`horizon-pill${expandedCol === col.key ? " active" : ""}`}
+              onClick={() => setExpandedCol(col.key)}
+            >
+              {col.shortLabel}
+              {count > 0 && <span className="pill-badge">{count}</span>}
+            </button>
+          );
+        })}
       </div>
 
-      {/* ── MOBILE: Horizontal pill nav + single content panel ── */}
-      <div className="mobile-horizon-nav">
-        <div className="horizon-pills" role="tablist">
-          {/* Inbox pill — only shown when there are brain dump items */}
-          {brainDump.length > 0 && (
-            <button
-              role="tab"
-              className={`horizon-pill${expandedCol === "inbox" ? " active" : ""}`}
-              onClick={() => setExpandedCol("inbox")}
-            >
-              📥 Inbox
-              <span className="pill-badge">{brainDump.length}</span>
+      <div className="horizon-panel">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)" }}>
+            {expandedCol === "inbox" ? "📥 Brain Dump Inbox" : currentCol?.label || ""}
+          </span>
+          {expandedCol !== "inbox" && (
+            <button className="column-add-btn" onClick={() => onOpenAddTask(expandedCol)}
+              style={{ width: "28px", height: "28px", fontSize: "18px", borderRadius: "50%", flexShrink: 0 }}
+              title={`Add task to ${currentCol?.label}`}>+</button>
+          )}
+          {expandedCol === "inbox" && brainDump.length > 0 && (
+            <button onClick={handleClearAllBrainDump}
+              style={{ fontSize: "11px", padding: "4px 10px", background: "none", border: "1px solid var(--danger)", borderRadius: "var(--radius-sm)", color: "var(--danger)", cursor: "pointer", fontWeight: "700" }}>
+              Clear all
             </button>
           )}
-          {columns.map(col => {
-            const count = tasks.filter(t => t.horizonLevel === col.key && !t.isDeleted && !t.isCompleted).length;
-            return (
-              <button
-                key={col.key}
-                role="tab"
-                className={`horizon-pill${expandedCol === col.key ? " active" : ""}`}
-                onClick={() => setExpandedCol(col.key)}
-              >
-                {col.shortLabel}
-                {count > 0 && <span className="pill-badge">{count}</span>}
-              </button>
-            );
-          })}
         </div>
 
-        {/* Content panel */}
-        <div className="horizon-panel">
-          {/* Panel header */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)" }}>
-              {expandedCol === "inbox" ? "📥 Brain Dump Inbox" : currentCol?.label || ""}
-            </span>
-            {expandedCol !== "inbox" && (
-              <button
-                className="column-add-btn"
-                onClick={() => onOpenAddTask(expandedCol)}
-                style={{ width: "28px", height: "28px", fontSize: "18px", borderRadius: "50%", flexShrink: 0 }}
-                title={`Add task to ${currentCol?.label}`}
-              >
-                +
-              </button>
-            )}
-            {expandedCol === "inbox" && brainDump.length > 0 && (
-              <button onClick={handleClearAllBrainDump}
-                style={{ fontSize: "11px", padding: "4px 10px", background: "none", border: "1px solid var(--danger)", borderRadius: "var(--radius-sm)", color: "var(--danger)", cursor: "pointer", fontWeight: "700" }}>
-                Clear all
-              </button>
-            )}
-          </div>
-
-          {/* Panel body */}
-          {expandedCol === "inbox" ? (
-            brainDump.length === 0 ? (
-              <div className="roadmap-empty-state">
-                Brain dump is empty. Use the 📝 button on the Home tab to capture thoughts.
-              </div>
-            ) : (
-              <>
-                <p style={{ fontSize: "11.5px", color: brainDump.length >= 50 ? "var(--danger)" : "var(--text-secondary)", fontWeight: brainDump.length >= 50 ? "700" : "400" }}>
-                  {brainDump.length}/50 {brainDump.length >= 50 ? "— inbox full! Triage before adding more." : `item${brainDump.length !== 1 ? "s" : ""}. Send each to the right horizon.`}
-                </p>
-                {brainDump.map(item => (
-                  <div key={item.id} style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px" }}>
-                    <p style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "8px" }}>{item.text}</p>
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                      {[["today","Today"],["week","Week"],["month","Month"],["quarter","Qtr"]].map(([h, label]) => (
-                        <button key={h} className="btn" onClick={() => handleTriageBrainDump(item, h)}
-                          style={{ fontSize: "11px", padding: "5px 10px", background: "var(--bg-card)", color: "var(--accent)", border: "1px solid var(--accent)" }}>
-                          → {label}
-                        </button>
-                      ))}
-                      <button onClick={() => handleDeleteBrainDump(item)}
-                        style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--danger)", cursor: "pointer" }}>
-                        🗑
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </>
-            )
+        {expandedCol === "inbox" ? (
+          brainDump.length === 0 ? (
+            <div className="roadmap-empty-state">Brain dump is empty. Use the 📝 button on the Home tab to capture thoughts.</div>
           ) : (
-            renderTaskList(expandedCol)
-          )}
-        </div>
+            <>
+              <p style={{ fontSize: "11.5px", color: brainDump.length >= 50 ? "var(--danger)" : "var(--text-secondary)", fontWeight: brainDump.length >= 50 ? "700" : "400" }}>
+                {brainDump.length}/50 {brainDump.length >= 50 ? "— inbox full! Triage before adding more." : `item${brainDump.length !== 1 ? "s" : ""}. Send each to the right horizon.`}
+              </p>
+              {brainDump.map(item => (
+                <div key={item.id} style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px" }}>
+                  <p style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "8px" }}>{item.text}</p>
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                    {[["today","Today"],["week","Week"],["month","Month"],["quarter","Qtr"]].map(([h, label]) => (
+                      <button key={h} className="btn" onClick={() => handleTriageBrainDump(item, h)}
+                        style={{ fontSize: "11px", padding: "5px 10px", background: "var(--bg-card)", color: "var(--accent)", border: "1px solid var(--accent)" }}>
+                        → {label}
+                      </button>
+                    ))}
+                    <button onClick={() => handleDeleteBrainDump(item)}
+                      style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--danger)", cursor: "pointer" }}>
+                      🗑
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )
+        ) : (
+          renderTaskList(expandedCol)
+        )}
       </div>
+    </div>
+  );
 
-      {/* ── DESKTOP: Brain Dump Inbox ── */}
+  // ── Shared: accordion grid layout (grid mode, works at all screen sizes) ──
+  const renderGridLayout = () => (
+    <>
       {brainDump.length > 0 && (
-        <section className="card desktop-only" style={{ marginBottom: "4px" }}>
+        <section className="card" style={{ marginBottom: "4px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
             <h2 style={{ fontSize: "15px", fontWeight: "800", fontFamily: "var(--font-display)", color: "var(--text-primary)", margin: 0 }}>
               📥 Brain Dump Inbox
@@ -265,9 +244,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
           </div>
         </section>
       )}
-
-      {/* ── DESKTOP: Horizon grid columns ── */}
-      <div className="roadmap-scroll-container desktop-only">
+      <div className="roadmap-scroll-container">
         {columns.map((col) => {
           const colTasks = tasks
             .filter((t) => t.horizonLevel === col.key && !t.isDeleted && !t.isCompleted)
@@ -275,21 +252,11 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
           const isExpanded = expandedCol === col.key;
           return (
             <div key={col.key} className={`roadmap-column${isExpanded ? " expanded" : ""}`}>
-              <div
-                className="column-header"
-                onClick={() => setExpandedCol(isExpanded ? "" : col.key)}
-                style={{ cursor: "pointer", userSelect: "none" }}
-              >
+              <div className="column-header" onClick={() => setExpandedCol(isExpanded ? "" : col.key)} style={{ cursor: "pointer", userSelect: "none" }}>
                 <span className="column-title">{col.label}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <span className="column-count">{colTasks.length}</span>
-                  <button
-                    className="column-add-btn"
-                    onClick={(e) => { e.stopPropagation(); onOpenAddTask(col.key); }}
-                    title={`Add task directly to ${col.label}`}
-                  >
-                    +
-                  </button>
+                  <button className="column-add-btn" onClick={(e) => { e.stopPropagation(); onOpenAddTask(col.key); }} title={`Add task directly to ${col.label}`}>+</button>
                   <span style={{ fontSize: "18px", color: "var(--text-primary)", fontWeight: "700", transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
                 </div>
               </div>
@@ -301,13 +268,9 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
                     <div key={task.uuid} className="roadmap-task-card" onClick={() => setSelectedTask(task)}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "6px" }}>
                         <span className="roadmap-task-title">{task.title}</span>
-                        <span className={`priority-badge ${task.priority.toLowerCase()}`} style={{ flexShrink: 0 }}>
-                          {task.priority}
-                        </span>
+                        <span className={`priority-badge ${task.priority.toLowerCase()}`} style={{ flexShrink: 0 }}>{task.priority}</span>
                       </div>
-                      {task.concreteStep && (
-                        <span className="roadmap-task-step">⚡ {task.concreteStep}</span>
-                      )}
+                      {task.concreteStep && <span className="roadmap-task-step">⚡ {task.concreteStep}</span>}
                     </div>
                   ))
                 )}
@@ -316,6 +279,19 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
           );
         })}
       </div>
+    </>
+  );
+
+  return (
+    <div className="roadmap-container">
+      <div>
+        <h2 className="roadmap-board-title">Horizon Planning</h2>
+        <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+          Map your goals strategically across time horizons. Tap a card to manage.
+        </p>
+      </div>
+
+      {useCompact ? renderCompactLayout() : renderGridLayout()}
 
       {/* Task management overlay */}
       {selectedTask && (

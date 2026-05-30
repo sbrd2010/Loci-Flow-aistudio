@@ -2,11 +2,14 @@ import React, { useState, useEffect, useRef } from "react";
 import TaskRow from "./TaskRow";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
+import { safeUUID } from "../utils/uuid";
 
 export default function TodayTab({ payload, savePayload }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerSecondsLeft, setTimerSecondsLeft] = useState((config.pomodoroDurationMinutes || 25) * 60);
@@ -82,27 +85,44 @@ export default function TodayTab({ payload, savePayload }) {
   }, [ritualDone]);
 
   const QUOTES = [
-    { quote: "Done is better than perfect.", author: "Sheryl Sandberg" },
-    { quote: "Action cures fear.", author: "David J. Schwartz" },
-    { quote: "Absorb what is useful.", author: "Bruce Lee" },
-    { quote: "Deep work creates rare value.", author: "Cal Newport" },
-    { quote: "Start before you feel ready.", author: "Marie Forleo" },
-    { quote: "Clarity before speed.", author: "Anonymous" },
-    { quote: "One task. Full attention.", author: "Anonymous" },
-    { quote: "Progress beats perfection.", author: "Anonymous" },
+    { quote: "Either you run the day or the day runs you.", author: "Jim Rohn" },
+    { quote: "The secret of getting ahead is getting started.", author: "Mark Twain" },
+    { quote: "Procrastination is the thief of time — collar him.", author: "Charles Dickens" },
+    { quote: "You can't build a reputation on what you're going to do.", author: "Henry Ford" },
+    { quote: "A goal without a plan is just a wish.", author: "Antoine de Saint-Exupéry" },
+    { quote: "Focus on being productive instead of busy.", author: "Tim Ferriss" },
+    { quote: "Schedule your priorities, don't prioritize your schedule.", author: "Stephen Covey" },
+    { quote: "Until we can manage time, we can manage nothing else.", author: "Peter Drucker" },
+    { quote: "Lost time is never found again.", author: "Benjamin Franklin" },
+    { quote: "Do the hard jobs first. The easy jobs take care of themselves.", author: "Dale Carnegie" },
+    { quote: "An hour of planning can save you 10 hours of doing.", author: "Dale Carnegie" },
+    { quote: "Deep work is the ability to focus without distraction.", author: "Cal Newport" },
+    { quote: "The main thing is to keep the main thing the main thing.", author: "Stephen Covey" },
+    { quote: "Start where you are. Use what you have. Do what you can.", author: "Arthur Ashe" },
+    { quote: "The way to get started is to quit talking and begin doing.", author: "Walt Disney" },
+    { quote: "What gets measured gets managed.", author: "Peter Drucker" },
+    { quote: "You don't have to be great to start, but you must start to be great.", author: "Zig Ziglar" },
+    { quote: "Don't count the days — make the days count.", author: "Muhammad Ali" },
+    { quote: "Clarity about what matters gives clarity about what does not.", author: "Cal Newport" },
+    { quote: "Absorb what is useful, discard what is not.", author: "Bruce Lee" },
+    { quote: "Your future is created by what you do today, not tomorrow.", author: "Robert Kiyosaki" },
+    { quote: "Someday is not a day of the week.", author: "Janet Dailey" },
     { quote: "Begin. The rest is easy.", author: "Seneca" },
-    { quote: "Ship it. Learn. Improve.", author: "Anonymous" },
-    { quote: "Your focus is your power.", author: "Anonymous" },
-    { quote: "Do it now, not later.", author: "Anonymous" },
-    { quote: "Momentum follows action.", author: "Anonymous" },
+    { quote: "Action is the antidote to despair.", author: "Joan Baez" },
     { quote: "Execution is the strategy.", author: "Anonymous" },
-    { quote: "Simplify, then execute.", author: "Steve Jobs" },
   ];
   const currentQuote = QUOTES[Math.floor(Date.now() / (2 * 3600 * 1000)) % QUOTES.length];
 
   const [timelineProgress, setTimelineProgress] = useState(0.5);
   const [currentTimeStr, setCurrentTimeStr] = useState("");
   const [currentDateStr, setCurrentDateStr] = useState("");
+
+  const formatHourLabel = (h) => {
+    const h24 = h % 24;
+    const isAM = h24 < 12 || h24 === 0;
+    const displayH = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
+    return `${displayH}${isAM ? "am" : "pm"}`;
+  };
 
   const updateTimeline = () => {
     const now = new Date();
@@ -113,9 +133,10 @@ export default function TodayTab({ payload, savePayload }) {
     const amPmStr = hour >= 12 ? "PM" : "AM";
     setCurrentTimeStr(`${displayHour}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")} ${amPmStr}`);
     setCurrentDateStr(now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }));
-    const startHour = 7, endHour = 26;
+    const startHour = config.dayStartHour ?? 7;
+    const endHour = config.dayEndHour ?? 26;
     const currentHourFloat = hour + minute / 60;
-    const adjustedHour = hour < 7 ? currentHourFloat + 24 : currentHourFloat;
+    const adjustedHour = hour < startHour ? currentHourFloat + 24 : currentHourFloat;
     setTimelineProgress(Math.max(0, Math.min(1, (adjustedHour - startHour) / (endHour - startHour))));
   };
 
@@ -123,6 +144,14 @@ export default function TodayTab({ payload, savePayload }) {
     updateTimeline();
     const interval = setInterval(updateTimeline, 1000);
     return () => clearInterval(interval);
+  }, [config.dayStartHour, config.dayEndHour]);
+
+  useEffect(() => {
+    const container = document.querySelector('.screen-content');
+    if (!container) return;
+    const onScroll = () => setIsScrolled(container.scrollTop > 15);
+    container.addEventListener('scroll', onScroll, { passive: true });
+    return () => container.removeEventListener('scroll', onScroll);
   }, []);
 
   const [rescueActive, setRescueActive] = useState(false);
@@ -174,7 +203,7 @@ export default function TodayTab({ payload, savePayload }) {
     if (!brainDumpText.trim()) return;
     const currentDump = payload.brainDump || [];
     if (currentDump.length >= 50) return;
-    savePayload({ ...payload, brainDump: [...currentDump, { id: crypto.randomUUID(), text: brainDumpText.trim(), createdAt: Date.now() }] });
+    savePayload({ ...payload, brainDump: [...currentDump, { id: safeUUID(), text: brainDumpText.trim(), createdAt: Date.now() }] });
     setBrainDumpText("");
   };
 
@@ -366,35 +395,179 @@ export default function TodayTab({ payload, savePayload }) {
         </div>
       )}
 
-      {/* ── Compact header: Clock · Horizon bar · Quote */}
-      <section style={{
-        background: "var(--bg-card)", border: "1px solid var(--border)",
-        borderRadius: "var(--radius-sm)", padding: "8px 14px",
-        display: "flex", alignItems: "center", gap: "10px"
-      }}>
-        <div style={{ flexShrink: 0 }}>
-          <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", letterSpacing: "-0.01em", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
-            {currentTimeStr}
+      {/* ── Day header: style switchable via Settings → Header Style ── */}
+      {(() => {
+        const startHour = config.dayStartHour ?? 7;
+        const endHour = config.dayEndHour ?? 26;
+        const daySpan = endHour - startHour;
+        const labelCount = daySpan > 10 ? 5 : 3;
+        const timeLabels = Array.from({ length: labelCount }, (_, i) =>
+          formatHourLabel(startHour + Math.round((daySpan / (labelCount - 1)) * i))
+        );
+        const nowHour = new Date().getHours();
+        const greeting = nowHour < 12 ? "Good morning" : nowHour < 17 ? "Good afternoon" : "Good evening";
+        const firstName = (config.userName || "").split(" ")[0];
+        const headerStyle = config.headerStyle || "full";
+
+        // Option E: Auto-hide — wraps the full card, collapses on scroll
+        if (headerStyle === "autohide") {
+          const fullCard = (
+            <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px 14px" }}>
+              {firstName ? (
+                <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "8px", letterSpacing: "-0.01em" }}>
+                  {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
+                </div>
+              ) : null}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "10px" }}>
+                <div style={{ fontSize: "18px", fontWeight: "800", color: "var(--text-primary)", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{currentTimeStr}</div>
+                <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>{currentDateStr}</div>
+              </div>
+              <div style={{ height: "8px", background: "var(--bg-secondary)", borderRadius: "4px", overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "4px", transition: "width 1s linear" }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", marginBottom: "10px" }}>
+                {timeLabels.map((label, i) => (
+                  <span key={i} style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{label}</span>
+                ))}
+              </div>
+              <p style={{ margin: 0, fontSize: "12px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
+                "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
+              </p>
+            </section>
+          );
+          return (
+            <div className={`header-autohide-wrapper${isScrolled ? " header-collapsed" : ""}`}>
+              {fullCard}
+            </div>
+          );
+        }
+
+        // Option C: Compact strip — tap ▾ to reveal full details
+        if (headerStyle === "compact") {
+          return (
+            <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "8px 14px" }}>
+              <div onClick={() => setHeaderExpanded(e => !e)} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", userSelect: "none" }}>
+                <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em", flexShrink: 0 }}>
+                  {currentTimeStr}
+                </span>
+                <div style={{ flex: 1, height: "6px", background: "var(--bg-secondary)", borderRadius: "3px", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "3px", transition: "width 1s linear" }} />
+                </div>
+                <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600", flexShrink: 0 }}>{currentDateStr}</span>
+                <span style={{ fontSize: "12px", color: "var(--text-muted)", flexShrink: 0 }}>{headerExpanded ? "▴" : "▾"}</span>
+              </div>
+              {headerExpanded && (
+                <div style={{ marginTop: "10px" }}>
+                  {firstName && (
+                    <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "8px" }}>
+                      {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
+                    </div>
+                  )}
+                  <div style={{ height: "8px", background: "var(--bg-secondary)", borderRadius: "4px", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "4px", transition: "width 1s linear" }} />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", marginBottom: "8px" }}>
+                    {timeLabels.map((label, i) => (
+                      <span key={i} style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{label}</span>
+                    ))}
+                  </div>
+                  <p style={{ margin: 0, fontSize: "12px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
+                    "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
+                  </p>
+                </div>
+              )}
+            </section>
+          );
+        }
+
+        // Option D: Frameless bar — no card border/padding, all info on two rows
+        if (headerStyle === "frameless") {
+          return (
+            <div style={{ padding: "4px 2px 8px 2px" }}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "6px" }}>
+                {firstName ? (
+                  <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>
+                    {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
+                  </span>
+                ) : (
+                  <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{currentTimeStr}</span>
+                )}
+                <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
+                  {firstName && <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{currentTimeStr}</span>}
+                  <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>{currentDateStr}</span>
+                </div>
+              </div>
+              <div style={{ height: "6px", background: "var(--bg-secondary)", borderRadius: "3px", overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "3px", transition: "width 1s linear" }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "3px", marginBottom: "6px" }}>
+                {timeLabels.map((label, i) => (
+                  <span key={i} style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{label}</span>
+                ))}
+              </div>
+              <p style={{ margin: 0, fontSize: "11px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.4, fontWeight: "600" }}>
+                "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "10px" }}>— {currentQuote.author}</span>
+              </p>
+            </div>
+          );
+        }
+
+        // Default ("full"): original 4-row card
+        return (
+          <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px 14px" }}>
+            {firstName ? (
+              <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "8px", letterSpacing: "-0.01em" }}>
+                {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
+              </div>
+            ) : null}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "10px" }}>
+              <div style={{ fontSize: "18px", fontWeight: "800", color: "var(--text-primary)", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+                {currentTimeStr}
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>
+                {currentDateStr}
+              </div>
+            </div>
+            <div style={{ height: "8px", background: "var(--bg-secondary)", borderRadius: "4px", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "4px", transition: "width 1s linear" }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", marginBottom: "10px" }}>
+              {timeLabels.map((label, i) => (
+                <span key={i} style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{label}</span>
+              ))}
+            </div>
+            <p style={{ margin: 0, fontSize: "12px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
+              "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
+            </p>
+          </section>
+        );
+      })()}
+
+      {/* ── Key Deadline countdown strip */}
+      {config.deadlineDate && (() => {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const target = new Date(config.deadlineDate + "T00:00:00");
+        const days = Math.round((target - today) / 86400000);
+        if (days < 0) return null;
+        const label = (config.deadlineLabel || "Deadline").trim();
+        const color = days === 0 ? "var(--danger)" : days <= 14 ? "var(--danger)" : days <= 45 ? "var(--warning)" : "var(--accent)";
+        const bg = days === 0 ? "rgba(248,113,113,0.13)" : days <= 14 ? "rgba(248,113,113,0.10)" : days <= 45 ? "rgba(251,191,36,0.10)" : "var(--accent-light)";
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", background: bg, border: `1px solid ${color}`, borderRadius: "var(--radius-sm)", padding: "10px 14px" }}>
+            <span style={{ fontSize: "22px", fontWeight: "900", color, fontFamily: "var(--font-display)", fontVariantNumeric: "tabular-nums", lineHeight: 1, flexShrink: 0 }}>
+              {days === 0 ? "TODAY" : `${days}d`}
+            </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "1px", minWidth: 0 }}>
+              <span style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.1em", textTransform: "uppercase", color }}>
+                KEY DEADLINE
+              </span>
+              <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {label}
+              </span>
+            </div>
           </div>
-          <div style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600", marginTop: "2px" }}>
-            {currentDateStr}
-          </div>
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ height: "4px", background: "var(--bg-secondary)", borderRadius: "2px", overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "2px" }} />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "2px" }}>
-            <span style={{ fontSize: "8px", color: "var(--text-muted)", fontWeight: "600" }}>7a</span>
-            <span style={{ fontSize: "8px", color: "var(--text-muted)", fontWeight: "600" }}>2a</span>
-          </div>
-        </div>
-        <div style={{ flexShrink: 0, maxWidth: "92px" }}>
-          <p style={{ fontSize: "9px", fontStyle: "italic", color: "var(--accent)", margin: 0, lineHeight: "1.35", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-            "{currentQuote.quote.length > 40 ? currentQuote.quote.substring(0, 38) + "…" : currentQuote.quote}"
-          </p>
-        </div>
-      </section>
+        );
+      })()}
 
       {/* ── Today's Focus — tasks dominate the screen */}
       <section className="tasks-section" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -417,7 +590,7 @@ export default function TodayTab({ payload, savePayload }) {
                 color: config.isLowEnergyMode ? "#fff" : "var(--text-secondary)"
               }}
             >
-              🔋 {config.isLowEnergyMode ? "ON" : "Low E"}
+              🔋 {config.isLowEnergyMode ? "Low Energy ON" : "Low Energy"}
             </button>
             <span className="section-count-badge">
               {completedTasks.length}/{todayTasksFiltered.length}
@@ -537,9 +710,9 @@ export default function TodayTab({ payload, savePayload }) {
         </section>
       )}
 
-      {/* ── Utility strip: Streak · Ritual · Dump · Rescue · Reset */}
-      <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "10px 14px" }}>
+      {/* ── Utility strip: inline (hidden when dock is active) */}
+      {(config.toolsStyle || "inline") !== "dock" && <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}>
+        <div className="habits-tools-row" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "10px 14px" }}>
           {/* Streak + 7-day dots — tap to expand progress detail */}
           <button
             onClick={() => setToolPanel(p => p === "progress" ? null : "progress")}
@@ -575,7 +748,7 @@ export default function TodayTab({ payload, savePayload }) {
               borderRadius: "8px", cursor: "pointer", lineHeight: 1
             }}
           >
-            🌅
+            🌅<span className="tool-btn-text">Ritual</span>
           </button>
 
           {/* Brain Dump */}
@@ -589,7 +762,7 @@ export default function TodayTab({ payload, savePayload }) {
               border: "1px solid var(--border)", borderRadius: "8px", cursor: "pointer", lineHeight: 1
             }}
           >
-            📝
+            📝<span className="tool-btn-text">Dump</span>
             {dumpCount > 0 && (
               <span style={{ position: "absolute", top: "-5px", right: "-5px", background: "var(--accent)", color: "var(--btn-text, #fff)", fontSize: "8px", fontWeight: "800", borderRadius: "6px", padding: "1px 4px", lineHeight: 1.3 }}>
                 {dumpCount}
@@ -600,13 +773,13 @@ export default function TodayTab({ payload, savePayload }) {
           {/* Rescue */}
           <button onClick={openRescueMode} title="Rescue Mode"
             style={{ fontSize: "15px", padding: "5px 9px", background: "rgba(248,113,113,0.12)", border: "1px solid var(--danger)", borderRadius: "8px", color: "var(--danger)", cursor: "pointer", lineHeight: 1 }}>
-            🚨
+            🚨<span className="tool-btn-text">Rescue</span>
           </button>
 
           {/* Bad Day Reset */}
           <button onClick={handleBadDayReset} title="Bad Day Reset"
             style={{ fontSize: "15px", padding: "5px 9px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-secondary)", cursor: "pointer", lineHeight: 1 }}>
-            🌪️
+            🌪️<span className="tool-btn-text">Reset</span>
           </button>
         </div>
 
@@ -748,7 +921,181 @@ export default function TodayTab({ payload, savePayload }) {
             </form>
           </div>
         )}
-      </section>
+      </section>}
+      {(config.toolsStyle || "inline") !== "dock" && (
+        <div className="mobile-tools-legend" style={{ display: "none", justifyContent: "center", gap: "8px", fontSize: "10.5px", color: "var(--text-muted)", marginTop: "4px", padding: "0 6px" }}>
+          <span>🌅 Ritual</span> · <span>📝 Dump</span> · <span>🚨 Rescue</span> · <span>🌪️ Reset</span>
+        </div>
+      )}
+
+      {/* ── Floating Bottom Dock (Concept 3) */}
+      {config.toolsStyle === "dock" && (
+        <>
+          {/* Spacer so tasks aren't hidden behind the dock */}
+          <div style={{ height: "72px" }} />
+
+          {/* Backdrop */}
+          {toolPanel && (
+            <div className="tools-sheet-backdrop" onClick={() => setToolPanel(null)} />
+          )}
+
+          {/* Bottom Sheet content */}
+          {toolPanel && (
+            <div className="tools-bottom-sheet">
+              <div className="tools-sheet-handle" />
+
+              {toolPanel === "progress" && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                    <h3 style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", margin: 0 }}>
+                      📊 7-Day Progress
+                    </h3>
+                    <div style={{ display: "flex", gap: "4px" }}>
+                      {[{ id: "streak", label: "🔥" }, { id: "dots", label: "●" }].map(v => (
+                        <button key={v.id} onClick={() => { setVizMode(v.id); localStorage.setItem("loci_viz", v.id); }}
+                          style={{ padding: "3px 10px", fontSize: "12px", border: "1px solid var(--border)", borderRadius: "20px", cursor: "pointer", fontWeight: "700", background: vizMode === v.id ? "var(--accent)" : "var(--bg-secondary)", color: vizMode === v.id ? "var(--btn-text, #fff)" : "var(--text-muted)", transition: "all 0.15s" }}>
+                          {v.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {vizMode === "streak" && (
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ marginBottom: "14px" }}>
+                        <span style={{ fontSize: "clamp(28px, 8vw, 44px)", fontWeight: "900", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-display)" }}>
+                          {config.visitStreakCount || 0}
+                        </span>
+                        <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "2px" }}>day streak 🔥</div>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginBottom: "8px" }}>
+                        {bentoDays.map((day, i) => {
+                          const isToday = i === 6;
+                          const done = day.count > 0;
+                          return (
+                            <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                              <div style={{ width: isToday ? "28px" : "22px", height: isToday ? "28px" : "22px", borderRadius: "50%", background: done ? "var(--accent)" : "var(--bg-secondary)", border: isToday ? "2px solid var(--accent)" : "2px solid var(--border)", transition: "all 0.2s" }} />
+                              <span style={{ fontSize: "8px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>{day.label}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600" }}>Filled = tasks done that day</p>
+                    </div>
+                  )}
+                  {vizMode === "dots" && (
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                        {bentoDays.map((day, i) => {
+                          const isToday = i === 6;
+                          const done = day.count > 0;
+                          return (
+                            <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "5px", flex: 1 }}>
+                              <span style={{ fontSize: "9px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>{day.label}</span>
+                              <div style={{ width: isToday ? "32px" : "26px", height: isToday ? "32px" : "26px", borderRadius: "50%", background: done ? "var(--success, #22c55e)" : "var(--bg-secondary)", border: isToday ? "2.5px solid var(--accent)" : done ? "none" : "2px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}>
+                                {done && <span style={{ fontSize: "12px" }}>✓</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600", marginTop: "4px" }}>Green ✓ = showed up · Today highlighted</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {toolPanel === "ritual" && (
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: ritualActive ? "10px" : 0 }}>
+                    <span style={{ fontSize: "16px" }}>🌅</span>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>Morning Ritual</span>
+                      <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "8px" }}>7 min · +80 XP</span>
+                    </div>
+                    {!ritualActive ? (
+                      <button className="btn" onClick={handleBeginRitual} style={{ padding: "6px 16px", fontSize: "12px", fontWeight: "700" }}>Begin</button>
+                    ) : (
+                      <button onClick={handleAbortRitual} style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>Stop</button>
+                    )}
+                  </div>
+                  {ritualActive && (
+                    <div style={{ background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", padding: "12px", display: "flex", flexDirection: "column", gap: "8px", marginTop: "10px" }}>
+                      <span style={{ fontSize: "10px", fontWeight: "800", color: "var(--text-muted)", letterSpacing: "0.05em", textTransform: "uppercase" }}>STEP {ritualStepIndex + 1} OF {ritualSteps.length}</span>
+                      <p style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0 }}>{ritualSteps[ritualStepIndex].name}</p>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontSize: "20px", fontWeight: "800", color: "var(--accent)", fontFamily: "var(--font-display)" }}>{formatRitualTime(ritualSecondsLeft)}</span>
+                        <button className="btn" onClick={handleAdvanceRitualStep} style={{ padding: "5px 14px", fontSize: "12px", background: "var(--bg-card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>Skip →</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {toolPanel === "dump" && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <h2 className="section-title" style={{ fontSize: "13px", margin: 0 }}>📝 Brain Dump</h2>
+                    {dumpCount > 0 && (
+                      <span style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700" }}>{dumpCount}/50</span>
+                    )}
+                  </div>
+                  {dumpCount >= 50 && (
+                    <p style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "8px", fontWeight: "600" }}>Inbox full (50/50). Go to Roadmap to triage first.</p>
+                  )}
+                  <form className="braindump-form" onSubmit={handleBrainDumpSubmit}>
+                    <input type="text" className="braindump-input"
+                      placeholder="Add anything on your mind."
+                      value={brainDumpText}
+                      onChange={e => setBrainDumpText(e.target.value)}
+                      disabled={dumpCount >= 50} />
+                    <button type="submit" className="braindump-submit" disabled={dumpCount >= 50}>➔</button>
+                  </form>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* The dock itself */}
+          <div className="floating-tools-dock">
+            <button
+              onClick={() => setToolPanel(p => p === "progress" ? null : "progress")}
+              style={{ display: "flex", alignItems: "center", gap: "5px", background: toolPanel === "progress" ? "rgba(255,255,255,0.1)" : "transparent", border: "none", cursor: "pointer", padding: "4px 6px", borderRadius: "16px" }}
+            >
+              <span style={{ fontSize: "12px", fontWeight: "800", color: "var(--accent)", whiteSpace: "nowrap" }}>🔥 {config.visitStreakCount || 0}d</span>
+              <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
+                {bentoDays.map((day, i) => (
+                  <div key={day.dateStr} style={{ width: i === 6 ? "8px" : "6px", height: i === 6 ? "8px" : "6px", borderRadius: "50%", background: day.count > 0 ? "var(--accent)" : "rgba(255,255,255,0.15)", border: i === 6 ? "1.5px solid var(--accent)" : "1px solid rgba(255,255,255,0.2)", flexShrink: 0 }} />
+                ))}
+              </div>
+            </button>
+
+            <div style={{ width: "1px", height: "24px", background: "rgba(255,255,255,0.12)" }} />
+
+            <button onClick={() => setToolPanel(p => p === "ritual" ? null : "ritual")}
+              style={{ fontSize: "18px", padding: "6px", background: (ritualActive || toolPanel === "ritual") ? "rgba(255,255,255,0.15)" : "transparent", border: ritualActive ? "1.5px solid var(--success)" : "none", borderRadius: "10px", cursor: "pointer", lineHeight: 1, color: "inherit" }} title="Morning Ritual">
+              🌅
+            </button>
+
+            <button onClick={() => setToolPanel(p => p === "dump" ? null : "dump")}
+              style={{ fontSize: "18px", padding: "6px", background: toolPanel === "dump" ? "rgba(255,255,255,0.15)" : "transparent", border: "none", borderRadius: "10px", cursor: "pointer", lineHeight: 1, position: "relative" }} title="Brain Dump">
+              📝
+              {dumpCount > 0 && (
+                <span style={{ position: "absolute", top: "2px", right: "2px", background: "var(--accent)", color: "#fff", fontSize: "7px", fontWeight: "800", borderRadius: "5px", padding: "1px 3px", lineHeight: 1.2 }}>{dumpCount}</span>
+              )}
+            </button>
+
+            <button onClick={openRescueMode}
+              style={{ fontSize: "18px", padding: "6px", background: "transparent", border: "none", borderRadius: "10px", cursor: "pointer", lineHeight: 1 }} title="Rescue Mode">
+              🚨
+            </button>
+
+            <button onClick={handleBadDayReset}
+              style={{ fontSize: "18px", padding: "6px", background: "transparent", border: "none", borderRadius: "10px", cursor: "pointer", lineHeight: 1 }} title="Bad Day Reset">
+              🌪️
+            </button>
+          </div>
+        </>
+      )}
 
       {/* ── Undo Delete Toast */}
       {undoTask && (

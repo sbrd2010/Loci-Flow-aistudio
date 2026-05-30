@@ -22,6 +22,13 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
   const [editedNagInterval, setEditedNagInterval] = useState(config.reminderNagIntervalMinutes || 15);
   const [editedEveningGuard, setEditedEveningGuard] = useState(!!config.eveningGuardWindowActive);
   const [editedChallenge, setEditedChallenge] = useState(config.challengeType || "starting");
+  const [editedDayStart, setEditedDayStart] = useState(config.dayStartHour ?? 7);
+  const [editedDayEnd, setEditedDayEnd] = useState(config.dayEndHour ?? 26);
+  const [editedHeaderStyle, setEditedHeaderStyle] = useState(config.headerStyle || "full");
+  const [editedToolsStyle, setEditedToolsStyle] = useState(config.toolsStyle || "inline");
+  const [editedRoadmapStyle, setEditedRoadmapStyle] = useState(config.roadmapStyle || "compact");
+  const [editedDeadlineLabel, setEditedDeadlineLabel] = useState(config.deadlineLabel || "");
+  const [editedDeadlineDate, setEditedDeadlineDate] = useState(config.deadlineDate || "");
 
   useEffect(() => {
     setEditedName(config.userName || "");
@@ -30,8 +37,17 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
     setEditedNagInterval(config.reminderNagIntervalMinutes || 15);
     setEditedEveningGuard(!!config.eveningGuardWindowActive);
     setEditedChallenge(config.challengeType || "starting");
+    setEditedDayStart(config.dayStartHour ?? 7);
+    setEditedDayEnd(config.dayEndHour ?? 26);
+    setEditedHeaderStyle(config.headerStyle || "full");
+    setEditedToolsStyle(config.toolsStyle || "inline");
+    setEditedRoadmapStyle(config.roadmapStyle || "compact");
+    setEditedDeadlineLabel(config.deadlineLabel || "");
+    setEditedDeadlineDate(config.deadlineDate || "");
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
-      config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType]);
+      config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType,
+      config.dayStartHour, config.dayEndHour, config.headerStyle, config.toolsStyle,
+      config.roadmapStyle, config.deadlineLabel, config.deadlineDate]);
 
   const challengeOptions = [
     { key: "starting",   label: "Overcoming Inertia",    desc: "Can't get started on tasks.", icon: "🏁" },
@@ -41,6 +57,9 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
   ];
 
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [profileOpen, setProfileOpen] = useState(!config.userName);
+  const [progressOpen, setProgressOpen] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
   const [aiKeysOpen, setAiKeysOpen] = useState(false);
   const [challengeOpen, setChallengeOpen] = useState(false);
 
@@ -57,6 +76,13 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
         pomodoroDurationMinutes: Math.min(120, Math.max(1, parseInt(editedPomodoro) || 25)),
         reminderNagIntervalMinutes: Math.min(60, Math.max(1, parseInt(editedNagInterval) || 15)),
         eveningGuardWindowActive: editedEveningGuard,
+        dayStartHour: editedDayStart,
+        dayEndHour: editedDayEnd,
+        headerStyle: editedHeaderStyle,
+        toolsStyle: editedToolsStyle,
+        roadmapStyle: editedRoadmapStyle,
+        deadlineLabel: editedDeadlineLabel.trim(),
+        deadlineDate: editedDeadlineDate,
         lastUpdated: Date.now()
       }
     });
@@ -115,14 +141,21 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
 
       {/* ── Profile ──────────────────────────────────────────────────────── */}
       <section className="card">
-        <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "4px", color: "var(--text-primary)" }}>
-          Your Profile
-        </h2>
-        <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "18px" }}>
-          Personalise your name, coaching mentor and focus settings.
-        </p>
+        <button type="button" onClick={() => setProfileOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: profileOpen ? "16px" : 0 }}>
+          <div>
+            <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
+              👤 Your Profile
+            </h2>
+            {!profileOpen && config.userName && (
+              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                {config.userName} · {challengeOptions.find(o => o.key === (config.challengeType || "starting"))?.label}
+              </div>
+            )}
+          </div>
+          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: profileOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
+        </button>
 
-        <form onSubmit={handleSaveSettings} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+        {profileOpen && <form onSubmit={handleSaveSettings} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
           <div className="form-group">
             <label className="form-label" htmlFor="settings-name">Your Name</label>
             <input id="settings-name" className="text-input" type="text"
@@ -222,6 +255,115 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
             </div>
           </div>
 
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <div className="form-group">
+              <label className="form-label" htmlFor="settings-day-start">Day Starts</label>
+              <select id="settings-day-start" className="text-input" value={editedDayStart}
+                onChange={e => setEditedDayStart(Number(e.target.value))}>
+                {[5, 6, 7, 8, 9, 10].map(h => (
+                  <option key={h} value={h}>{h < 12 ? `${h}:00 AM` : "12:00 PM"}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="settings-day-end">Day Ends</label>
+              <select id="settings-day-end" className="text-input" value={editedDayEnd}
+                onChange={e => setEditedDayEnd(Number(e.target.value))}>
+                {[17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27].map(h => {
+                  const labels = { 17: "5 PM", 18: "6 PM", 19: "7 PM", 20: "8 PM", 21: "9 PM", 22: "10 PM", 23: "11 PM", 24: "12 AM", 25: "1 AM", 26: "2 AM", 27: "3 AM" };
+                  return <option key={h} value={h}>{labels[h]}</option>;
+                })}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Home Header Style</label>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
+              {[
+                { key: "full", label: "Full card" },
+                { key: "compact", label: "Compact (tap)" },
+                { key: "frameless", label: "Frameless" },
+                { key: "autohide", label: "Auto-hide" }
+              ].map(({ key, label }) => (
+                <button key={key} type="button"
+                  onClick={() => setEditedHeaderStyle(key)}
+                  style={{
+                    padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700",
+                    cursor: "pointer", transition: "all 0.15s",
+                    background: editedHeaderStyle === key ? "var(--accent)" : "var(--bg-secondary)",
+                    color: editedHeaderStyle === key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
+                    border: editedHeaderStyle === key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
+                  }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Tools Layout</label>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
+              {[
+                { key: "inline", label: "Inline (current)" },
+                { key: "dock", label: "Floating Dock" }
+              ].map(({ key, label }) => (
+                <button key={key} type="button"
+                  onClick={() => setEditedToolsStyle(key)}
+                  style={{
+                    padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700",
+                    cursor: "pointer", transition: "all 0.15s",
+                    background: editedToolsStyle === key ? "var(--accent)" : "var(--bg-secondary)",
+                    color: editedToolsStyle === key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
+                    border: editedToolsStyle === key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
+                  }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Plan Page Layout</label>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
+              {[
+                { key: "compact", label: "Compact (pills)" },
+                { key: "grid",    label: "Grid (columns)" }
+              ].map(({ key, label }) => (
+                <button key={key} type="button"
+                  onClick={() => setEditedRoadmapStyle(key)}
+                  style={{
+                    padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700",
+                    cursor: "pointer", transition: "all 0.15s",
+                    background: editedRoadmapStyle === key ? "var(--accent)" : "var(--bg-secondary)",
+                    color: editedRoadmapStyle === key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
+                    border: editedRoadmapStyle === key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
+                  }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">📅 Key Deadline (home screen countdown)</label>
+            <input className="text-input" type="text"
+              value={editedDeadlineLabel}
+              onChange={e => setEditedDeadlineLabel(e.target.value)}
+              placeholder="e.g. Get a job · Exam · Birthday"
+              style={{ marginBottom: "8px" }} />
+            <input className="text-input" type="date"
+              value={editedDeadlineDate}
+              onChange={e => setEditedDeadlineDate(e.target.value)} />
+            {editedDeadlineDate && (
+              <button type="button"
+                onClick={() => { setEditedDeadlineDate(""); setEditedDeadlineLabel(""); }}
+                style={{ marginTop: "6px", fontSize: "11px", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                ✕ Clear deadline
+              </button>
+            )}
+          </div>
+
           <div
             className="toggle-row"
             onClick={() => setEditedEveningGuard(!editedEveningGuard)}
@@ -241,12 +383,25 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
           <button className="btn" type="submit" style={{ width: "100%", marginTop: "4px" }}>
             {savedProfile ? "✓ Saved!" : "Save Profile"}
           </button>
-        </form>
+        </form>}
       </section>
 
       {/* ── Your Progress ── */}
       <section className="card">
-        <h2 className="section-title">Your Progress</h2>
+        <button type="button" onClick={() => setProgressOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: progressOpen ? "12px" : 0 }}>
+          <div>
+            <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
+              📈 Your Progress
+            </h2>
+            {!progressOpen && (
+              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                {levelTitle} · {xpInLevel}/200 XP
+              </div>
+            )}
+          </div>
+          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: progressOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
+        </button>
+        {progressOpen && <>
         <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "14px" }}>
           XP earned by completing tasks. Levels reset every 200 XP.
         </p>
@@ -274,6 +429,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
             </div>
           ))}
         </div>
+        </>}
       </section>
 
       {/* ── AI Keys ─────────────────────────────────────────────────────── */}
@@ -360,44 +516,70 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
 
       {/* ── Data Sync ────────────────────────────────────────────────────── */}
       <section className="card">
-        <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "4px", color: "var(--text-primary)" }}>
-          Data Sync
-        </h2>
-        <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "14px" }}>
-          Your tasks sync instantly with Firebase across all your devices.
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          {[
-            { label: "Account", value: config.userId || "Active User" },
-            { label: "Last Sync", value: formatRelativeTime(payload.timestamp) },
-            { label: "Active Tasks", value: `${(payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).length} tasks` },
-            { label: "Total XP", value: `${Number(config.totalXp) || 0} XP` }
-          ].map(row => (
-            <div key={row.label} style={{ display: "flex", justifyContent: "space-between", fontSize: "12.5px" }}>
-              <span style={{ color: "var(--text-muted)", fontWeight: "600" }}>{row.label}</span>
-              <span style={{ color: "var(--text-primary)", fontWeight: "700" }}>{row.value}</span>
-            </div>
-          ))}
-        </div>
+        <button type="button" onClick={() => setSyncOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: syncOpen ? "12px" : 0 }}>
+          <div>
+            <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
+              ☁️ Data Sync
+            </h2>
+            {!syncOpen && (
+              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                Last sync: {formatRelativeTime(payload.timestamp)}
+              </div>
+            )}
+          </div>
+          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: syncOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
+        </button>
+        {syncOpen && <>
+          <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "14px" }}>
+            Your tasks sync instantly with Firebase across all your devices.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {[
+              { label: "Account", value: config.userId || "Active User" },
+              { label: "Last Sync", value: formatRelativeTime(payload.timestamp) },
+              { label: "Active Tasks", value: `${(payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).length} tasks` },
+              { label: "Total XP", value: `${Number(config.totalXp) || 0} XP` }
+            ].map(row => (
+              <div key={row.label} style={{ display: "flex", justifyContent: "space-between", fontSize: "12.5px" }}>
+                <span style={{ color: "var(--text-muted)", fontWeight: "600" }}>{row.label}</span>
+                <span style={{ color: "var(--text-primary)", fontWeight: "700" }}>{row.value}</span>
+              </div>
+            ))}
+          </div>
+        </>}
       </section>
 
-      {/* ── Danger Zone ──────────────────────────────────────────────────── */}
+      {/* ── Account ──────────────────────────────────────────────────────── */}
       <section className="card">
         <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "14px", color: "var(--text-primary)" }}>
           Account
         </h2>
-        <button
-          className="btn"
-          style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--danger)", border: "1.5px solid var(--border)", boxShadow: "none" }}
-          onClick={() => setConfirmDialog({
-            message: "Sign out? Your data stays saved.",
-            confirmLabel: "Sign out", cancelLabel: "Cancel",
-            onConfirm: () => { setConfirmDialog(null); onSignOut?.(); },
-            onCancel: () => setConfirmDialog(null)
-          })}
-        >
-          Sign out of Loci
-        </button>
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <button
+            className="btn"
+            style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
+            onClick={() => setConfirmDialog({
+              message: "Reset 7-day tracking data?\n\nThis clears the dots AND the streak counter on the Home tab. Cannot be undone.",
+              confirmLabel: "Reset tracking", cancelLabel: "Cancel",
+              onConfirm: () => { savePayload({ ...payload, contributions: [], config: { ...config, visitStreakCount: 0, lastUpdated: Date.now() } }); setConfirmDialog(null); },
+              onCancel: () => setConfirmDialog(null)
+            })}
+          >
+            🔄 Reset 7-day tracking data
+          </button>
+          <button
+            className="btn"
+            style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--danger)", border: "1.5px solid var(--border)", boxShadow: "none" }}
+            onClick={() => setConfirmDialog({
+              message: "Sign out? Your data stays saved.",
+              confirmLabel: "Sign out", cancelLabel: "Cancel",
+              onConfirm: () => { setConfirmDialog(null); onSignOut?.(); },
+              onCancel: () => setConfirmDialog(null)
+            })}
+          >
+            Sign out of Loci
+          </button>
+        </div>
       </section>
 
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}

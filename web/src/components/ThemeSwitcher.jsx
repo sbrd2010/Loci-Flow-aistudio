@@ -10,22 +10,33 @@ const THEMES = [
   { id: "midnight-neon", label: "Midnight Neon", emoji: "⚡", desc: "Electric cyan on pure black" },
   { id: "solar-ember",   label: "Solar Ember",   emoji: "🔥", desc: "Warm amber, terracotta light" },
   { id: "arctic-frost",  label: "Arctic Frost",  emoji: "❄️", desc: "Cool blue, clinical clarity" },
-  { id: "regal-amethyst",label: "Regal Amethyst",emoji: "💜", desc: "Deep purple glassmorphism" },
+  { id: "regal-amethyst",   label: "Regal Amethyst", emoji: "💜", desc: "Deep purple glassmorphism" },
+  { id: "option-a-amie",    label: "Amie Glass",     emoji: "🌸", desc: "Translucent soft glassy pastel" },
+  { id: "option-b-linear",  label: "Linear Dark",    emoji: "🛸", desc: "Industrial high-precision dark" },
+  { id: "option-c-zen",     label: "Zen Canvas",     emoji: "🕊️", desc: "Elegant serif, warm cream" },
+  { id: "option-d-bento",   label: "Bento Grid",     emoji: "🍱", desc: "iOS compartmental, amber focus" },
+  { id: "option-e-slate",   label: "Slate Notebook", emoji: "📓", desc: "Notion-minimal dark notebook" },
+  { id: "option-f-chronos", label: "Chronos Time",   emoji: "⏳", desc: "Cosmic purple, orange highlights" },
 ];
 
 export default function ThemeSwitcher({ theme, onThemeChange }) {
   const [open, setOpen] = useState(false);
   const current = THEMES.find(t => t.id === theme) || THEMES[0];
 
-  // Close dropdown on scroll or touch-scroll so it doesn't stay pinned on mobile
+  // Close on page scroll or on touchmove OUTSIDE the dropdown.
+  // Without the inside-check, scrolling the theme list itself would close it on mobile.
   useEffect(() => {
     if (!open) return;
-    const close = () => setOpen(false);
-    window.addEventListener("scroll", close, { passive: true });
-    window.addEventListener("touchmove", close, { passive: true });
+    const closeOnScroll = () => setOpen(false);
+    const closeOnTouchMove = (e) => {
+      if (e.target && e.target.closest && e.target.closest(".theme-dropdown")) return;
+      setOpen(false);
+    };
+    window.addEventListener("scroll", closeOnScroll, { passive: true });
+    window.addEventListener("touchmove", closeOnTouchMove, { passive: true });
     return () => {
-      window.removeEventListener("scroll", close);
-      window.removeEventListener("touchmove", close);
+      window.removeEventListener("scroll", closeOnScroll);
+      window.removeEventListener("touchmove", closeOnTouchMove);
     };
   }, [open]);
 

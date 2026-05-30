@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set, update, runTransaction, get } from "firebase/database";
 import { db } from "./firebase";
+import { safeUUID } from "./utils/uuid";
 
 // Retry a Firebase set() up to `retries` times with exponential backoff (500ms, 1s, 2s).
 async function writeWithRetry(dbRef, data, retries = 3) {
@@ -70,7 +71,7 @@ export function useSync(uid, email) {
               {
                 id: Date.now(),
                 userId: email,
-                uuid: crypto.randomUUID(),
+                uuid: safeUUID(),
                 title: "Optimize resume for tech product role",
                 concreteStep: "Add metric metrics to job #1",
                 horizonLevel: "today",
@@ -89,7 +90,7 @@ export function useSync(uid, email) {
               {
                 id: Date.now() + 1,
                 userId: email,
-                uuid: crypto.randomUUID(),
+                uuid: safeUUID(),
                 title: "Prep interview answers for star technique",
                 concreteStep: "Draft situation for leadership quest",
                 horizonLevel: "today",
@@ -108,7 +109,7 @@ export function useSync(uid, email) {
               {
                 id: Date.now() + 2,
                 userId: email,
-                uuid: crypto.randomUUID(),
+                uuid: safeUUID(),
                 title: "Go for a brief outdoor walk to recharge dopamine",
                 concreteStep: "Put on sneakers and walk 10 mins",
                 horizonLevel: "today",
@@ -139,6 +140,7 @@ export function useSync(uid, email) {
               isLowEnergyMode: false,
               isOnboardingCompleted: false,
               eveningGuardWindowActive: true,
+              roadmapStyle: "compact",
               lastUpdated: Date.now()
             },
             contributions: [
@@ -192,17 +194,28 @@ export function useSync(uid, email) {
     };
   }, [dbRefPath, uid, email]);
 
-  // Flush any pending debounced write immediately when the tab is closed.
+  // Flush pending debounced write on tab close / mobile background / screen lock.
+  // beforeunload alone is unreliable on iOS Safari and Android Chrome when the user
+  // backgrounds the app or locks the screen — pagehide and visibilitychange cover those cases.
   useEffect(() => {
-    const handleBeforeUnload = () => {
+    const flush = () => {
       if (timeoutRef.current && dbRefPath && payloadRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
         set(ref(db, dbRefPath), payloadRef.current);
       }
     };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("beforeunload", flush);
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [dbRefPath]);
 
   // One-time migration: copy data from legacy email path to uid path
