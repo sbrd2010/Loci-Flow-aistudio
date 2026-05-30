@@ -82,21 +82,31 @@ export default function TodayTab({ payload, savePayload }) {
   }, [ritualDone]);
 
   const QUOTES = [
-    { quote: "Done is better than perfect.", author: "Sheryl Sandberg" },
-    { quote: "Action cures fear.", author: "David J. Schwartz" },
-    { quote: "Absorb what is useful.", author: "Bruce Lee" },
-    { quote: "Deep work creates rare value.", author: "Cal Newport" },
-    { quote: "Start before you feel ready.", author: "Marie Forleo" },
-    { quote: "Clarity before speed.", author: "Anonymous" },
-    { quote: "One task. Full attention.", author: "Anonymous" },
-    { quote: "Progress beats perfection.", author: "Anonymous" },
+    { quote: "Either you run the day or the day runs you.", author: "Jim Rohn" },
+    { quote: "The secret of getting ahead is getting started.", author: "Mark Twain" },
+    { quote: "Procrastination is the thief of time — collar him.", author: "Charles Dickens" },
+    { quote: "You can't build a reputation on what you're going to do.", author: "Henry Ford" },
+    { quote: "A goal without a plan is just a wish.", author: "Antoine de Saint-Exupéry" },
+    { quote: "Focus on being productive instead of busy.", author: "Tim Ferriss" },
+    { quote: "Schedule your priorities, don't prioritize your schedule.", author: "Stephen Covey" },
+    { quote: "Until we can manage time, we can manage nothing else.", author: "Peter Drucker" },
+    { quote: "Lost time is never found again.", author: "Benjamin Franklin" },
+    { quote: "Do the hard jobs first. The easy jobs take care of themselves.", author: "Dale Carnegie" },
+    { quote: "An hour of planning can save you 10 hours of doing.", author: "Dale Carnegie" },
+    { quote: "Deep work is the ability to focus without distraction.", author: "Cal Newport" },
+    { quote: "The main thing is to keep the main thing the main thing.", author: "Stephen Covey" },
+    { quote: "Start where you are. Use what you have. Do what you can.", author: "Arthur Ashe" },
+    { quote: "The way to get started is to quit talking and begin doing.", author: "Walt Disney" },
+    { quote: "What gets measured gets managed.", author: "Peter Drucker" },
+    { quote: "You don't have to be great to start, but you must start to be great.", author: "Zig Ziglar" },
+    { quote: "Don't count the days — make the days count.", author: "Muhammad Ali" },
+    { quote: "Clarity about what matters gives clarity about what does not.", author: "Cal Newport" },
+    { quote: "Absorb what is useful, discard what is not.", author: "Bruce Lee" },
+    { quote: "Your future is created by what you do today, not tomorrow.", author: "Robert Kiyosaki" },
+    { quote: "Someday is not a day of the week.", author: "Janet Dailey" },
     { quote: "Begin. The rest is easy.", author: "Seneca" },
-    { quote: "Ship it. Learn. Improve.", author: "Anonymous" },
-    { quote: "Your focus is your power.", author: "Anonymous" },
-    { quote: "Do it now, not later.", author: "Anonymous" },
-    { quote: "Momentum follows action.", author: "Anonymous" },
+    { quote: "Action is the antidote to despair.", author: "Joan Baez" },
     { quote: "Execution is the strategy.", author: "Anonymous" },
-    { quote: "Simplify, then execute.", author: "Steve Jobs" },
   ];
   const currentQuote = QUOTES[Math.floor(Date.now() / (2 * 3600 * 1000)) % QUOTES.length];
 
@@ -131,7 +141,7 @@ export default function TodayTab({ payload, savePayload }) {
     updateTimeline();
     const interval = setInterval(updateTimeline, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [config.dayStartHour, config.dayEndHour]);
 
   const [rescueActive, setRescueActive] = useState(false);
   const [rescueTask, setRescueTask] = useState(null);
@@ -374,19 +384,26 @@ export default function TodayTab({ payload, savePayload }) {
         </div>
       )}
 
-      {/* ── Day header: Clock · Timeline · Quote */}
+      {/* ── Day header: Greeting · Clock · Timeline · Quote */}
       {(() => {
         const startHour = config.dayStartHour ?? 7;
         const endHour = config.dayEndHour ?? 26;
-        const midHour = Math.round((startHour + endHour) / 2);
-        const startLabel = formatHourLabel(startHour);
-        const midLabel = formatHourLabel(midHour);
-        const endLabel = formatHourLabel(endHour);
+        const daySpan = endHour - startHour;
+        const labelCount = daySpan > 10 ? 5 : 3;
+        const timeLabels = Array.from({ length: labelCount }, (_, i) =>
+          formatHourLabel(startHour + Math.round((daySpan / (labelCount - 1)) * i))
+        );
+        const nowHour = new Date().getHours();
+        const greeting = nowHour < 12 ? "Good morning" : nowHour < 17 ? "Good afternoon" : "Good evening";
+        const firstName = (config.userName || "").split(" ")[0];
         return (
-          <section style={{
-            background: "var(--bg-card)", border: "1px solid var(--border)",
-            borderRadius: "var(--radius-sm)", padding: "12px 14px"
-          }}>
+          <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px 14px" }}>
+            {/* Row 0: Greeting */}
+            {firstName ? (
+              <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "8px", letterSpacing: "-0.01em" }}>
+                {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
+              </div>
+            ) : null}
             {/* Row 1: Clock + Date */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "10px" }}>
               <div style={{ fontSize: "18px", fontWeight: "800", color: "var(--text-primary)", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
@@ -397,14 +414,14 @@ export default function TodayTab({ payload, savePayload }) {
               </div>
             </div>
             {/* Row 2: Timeline bar */}
-            <div style={{ height: "8px", background: "var(--bg-secondary)", borderRadius: "4px", overflow: "hidden", position: "relative" }}>
+            <div style={{ height: "8px", background: "var(--bg-secondary)", borderRadius: "4px", overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "4px", transition: "width 1s linear" }} />
             </div>
-            {/* Row 3: Time labels */}
+            {/* Row 3: Time labels — 3 for short day, 5 for long */}
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", marginBottom: "10px" }}>
-              <span style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{startLabel}</span>
-              <span style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{midLabel}</span>
-              <span style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{endLabel}</span>
+              {timeLabels.map((label, i) => (
+                <span key={i} style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{label}</span>
+              ))}
             </div>
             {/* Row 4: Motivation quote */}
             <p style={{ margin: 0, fontSize: "12px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
