@@ -2254,7 +2254,10 @@ html[data-theme="glassy"] .signin-overlay {
   box-shadow: var(--shadow-lg);
   min-width: 196px;
   z-index: 200;
-  overflow: hidden;
+  max-height: calc(100dvh - 80px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 html[data-theme="glassy"] .theme-dropdown {
@@ -2337,9 +2340,10 @@ html[data-theme="glassy"] .theme-dropdown {
     left: 0;
     right: 0;
     top: auto;
-    max-height: 60vh;
+    max-height: 72vh;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
     border-radius: 16px 16px 0 0;
     border-bottom: none;
     padding-bottom: env(safe-area-inset-bottom, 0px);
