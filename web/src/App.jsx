@@ -26,7 +26,7 @@ export default function App() {
     localStorage.setItem("loci_theme", theme);
   }, [theme]);
 
-  // Handle redirect sign-in result (mobile only — iOS Safari / Android)
+  // Handle redirect sign-in result — only relevant for iOS (uses redirect flow)
   useEffect(() => {
     const redirectPending = localStorage.getItem("loci_redirect_pending");
     localStorage.removeItem("loci_redirect_pending");
@@ -41,23 +41,44 @@ export default function App() {
   const handleSignIn = () => {
     setSigningIn(true);
     setSignInError("");
-    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-    if (isMobile) {
+    const ua = navigator.userAgent;
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    const isAndroid = /Android/i.test(ua);
+
+    if (isIOS) {
+      // iOS: Safari and all WebKit browsers work best with redirect
       localStorage.setItem("loci_redirect_pending", "1");
-      signInWithRedirect(auth, new GoogleAuthProvider());
+      signInWithRedirect(auth, new GoogleAuthProvider()).catch((err) => {
+        localStorage.removeItem("loci_redirect_pending");
+        setSigningIn(false);
+        console.error("iOS redirect sign-in failed:", err.code, err.message);
+        setSignInError("Sign-in failed. Please try again.");
+      });
       return;
     }
-    // Desktop: popup only — redirect fails in Brave/privacy browsers (sessionStorage cleared between hops)
+
+    // Android + Desktop: popup-first.
+    // Android redirect clears sessionStorage between hops (Brave Shields) → popup is more reliable.
     signInWithPopup(auth, new GoogleAuthProvider()).catch((err) => {
       setSigningIn(false);
       if (err.code === "auth/popup-closed-by-user" || err.code === "auth/cancelled-popup-request") return;
       if (err.code === "auth/popup-blocked") {
+        if (isAndroid) {
+          // Popup blocked on Android → fall back to redirect
+          setSigningIn(true);
+          localStorage.setItem("loci_redirect_pending", "1");
+          signInWithRedirect(auth, new GoogleAuthProvider()).catch(() => {
+            localStorage.removeItem("loci_redirect_pending");
+            setSigningIn(false);
+            setSignInError("Sign-in failed. Please try again.");
+          });
+          return;
+        }
         setSignInError("Popup blocked. Please allow popups for this site, then try again.");
         return;
       }
-      // Privacy browsers (Brave) can block the popup auth flow
-      console.error("Popup sign-in failed:", err.code, err.message);
-      setSignInError("Sign-in failed. Allow popups for this site, or disable browser shields and try again.");
+      console.error("Sign-in failed:", err.code, err.message);
+      setSignInError("Sign-in failed. Please try again.");
     });
   };
 
@@ -138,7 +159,7 @@ export default function App() {
               <path d="M3.964 10.706A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.038l3.007-2.332z" fill="#FBBC05"/>
               <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.962L3.964 6.294C4.672 4.167 6.656 3.58 9 3.58z" fill="#EA4335"/>
             </svg>
-            {signingIn ? "Redirecting to Google…" : "Continue with Google"}
+            {signingIn ? "Signing in…" : "Continue with Google"}
           </button>
           {signInError && (
             <p style={{ fontSize: "12px", color: "var(--danger)", marginTop: "8px", textAlign: "center" }}>{signInError}</p>
