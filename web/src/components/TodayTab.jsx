@@ -574,7 +574,7 @@ export default function TodayTab({ payload, savePayload }) {
 
       {/* ── Utility strip: Streak · Ritual · Dump · Rescue · Reset */}
       <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "10px 14px" }}>
+        <div className="habits-tools-row" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "10px 14px" }}>
           {/* Streak + 7-day dots — tap to expand progress detail */}
           <button
             onClick={() => setToolPanel(p => p === "progress" ? null : "progress")}
@@ -610,7 +610,7 @@ export default function TodayTab({ payload, savePayload }) {
               borderRadius: "8px", cursor: "pointer", lineHeight: 1
             }}
           >
-            🌅
+            🌅<span className="tool-btn-text">Ritual</span>
           </button>
 
           {/* Brain Dump */}
@@ -624,7 +624,7 @@ export default function TodayTab({ payload, savePayload }) {
               border: "1px solid var(--border)", borderRadius: "8px", cursor: "pointer", lineHeight: 1
             }}
           >
-            📝
+            📝<span className="tool-btn-text">Dump</span>
             {dumpCount > 0 && (
               <span style={{ position: "absolute", top: "-5px", right: "-5px", background: "var(--accent)", color: "var(--btn-text, #fff)", fontSize: "8px", fontWeight: "800", borderRadius: "6px", padding: "1px 4px", lineHeight: 1.3 }}>
                 {dumpCount}
@@ -635,13 +635,13 @@ export default function TodayTab({ payload, savePayload }) {
           {/* Rescue */}
           <button onClick={openRescueMode} title="Rescue Mode"
             style={{ fontSize: "15px", padding: "5px 9px", background: "rgba(248,113,113,0.12)", border: "1px solid var(--danger)", borderRadius: "8px", color: "var(--danger)", cursor: "pointer", lineHeight: 1 }}>
-            🚨
+            🚨<span className="tool-btn-text">Rescue</span>
           </button>
 
           {/* Bad Day Reset */}
           <button onClick={handleBadDayReset} title="Bad Day Reset"
             style={{ fontSize: "15px", padding: "5px 9px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-secondary)", cursor: "pointer", lineHeight: 1 }}>
-            🌪️
+            🌪️<span className="tool-btn-text">Reset</span>
           </button>
         </div>
 
@@ -784,6 +784,9 @@ export default function TodayTab({ payload, savePayload }) {
           </div>
         )}
       </section>
+      <div className="mobile-tools-legend" style={{ display: "none", justifyContent: "center", gap: "8px", fontSize: "10.5px", color: "var(--text-muted)", marginTop: "4px", padding: "0 6px" }}>
+        <span>🌅 Ritual</span> · <span>📝 Dump</span> · <span>🚨 Rescue</span> · <span>🌪️ Reset</span>
+      </div>
 
       {/* ── Undo Delete Toast */}
       {undoTask && (
