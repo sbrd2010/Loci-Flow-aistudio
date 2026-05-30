@@ -28,9 +28,13 @@ export default function App() {
 
   // Handle redirect sign-in result (iOS Safari / mobile fallback)
   useEffect(() => {
+    const redirectPending = localStorage.getItem("loci_redirect_pending");
+    localStorage.removeItem("loci_redirect_pending");
     getRedirectResult(auth).catch((err) => {
-      if (err?.code && err.code !== "auth/no-current-user") {
-        setSignInError("Sign-in was interrupted. Please try again.");
+      // Only surface the error if we actually initiated a redirect this session
+      if (redirectPending && err?.code) {
+        console.error("Redirect sign-in failed:", err.code, err.message);
+        setSignInError(`Sign-in failed (${err.code}). Please try again.`);
       }
     });
   }, []);
@@ -40,13 +44,14 @@ export default function App() {
     setSignInError("");
     const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
     if (isMobile) {
+      localStorage.setItem("loci_redirect_pending", "1");
       signInWithRedirect(auth, new GoogleAuthProvider());
       return;
     }
     signInWithPopup(auth, new GoogleAuthProvider()).catch((err) => {
       const intentional = err.code === "auth/popup-closed-by-user" || err.code === "auth/cancelled-popup-request";
       if (intentional) { setSigningIn(false); return; }
-      // Any other popup failure: fall back to redirect
+      localStorage.setItem("loci_redirect_pending", "1");
       signInWithRedirect(auth, new GoogleAuthProvider());
     });
   };
