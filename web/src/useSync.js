@@ -38,7 +38,15 @@ export function useSync(uid, email) {
     setError(null);
     const userRef = ref(db, dbRefPath);
 
+    // If Firebase RTDB doesn't respond within 12s (e.g. Brave blocking WebSockets,
+    // offline, or slow network) surface a retryable error instead of hanging forever.
+    const connectTimeoutId = setTimeout(() => {
+      setError("Could not reach sync server. Check your connection, disable browser shields, and reload.");
+      setLoading(false);
+    }, 12000);
+
     const unsubscribe = onValue(userRef, (snapshot) => {
+      clearTimeout(connectTimeoutId);
       const data = snapshot.val();
 
       if (!timeoutRef.current) {
@@ -181,12 +189,14 @@ export function useSync(uid, email) {
       }
       setLoading(false);
     }, (err) => {
+      clearTimeout(connectTimeoutId);
       console.error("Error reading RTDB payload:", err);
       setError("Could not connect to sync server. Check your connection and reload.");
       setLoading(false);
     });
 
     return () => {
+      clearTimeout(connectTimeoutId);
       unsubscribe();
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
