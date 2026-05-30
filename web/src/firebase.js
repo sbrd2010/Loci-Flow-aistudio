@@ -1,10 +1,6 @@
 import { initializeApp } from "firebase/app";
-import { getDatabase, forceLongPolling } from "firebase/database";
+import { getDatabase } from "firebase/database";
 import { getAuth } from "firebase/auth";
-
-// Use HTTP long-polling instead of WebSockets so RTDB works even when
-// WebSockets are blocked (Brave shields, corporate firewalls, some 5G carriers).
-forceLongPolling();
 
 const firebaseConfig = {
   apiKey: "AIzaSyDKCF2WcJk9kI1YovHBTPrWj2QSdmrjUx0",
