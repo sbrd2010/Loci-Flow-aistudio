@@ -2633,3 +2633,27 @@ html[data-theme="glassy"] .theme-dropdown {
 @media (max-width: 640px) {
   .reorder-btns { display: none; }
 }
+
+
+/* Habits & Mental Tools Mobile/Desktop responsive optimizations */
+.tool-btn-text {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .tool-btn-text {
+    display: inline;
+    margin-left: 6px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+@media (max-width: 640px) {
+  .habits-tools-row {
+    padding-right: 60px !important; /* Clears floating action button (+ sign) zone */
+  }
+  .mobile-tools-legend {
+    display: flex !important;
+  }
+}
