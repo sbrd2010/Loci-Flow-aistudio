@@ -7,6 +7,7 @@ export default function TodayTab({ payload, savePayload }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [headerExpanded, setHeaderExpanded] = useState(false);
 
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerSecondsLeft, setTimerSecondsLeft] = useState((config.pomodoroDurationMinutes || 25) * 60);
@@ -384,7 +385,7 @@ export default function TodayTab({ payload, savePayload }) {
         </div>
       )}
 
-      {/* ── Day header: Greeting · Clock · Timeline · Quote */}
+      {/* ── Day header: style switchable via Settings → Header Style ── */}
       {(() => {
         const startHour = config.dayStartHour ?? 7;
         const endHour = config.dayEndHour ?? 26;
@@ -396,15 +397,86 @@ export default function TodayTab({ payload, savePayload }) {
         const nowHour = new Date().getHours();
         const greeting = nowHour < 12 ? "Good morning" : nowHour < 17 ? "Good afternoon" : "Good evening";
         const firstName = (config.userName || "").split(" ")[0];
+        const headerStyle = config.headerStyle || "full";
+
+        // Option C: Compact strip — tap ▾ to reveal full details
+        if (headerStyle === "compact") {
+          return (
+            <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "8px 14px" }}>
+              <div onClick={() => setHeaderExpanded(e => !e)} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", userSelect: "none" }}>
+                <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em", flexShrink: 0 }}>
+                  {currentTimeStr}
+                </span>
+                <div style={{ flex: 1, height: "6px", background: "var(--bg-secondary)", borderRadius: "3px", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "3px", transition: "width 1s linear" }} />
+                </div>
+                <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600", flexShrink: 0 }}>{currentDateStr}</span>
+                <span style={{ fontSize: "12px", color: "var(--text-muted)", flexShrink: 0 }}>{headerExpanded ? "▴" : "▾"}</span>
+              </div>
+              {headerExpanded && (
+                <div style={{ marginTop: "10px" }}>
+                  {firstName && (
+                    <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "8px" }}>
+                      {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
+                    </div>
+                  )}
+                  <div style={{ height: "8px", background: "var(--bg-secondary)", borderRadius: "4px", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "4px", transition: "width 1s linear" }} />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", marginBottom: "8px" }}>
+                    {timeLabels.map((label, i) => (
+                      <span key={i} style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{label}</span>
+                    ))}
+                  </div>
+                  <p style={{ margin: 0, fontSize: "12px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
+                    "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
+                  </p>
+                </div>
+              )}
+            </section>
+          );
+        }
+
+        // Option D: Frameless bar — no card border/padding, all info on two rows
+        if (headerStyle === "frameless") {
+          return (
+            <div style={{ padding: "4px 2px 8px 2px" }}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "6px" }}>
+                {firstName ? (
+                  <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>
+                    {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
+                  </span>
+                ) : (
+                  <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{currentTimeStr}</span>
+                )}
+                <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
+                  {firstName && <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{currentTimeStr}</span>}
+                  <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>{currentDateStr}</span>
+                </div>
+              </div>
+              <div style={{ height: "6px", background: "var(--bg-secondary)", borderRadius: "3px", overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "3px", transition: "width 1s linear" }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "3px", marginBottom: "6px" }}>
+                {timeLabels.map((label, i) => (
+                  <span key={i} style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{label}</span>
+                ))}
+              </div>
+              <p style={{ margin: 0, fontSize: "11px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.4, fontWeight: "600" }}>
+                "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "10px" }}>— {currentQuote.author}</span>
+              </p>
+            </div>
+          );
+        }
+
+        // Default ("full"): original 4-row card
         return (
           <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px 14px" }}>
-            {/* Row 0: Greeting */}
             {firstName ? (
               <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "8px", letterSpacing: "-0.01em" }}>
                 {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
               </div>
             ) : null}
-            {/* Row 1: Clock + Date */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "10px" }}>
               <div style={{ fontSize: "18px", fontWeight: "800", color: "var(--text-primary)", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
                 {currentTimeStr}
@@ -413,17 +485,14 @@ export default function TodayTab({ payload, savePayload }) {
                 {currentDateStr}
               </div>
             </div>
-            {/* Row 2: Timeline bar */}
             <div style={{ height: "8px", background: "var(--bg-secondary)", borderRadius: "4px", overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "4px", transition: "width 1s linear" }} />
             </div>
-            {/* Row 3: Time labels — 3 for short day, 5 for long */}
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", marginBottom: "10px" }}>
               {timeLabels.map((label, i) => (
                 <span key={i} style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{label}</span>
               ))}
             </div>
-            {/* Row 4: Motivation quote */}
             <p style={{ margin: 0, fontSize: "12px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
               "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
             </p>

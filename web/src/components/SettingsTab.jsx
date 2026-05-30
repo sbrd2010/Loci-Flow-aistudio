@@ -24,6 +24,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
   const [editedChallenge, setEditedChallenge] = useState(config.challengeType || "starting");
   const [editedDayStart, setEditedDayStart] = useState(config.dayStartHour ?? 7);
   const [editedDayEnd, setEditedDayEnd] = useState(config.dayEndHour ?? 26);
+  const [editedHeaderStyle, setEditedHeaderStyle] = useState(config.headerStyle || "full");
 
   useEffect(() => {
     setEditedName(config.userName || "");
@@ -34,9 +35,10 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
     setEditedChallenge(config.challengeType || "starting");
     setEditedDayStart(config.dayStartHour ?? 7);
     setEditedDayEnd(config.dayEndHour ?? 26);
+    setEditedHeaderStyle(config.headerStyle || "full");
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
       config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType,
-      config.dayStartHour, config.dayEndHour]);
+      config.dayStartHour, config.dayEndHour, config.headerStyle]);
 
   const challengeOptions = [
     { key: "starting",   label: "Overcoming Inertia",    desc: "Can't get started on tasks.", icon: "🏁" },
@@ -67,6 +69,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
         eveningGuardWindowActive: editedEveningGuard,
         dayStartHour: editedDayStart,
         dayEndHour: editedDayEnd,
+        headerStyle: editedHeaderStyle,
         lastUpdated: Date.now()
       }
     });
@@ -258,6 +261,29 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
                   return <option key={h} value={h}>{labels[h]}</option>;
                 })}
               </select>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Home Header Style</label>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
+              {[
+                { key: "full", label: "Full card" },
+                { key: "compact", label: "Compact (tap)" },
+                { key: "frameless", label: "Frameless" }
+              ].map(({ key, label }) => (
+                <button key={key} type="button"
+                  onClick={() => setEditedHeaderStyle(key)}
+                  style={{
+                    padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700",
+                    cursor: "pointer", transition: "all 0.15s",
+                    background: editedHeaderStyle === key ? "var(--accent)" : "var(--bg-secondary)",
+                    color: editedHeaderStyle === key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
+                    border: editedHeaderStyle === key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
+                  }}>
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
 
