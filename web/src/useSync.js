@@ -140,6 +140,7 @@ export function useSync(uid, email) {
               isLowEnergyMode: false,
               isOnboardingCompleted: false,
               eveningGuardWindowActive: true,
+              roadmapStyle: "compact",
               lastUpdated: Date.now()
             },
             contributions: [
