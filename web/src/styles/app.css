@@ -507,6 +507,14 @@ h1, h2, h3, h4, h5, h6 {
   -webkit-text-fill-color: transparent;
 }
 
+/* Subtitle must override the gradient rule above — it's a plain muted label */
+.app-brand .header-subtitle {
+  background: none;
+  -webkit-background-clip: unset;
+  -webkit-text-fill-color: unset;
+  color: var(--text-muted);
+}
+
 .header-right {
   display: flex;
   align-items: center;
