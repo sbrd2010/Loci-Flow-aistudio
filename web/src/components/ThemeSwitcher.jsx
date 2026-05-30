@@ -23,15 +23,20 @@ export default function ThemeSwitcher({ theme, onThemeChange }) {
   const [open, setOpen] = useState(false);
   const current = THEMES.find(t => t.id === theme) || THEMES[0];
 
-  // Close dropdown on scroll or touch-scroll so it doesn't stay pinned on mobile
+  // Close on page scroll or on touchmove OUTSIDE the dropdown.
+  // Without the inside-check, scrolling the theme list itself would close it on mobile.
   useEffect(() => {
     if (!open) return;
-    const close = () => setOpen(false);
-    window.addEventListener("scroll", close, { passive: true });
-    window.addEventListener("touchmove", close, { passive: true });
+    const closeOnScroll = () => setOpen(false);
+    const closeOnTouchMove = (e) => {
+      if (e.target && e.target.closest && e.target.closest(".theme-dropdown")) return;
+      setOpen(false);
+    };
+    window.addEventListener("scroll", closeOnScroll, { passive: true });
+    window.addEventListener("touchmove", closeOnTouchMove, { passive: true });
     return () => {
-      window.removeEventListener("scroll", close);
-      window.removeEventListener("touchmove", close);
+      window.removeEventListener("scroll", closeOnScroll);
+      window.removeEventListener("touchmove", closeOnTouchMove);
     };
   }, [open]);
 
