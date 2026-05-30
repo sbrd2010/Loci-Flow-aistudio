@@ -5,99 +5,54 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   const columns = [
-    { key: "week", label: "This Week" },
-    { key: "month", label: "Month" },
-    { key: "quarter", label: "Quarter" },
-    { key: "halfyear", label: "6 Months" },
-    { key: "office", label: "Work" }
+    { key: "week",     label: "This Week",  shortLabel: "Week"  },
+    { key: "month",    label: "Month",      shortLabel: "Month" },
+    { key: "quarter",  label: "Quarter",    shortLabel: "Qtr"   },
+    { key: "halfyear", label: "6 Months",   shortLabel: "6M"    },
+    { key: "office",   label: "Work",       shortLabel: "Work"  }
   ];
 
-  // Active task selected for overlay details menu
   const [selectedTask, setSelectedTask] = useState(null);
-
-  // Mobile accordion: which column is expanded
+  // "week" by default; "inbox" when brain dump pill is selected on mobile
   const [expandedCol, setExpandedCol] = useState("week");
-
   const [confirmDialog, setConfirmDialog] = useState(null);
 
-  // Helper: Format date as YYYY-MM-DD
   const getTodayDateString = () => {
     const d = new Date();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${d.getFullYear()}-${month}-${day}`;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
 
-  // Update contribution count inside the payload
   const incrementContribution = (newContributions, dateStr) => {
     const index = newContributions.findIndex((c) => c.dateString === dateStr);
     const uid = payload.userId || payload.config?.userId || "";
     const compositeKey = `${uid}_${dateStr}`;
     if (index === -1) {
-      newContributions.push({
-        compositeKey,
-        userId: uid,
-        dateString: dateStr,
-        count: 1,
-        lastUpdated: Date.now()
-      });
+      newContributions.push({ compositeKey, userId: uid, dateString: dateStr, count: 1, lastUpdated: Date.now() });
     } else {
-      newContributions[index] = {
-        ...newContributions[index],
-        count: newContributions[index].count + 1,
-        lastUpdated: Date.now()
-      };
+      newContributions[index] = { ...newContributions[index], count: newContributions[index].count + 1, lastUpdated: Date.now() };
     }
     return newContributions;
   };
 
   const handleMoveToToday = (task) => {
-    // 1. Calculate new orderIndex for Today tasks
     const todayTasksCount = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted).length;
-
-    const updatedTasks = tasks.map((t) => {
-      if (t.uuid === task.uuid) {
-        return {
-          ...t,
-          horizonLevel: "today",
-          orderIndex: todayTasksCount,
-          lastUpdated: Date.now()
-        };
-      }
-      return t;
-    });
-
     savePayload({
       ...payload,
-      tasks: updatedTasks
+      tasks: tasks.map((t) =>
+        t.uuid === task.uuid ? { ...t, horizonLevel: "today", orderIndex: todayTasksCount, lastUpdated: Date.now() } : t
+      )
     });
     setSelectedTask(null);
   };
 
   const handleMarkDone = (task) => {
     const todayDateStr = getTodayDateString();
-
-    const updatedTasks = tasks.map((t) => {
-      if (t.uuid === task.uuid) {
-        return {
-          ...t,
-          isCompleted: true,
-          isNowFocus: false,
-          dateCompletedString: todayDateStr,
-          lastUpdated: Date.now()
-        };
-      }
-      return t;
-    });
-
     savePayload({
       ...payload,
-      tasks: updatedTasks,
-      config: {
-        ...config,
-        totalXp: (Number(config.totalXp) || 0) + 100,
-        lastUpdated: Date.now()
-      },
+      tasks: tasks.map((t) =>
+        t.uuid === task.uuid ? { ...t, isCompleted: true, isNowFocus: false, dateCompletedString: todayDateStr, lastUpdated: Date.now() } : t
+      ),
+      config: { ...config, totalXp: (Number(config.totalXp) || 0) + 100, lastUpdated: Date.now() },
       contributions: incrementContribution([...contributions], todayDateStr)
     });
     setSelectedTask(null);
@@ -106,8 +61,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
   const handleTriageBrainDump = (item, horizon) => {
     const userId = payload.userId || payload.config?.userId || "";
     const freshTask = {
-      id: Date.now(),
-      userId,
+      id: Date.now(), userId,
       uuid: crypto.randomUUID(),
       title: item.text,
       concreteStep: "Do first tiny step",
@@ -116,16 +70,11 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
       category: "Personal",
       timeEstimateMinutes: 25,
       deadlineTimestamp: null,
-      isCompleted: false,
-      isParked: false,
-      isNowFocus: false,
+      isCompleted: false, isParked: false, isNowFocus: false,
       orderIndex: tasks.filter(t => t.horizonLevel === horizon && !t.isDeleted).length,
-      dateCompletedString: null,
-      isDeleted: false,
-      lastUpdated: Date.now()
+      dateCompletedString: null, isDeleted: false, lastUpdated: Date.now()
     };
-    const updatedDump = (payload.brainDump || []).filter(d => d.id !== item.id);
-    savePayload({ ...payload, tasks: [...tasks, freshTask], brainDump: updatedDump });
+    savePayload({ ...payload, tasks: [...tasks, freshTask], brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) });
   };
 
   const handleDeleteBrainDump = (item) => {
@@ -137,10 +86,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
       message: `Delete "${task.title}"?\n\nThis cannot be undone.`,
       confirmLabel: "Delete", cancelLabel: "Cancel", danger: true,
       onConfirm: () => {
-        const updatedTasks = tasks.map((t) =>
-          t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t
-        );
-        savePayload({ ...payload, tasks: updatedTasks });
+        savePayload({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t) });
         setSelectedTask(null);
         setConfirmDialog(null);
       },
@@ -152,43 +98,165 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
     setConfirmDialog({
       message: `Clear all ${(payload.brainDump || []).length} brain dump items?\n\nThis cannot be undone.`,
       confirmLabel: "Clear all", cancelLabel: "Cancel", danger: true,
-      onConfirm: () => {
-        savePayload({ ...payload, brainDump: [] });
-        setConfirmDialog(null);
-      },
+      onConfirm: () => { savePayload({ ...payload, brainDump: [] }); setConfirmDialog(null); },
       onCancel: () => setConfirmDialog(null)
     });
   };
 
+  // Shared task list renderer used by both mobile panel and desktop column
+  const renderTaskList = (colKey) => {
+    const colTasks = tasks
+      .filter(t => t.horizonLevel === colKey && !t.isDeleted && !t.isCompleted)
+      .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+    if (colTasks.length === 0) {
+      return <div className="roadmap-empty-state">No tasks here. Tap + to add one.</div>;
+    }
+    return colTasks.map(task => (
+      <div key={task.uuid} className="roadmap-task-card" onClick={() => setSelectedTask(task)}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "6px" }}>
+          <span className="roadmap-task-title">{task.title}</span>
+          <span className={`priority-badge ${task.priority.toLowerCase()}`} style={{ flexShrink: 0 }}>
+            {task.priority}
+          </span>
+        </div>
+        {task.concreteStep && (
+          <span className="roadmap-task-step">⚡ {task.concreteStep}</span>
+        )}
+      </div>
+    ));
+  };
+
+  const brainDump = payload.brainDump || [];
+  const currentCol = columns.find(c => c.key === expandedCol);
+
   return (
     <div className="roadmap-container">
-      {(payload.brainDump || []).length > 0 && (
-        <section className="card" style={{marginBottom:"4px"}}>
-          <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"4px"}}>
-            <h2 style={{fontSize:"15px", fontWeight:"800", fontFamily:"var(--font-display)", color:"var(--text-primary)", margin:0}}>
+      <div>
+        <h2 className="roadmap-board-title">Horizon Planning</h2>
+        <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+          Map your goals strategically across time horizons. Tap a card to manage.
+        </p>
+      </div>
+
+      {/* ── MOBILE: Horizontal pill nav + single content panel ── */}
+      <div className="mobile-horizon-nav">
+        <div className="horizon-pills" role="tablist">
+          {/* Inbox pill — only shown when there are brain dump items */}
+          {brainDump.length > 0 && (
+            <button
+              role="tab"
+              className={`horizon-pill${expandedCol === "inbox" ? " active" : ""}`}
+              onClick={() => setExpandedCol("inbox")}
+            >
+              📥 Inbox
+              <span className="pill-badge">{brainDump.length}</span>
+            </button>
+          )}
+          {columns.map(col => {
+            const count = tasks.filter(t => t.horizonLevel === col.key && !t.isDeleted && !t.isCompleted).length;
+            return (
+              <button
+                key={col.key}
+                role="tab"
+                className={`horizon-pill${expandedCol === col.key ? " active" : ""}`}
+                onClick={() => setExpandedCol(col.key)}
+              >
+                {col.shortLabel}
+                {count > 0 && <span className="pill-badge">{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Content panel */}
+        <div className="horizon-panel">
+          {/* Panel header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)" }}>
+              {expandedCol === "inbox" ? "📥 Brain Dump Inbox" : currentCol?.label || ""}
+            </span>
+            {expandedCol !== "inbox" && (
+              <button
+                className="column-add-btn"
+                onClick={() => onOpenAddTask(expandedCol)}
+                style={{ width: "28px", height: "28px", fontSize: "18px", borderRadius: "50%", flexShrink: 0 }}
+                title={`Add task to ${currentCol?.label}`}
+              >
+                +
+              </button>
+            )}
+            {expandedCol === "inbox" && brainDump.length > 0 && (
+              <button onClick={handleClearAllBrainDump}
+                style={{ fontSize: "11px", padding: "4px 10px", background: "none", border: "1px solid var(--danger)", borderRadius: "var(--radius-sm)", color: "var(--danger)", cursor: "pointer", fontWeight: "700" }}>
+                Clear all
+              </button>
+            )}
+          </div>
+
+          {/* Panel body */}
+          {expandedCol === "inbox" ? (
+            brainDump.length === 0 ? (
+              <div className="roadmap-empty-state">
+                Brain dump is empty. Use the 📝 button on the Home tab to capture thoughts.
+              </div>
+            ) : (
+              <>
+                <p style={{ fontSize: "11.5px", color: brainDump.length >= 50 ? "var(--danger)" : "var(--text-secondary)", fontWeight: brainDump.length >= 50 ? "700" : "400" }}>
+                  {brainDump.length}/50 {brainDump.length >= 50 ? "— inbox full! Triage before adding more." : `item${brainDump.length !== 1 ? "s" : ""}. Send each to the right horizon.`}
+                </p>
+                {brainDump.map(item => (
+                  <div key={item.id} style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px" }}>
+                    <p style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "8px" }}>{item.text}</p>
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                      {[["today","Today"],["week","Week"],["month","Month"],["quarter","Qtr"]].map(([h, label]) => (
+                        <button key={h} className="btn" onClick={() => handleTriageBrainDump(item, h)}
+                          style={{ fontSize: "11px", padding: "5px 10px", background: "var(--bg-card)", color: "var(--accent)", border: "1px solid var(--accent)" }}>
+                          → {label}
+                        </button>
+                      ))}
+                      <button onClick={() => handleDeleteBrainDump(item)}
+                        style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--danger)", cursor: "pointer" }}>
+                        🗑
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )
+          ) : (
+            renderTaskList(expandedCol)
+          )}
+        </div>
+      </div>
+
+      {/* ── DESKTOP: Brain Dump Inbox ── */}
+      {brainDump.length > 0 && (
+        <section className="card desktop-only" style={{ marginBottom: "4px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: "800", fontFamily: "var(--font-display)", color: "var(--text-primary)", margin: 0 }}>
               📥 Brain Dump Inbox
             </h2>
             <button onClick={handleClearAllBrainDump}
-              style={{fontSize:"11px", padding:"4px 10px", background:"none", border:"1px solid var(--border)", borderRadius:"var(--radius-sm)", color:"var(--danger)", cursor:"pointer", fontWeight:"700"}}>
+              style={{ fontSize: "11px", padding: "4px 10px", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--danger)", cursor: "pointer", fontWeight: "700" }}>
               Clear all
             </button>
           </div>
-          <p style={{fontSize:"11.5px", color:(payload.brainDump || []).length >= 50 ? "var(--danger)" : "var(--text-secondary)", marginBottom:"12px", fontWeight:(payload.brainDump || []).length >= 50 ? "700" : "400"}}>
-            {(payload.brainDump || []).length}/50 {(payload.brainDump || []).length >= 50 ? "— inbox full! Triage before adding more." : `unprocessed idea${(payload.brainDump || []).length !== 1 ? "s" : ""}. Send each to the right horizon.`}
+          <p style={{ fontSize: "11.5px", color: brainDump.length >= 50 ? "var(--danger)" : "var(--text-secondary)", marginBottom: "12px", fontWeight: brainDump.length >= 50 ? "700" : "400" }}>
+            {brainDump.length}/50 {brainDump.length >= 50 ? "— inbox full! Triage before adding more." : `unprocessed idea${brainDump.length !== 1 ? "s" : ""}. Send each to the right horizon.`}
           </p>
-          <div style={{display:"flex", flexDirection:"column", gap:"8px"}}>
-            {(payload.brainDump || []).map(item => (
-              <div key={item.id} style={{background:"var(--bg-secondary)", border:"1px solid var(--border)", borderRadius:"var(--radius-sm)", padding:"10px 12px"}}>
-                <p style={{fontSize:"13px", fontWeight:"600", color:"var(--text-primary)", marginBottom:"8px"}}>{item.text}</p>
-                <div style={{display:"flex", gap:"6px", flexWrap:"wrap"}}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {brainDump.map(item => (
+              <div key={item.id} style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px" }}>
+                <p style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "8px" }}>{item.text}</p>
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                   {[["today","→ Today"],["week","→ Week"],["month","→ Month"],["quarter","→ Quarter"]].map(([h, label]) => (
                     <button key={h} className="btn" onClick={() => handleTriageBrainDump(item, h)}
-                      style={{fontSize:"11px", padding:"5px 10px", background:"var(--bg-card)", color:"var(--accent)", border:"1px solid var(--accent)"}}>
+                      style={{ fontSize: "11px", padding: "5px 10px", background: "var(--bg-card)", color: "var(--accent)", border: "1px solid var(--accent)" }}>
                       {label}
                     </button>
                   ))}
                   <button onClick={() => handleDeleteBrainDump(item)}
-                    style={{fontSize:"11px", padding:"5px 10px", background:"none", border:"1px solid var(--border)", borderRadius:"var(--radius-sm)", color:"var(--danger)", cursor:"pointer"}}>
+                    style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--danger)", cursor: "pointer" }}>
                     🗑
                   </button>
                 </div>
@@ -198,22 +266,13 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
         </section>
       )}
 
-      <div>
-        <h2 className="roadmap-board-title">Horizon Planning</h2>
-        <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-          Map your goals strategically across time-horizons. Tap a card to edit.
-        </p>
-      </div>
-
-      <div className="roadmap-scroll-container">
+      {/* ── DESKTOP: Horizon grid columns ── */}
+      <div className="roadmap-scroll-container desktop-only">
         {columns.map((col) => {
           const colTasks = tasks
             .filter((t) => t.horizonLevel === col.key && !t.isDeleted && !t.isCompleted)
-            // Fix #19: sort by orderIndex for consistent display order
             .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
-
           const isExpanded = expandedCol === col.key;
-
           return (
             <div key={col.key} className={`roadmap-column${isExpanded ? " expanded" : ""}`}>
               <div
@@ -234,19 +293,12 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
                   <span style={{ fontSize: "18px", color: "var(--text-primary)", fontWeight: "700", transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
                 </div>
               </div>
-
               <div className={`column-tasks-list${isExpanded ? " col-expanded" : " col-collapsed"}`}>
                 {colTasks.length === 0 ? (
-                  <div className="roadmap-empty-state">
-                    No tasks here. Add some via + button.
-                  </div>
+                  <div className="roadmap-empty-state">No tasks here. Add some via + button.</div>
                 ) : (
                   colTasks.map((task) => (
-                    <div
-                      key={task.uuid}
-                      className="roadmap-task-card"
-                      onClick={() => setSelectedTask(task)}
-                    >
+                    <div key={task.uuid} className="roadmap-task-card" onClick={() => setSelectedTask(task)}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "6px" }}>
                         <span className="roadmap-task-title">{task.title}</span>
                         <span className={`priority-badge ${task.priority.toLowerCase()}`} style={{ flexShrink: 0 }}>
@@ -265,7 +317,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
         })}
       </div>
 
-      {/* Task Interaction Overlay Menu Dialog */}
+      {/* Task management overlay */}
       {selectedTask && (
         <div className="modal-overlay" onClick={() => setSelectedTask(null)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "360px" }}>
@@ -285,22 +337,14 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
                   Micro step: {selectedTask.concreteStep}
                 </p>
               </div>
-
               <button className="btn" onClick={() => handleMoveToToday(selectedTask)}>
                 🚀 Move to Today
               </button>
-              <button
-                className="btn"
-                onClick={() => handleMarkDone(selectedTask)}
-                style={{ background: "var(--success)" }}
-              >
+              <button className="btn" onClick={() => handleMarkDone(selectedTask)} style={{ background: "var(--success)" }}>
                 ✓ Mark Done (+100 XP)
               </button>
-              <button
-                className="btn btn-cancel"
-                onClick={() => handleDelete(selectedTask)}
-                style={{ color: "var(--danger)", border: "1.5px solid var(--border)" }}
-              >
+              <button className="btn btn-cancel" onClick={() => handleDelete(selectedTask)}
+                style={{ color: "var(--danger)", border: "1.5px solid var(--border)" }}>
                 🗑 Delete Task
               </button>
             </div>
