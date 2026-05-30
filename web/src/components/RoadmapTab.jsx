@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import ConfirmDialog from "./ConfirmDialog";
+import { safeUUID } from "../utils/uuid";
 
 export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
@@ -62,7 +63,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
     const userId = payload.userId || payload.config?.userId || "";
     const freshTask = {
       id: Date.now(), userId,
-      uuid: crypto.randomUUID(),
+      uuid: safeUUID(),
       title: item.text,
       concreteStep: "Do first tiny step",
       horizonLevel: horizon,
