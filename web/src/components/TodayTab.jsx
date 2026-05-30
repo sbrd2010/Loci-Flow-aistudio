@@ -118,7 +118,7 @@ export default function TodayTab({ payload, savePayload }) {
     const h24 = h % 24;
     const isAM = h24 < 12 || h24 === 0;
     const displayH = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
-    return `${displayH}${isAM ? "a" : "p"}`;
+    return `${displayH}${isAM ? "am" : "pm"}`;
   };
 
   const updateTimeline = () => {

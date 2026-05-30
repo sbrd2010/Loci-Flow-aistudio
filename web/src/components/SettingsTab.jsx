@@ -456,9 +456,9 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
             className="btn"
             style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
             onClick={() => setConfirmDialog({
-              message: "Reset 7-day tracking data?\n\nThis clears all contribution history (the dots on the Home tab). Cannot be undone.",
+              message: "Reset 7-day tracking data?\n\nThis clears the dots AND the streak counter on the Home tab. Cannot be undone.",
               confirmLabel: "Reset tracking", cancelLabel: "Cancel",
-              onConfirm: () => { savePayload({ ...payload, contributions: [] }); setConfirmDialog(null); },
+              onConfirm: () => { savePayload({ ...payload, contributions: [], config: { ...config, visitStreakCount: 0, lastUpdated: Date.now() } }); setConfirmDialog(null); },
               onCancel: () => setConfirmDialog(null)
             })}
           >
