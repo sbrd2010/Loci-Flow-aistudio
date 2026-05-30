@@ -3,7 +3,8 @@ import TaskRow from "./TaskRow";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
-import { getAIKeys } from "../utils/aiCall";
+import { getAIKeys, callAI } from "../utils/aiCall";
+import { celebrate } from "../utils/celebrations";
 
 export default function TodayTab({ payload, savePayload }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
@@ -192,6 +193,8 @@ export default function TodayTab({ payload, savePayload }) {
     else { setShowRescue(false); setRescueStepIndex(0); }
   };
 
+  const [breakdownLoadingUuid, setBreakdownLoadingUuid] = useState(null);
+
   const [brainDumpText, setBrainDumpText] = useState("");
   const [editingTaskUuid, setEditingTaskUuid] = useState(null);
   const [editFields, setEditFields] = useState({ title: "", concreteStep: "", priority: "P2" });
@@ -231,6 +234,7 @@ export default function TodayTab({ payload, savePayload }) {
     const updatedTasks = tasks.map((t) =>
       t.uuid === task.uuid ? { ...t, isCompleted, isNowFocus: false, dateCompletedString: isCompleted ? todayDateStr : null, lastUpdated: Date.now() } : t
     );
+    if (isCompleted) celebrate();
     let nextXp = Number(config.totalXp) || 0;
     let nextContributions = [...contributions];
     if (isCompleted) {
@@ -278,6 +282,7 @@ export default function TodayTab({ payload, savePayload }) {
         confirmLabel: "Done! +120 XP",
         cancelLabel: "+50 XP, keep going",
         onConfirm: () => {
+          celebrate();
           savePayload({
             ...payload,
             tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isCompleted: true, isNowFocus: false, dateCompletedString: todayDateStr, lastUpdated: Date.now() } : t),
@@ -309,6 +314,40 @@ export default function TodayTab({ payload, savePayload }) {
     if (!editFields.title.trim()) return;
     savePayload({ ...payload, tasks: tasks.map(t => t.uuid === editingTaskUuid ? { ...t, title: editFields.title.trim(), concreteStep: editFields.concreteStep.trim(), priority: editFields.priority, lastUpdated: Date.now() } : t) });
     setEditingTaskUuid(null);
+  };
+
+  const handleBreakdown = async (task) => {
+    setBreakdownLoadingUuid(task.uuid);
+    const { groqKey, geminiKey } = getAIKeys();
+    try {
+      const raw = await callAI({
+        groqKey, geminiKey,
+        systemPrompt: "You are an ADHD productivity coach. Respond ONLY with a valid JSON array of strings, no markdown, no explanation.",
+        messages: [{
+          role: "user",
+          content: `Break this task into 3–5 tiny, concrete micro-steps that each take under 5 minutes and feel easy to start.\n\nTask: "${task.title}"\nConcrete step: "${task.concreteStep || ""}"\nTime estimate: ${task.timeEstimateMinutes || 25} minutes\n\nReturn ONLY a JSON array of short strings (each under 12 words). Example: ["Open the document", "Write one sentence", "Save the file"]`
+        }],
+        maxTokens: 200
+      });
+      const cleaned = raw.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
+      const steps = JSON.parse(cleaned);
+      if (!Array.isArray(steps) || steps.length === 0) throw new Error("bad response");
+      const subSteps = steps.slice(0, 5).map(text => ({ id: safeUUID(), text: String(text).trim(), done: false }));
+      savePayload({ ...payload, tasks: tasks.map(t => t.uuid === task.uuid ? { ...t, subSteps, lastUpdated: Date.now() } : t) });
+    } catch (_) {
+      // silently fail — user can retry via menu
+    } finally {
+      setBreakdownLoadingUuid(null);
+    }
+  };
+
+  const handleSubStepToggle = (task, stepId) => {
+    const updatedTasks = tasks.map(t => {
+      if (t.uuid !== task.uuid) return t;
+      const newSubSteps = (t.subSteps || []).map(s => s.id === stepId ? { ...s, done: !s.done } : s);
+      return { ...t, subSteps: newSubSteps, lastUpdated: Date.now() };
+    });
+    savePayload({ ...payload, tasks: updatedTasks });
   };
 
   const handleMoveTask = (task, direction) => {
@@ -670,6 +709,9 @@ export default function TodayTab({ payload, savePayload }) {
                     onEdit={handleStartEdit}
                     onMoveUp={idx > 0 ? t => handleMoveTask(t, "up") : undefined}
                     onMoveDown={idx < remainingTasks.length - 1 ? t => handleMoveTask(t, "down") : undefined}
+                    onBreakdown={handleBreakdown}
+                    onSubStepToggle={handleSubStepToggle}
+                    isBreakingDown={breakdownLoadingUuid === task.uuid}
                   />
                 )
               ))}
