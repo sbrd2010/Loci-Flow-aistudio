@@ -428,9 +428,6 @@ export default function TodayTab({ payload, savePayload }) {
               "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
             </p>
           </section>
-      <div className="mobile-tools-legend" style={{ display: "none", justifyContent: "center", gap: "8px", fontSize: "10.5px", color: "var(--text-muted)", marginTop: "4px", padding: "0 6px" }}>
-        <span>ðŸŒ… Ritual</span> Â· <span>ðŸ“ Dump</span> Â· <span>ðŸš¨ Rescue</span> Â· <span>ðŸŒªï¸ Reset</span>
-      </div>
         );
       })()}
 
@@ -535,9 +532,6 @@ export default function TodayTab({ payload, savePayload }) {
           )}
         </div>
       </section>
-      <div className="mobile-tools-legend" style={{ display: "none", justifyContent: "center", gap: "8px", fontSize: "10.5px", color: "var(--text-muted)", marginTop: "4px", padding: "0 6px" }}>
-        <span>ðŸŒ… Ritual</span> Â· <span>ðŸ“ Dump</span> Â· <span>ðŸš¨ Rescue</span> Â· <span>ðŸŒªï¸ Reset</span>
-      </div>
 
       {/* ── Active Focus Block — only when a task is pinned */}
       {activeTask && (
@@ -576,9 +570,6 @@ export default function TodayTab({ payload, savePayload }) {
             "{config.intentionMessage}" — {config.mentorName || "Marcus Aurelius"}
           </p>
         </section>
-      <div className="mobile-tools-legend" style={{ display: "none", justifyContent: "center", gap: "8px", fontSize: "10.5px", color: "var(--text-muted)", marginTop: "4px", padding: "0 6px" }}>
-        <span>ðŸŒ… Ritual</span> Â· <span>ðŸ“ Dump</span> Â· <span>ðŸš¨ Rescue</span> Â· <span>ðŸŒªï¸ Reset</span>
-      </div>
       )}
 
       {/* ── Utility strip: Streak · Ritual · Dump · Rescue · Reset */}
@@ -619,7 +610,7 @@ export default function TodayTab({ payload, savePayload }) {
               borderRadius: "8px", cursor: "pointer", lineHeight: 1
             }}
           >
-            🌅
+            🌅<span className="tool-btn-text">Ritual</span>
           </button>
 
           {/* Brain Dump */}
@@ -633,7 +624,7 @@ export default function TodayTab({ payload, savePayload }) {
               border: "1px solid var(--border)", borderRadius: "8px", cursor: "pointer", lineHeight: 1
             }}
           >
-            📝
+            📝<span className="tool-btn-text">Dump</span>
             {dumpCount > 0 && (
               <span style={{ position: "absolute", top: "-5px", right: "-5px", background: "var(--accent)", color: "var(--btn-text, #fff)", fontSize: "8px", fontWeight: "800", borderRadius: "6px", padding: "1px 4px", lineHeight: 1.3 }}>
                 {dumpCount}
@@ -644,13 +635,13 @@ export default function TodayTab({ payload, savePayload }) {
           {/* Rescue */}
           <button onClick={openRescueMode} title="Rescue Mode"
             style={{ fontSize: "15px", padding: "5px 9px", background: "rgba(248,113,113,0.12)", border: "1px solid var(--danger)", borderRadius: "8px", color: "var(--danger)", cursor: "pointer", lineHeight: 1 }}>
-            🚨
+            🚨<span className="tool-btn-text">Rescue</span>
           </button>
 
           {/* Bad Day Reset */}
           <button onClick={handleBadDayReset} title="Bad Day Reset"
             style={{ fontSize: "15px", padding: "5px 9px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-secondary)", cursor: "pointer", lineHeight: 1 }}>
-            🌪️
+            🌪️<span className="tool-btn-text">Reset</span>
           </button>
         </div>
 
@@ -794,7 +785,7 @@ export default function TodayTab({ payload, savePayload }) {
         )}
       </section>
       <div className="mobile-tools-legend" style={{ display: "none", justifyContent: "center", gap: "8px", fontSize: "10.5px", color: "var(--text-muted)", marginTop: "4px", padding: "0 6px" }}>
-        <span>ðŸŒ… Ritual</span> Â· <span>ðŸ“ Dump</span> Â· <span>ðŸš¨ Rescue</span> Â· <span>ðŸŒªï¸ Reset</span>
+        <span>🌅 Ritual</span> · <span>📝 Dump</span> · <span>🚨 Rescue</span> · <span>🌪️ Reset</span>
       </div>
 
       {/* ── Undo Delete Toast */}
