@@ -22,6 +22,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
   const [editedNagInterval, setEditedNagInterval] = useState(config.reminderNagIntervalMinutes || 15);
   const [editedEveningGuard, setEditedEveningGuard] = useState(!!config.eveningGuardWindowActive);
   const [editedChallenge, setEditedChallenge] = useState(config.challengeType || "starting");
+  const [editedDayStart, setEditedDayStart] = useState(config.dayStartHour ?? 7);
+  const [editedDayEnd, setEditedDayEnd] = useState(config.dayEndHour ?? 26);
 
   useEffect(() => {
     setEditedName(config.userName || "");
@@ -30,8 +32,11 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
     setEditedNagInterval(config.reminderNagIntervalMinutes || 15);
     setEditedEveningGuard(!!config.eveningGuardWindowActive);
     setEditedChallenge(config.challengeType || "starting");
+    setEditedDayStart(config.dayStartHour ?? 7);
+    setEditedDayEnd(config.dayEndHour ?? 26);
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
-      config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType]);
+      config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType,
+      config.dayStartHour, config.dayEndHour]);
 
   const challengeOptions = [
     { key: "starting",   label: "Overcoming Inertia",    desc: "Can't get started on tasks.", icon: "🏁" },
@@ -57,6 +62,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
         pomodoroDurationMinutes: Math.min(120, Math.max(1, parseInt(editedPomodoro) || 25)),
         reminderNagIntervalMinutes: Math.min(60, Math.max(1, parseInt(editedNagInterval) || 15)),
         eveningGuardWindowActive: editedEveningGuard,
+        dayStartHour: editedDayStart,
+        dayEndHour: editedDayEnd,
         lastUpdated: Date.now()
       }
     });
@@ -219,6 +226,28 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
               <input id="settings-nag" className="text-input" type="number"
                 min="1" max="60" value={editedNagInterval}
                 onChange={e => setEditedNagInterval(Math.min(60, Math.max(1, Number(e.target.value) || 15)))} />
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <div className="form-group">
+              <label className="form-label" htmlFor="settings-day-start">Day Starts</label>
+              <select id="settings-day-start" className="text-input" value={editedDayStart}
+                onChange={e => setEditedDayStart(Number(e.target.value))}>
+                {[5, 6, 7, 8, 9, 10].map(h => (
+                  <option key={h} value={h}>{h < 12 ? `${h}:00 AM` : "12:00 PM"}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="settings-day-end">Day Ends</label>
+              <select id="settings-day-end" className="text-input" value={editedDayEnd}
+                onChange={e => setEditedDayEnd(Number(e.target.value))}>
+                {[17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27].map(h => {
+                  const labels = { 17: "5 PM", 18: "6 PM", 19: "7 PM", 20: "8 PM", 21: "9 PM", 22: "10 PM", 23: "11 PM", 24: "12 AM", 25: "1 AM", 26: "2 AM", 27: "3 AM" };
+                  return <option key={h} value={h}>{labels[h]}</option>;
+                })}
+              </select>
             </div>
           </div>
 

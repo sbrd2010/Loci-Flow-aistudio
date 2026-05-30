@@ -283,6 +283,83 @@ RULES: Bold task names. Be direct and concise. No filler. ${firstName} is ADHD �
           Your AI scans every task across all horizons — flags overload, catches time blindness, and briefs you on exactly what to tackle now.
         </p>
 
+        {/* Task Snapshot — always-visible data viz */}
+        {(() => {
+          const active = tasks.filter(t => !t.isDeleted && !t.isCompleted);
+          const horizons = ["today", "week", "month", "quarter", "halfyear", "office"];
+          const hLabels = { today: "Today", week: "Week", month: "Month", quarter: "Quarter", halfyear: "6 Mo.", office: "Work" };
+          const hCounts = horizons.map(h => active.filter(t => t.horizonLevel === h).length);
+          const maxHCount = Math.max(...hCounts, 1);
+          const priorities = ["P1", "P2", "P3", "P4"];
+          const pColors = { P1: "var(--danger)", P2: "var(--warning)", P3: "var(--accent)", P4: "var(--success)" };
+          const pCounts = Object.fromEntries(priorities.map(p => [p, active.filter(t => t.priority === p).length]));
+          const totalPriority = Math.max(Object.values(pCounts).reduce((a, b) => a + b, 0), 1);
+          const todayTasks = active.filter(t => t.horizonLevel === "today");
+          const todayMins = todayTasks.reduce((s, t) => s + (Number(t.timeEstimateMinutes) || 25), 0);
+          const loadPct = Math.min(100, Math.round((todayMins / 60) / 8 * 100));
+          return (
+            <div style={{ background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", padding: "12px 14px", marginBottom: "4px" }}>
+              <h3 style={{ fontSize: "10px", fontWeight: "900", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "10px" }}>
+                📊 Task Snapshot
+              </h3>
+              {/* Horizon bars */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "5px", marginBottom: "12px" }}>
+                {horizons.map((h, i) => {
+                  const count = hCounts[i];
+                  if (count === 0) return null;
+                  const pct = (count / maxHCount) * 100;
+                  return (
+                    <div key={h} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", width: "46px", flexShrink: 0 }}>{hLabels[h]}</span>
+                      <div style={{ flex: 1, height: "6px", background: "var(--bg-card)", borderRadius: "3px", overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${pct}%`, background: "var(--accent)", borderRadius: "3px" }} />
+                      </div>
+                      <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-primary)", width: "14px", textAlign: "right" }}>{count}</span>
+                    </div>
+                  );
+                })}
+                {active.length === 0 && (
+                  <span style={{ fontSize: "11px", color: "var(--text-muted)", fontStyle: "italic" }}>No active tasks yet</span>
+                )}
+              </div>
+              {/* Priority mix bar */}
+              {active.length > 0 && (
+                <>
+                  <div style={{ display: "flex", height: "6px", borderRadius: "3px", overflow: "hidden", marginBottom: "6px", gap: "1px" }}>
+                    {priorities.map(p => {
+                      const count = pCounts[p];
+                      if (count === 0) return null;
+                      return (
+                        <div key={p} style={{ flex: count / totalPriority, background: pColors[p], minWidth: "4px" }} title={`${p}: ${count}`} />
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: "flex", gap: "10px", marginBottom: "12px" }}>
+                    {priorities.map(p => pCounts[p] > 0 && (
+                      <span key={p} style={{ fontSize: "10px", fontWeight: "700", color: pColors[p] }}>{p} {pCounts[p]}</span>
+                    ))}
+                  </div>
+                </>
+              )}
+              {/* Today's load gauge */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                  <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)" }}>Today's Load</span>
+                  <span style={{ fontSize: "10px", fontWeight: "800", color: loadPct > 100 ? "var(--danger)" : loadPct > 75 ? "var(--warning)" : "var(--success)" }}>
+                    {(todayMins / 60).toFixed(1)}h / 8h
+                  </span>
+                </div>
+                <div style={{ height: "6px", background: "var(--bg-card)", borderRadius: "3px", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${Math.min(loadPct, 100)}%`, background: loadPct > 100 ? "var(--danger)" : loadPct > 75 ? "var(--warning)" : "var(--success)", borderRadius: "3px" }} />
+                </div>
+                <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "3px", textAlign: "right" }}>
+                  {loadPct}% capacity{loadPct > 100 ? " — overloaded" : loadPct > 75 ? " — heavy day" : " — good"}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {!hasAnyKey ? (
           <div style={{ background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", padding: "12px", fontSize: "12px", color: "var(--text-secondary)", textAlign: "center" }}>
             🔑 Add an AI key in <strong>Settings → AI Keys</strong> to enable this.
