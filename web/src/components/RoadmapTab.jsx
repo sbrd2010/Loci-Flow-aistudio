@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
+import { celebrate } from "../utils/celebrations";
 
 export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
@@ -47,6 +48,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
   };
 
   const handleMarkDone = (task) => {
+    celebrate();
     const todayDateStr = getTodayDateString();
     savePayload({
       ...payload,

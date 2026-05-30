@@ -7,8 +7,8 @@ const menuItemStyle = (color) => ({
   color
 });
 
-export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown }) {
-  const { title, concreteStep, priority, isCompleted, isNowFocus } = task;
+export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onBreakdown, onSubStepToggle, isBreakingDown }) {
+  const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -25,7 +25,10 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
     };
   }, [menuOpen]);
 
-  const hasActions = !isCompleted && (onEdit || onPin || onMoveUp || onMoveDown || onDelete);
+  const hasActions = !isCompleted && (onEdit || onPin || onMoveUp || onMoveDown || onDelete || onBreakdown);
+  const activeSubSteps = subSteps?.filter(s => !s.done) ?? [];
+  const doneSubSteps = subSteps?.filter(s => s.done) ?? [];
+  const hasSubSteps = subSteps && subSteps.length > 0;
 
   return (
     <div className={`task-row ${isCompleted ? "completed" : ""}`} style={menuOpen ? { zIndex: 400, position: "relative" } : undefined}>
@@ -36,7 +39,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         </div>
       </div>
 
-      {/* Task content — takes all available space */}
+      {/* Task content */}
       <div className="task-middle">
         <div className="task-row-top">
           <span className={`priority-badge ${priority.toLowerCase()}`}>{priority}</span>
@@ -47,6 +50,43 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         </div>
         {concreteStep && (
           <span className="task-step-text">⚡ {concreteStep}</span>
+        )}
+
+        {/* Sub-steps checklist */}
+        {hasSubSteps && (
+          <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "5px" }}>
+            {[...activeSubSteps, ...doneSubSteps].map(step => (
+              <div
+                key={step.id}
+                onClick={() => onSubStepToggle && onSubStepToggle(task, step.id)}
+                style={{ display: "flex", alignItems: "center", gap: "8px", cursor: onSubStepToggle ? "pointer" : "default", padding: "3px 0" }}
+              >
+                <div style={{
+                  width: "14px", height: "14px", borderRadius: "3px", flexShrink: 0,
+                  border: step.done ? "none" : "1.5px solid var(--border)",
+                  background: step.done ? "var(--success)" : "var(--bg-secondary)",
+                  display: "flex", alignItems: "center", justifyContent: "center"
+                }}>
+                  {step.done && <span style={{ color: "#fff", fontSize: "9px", fontWeight: "800", lineHeight: 1 }}>✓</span>}
+                </div>
+                <span style={{
+                  fontSize: "12px", fontWeight: "500", lineHeight: "1.3",
+                  color: step.done ? "var(--text-muted)" : "var(--text-secondary)",
+                  textDecoration: step.done ? "line-through" : "none"
+                }}>{step.text}</span>
+              </div>
+            ))}
+            <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "2px" }}>
+              {doneSubSteps.length}/{subSteps.length} steps done
+            </div>
+          </div>
+        )}
+
+        {/* Breakdown loading indicator */}
+        {isBreakingDown && (
+          <span style={{ fontSize: "11px", color: "var(--accent)", fontStyle: "italic", marginTop: "6px", display: "block" }}>
+            ✨ Breaking it down…
+          </span>
         )}
       </div>
 
@@ -71,11 +111,16 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
               position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 300,
               background: "var(--bg-card)", border: "1px solid var(--border)",
               borderRadius: "12px", boxShadow: "var(--shadow-lg)",
-              minWidth: "168px", overflow: "hidden"
+              minWidth: "178px", overflow: "hidden"
             }}>
               {onPin && (
                 <button onClick={() => { onPin(task); setMenuOpen(false); }} style={menuItemStyle(isNowFocus ? "var(--warning)" : "var(--text-primary)")}>
                   {isNowFocus ? "📍 Unpin Focus" : "📌 Pin to Focus"}
+                </button>
+              )}
+              {onBreakdown && !isBreakingDown && (
+                <button onClick={() => { onBreakdown(task); setMenuOpen(false); }} style={menuItemStyle("var(--accent)")}>
+                  ✨ Break it down
                 </button>
               )}
               {onEdit && (
