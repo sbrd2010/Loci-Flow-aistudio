@@ -25,6 +25,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
   const [editedDayStart, setEditedDayStart] = useState(config.dayStartHour ?? 7);
   const [editedDayEnd, setEditedDayEnd] = useState(config.dayEndHour ?? 26);
   const [editedHeaderStyle, setEditedHeaderStyle] = useState(config.headerStyle || "full");
+  const [editedToolsStyle, setEditedToolsStyle] = useState(config.toolsStyle || "inline");
 
   useEffect(() => {
     setEditedName(config.userName || "");
@@ -36,9 +37,10 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
     setEditedDayStart(config.dayStartHour ?? 7);
     setEditedDayEnd(config.dayEndHour ?? 26);
     setEditedHeaderStyle(config.headerStyle || "full");
+    setEditedToolsStyle(config.toolsStyle || "inline");
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
       config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType,
-      config.dayStartHour, config.dayEndHour, config.headerStyle]);
+      config.dayStartHour, config.dayEndHour, config.headerStyle, config.toolsStyle]);
 
   const challengeOptions = [
     { key: "starting",   label: "Overcoming Inertia",    desc: "Can't get started on tasks.", icon: "🏁" },
@@ -70,6 +72,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
         dayStartHour: editedDayStart,
         dayEndHour: editedDayEnd,
         headerStyle: editedHeaderStyle,
+        toolsStyle: editedToolsStyle,
         lastUpdated: Date.now()
       }
     });
@@ -270,7 +273,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
               {[
                 { key: "full", label: "Full card" },
                 { key: "compact", label: "Compact (tap)" },
-                { key: "frameless", label: "Frameless" }
+                { key: "frameless", label: "Frameless" },
+                { key: "autohide", label: "Auto-hide" }
               ].map(({ key, label }) => (
                 <button key={key} type="button"
                   onClick={() => setEditedHeaderStyle(key)}
@@ -280,6 +284,28 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
                     background: editedHeaderStyle === key ? "var(--accent)" : "var(--bg-secondary)",
                     color: editedHeaderStyle === key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
                     border: editedHeaderStyle === key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
+                  }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Tools Layout</label>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
+              {[
+                { key: "inline", label: "Inline (current)" },
+                { key: "dock", label: "Floating Dock" }
+              ].map(({ key, label }) => (
+                <button key={key} type="button"
+                  onClick={() => setEditedToolsStyle(key)}
+                  style={{
+                    padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700",
+                    cursor: "pointer", transition: "all 0.15s",
+                    background: editedToolsStyle === key ? "var(--accent)" : "var(--bg-secondary)",
+                    color: editedToolsStyle === key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
+                    border: editedToolsStyle === key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
                   }}>
                   {label}
                 </button>
