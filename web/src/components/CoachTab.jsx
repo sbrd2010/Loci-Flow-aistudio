@@ -28,7 +28,8 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
       if (hTasks.length > 8) lines.push(`  … +${hTasks.length - 8} more`);
     }
     const completed = (allTasks || []).filter(t => t.isCompleted && !t.isDeleted);
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const now2 = new Date();
+    const todayStr = `${now2.getFullYear()}-${String(now2.getMonth()+1).padStart(2,"0")}-${String(now2.getDate()).padStart(2,"0")}`;
     const doneToday = completed.filter(t => t.dateCompletedString === todayStr).length;
     if (doneToday > 0) lines.push(`\nCOMPLETED TODAY: ${doneToday} task${doneToday > 1 ? "s" : ""}`);
     return total === 0 ? "No active tasks yet." : lines.join("\n");
@@ -57,7 +58,7 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
 
   useEffect(() => {
     if (chatBottomRef.current) {
-      chatBottomRef.current.parentElement?.scrollTo?.({ top: 99999, behavior: "smooth" });
+      chatBottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [chatHistory, chatLoading]);
 

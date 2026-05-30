@@ -18,7 +18,11 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
       if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
     };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
   }, [menuOpen]);
 
   const hasActions = !isCompleted && (onEdit || onPin || onMoveUp || onMoveDown || onDelete);
