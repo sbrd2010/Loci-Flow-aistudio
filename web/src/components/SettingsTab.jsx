@@ -46,6 +46,9 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
   ];
 
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [profileOpen, setProfileOpen] = useState(!config.userName);
+  const [progressOpen, setProgressOpen] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
   const [aiKeysOpen, setAiKeysOpen] = useState(false);
   const [challengeOpen, setChallengeOpen] = useState(false);
 
@@ -122,14 +125,21 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
 
       {/* ── Profile ──────────────────────────────────────────────────────── */}
       <section className="card">
-        <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "4px", color: "var(--text-primary)" }}>
-          Your Profile
-        </h2>
-        <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "18px" }}>
-          Personalise your name, coaching mentor and focus settings.
-        </p>
+        <button type="button" onClick={() => setProfileOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: profileOpen ? "16px" : 0 }}>
+          <div>
+            <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
+              👤 Your Profile
+            </h2>
+            {!profileOpen && config.userName && (
+              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                {config.userName} · {challengeOptions.find(o => o.key === (config.challengeType || "starting"))?.label}
+              </div>
+            )}
+          </div>
+          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: profileOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
+        </button>
 
-        <form onSubmit={handleSaveSettings} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+        {profileOpen && <form onSubmit={handleSaveSettings} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
           <div className="form-group">
             <label className="form-label" htmlFor="settings-name">Your Name</label>
             <input id="settings-name" className="text-input" type="text"
@@ -270,12 +280,25 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
           <button className="btn" type="submit" style={{ width: "100%", marginTop: "4px" }}>
             {savedProfile ? "✓ Saved!" : "Save Profile"}
           </button>
-        </form>
+        </form>}
       </section>
 
       {/* ── Your Progress ── */}
       <section className="card">
-        <h2 className="section-title">Your Progress</h2>
+        <button type="button" onClick={() => setProgressOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: progressOpen ? "12px" : 0 }}>
+          <div>
+            <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
+              📈 Your Progress
+            </h2>
+            {!progressOpen && (
+              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                {levelTitle} · {xpInLevel}/200 XP
+              </div>
+            )}
+          </div>
+          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: progressOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
+        </button>
+        {progressOpen && <>
         <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "14px" }}>
           XP earned by completing tasks. Levels reset every 200 XP.
         </p>
@@ -303,6 +326,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
             </div>
           ))}
         </div>
+        </>}
       </section>
 
       {/* ── AI Keys ─────────────────────────────────────────────────────── */}
@@ -389,44 +413,70 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
 
       {/* ── Data Sync ────────────────────────────────────────────────────── */}
       <section className="card">
-        <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "4px", color: "var(--text-primary)" }}>
-          Data Sync
-        </h2>
-        <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "14px" }}>
-          Your tasks sync instantly with Firebase across all your devices.
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          {[
-            { label: "Account", value: config.userId || "Active User" },
-            { label: "Last Sync", value: formatRelativeTime(payload.timestamp) },
-            { label: "Active Tasks", value: `${(payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).length} tasks` },
-            { label: "Total XP", value: `${Number(config.totalXp) || 0} XP` }
-          ].map(row => (
-            <div key={row.label} style={{ display: "flex", justifyContent: "space-between", fontSize: "12.5px" }}>
-              <span style={{ color: "var(--text-muted)", fontWeight: "600" }}>{row.label}</span>
-              <span style={{ color: "var(--text-primary)", fontWeight: "700" }}>{row.value}</span>
-            </div>
-          ))}
-        </div>
+        <button type="button" onClick={() => setSyncOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: syncOpen ? "12px" : 0 }}>
+          <div>
+            <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
+              ☁️ Data Sync
+            </h2>
+            {!syncOpen && (
+              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                Last sync: {formatRelativeTime(payload.timestamp)}
+              </div>
+            )}
+          </div>
+          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: syncOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
+        </button>
+        {syncOpen && <>
+          <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "14px" }}>
+            Your tasks sync instantly with Firebase across all your devices.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {[
+              { label: "Account", value: config.userId || "Active User" },
+              { label: "Last Sync", value: formatRelativeTime(payload.timestamp) },
+              { label: "Active Tasks", value: `${(payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).length} tasks` },
+              { label: "Total XP", value: `${Number(config.totalXp) || 0} XP` }
+            ].map(row => (
+              <div key={row.label} style={{ display: "flex", justifyContent: "space-between", fontSize: "12.5px" }}>
+                <span style={{ color: "var(--text-muted)", fontWeight: "600" }}>{row.label}</span>
+                <span style={{ color: "var(--text-primary)", fontWeight: "700" }}>{row.value}</span>
+              </div>
+            ))}
+          </div>
+        </>}
       </section>
 
-      {/* ── Danger Zone ──────────────────────────────────────────────────── */}
+      {/* ── Account ──────────────────────────────────────────────────────── */}
       <section className="card">
         <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "14px", color: "var(--text-primary)" }}>
           Account
         </h2>
-        <button
-          className="btn"
-          style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--danger)", border: "1.5px solid var(--border)", boxShadow: "none" }}
-          onClick={() => setConfirmDialog({
-            message: "Sign out? Your data stays saved.",
-            confirmLabel: "Sign out", cancelLabel: "Cancel",
-            onConfirm: () => { setConfirmDialog(null); onSignOut?.(); },
-            onCancel: () => setConfirmDialog(null)
-          })}
-        >
-          Sign out of Loci
-        </button>
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <button
+            className="btn"
+            style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
+            onClick={() => setConfirmDialog({
+              message: "Reset 7-day tracking data?\n\nThis clears all contribution history (the dots on the Home tab). Cannot be undone.",
+              confirmLabel: "Reset tracking", cancelLabel: "Cancel",
+              onConfirm: () => { savePayload({ ...payload, contributions: [] }); setConfirmDialog(null); },
+              onCancel: () => setConfirmDialog(null)
+            })}
+          >
+            🔄 Reset 7-day tracking data
+          </button>
+          <button
+            className="btn"
+            style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--danger)", border: "1.5px solid var(--border)", boxShadow: "none" }}
+            onClick={() => setConfirmDialog({
+              message: "Sign out? Your data stays saved.",
+              confirmLabel: "Sign out", cancelLabel: "Cancel",
+              onConfirm: () => { setConfirmDialog(null); onSignOut?.(); },
+              onCancel: () => setConfirmDialog(null)
+            })}
+          >
+            Sign out of Loci
+          </button>
+        </div>
       </section>
 
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
