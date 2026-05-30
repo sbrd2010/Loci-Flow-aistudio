@@ -21,11 +21,11 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
       if (hTasks.length === 0) continue;
       total += hTasks.length;
       lines.push(`${horizonLabels[h]} (${hTasks.length}):`);
-      hTasks.slice(0, 6).forEach(t => {
+      hTasks.slice(0, 8).forEach(t => {
         const focus = t.isNowFocus ? " [NOW FOCUS]" : "";
         lines.push(`  • [${t.priority}]${focus} ${t.title}${t.timeEstimateMinutes ? ` (${t.timeEstimateMinutes}min)` : ""}`);
       });
-      if (hTasks.length > 6) lines.push(`  … +${hTasks.length - 6} more`);
+      if (hTasks.length > 8) lines.push(`  … +${hTasks.length - 8} more`);
     }
     const completed = (allTasks || []).filter(t => t.isCompleted && !t.isDeleted);
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -83,21 +83,34 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
     const todayActive = tasks.filter(t => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted);
     const taskContext = buildTaskContext(tasks);
 
-    const systemInstruction = `You are ${config.mentorName || "an ADHD coach"}, a certified ADHD productivity coach embedded inside Loci Focus — an ADHD-friendly task management app.
+    const systemInstruction = `You are ${config.mentorName || "an ADHD coach"}, an expert AI productivity coach embedded inside Loci Focus — an ADHD-friendly task management app.
 
-Your client: ${config.userName || "a user"} (call them "${firstName}"), core challenge: "${challengeLabel}".
+YOUR CLIENT: ${config.userName || "a user"} — call them "${firstName}". Core challenge: "${challengeLabel}".
 
-THEIR FULL TASK LIST — you can see ALL of this and MUST reference specific task names in your replies:
+THEIR FULL TASK LIST (you can see ALL of this — reference specific task names in your replies):
 ${taskContext}
 
-COACHING RULES:
-- Max 3 sentences per reply. No filler phrases ("Great!", "Absolutely!", "Of course!").
+YOUR EXPERTISE COVERS:
+- ADHD productivity: initiation, focus protection, time awareness, task completion
+- Task planning: sequencing, realistic time estimation, priority calibration
+- Cognitive load: reducing overwhelm, chunking work, managing mental energy
+- Momentum coaching: door-handle moves, micro-commitments, 2-minute rules
+- Time blindness: realistic scheduling, buffer time, deadline awareness
+- Motivation: streaks, progress visibility, identity-based encouragement
+
+COACHING STYLE:
+- Max 3 short sentences per reply. Zero filler phrases ("Great!", "Absolutely!", "Of course!").
 - Address as "${firstName}". Be warm, specific, and action-oriented.
-- For overwhelm: name ONE specific task from their list and give its door-handle step (under 30 seconds to start).
-- For initiation blocks: use the [NOW FOCUS] task if present, else pick the top P1 or P2.
+- For overwhelm: name ONE specific task from their list + its 30-second starter.
+- For initiation blocks: use the [NOW FOCUS] task if present, else top P1 or P2.
 - For distraction: re-anchor — "You were working on [task name], open it and read the first line."
 - NEVER say you cannot see their tasks — you CAN see the full list above.
-- If they ask "what should I do?" or "what are my tasks?", answer from the list above directly.
+- If asked "what should I do?" or "what are my tasks?": answer directly from the list above.
+
+GUARD RAILS:
+- Off-topic (illegal, harmful, explicit, unrelated to productivity/wellbeing): respond with "That's outside my scope, ${firstName}. Let's focus on your tasks — what's blocking you right now?" Do not elaborate.
+- If ${firstName} seems in genuine distress or crisis: "I hear you. Please reach out to someone you trust or a professional if this feels urgent. For now, what's the one smallest thing that might help you feel less stuck?"
+- Stay firmly within: productivity, tasks, focus, ADHD strategies, time management, motivation, wellbeing support.
 
 SESSION: ${timeOfDay}, ${config.visitStreakCount || 0}-day streak, ${todayActive.length} active tasks today.`;
 
@@ -114,77 +127,93 @@ SESSION: ${timeOfDay}, ${config.visitStreakCount || 0}-day streak, ${todayActive
     }
   };
 
-  // ── AI Weekly Review ──────────────────────────────────────────────────────
-  const [reviewLoading, setReviewLoading] = useState(false);
-  const [reviewResult, setReviewResult] = useState("");
+  // ── Focus Briefing (AI task analysis across all horizons) ─────────────────
+  const [briefingLoading, setBriefingLoading] = useState(false);
+  const [briefingResult, setBriefingResult] = useState("");
 
-  const handleAiReview = async () => {
+  const handleFocusBriefing = async () => {
     if (!hasAnyKey) return;
     const backlog = tasks.filter(t => !t.isDeleted && !t.isCompleted);
     if (backlog.length === 0) {
-      setReviewResult("🎉 Your backlog is empty — nothing to review! Add goals on the Roadmap tab and come back.");
+      setBriefingResult(`No tasks yet, ${firstName}. Tap + on the Home tab to add your first task, or use the Plan tab to map goals across horizons — then come back for your Focus Briefing.`);
       return;
     }
-    setReviewLoading(true);
-    setReviewResult("");
+
+    setBriefingLoading(true);
+    setBriefingResult("");
+
     const challengeDesc =
       config.challengeType === "starting" ? "Overcoming Inertia (struggles to start tasks)" :
       config.challengeType === "focusing" ? "Protecting Focus Sessions (gets distracted mid-task)" :
       config.challengeType === "tracking" ? "Time Awareness (loses track of time, misses deadlines)" :
       "Action over Perfectionism (overthinks and delays finishing)";
+
     const now = new Date();
     const hour = now.getHours();
     const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+    const energyNote = hour < 12 ? "peak cognitive energy — ideal for deep/complex work" : hour < 15 ? "post-lunch dip — prefer shorter, concrete tasks" : hour < 18 ? "second wind — good for creative or social tasks" : "low energy — protect recovery, do only simple tasks";
+
     const todayTasks = backlog.filter(t => t.horizonLevel === "today");
-    const overdueTasks = backlog.filter(t => t.horizonLevel === "today" && t.priority === "P1");
-    const prompt = `You are ${config.mentorName || "an ADHD coach"}, an expert ADHD productivity coach. Review this person's task list and pick the 3 best tasks to do TODAY based on ADHD-friendly prioritization.
+    const weekTasks = backlog.filter(t => t.horizonLevel === "week");
+    const totalTodayMins = todayTasks.reduce((sum, t) => sum + (Number(t.timeEstimateMinutes) || 25), 0);
+    const totalTodayHours = (totalTodayMins / 60).toFixed(1);
+    const p1Count = backlog.filter(t => t.priority === "P1").length;
+    const p1Ratio = p1Count / backlog.length;
 
-USER PROFILE:
-- Name: ${config.userName || "friend"}
-- Core challenge: ${challengeDesc}
-- Time of day: ${timeOfDay} (${hour}:00) — ${hour < 12 ? "peak cognitive energy window" : hour < 15 ? "post-lunch dip, use easier tasks" : hour < 18 ? "second wind window" : "low energy, protect recovery"}
-- Streak: ${config.visitStreakCount || 0} days
-- Today's task count: ${todayTasks.length}
-- Urgent P1 tasks today: ${overdueTasks.length}
+    const prompt = `You are ${config.mentorName || "an ADHD coach"}, an expert ADHD productivity coach.
 
-FULL TASK LIST:
-${backlog.map(t => `[${t.priority}] ${t.title} | horizon: ${t.horizonLevel} | est: ${t.timeEstimateMinutes}min | category: ${t.category || "–"}`).join("\n")}
+USER: ${config.userName || "friend"} | Challenge: ${challengeDesc}
+Time: ${timeOfDay} (${hour}:00) — ${energyNote}
+Streak: ${config.visitStreakCount || 0} days
+Today: ${todayTasks.length} tasks (${totalTodayHours}h estimated) | Week backlog: ${weekTasks.length} | Total active: ${backlog.length}
+Priority distribution: ${p1Count} P1 of ${backlog.length} total (${Math.round(p1Ratio * 100)}% P1)
 
-ADHD PRIORITIZATION RULES (apply in this order):
-1. Urgent + short tasks first if procrastination is the challenge
-2. Energy-matched tasks for current time of day
-3. Tasks with momentum value — completing it makes OTHER things easier
-4. Never recommend more than one P1 to avoid overwhelm
+FULL TASK LIST (key: [priority] [horizon] title | est minutes):
+${backlog.map(t => `[${t.priority}] [${t.horizonLevel}] ${t.title} | ${t.timeEstimateMinutes || 25}min | ${t.category || "–"}`).join("\n")}
 
-FOR EACH OF YOUR 3 PICKS, PROVIDE:
-• **Task title**
-• Why to do it NOW (1 sentence — energy match, urgency, or momentum reason)
-• The door-handle move: the single first physical action to START it (max 10 words)
+PRODUCE A FOCUS BRIEFING with these sections:
 
-End with one sentence of encouragement. Be direct and specific — no generic productivity advice.`;
+**📊 Load Check**
+- Is today overloaded? (flag if >6h estimated or >8 tasks today)
+- Any horizon packed? (flag if week>10 tasks or month>15 tasks with no quarter plan)
+- If overload: name 1-2 specific tasks to park or move to a later horizon
+
+**🎯 Top 3 Right Now**
+For each task: bold the name, one sentence WHY (energy match + urgency + momentum), then "Start: [10-word door-handle action]"
+Pick based on: current energy level, ADHD-friendly sequencing (build momentum first), urgency, and cascade value (doing X unblocks Y)
+
+**⏰ Time Awareness Check** (only if issues found)
+- Flag any task that seems severely underestimated (e.g., "Quarterly report" at 15min — likely 3-4h)
+- Flag any task placed in wrong horizon (e.g., a P1 urgent item sitting in Quarter)
+- Give 1-2 specific move suggestions: "Move '[task]' from [current] to [better] because..."
+
+**🔥 Priority Note** (only if >35% of tasks are P1)
+- Flag priority inflation briefly. One sentence max.
+
+**One sentence of encouragement** — be specific, reference their streak or a task they've completed recently if visible.
+
+RULES: Bold task names. Be direct and concise. No filler. ${firstName} is ADHD — punchy, specific, actionable beats thorough but vague.`;
 
     try {
       const reply = await callAI({
         groqKey, geminiKey,
         systemPrompt: `You are ${config.mentorName || "an ADHD coach"}, an expert ADHD productivity coach.`,
         messages: [{ role: "user", content: prompt }],
-        maxTokens: 600
+        maxTokens: 800
       });
-      setReviewResult(reply);
+      setBriefingResult(reply);
     } catch (err) {
-      setReviewResult(`AI Review failed: ${err.message}`);
+      setBriefingResult(`Focus Briefing failed: ${err.message}`);
     } finally {
-      setReviewLoading(false);
+      setBriefingLoading(false);
     }
   };
-
 
   // ── Render ────────────────────────────────────────────────────────────────
   const parkedTasks = tasks.filter(t => t.isParked && !t.isDeleted && !t.isCompleted);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
 
       {/* 1 ── AI Mentor Chat */}
@@ -195,12 +224,12 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
               🤖 Chat with {config.mentorName || "your Mentor"}
             </h2>
             <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
-              Your AI focus coach — ask anything about tasks, focus, or momentum.
+              Your AI coach — ask about tasks, focus, overwhelm, or momentum.
             </p>
           </div>
           {payload.chatHistory && payload.chatHistory.length > 0 && (
             <button
-              onClick={() => setConfirmDialog({ message: "Clear all chat history with your coach?", confirmLabel: "Clear", danger: true, onConfirm: () => { saveSubPath("chatHistory", null); setConfirmDialog(null); }, onCancel: () => setConfirmDialog(null) })}
+              onClick={() => setConfirmDialog({ message: "Clear all chat history?", confirmLabel: "Clear", danger: true, onConfirm: () => { saveSubPath("chatHistory", null); setConfirmDialog(null); }, onCancel: () => setConfirmDialog(null) })}
               style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "11px", fontWeight: "700", cursor: "pointer", padding: "4px 8px", flexShrink: 0 }}
             >
               Clear
@@ -220,7 +249,7 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
           ))}
           {chatLoading && (
             <div className="chat-bubble chat-bubble-mentor" style={{ fontStyle: "italic", color: "var(--text-muted)", alignSelf: "flex-start" }}>
-              <span>{config.mentorName || "Mentor"} is typing…</span>
+              <span>{config.mentorName || "Mentor"} is thinking…</span>
             </div>
           )}
           <div ref={chatBottomRef} />
@@ -245,13 +274,13 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
         )}
       </section>
 
-      {/* 4 ── AI Weekly Review */}
+      {/* 2 ── Focus Briefing */}
       <section className="card">
         <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "4px", color: "var(--text-primary)" }}>
-          AI Horizon Review
+          ⚡ Focus Briefing
         </h2>
         <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "14px", lineHeight: "1.5" }}>
-          Your mentor scans your full backlog and recommends the 3 most important tasks to do today.
+          Your AI scans every task across all horizons — flags overload, catches time blindness, and tells you exactly what to tackle now.
         </p>
 
         {!hasAnyKey ? (
@@ -260,19 +289,19 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <button className="btn" onClick={handleAiReview} disabled={reviewLoading} style={{ width: "100%" }}>
-              {reviewLoading ? "Reviewing…" : "Run AI Review"}
+            <button className="btn" onClick={handleFocusBriefing} disabled={briefingLoading} style={{ width: "100%" }}>
+              {briefingLoading ? "Analyzing your tasks…" : "Get Focus Briefing"}
             </button>
-            {reviewResult && (
-              <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px", fontSize: "12.5px", lineHeight: "1.6", maxHeight: "200px", overflowY: "auto", whiteSpace: "pre-line", color: "var(--text-primary)" }}>
-                {reviewResult}
+            {briefingResult && (
+              <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "14px", fontSize: "12.5px", lineHeight: "1.7", maxHeight: "380px", overflowY: "auto", whiteSpace: "pre-line", color: "var(--text-primary)" }}>
+                {briefingResult}
               </div>
             )}
           </div>
         )}
       </section>
 
-      {/* 6 ── Parked Archive */}
+      {/* 3 ── Parked Archive */}
       {parkedTasks.length > 0 && (
         <section className="card">
           <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "4px", color: "var(--text-primary)" }}>
@@ -305,7 +334,6 @@ End with one sentence of encouragement. Be direct and specific — no generic pr
           </div>
         </section>
       )}
-
     </div>
   );
 }
