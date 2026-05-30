@@ -214,14 +214,6 @@ export default function TodayTab({ payload, savePayload }) {
   const [undoTask, setUndoTask] = useState(null);
   const undoTimeoutRef = useRef(null);
 
-  // Morning Ritual
-  const [ritualActive, setRitualActive] = useState(false);
-  const [ritualStepIndex, setRitualStepIndex] = useState(-1);
-  const [ritualSecondsLeft, setRitualSecondsLeft] = useState(0);
-  const [ritualDone, setRitualDone] = useState(false);
-  const [ritualSuccess, setRitualSuccess] = useState(false);
-  const ritualIntervalRef = useRef(null);
-
   const handleBrainDumpSubmit = (e) => {
     e.preventDefault();
     if (!brainDumpText.trim()) return;
