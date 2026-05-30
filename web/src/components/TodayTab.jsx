@@ -104,6 +104,13 @@ export default function TodayTab({ payload, savePayload }) {
   const [currentTimeStr, setCurrentTimeStr] = useState("");
   const [currentDateStr, setCurrentDateStr] = useState("");
 
+  const formatHourLabel = (h) => {
+    const h24 = h % 24;
+    const isAM = h24 < 12 || h24 === 0;
+    const displayH = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
+    return `${displayH}${isAM ? "a" : "p"}`;
+  };
+
   const updateTimeline = () => {
     const now = new Date();
     const hour = now.getHours();
@@ -113,9 +120,10 @@ export default function TodayTab({ payload, savePayload }) {
     const amPmStr = hour >= 12 ? "PM" : "AM";
     setCurrentTimeStr(`${displayHour}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")} ${amPmStr}`);
     setCurrentDateStr(now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }));
-    const startHour = 7, endHour = 26;
+    const startHour = config.dayStartHour ?? 7;
+    const endHour = config.dayEndHour ?? 26;
     const currentHourFloat = hour + minute / 60;
-    const adjustedHour = hour < 7 ? currentHourFloat + 24 : currentHourFloat;
+    const adjustedHour = hour < startHour ? currentHourFloat + 24 : currentHourFloat;
     setTimelineProgress(Math.max(0, Math.min(1, (adjustedHour - startHour) / (endHour - startHour))));
   };
 
@@ -366,35 +374,45 @@ export default function TodayTab({ payload, savePayload }) {
         </div>
       )}
 
-      {/* ── Compact header: Clock · Horizon bar · Quote */}
-      <section style={{
-        background: "var(--bg-card)", border: "1px solid var(--border)",
-        borderRadius: "var(--radius-sm)", padding: "8px 14px",
-        display: "flex", alignItems: "center", gap: "10px"
-      }}>
-        <div style={{ flexShrink: 0 }}>
-          <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", letterSpacing: "-0.01em", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
-            {currentTimeStr}
-          </div>
-          <div style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600", marginTop: "2px" }}>
-            {currentDateStr}
-          </div>
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ height: "4px", background: "var(--bg-secondary)", borderRadius: "2px", overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "2px" }} />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "2px" }}>
-            <span style={{ fontSize: "8px", color: "var(--text-muted)", fontWeight: "600" }}>7a</span>
-            <span style={{ fontSize: "8px", color: "var(--text-muted)", fontWeight: "600" }}>2a</span>
-          </div>
-        </div>
-        <div style={{ flexShrink: 0, maxWidth: "92px" }}>
-          <p style={{ fontSize: "9px", fontStyle: "italic", color: "var(--accent)", margin: 0, lineHeight: "1.35", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-            "{currentQuote.quote.length > 40 ? currentQuote.quote.substring(0, 38) + "…" : currentQuote.quote}"
-          </p>
-        </div>
-      </section>
+      {/* ── Day header: Clock · Timeline · Quote */}
+      {(() => {
+        const startHour = config.dayStartHour ?? 7;
+        const endHour = config.dayEndHour ?? 26;
+        const midHour = Math.round((startHour + endHour) / 2);
+        const startLabel = formatHourLabel(startHour);
+        const midLabel = formatHourLabel(midHour);
+        const endLabel = formatHourLabel(endHour);
+        return (
+          <section style={{
+            background: "var(--bg-card)", border: "1px solid var(--border)",
+            borderRadius: "var(--radius-sm)", padding: "12px 14px"
+          }}>
+            {/* Row 1: Clock + Date */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "10px" }}>
+              <div style={{ fontSize: "18px", fontWeight: "800", color: "var(--text-primary)", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+                {currentTimeStr}
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>
+                {currentDateStr}
+              </div>
+            </div>
+            {/* Row 2: Timeline bar */}
+            <div style={{ height: "8px", background: "var(--bg-secondary)", borderRadius: "4px", overflow: "hidden", position: "relative" }}>
+              <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "4px", transition: "width 1s linear" }} />
+            </div>
+            {/* Row 3: Time labels */}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", marginBottom: "10px" }}>
+              <span style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{startLabel}</span>
+              <span style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{midLabel}</span>
+              <span style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{endLabel}</span>
+            </div>
+            {/* Row 4: Motivation quote */}
+            <p style={{ margin: 0, fontSize: "12px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
+              "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
+            </p>
+          </section>
+        );
+      })()}
 
       {/* ── Today's Focus — tasks dominate the screen */}
       <section className="tasks-section" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -417,7 +435,7 @@ export default function TodayTab({ payload, savePayload }) {
                 color: config.isLowEnergyMode ? "#fff" : "var(--text-secondary)"
               }}
             >
-              🔋 {config.isLowEnergyMode ? "ON" : "Low E"}
+              🔋 {config.isLowEnergyMode ? "Low Energy ON" : "Low Energy"}
             </button>
             <span className="section-count-badge">
               {completedTasks.length}/{todayTasksFiltered.length}

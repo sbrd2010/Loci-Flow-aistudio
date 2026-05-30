@@ -7,8 +7,8 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
   const columns = [
     { key: "week",     label: "This Week",  shortLabel: "Week"  },
     { key: "month",    label: "Month",      shortLabel: "Month" },
-    { key: "quarter",  label: "Quarter",    shortLabel: "Qtr"   },
-    { key: "halfyear", label: "6 Months",   shortLabel: "6M"    },
+    { key: "quarter",  label: "Quarter",    shortLabel: "Quarter"  },
+    { key: "halfyear", label: "6 Months",   shortLabel: "6 Months" },
     { key: "office",   label: "Work",       shortLabel: "Work"  }
   ];
 
