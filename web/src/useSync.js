@@ -38,12 +38,12 @@ export function useSync(uid, email) {
     setError(null);
     const userRef = ref(db, dbRefPath);
 
-    // If Firebase RTDB doesn't respond within 12s (e.g. Brave blocking WebSockets,
-    // offline, or slow network) surface a retryable error instead of hanging forever.
+    // If Firebase RTDB doesn't respond within 15s surface a retryable error.
+    // Brave Shields block WebSocket to *.firebaseio.com — user must disable Shields for this site.
     const connectTimeoutId = setTimeout(() => {
-      setError("Could not reach sync server. Check your connection, disable browser shields, and reload.");
+      setError("Could not reach sync server. Using Brave? Disable Shields for loci-flow.web.app. Otherwise check your connection and reload.");
       setLoading(false);
-    }, 12000);
+    }, 15000);
 
     const unsubscribe = onValue(userRef, (snapshot) => {
       clearTimeout(connectTimeoutId);
