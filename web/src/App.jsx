@@ -55,8 +55,9 @@ export default function App() {
         setSignInError("Popup blocked. Please allow popups for this site, then try again.");
         return;
       }
-      // Brave shields or other privacy browsers can block the popup auth flow
-      setSignInError("Sign-in failed. If you're using Brave, disable Shields for this site and try again.");
+      // Privacy browsers (Brave) can block the popup auth flow
+      console.error("Popup sign-in failed:", err.code, err.message);
+      setSignInError("Sign-in failed. Allow popups for this site, or disable browser shields and try again.");
     });
   };
 
