@@ -8,6 +8,7 @@ export default function TodayTab({ payload, savePayload }) {
 
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [headerExpanded, setHeaderExpanded] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerSecondsLeft, setTimerSecondsLeft] = useState((config.pomodoroDurationMinutes || 25) * 60);
@@ -143,6 +144,14 @@ export default function TodayTab({ payload, savePayload }) {
     const interval = setInterval(updateTimeline, 1000);
     return () => clearInterval(interval);
   }, [config.dayStartHour, config.dayEndHour]);
+
+  useEffect(() => {
+    const container = document.querySelector('.screen-content');
+    if (!container) return;
+    const onScroll = () => setIsScrolled(container.scrollTop > 15);
+    container.addEventListener('scroll', onScroll, { passive: true });
+    return () => container.removeEventListener('scroll', onScroll);
+  }, []);
 
   const [rescueActive, setRescueActive] = useState(false);
   const [rescueTask, setRescueTask] = useState(null);
@@ -399,6 +408,39 @@ export default function TodayTab({ payload, savePayload }) {
         const firstName = (config.userName || "").split(" ")[0];
         const headerStyle = config.headerStyle || "full";
 
+        // Option E: Auto-hide — wraps the full card, collapses on scroll
+        if (headerStyle === "autohide") {
+          const fullCard = (
+            <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px 14px" }}>
+              {firstName ? (
+                <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "8px", letterSpacing: "-0.01em" }}>
+                  {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
+                </div>
+              ) : null}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "10px" }}>
+                <div style={{ fontSize: "18px", fontWeight: "800", color: "var(--text-primary)", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{currentTimeStr}</div>
+                <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>{currentDateStr}</div>
+              </div>
+              <div style={{ height: "8px", background: "var(--bg-secondary)", borderRadius: "4px", overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "4px", transition: "width 1s linear" }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", marginBottom: "10px" }}>
+                {timeLabels.map((label, i) => (
+                  <span key={i} style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{label}</span>
+                ))}
+              </div>
+              <p style={{ margin: 0, fontSize: "12px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
+                "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
+              </p>
+            </section>
+          );
+          return (
+            <div className={`header-autohide-wrapper${isScrolled ? " header-collapsed" : ""}`}>
+              {fullCard}
+            </div>
+          );
+        }
+
         // Option C: Compact strip — tap ▾ to reveal full details
         if (headerStyle === "compact") {
           return (
@@ -641,8 +683,8 @@ export default function TodayTab({ payload, savePayload }) {
         </section>
       )}
 
-      {/* ── Utility strip: Streak · Ritual · Dump · Rescue · Reset */}
-      <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}>
+      {/* ── Utility strip: inline (hidden when dock is active) */}
+      {(config.toolsStyle || "inline") !== "dock" && <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}>
         <div className="habits-tools-row" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "10px 14px" }}>
           {/* Streak + 7-day dots — tap to expand progress detail */}
           <button
@@ -852,10 +894,181 @@ export default function TodayTab({ payload, savePayload }) {
             </form>
           </div>
         )}
-      </section>
-      <div className="mobile-tools-legend" style={{ display: "none", justifyContent: "center", gap: "8px", fontSize: "10.5px", color: "var(--text-muted)", marginTop: "4px", padding: "0 6px" }}>
-        <span>🌅 Ritual</span> · <span>📝 Dump</span> · <span>🚨 Rescue</span> · <span>🌪️ Reset</span>
-      </div>
+      </section>}
+      {(config.toolsStyle || "inline") !== "dock" && (
+        <div className="mobile-tools-legend" style={{ display: "none", justifyContent: "center", gap: "8px", fontSize: "10.5px", color: "var(--text-muted)", marginTop: "4px", padding: "0 6px" }}>
+          <span>🌅 Ritual</span> · <span>📝 Dump</span> · <span>🚨 Rescue</span> · <span>🌪️ Reset</span>
+        </div>
+      )}
+
+      {/* ── Floating Bottom Dock (Concept 3) */}
+      {config.toolsStyle === "dock" && (
+        <>
+          {/* Spacer so tasks aren't hidden behind the dock */}
+          <div style={{ height: "72px" }} />
+
+          {/* Backdrop */}
+          {toolPanel && (
+            <div className="tools-sheet-backdrop" onClick={() => setToolPanel(null)} />
+          )}
+
+          {/* Bottom Sheet content */}
+          {toolPanel && (
+            <div className="tools-bottom-sheet">
+              <div className="tools-sheet-handle" />
+
+              {toolPanel === "progress" && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                    <h3 style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", margin: 0 }}>
+                      📊 7-Day Progress
+                    </h3>
+                    <div style={{ display: "flex", gap: "4px" }}>
+                      {[{ id: "streak", label: "🔥" }, { id: "dots", label: "●" }].map(v => (
+                        <button key={v.id} onClick={() => { setVizMode(v.id); localStorage.setItem("loci_viz", v.id); }}
+                          style={{ padding: "3px 10px", fontSize: "12px", border: "1px solid var(--border)", borderRadius: "20px", cursor: "pointer", fontWeight: "700", background: vizMode === v.id ? "var(--accent)" : "var(--bg-secondary)", color: vizMode === v.id ? "var(--btn-text, #fff)" : "var(--text-muted)", transition: "all 0.15s" }}>
+                          {v.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {vizMode === "streak" && (
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ marginBottom: "14px" }}>
+                        <span style={{ fontSize: "clamp(28px, 8vw, 44px)", fontWeight: "900", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-display)" }}>
+                          {config.visitStreakCount || 0}
+                        </span>
+                        <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "2px" }}>day streak 🔥</div>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginBottom: "8px" }}>
+                        {bentoDays.map((day, i) => {
+                          const isToday = i === 6;
+                          const done = day.count > 0;
+                          return (
+                            <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                              <div style={{ width: isToday ? "28px" : "22px", height: isToday ? "28px" : "22px", borderRadius: "50%", background: done ? "var(--accent)" : "var(--bg-secondary)", border: isToday ? "2px solid var(--accent)" : "2px solid var(--border)", transition: "all 0.2s" }} />
+                              <span style={{ fontSize: "8px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>{day.label}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600" }}>Filled = tasks done that day</p>
+                    </div>
+                  )}
+                  {vizMode === "dots" && (
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                        {bentoDays.map((day, i) => {
+                          const isToday = i === 6;
+                          const done = day.count > 0;
+                          return (
+                            <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "5px", flex: 1 }}>
+                              <span style={{ fontSize: "9px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>{day.label}</span>
+                              <div style={{ width: isToday ? "32px" : "26px", height: isToday ? "32px" : "26px", borderRadius: "50%", background: done ? "var(--success, #22c55e)" : "var(--bg-secondary)", border: isToday ? "2.5px solid var(--accent)" : done ? "none" : "2px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}>
+                                {done && <span style={{ fontSize: "12px" }}>✓</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600", marginTop: "4px" }}>Green ✓ = showed up · Today highlighted</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {toolPanel === "ritual" && (
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: ritualActive ? "10px" : 0 }}>
+                    <span style={{ fontSize: "16px" }}>🌅</span>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>Morning Ritual</span>
+                      <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "8px" }}>7 min · +80 XP</span>
+                    </div>
+                    {!ritualActive ? (
+                      <button className="btn" onClick={handleBeginRitual} style={{ padding: "6px 16px", fontSize: "12px", fontWeight: "700" }}>Begin</button>
+                    ) : (
+                      <button onClick={handleAbortRitual} style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>Stop</button>
+                    )}
+                  </div>
+                  {ritualActive && (
+                    <div style={{ background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", padding: "12px", display: "flex", flexDirection: "column", gap: "8px", marginTop: "10px" }}>
+                      <span style={{ fontSize: "10px", fontWeight: "800", color: "var(--text-muted)", letterSpacing: "0.05em", textTransform: "uppercase" }}>STEP {ritualStepIndex + 1} OF {ritualSteps.length}</span>
+                      <p style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0 }}>{ritualSteps[ritualStepIndex].name}</p>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontSize: "20px", fontWeight: "800", color: "var(--accent)", fontFamily: "var(--font-display)" }}>{formatRitualTime(ritualSecondsLeft)}</span>
+                        <button className="btn" onClick={handleAdvanceRitualStep} style={{ padding: "5px 14px", fontSize: "12px", background: "var(--bg-card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>Skip →</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {toolPanel === "dump" && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <h2 className="section-title" style={{ fontSize: "13px", margin: 0 }}>📝 Brain Dump</h2>
+                    {dumpCount > 0 && (
+                      <span style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700" }}>{dumpCount}/50</span>
+                    )}
+                  </div>
+                  {dumpCount >= 50 && (
+                    <p style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "8px", fontWeight: "600" }}>Inbox full (50/50). Go to Roadmap to triage first.</p>
+                  )}
+                  <form className="braindump-form" onSubmit={handleBrainDumpSubmit}>
+                    <input type="text" className="braindump-input"
+                      placeholder="Add anything on your mind."
+                      value={brainDumpText}
+                      onChange={e => setBrainDumpText(e.target.value)}
+                      disabled={dumpCount >= 50} />
+                    <button type="submit" className="braindump-submit" disabled={dumpCount >= 50}>➔</button>
+                  </form>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* The dock itself */}
+          <div className="floating-tools-dock">
+            <button
+              onClick={() => setToolPanel(p => p === "progress" ? null : "progress")}
+              style={{ display: "flex", alignItems: "center", gap: "5px", background: toolPanel === "progress" ? "rgba(255,255,255,0.1)" : "transparent", border: "none", cursor: "pointer", padding: "4px 6px", borderRadius: "16px" }}
+            >
+              <span style={{ fontSize: "12px", fontWeight: "800", color: "var(--accent)", whiteSpace: "nowrap" }}>🔥 {config.visitStreakCount || 0}d</span>
+              <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
+                {bentoDays.map((day, i) => (
+                  <div key={day.dateStr} style={{ width: i === 6 ? "8px" : "6px", height: i === 6 ? "8px" : "6px", borderRadius: "50%", background: day.count > 0 ? "var(--accent)" : "rgba(255,255,255,0.15)", border: i === 6 ? "1.5px solid var(--accent)" : "1px solid rgba(255,255,255,0.2)", flexShrink: 0 }} />
+                ))}
+              </div>
+            </button>
+
+            <div style={{ width: "1px", height: "24px", background: "rgba(255,255,255,0.12)" }} />
+
+            <button onClick={() => setToolPanel(p => p === "ritual" ? null : "ritual")}
+              style={{ fontSize: "18px", padding: "6px", background: (ritualActive || toolPanel === "ritual") ? "rgba(255,255,255,0.15)" : "transparent", border: ritualActive ? "1.5px solid var(--success)" : "none", borderRadius: "10px", cursor: "pointer", lineHeight: 1, color: "inherit" }} title="Morning Ritual">
+              🌅
+            </button>
+
+            <button onClick={() => setToolPanel(p => p === "dump" ? null : "dump")}
+              style={{ fontSize: "18px", padding: "6px", background: toolPanel === "dump" ? "rgba(255,255,255,0.15)" : "transparent", border: "none", borderRadius: "10px", cursor: "pointer", lineHeight: 1, position: "relative" }} title="Brain Dump">
+              📝
+              {dumpCount > 0 && (
+                <span style={{ position: "absolute", top: "2px", right: "2px", background: "var(--accent)", color: "#fff", fontSize: "7px", fontWeight: "800", borderRadius: "5px", padding: "1px 3px", lineHeight: 1.2 }}>{dumpCount}</span>
+              )}
+            </button>
+
+            <button onClick={openRescueMode}
+              style={{ fontSize: "18px", padding: "6px", background: "transparent", border: "none", borderRadius: "10px", cursor: "pointer", lineHeight: 1 }} title="Rescue Mode">
+              🚨
+            </button>
+
+            <button onClick={handleBadDayReset}
+              style={{ fontSize: "18px", padding: "6px", background: "transparent", border: "none", borderRadius: "10px", cursor: "pointer", lineHeight: 1 }} title="Bad Day Reset">
+              🌪️
+            </button>
+          </div>
+        </>
+      )}
 
       {/* ── Undo Delete Toast */}
       {undoTask && (
