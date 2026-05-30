@@ -428,6 +428,9 @@ export default function TodayTab({ payload, savePayload }) {
               "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
             </p>
           </section>
+      <div className="mobile-tools-legend" style={{ display: "none", justifyContent: "center", gap: "8px", fontSize: "10.5px", color: "var(--text-muted)", marginTop: "4px", padding: "0 6px" }}>
+        <span>ðŸŒ… Ritual</span> Â· <span>ðŸ“ Dump</span> Â· <span>ðŸš¨ Rescue</span> Â· <span>ðŸŒªï¸ Reset</span>
+      </div>
         );
       })()}
 
@@ -532,6 +535,9 @@ export default function TodayTab({ payload, savePayload }) {
           )}
         </div>
       </section>
+      <div className="mobile-tools-legend" style={{ display: "none", justifyContent: "center", gap: "8px", fontSize: "10.5px", color: "var(--text-muted)", marginTop: "4px", padding: "0 6px" }}>
+        <span>ðŸŒ… Ritual</span> Â· <span>ðŸ“ Dump</span> Â· <span>ðŸš¨ Rescue</span> Â· <span>ðŸŒªï¸ Reset</span>
+      </div>
 
       {/* ── Active Focus Block — only when a task is pinned */}
       {activeTask && (
@@ -570,11 +576,14 @@ export default function TodayTab({ payload, savePayload }) {
             "{config.intentionMessage}" — {config.mentorName || "Marcus Aurelius"}
           </p>
         </section>
+      <div className="mobile-tools-legend" style={{ display: "none", justifyContent: "center", gap: "8px", fontSize: "10.5px", color: "var(--text-muted)", marginTop: "4px", padding: "0 6px" }}>
+        <span>ðŸŒ… Ritual</span> Â· <span>ðŸ“ Dump</span> Â· <span>ðŸš¨ Rescue</span> Â· <span>ðŸŒªï¸ Reset</span>
+      </div>
       )}
 
       {/* ── Utility strip: Streak · Ritual · Dump · Rescue · Reset */}
       <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "10px 14px" }}>
+        <div className="habits-tools-row" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "10px 14px" }}>
           {/* Streak + 7-day dots — tap to expand progress detail */}
           <button
             onClick={() => setToolPanel(p => p === "progress" ? null : "progress")}
@@ -784,6 +793,9 @@ export default function TodayTab({ payload, savePayload }) {
           </div>
         )}
       </section>
+      <div className="mobile-tools-legend" style={{ display: "none", justifyContent: "center", gap: "8px", fontSize: "10.5px", color: "var(--text-muted)", marginTop: "4px", padding: "0 6px" }}>
+        <span>ðŸŒ… Ritual</span> Â· <span>ðŸ“ Dump</span> Â· <span>ðŸš¨ Rescue</span> Â· <span>ðŸŒªï¸ Reset</span>
+      </div>
 
       {/* ── Undo Delete Toast */}
       {undoTask && (
