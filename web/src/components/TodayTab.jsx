@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import TaskRow from "./TaskRow";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
+import { safeUUID } from "../utils/uuid";
 
 export default function TodayTab({ payload, savePayload }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
@@ -202,7 +203,7 @@ export default function TodayTab({ payload, savePayload }) {
     if (!brainDumpText.trim()) return;
     const currentDump = payload.brainDump || [];
     if (currentDump.length >= 50) return;
-    savePayload({ ...payload, brainDump: [...currentDump, { id: crypto.randomUUID(), text: brainDumpText.trim(), createdAt: Date.now() }] });
+    savePayload({ ...payload, brainDump: [...currentDump, { id: safeUUID(), text: brainDumpText.trim(), createdAt: Date.now() }] });
     setBrainDumpText("");
   };
 

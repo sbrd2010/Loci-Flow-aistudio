@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { callAI, getAIKeys } from "../utils/aiCall";
+import { safeUUID } from "../utils/uuid";
 
 
 export default function AddTaskDialog({ email, payload, savePayload, defaultHorizon, onClose }) {
@@ -107,7 +108,7 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
     const freshTask = {
       id: Date.now(),
       userId: email,
-      uuid: crypto.randomUUID(),
+      uuid: safeUUID(),
       title: title.trim(),
       concreteStep: concreteStep.trim() || "Do first tiny step",
       horizonLevel,
