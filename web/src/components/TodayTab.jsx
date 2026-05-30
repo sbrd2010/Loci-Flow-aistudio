@@ -770,98 +770,139 @@ export default function TodayTab({ payload, savePayload }) {
         </form>
       </section>
 
-      {/* 6 ── 7-Day Progress */}
-      <section className="bento-card" style={{ padding: "12px 14px" }}>
-        {/* Header + view toggle */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-          <h3 style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", margin: 0 }}>
-            📊 7-Day Progress
-          </h3>
-          <div style={{ display: "flex", gap: "4px" }}>
-            {[{ id: "streak", label: "🔥" }, { id: "dots", label: "●" }].map(v => (
-              <button key={v.id} onClick={() => { setVizMode(v.id); localStorage.setItem("loci_viz", v.id); }}
-                style={{
-                  padding: "3px 10px", fontSize: "12px", border: "1px solid var(--border)",
-                  borderRadius: "20px", cursor: "pointer", fontWeight: "700",
-                  background: vizMode === v.id ? "var(--accent)" : "var(--bg-secondary)",
-                  color: vizMode === v.id ? "var(--btn-text, #fff)" : "var(--text-muted)",
-                  transition: "all 0.15s"
-                }}>{v.label}</button>
-            ))}
-          </div>
+      {/* 6 ── Progress + Quick Actions */}
+      <section style={{
+        background: "var(--bg-card)", border: "1px solid var(--border)",
+        borderRadius: "var(--radius-sm)", padding: "10px 14px",
+        display: "flex", flexDirection: "column", gap: "0"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {/* Clickable progress strip */}
+          <button
+            onClick={() => setProgressDetailOpen(o => !o)}
+            style={{
+              display: "flex", alignItems: "center", gap: "10px", flex: 1,
+              background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0
+            }}
+          >
+            <span style={{ fontSize: "13px", fontWeight: "800", color: "var(--accent)", whiteSpace: "nowrap" }}>
+              🔥 {config.visitStreakCount || 0}d
+            </span>
+            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+              {bentoDays.map((day, i) => (
+                <div key={day.dateStr} style={{
+                  width: i === 6 ? "12px" : "9px",
+                  height: i === 6 ? "12px" : "9px",
+                  borderRadius: "50%",
+                  background: day.count > 0 ? "var(--accent)" : "var(--bg-secondary)",
+                  border: i === 6 ? "2px solid var(--accent)" : "1px solid var(--border)",
+                  flexShrink: 0
+                }} />
+              ))}
+            </div>
+            <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "2px" }}>
+              {progressDetailOpen ? "▲" : "▼"}
+            </span>
+          </button>
+          {/* Action buttons */}
+          <button onClick={openRescueMode}
+            style={{ fontSize: "11px", fontWeight: "700", padding: "5px 10px", background: "rgba(248,113,113,0.12)", border: "1px solid var(--danger)", borderRadius: "8px", color: "var(--danger)", cursor: "pointer", whiteSpace: "nowrap" }}>
+            🚨 Rescue
+          </button>
+          <button onClick={handleBadDayReset}
+            style={{ fontSize: "11px", fontWeight: "700", padding: "5px 10px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-secondary)", cursor: "pointer", whiteSpace: "nowrap" }}>
+            🌪️ Reset
+          </button>
         </div>
 
-        {/* ── VIEW A: Streak-First (🔥) ── */}
-        {vizMode === "streak" && (() => {
-          const streak = config.visitStreakCount || 0;
-          return (
-            <div style={{ textAlign: "center" }}>
-              {/* Big streak number */}
-              <div style={{ marginBottom: "14px" }}>
-                <span style={{ fontSize: "clamp(28px, 8vw, 44px)", fontWeight: "900", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-display)" }}>
-                  {streak}
-                </span>
-                <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "2px" }}>
-                  day streak 🔥
-                </div>
+        {progressDetailOpen && (
+          <div style={{ marginTop: "12px", borderTop: "1px solid var(--border)", paddingTop: "12px" }}>
+            {/* View toggle */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <h3 style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", margin: 0 }}>
+                📊 7-Day Progress
+              </h3>
+              <div style={{ display: "flex", gap: "4px" }}>
+                {[{ id: "streak", label: "🔥" }, { id: "dots", label: "●" }].map(v => (
+                  <button key={v.id} onClick={() => { setVizMode(v.id); localStorage.setItem("loci_viz", v.id); }}
+                    style={{
+                      padding: "3px 10px", fontSize: "12px", border: "1px solid var(--border)",
+                      borderRadius: "20px", cursor: "pointer", fontWeight: "700",
+                      background: vizMode === v.id ? "var(--accent)" : "var(--bg-secondary)",
+                      color: vizMode === v.id ? "var(--btn-text, #fff)" : "var(--text-muted)",
+                      transition: "all 0.15s"
+                    }}>{v.label}</button>
+                ))}
               </div>
-              {/* 7 dots */}
-              <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginBottom: "8px" }}>
-                {bentoDays.map((day, i) => {
-                  const isToday = i === 6;
-                  const done = day.count > 0;
-                  return (
-                    <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
-                      <div style={{
-                        width: isToday ? "28px" : "22px",
-                        height: isToday ? "28px" : "22px",
-                        borderRadius: "50%",
-                        background: done ? "var(--accent)" : "var(--bg-secondary)",
-                        border: isToday ? "2px solid var(--accent)" : "2px solid var(--border)",
-                        transition: "all 0.2s"
-                      }} />
-                      <span style={{ fontSize: "8px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>
-                        {day.label}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-              <p style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600" }}>Filled = tasks done that day</p>
             </div>
-          );
-        })()}
 
-        {/* ── VIEW B: Habit Dots (●) ── */}
-        {vizMode === "dots" && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              {bentoDays.map((day, i) => {
-                const isToday = i === 6;
-                const done = day.count > 0;
-                return (
-                  <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "5px", flex: 1 }}>
-                    <span style={{ fontSize: "9px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>
-                      {day.label}
+            {vizMode === "streak" && (() => {
+              const streak = config.visitStreakCount || 0;
+              return (
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ marginBottom: "14px" }}>
+                    <span style={{ fontSize: "clamp(28px, 8vw, 44px)", fontWeight: "900", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-display)" }}>
+                      {streak}
                     </span>
-                    <div style={{
-                      width: isToday ? "32px" : "26px",
-                      height: isToday ? "32px" : "26px",
-                      borderRadius: "50%",
-                      background: done ? "var(--success, #22c55e)" : "var(--bg-secondary)",
-                      border: isToday ? "2.5px solid var(--accent)" : done ? "none" : "2px solid var(--border)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      transition: "all 0.2s"
-                    }}>
-                      {done && <span style={{ fontSize: "12px" }}>✓</span>}
+                    <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "2px" }}>
+                      day streak 🔥
                     </div>
                   </div>
-                );
-              })}
-            </div>
-            <p style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600", marginTop: "4px" }}>
-              Green ✓ = showed up · Today highlighted
-            </p>
+                  <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginBottom: "8px" }}>
+                    {bentoDays.map((day, i) => {
+                      const isToday = i === 6;
+                      const done = day.count > 0;
+                      return (
+                        <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                          <div style={{
+                            width: isToday ? "28px" : "22px", height: isToday ? "28px" : "22px",
+                            borderRadius: "50%",
+                            background: done ? "var(--accent)" : "var(--bg-secondary)",
+                            border: isToday ? "2px solid var(--accent)" : "2px solid var(--border)",
+                            transition: "all 0.2s"
+                          }} />
+                          <span style={{ fontSize: "8px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>
+                            {day.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600" }}>Filled = tasks done that day</p>
+                </div>
+              );
+            })()}
+
+            {vizMode === "dots" && (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  {bentoDays.map((day, i) => {
+                    const isToday = i === 6;
+                    const done = day.count > 0;
+                    return (
+                      <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "5px", flex: 1 }}>
+                        <span style={{ fontSize: "9px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>
+                          {day.label}
+                        </span>
+                        <div style={{
+                          width: isToday ? "32px" : "26px", height: isToday ? "32px" : "26px",
+                          borderRadius: "50%",
+                          background: done ? "var(--success, #22c55e)" : "var(--bg-secondary)",
+                          border: isToday ? "2.5px solid var(--accent)" : done ? "none" : "2px solid var(--border)",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          transition: "all 0.2s"
+                        }}>
+                          {done && <span style={{ fontSize: "12px" }}>✓</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600", marginTop: "4px" }}>
+                  Green ✓ = showed up · Today highlighted
+                </p>
+              </div>
+            )}
           </div>
         )}
       </section>
