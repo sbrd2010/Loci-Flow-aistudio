@@ -8,13 +8,12 @@ export default function TodayTab({ payload, savePayload }) {
 
   const [confirmDialog, setConfirmDialog] = useState(null);
 
-  // Local state for pomodoro timer
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerSecondsLeft, setTimerSecondsLeft] = useState((config.pomodoroDurationMinutes || 25) * 60);
   const [timerMaxSeconds, setTimerMaxSeconds] = useState((config.pomodoroDurationMinutes || 25) * 60);
   const timerIntervalRef = useRef(null);
 
-  // Morning Ritual — declared here so useEffects below can reference them
+  // Morning Ritual — declared before useEffects that reference them
   const [ritualActive, setRitualActive] = useState(false);
   const [ritualStepIndex, setRitualStepIndex] = useState(-1);
   const [ritualSecondsLeft, setRitualSecondsLeft] = useState(0);
@@ -22,65 +21,40 @@ export default function TodayTab({ payload, savePayload }) {
   const [ritualSuccess, setRitualSuccess] = useState(false);
   const ritualIntervalRef = useRef(null);
 
-  // Active focus task (if any)
   const activeTask = tasks.find((t) => t.isNowFocus && !t.isDeleted && !t.isCompleted);
 
-  // Synchronize timer duration if active task estimate changes or is pinned
   useEffect(() => {
     if (activeTask) {
-      // Fix #16: guard against NaN/0 from missing timeEstimateMinutes
       const rawMins = Number(activeTask.timeEstimateMinutes);
       const taskSecs = (rawMins > 0 ? rawMins : 25) * 60;
       setTimerMaxSeconds(taskSecs);
-      // Reset timer countdown if not already running
-      if (!isTimerRunning) {
-        setTimerSecondsLeft(taskSecs);
-      }
+      if (!isTimerRunning) setTimerSecondsLeft(taskSecs);
     } else {
       const rawMins = Number(config.pomodoroDurationMinutes);
       const defaultSecs = (rawMins > 0 ? rawMins : 25) * 60;
       setTimerMaxSeconds(defaultSecs);
-      if (!isTimerRunning) {
-        setTimerSecondsLeft(defaultSecs);
-      }
+      if (!isTimerRunning) setTimerSecondsLeft(defaultSecs);
     }
   }, [activeTask?.uuid, activeTask?.timeEstimateMinutes, config.pomodoroDurationMinutes]);
 
-  // Pomodoro countdown timer logic
   useEffect(() => {
     if (isTimerRunning) {
       timerIntervalRef.current = setInterval(() => {
-        setTimerSecondsLeft((prev) => {
-          if (prev <= 1) {
-            return 0;
-          }
-          return prev - 1;
-        });
+        setTimerSecondsLeft((prev) => (prev <= 1 ? 0 : prev - 1));
       }, 1000);
     } else {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     }
-
-    return () => {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
-    };
+    return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
   }, [isTimerRunning]);
 
-  // Handle Pomodoro Timer Completion Side-Effect
   useEffect(() => {
     if (isTimerRunning && timerSecondsLeft === 0) {
       setIsTimerRunning(false);
-      // Fix #17: Pomodoro finished — alert user but do NOT auto-complete the task
-      // The user may have stopped the focus block without finishing the actual task.
       handlePomodoroCompletion();
     }
   }, [timerSecondsLeft, isTimerRunning]);
 
-  // Morning Ritual timer
   useEffect(() => {
     if (ritualActive && ritualStepIndex >= 0 && ritualSecondsLeft > 0) {
       ritualIntervalRef.current = setInterval(() => {
@@ -107,7 +81,6 @@ export default function TodayTab({ payload, savePayload }) {
     }
   }, [ritualDone]);
 
-  // Rotating quotes — change every 2 hours
   const QUOTES = [
     { quote: "Done is better than perfect.", author: "Sheryl Sandberg" },
     { quote: "Action cures fear.", author: "David J. Schwartz" },
@@ -127,7 +100,6 @@ export default function TodayTab({ payload, savePayload }) {
   ];
   const currentQuote = QUOTES[Math.floor(Date.now() / (2 * 3600 * 1000)) % QUOTES.length];
 
-  // Timeline progress calculations
   const [timelineProgress, setTimelineProgress] = useState(0.5);
   const [currentTimeStr, setCurrentTimeStr] = useState("");
   const [currentDateStr, setCurrentDateStr] = useState("");
@@ -137,22 +109,14 @@ export default function TodayTab({ payload, savePayload }) {
     const hour = now.getHours();
     const minute = now.getMinutes();
     const second = now.getSeconds();
-
-    // Formatting display clock
     const displayHour = hour % 12 === 0 ? 12 : hour % 12;
     const amPmStr = hour >= 12 ? "PM" : "AM";
     setCurrentTimeStr(`${displayHour}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")} ${amPmStr}`);
     setCurrentDateStr(now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }));
-
-    // Day boundary progress: 7 AM to 2 AM next day (19 hours total)
-    const startHour = 7;
-    const endHour = 26; // 2 AM next day is 26 hours from 0
-
+    const startHour = 7, endHour = 26;
     const currentHourFloat = hour + minute / 60;
     const adjustedHour = hour < 7 ? currentHourFloat + 24 : currentHourFloat;
-
-    const progress = (adjustedHour - startHour) / (endHour - startHour);
-    setTimelineProgress(Math.max(0, Math.min(1, progress)));
+    setTimelineProgress(Math.max(0, Math.min(1, (adjustedHour - startHour) / (endHour - startHour))));
   };
 
   useEffect(() => {
@@ -161,14 +125,14 @@ export default function TodayTab({ payload, savePayload }) {
     return () => clearInterval(interval);
   }, []);
 
-  // Rescue Mode v2 + Quick menu
   const [rescueActive, setRescueActive] = useState(false);
-  const [rescueTask, setRescueTask]     = useState(null);
-  const [progressDetailOpen, setProgressDetailOpen] = useState(false);
+  const [rescueTask, setRescueTask] = useState(null);
+  // null | "ritual" | "dump" | "progress"
+  const [toolPanel, setToolPanel] = useState(null);
 
   const openRescueMode = () => {
     const pinned = tasks.find(t => !t.isDeleted && !t.isCompleted && t.isNowFocus);
-    const first  = tasks.find(t => !t.isDeleted && !t.isCompleted);
+    const first = tasks.find(t => !t.isDeleted && !t.isCompleted);
     setRescueTask(pinned || first || null);
     setRescueActive(true);
   };
@@ -185,7 +149,6 @@ export default function TodayTab({ payload, savePayload }) {
     });
   };
 
-  // Legacy rescue pod (kept for pinned-task Stuck? button)
   const [showRescue, setShowRescue] = useState(false);
   const [rescueStepIndex, setRescueStepIndex] = useState(0);
   const rescueSteps = [
@@ -195,22 +158,14 @@ export default function TodayTab({ payload, savePayload }) {
     "Commit to just 2 minutes. You can stop after that."
   ];
   const handleNextRescueStep = () => {
-    if (rescueStepIndex < rescueSteps.length - 1) { setRescueStepIndex(rescueStepIndex + 1); }
+    if (rescueStepIndex < rescueSteps.length - 1) setRescueStepIndex(rescueStepIndex + 1);
     else { setShowRescue(false); setRescueStepIndex(0); }
   };
 
-  // Brain Dump capture field
   const [brainDumpText, setBrainDumpText] = useState("");
-
-  // Inline task editing
   const [editingTaskUuid, setEditingTaskUuid] = useState(null);
   const [editFields, setEditFields] = useState({ title: "", concreteStep: "", priority: "P2" });
-
-  // Bar chart selected day
-  const [selectedDay, setSelectedDay] = useState(null);
   const [vizMode, setVizMode] = useState(() => localStorage.getItem("loci_viz") || "streak");
-
-  // Undo delete
   const [undoTask, setUndoTask] = useState(null);
   const undoTimeoutRef = useRef(null);
 
@@ -219,113 +174,59 @@ export default function TodayTab({ payload, savePayload }) {
     if (!brainDumpText.trim()) return;
     const currentDump = payload.brainDump || [];
     if (currentDump.length >= 50) return;
-    const newItem = { id: crypto.randomUUID(), text: brainDumpText.trim(), createdAt: Date.now() };
-    savePayload({ ...payload, brainDump: [...currentDump, newItem] });
+    savePayload({ ...payload, brainDump: [...currentDump, { id: crypto.randomUUID(), text: brainDumpText.trim(), createdAt: Date.now() }] });
     setBrainDumpText("");
   };
 
-  // Helper: Format date as YYYY-MM-DD
   const getTodayDateString = () => {
     const d = new Date();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${d.getFullYear()}-${month}-${day}`;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
 
-  // Update contribution count inside the payload
   const incrementContribution = (newContributions, dateStr) => {
     const index = newContributions.findIndex((c) => c.dateString === dateStr);
     const uid = payload.userId || payload.config?.userId || "";
     const compositeKey = `${uid}_${dateStr}`;
     if (index === -1) {
-      newContributions.push({
-        compositeKey,
-        userId: uid,
-        dateString: dateStr,
-        count: 1,
-        lastUpdated: Date.now()
-      });
+      newContributions.push({ compositeKey, userId: uid, dateString: dateStr, count: 1, lastUpdated: Date.now() });
     } else {
-      newContributions[index] = {
-        ...newContributions[index],
-        count: newContributions[index].count + 1,
-        lastUpdated: Date.now()
-      };
+      newContributions[index] = { ...newContributions[index], count: newContributions[index].count + 1, lastUpdated: Date.now() };
     }
     return newContributions;
   };
 
-  // Handlers for Task Actions
   const handleToggleComplete = (task) => {
     const todayDateStr = getTodayDateString();
     const isCompleted = !task.isCompleted;
-
-    // 1. Update task completed markers
-    const updatedTasks = tasks.map((t) => {
-      if (t.uuid === task.uuid) {
-        return {
-          ...t,
-          isCompleted,
-          isNowFocus: false,
-          dateCompletedString: isCompleted ? todayDateStr : null,
-          lastUpdated: Date.now()
-        };
-      }
-      return t;
-    });
-
-    // 2. Adjust XP balance and Streak contributions
+    const updatedTasks = tasks.map((t) =>
+      t.uuid === task.uuid ? { ...t, isCompleted, isNowFocus: false, dateCompletedString: isCompleted ? todayDateStr : null, lastUpdated: Date.now() } : t
+    );
     let nextXp = Number(config.totalXp) || 0;
     let nextContributions = [...contributions];
     if (isCompleted) {
-      // Task checked: +100 XP and add contribution
       nextXp += 100;
       nextContributions = incrementContribution(nextContributions, todayDateStr);
     } else {
-      // Task unchecked: deduct 100 XP (floor 0) and reverse contribution
       nextXp = Math.max(0, nextXp - 100);
-      // Decrement contribution count if present
       const contrIdx = nextContributions.findIndex((c) => c.dateString === todayDateStr);
       if (contrIdx !== -1 && nextContributions[contrIdx].count > 0) {
-        nextContributions[contrIdx] = {
-          ...nextContributions[contrIdx],
-          count: nextContributions[contrIdx].count - 1,
-          lastUpdated: Date.now()
-        };
+        nextContributions[contrIdx] = { ...nextContributions[contrIdx], count: nextContributions[contrIdx].count - 1, lastUpdated: Date.now() };
       }
     }
-
-    savePayload({
-      ...payload,
-      tasks: updatedTasks,
-      config: {
-        ...config,
-        totalXp: nextXp,
-        lastUpdated: Date.now()
-      },
-      contributions: nextContributions
-    });
+    savePayload({ ...payload, tasks: updatedTasks, config: { ...config, totalXp: nextXp, lastUpdated: Date.now() }, contributions: nextContributions });
   };
 
   const handlePinTask = (task) => {
     const now = Date.now();
-    const updatedTasks = tasks.map((t) => {
+    savePayload({ ...payload, tasks: tasks.map((t) => {
       const newFocus = t.uuid === task.uuid;
       if (t.isNowFocus === newFocus) return t;
       return { ...t, isNowFocus: newFocus, lastUpdated: now };
-    });
-
-    savePayload({
-      ...payload,
-      tasks: updatedTasks
-    });
+    })});
   };
 
   const handleDeleteTask = (task) => {
-    const updatedTasks = tasks.map((t) =>
-      t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t
-    );
-    savePayload({ ...payload, tasks: updatedTasks });
+    savePayload({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t) });
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
     setUndoTask(task);
     undoTimeoutRef.current = setTimeout(() => setUndoTask(null), 5000);
@@ -334,10 +235,7 @@ export default function TodayTab({ payload, savePayload }) {
   const handleUndoDelete = () => {
     if (!undoTask) return;
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
-    const updatedTasks = tasks.map((t) =>
-      t.uuid === undoTask.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t
-    );
-    savePayload({ ...payload, tasks: updatedTasks });
+    savePayload({ ...payload, tasks: tasks.map((t) => t.uuid === undoTask.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t) });
     setUndoTask(null);
   };
 
@@ -345,50 +243,31 @@ export default function TodayTab({ payload, savePayload }) {
     if (activeTask) {
       const todayDateStr = getTodayDateString();
       const task = activeTask;
-
       setConfirmDialog({
         message: `⏱️ Focus block complete!\n\nDid you fully finish:\n"${task.title}"?`,
         confirmLabel: "Done! +120 XP",
         cancelLabel: "+50 XP, keep going",
         onConfirm: () => {
-          const updatedTasks = tasks.map((t) =>
-            t.uuid === task.uuid
-              ? { ...t, isCompleted: true, isNowFocus: false, dateCompletedString: todayDateStr, lastUpdated: Date.now() }
-              : t
-          );
           savePayload({
             ...payload,
-            tasks: updatedTasks,
+            tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isCompleted: true, isNowFocus: false, dateCompletedString: todayDateStr, lastUpdated: Date.now() } : t),
             config: { ...config, totalXp: (Number(config.totalXp) || 0) + 120, lastUpdated: Date.now() },
             contributions: incrementContribution([...contributions], todayDateStr)
           });
           setConfirmDialog(null);
         },
         onCancel: () => {
-          savePayload({
-            ...payload,
-            config: { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() }
-          });
+          savePayload({ ...payload, config: { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() } });
           setConfirmDialog(null);
         }
       });
     } else {
-      savePayload({
-        ...payload,
-        config: { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() }
-      });
+      savePayload({ ...payload, config: { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() } });
     }
   };
 
   const handleEnergyToggle = () => {
-    savePayload({
-      ...payload,
-      config: {
-        ...config,
-        isLowEnergyMode: !config.isLowEnergyMode,
-        lastUpdated: Date.now()
-      }
-    });
+    savePayload({ ...payload, config: { ...config, isLowEnergyMode: !config.isLowEnergyMode, lastUpdated: Date.now() } });
   };
 
   const handleStartEdit = (task) => {
@@ -398,12 +277,7 @@ export default function TodayTab({ payload, savePayload }) {
   const handleCancelEdit = () => setEditingTaskUuid(null);
   const handleSaveEdit = () => {
     if (!editFields.title.trim()) return;
-    const updatedTasks = tasks.map(t =>
-      t.uuid === editingTaskUuid
-        ? { ...t, title: editFields.title.trim(), concreteStep: editFields.concreteStep.trim(), priority: editFields.priority, lastUpdated: Date.now() }
-        : t
-    );
-    savePayload({ ...payload, tasks: updatedTasks });
+    savePayload({ ...payload, tasks: tasks.map(t => t.uuid === editingTaskUuid ? { ...t, title: editFields.title.trim(), concreteStep: editFields.concreteStep.trim(), priority: editFields.priority, lastUpdated: Date.now() } : t) });
     setEditingTaskUuid(null);
   };
 
@@ -414,15 +288,13 @@ export default function TodayTab({ payload, savePayload }) {
     if (swapIdx < 0 || swapIdx >= list.length) return;
     const aIdx = list[idx].orderIndex ?? idx;
     const bIdx = list[swapIdx].orderIndex ?? swapIdx;
-    const updatedTasks = tasks.map(t => {
+    savePayload({ ...payload, tasks: tasks.map(t => {
       if (t.uuid === list[idx].uuid) return { ...t, orderIndex: bIdx, lastUpdated: Date.now() };
       if (t.uuid === list[swapIdx].uuid) return { ...t, orderIndex: aIdx, lastUpdated: Date.now() };
       return t;
-    });
-    savePayload({ ...payload, tasks: updatedTasks });
+    })});
   };
 
-  // Morning Ritual steps & handlers
   const ritualSteps = [
     { name: "Hydrate — drink a full glass of water", seconds: 60 },
     { name: "Stand & Stretch (touch toes)", seconds: 90 },
@@ -431,7 +303,6 @@ export default function TodayTab({ payload, savePayload }) {
     { name: "Scan your task list — pick 3 priorities", seconds: 30 },
     { name: "Pick your very first action NOW", seconds: 30 }
   ];
-
   const formatRitualTime = secs => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
 
   const handleAdvanceRitualStep = () => {
@@ -461,47 +332,31 @@ export default function TodayTab({ payload, savePayload }) {
     setRitualSecondsLeft(0);
   };
 
-  // Filter today tasks list based on active Level Energy Filters (excluding parked tasks)
   const todayTasksAll = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isParked);
-  const todayTasksFiltered = config.isLowEnergyMode
-    ? todayTasksAll.filter((t) => t.priority === "P4")
-    : todayTasksAll;
-
-  const remainingTasks = todayTasksFiltered
-    .filter((t) => !t.isCompleted)
-    .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
-
+  const todayTasksFiltered = config.isLowEnergyMode ? todayTasksAll.filter((t) => t.priority === "P4") : todayTasksAll;
+  const remainingTasks = todayTasksFiltered.filter((t) => !t.isCompleted).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
   const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted);
 
-  // Bento contribution grid calculation (previous 7 days)
   const getBentoDays = () => {
     const days = [];
     const d = new Date();
     for (let i = 6; i >= 0; i--) {
       const past = new Date(d);
       past.setDate(d.getDate() - i);
-      const month = String(past.getMonth() + 1).padStart(2, "0");
-      const day = String(past.getDate()).padStart(2, "0");
-      const dateStr = `${past.getFullYear()}-${month}-${day}`;
-
+      const dateStr = `${past.getFullYear()}-${String(past.getMonth() + 1).padStart(2, "0")}-${String(past.getDate()).padStart(2, "0")}`;
       const contr = contributions.find((c) => c.dateString === dateStr);
-      days.push({
-        dateStr,
-        label: past.toLocaleDateString("en-US", { weekday: "short" }).substring(0, 2),
-        count: contr ? contr.count : 0
-      });
+      days.push({ dateStr, label: past.toLocaleDateString("en-US", { weekday: "short" }).substring(0, 2), count: contr ? contr.count : 0 });
     }
     return days;
   };
-
   const bentoDays = getBentoDays();
 
-  // Timer SVG configuration — guard against division-by-zero when timerMaxSeconds is 0
   const progressRatio = timerMaxSeconds > 0 ? timerSecondsLeft / timerMaxSeconds : 0;
   const strokeDashoffset = 439.8 * (1 - progressRatio);
-
   const formatTimerMinutes = Math.floor(timerSecondsLeft / 60);
   const formatTimerSeconds = String(timerSecondsLeft % 60).padStart(2, "0");
+
+  const dumpCount = (payload.brainDump || []).length;
 
   return (
     <>
@@ -511,90 +366,37 @@ export default function TodayTab({ payload, savePayload }) {
         </div>
       )}
 
-      {/* 1 ── Rotating Motivation Quote */}
+      {/* ── Compact header: Clock · Horizon bar · Quote */}
       <section style={{
-        background: "var(--accent)", borderRadius: "var(--radius-sm)",
-        padding: "8px 14px", display: "flex", alignItems: "center", gap: "10px"
+        background: "var(--bg-card)", border: "1px solid var(--border)",
+        borderRadius: "var(--radius-sm)", padding: "8px 14px",
+        display: "flex", alignItems: "center", gap: "10px"
       }}>
-        <p style={{
-          fontSize: "13px", fontWeight: "700",
-          color: "var(--btn-text, #fff)", lineHeight: "1.3",
-          fontStyle: "italic", margin: 0, flex: 1
-        }}>
-          "{currentQuote.quote}"
-        </p>
-        <p style={{ fontSize: "10px", fontWeight: "600", color: "rgba(255,255,255,0.75)", margin: 0, flexShrink: 0, letterSpacing: "0.03em" }}>
-          — {currentQuote.author}
-        </p>
-      </section>
-
-      {/* 2 ── Day Horizon Timeline */}
-      <section className="timeline-card">
-        <div className="timeline-header">
-          <div className="timeline-title">
-            <h2 className="section-title" style={{ fontSize: "15px", marginBottom: 0 }}>⏰ Day Horizon</h2>
+        <div style={{ flexShrink: 0 }}>
+          <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", letterSpacing: "-0.01em", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+            {currentTimeStr}
           </div>
-          <div style={{ textAlign: "right" }}>
-            <div className="timeline-clock">{currentTimeStr}</div>
-            <div style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600", marginTop: "1px" }}>{currentDateStr}</div>
+          <div style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600", marginTop: "2px" }}>
+            {currentDateStr}
           </div>
         </div>
-        <div className="timeline-progress-track">
-          <div className="timeline-labels">
-            <span className="timeline-label">7 am</span>
-            <span className="timeline-label">1 pm</span>
-            <span className="timeline-label">7 pm</span>
-            <span className="timeline-label">2 am</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ height: "4px", background: "var(--bg-secondary)", borderRadius: "2px", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "2px" }} />
           </div>
-          <div className="timeline-progress-fill" style={{ width: `${timelineProgress * 100}%` }}></div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "2px" }}>
+            <span style={{ fontSize: "8px", color: "var(--text-muted)", fontWeight: "600" }}>7a</span>
+            <span style={{ fontSize: "8px", color: "var(--text-muted)", fontWeight: "600" }}>2a</span>
+          </div>
+        </div>
+        <div style={{ flexShrink: 0, maxWidth: "92px" }}>
+          <p style={{ fontSize: "9px", fontStyle: "italic", color: "var(--accent)", margin: 0, lineHeight: "1.35", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+            "{currentQuote.quote.length > 40 ? currentQuote.quote.substring(0, 38) + "…" : currentQuote.quote}"
+          </p>
         </div>
       </section>
 
-      {/* Morning Ritual — compact strip */}
-      <section style={{
-        background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
-        padding: "10px 14px", display: "flex", flexDirection: "column", gap: "10px"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontSize: "18px" }}>🌅</span>
-          <div style={{ flex: 1 }}>
-            <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>Morning Ritual</span>
-            <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "8px" }}>7 min · +80 XP</span>
-          </div>
-          {!ritualActive ? (
-            <button className="btn" onClick={handleBeginRitual}
-              style={{ padding: "6px 16px", fontSize: "12px", fontWeight: "700" }}>
-              Begin
-            </button>
-          ) : (
-            <button onClick={handleAbortRitual}
-              style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-              Stop
-            </button>
-          )}
-        </div>
-        {ritualActive && (
-          <div style={{ background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", padding: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
-            <span style={{ fontSize: "10px", fontWeight: "800", color: "var(--text-muted)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-              STEP {ritualStepIndex + 1} OF {ritualSteps.length}
-            </span>
-            <p style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0 }}>
-              {ritualSteps[ritualStepIndex].name}
-            </p>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: "20px", fontWeight: "800", color: "var(--accent)", fontFamily: "var(--font-display)" }}>
-                {formatRitualTime(ritualSecondsLeft)}
-              </span>
-              <button className="btn" onClick={handleAdvanceRitualStep}
-                style={{ padding: "5px 14px", fontSize: "12px", background: "var(--bg-card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
-                Skip →
-              </button>
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* 3 ── Today's Focus (primary section) */}
+      {/* ── Today's Focus — tasks dominate the screen */}
       <section className="tasks-section" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         <div className="section-header">
           <h2 className="section-title">
@@ -609,13 +411,13 @@ export default function TodayTab({ payload, savePayload }) {
             <button
               className="stuck-btn"
               onClick={handleEnergyToggle}
-              title="Toggle Low Energy mode"
+              title={config.isLowEnergyMode ? "Low Energy ON — tap to disable" : "Enable Low Energy mode"}
               style={{
                 background: config.isLowEnergyMode ? "var(--success)" : "var(--bg-secondary)",
                 color: config.isLowEnergyMode ? "#fff" : "var(--text-secondary)"
               }}
             >
-              🔋 Low Energy
+              🔋 {config.isLowEnergyMode ? "ON" : "Low E"}
             </button>
             <span className="section-count-badge">
               {completedTasks.length}/{todayTasksFiltered.length}
@@ -625,15 +427,9 @@ export default function TodayTab({ payload, savePayload }) {
 
         <div className="tasks-list">
           {todayTasksAll.length === 0 && (
-            <div style={{
-              textAlign: "center", padding: "24px 16px",
-              background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)",
-              border: "1px dashed var(--border)"
-            }}>
+            <div style={{ textAlign: "center", padding: "24px 16px", background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", border: "1px dashed var(--border)" }}>
               <div style={{ fontSize: "32px", marginBottom: "10px" }}>🧠</div>
-              <p style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "6px" }}>
-                Welcome to Loci!
-              </p>
+              <p style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "6px" }}>Welcome to Loci!</p>
               <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: "1.6", marginBottom: "14px" }}>
                 Loci helps you capture tasks, prioritize them with AI, and build daily focus habits — designed for ADHD brains.
               </p>
@@ -663,8 +459,7 @@ export default function TodayTab({ payload, savePayload }) {
                       placeholder="Micro step (optional)" style={{ marginBottom: "8px" }} />
                     <div style={{ display: "flex", gap: "6px", marginBottom: "12px" }}>
                       {["P1","P2","P3","P4"].map(p => (
-                        <button key={p} type="button"
-                          className={`priority-badge ${p.toLowerCase()}`}
+                        <button key={p} type="button" className={`priority-badge ${p.toLowerCase()}`}
                           onClick={() => setEditFields(f => ({ ...f, priority: p }))}
                           style={{ border: editFields.priority === p ? "2px solid var(--accent)" : "2px solid transparent", cursor: "pointer", padding: "4px 10px", opacity: editFields.priority === p ? 1 : 0.55 }}>
                           {p}
@@ -694,9 +489,7 @@ export default function TodayTab({ payload, savePayload }) {
                 <>
                   <div className="completed-section-title">Completed</div>
                   {completedTasks.map(task => (
-                    <TaskRow key={task.uuid} task={task}
-                      onToggleComplete={handleToggleComplete}
-                      onDelete={handleDeleteTask} />
+                    <TaskRow key={task.uuid} task={task} onToggleComplete={handleToggleComplete} onDelete={handleDeleteTask} />
                   ))}
                 </>
               )}
@@ -705,7 +498,7 @@ export default function TodayTab({ payload, savePayload }) {
         </div>
       </section>
 
-      {/* 4 ── Active Focus Block — only visible when a task is pinned */}
+      {/* ── Active Focus Block — only when a task is pinned */}
       {activeTask && (
         <section className="card focus-card">
           <div className="focus-top-bar">
@@ -723,8 +516,7 @@ export default function TodayTab({ payload, savePayload }) {
             <div className="timer-circle-container">
               <svg className="timer-svg" viewBox="0 0 160 160">
                 <circle className="timer-ring-bg" cx="80" cy="80" r="70" strokeWidth="8" />
-                <circle className="timer-ring-progress" cx="80" cy="80" r="70" strokeWidth="8"
-                  style={{ strokeDashoffset }} />
+                <circle className="timer-ring-progress" cx="80" cy="80" r="70" strokeWidth="8" style={{ strokeDashoffset }} />
               </svg>
               <div className="timer-text-container">
                 <span className="timer-time">{formatTimerMinutes}:{formatTimerSeconds}</span>
@@ -745,54 +537,22 @@ export default function TodayTab({ payload, savePayload }) {
         </section>
       )}
 
-      {/* 5 ── Brain Dump Quick Capture */}
-      <section className="braindump-card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-          <h2 className="section-title" style={{ fontSize: "15px", margin: 0 }}>📝 Brain Dump</h2>
-          {(payload.brainDump || []).length > 0 && (
-            <span style={{ fontSize: "11px", color: (payload.brainDump || []).length >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700" }}>
-              {(payload.brainDump || []).length}/50
-            </span>
-          )}
-        </div>
-        {(payload.brainDump || []).length >= 50 && (
-          <p style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "8px", fontWeight: "600" }}>
-            Inbox full (50/50). Go to the Roadmap tab to triage items first.
-          </p>
-        )}
-        <form className="braindump-form" onSubmit={handleBrainDumpSubmit}>
-          <input type="text" className="braindump-input"
-            placeholder="Add anything on your mind."
-            value={brainDumpText}
-            onChange={e => setBrainDumpText(e.target.value)}
-            disabled={(payload.brainDump || []).length >= 50} />
-          <button type="submit" className="braindump-submit" disabled={(payload.brainDump || []).length >= 50}>➔</button>
-        </form>
-      </section>
-
-      {/* 6 ── Progress + Quick Actions */}
-      <section style={{
-        background: "var(--bg-card)", border: "1px solid var(--border)",
-        borderRadius: "var(--radius-sm)", padding: "10px 14px",
-        display: "flex", flexDirection: "column", gap: "0"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          {/* Clickable progress strip */}
+      {/* ── Utility strip: Streak · Ritual · Dump · Rescue · Reset */}
+      <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "10px 14px" }}>
+          {/* Streak + 7-day dots — tap to expand progress detail */}
           <button
-            onClick={() => setProgressDetailOpen(o => !o)}
-            style={{
-              display: "flex", alignItems: "center", gap: "10px", flex: 1,
-              background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0
-            }}
+            onClick={() => setToolPanel(p => p === "progress" ? null : "progress")}
+            style={{ display: "flex", alignItems: "center", gap: "5px", flex: 1, background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}
           >
-            <span style={{ fontSize: "13px", fontWeight: "800", color: "var(--accent)", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: "12px", fontWeight: "800", color: "var(--accent)", whiteSpace: "nowrap" }}>
               🔥 {config.visitStreakCount || 0}d
             </span>
-            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
               {bentoDays.map((day, i) => (
                 <div key={day.dateStr} style={{
-                  width: i === 6 ? "12px" : "9px",
-                  height: i === 6 ? "12px" : "9px",
+                  width: i === 6 ? "10px" : "7px",
+                  height: i === 6 ? "10px" : "7px",
                   borderRadius: "50%",
                   background: day.count > 0 ? "var(--accent)" : "var(--bg-secondary)",
                   border: i === 6 ? "2px solid var(--accent)" : "1px solid var(--border)",
@@ -800,24 +560,59 @@ export default function TodayTab({ payload, savePayload }) {
                 }} />
               ))}
             </div>
-            <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "2px" }}>
-              {progressDetailOpen ? "▲" : "▼"}
-            </span>
+            <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>{toolPanel === "progress" ? "▲" : "▼"}</span>
           </button>
-          {/* Action buttons */}
-          <button onClick={openRescueMode}
-            style={{ fontSize: "11px", fontWeight: "700", padding: "5px 10px", background: "rgba(248,113,113,0.12)", border: "1px solid var(--danger)", borderRadius: "8px", color: "var(--danger)", cursor: "pointer", whiteSpace: "nowrap" }}>
-            🚨 Rescue
+
+          {/* Morning Ritual */}
+          <button
+            onClick={() => setToolPanel(p => p === "ritual" ? null : "ritual")}
+            title="Morning Ritual"
+            style={{
+              fontSize: "15px", padding: "5px 9px",
+              background: (ritualActive || toolPanel === "ritual") ? "var(--accent)" : "var(--bg-secondary)",
+              color: (ritualActive || toolPanel === "ritual") ? "var(--btn-text, #fff)" : "var(--text-secondary)",
+              border: ritualActive ? "2px solid var(--success)" : "1px solid var(--border)",
+              borderRadius: "8px", cursor: "pointer", lineHeight: 1
+            }}
+          >
+            🌅
           </button>
-          <button onClick={handleBadDayReset}
-            style={{ fontSize: "11px", fontWeight: "700", padding: "5px 10px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-secondary)", cursor: "pointer", whiteSpace: "nowrap" }}>
-            🌪️ Reset
+
+          {/* Brain Dump */}
+          <button
+            onClick={() => setToolPanel(p => p === "dump" ? null : "dump")}
+            title="Brain Dump"
+            style={{
+              fontSize: "15px", padding: "5px 9px", position: "relative",
+              background: toolPanel === "dump" ? "var(--accent)" : "var(--bg-secondary)",
+              color: toolPanel === "dump" ? "var(--btn-text, #fff)" : "var(--text-secondary)",
+              border: "1px solid var(--border)", borderRadius: "8px", cursor: "pointer", lineHeight: 1
+            }}
+          >
+            📝
+            {dumpCount > 0 && (
+              <span style={{ position: "absolute", top: "-5px", right: "-5px", background: "var(--accent)", color: "var(--btn-text, #fff)", fontSize: "8px", fontWeight: "800", borderRadius: "6px", padding: "1px 4px", lineHeight: 1.3 }}>
+                {dumpCount}
+              </span>
+            )}
+          </button>
+
+          {/* Rescue */}
+          <button onClick={openRescueMode} title="Rescue Mode"
+            style={{ fontSize: "15px", padding: "5px 9px", background: "rgba(248,113,113,0.12)", border: "1px solid var(--danger)", borderRadius: "8px", color: "var(--danger)", cursor: "pointer", lineHeight: 1 }}>
+            🚨
+          </button>
+
+          {/* Bad Day Reset */}
+          <button onClick={handleBadDayReset} title="Bad Day Reset"
+            style={{ fontSize: "15px", padding: "5px 9px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-secondary)", cursor: "pointer", lineHeight: 1 }}>
+            🌪️
           </button>
         </div>
 
-        {progressDetailOpen && (
-          <div style={{ marginTop: "12px", borderTop: "1px solid var(--border)", paddingTop: "12px" }}>
-            {/* View toggle */}
+        {/* Expandable: 7-Day Progress */}
+        {toolPanel === "progress" && (
+          <div style={{ borderTop: "1px solid var(--border)", padding: "12px 14px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
               <h3 style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", margin: 0 }}>
                 📊 7-Day Progress
@@ -825,17 +620,12 @@ export default function TodayTab({ payload, savePayload }) {
               <div style={{ display: "flex", gap: "4px" }}>
                 {[{ id: "streak", label: "🔥" }, { id: "dots", label: "●" }].map(v => (
                   <button key={v.id} onClick={() => { setVizMode(v.id); localStorage.setItem("loci_viz", v.id); }}
-                    style={{
-                      padding: "3px 10px", fontSize: "12px", border: "1px solid var(--border)",
-                      borderRadius: "20px", cursor: "pointer", fontWeight: "700",
-                      background: vizMode === v.id ? "var(--accent)" : "var(--bg-secondary)",
-                      color: vizMode === v.id ? "var(--btn-text, #fff)" : "var(--text-muted)",
-                      transition: "all 0.15s"
-                    }}>{v.label}</button>
+                    style={{ padding: "3px 10px", fontSize: "12px", border: "1px solid var(--border)", borderRadius: "20px", cursor: "pointer", fontWeight: "700", background: vizMode === v.id ? "var(--accent)" : "var(--bg-secondary)", color: vizMode === v.id ? "var(--btn-text, #fff)" : "var(--text-muted)", transition: "all 0.15s" }}>
+                    {v.label}
+                  </button>
                 ))}
               </div>
             </div>
-
             {vizMode === "streak" && (() => {
               const streak = config.visitStreakCount || 0;
               return (
@@ -854,13 +644,7 @@ export default function TodayTab({ payload, savePayload }) {
                       const done = day.count > 0;
                       return (
                         <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
-                          <div style={{
-                            width: isToday ? "28px" : "22px", height: isToday ? "28px" : "22px",
-                            borderRadius: "50%",
-                            background: done ? "var(--accent)" : "var(--bg-secondary)",
-                            border: isToday ? "2px solid var(--accent)" : "2px solid var(--border)",
-                            transition: "all 0.2s"
-                          }} />
+                          <div style={{ width: isToday ? "28px" : "22px", height: isToday ? "28px" : "22px", borderRadius: "50%", background: done ? "var(--accent)" : "var(--bg-secondary)", border: isToday ? "2px solid var(--accent)" : "2px solid var(--border)", transition: "all 0.2s" }} />
                           <span style={{ fontSize: "8px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>
                             {day.label}
                           </span>
@@ -872,7 +656,6 @@ export default function TodayTab({ payload, savePayload }) {
                 </div>
               );
             })()}
-
             {vizMode === "dots" && (
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
@@ -884,14 +667,7 @@ export default function TodayTab({ payload, savePayload }) {
                         <span style={{ fontSize: "9px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>
                           {day.label}
                         </span>
-                        <div style={{
-                          width: isToday ? "32px" : "26px", height: isToday ? "32px" : "26px",
-                          borderRadius: "50%",
-                          background: done ? "var(--success, #22c55e)" : "var(--bg-secondary)",
-                          border: isToday ? "2.5px solid var(--accent)" : done ? "none" : "2px solid var(--border)",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          transition: "all 0.2s"
-                        }}>
+                        <div style={{ width: isToday ? "32px" : "26px", height: isToday ? "32px" : "26px", borderRadius: "50%", background: done ? "var(--success, #22c55e)" : "var(--bg-secondary)", border: isToday ? "2.5px solid var(--accent)" : done ? "none" : "2px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}>
                           {done && <span style={{ fontSize: "12px" }}>✓</span>}
                         </div>
                       </div>
@@ -905,24 +681,83 @@ export default function TodayTab({ payload, savePayload }) {
             )}
           </div>
         )}
+
+        {/* Expandable: Morning Ritual */}
+        {toolPanel === "ritual" && (
+          <div style={{ borderTop: "1px solid var(--border)", padding: "12px 14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: ritualActive ? "10px" : 0 }}>
+              <span style={{ fontSize: "16px" }}>🌅</span>
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>Morning Ritual</span>
+                <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "8px" }}>7 min · +80 XP</span>
+              </div>
+              {!ritualActive ? (
+                <button className="btn" onClick={handleBeginRitual} style={{ padding: "6px 16px", fontSize: "12px", fontWeight: "700" }}>
+                  Begin
+                </button>
+              ) : (
+                <button onClick={handleAbortRitual} style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
+                  Stop
+                </button>
+              )}
+            </div>
+            {ritualActive && (
+              <div style={{ background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", padding: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                <span style={{ fontSize: "10px", fontWeight: "800", color: "var(--text-muted)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                  STEP {ritualStepIndex + 1} OF {ritualSteps.length}
+                </span>
+                <p style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0 }}>
+                  {ritualSteps[ritualStepIndex].name}
+                </p>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: "20px", fontWeight: "800", color: "var(--accent)", fontFamily: "var(--font-display)" }}>
+                    {formatRitualTime(ritualSecondsLeft)}
+                  </span>
+                  <button className="btn" onClick={handleAdvanceRitualStep} style={{ padding: "5px 14px", fontSize: "12px", background: "var(--bg-card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                    Skip →
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Expandable: Brain Dump */}
+        {toolPanel === "dump" && (
+          <div style={{ borderTop: "1px solid var(--border)", padding: "12px 14px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <h2 className="section-title" style={{ fontSize: "13px", margin: 0 }}>📝 Brain Dump</h2>
+              {dumpCount > 0 && (
+                <span style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700" }}>
+                  {dumpCount}/50
+                </span>
+              )}
+            </div>
+            {dumpCount >= 50 && (
+              <p style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "8px", fontWeight: "600" }}>
+                Inbox full (50/50). Go to the Roadmap tab to triage items first.
+              </p>
+            )}
+            <form className="braindump-form" onSubmit={handleBrainDumpSubmit}>
+              <input type="text" className="braindump-input"
+                placeholder="Add anything on your mind."
+                value={brainDumpText}
+                onChange={e => setBrainDumpText(e.target.value)}
+                disabled={dumpCount >= 50} />
+              <button type="submit" className="braindump-submit" disabled={dumpCount >= 50}>➔</button>
+            </form>
+          </div>
+        )}
       </section>
 
       {/* ── Undo Delete Toast */}
       {undoTask && (
-        <div style={{
-          position: "fixed", bottom: "calc(76px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)",
-          background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "20px",
-          padding: "10px 16px", display: "flex", alignItems: "center", gap: "12px",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.35)", zIndex: 200,
-          fontSize: "12.5px", whiteSpace: "nowrap", maxWidth: "90vw"
-        }}>
+        <div style={{ position: "fixed", bottom: "calc(76px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "20px", padding: "10px 16px", display: "flex", alignItems: "center", gap: "12px", boxShadow: "0 4px 20px rgba(0,0,0,0.35)", zIndex: 200, fontSize: "12.5px", whiteSpace: "nowrap", maxWidth: "90vw" }}>
           <span style={{ color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis" }}>
             "{undoTask.title.length > 28 ? undoTask.title.substring(0, 28) + "…" : undoTask.title}" deleted
           </span>
           <button onClick={handleUndoDelete}
-            style={{ background: "var(--accent)", color: "var(--btn-text, #fff)", border: "none",
-              borderRadius: "12px", padding: "5px 14px", fontSize: "12px", fontWeight: "700",
-              cursor: "pointer", flexShrink: 0 }}>
+            style={{ background: "var(--accent)", color: "var(--btn-text, #fff)", border: "none", borderRadius: "12px", padding: "5px 14px", fontSize: "12px", fontWeight: "700", cursor: "pointer", flexShrink: 0 }}>
             Undo
           </button>
         </div>
@@ -946,7 +781,7 @@ export default function TodayTab({ payload, savePayload }) {
         </div>
       )}
 
-      {/* Rescue Mode v2 — triggered from ⋮ menu */}
+      {/* Rescue Mode v2 */}
       {rescueActive && (
         <RescueMode
           task={rescueTask}
