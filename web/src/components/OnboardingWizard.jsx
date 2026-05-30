@@ -69,6 +69,7 @@ export default function OnboardingWizard({ payload, savePayload }) {
                 placeholder="Your name"
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && userName.trim()) { e.preventDefault(); setCurrentStep(2); } }}
                 required
                 autoFocus
               />

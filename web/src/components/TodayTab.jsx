@@ -3,6 +3,7 @@ import TaskRow from "./TaskRow";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
+import { getAIKeys } from "../utils/aiCall";
 
 export default function TodayTab({ payload, savePayload }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
@@ -599,18 +600,32 @@ export default function TodayTab({ payload, savePayload }) {
         </div>
 
         <div className="tasks-list">
-          {todayTasksAll.length === 0 && (
-            <div style={{ textAlign: "center", padding: "24px 16px", background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", border: "1px dashed var(--border)" }}>
-              <div style={{ fontSize: "32px", marginBottom: "10px" }}>🧠</div>
-              <p style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "6px" }}>Welcome to Loci!</p>
-              <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: "1.6", marginBottom: "14px" }}>
-                Loci helps you capture tasks, prioritize them with AI, and build daily focus habits — designed for ADHD brains.
-              </p>
-              <p style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: "1.5" }}>
-                Tap the <strong style={{ color: "var(--accent)" }}>+</strong> button below to add your first task. The AI will help you break it down.
-              </p>
-            </div>
-          )}
+          {todayTasksAll.length === 0 && (() => {
+            const hasEverHadTasks = tasks.filter(t => !t.isDeleted).length > 0;
+            if (hasEverHadTasks) {
+              return (
+                <div style={{ textAlign: "center", padding: "24px 16px", background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", border: "1px dashed var(--border)" }}>
+                  <div style={{ fontSize: "32px", marginBottom: "10px" }}>🎉</div>
+                  <p style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "6px" }}>All clear for today!</p>
+                  <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: "1.6" }}>
+                    No tasks scheduled for today. Tap <strong style={{ color: "var(--accent)" }}>+</strong> to add one, or check other horizons on the Plan tab.
+                  </p>
+                </div>
+              );
+            }
+            return (
+              <div style={{ textAlign: "center", padding: "24px 16px", background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", border: "1px dashed var(--border)" }}>
+                <div style={{ fontSize: "32px", marginBottom: "10px" }}>🧠</div>
+                <p style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "6px" }}>Welcome to Loci!</p>
+                <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: "1.6", marginBottom: "14px" }}>
+                  Loci helps you capture tasks, prioritize them with AI, and build daily focus habits — designed for ADHD brains.
+                </p>
+                <p style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: "1.5" }}>
+                  Tap the <strong style={{ color: "var(--accent)" }}>+</strong> button below to add your first task. The AI will help you break it down.
+                </p>
+              </div>
+            );
+          })()}
           {todayTasksAll.length > 0 && todayTasksFiltered.length === 0 && config.isLowEnergyMode && (
             <div style={{ textAlign: "center", padding: "24px 10px", color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
               <p style={{ fontSize: "13px", fontWeight: "600" }}>No easy wins available right now.</p>
@@ -699,6 +714,10 @@ export default function TodayTab({ payload, savePayload }) {
             <div className="timer-controls">
               <button className="control-btn control-btn-play" onClick={() => setIsTimerRunning(!isTimerRunning)}>
                 {isTimerRunning ? "⏸" : "▶"}
+              </button>
+              <button className="control-btn" onClick={() => { setIsTimerRunning(false); setTimerSecondsLeft(timerMaxSeconds); }}
+                title="Reset timer" style={{ fontSize: "16px" }}>
+                ↺
               </button>
               <button className="control-btn control-btn-done" onClick={() => handleToggleComplete(activeTask)}>✓</button>
             </div>
@@ -922,11 +941,6 @@ export default function TodayTab({ payload, savePayload }) {
           </div>
         )}
       </section>}
-      {(config.toolsStyle || "inline") !== "dock" && (
-        <div className="mobile-tools-legend" style={{ display: "none", justifyContent: "center", gap: "8px", fontSize: "10.5px", color: "var(--text-muted)", marginTop: "4px", padding: "0 6px" }}>
-          <span>🌅 Ritual</span> · <span>📝 Dump</span> · <span>🚨 Rescue</span> · <span>🌪️ Reset</span>
-        </div>
-      )}
 
       {/* ── Floating Bottom Dock (Concept 3) */}
       {config.toolsStyle === "dock" && (
@@ -1134,7 +1148,7 @@ export default function TodayTab({ payload, savePayload }) {
           task={rescueTask}
           allTasks={tasks}
           firstName={(config.userName || "").split(" ")[0] || "friend"}
-          apiKey={localStorage.getItem("loci_gemini_key") || import.meta.env.VITE_GEMINI_KEY || ""}
+          apiKey={getAIKeys().geminiKey}
           onDismiss={() => setRescueActive(false)}
           onAccept={() => {
             setRescueActive(false);
