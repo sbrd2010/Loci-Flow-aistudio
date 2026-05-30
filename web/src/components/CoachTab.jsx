@@ -277,10 +277,10 @@ RULES: Bold task names. Be direct and concise. No filler. ${firstName} is ADHD �
       {/* 2 ── Focus Briefing */}
       <section className="card">
         <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "4px", color: "var(--text-primary)" }}>
-          ⚡ Focus Briefing
+          ⚡ AI Focus Brief
         </h2>
         <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "14px", lineHeight: "1.5" }}>
-          Your AI scans every task across all horizons — flags overload, catches time blindness, and tells you exactly what to tackle now.
+          Your AI scans every task across all horizons — flags overload, catches time blindness, and briefs you on exactly what to tackle now.
         </p>
 
         {!hasAnyKey ? (
@@ -290,7 +290,7 @@ RULES: Bold task names. Be direct and concise. No filler. ${firstName} is ADHD �
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <button className="btn" onClick={handleFocusBriefing} disabled={briefingLoading} style={{ width: "100%" }}>
-              {briefingLoading ? "Analyzing your tasks…" : "Get Focus Briefing"}
+              {briefingLoading ? "Analyzing your tasks…" : "Get AI Focus Brief"}
             </button>
             {briefingResult && (
               <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "14px", fontSize: "12.5px", lineHeight: "1.7", maxHeight: "380px", overflowY: "auto", whiteSpace: "pre-line", color: "var(--text-primary)" }}>
