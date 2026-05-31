@@ -37,39 +37,39 @@ export function createDemoPayload() {
     userId: "demo",
     tasks: [
       // ── Today ────────────────────────────────────────────────
-      t({ uuid:"demo-t1", title:"Write down the 3 most important things for today", concreteStep:"Grab a notepad or open a note app, pick your top 3", priority:"P1", isNowFocus:true, orderIndex:0,
+      t({ uuid:"demo-t1", title:"Reply to that recruiter / important email sitting in your inbox", concreteStep:"Open the thread, write 3 honest sentences, hit send", priority:"P1", isNowFocus:true, orderIndex:0,
           subSteps:[
-            { id:"ss1", text:"Think about what absolutely must happen today", done:true },
-            { id:"ss2", text:"Write down your first priority", done:true },
-            { id:"ss3", text:"Write down priorities 2 and 3", done:false },
-            { id:"ss4", text:"Put the list somewhere visible", done:false },
+            { id:"ss1", text:"Open email / LinkedIn / WhatsApp", done:true },
+            { id:"ss2", text:"Read the message properly", done:true },
+            { id:"ss3", text:"Write a short, honest reply (3 sentences is enough)", done:false },
+            { id:"ss4", text:"Hit send — done", done:false },
           ]
       }),
-      t({ uuid:"demo-t2", title:"Reply to that message you've been putting off", concreteStep:"Open the app or email, type a quick honest reply", priority:"P2", orderIndex:1,
+      t({ uuid:"demo-t2", title:"Block 25 minutes on your most important task — no distractions", concreteStep:"Close other tabs, set a timer, start on just one thing", priority:"P2", orderIndex:1,
           reminderAt: Date.now() + 2 * 60 * 60 * 1000
       }),
-      t({ uuid:"demo-t3", title:"10-minute walk outside to reset focus", concreteStep:"Put on shoes, step outside, walk around the block", priority:"P4", orderIndex:2 }),
-      t({ uuid:"demo-t4", title:"Drink a full glass of water right now", concreteStep:"Go to the kitchen, fill a glass, drink it", priority:"P4", orderIndex:3,
+      t({ uuid:"demo-t3", title:"10-minute walk to clear your head between tasks", concreteStep:"Put on shoes, step outside, leave your phone behind", priority:"P4", orderIndex:2 }),
+      t({ uuid:"demo-t4", title:"Drink water and take your vitamins", concreteStep:"Go to the kitchen, glass of water, done", priority:"P4", orderIndex:3,
           isCompleted:true, dateCompletedString:todayStr }),
-      t({ uuid:"demo-t5", title:"Take morning medication / vitamins", concreteStep:"Open the cabinet, take with water", priority:"P3", orderIndex:4,
+      t({ uuid:"demo-t5", title:"Tidy your workspace so you can actually think", concreteStep:"Put 3 things away and wipe your desk surface", priority:"P3", orderIndex:4,
           isCompleted:true, dateCompletedString:todayStr }),
 
       // ── Week ─────────────────────────────────────────────────
-      t({ uuid:"demo-w1", title:"Tidy one corner of your space that bothers you", concreteStep:"Pick the messiest spot, spend 20 minutes on just that area", priority:"P2", horizonLevel:"week", orderIndex:0 }),
-      t({ uuid:"demo-w2", title:"Schedule that appointment you've been avoiding", concreteStep:"Find the number or website, pick a time slot, book it", priority:"P3", horizonLevel:"week", orderIndex:1 }),
-      t({ uuid:"demo-w3", title:"Read 20 pages of a book you actually enjoy", concreteStep:"Find the book, set a timer for 30 min, start reading", priority:"P4", horizonLevel:"week", orderIndex:2 }),
+      t({ uuid:"demo-w1", title:"Update your CV or portfolio — add your most recent work", concreteStep:"Open the file and add one new bullet point or project", priority:"P1", horizonLevel:"week", orderIndex:0 }),
+      t({ uuid:"demo-w2", title:"Apply to 3 roles, clients, or gigs this week", concreteStep:"Search one platform, save 3 realistic listings, write one application", priority:"P2", horizonLevel:"week", orderIndex:1 }),
+      t({ uuid:"demo-w3", title:"Read one article or watch one video that actually teaches you something", concreteStep:"Pick something relevant to where you want to go — 30 minutes", priority:"P4", horizonLevel:"week", orderIndex:2 }),
 
       // ── Month ─────────────────────────────────────────────────
-      t({ uuid:"demo-m1", title:"Start learning one thing you've wanted to for a while", concreteStep:"Search for a beginner tutorial or video, spend 25 min on it", priority:"P2", horizonLevel:"month", orderIndex:0,
+      t({ uuid:"demo-m1", title:"Finish one meaningful work or study deliverable", concreteStep:"List the 3 remaining steps, then start step 1 for 25 minutes", priority:"P2", horizonLevel:"month", orderIndex:0,
           reminderAt: Date.now() + 7 * 24 * 60 * 60 * 1000
       }),
-      t({ uuid:"demo-m2", title:"Call or message someone you haven't spoken to in a while", concreteStep:"Think of one person, send them a simple 'hey, how are you?'", priority:"P3", horizonLevel:"month", orderIndex:1 }),
+      t({ uuid:"demo-m2", title:"Check your finances — what came in, what went out", concreteStep:"Open banking app, scan last 30 days, note one thing to change", priority:"P3", horizonLevel:"month", orderIndex:1 }),
 
       // ── Quarter ───────────────────────────────────────────────
-      t({ uuid:"demo-q1", title:"Pick one habit to build this season", concreteStep:"Write down the habit and decide on a trigger that starts it daily", priority:"P2", horizonLevel:"quarter", orderIndex:0 }),
+      t({ uuid:"demo-q1", title:"Invest in one skill that moves your career forward", concreteStep:"Pick a course, book, or mentor and block 2 hours a week for it", priority:"P2", horizonLevel:"quarter", orderIndex:0 }),
 
       // ── 6 months ──────────────────────────────────────────────
-      t({ uuid:"demo-h1", title:"Plan a trip or experience to look forward to", concreteStep:"Brainstorm 3 ideas with someone you'd go with", priority:"P3", horizonLevel:"halfyear", orderIndex:0 }),
+      t({ uuid:"demo-h1", title:"Decide your main direction and make it real by telling someone", concreteStep:"Write 2 sentences: what you're building toward and by when", priority:"P3", horizonLevel:"halfyear", orderIndex:0 }),
     ],
 
     config: {
@@ -100,8 +100,8 @@ export function createDemoPayload() {
     ],
 
     brainDump: [
-      { id:"bd1", text:"Try journaling for a week and see if it helps", createdAt: Date.now() - 86400000 },
-      { id:"bd2", text:"Look into a good task manager that works for my brain", createdAt: Date.now() - 3600000 },
+      { id:"bd1", text:"Look into freelancing — could it replace part-time income?", createdAt: Date.now() - 86400000 },
+      { id:"bd2", text:"Reach out to that person from last year — it's been too long", createdAt: Date.now() - 3600000 },
     ],
 
     timestamp: Date.now(),
