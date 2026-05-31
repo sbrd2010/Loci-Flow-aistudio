@@ -44,6 +44,17 @@
         "$other": { ".validate": true }
       }
     },
+    "bugReports": {
+      "$reportId": {
+        ".read":  false,
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['userId', 'message', 'timestamp'])",
+        "userId":    { ".validate": "newData.isString() && newData.val().length <= 200" },
+        "message":   { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 2000" },
+        "timestamp": { ".validate": "newData.isNumber()" },
+        "$other":    { ".validate": true }
+      }
+    },
     "$other": {
       ".read":  false,
       ".write": false

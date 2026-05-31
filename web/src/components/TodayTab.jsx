@@ -80,14 +80,17 @@ export default function TodayTab({ payload, savePayload }) {
 
   useEffect(() => {
     if (isTimerRunning) {
+      // Anchor to wall-clock time so background tabs / GC pauses don't cause drift
+      const targetEndTime = Date.now() + timerSecondsLeft * 1000;
       timerIntervalRef.current = setInterval(() => {
-        setTimerSecondsLeft((prev) => (prev <= 1 ? 0 : prev - 1));
+        const remaining = Math.ceil((targetEndTime - Date.now()) / 1000);
+        setTimerSecondsLeft(remaining <= 0 ? 0 : remaining);
       }, 1000);
     } else {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     }
     return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
-  }, [isTimerRunning]);
+  }, [isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isTimerRunning && timerSecondsLeft === 0) {
