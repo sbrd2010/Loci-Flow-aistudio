@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { auth } from "./firebase";
+import { auth, track } from "./firebase";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { useSync } from "./useSync";
 import Header from "./components/Header";
@@ -11,6 +11,7 @@ import CoachTab from "./components/CoachTab";
 import SettingsTab from "./components/SettingsTab";
 import AddTaskDialog from "./components/AddTaskDialog";
 import OnboardingWizard from "./components/OnboardingWizard";
+import PrivacyPolicy from "./components/PrivacyPolicy";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -21,6 +22,14 @@ export default function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem("loci_theme") || "glassy");
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState("");
+  const [showPrivacy, setShowPrivacy] = useState(false);
+
+  // Register service worker for notifications
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -119,6 +128,12 @@ export default function App() {
     return unsubscribe;
   }, []);
 
+  // Track tab switches
+  const handleTabSelect = (tab) => {
+    setActiveTab(tab);
+    track("tab_switch", { tab });
+  };
+
   // Handle sign-out / switch user
   const handleSwitchUser = () => {
     signOut(auth).then(() => {
@@ -146,6 +161,7 @@ export default function App() {
 
   if (!user) {
     return (
+      <>
       <div className="signin-overlay">
         <div className="signin-card card">
           <div className="signin-title-container">
@@ -173,8 +189,16 @@ export default function App() {
           <span className="signin-note">
             Your tasks sync across your devices. Sign in with Google to begin.
           </span>
+          <button
+            onClick={() => setShowPrivacy(true)}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: "11px", color: "var(--text-muted)", textDecoration: "underline", marginTop: "4px" }}
+          >
+            Privacy Policy
+          </button>
         </div>
       </div>
+      {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
+    </>
     );
   }
 
@@ -256,7 +280,7 @@ export default function App() {
       )}
 
       {/* Bottom Nav Footer */}
-      <BottomNav activeTab={activeTab} onTabSelect={setActiveTab} />
+      <BottomNav activeTab={activeTab} onTabSelect={handleTabSelect} />
 
       {/* Modal Add Task Dialog */}
       {showAddTask && (
