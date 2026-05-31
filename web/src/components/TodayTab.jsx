@@ -515,7 +515,7 @@ export default function TodayTab({ payload, savePayload }) {
           </div>
         </div>
 
-        <div className="tasks-list">
+        <div className="tasks-list" data-testid="today-tasks-list">
           {todayTasksAll.length === 0 && (() => {
             const hasEverHadTasks = tasks.filter(t => !t.isDeleted).length > 0;
             if (hasEverHadTasks) {
@@ -654,7 +654,7 @@ export default function TodayTab({ payload, savePayload }) {
               </div>
             </div>
             <div className="timer-controls">
-              <button className="control-btn control-btn-play" onClick={() => setIsTimerRunning(!isTimerRunning)}>
+              <button className="control-btn control-btn-play" data-testid="timer-play-pause" onClick={() => setIsTimerRunning(!isTimerRunning)}>
                 {isTimerRunning ? "⏸" : "▶"}
               </button>
               <button className="control-btn" onClick={() => { setIsTimerRunning(false); setTimerSecondsLeft(timerMaxSeconds); }}

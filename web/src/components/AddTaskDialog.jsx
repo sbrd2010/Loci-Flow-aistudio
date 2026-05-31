@@ -183,6 +183,7 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
             <input
               type="text"
               className="text-input"
+              data-testid="add-task-title"
               placeholder="e.g. Write cover letter draft"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -360,7 +361,7 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
                 <button type="button" className="btn btn-cancel" onClick={onClose} style={{ flex: 1 }}>
                   Cancel
                 </button>
-                <button type="submit" className="btn" style={{ flex: 1 }}>
+                <button type="submit" className="btn" data-testid="add-task-submit" style={{ flex: 1 }}>
                   Add Task
                 </button>
               </>
