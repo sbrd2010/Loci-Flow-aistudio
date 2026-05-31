@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { auth, track } from "./firebase";
 import { scheduleAllReminders } from "./utils/reminders";
+import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { useSync } from "./useSync";
 import Header from "./components/Header";
@@ -25,7 +26,30 @@ export default function App() {
   const [signInError, setSignInError] = useState("");
   const [showPrivacy, setShowPrivacy] = useState(false);
 
-  // Register service worker for notifications
+  // ── Demo mode ──────────────────────────────────────────────────────────────
+  const [demoMode, setDemoMode] = useState(false);
+  const [demoPayload, setDemoPayload] = useState(null);
+
+  const enterDemo = () => {
+    setDemoPayload(createDemoPayload());
+    setDemoMode(true);
+    setActiveTab("today");
+    track("demo_start");
+  };
+
+  const exitDemo = () => {
+    setDemoMode(false);
+    setDemoPayload(null);
+    setActiveTab("today");
+  };
+
+  const saveDemoPayload = (updated) => {
+    setDemoPayload({ ...updated, timestamp: Date.now() });
+  };
+
+  const saveDemoSubPath = () => {};
+
+  // ── Service worker ─────────────────────────────────────────────────────────
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -57,7 +81,6 @@ export default function App() {
     const isAndroid = /Android/i.test(ua);
 
     if (isIOS) {
-      // iOS: Safari and all WebKit browsers work best with redirect
       localStorage.setItem("loci_redirect_pending", "1");
       signInWithRedirect(auth, new GoogleAuthProvider()).catch((err) => {
         localStorage.removeItem("loci_redirect_pending");
@@ -68,14 +91,11 @@ export default function App() {
       return;
     }
 
-    // Android + Desktop: popup-first.
-    // Android redirect clears sessionStorage between hops (Brave Shields) → popup is more reliable.
     signInWithPopup(auth, new GoogleAuthProvider()).catch((err) => {
       setSigningIn(false);
       if (err.code === "auth/popup-closed-by-user" || err.code === "auth/cancelled-popup-request") return;
       if (err.code === "auth/popup-blocked") {
         if (isAndroid) {
-          // Popup blocked on Android → fall back to redirect
           setSigningIn(true);
           localStorage.setItem("loci_redirect_pending", "1");
           signInWithRedirect(auth, new GoogleAuthProvider()).catch(() => {
@@ -89,7 +109,6 @@ export default function App() {
         return;
       }
       console.error("Sign-in failed:", err.code, err.message);
-      // auth/internal-error on Android is almost always Brave Shields blocking Google's auth scripts
       if (err.code === "auth/internal-error" || err.code === "auth/network-request-failed") {
         setSignInError("Sign-in blocked. If you're using Brave, tap the lion icon in the address bar → disable Shields for this site, then try again.");
         return;
@@ -98,31 +117,31 @@ export default function App() {
     });
   };
 
-  // Load the sync payload from RTDB
-  const { payload, loading, error, savePayload, saveSubPath } = useSync(user?.uid || null, user?.email || null);
+  // Load the sync payload from RTDB (skipped in demo mode — uid is null)
+  const { payload: rtdbPayload, loading, error, savePayload: rtdbSave, saveSubPath: rtdbSaveSub } =
+    useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
+
+  const payload = demoMode ? demoPayload : rtdbPayload;
+  const savePayload = demoMode ? saveDemoPayload : rtdbSave;
+  const saveSubPath = demoMode ? saveDemoSubPath : rtdbSaveSub;
 
   // Schedule task reminders whenever payload loads/changes
   useEffect(() => {
     if (payload?.tasks) scheduleAllReminders(payload.tasks);
   }, [payload?.tasks]);
 
-  // Auto-increment visit streak on first open each day
+  // Auto-increment visit streak on first open each day (real users only)
   useEffect(() => {
-    if (!payload?.config || !user) return;
+    if (!payload?.config || !user || demoMode) return;
     const cfg = payload.config;
     const toLocalDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
     const todayStr = toLocalDateStr(new Date());
     if (cfg.lastVisitDate === todayStr) return;
-
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = toLocalDateStr(yesterday);
     const newStreak = cfg.lastVisitDate === yesterdayStr ? (cfg.visitStreakCount || 0) + 1 : 1;
-
-    savePayload({
-      ...payload,
-      config: { ...cfg, visitStreakCount: newStreak, lastVisitDate: todayStr, lastUpdated: Date.now() }
-    });
+    savePayload({ ...payload, config: { ...cfg, visitStreakCount: newStreak, lastVisitDate: todayStr, lastUpdated: Date.now() } });
   }, [payload?.config?.lastVisitDate, user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Firebase auth state listener
@@ -130,31 +149,24 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setAuthLoading(false);
+      if (firebaseUser && demoMode) exitDemo(); // auto-exit demo if user signs in
     });
     return unsubscribe;
-  }, []);
+  }, [demoMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Track tab switches
-  const handleTabSelect = (tab) => {
-    setActiveTab(tab);
-    track("tab_switch", { tab });
-  };
+  const handleTabSelect = (tab) => { setActiveTab(tab); track("tab_switch", { tab }); };
 
-  // Handle sign-out / switch user
   const handleSwitchUser = () => {
-    signOut(auth).then(() => {
-      setUser(null);
-      setActiveTab("today");
-    });
+    signOut(auth).then(() => { setUser(null); setActiveTab("today"); });
   };
 
-  // Open the Add Task dialog
   const openAddTask = (horizon = "today") => {
     setPreselectedHorizon(horizon);
     setShowAddTask(true);
   };
 
-  if (authLoading) {
+  // ── Loading spinner ────────────────────────────────────────────────────────
+  if (!demoMode && authLoading) {
     return (
       <div className="signin-overlay">
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
@@ -165,51 +177,67 @@ export default function App() {
     );
   }
 
-  if (!user) {
+  // ── Sign-in screen ─────────────────────────────────────────────────────────
+  if (!demoMode && !user) {
     return (
       <>
-      <div className="signin-overlay">
-        <div className="signin-card card">
-          <div className="signin-title-container">
-            <span className="signin-emoji">🧠</span>
-            <h1 className="signin-title">Loci Focus</h1>
-            <p className="signin-subtitle">Your daily focus companion.</p>
+        <div className="signin-overlay">
+          <div className="signin-card card">
+            <div className="signin-title-container">
+              <span className="signin-emoji">🧠</span>
+              <h1 className="signin-title">Loci Focus</h1>
+              <p className="signin-subtitle">Your daily focus companion.</p>
+            </div>
+            <button
+              className="btn"
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", fontSize: "15px", padding: "14px 20px", opacity: signingIn ? 0.7 : 1 }}
+              onClick={handleSignIn}
+              disabled={signingIn}
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+                <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+                <path d="M3.964 10.706A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.038l3.007-2.332z" fill="#FBBC05"/>
+                <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.962L3.964 6.294C4.672 4.167 6.656 3.58 9 3.58z" fill="#EA4335"/>
+              </svg>
+              {signingIn ? "Signing in…" : "Continue with Google"}
+            </button>
+            {signInError && (
+              <p style={{ fontSize: "12px", color: "var(--danger)", marginTop: "8px", textAlign: "center" }}>{signInError}</p>
+            )}
+
+            {/* Demo mode entry */}
+            <div style={{ width: "100%", display: "flex", alignItems: "center", gap: "10px", margin: "4px 0" }}>
+              <div style={{ flex: 1, height: "1px", background: "var(--border)" }} />
+              <span style={{ fontSize: "11px", color: "var(--text-muted)", whiteSpace: "nowrap" }}>or</span>
+              <div style={{ flex: 1, height: "1px", background: "var(--border)" }} />
+            </div>
+            <button
+              className="btn"
+              style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px", fontWeight: "700" }}
+              onClick={enterDemo}
+            >
+              🎭 Try Demo Without Sign-In
+            </button>
+
+            <span className="signin-note">
+              Your tasks sync across your devices. Sign in with Google to begin.
+            </span>
+            <button
+              onClick={() => setShowPrivacy(true)}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: "11px", color: "var(--text-muted)", textDecoration: "underline", marginTop: "4px" }}
+            >
+              Privacy Policy
+            </button>
           </div>
-          <button
-            className="btn"
-            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", fontSize: "15px", padding: "14px 20px", opacity: signingIn ? 0.7 : 1 }}
-            onClick={handleSignIn}
-            disabled={signingIn}
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
-              <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
-              <path d="M3.964 10.706A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.038l3.007-2.332z" fill="#FBBC05"/>
-              <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.962L3.964 6.294C4.672 4.167 6.656 3.58 9 3.58z" fill="#EA4335"/>
-            </svg>
-            {signingIn ? "Signing in…" : "Continue with Google"}
-          </button>
-          {signInError && (
-            <p style={{ fontSize: "12px", color: "var(--danger)", marginTop: "8px", textAlign: "center" }}>{signInError}</p>
-          )}
-          <span className="signin-note">
-            Your tasks sync across your devices. Sign in with Google to begin.
-          </span>
-          <button
-            onClick={() => setShowPrivacy(true)}
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: "11px", color: "var(--text-muted)", textDecoration: "underline", marginTop: "4px" }}
-          >
-            Privacy Policy
-          </button>
         </div>
-      </div>
-      {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
-    </>
+        {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
+      </>
     );
   }
 
-  // If Firebase connection failed, show an actionable error screen
-  if (error) {
+  // ── Firebase errors (real users only) ─────────────────────────────────────
+  if (!demoMode && error) {
     return (
       <div className="signin-overlay">
         <div className="signin-card card" style={{ padding: "40px 20px" }}>
@@ -224,8 +252,8 @@ export default function App() {
     );
   }
 
-  // If loading sync data, show beautiful dark load screen
-  if (loading || !payload) {
+  // ── RTDB loading (real users only) ────────────────────────────────────────
+  if (!demoMode && (loading || !payload)) {
     return (
       <div className="signin-overlay">
         <div className="signin-card card" style={{ padding: "40px 20px" }}>
@@ -237,17 +265,46 @@ export default function App() {
     );
   }
 
-  // Render onboarding wizard overlay only for new web users.
-  // Use strict === false so existing Android users (isOnboardingCompleted === undefined) skip it.
-  if (payload.config && payload.config.isOnboardingCompleted === false) {
+  // ── Onboarding wizard (real users only) ───────────────────────────────────
+  if (!demoMode && payload.config && payload.config.isOnboardingCompleted === false) {
     return <OnboardingWizard payload={payload} savePayload={savePayload} />;
   }
 
+  // ── Main app ───────────────────────────────────────────────────────────────
   return (
     <div className="app-container">
+
+      {/* Demo mode banner */}
+      {demoMode && (
+        <div style={{
+          position: "sticky", top: 0, zIndex: 500,
+          background: "linear-gradient(90deg, #f59e0b, #f97316)",
+          padding: "8px 16px",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px",
+          fontSize: "12px", fontWeight: "700", color: "#fff",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.2)"
+        }}>
+          <span>🎭 Demo Mode — changes are not saved</span>
+          <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+            <button
+              onClick={() => { exitDemo(); handleSignIn(); }}
+              style={{ background: "#fff", color: "#f59e0b", border: "none", borderRadius: "6px", padding: "4px 10px", fontSize: "11px", fontWeight: "800", cursor: "pointer" }}
+            >
+              Sign in
+            </button>
+            <button
+              onClick={exitDemo}
+              style={{ background: "rgba(255,255,255,0.2)", color: "#fff", border: "1px solid rgba(255,255,255,0.4)", borderRadius: "6px", padding: "4px 10px", fontSize: "11px", fontWeight: "700", cursor: "pointer" }}
+            >
+              Exit
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header top bar */}
       <Header
-        userName={payload?.config?.userName || user.displayName || user.email}
+        userName={demoMode ? "Demo User" : (payload?.config?.userName || user?.displayName || user?.email)}
         onGoHome={() => setActiveTab("today")}
         theme={theme}
         onThemeChange={setTheme}
@@ -256,25 +313,24 @@ export default function App() {
       {/* Main Tab Screen Router */}
       <main className="screen-content">
         {activeTab === "today" && (
-          <TodayTab 
-            payload={payload} 
-            savePayload={savePayload} 
-            onOpenAddTask={() => openAddTask("today")}
-          />
+          <TodayTab payload={payload} savePayload={savePayload} onOpenAddTask={() => openAddTask("today")} />
         )}
         {activeTab === "roadmap" && (
-          <RoadmapTab 
-            payload={payload} 
-            savePayload={savePayload} 
-            onOpenAddTask={openAddTask}
-          />
+          <RoadmapTab payload={payload} savePayload={savePayload} onOpenAddTask={openAddTask} />
         )}
         {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} />}
         {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} />}
-        {activeTab === "settings" && <SettingsTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} onSignOut={handleSwitchUser} />}
+        {activeTab === "settings" && (
+          <SettingsTab
+            payload={payload}
+            savePayload={savePayload}
+            saveSubPath={saveSubPath}
+            onSignOut={demoMode ? exitDemo : handleSwitchUser}
+          />
+        )}
       </main>
 
-      {/* Floating Action Button (Only show on Today & Roadmap screens) */}
+      {/* FAB */}
       {(activeTab === "today" || activeTab === "roadmap") && (
         <button
           className="fab"
@@ -285,13 +341,13 @@ export default function App() {
         </button>
       )}
 
-      {/* Bottom Nav Footer */}
+      {/* Bottom Nav */}
       <BottomNav activeTab={activeTab} onTabSelect={handleTabSelect} />
 
-      {/* Modal Add Task Dialog */}
+      {/* Add Task Dialog */}
       {showAddTask && (
         <AddTaskDialog
-          email={user.email}
+          email={demoMode ? "demo@loci.app" : user?.email}
           payload={payload}
           savePayload={savePayload}
           defaultHorizon={preselectedHorizon}
