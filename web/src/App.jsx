@@ -136,7 +136,7 @@ export default function App() {
   };
 
   // Load the sync payload from RTDB (skipped in demo mode — uid is null)
-  const { payload: rtdbPayload, loading, error, slowLoading, savePayload: rtdbSave, saveSubPath: rtdbSaveSub } =
+  const { payload: rtdbPayload, loading, error, slowLoading, isSyncingFromCache, savePayload: rtdbSave, saveSubPath: rtdbSaveSub } =
     useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
   const payload = demoMode ? demoPayload : rtdbPayload;
@@ -285,15 +285,12 @@ export default function App() {
             </button>
             <button
               className="btn"
-              onClick={enterDemo}
+              onClick={() => signOut(auth)}
               style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
             >
-              Continue in Demo Mode
+              Sign Out
             </button>
           </div>
-          <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "12px", textAlign: "center", lineHeight: "1.5" }}>
-            Demo mode uses sample data — your real tasks will load once connection is restored.
-          </p>
         </div>
       </div>
     );
@@ -314,12 +311,8 @@ export default function App() {
               : "Synchronizing your commitments…"}
           </p>
           {slowLoading && (
-            <button
-              className="btn"
-              onClick={enterDemo}
-              style={{ marginTop: "20px", width: "100%", background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
-            >
-              Continue in Demo Mode
+            <button className="btn" onClick={() => window.location.reload()} style={{ marginTop: "20px", width: "100%" }}>
+              Try Again
             </button>
           )}
         </div>
@@ -335,6 +328,21 @@ export default function App() {
   // ── Main app ───────────────────────────────────────────────────────────────
   return (
     <div className="app-container">
+
+      {/* Subtle cloud-sync indicator — shown while serving from cache, hidden once RTDB responds */}
+      {!demoMode && isSyncingFromCache && (
+        <div style={{
+          position: "fixed", bottom: "72px", left: "50%", transform: "translateX(-50%)",
+          background: "var(--bg-card)", border: "1px solid var(--border)",
+          borderRadius: "20px", padding: "5px 14px",
+          fontSize: "11px", fontWeight: "600", color: "var(--text-muted)",
+          zIndex: 490, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+          pointerEvents: "none", whiteSpace: "nowrap",
+          boxShadow: "0 2px 12px rgba(0,0,0,0.18)"
+        }}>
+          ↻ Syncing with cloud…
+        </div>
+      )}
 
       {/* Demo mode banner */}
       {demoMode && (

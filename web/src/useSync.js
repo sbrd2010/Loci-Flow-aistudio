@@ -44,6 +44,8 @@ export function useSync(uid, email) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [slowLoading, setSlowLoading] = useState(false);
+  // True while app is rendering from cache and RTDB hasn't responded yet
+  const [isSyncingFromCache, setIsSyncingFromCache] = useState(false);
 
   const dbRefPath = uid ? `sync/${uid}` : null;
 
@@ -60,6 +62,7 @@ export function useSync(uid, email) {
     setLoading(true);
     setSlowLoading(false);
     setError(null);
+    setIsSyncingFromCache(false);
     const userRef = ref(db, dbRefPath);
 
     // Serve cached data immediately — user sees their app in <100ms on return visits.
@@ -69,7 +72,8 @@ export function useSync(uid, email) {
     if (hasCachedData) {
       setPayload(cached);
       payloadRef.current = cached;
-      setLoading(false); // App renders instantly; RTDB syncs in background
+      setLoading(false);       // App renders instantly; RTDB syncs in background
+      setIsSyncingFromCache(true); // Show subtle "syncing…" indicator until RTDB responds
     }
 
     // "Slow loading" warning at 10s — only shown if we have no cached data
@@ -91,6 +95,7 @@ export function useSync(uid, email) {
       if (connectTimeoutId) clearTimeout(connectTimeoutId);
       if (slowWarningId) clearTimeout(slowWarningId);
       setSlowLoading(false);
+      setIsSyncingFromCache(false); // RTDB responded — indicator can disappear
 
       const data = snapshot.val();
 
@@ -243,6 +248,7 @@ export function useSync(uid, email) {
       if (slowWarningId) clearTimeout(slowWarningId);
       setSlowLoading(false);
       console.error("Error reading RTDB payload:", err);
+      setIsSyncingFromCache(false);
       if (!hasCachedData) {
         setError("Could not connect to sync server. Check your connection and reload.");
         setLoading(false);
@@ -342,5 +348,5 @@ export function useSync(uid, email) {
       .catch(err => console.error(`Sub-path write failed (${subPath}):`, err));
   };
 
-  return { payload, loading, error, slowLoading, savePayload, saveSubPath };
+  return { payload, loading, error, slowLoading, isSyncingFromCache, savePayload, saveSubPath };
 }
