@@ -3,6 +3,10 @@ import { ref, onValue, set, update, runTransaction, get } from "firebase/databas
 import { db } from "./firebase";
 import { safeUUID } from "./utils/uuid";
 
+// Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
+// This lets the app show specific messages at each stage instead of just "loading".
+export const CONN = { CONNECTING: "connecting", CONNECTED: "connected", OFFLINE: "offline", ERROR: "error" };
+
 // Retry a Firebase set() up to `retries` times with exponential backoff (500ms, 1s, 2s).
 async function writeWithRetry(dbRef, data, retries = 3) {
   for (let attempt = 0; attempt < retries; attempt++) {
@@ -43,7 +47,7 @@ export function useSync(uid, email) {
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [slowLoading, setSlowLoading] = useState(false);
+  const [connPhase, setConnPhase] = useState(CONN.CONNECTING);
   // True while app is rendering from cache and RTDB hasn't responded yet
   const [isSyncingFromCache, setIsSyncingFromCache] = useState(false);
 
@@ -52,6 +56,10 @@ export function useSync(uid, email) {
   const payloadRef = useRef(null);
   const timeoutRef = useRef(null);
   const pendingRemoteRef = useRef(null);
+  // Track if RTDB is physically connected (via .info/connected)
+  const rtdbConnectedRef = useRef(false);
+  // Mutable ref so the timeout callback can see the latest phase without stale closure
+  const dataTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (!dbRefPath) {
@@ -60,57 +68,74 @@ export function useSync(uid, email) {
     }
 
     setLoading(true);
-    setSlowLoading(false);
+    setConnPhase(CONN.CONNECTING);
     setError(null);
     setIsSyncingFromCache(false);
+    rtdbConnectedRef.current = false;
     const userRef = ref(db, dbRefPath);
 
-    // Serve cached data immediately — user sees their app in <100ms on return visits.
-    // We still open the RTDB listener in the background to sync fresh data.
+    // Load from localStorage cache immediately — app is usable in <100ms on return visits.
     const cached = readCache(uid);
     const hasCachedData = !!cached;
     if (hasCachedData) {
       setPayload(cached);
       payloadRef.current = cached;
-      setLoading(false);       // App renders instantly; RTDB syncs in background
-      setIsSyncingFromCache(true); // Show subtle "syncing…" indicator until RTDB responds
+      setLoading(false);
+      setIsSyncingFromCache(true);
     }
 
-    // "Slow loading" warning at 7s — only shown when no cached data
-    const slowWarningId = !hasCachedData
-      ? setTimeout(() => setSlowLoading(true), 7000)
-      : null;
+    // ── Phase 1: monitor raw TCP/WebSocket/long-poll connectivity via .info/connected ──
+    // Firebase sets this ref to true the moment the RTDB transport is established,
+    // before any user data arrives. This lets us separate "can't connect at all"
+    // from "connected but data taking time."
+    let connTimeoutId = null;
+    let dataTimeoutId = null;
 
-    // Hard timeout: 12s (no cache). Probe network to give a specific error message.
-    // With cache the hard timeout is skipped; RTDB syncs silently in background.
-    const connectTimeoutId = !hasCachedData
-      ? setTimeout(async () => {
-          // Quick network probe: if we can't reach any HTTPS endpoint, it's a connectivity
-          // issue, not a Firebase-specific block.
-          let isOnline = false;
-          try {
-            await fetch("https://www.gstatic.com/generate_204", { method: "HEAD", mode: "no-cors", cache: "no-store", signal: AbortSignal.timeout(3000) });
-            isOnline = true;
-          } catch { /* offline or blocked */ }
-
-          const isBrave = typeof navigator !== "undefined" && !!navigator.brave;
-          if (!isOnline) {
-            setError("No internet connection detected. Check your Wi-Fi or mobile data, then tap Retry.");
+    if (!hasCachedData) {
+      // If the transport can't establish at all within 10s, show error.
+      connTimeoutId = setTimeout(() => {
+        if (!rtdbConnectedRef.current) {
+          const isBrave = !!navigator.brave;
+          if (!navigator.onLine) {
+            setError("You appear to be offline. Check your Wi-Fi or mobile data, then tap Retry.");
           } else if (isBrave) {
-            setError("Brave Shields is blocking the sync server. Tap the lion icon → disable Shields for loci-flow.web.app, then tap Retry.");
+            setError("Brave Shields is blocking the sync connection. Tap the Brave lion icon → disable Shields for loci-flow.web.app → tap Retry.");
           } else {
-            setError("Could not reach the sync server. Your network may be blocking the connection. Try a different network or tap Retry.");
+            setError("Could not reach the sync server. Your network may be filtering the connection. Try switching between Wi-Fi and mobile data, then tap Retry.");
           }
+          setConnPhase(CONN.ERROR);
           setLoading(false);
-          setSlowLoading(false);
-        }, 12000)
-      : null;
+        }
+      }, 10000);
+    }
+
+    // Monitor real connection state from Firebase SDK itself
+    const connRef = ref(db, ".info/connected");
+    const unsubConn = onValue(connRef, (snap) => {
+      if (snap.val() === true) {
+        rtdbConnectedRef.current = true;
+        setConnPhase(CONN.CONNECTED);
+        if (connTimeoutId) clearTimeout(connTimeoutId);
+        // If we're now connected but still waiting for data (no cache), allow 10 more seconds
+        if (!hasCachedData && !payloadRef.current) {
+          dataTimeoutId = setTimeout(() => {
+            setError("Connected to the server but data isn't arriving. This may be a permissions issue — try signing out and back in.");
+            setConnPhase(CONN.ERROR);
+            setLoading(false);
+          }, 10000);
+          dataTimeoutRef.current = dataTimeoutId;
+        }
+      } else if (rtdbConnectedRef.current) {
+        // Was connected, now disconnected — Firebase will auto-reconnect
+        setConnPhase(CONN.OFFLINE);
+      }
+    });
 
     const unsubscribe = onValue(userRef, (snapshot) => {
-      if (connectTimeoutId) clearTimeout(connectTimeoutId);
-      if (slowWarningId) clearTimeout(slowWarningId);
-      setSlowLoading(false);
-      setIsSyncingFromCache(false); // RTDB responded — indicator can disappear
+      if (connTimeoutId) clearTimeout(connTimeoutId);
+      if (dataTimeoutRef.current) { clearTimeout(dataTimeoutRef.current); dataTimeoutRef.current = null; }
+      setIsSyncingFromCache(false);
+      setConnPhase(CONN.CONNECTED);
 
       const data = snapshot.val();
 
@@ -259,21 +284,22 @@ export function useSync(uid, email) {
       }
       setLoading(false);
     }, (err) => {
-      if (connectTimeoutId) clearTimeout(connectTimeoutId);
-      if (slowWarningId) clearTimeout(slowWarningId);
-      setSlowLoading(false);
+      if (connTimeoutId) clearTimeout(connTimeoutId);
+      if (dataTimeoutRef.current) { clearTimeout(dataTimeoutRef.current); dataTimeoutRef.current = null; }
       console.error("Error reading RTDB payload:", err);
       setIsSyncingFromCache(false);
       if (!hasCachedData) {
         setError("Could not connect to sync server. Check your connection and reload.");
+        setConnPhase(CONN.ERROR);
         setLoading(false);
       }
       // If we have cached data, don't show an error — user already sees the app
     });
 
     return () => {
-      if (connectTimeoutId) clearTimeout(connectTimeoutId);
-      if (slowWarningId) clearTimeout(slowWarningId);
+      if (connTimeoutId) clearTimeout(connTimeoutId);
+      if (dataTimeoutRef.current) clearTimeout(dataTimeoutRef.current);
+      unsubConn();
       unsubscribe();
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
@@ -363,5 +389,5 @@ export function useSync(uid, email) {
       .catch(err => console.error(`Sub-path write failed (${subPath}):`, err));
   };
 
-  return { payload, loading, error, slowLoading, isSyncingFromCache, savePayload, saveSubPath };
+  return { payload, loading, error, connPhase, isSyncingFromCache, savePayload, saveSubPath };
 }

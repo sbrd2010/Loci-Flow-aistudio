@@ -3,7 +3,7 @@ import { auth, track } from "./firebase";
 import { scheduleAllReminders } from "./utils/reminders";
 import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
-import { useSync } from "./useSync";
+import { useSync, CONN } from "./useSync";
 import Header from "./components/Header";
 import BottomNav from "./components/BottomNav";
 import TodayTab from "./components/TodayTab";
@@ -136,7 +136,7 @@ export default function App() {
   };
 
   // Load the sync payload from RTDB (skipped in demo mode — uid is null)
-  const { payload: rtdbPayload, loading, error, slowLoading, isSyncingFromCache, savePayload: rtdbSave, saveSubPath: rtdbSaveSub } =
+  const { payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, savePayload: rtdbSave, saveSubPath: rtdbSaveSub } =
     useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
   const payload = demoMode ? demoPayload : rtdbPayload;
@@ -304,16 +304,18 @@ export default function App() {
         <div className="signin-card card" style={{ padding: "40px 20px" }}>
           <span className="signin-emoji" style={{ animationDuration: "1.5s" }}>🧠</span>
           <h2 style={{ fontFamily: "var(--font-display)", fontWeight: "800" }}>
-            {slowLoading ? "Still connecting…" : "Loading Loci Space…"}
+            {connPhase === CONN.CONNECTED ? "Still connecting…" : connPhase === CONN.OFFLINE ? "Reconnecting…" : "Loading Loci Space…"}
           </h2>
           <p style={{ color: "var(--text-muted)", fontSize: "13px", marginTop: "4px", lineHeight: "1.5" }}>
-            {slowLoading && isBrave
+            {connPhase === CONN.CONNECTED && isBrave
               ? "Brave Shields may be blocking the connection. Tap the lion icon → disable Shields for this site."
-              : slowLoading
+              : connPhase === CONN.CONNECTED
               ? "Taking longer than usual. Check your Wi-Fi or mobile data."
+              : connPhase === CONN.OFFLINE
+              ? "Lost connection — Firebase will reconnect automatically."
               : "Synchronizing your commitments…"}
           </p>
-          {slowLoading && (
+          {(connPhase === CONN.CONNECTED || connPhase === CONN.OFFLINE) && (
             <button className="btn" onClick={() => window.location.reload()} style={{ marginTop: "20px", width: "100%" }}>
               Try Again
             </button>
