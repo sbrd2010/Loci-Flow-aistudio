@@ -24,6 +24,11 @@ function json(res, status, body) {
   res.status(status).json(body);
 }
 
+function noContent(res) {
+  res.set("Cache-Control", "no-store");
+  res.status(204).send("");
+}
+
 function getBearerToken(req) {
   const header = req.get("authorization") || "";
   const match = header.match(/^Bearer\s+(.+)$/i);
@@ -31,7 +36,7 @@ function getBearerToken(req) {
 }
 
 function cleanMessages(messages) {
-  if (!Array.isArray(messages) || messages.length === 0 || messages.length > MAX_MESSAGES) {
+  if (!Array.isArray(messages) || messages.length > MAX_MESSAGES) {
     throw new Error("invalid_messages");
   }
 
@@ -143,7 +148,7 @@ exports.aiProxy = onRequest({
   timeoutSeconds: 60,
   memory: "256MiB",
 }, async (req, res) => {
-  if (req.method === "OPTIONS") return json(res, 204, {});
+  if (req.method === "OPTIONS") return noContent(res);
   if (req.method !== "POST") return json(res, 405, { code: "method_not_allowed" });
 
   try {
