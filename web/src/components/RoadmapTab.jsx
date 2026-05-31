@@ -27,15 +27,15 @@ function SortableRoadmapCard({ id, task, onTaskClick }) {
       <div
         className="roadmap-task-card"
         onClick={() => onTaskClick(task)}
-        style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}
+        style={{ display: "flex", alignItems: "center", gap: "6px" }}
       >
         <button
           {...listeners}
           {...attributes}
           style={{
             background: "none", border: "none", cursor: "grab",
-            color: "var(--text-muted)", opacity: 0.3, padding: "2px 4px",
-            flexShrink: 0, lineHeight: 1, fontSize: "14px", marginTop: "1px",
+            color: "var(--text-muted)", opacity: 0.3, padding: "2px 3px",
+            flexShrink: 0, lineHeight: 1, fontSize: "13px",
             touchAction: "none",
           }}
           onClick={e => e.stopPropagation()}
@@ -43,17 +43,10 @@ function SortableRoadmapCard({ id, task, onTaskClick }) {
         >
           ⠿
         </button>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "6px" }}>
-            <span className="roadmap-task-title">{task.title}</span>
-            <span className={`priority-badge ${task.priority?.toLowerCase() || "p3"}`} style={{ flexShrink: 0 }}>
-              {task.priority}
-            </span>
-          </div>
-          {task.concreteStep && (
-            <span className="roadmap-task-step">⚡ {task.concreteStep}</span>
-          )}
-        </div>
+        <span className={`priority-badge ${task.priority?.toLowerCase() || "p3"}`} style={{ flexShrink: 0 }}>
+          {task.priority || "P3"}
+        </span>
+        <span className="roadmap-task-title" style={{ flex: 1, minWidth: 0 }}>{task.title}</span>
       </div>
     </div>
   );
@@ -420,15 +413,17 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
             </div>
             <div className="modal-body" style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
               <div style={{ marginBottom: "8px" }}>
-                <span className={`priority-badge ${selectedTask.priority.toLowerCase()}`} style={{ marginBottom: "6px", display: "inline-block" }}>
-                  {selectedTask.priority}
+                <span className={`priority-badge ${(selectedTask.priority || "P3").toLowerCase()}`} style={{ marginBottom: "6px", display: "inline-block" }}>
+                  {selectedTask.priority || "P3"}
                 </span>
                 <h4 style={{ fontSize: "15px", fontWeight: "600", color: "var(--text-primary)", lineHeight: "1.4" }}>
                   {selectedTask.title}
                 </h4>
-                <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                  Micro step: {selectedTask.concreteStep}
-                </p>
+                {selectedTask.concreteStep && selectedTask.concreteStep !== "Do first tiny step" && (
+                  <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                    ⚡ {selectedTask.concreteStep}
+                  </p>
+                )}
               </div>
               <button className="btn" onClick={() => handleMoveToToday(selectedTask)}>
                 🚀 Move to Today
