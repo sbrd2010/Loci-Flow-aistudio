@@ -1,13 +1,26 @@
-// In-memory map of task UUID → timeout ID (cleared on page refresh, re-scheduled on load)
+// In-memory map of task UUID -> timeout ID (cleared on page refresh, re-scheduled on load)
 const scheduled = new Map();
 
+function shouldScheduleReminder(task) {
+  return !!(
+    task?.uuid &&
+    task.reminderAt &&
+    !task.isCompleted &&
+    !task.isDeleted &&
+    !task.isParked
+  );
+}
+
 export function scheduleReminder(task) {
-  if (!task.reminderAt || task.isCompleted || task.isDeleted) return;
+  if (!shouldScheduleReminder(task)) {
+    if (task?.uuid) cancelReminder(task.uuid);
+    return;
+  }
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
 
   const delay = task.reminderAt - Date.now();
   cancelReminder(task.uuid);
-  if (delay <= 0) return; // already past — don't fire stale reminder
+  if (delay <= 0) return; // already past - don't fire stale reminder
 
   const id = setTimeout(async () => {
     scheduled.delete(task.uuid);
@@ -34,9 +47,20 @@ export function cancelReminder(uuid) {
 }
 
 export function scheduleAllReminders(tasks = []) {
+  const eligibleIds = new Set();
+
   tasks.forEach(t => {
-    if (t.reminderAt && !t.isCompleted && !t.isDeleted) scheduleReminder(t);
+    if (shouldScheduleReminder(t)) {
+      eligibleIds.add(t.uuid);
+      scheduleReminder(t);
+    } else if (t?.uuid) {
+      cancelReminder(t.uuid);
+    }
   });
+
+  for (const uuid of scheduled.keys()) {
+    if (!eligibleIds.has(uuid)) cancelReminder(uuid);
+  }
 }
 
 export function formatReminderLabel(ts) {
