@@ -86,8 +86,9 @@ test("6. User can create a new task", async ({ page }) => {
   const tasksList = page.getByTestId("today-tasks-list");
   const beforeCount = await tasksList.locator(".task-row:not(.completed)").count();
 
-  // Open add-task dialog via FAB
+  // Open add-task dialog via FAB speed-dial (two-step: expand then select)
   await page.getByTestId("fab-add-task").click();
+  await page.getByTestId("fab-add-task-option").click();
   await expect(page.locator(".modal-card")).toBeVisible({ timeout: 5_000 });
 
   // Fill in the title and submit
