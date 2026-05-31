@@ -43,27 +43,27 @@ export default function OnboardingWizard({ payload, savePayload }) {
   const challenges = [
     {
       key: "overplanner",
-      icon: "📋",
-      label: "Overplanner",
-      sub: "I research and plan endlessly — but rarely get started"
-    },
-    {
-      key: "overwhelmed",
-      icon: "🌊",
-      label: "Overwhelmed",
-      sub: "Too much on my plate, guilt about the backlog"
+      icon: "🎯",
+      label: "Help me decide what to work on",
+      sub: "Too many options — I need clarity on what actually matters right now"
     },
     {
       key: "initiation",
       icon: "🧊",
-      label: "Initiation block",
-      sub: "I know exactly what to do but freeze before starting"
+      label: "Help me just start",
+      sub: "I know what to do — starting is the hard part"
     },
     {
       key: "momentum",
       icon: "⚡",
-      label: "Momentum seeker",
-      sub: "I need a quick win to get rolling"
+      label: "Keep me moving forward",
+      sub: "I work well once I'm going — I just need momentum"
+    },
+    {
+      key: "overwhelmed",
+      icon: "🌱",
+      label: "Help me recover and catch up",
+      sub: "I've fallen behind and need to reset without losing everything"
     }
   ];
 
@@ -136,8 +136,8 @@ export default function OnboardingWizard({ payload, savePayload }) {
         {currentStep === 2 && (
           <div style={{ display: "flex", flexDirection: "column", gap: "14px", width: "100%" }}>
             <div>
-              <h2 style={{ fontSize: "19px", fontWeight: "800", textAlign: "center" }}>Which describes you best?</h2>
-              <p style={{ fontSize: "12px", color: "var(--text-muted)", textAlign: "center", marginTop: "4px" }}>Loci adapts its coaching to your profile.</p>
+              <h2 style={{ fontSize: "19px", fontWeight: "800", textAlign: "center" }}>What do you need most from Loci?</h2>
+              <p style={{ fontSize: "12px", color: "var(--text-muted)", textAlign: "center", marginTop: "4px" }}>Your coaching and AI suggestions will be tailored to this.</p>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
               {challenges.map((c) => {

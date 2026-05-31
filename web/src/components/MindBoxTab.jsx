@@ -377,7 +377,7 @@ export default function MindBoxTab({ payload, savePayload }) {
             <h2 className="mindbox-subview-title">📊 Progress</h2>
           </div>
           <div style={{ textAlign: "center", padding: "20px 0 28px" }}>
-            <span style={{ fontSize: "clamp(52px, 16vw, 80px)", fontWeight: "900", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-display)" }}>
+            <span style={{ fontSize: "clamp(52px, 16vw, 80px)", fontWeight: "700", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-mono)" }}>
               {config.visitStreakCount || 0}
             </span>
             <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "6px", marginBottom: "28px" }}>
@@ -399,19 +399,19 @@ export default function MindBoxTab({ payload, savePayload }) {
           </div>
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "16px 20px", display: "flex", justifyContent: "space-around", textAlign: "center" }}>
             <div>
-              <div style={{ fontSize: "24px", fontWeight: "900", color: "var(--accent)", fontFamily: "var(--font-display)" }}>{config.totalXp || 0}</div>
+              <div style={{ fontSize: "24px", fontWeight: "900", color: "var(--accent)", fontFamily: "var(--font-mono)" }}>{config.totalXp || 0}</div>
               <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "2px" }}>Total XP</div>
             </div>
             <div style={{ width: "1px", background: "var(--border)" }} />
             <div>
-              <div style={{ fontSize: "24px", fontWeight: "900", color: "var(--success, #22c55e)", fontFamily: "var(--font-display)" }}>
+              <div style={{ fontSize: "24px", fontWeight: "900", color: "var(--success, #22c55e)", fontFamily: "var(--font-mono)" }}>
                 {tasks.filter(t => !t.isDeleted && t.isCompleted).length}
               </div>
               <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "2px" }}>Tasks Done</div>
             </div>
             <div style={{ width: "1px", background: "var(--border)" }} />
             <div>
-              <div style={{ fontSize: "24px", fontWeight: "900", color: "var(--text-primary)", fontFamily: "var(--font-display)" }}>
+              <div style={{ fontSize: "24px", fontWeight: "900", color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
                 {bentoDays.filter(d => d.count > 0).length}
               </div>
               <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "2px" }}>Days This Week</div>
@@ -468,7 +468,7 @@ export default function MindBoxTab({ payload, savePayload }) {
                   {ritualSteps[ritualStepIndex].name}
                 </p>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: "30px", fontWeight: "900", color: "var(--accent)", fontFamily: "var(--font-display)" }}>
+                  <span style={{ fontSize: "30px", fontWeight: "900", color: "var(--accent)", fontFamily: "var(--font-mono)" }}>
                     {formatRitualTime(ritualSecondsLeft)}
                   </span>
                   <button className="btn" onClick={handleAdvanceRitualStep} style={{ padding: "6px 18px", fontSize: "12px" }}>Skip →</button>
@@ -483,7 +483,7 @@ export default function MindBoxTab({ payload, savePayload }) {
       {!toolPanel && (
         <>
           <div style={{ padding: "0 0 20px 0" }}>
-            <h2 style={{ fontSize: "18px", fontWeight: "800", color: "var(--text-primary)", fontFamily: "var(--font-display)" }}>Mind Box</h2>
+            <h2 style={{ fontSize: "18px", fontWeight: "800", color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>Mind Box</h2>
             <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Your tools, streaks, and reset buttons.</p>
           </div>
 
