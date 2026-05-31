@@ -1,6 +1,15 @@
 import React, { useState } from "react";
 import { callAI, getAIKeys } from "../utils/aiCall";
 import { safeUUID } from "../utils/uuid";
+import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
+
+function defaultReminderDateTime() {
+  const d = new Date();
+  d.setHours(d.getHours() + 1, 0, 0, 0);
+  const dateStr = d.toISOString().slice(0, 10);
+  const timeStr = `${String(d.getHours()).padStart(2, "0")}:00`;
+  return { dateStr, timeStr };
+}
 
 
 export default function AddTaskDialog({ email, payload, savePayload, defaultHorizon, onClose }) {
@@ -15,6 +24,9 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
   const [formError, setFormError] = useState("");
+  const [reminderOn, setReminderOn] = useState(false);
+  const [reminderDate, setReminderDate] = useState(() => defaultReminderDateTime().dateStr);
+  const [reminderTime, setReminderTime] = useState(() => defaultReminderDateTime().timeStr);
 
   const { groqKey, geminiKey } = getAIKeys();
   const hasAnyKey = !!(groqKey || geminiKey);
@@ -86,7 +98,7 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
     { min: 60, label: "1h" }, { min: 120, label: "2h" }, { min: 240, label: "4h" }, { min: 360, label: "6h" }
   ];
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim()) return;
 
@@ -105,6 +117,18 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
     );
     const orderIndex = currentLevelTasks.length;
 
+    // Build reminderAt timestamp from picker values
+    let reminderAt = null;
+    if (reminderOn && reminderDate && reminderTime) {
+      reminderAt = new Date(`${reminderDate}T${reminderTime}`).getTime();
+      if (isNaN(reminderAt) || reminderAt <= Date.now()) reminderAt = null;
+    }
+
+    // Request notification permission if a reminder is set
+    if (reminderAt && typeof Notification !== "undefined" && Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+
     const freshTask = {
       id: Date.now(),
       userId: email,
@@ -116,6 +140,7 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
       category,
       timeEstimateMinutes: Number(estimateMinutes),
       deadlineTimestamp: null,
+      reminderAt,
       isCompleted: false,
       isParked: false,
       isNowFocus: false,
@@ -124,6 +149,8 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
       isDeleted: false,
       lastUpdated: Date.now()
     };
+
+    if (reminderAt) scheduleReminder(freshTask);
 
     const updatedTasks = [...(payload.tasks || []), freshTask];
     savePayload({
@@ -217,6 +244,50 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Reminder picker */}
+          <div style={{ marginBottom: "4px" }}>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!reminderOn && typeof Notification !== "undefined" && Notification.permission === "default") {
+                  await Notification.requestPermission();
+                }
+                setReminderOn(o => !o);
+              }}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                width: "100%", padding: "10px 14px",
+                background: reminderOn ? "var(--accent-ring, rgba(99,102,241,0.08))" : "var(--bg-secondary)",
+                border: reminderOn ? "1.5px solid var(--accent)" : "1.5px solid var(--border)",
+                borderRadius: "8px", cursor: "pointer", transition: "all 0.15s"
+              }}
+            >
+              <span style={{ fontSize: "13px", fontWeight: "700", color: reminderOn ? "var(--accent)" : "var(--text-secondary)" }}>
+                🔔 {reminderOn ? `Remind me: ${formatReminderLabel(new Date(`${reminderDate}T${reminderTime}`).getTime())}` : "Set a reminder"}
+              </span>
+              <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{reminderOn ? "✕ remove" : "+"}</span>
+            </button>
+            {reminderOn && (
+              <div style={{ display: "flex", gap: "8px", marginTop: "8px", alignItems: "center" }}>
+                <input
+                  type="date"
+                  className="text-input"
+                  value={reminderDate}
+                  min={new Date().toISOString().slice(0, 10)}
+                  onChange={e => setReminderDate(e.target.value)}
+                  style={{ flex: 1.4 }}
+                />
+                <input
+                  type="time"
+                  className="text-input"
+                  value={reminderTime}
+                  onChange={e => setReminderTime(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+              </div>
+            )}
           </div>
 
           {/* Advanced toggle — Category + Time Estimate */}

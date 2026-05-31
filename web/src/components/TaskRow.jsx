@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { formatReminderLabel } from "../utils/reminders";
 
 const menuItemStyle = (color) => ({
   display: "flex", alignItems: "center", gap: "10px", width: "100%",
@@ -8,7 +9,7 @@ const menuItemStyle = (color) => ({
 });
 
 export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onBreakdown, onSubStepToggle, isBreakingDown }) {
-  const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps } = task;
+  const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -50,6 +51,17 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         </div>
         {concreteStep && (
           <span className="task-step-text">⚡ {concreteStep}</span>
+        )}
+        {reminderAt && !isCompleted && (
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: "4px",
+            fontSize: "10px", fontWeight: "700",
+            color: reminderAt < Date.now() ? "var(--danger)" : "var(--accent)",
+            background: reminderAt < Date.now() ? "rgba(248,113,113,0.1)" : "var(--accent-ring, rgba(99,102,241,0.08))",
+            padding: "2px 7px", borderRadius: "4px", marginTop: "3px"
+          }}>
+            🔔 {formatReminderLabel(reminderAt)}{reminderAt < Date.now() ? " (overdue)" : ""}
+          </span>
         )}
 
         {/* Sub-steps checklist */}

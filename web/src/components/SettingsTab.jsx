@@ -65,25 +65,11 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
   const [notifPermission, setNotifPermission] = useState(() =>
     typeof Notification !== "undefined" ? Notification.permission : "denied"
   );
-  const [notifEnabled, setNotifEnabled] = useState(() => localStorage.getItem("loci_notif_enabled") === "1");
-  const [notifTime, setNotifTime] = useState(() => localStorage.getItem("loci_notif_time") || "09:00");
 
   const requestNotifPermission = async () => {
     if (typeof Notification === "undefined") return;
     const result = await Notification.requestPermission();
     setNotifPermission(result);
-    if (result === "granted") {
-      localStorage.setItem("loci_notif_enabled", "1");
-      setNotifEnabled(true);
-    }
-  };
-
-  const handleSaveNotifTime = () => {
-    localStorage.setItem("loci_notif_time", notifTime);
-    localStorage.setItem("loci_notif_enabled", notifEnabled ? "1" : "0");
-    if (notifPermission === "granted" && notifEnabled) {
-      new Notification("Loci Focus", { body: `Daily reminder set for ${notifTime}. See you then! 🧠`, icon: "/icon-192.png" });
-    }
   };
   const [progressOpen, setProgressOpen] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
@@ -578,50 +564,27 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
 
       {/* ── Notifications ────────────────────────────────────────────────── */}
       <section className="card">
-        <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "14px", color: "var(--text-primary)" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "10px", color: "var(--text-primary)" }}>
           🔔 Notifications
         </h2>
+        {notifPermission === "granted" && (
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "10px" }}>
+            <span style={{ fontSize: "12px", color: "var(--success)", fontWeight: "700" }}>✓ Notifications allowed</span>
+          </div>
+        )}
         {notifPermission === "denied" && (
           <p style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "10px" }}>
-            Notifications are blocked in your browser. Go to browser settings → Site settings → Notifications to allow them for this site.
+            Notifications are blocked. Go to browser Settings → Site settings → Notifications → allow for this site.
           </p>
         )}
         {notifPermission !== "granted" && notifPermission !== "denied" && (
-          <button className="btn" style={{ width: "100%", marginBottom: "12px" }} onClick={requestNotifPermission}>
-            Enable notifications
+          <button className="btn" style={{ width: "100%", marginBottom: "10px" }} onClick={requestNotifPermission}>
+            Allow notifications
           </button>
         )}
-        {notifPermission === "granted" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", cursor: "pointer" }}>
-              Daily focus reminder
-              <input
-                type="checkbox"
-                checked={notifEnabled}
-                onChange={e => { setNotifEnabled(e.target.checked); localStorage.setItem("loci_notif_enabled", e.target.checked ? "1" : "0"); }}
-                style={{ width: "18px", height: "18px", cursor: "pointer" }}
-              />
-            </label>
-            {notifEnabled && (
-              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                <label className="form-label" style={{ margin: 0, whiteSpace: "nowrap" }}>Remind me at</label>
-                <input
-                  type="time"
-                  className="text-input"
-                  value={notifTime}
-                  onChange={e => setNotifTime(e.target.value)}
-                  style={{ flex: 1 }}
-                />
-                <button className="btn" onClick={handleSaveNotifTime} style={{ whiteSpace: "nowrap", padding: "10px 14px", fontSize: "12px" }}>
-                  Save
-                </button>
-              </div>
-            )}
-            <p style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-              Reminders fire when your browser is open. For reminders when the browser is closed, install the app to your home screen.
-            </p>
-          </div>
-        )}
+        <p style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: "1.5" }}>
+          Reminders are set <strong>per task</strong> — tap <strong>+ Add Task</strong> or <strong>✏ Edit</strong> a task and tap <strong>🔔 Set a reminder</strong> to choose the exact date and time.
+        </p>
       </section>
 
       {/* ── Account ──────────────────────────────────────────────────────── */}

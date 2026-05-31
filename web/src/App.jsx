@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { auth, track } from "./firebase";
+import { scheduleAllReminders } from "./utils/reminders";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { useSync } from "./useSync";
 import Header from "./components/Header";
@@ -99,6 +100,11 @@ export default function App() {
 
   // Load the sync payload from RTDB
   const { payload, loading, error, savePayload, saveSubPath } = useSync(user?.uid || null, user?.email || null);
+
+  // Schedule task reminders whenever payload loads/changes
+  useEffect(() => {
+    if (payload?.tasks) scheduleAllReminders(payload.tasks);
+  }, [payload?.tasks]);
 
   // Auto-increment visit streak on first open each day
   useEffect(() => {
