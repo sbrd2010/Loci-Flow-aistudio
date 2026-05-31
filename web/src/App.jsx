@@ -392,13 +392,13 @@ export default function App() {
             onClick={() => { setShowQuickDump(false); setQuickDumpText(""); }}
           />
           <div style={{
-            position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
-            width: "100%", maxWidth: "480px",
-            background: "var(--bg-card)", borderRadius: "20px 20px 0 0",
-            padding: "12px 20px calc(20px + env(safe-area-inset-bottom, 0px))",
-            boxShadow: "0 -4px 24px rgba(0,0,0,0.18)", zIndex: 201
+            position: "fixed", top: "50%", left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "calc(100% - 32px)", maxWidth: "440px",
+            background: "var(--bg-card)", borderRadius: "20px",
+            padding: "22px 20px 24px",
+            boxShadow: "0 8px 40px rgba(0,0,0,0.35)", zIndex: 201
           }}>
-            <div style={{ width: "36px", height: "4px", background: "var(--border)", borderRadius: "2px", margin: "0 auto 16px" }} />
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
               <h3 style={{ fontSize: "15px", fontWeight: "800", margin: 0, color: "var(--text-primary)" }}>📝 Brain Dump</h3>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
