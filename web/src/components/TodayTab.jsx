@@ -305,35 +305,38 @@ export default function TodayTab({ payload, savePayload }) {
     savePayload({ ...payload, tasks: updatedTasks });
   };
 
+  const getTaskKey = (t) => t.uuid || String(t.id);
+
   const handleGripTap = (task) => {
     if (!liftedTaskUuid) {
-      setLiftedTaskUuid(task.uuid);
-    } else if (liftedTaskUuid === task.uuid) {
+      setLiftedTaskUuid(getTaskKey(task));
+    } else if (liftedTaskUuid === getTaskKey(task)) {
       setLiftedTaskUuid(null);
     } else {
-      const fromIdx = remainingTasks.findIndex(t => t.uuid === liftedTaskUuid);
-      const toIdx = remainingTasks.findIndex(t => t.uuid === task.uuid);
+      const fromIdx = remainingTasks.findIndex(t => getTaskKey(t) === liftedTaskUuid);
+      const toIdx = remainingTasks.findIndex(t => getTaskKey(t) === getTaskKey(task));
       if (fromIdx === -1) { setLiftedTaskUuid(null); return; }
       const list = [...remainingTasks];
       [list[fromIdx], list[toIdx]] = [list[toIdx], list[fromIdx]];
-      const orderMap = new Map(list.map((t, i) => [t.uuid, i]));
+      const orderMap = new Map(list.map((t, i) => [getTaskKey(t), i]));
       savePayload({ ...payload, tasks: tasks.map(t =>
-        orderMap.has(t.uuid) ? { ...t, orderIndex: orderMap.get(t.uuid), lastUpdated: Date.now() } : t
+        orderMap.has(getTaskKey(t)) ? { ...t, orderIndex: orderMap.get(getTaskKey(t)), lastUpdated: Date.now() } : t
       )});
       setLiftedTaskUuid(null);
     }
   };
 
   const handleMoveTask = (task, direction) => {
+    const taskKey = getTaskKey(task);
     const list = [...remainingTasks];
-    const idx = list.findIndex(t => t.uuid === task.uuid);
+    const idx = list.findIndex(t => getTaskKey(t) === taskKey);
+    if (idx === -1) return;
     const swapIdx = direction === "up" ? idx - 1 : idx + 1;
     if (swapIdx < 0 || swapIdx >= list.length) return;
     [list[idx], list[swapIdx]] = [list[swapIdx], list[idx]];
-    // Re-assign clean sequential orderIndex to all visible tasks — heals any existing drift
-    const orderMap = new Map(list.map((t, i) => [t.uuid, i]));
+    const orderMap = new Map(list.map((t, i) => [getTaskKey(t), i]));
     savePayload({ ...payload, tasks: tasks.map(t =>
-      orderMap.has(t.uuid) ? { ...t, orderIndex: orderMap.get(t.uuid), lastUpdated: Date.now() } : t
+      orderMap.has(getTaskKey(t)) ? { ...t, orderIndex: orderMap.get(getTaskKey(t)), lastUpdated: Date.now() } : t
     )});
   };
 
@@ -702,7 +705,7 @@ export default function TodayTab({ payload, savePayload }) {
                     isBreakingDown={breakdownLoadingUuid === task.uuid}
                     onToggleMVD={handleToggleMVD}
                     onGripTap={handleGripTap}
-                    isLifted={liftedTaskUuid === task.uuid}
+                    isLifted={liftedTaskUuid === getTaskKey(task)}
                     anyLifted={!!liftedTaskUuid}
                   />
                 )

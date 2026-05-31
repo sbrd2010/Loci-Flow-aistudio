@@ -248,7 +248,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
 
       {/* ⋮ context menu */}
       {hasActions ? (
-        <div ref={menuRef} style={{ position: "relative", flexShrink: 0 }}>
+        <div ref={menuRef} style={{ position: "relative", flexShrink: 0 }} onClick={e => e.stopPropagation()}>
           <button
             onClick={() => setMenuOpen(o => !o)}
             aria-label="Task options"
