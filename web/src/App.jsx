@@ -14,6 +14,7 @@ import SettingsTab from "./components/SettingsTab";
 import AddTaskDialog from "./components/AddTaskDialog";
 import OnboardingWizard from "./components/OnboardingWizard";
 import PrivacyPolicy from "./components/PrivacyPolicy";
+import { safeUUID } from "./utils/uuid";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -25,6 +26,8 @@ export default function App() {
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState("");
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showQuickDump, setShowQuickDump] = useState(false);
+  const [quickDumpText, setQuickDumpText] = useState("");
 
   // ── Demo mode ──────────────────────────────────────────────────────────────
   const [demoMode, setDemoMode] = useState(false);
@@ -176,6 +179,16 @@ export default function App() {
   const openAddTask = (horizon = "today") => {
     setPreselectedHorizon(horizon);
     setShowAddTask(true);
+  };
+
+  const dumpCount = (payload?.brainDump || []).length;
+  const recentDump = [...(payload?.brainDump || [])].slice(-3).reverse();
+
+  const handleQuickDump = (e) => {
+    e.preventDefault();
+    if (!quickDumpText.trim() || dumpCount >= 50 || !payload) return;
+    savePayload({ ...payload, brainDump: [...(payload.brainDump || []), { id: safeUUID(), text: quickDumpText.trim(), createdAt: Date.now() }] });
+    setQuickDumpText("");
   };
 
   // ── Loading spinner ────────────────────────────────────────────────────────
@@ -349,16 +362,89 @@ export default function App() {
         )}
       </main>
 
-      {/* FAB */}
+      {/* FABs — Brain Dump (secondary) + Add Task (primary) */}
       {(activeTab === "today" || activeTab === "roadmap") && (
-        <button
-          className="fab"
-          data-testid="fab-add-task"
-          onClick={() => openAddTask(activeTab === "roadmap" ? "week" : "today")}
-          title="Add Focus Commit"
-        >
-          +
-        </button>
+        <>
+          <button
+            className="fab-secondary"
+            data-testid="fab-brain-dump"
+            onClick={() => setShowQuickDump(true)}
+            title="Quick Brain Dump"
+          >
+            📝
+          </button>
+          <button
+            className="fab"
+            data-testid="fab-add-task"
+            onClick={() => openAddTask(activeTab === "roadmap" ? "week" : "today")}
+            title="Add Focus Commit"
+          >
+            +
+          </button>
+        </>
+      )}
+
+      {/* Quick Brain Dump sheet */}
+      {showQuickDump && (
+        <>
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 200 }}
+            onClick={() => { setShowQuickDump(false); setQuickDumpText(""); }}
+          />
+          <div style={{
+            position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
+            width: "100%", maxWidth: "480px",
+            background: "var(--bg-card)", borderRadius: "20px 20px 0 0",
+            padding: "12px 20px calc(20px + env(safe-area-inset-bottom, 0px))",
+            boxShadow: "0 -4px 24px rgba(0,0,0,0.18)", zIndex: 201
+          }}>
+            <div style={{ width: "36px", height: "4px", background: "var(--border)", borderRadius: "2px", margin: "0 auto 16px" }} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+              <h3 style={{ fontSize: "15px", fontWeight: "800", margin: 0, color: "var(--text-primary)" }}>📝 Brain Dump</h3>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                {dumpCount > 0 && (
+                  <span style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700" }}>
+                    {dumpCount}/50
+                  </span>
+                )}
+                <button
+                  onClick={() => { setShowQuickDump(false); setQuickDumpText(""); }}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: "20px", color: "var(--text-muted)", lineHeight: 1, padding: "2px 4px" }}
+                >×</button>
+              </div>
+            </div>
+            {dumpCount >= 50 && (
+              <p style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "8px", fontWeight: "600" }}>
+                Inbox full — triage items in Mind Box first.
+              </p>
+            )}
+            <form onSubmit={handleQuickDump} style={{ display: "flex", gap: "8px", marginBottom: recentDump.length ? "14px" : 0 }}>
+              <input
+                autoFocus
+                type="text"
+                className="braindump-input"
+                placeholder="What's on your mind?"
+                value={quickDumpText}
+                onChange={e => setQuickDumpText(e.target.value)}
+                disabled={dumpCount >= 50}
+                style={{ flex: 1 }}
+              />
+              <button type="submit" className="braindump-submit" disabled={dumpCount >= 50 || !quickDumpText.trim()}>➔</button>
+            </form>
+            {recentDump.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Recently captured
+                </span>
+                {recentDump.map(item => (
+                  <p key={item.id} style={{ fontSize: "12px", color: "var(--text-secondary)", margin: 0, padding: "6px 10px", background: "var(--bg-secondary)", borderRadius: "8px", lineHeight: "1.45" }}>
+                    {item.text}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {/* Bottom Nav */}
