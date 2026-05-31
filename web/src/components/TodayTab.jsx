@@ -43,6 +43,7 @@ export default function TodayTab({ payload, savePayload }) {
   const [rescueStep, setRescueStep] = useState(0);
   const [isMVDMode, setIsMVDMode] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState(null);
+  const [reminderPastError, setReminderPastError] = useState(false);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -91,6 +92,11 @@ export default function TodayTab({ payload, savePayload }) {
     }
     return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
   }, [isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stop timer automatically if the focused task is deleted or completed mid-session
+  useEffect(() => {
+    if (isTimerRunning && !activeTask) setIsTimerRunning(false);
+  }, [activeTask, isTimerRunning]);
 
   useEffect(() => {
     if (isTimerRunning && timerSecondsLeft === 0) {
@@ -285,9 +291,15 @@ export default function TodayTab({ payload, savePayload }) {
   const handleSaveEdit = () => {
     if (!editFields.title.trim()) return;
     let reminderAt = null;
+    setReminderPastError(false);
     if (editFields.reminderOn && editFields.reminderDate && editFields.reminderTime) {
       const ts = new Date(`${editFields.reminderDate}T${editFields.reminderTime}`).getTime();
-      if (!isNaN(ts) && ts > Date.now()) reminderAt = ts;
+      if (!isNaN(ts) && ts > Date.now()) {
+        reminderAt = ts;
+      } else if (!isNaN(ts)) {
+        setReminderPastError(true);
+        return;
+      }
     }
     const updatedTask = tasks.find(t => t.uuid === editingTaskUuid);
     if (updatedTask) {
@@ -709,9 +721,16 @@ export default function TodayTab({ payload, savePayload }) {
                             <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{editFields.reminderOn ? "remove" : "+"}</span>
                           </button>
                           {editFields.reminderOn && (
-                            <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
-                              <input type="date" className="text-input" value={editFields.reminderDate} min={new Date().toISOString().slice(0,10)} onChange={e => setEditFields(f => ({ ...f, reminderDate: e.target.value }))} style={{ flex: 1.4 }} />
-                              <input type="time" className="text-input" value={editFields.reminderTime} onChange={e => setEditFields(f => ({ ...f, reminderTime: e.target.value }))} style={{ flex: 1 }} />
+                            <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexDirection: "column" }}>
+                              <div style={{ display: "flex", gap: "6px" }}>
+                                <input type="date" className="text-input" value={editFields.reminderDate} min={new Date().toISOString().slice(0,10)} onChange={e => { setEditFields(f => ({ ...f, reminderDate: e.target.value })); setReminderPastError(false); }} style={{ flex: 1.4 }} />
+                                <input type="time" className="text-input" value={editFields.reminderTime} onChange={e => { setEditFields(f => ({ ...f, reminderTime: e.target.value })); setReminderPastError(false); }} style={{ flex: 1 }} />
+                              </div>
+                              {reminderPastError && (
+                                <span style={{ fontSize: "11px", color: "var(--danger)", fontWeight: "600" }}>
+                                  ⚠ Reminder time is in the past — pick a future time.
+                                </span>
+                              )}
                             </div>
                           )}
                           <div style={{ display: "flex", gap: "8px" }}>

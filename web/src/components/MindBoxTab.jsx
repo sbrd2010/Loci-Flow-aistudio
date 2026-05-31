@@ -272,7 +272,9 @@ export default function MindBoxTab({ payload, savePayload }) {
         lastUpdated: Date.now()
       };
     });
-    savePayload({ ...payload, tasks: [...(payload.tasks || []), ...newTasks] });
+    const addedTexts = new Set(toAdd.map(t => t.title?.toLowerCase().trim()).filter(Boolean));
+    const clearedDump = (payload.brainDump || []).filter(d => !addedTexts.has(d.text?.toLowerCase().trim()));
+    savePayload({ ...payload, tasks: [...(payload.tasks || []), ...newTasks], brainDump: clearedDump });
     setToolPanel(null);
     setOrganizeResults([]);
     setOrganizeSelected(new Set());

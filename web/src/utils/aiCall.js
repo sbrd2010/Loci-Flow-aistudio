@@ -6,8 +6,16 @@ const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemi
  * Unified AI call — prefers Groq (fast, free) over Gemini.
  * messages: [{ role: "user"|"assistant", content: string }]
  */
+const AI_TIMEOUT_MS = 30000;
+
+function fetchWithTimeout(url, opts) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+  return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(id));
+}
+
 async function callGroq(groqKey, systemPrompt, messages, maxTokens) {
-  const res = await fetch(GROQ_URL, {
+  const res = await fetchWithTimeout(GROQ_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -37,7 +45,7 @@ async function callGemini(geminiKey, systemPrompt, messages) {
   if (contents.length === 0) {
     contents = [{ role: "user", parts: [{ text: "Hello" }] }];
   }
-  const res = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
+  const res = await fetchWithTimeout(`${GEMINI_URL}?key=${geminiKey}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

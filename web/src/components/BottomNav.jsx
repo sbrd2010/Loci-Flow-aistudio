@@ -45,11 +45,11 @@ const SettingsIcon = () => (
 );
 
 const TABS = [
-  { id: "today",    label: "Today",    Icon: TodayIcon,    color: "#3b82f6" },
-  { id: "roadmap",  label: "Roadmap",  Icon: RoadmapIcon,  color: "#10b981" },
-  { id: "mindbox",  label: "Mind Box", Icon: MindBoxIcon,  color: "#8b5cf6" },
-  { id: "coach",    label: "AI Coach", Icon: CoachIcon,    color: "#ec4899" },
-  { id: "settings", label: "Settings", Icon: SettingsIcon, color: "#f59e0b" },
+  { id: "today",    label: "Today",    Icon: TodayIcon,    color: "var(--accent)" },
+  { id: "roadmap",  label: "Roadmap",  Icon: RoadmapIcon,  color: "var(--success)" },
+  { id: "mindbox",  label: "Mind Box", Icon: MindBoxIcon,  color: "var(--accent-secondary)" },
+  { id: "coach",    label: "AI Coach", Icon: CoachIcon,    color: "var(--p1-text)" },
+  { id: "settings", label: "Settings", Icon: SettingsIcon, color: "var(--warning)" },
 ];
 
 export default function BottomNav({ activeTab, onTabSelect }) {
@@ -71,7 +71,7 @@ export default function BottomNav({ activeTab, onTabSelect }) {
               aria-hidden="true"
               style={{
                 color: isActive ? color : "var(--text-secondary)",
-                background: isActive ? `${color}22` : "transparent",
+                background: isActive ? "var(--accent-light)" : "transparent",
                 transform: isActive ? "scale(1.08)" : "scale(1)",
               }}
             >
