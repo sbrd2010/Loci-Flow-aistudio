@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      GROQ_API_KEY: ${{ secrets.VITE_GROQ_KEY }}
+      GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -19,18 +21,42 @@ jobs:
       - name: Install and build web
         working-directory: web
         env:
-          VITE_GROQ_KEY: ${{ secrets.VITE_GROQ_KEY }}
-          VITE_GEMINI_KEY: ${{ secrets.VITE_GEMINI_KEY }}
+          VITE_AI_PROXY_ENABLED: "true"
+          VITE_GROQ_KEY: "__LOCI_BUILTIN_AI_PROXY__"
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_GA_MEASUREMENT_ID: ${{ secrets.VITE_GA_MEASUREMENT_ID }}
         run: |
           npm ci
           npm run build
 
-      - name: Deploy Database Rules
+      - name: Prepare Firebase credentials
         run: |
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW }}' > /tmp/sa.json
-          GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json npx firebase-tools@latest deploy --only database --project loci-flow
+
+      - name: Validate deployment secrets
+        run: |
+          test -s /tmp/sa.json
+          test -n "$GROQ_API_KEY"
+          test -n "$GEMINI_API_KEY"
+
+      - name: Install Functions dependencies
+        run: |
+          npm install --prefix functions --no-audit --no-fund
+
+      - name: Set Function Secrets
+        run: |
+          printf '%s' "$GROQ_API_KEY" > /tmp/groq_api_key
+          printf '%s' "$GEMINI_API_KEY" > /tmp/gemini_api_key
+          GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json npx firebase-tools@latest functions:secrets:set GROQ_API_KEY --project loci-flow --data-file /tmp/groq_api_key --non-interactive
+          GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json npx firebase-tools@latest functions:secrets:set GEMINI_API_KEY --project loci-flow --data-file /tmp/gemini_api_key --non-interactive
+
+      - name: Deploy Functions
+        run: |
+          GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json npx firebase-tools@latest deploy --only functions:aiProxy --project loci-flow --non-interactive
+
+      - name: Deploy Database Rules
+        run: |
+          GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json npx firebase-tools@latest deploy --only database --project loci-flow --non-interactive
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
