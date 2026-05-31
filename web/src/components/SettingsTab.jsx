@@ -157,7 +157,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
     e.preventDefault();
     localStorage.setItem("loci_groq_key", groqInput.trim());
     setSavedGroq(true);
-    setTimeout(() => { setSavedGroq(false); window.location.reload(); }, 1200);
+    setTimeout(() => setSavedGroq(false), 2000);
   };
 
   // ── Gemini API key ────────────────────────────────────────────────────────
@@ -167,7 +167,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
     e.preventDefault();
     localStorage.setItem("loci_gemini_key", keyInput.trim());
     setSavedKey(true);
-    setTimeout(() => { setSavedKey(false); window.location.reload(); }, 1200);
+    setTimeout(() => setSavedKey(false), 2000);
   };
 
   // ── Sync status ───────────────────────────────────────────────────────────
@@ -415,7 +415,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
                 Blocks adding new tasks after 8 PM to protect your wind-down.
               </p>
             </div>
-            <input type="checkbox" className="pill-toggle" checked={editedEveningGuard} readOnly />
+            <input type="checkbox" className="pill-toggle" checked={editedEveningGuard} onChange={() => setEditedEveningGuard(v => !v)} />
           </div>
 
           <button className="btn" type="submit" style={{ width: "100%", marginTop: "4px" }}>

@@ -175,7 +175,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
       {/* Task content */}
       <div className="task-middle">
         <div className="task-row-top">
-          <span className={`priority-badge ${priority.toLowerCase()}`}>{priority}</span>
+          <span className={`priority-badge ${(priority || "P4").toLowerCase()}`}>{priority || "P4"}</span>
           {isNowFocus && !isCompleted && (
             <span style={{ fontSize: "9px", fontWeight: "800", color: "var(--warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "4px" }}>FOCUS</span>
           )}

@@ -180,7 +180,7 @@ export function useSync(uid, email) {
                 userId: email,
                 uuid: safeUUID(),
                 title: "Optimize resume for tech product role",
-                concreteStep: "Add metric metrics to job #1",
+                concreteStep: "Add metrics to job #1",
                 horizonLevel: "today",
                 priority: "P1",
                 category: "Career",
@@ -199,7 +199,7 @@ export function useSync(uid, email) {
                 userId: email,
                 uuid: safeUUID(),
                 title: "Prep interview answers for star technique",
-                concreteStep: "Draft situation for leadership quest",
+                concreteStep: "Draft situation for leadership question",
                 horizonLevel: "today",
                 priority: "P2",
                 category: "Career",
@@ -311,7 +311,7 @@ export function useSync(uid, email) {
       if (timeoutRef.current && dbRefPath && payloadRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
-        set(ref(db, dbRefPath), payloadRef.current);
+        writeWithRetry(ref(db, dbRefPath), payloadRef.current).catch(() => {});
       }
     };
     const handleVisibilityChange = () => {
@@ -384,9 +384,12 @@ export function useSync(uid, email) {
       [`${dbRefPath}/${subPath}`]: value,
       [`${dbRefPath}/timestamp`]: Date.now()
     };
-    update(ref(db), updates)
-      .then(() => console.log(`Sub-path write OK: ${subPath}`))
-      .catch(err => console.error(`Sub-path write failed (${subPath}):`, err));
+    const attempt = (n) =>
+      update(ref(db), updates).catch(err => {
+        if (n > 0) return new Promise(r => setTimeout(r, 500 * Math.pow(2, 3 - n))).then(() => attempt(n - 1));
+        console.error(`Sub-path write failed (${subPath}):`, err);
+      });
+    attempt(3);
   };
 
   return { payload, loading, error, connPhase, isSyncingFromCache, savePayload, saveSubPath };
