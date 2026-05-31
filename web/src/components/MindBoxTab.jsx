@@ -9,7 +9,6 @@ export default function MindBoxTab({ payload, savePayload }) {
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [toolPanel, setToolPanel] = useState(null);
-  const [vizMode, setVizMode] = useState(() => localStorage.getItem("loci_viz") || "streak");
   const [ritualActive, setRitualActive] = useState(false);
   const [ritualStepIndex, setRitualStepIndex] = useState(-1);
   const [ritualSecondsLeft, setRitualSecondsLeft] = useState(0);
@@ -147,6 +146,20 @@ export default function MindBoxTab({ payload, savePayload }) {
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
+  const recentDump = [...(payload.brainDump || [])].slice(-3).reverse();
+
+  const handleDeleteDumpItem = (id) => {
+    savePayload({ ...payload, brainDump: (payload.brainDump || []).filter(item => item.id !== id) });
+  };
+
+  const formatRelTime = (ts) => {
+    const diff = Date.now() - ts;
+    if (diff < 60_000) return "just now";
+    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+    return `${Math.floor(diff / 86_400_000)}d ago`;
+  };
+
   return (
     <>
       {ritualSuccess && (
@@ -155,389 +168,216 @@ export default function MindBoxTab({ payload, savePayload }) {
         </div>
       )}
 
-      {/* Page title */}
-      <div style={{ padding: "0 0 16px 0" }}>
-        <h2 style={{ fontSize: "18px", fontWeight: "800", color: "var(--text-primary)", fontFamily: "var(--font-display)" }}>Mind Box</h2>
-        <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Your tools, streaks, and reset buttons.</p>
-      </div>
-
-      {/* ── Utility strip: inline (hidden when dock is active) */}
-      {(config.toolsStyle || "inline") !== "dock" && <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}>
-        <div className="habits-tools-row" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "10px 14px" }}>
-          {/* Streak + 7-day dots — tap to expand progress detail */}
-          <button
-            onClick={() => setToolPanel(p => p === "progress" ? null : "progress")}
-            style={{ display: "flex", alignItems: "center", gap: "5px", flex: 1, background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}
-          >
-            <span style={{ fontSize: "12px", fontWeight: "800", color: "var(--accent)", whiteSpace: "nowrap" }}>
-              {config.visitStreakCount || 0}d
-            </span>
-            <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
-              {bentoDays.map((day, i) => (
-                <div key={day.dateStr} style={{
-                  width: i === 6 ? "10px" : "7px",
-                  height: i === 6 ? "10px" : "7px",
-                  borderRadius: "50%",
-                  background: day.count > 0 ? "var(--accent)" : "var(--bg-secondary)",
-                  border: i === 6 ? "2px solid var(--accent)" : "1px solid var(--border)",
-                  flexShrink: 0
-                }} />
-              ))}
-            </div>
-            <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>{toolPanel === "progress" ? "▲" : "▼"}</span>
-          </button>
-
-          {/* Morning Ritual */}
-          <button
-            onClick={() => setToolPanel(p => p === "ritual" ? null : "ritual")}
-            title="Morning Ritual"
-            style={{
-              fontSize: "15px", padding: "5px 9px",
-              background: (ritualActive || toolPanel === "ritual") ? "var(--accent)" : "var(--bg-secondary)",
-              color: (ritualActive || toolPanel === "ritual") ? "var(--btn-text, #fff)" : "var(--text-secondary)",
-              border: ritualActive ? "2px solid var(--success)" : "1px solid var(--border)",
-              borderRadius: "8px", cursor: "pointer", lineHeight: 1
-            }}
-          >
-            🌅<span className="tool-btn-text">Ritual</span>
-          </button>
-
-          {/* Brain Dump */}
-          <button
-            onClick={() => setToolPanel(p => p === "dump" ? null : "dump")}
-            title="Brain Dump"
-            style={{
-              fontSize: "15px", padding: "5px 9px", position: "relative",
-              background: toolPanel === "dump" ? "var(--accent)" : "var(--bg-secondary)",
-              color: toolPanel === "dump" ? "var(--btn-text, #fff)" : "var(--text-secondary)",
-              border: "1px solid var(--border)", borderRadius: "8px", cursor: "pointer", lineHeight: 1
-            }}
-          >
-            📝<span className="tool-btn-text">Dump</span>
+      {/* ── Sub-view: Brain Dump full list */}
+      {toolPanel === "dump" && (
+        <>
+          <div className="mindbox-subview-header">
+            <button className="mindbox-back-btn" onClick={() => setToolPanel(null)}>← Back</button>
+            <h2 className="mindbox-subview-title">📝 Brain Dump</h2>
             {dumpCount > 0 && (
-              <span style={{ position: "absolute", top: "-5px", right: "-5px", background: "var(--accent)", color: "var(--btn-text, #fff)", fontSize: "8px", fontWeight: "800", borderRadius: "6px", padding: "1px 4px", lineHeight: 1.3 }}>
-                {dumpCount}
-              </span>
-            )}
-          </button>
-
-          {/* Rescue */}
-          <button onClick={openRescueMode} title="Rescue Mode"
-            style={{ fontSize: "15px", padding: "5px 9px", background: "rgba(248,113,113,0.12)", border: "1px solid var(--danger)", borderRadius: "8px", color: "var(--danger)", cursor: "pointer", lineHeight: 1 }}>
-            🚨<span className="tool-btn-text">Rescue</span>
-          </button>
-
-          {/* Bad Day Reset */}
-          <button onClick={handleBadDayReset} title="Bad Day Reset"
-            style={{ fontSize: "15px", padding: "5px 9px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-secondary)", cursor: "pointer", lineHeight: 1 }}>
-            🌪️<span className="tool-btn-text">Reset</span>
-          </button>
-        </div>
-
-        {/* Expandable: 7-Day Progress */}
-        {toolPanel === "progress" && (
-          <div style={{ borderTop: "1px solid var(--border)", padding: "12px 14px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <h3 style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", margin: 0 }}>
-                📊 7-Day Progress
-              </h3>
-              <div style={{ display: "flex", gap: "4px" }}>
-                {[{ id: "streak", label: "🔥" }, { id: "dots", label: "●" }].map(v => (
-                  <button key={v.id} onClick={() => { setVizMode(v.id); localStorage.setItem("loci_viz", v.id); }}
-                    style={{ padding: "3px 10px", fontSize: "12px", border: "1px solid var(--border)", borderRadius: "20px", cursor: "pointer", fontWeight: "700", background: vizMode === v.id ? "var(--accent)" : "var(--bg-secondary)", color: vizMode === v.id ? "var(--btn-text, #fff)" : "var(--text-muted)", transition: "all 0.15s" }}>
-                    {v.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {vizMode === "streak" && (() => {
-              const streak = config.visitStreakCount || 0;
-              return (
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ marginBottom: "14px" }}>
-                    <span style={{ fontSize: "clamp(28px, 8vw, 44px)", fontWeight: "900", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-display)" }}>
-                      {streak}
-                    </span>
-                    <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "2px" }}>
-                      day streak 🔥
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginBottom: "8px" }}>
-                    {bentoDays.map((day, i) => {
-                      const isToday = i === 6;
-                      const done = day.count > 0;
-                      return (
-                        <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
-                          <div style={{ width: isToday ? "28px" : "22px", height: isToday ? "28px" : "22px", borderRadius: "50%", background: done ? "var(--accent)" : "var(--bg-secondary)", border: isToday ? "2px solid var(--accent)" : "2px solid var(--border)", transition: "all 0.2s" }} />
-                          <span style={{ fontSize: "8px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>
-                            {day.label}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <p style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600" }}>Filled = tasks done that day</p>
-                </div>
-              );
-            })()}
-            {vizMode === "dots" && (
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                  {bentoDays.map((day, i) => {
-                    const isToday = i === 6;
-                    const done = day.count > 0;
-                    return (
-                      <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "5px", flex: 1 }}>
-                        <span style={{ fontSize: "9px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>
-                          {day.label}
-                        </span>
-                        <div style={{ width: isToday ? "32px" : "26px", height: isToday ? "32px" : "26px", borderRadius: "50%", background: done ? "var(--success, #22c55e)" : "var(--bg-secondary)", border: isToday ? "2.5px solid var(--accent)" : done ? "none" : "2px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}>
-                          {done && <span style={{ fontSize: "12px" }}>✓</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <p style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600", marginTop: "4px" }}>
-                  Green ✓ = showed up · Today highlighted
-                </p>
-              </div>
+              <span style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700", marginLeft: "auto" }}>{dumpCount}/50</span>
             )}
           </div>
-        )}
+          {dumpCount >= 50 && (
+            <p style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "10px", fontWeight: "600" }}>Inbox full — delete some items or convert them to Roadmap tasks.</p>
+          )}
+          <form className="braindump-form" onSubmit={handleBrainDumpSubmit} style={{ marginBottom: "16px" }}>
+            <input type="text" className="braindump-input"
+              placeholder="Add anything on your mind."
+              value={brainDumpText}
+              onChange={e => setBrainDumpText(e.target.value)}
+              disabled={dumpCount >= 50} />
+            <button type="submit" className="braindump-submit" disabled={dumpCount >= 50}>➔</button>
+          </form>
+          {(payload.brainDump || []).length === 0 ? (
+            <p style={{ fontSize: "13px", color: "var(--text-muted)", textAlign: "center", padding: "32px 0" }}>Nothing captured yet.</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {[...(payload.brainDump || [])].reverse().map(item => (
+                <div key={item.id} style={{ display: "flex", alignItems: "flex-start", gap: "10px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "10px 12px" }}>
+                  <p style={{ flex: 1, fontSize: "13px", color: "var(--text-primary)", margin: 0, lineHeight: "1.5" }}>{item.text}</p>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px", flexShrink: 0 }}>
+                    <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>{formatRelTime(item.createdAt)}</span>
+                    <button onClick={() => handleDeleteDumpItem(item.id)} title="Delete" style={{ background: "none", border: "none", cursor: "pointer", fontSize: "14px", color: "var(--text-muted)", padding: 0, lineHeight: 1 }}>✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
 
-        {/* Expandable: Morning Ritual */}
-        {toolPanel === "ritual" && (
-          <div style={{ borderTop: "1px solid var(--border)", padding: "12px 14px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: ritualActive ? "10px" : 0 }}>
-              <span style={{ fontSize: "16px" }}>🌅</span>
-              <div style={{ flex: 1 }}>
-                <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>Morning Ritual</span>
-                <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "8px" }}>7 min · +80 XP</span>
+      {/* ── Sub-view: 7-Day Progress */}
+      {toolPanel === "progress" && (
+        <>
+          <div className="mindbox-subview-header">
+            <button className="mindbox-back-btn" onClick={() => setToolPanel(null)}>← Back</button>
+            <h2 className="mindbox-subview-title">📊 Progress</h2>
+          </div>
+          <div style={{ textAlign: "center", padding: "20px 0 28px" }}>
+            <span style={{ fontSize: "clamp(52px, 16vw, 80px)", fontWeight: "900", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-display)" }}>
+              {config.visitStreakCount || 0}
+            </span>
+            <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "6px", marginBottom: "28px" }}>
+              day streak 🔥
+            </div>
+            <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginBottom: "10px" }}>
+              {bentoDays.map((day, i) => {
+                const isToday = i === 6;
+                const done = day.count > 0;
+                return (
+                  <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
+                    <div style={{ width: isToday ? "36px" : "28px", height: isToday ? "36px" : "28px", borderRadius: "50%", background: done ? "var(--accent)" : "var(--bg-secondary)", border: isToday ? "2.5px solid var(--accent)" : "2px solid var(--border)", transition: "all 0.2s" }} />
+                    <span style={{ fontSize: "9px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>{day.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <p style={{ fontSize: "12px", color: "var(--text-secondary)", fontWeight: "600", marginTop: "4px" }}>Filled circle = tasks completed that day</p>
+          </div>
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "16px 20px", display: "flex", justifyContent: "space-around", textAlign: "center" }}>
+            <div>
+              <div style={{ fontSize: "24px", fontWeight: "900", color: "var(--accent)", fontFamily: "var(--font-display)" }}>{config.totalXp || 0}</div>
+              <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "2px" }}>Total XP</div>
+            </div>
+            <div style={{ width: "1px", background: "var(--border)" }} />
+            <div>
+              <div style={{ fontSize: "24px", fontWeight: "900", color: "var(--success, #22c55e)", fontFamily: "var(--font-display)" }}>
+                {tasks.filter(t => !t.isDeleted && t.isCompleted).length}
+              </div>
+              <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "2px" }}>Tasks Done</div>
+            </div>
+            <div style={{ width: "1px", background: "var(--border)" }} />
+            <div>
+              <div style={{ fontSize: "24px", fontWeight: "900", color: "var(--text-primary)", fontFamily: "var(--font-display)" }}>
+                {bentoDays.filter(d => d.count > 0).length}
+              </div>
+              <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "2px" }}>Days This Week</div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Sub-view: Morning Ritual */}
+      {toolPanel === "ritual" && (
+        <>
+          <div className="mindbox-subview-header">
+            <button className="mindbox-back-btn" onClick={() => setToolPanel(null)}>← Back</button>
+            <h2 className="mindbox-subview-title">🌅 Morning Ritual</h2>
+          </div>
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ritualActive ? "20px" : "16px" }}>
+              <div>
+                <p style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: "0 0 3px" }}>Start your day with intention</p>
+                <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>6 steps · ~7 min · +80 XP</p>
               </div>
               {!ritualActive ? (
-                <button className="btn" onClick={handleBeginRitual} style={{ padding: "6px 16px", fontSize: "12px", fontWeight: "700" }}>
-                  Begin
-                </button>
+                <button className="btn" onClick={handleBeginRitual} style={{ padding: "8px 22px", fontSize: "13px", fontWeight: "700", flexShrink: 0 }}>Begin</button>
               ) : (
-                <button onClick={handleAbortRitual} style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                  Stop
-                </button>
+                <button onClick={handleAbortRitual} style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "13px", fontWeight: "700", cursor: "pointer", flexShrink: 0 }}>Stop</button>
               )}
             </div>
+            {!ritualActive && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {ritualSteps.map((step, i) => (
+                  <div key={i} style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+                    <span style={{ fontSize: "11px", fontWeight: "800", color: "var(--text-muted)", minWidth: "18px", paddingTop: "2px" }}>{i + 1}.</span>
+                    <div>
+                      <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: "0 0 2px", fontWeight: "600" }}>{step.name}</p>
+                      <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{formatRitualTime(step.seconds)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             {ritualActive && (
-              <div style={{ background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", padding: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                <span style={{ fontSize: "10px", fontWeight: "800", color: "var(--text-muted)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                  STEP {ritualStepIndex + 1} OF {ritualSteps.length}
-                </span>
-                <p style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0 }}>
+              <div style={{ background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "10px", fontWeight: "800", color: "var(--text-muted)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                    STEP {ritualStepIndex + 1} OF {ritualSteps.length}
+                  </span>
+                  <div style={{ display: "flex", gap: "5px" }}>
+                    {ritualSteps.map((_, i) => (
+                      <div key={i} style={{ width: "7px", height: "7px", borderRadius: "50%", background: i <= ritualStepIndex ? "var(--accent)" : "var(--border)" }} />
+                    ))}
+                  </div>
+                </div>
+                <p style={{ fontSize: "16px", fontWeight: "700", color: "var(--text-primary)", margin: 0, lineHeight: "1.45" }}>
                   {ritualSteps[ritualStepIndex].name}
                 </p>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: "20px", fontWeight: "800", color: "var(--accent)", fontFamily: "var(--font-display)" }}>
+                  <span style={{ fontSize: "30px", fontWeight: "900", color: "var(--accent)", fontFamily: "var(--font-display)" }}>
                     {formatRitualTime(ritualSecondsLeft)}
                   </span>
-                  <button className="btn" onClick={handleAdvanceRitualStep} style={{ padding: "5px 14px", fontSize: "12px", background: "var(--bg-card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>
-                    Skip →
-                  </button>
+                  <button className="btn" onClick={handleAdvanceRitualStep} style={{ padding: "6px 18px", fontSize: "12px" }}>Skip →</button>
                 </div>
               </div>
             )}
           </div>
-        )}
+        </>
+      )}
 
-        {/* Expandable: Brain Dump */}
-        {toolPanel === "dump" && (
-          <div style={{ borderTop: "1px solid var(--border)", padding: "12px 14px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <h2 className="section-title" style={{ fontSize: "13px", margin: 0 }}>📝 Brain Dump</h2>
+      {/* ── Main grid view */}
+      {!toolPanel && (
+        <>
+          <div style={{ padding: "0 0 20px 0" }}>
+            <h2 style={{ fontSize: "18px", fontWeight: "800", color: "var(--text-primary)", fontFamily: "var(--font-display)" }}>Mind Box</h2>
+            <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Your tools, streaks, and reset buttons.</p>
+          </div>
+
+          {/* Brain Dump — always-live capture */}
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "14px 16px", marginBottom: "16px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+              <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)" }}>📝 Brain Dump</span>
               {dumpCount > 0 && (
-                <span style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700" }}>
-                  {dumpCount}/50
-                </span>
+                <span style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700" }}>{dumpCount}/50</span>
               )}
             </div>
-            {dumpCount >= 50 && (
-              <p style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "8px", fontWeight: "600" }}>
-                Inbox full (50/50). Go to the Roadmap tab to triage items first.
-              </p>
-            )}
             <form className="braindump-form" onSubmit={handleBrainDumpSubmit}>
               <input type="text" className="braindump-input"
-                placeholder="Add anything on your mind."
+                placeholder="What's on your mind?"
                 value={brainDumpText}
                 onChange={e => setBrainDumpText(e.target.value)}
                 disabled={dumpCount >= 50} />
               <button type="submit" className="braindump-submit" disabled={dumpCount >= 50}>➔</button>
             </form>
-          </div>
-        )}
-      </section>}
-
-      {/* ── Floating Bottom Dock (Concept 3) */}
-      {config.toolsStyle === "dock" && (
-        <>
-          {/* Spacer so content isn't hidden behind the dock */}
-          <div style={{ height: "72px" }} />
-
-          {/* Backdrop */}
-          {toolPanel && (
-            <div className="tools-sheet-backdrop" onClick={() => setToolPanel(null)} />
-          )}
-
-          {/* Bottom Sheet content */}
-          {toolPanel && (
-            <div className="tools-bottom-sheet">
-              <div className="tools-sheet-handle" />
-
-              {toolPanel === "progress" && (
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                    <h3 style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", margin: 0 }}>
-                      📊 7-Day Progress
-                    </h3>
-                    <div style={{ display: "flex", gap: "4px" }}>
-                      {[{ id: "streak", label: "🔥" }, { id: "dots", label: "●" }].map(v => (
-                        <button key={v.id} onClick={() => { setVizMode(v.id); localStorage.setItem("loci_viz", v.id); }}
-                          style={{ padding: "3px 10px", fontSize: "12px", border: "1px solid var(--border)", borderRadius: "20px", cursor: "pointer", fontWeight: "700", background: vizMode === v.id ? "var(--accent)" : "var(--bg-secondary)", color: vizMode === v.id ? "var(--btn-text, #fff)" : "var(--text-muted)", transition: "all 0.15s" }}>
-                          {v.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  {vizMode === "streak" && (
-                    <div style={{ textAlign: "center" }}>
-                      <div style={{ marginBottom: "14px" }}>
-                        <span style={{ fontSize: "clamp(28px, 8vw, 44px)", fontWeight: "900", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-display)" }}>
-                          {config.visitStreakCount || 0}
-                        </span>
-                        <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "2px" }}>day streak 🔥</div>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginBottom: "8px" }}>
-                        {bentoDays.map((day, i) => {
-                          const isToday = i === 6;
-                          const done = day.count > 0;
-                          return (
-                            <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
-                              <div style={{ width: isToday ? "28px" : "22px", height: isToday ? "28px" : "22px", borderRadius: "50%", background: done ? "var(--accent)" : "var(--bg-secondary)", border: isToday ? "2px solid var(--accent)" : "2px solid var(--border)", transition: "all 0.2s" }} />
-                              <span style={{ fontSize: "8px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>{day.label}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <p style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600" }}>Filled = tasks done that day</p>
-                    </div>
-                  )}
-                  {vizMode === "dots" && (
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                        {bentoDays.map((day, i) => {
-                          const isToday = i === 6;
-                          const done = day.count > 0;
-                          return (
-                            <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "5px", flex: 1 }}>
-                              <span style={{ fontSize: "9px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>{day.label}</span>
-                              <div style={{ width: isToday ? "32px" : "26px", height: isToday ? "32px" : "26px", borderRadius: "50%", background: done ? "var(--success, #22c55e)" : "var(--bg-secondary)", border: isToday ? "2.5px solid var(--accent)" : done ? "none" : "2px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}>
-                                {done && <span style={{ fontSize: "12px" }}>✓</span>}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <p style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600", marginTop: "4px" }}>Green ✓ = showed up · Today highlighted</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {toolPanel === "ritual" && (
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: ritualActive ? "10px" : 0 }}>
-                    <span style={{ fontSize: "16px" }}>🌅</span>
-                    <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>Morning Ritual</span>
-                      <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "8px" }}>7 min · +80 XP</span>
-                    </div>
-                    {!ritualActive ? (
-                      <button className="btn" onClick={handleBeginRitual} style={{ padding: "6px 16px", fontSize: "12px", fontWeight: "700" }}>Begin</button>
-                    ) : (
-                      <button onClick={handleAbortRitual} style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>Stop</button>
-                    )}
-                  </div>
-                  {ritualActive && (
-                    <div style={{ background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", padding: "12px", display: "flex", flexDirection: "column", gap: "8px", marginTop: "10px" }}>
-                      <span style={{ fontSize: "10px", fontWeight: "800", color: "var(--text-muted)", letterSpacing: "0.05em", textTransform: "uppercase" }}>STEP {ritualStepIndex + 1} OF {ritualSteps.length}</span>
-                      <p style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0 }}>{ritualSteps[ritualStepIndex].name}</p>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontSize: "20px", fontWeight: "800", color: "var(--accent)", fontFamily: "var(--font-display)" }}>{formatRitualTime(ritualSecondsLeft)}</span>
-                        <button className="btn" onClick={handleAdvanceRitualStep} style={{ padding: "5px 14px", fontSize: "12px", background: "var(--bg-card)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>Skip →</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {toolPanel === "dump" && (
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                    <h2 className="section-title" style={{ fontSize: "13px", margin: 0 }}>📝 Brain Dump</h2>
-                    {dumpCount > 0 && (
-                      <span style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700" }}>{dumpCount}/50</span>
-                    )}
-                  </div>
-                  {dumpCount >= 50 && (
-                    <p style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "8px", fontWeight: "600" }}>Inbox full (50/50). Go to Roadmap to triage first.</p>
-                  )}
-                  <form className="braindump-form" onSubmit={handleBrainDumpSubmit}>
-                    <input type="text" className="braindump-input"
-                      placeholder="Add anything on your mind."
-                      value={brainDumpText}
-                      onChange={e => setBrainDumpText(e.target.value)}
-                      disabled={dumpCount >= 50} />
-                    <button type="submit" className="braindump-submit" disabled={dumpCount >= 50}>➔</button>
-                  </form>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* The dock itself */}
-          <div className="floating-tools-dock">
-            <button
-              onClick={() => setToolPanel(p => p === "progress" ? null : "progress")}
-              style={{ display: "flex", alignItems: "center", gap: "5px", background: toolPanel === "progress" ? "rgba(255,255,255,0.1)" : "transparent", border: "none", cursor: "pointer", padding: "4px 6px", borderRadius: "16px" }}
-            >
-              <span style={{ fontSize: "12px", fontWeight: "800", color: "var(--accent)", whiteSpace: "nowrap" }}>🔥 {config.visitStreakCount || 0}d</span>
-              <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
-                {bentoDays.map((day, i) => (
-                  <div key={day.dateStr} style={{ width: i === 6 ? "8px" : "6px", height: i === 6 ? "8px" : "6px", borderRadius: "50%", background: day.count > 0 ? "var(--accent)" : "rgba(255,255,255,0.15)", border: i === 6 ? "1.5px solid var(--accent)" : "1px solid rgba(255,255,255,0.2)", flexShrink: 0 }} />
+            {recentDump.length > 0 && (
+              <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "5px" }}>
+                {recentDump.map(item => (
+                  <p key={item.id} style={{ fontSize: "12px", color: "var(--text-secondary)", margin: 0, padding: "5px 8px", background: "var(--bg-secondary)", borderRadius: "6px", lineHeight: "1.4" }}>
+                    {item.text}
+                  </p>
                 ))}
+                {dumpCount > 3 && (
+                  <button onClick={() => setToolPanel("dump")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "11px", color: "var(--accent)", fontWeight: "700", textAlign: "left", padding: "2px 8px" }}>
+                    See all {dumpCount} items →
+                  </button>
+                )}
               </div>
+            )}
+          </div>
+
+          {/* 2×2 tool grid */}
+          <div className="mindbox-grid">
+            <button className="mindbox-card" onClick={() => setToolPanel("progress")}>
+              <span className="mindbox-card-icon">📊</span>
+              <span className="mindbox-card-title">Progress</span>
+              <span className="mindbox-card-sub">{config.visitStreakCount || 0}d streak 🔥</span>
             </button>
-
-            <div style={{ width: "1px", height: "24px", background: "rgba(255,255,255,0.12)" }} />
-
-            <button onClick={() => setToolPanel(p => p === "ritual" ? null : "ritual")}
-              style={{ fontSize: "18px", padding: "6px", background: (ritualActive || toolPanel === "ritual") ? "rgba(255,255,255,0.15)" : "transparent", border: ritualActive ? "1.5px solid var(--success)" : "none", borderRadius: "10px", cursor: "pointer", lineHeight: 1, color: "inherit" }} title="Morning Ritual">
-              🌅
+            <button className="mindbox-card" onClick={() => setToolPanel("ritual")}>
+              <span className="mindbox-card-icon">🌅</span>
+              <span className="mindbox-card-title">Morning Ritual</span>
+              <span className="mindbox-card-sub">7 min · +80 XP</span>
             </button>
-
-            <button onClick={() => setToolPanel(p => p === "dump" ? null : "dump")}
-              style={{ fontSize: "18px", padding: "6px", background: toolPanel === "dump" ? "rgba(255,255,255,0.15)" : "transparent", border: "none", borderRadius: "10px", cursor: "pointer", lineHeight: 1, position: "relative" }} title="Brain Dump">
-              📝
-              {dumpCount > 0 && (
-                <span style={{ position: "absolute", top: "2px", right: "2px", background: "var(--accent)", color: "#fff", fontSize: "7px", fontWeight: "800", borderRadius: "5px", padding: "1px 3px", lineHeight: 1.2 }}>{dumpCount}</span>
-              )}
+            <button className="mindbox-card mindbox-card--rescue" onClick={openRescueMode}>
+              <span className="mindbox-card-icon">🚨</span>
+              <span className="mindbox-card-title">Rescue Mode</span>
+              <span className="mindbox-card-sub">I'm stuck</span>
             </button>
-
-            <button onClick={openRescueMode}
-              style={{ fontSize: "18px", padding: "6px", background: "transparent", border: "none", borderRadius: "10px", cursor: "pointer", lineHeight: 1 }} title="Rescue Mode">
-              🚨
-            </button>
-
-            <button onClick={handleBadDayReset}
-              style={{ fontSize: "18px", padding: "6px", background: "transparent", border: "none", borderRadius: "10px", cursor: "pointer", lineHeight: 1 }} title="Bad Day Reset">
-              🌪️
+            <button className="mindbox-card" onClick={handleBadDayReset}>
+              <span className="mindbox-card-icon">🌪️</span>
+              <span className="mindbox-card-title">Bad Day Reset</span>
+              <span className="mindbox-card-sub">Park all tasks</span>
             </button>
           </div>
         </>
