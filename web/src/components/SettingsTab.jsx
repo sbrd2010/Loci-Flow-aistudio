@@ -8,15 +8,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
   const { config = {} } = payload;
 
   // ── XP / Progress computed values ────────────────────────────────────────
-  const tasks = payload.tasks || [];
   const contributions = payload.contributions || [];
-  const completedTotal = tasks.filter(t => t.isCompleted && !t.isDeleted).length;
-  const currentXp = Number(config.totalXp) || 0;
-  const xpInLevel = currentXp % 200;
-  const levelNum = Math.floor(currentXp / 200) + 1;
-  const levelProgress = (xpInLevel / 200) * 100;
-  const levelTitles = ["Focus Seed", "Inertia Crusher", "Momentum Builder", "Flow Finder", "Deep Worker", "Focus Master"];
-  const levelTitle = `${levelTitles[Math.min(levelNum - 1, levelTitles.length - 1)]} (L${levelNum})`;
 
   const normalizeChallengeKey = (key) => {
     const legacy = { starting: "initiation", focusing: "momentum", execution: "overplanner", tracking: "overwhelmed" };
@@ -127,7 +119,6 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
     const result = await Notification.requestPermission();
     setNotifPermission(result);
   };
-  const [progressOpen, setProgressOpen] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
   const [aiKeysOpen, setAiKeysOpen] = useState(false);
   const [challengeOpen, setChallengeOpen] = useState(false);
@@ -431,52 +422,6 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
             {savedProfile ? "✓ Saved!" : "Save Profile"}
           </button>
         </form>}
-      </section>
-
-      {/* ── Your Progress ── */}
-      <section className="card">
-        <button type="button" onClick={() => setProgressOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: progressOpen ? "12px" : 0 }}>
-          <div>
-            <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
-              📈 Your Progress
-            </h2>
-            {!progressOpen && (
-              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                {levelTitle} · {xpInLevel}/200 XP
-              </div>
-            )}
-          </div>
-          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: progressOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
-        </button>
-        {progressOpen && <>
-        <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "14px" }}>
-          XP earned by completing tasks. Levels reset every 200 XP.
-        </p>
-        <div style={{ marginBottom: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-            <span style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-primary)" }}>{levelTitle}</span>
-            <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{xpInLevel}/200 XP</span>
-          </div>
-          <div className="progress-track" style={{ height: "6px" }}>
-            <div className="progress-bar" style={{ width: `${levelProgress}%` }} />
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginTop: "12px" }}>
-          {[
-            { label: "Total XP", value: `⚡ ${currentXp}` },
-            { label: "Completed", value: `✓ ${completedTotal}` },
-            { label: "Day Streak", value: `🔥 ${config.visitStreakCount || 1}` }
-          ].map(stat => (
-            <div key={stat.label} style={{
-              background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)",
-              padding: "10px 8px", textAlign: "center"
-            }}>
-              <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "2px" }}>{stat.value}</div>
-              <div style={{ fontSize: "10px", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{stat.label}</div>
-            </div>
-          ))}
-        </div>
-        </>}
       </section>
 
       {/* ── AI Keys ─────────────────────────────────────────────────────── */}

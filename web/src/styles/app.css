@@ -2762,20 +2762,20 @@ html[data-theme="glassy"] .theme-dropdown {
 
 .mindbox-card {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 18px 16px;
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
   background: var(--bg-card);
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
   cursor: pointer;
   text-align: left;
   transition: var(--transition);
-  min-height: 100px;
+  min-height: 80px;
 }
 .mindbox-card:hover, .mindbox-card:active {
-  background: var(--bg-secondary);
+  background: var(--bg-card-hover, var(--bg-secondary));
   border-color: var(--accent);
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
@@ -2789,8 +2789,25 @@ html[data-theme="glassy"] .theme-dropdown {
   border-color: var(--danger);
 }
 .mindbox-card-icon {
-  font-size: 26px;
-  line-height: 1;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--accent-ring, rgba(99,102,241,0.08));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.mindbox-card--rescue .mindbox-card-icon {
+  background: rgba(248, 113, 113, 0.12);
+  color: var(--danger);
+}
+.mindbox-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
 .mindbox-card-title {
   font-size: 13px;
@@ -2801,7 +2818,8 @@ html[data-theme="glassy"] .theme-dropdown {
 .mindbox-card-sub {
   font-size: 11px;
   color: var(--text-muted);
-  font-weight: 600;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .mindbox-subview-header {
