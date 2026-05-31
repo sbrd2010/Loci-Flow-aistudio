@@ -61,10 +61,21 @@ export default function App() {
     localStorage.setItem("loci_theme", theme);
   }, [theme]);
 
-  // Handle redirect sign-in result — only relevant for iOS (uses redirect flow)
+  // Handle redirect sign-in result (iOS, Brave, and Android popup-blocked fallback)
   useEffect(() => {
-    const redirectPending = localStorage.getItem("loci_redirect_pending");
+    const pendingRaw = localStorage.getItem("loci_redirect_pending");
     localStorage.removeItem("loci_redirect_pending");
+    // Only treat as an active redirect if the flag was set within the last 2 minutes —
+    // prevents a stuck flag from a previous interrupted session poisoning a new one.
+    let redirectPending = false;
+    if (pendingRaw) {
+      try {
+        const { t } = JSON.parse(pendingRaw);
+        redirectPending = (Date.now() - t) < 120_000;
+      } catch {
+        redirectPending = true; // legacy plain string — treat as recent
+      }
+    }
     getRedirectResult(auth).catch((err) => {
       if (redirectPending && err?.code) {
         console.error("Redirect sign-in failed:", err.code, err.message);
@@ -79,15 +90,22 @@ export default function App() {
     const ua = navigator.userAgent;
     const isIOS = /iPhone|iPad|iPod/i.test(ua);
     const isAndroid = /Android/i.test(ua);
+    // navigator.brave is only defined in Brave — sync check, no async needed
+    const isBraveBrowser = !!navigator.brave;
 
-    if (isIOS) {
-      localStorage.setItem("loci_redirect_pending", "1");
+    const doRedirect = (errorMsg = "Sign-in failed. Please try again.") => {
+      localStorage.setItem("loci_redirect_pending", JSON.stringify({ t: Date.now() }));
       signInWithRedirect(auth, new GoogleAuthProvider()).catch((err) => {
         localStorage.removeItem("loci_redirect_pending");
         setSigningIn(false);
-        console.error("iOS redirect sign-in failed:", err.code, err.message);
-        setSignInError("Sign-in failed. Please try again.");
+        console.error("Redirect sign-in failed:", err.code, err.message);
+        setSignInError(errorMsg);
       });
+    };
+
+    // Brave blocks popups via Shields on all platforms — go straight to redirect
+    if (isBraveBrowser || isIOS) {
+      doRedirect("Sign-in failed. If using Brave, tap the lion icon → disable Shields for this site, then try again.");
       return;
     }
 
@@ -97,12 +115,7 @@ export default function App() {
       if (err.code === "auth/popup-blocked") {
         if (isAndroid) {
           setSigningIn(true);
-          localStorage.setItem("loci_redirect_pending", "1");
-          signInWithRedirect(auth, new GoogleAuthProvider()).catch(() => {
-            localStorage.removeItem("loci_redirect_pending");
-            setSigningIn(false);
-            setSignInError("Sign-in failed. Please try again.");
-          });
+          doRedirect();
           return;
         }
         setSignInError("Popup blocked. Please allow popups for this site, then try again.");
@@ -110,7 +123,7 @@ export default function App() {
       }
       console.error("Sign-in failed:", err.code, err.message);
       if (err.code === "auth/internal-error" || err.code === "auth/network-request-failed") {
-        setSignInError("Sign-in blocked. If you're using Brave, tap the lion icon in the address bar → disable Shields for this site, then try again.");
+        setSignInError("Sign-in blocked. If you're using Brave, tap the lion icon → disable Shields for this site, then try again.");
         return;
       }
       setSignInError("Sign-in failed. Please try again.");
@@ -204,6 +217,11 @@ export default function App() {
             </button>
             {signInError && (
               <p style={{ fontSize: "12px", color: "var(--danger)", marginTop: "8px", textAlign: "center" }}>{signInError}</p>
+            )}
+            {!signInError && !!navigator.brave && (
+              <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "6px", textAlign: "center" }}>
+                Brave detected — you'll be redirected to Google and brought back.
+              </p>
             )}
 
             {/* Demo mode entry */}
