@@ -11,7 +11,7 @@ const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemi
 const DATABASE_URL = "https://loci-flow-default-rtdb.firebaseio.com";
 
 const HOURLY_LIMIT = 40;
-const DAILY_LIMIT = 160;
+const DAILY_LIMIT = 120;
 const MAX_MESSAGES = 24;
 const MAX_MESSAGE_CHARS = 6000;
 const MAX_SYSTEM_CHARS = 8000;
@@ -58,32 +58,84 @@ function parseRequestBody(req) {
   return { systemPrompt, messages, maxTokens };
 }
 
-async function consumeBucket(ref, limit, windowMs, now) {
-  const result = await ref.transaction((current) => {
-    const bucket = current || { count: 0, resetAt: now + windowMs };
-    if (!bucket.resetAt || bucket.resetAt <= now) {
-      return { count: 1, resetAt: now + windowMs, updatedAt: now };
-    }
-    if ((Number(bucket.count) || 0) >= limit) return;
-    return { ...bucket, count: (Number(bucket.count) || 0) + 1, updatedAt: now };
-  }, undefined, false);
+function normalizeBucket(raw, windowMs, now) {
+  const resetAt = Number(raw?.resetAt) || 0;
+  if (!resetAt || resetAt <= now) {
+    return { count: 0, resetAt: now + windowMs };
+  }
+  return {
+    count: Math.max(0, Number(raw?.count) || 0),
+    resetAt,
+  };
+}
 
-  return result.committed;
+function dailyWarning(percent) {
+  if (percent >= 100) return { code: "day_exhausted", label: "Daily shared AI limit reached", percent: 100 };
+  if (percent >= 95) return { code: "day_95", label: "95% of today's shared AI limit used", percent: 95 };
+  if (percent >= 80) return { code: "day_80", label: "80% of today's shared AI limit used", percent: 80 };
+  if (percent >= 50) return { code: "day_50", label: "50% of today's shared AI limit used", percent: 50 };
+  return null;
+}
+
+function usageSnapshot(value, now) {
+  const hour = normalizeBucket(value?.hour, 60 * 60 * 1000, now);
+  const day = normalizeBucket(value?.day, 24 * 60 * 60 * 1000, now);
+  const hourlyCount = Math.min(HOURLY_LIMIT, hour.count);
+  const dailyCount = Math.min(DAILY_LIMIT, day.count);
+  const dailyPercent = Math.min(100, Math.round((dailyCount / DAILY_LIMIT) * 100));
+
+  return {
+    hourly: {
+      count: hourlyCount,
+      limit: HOURLY_LIMIT,
+      remaining: Math.max(0, HOURLY_LIMIT - hourlyCount),
+      percent: Math.min(100, Math.round((hourlyCount / HOURLY_LIMIT) * 100)),
+      resetAt: hour.resetAt,
+    },
+    daily: {
+      count: dailyCount,
+      limit: DAILY_LIMIT,
+      remaining: Math.max(0, DAILY_LIMIT - dailyCount),
+      percent: dailyPercent,
+      resetAt: day.resetAt,
+      warning: dailyWarning(dailyPercent),
+    },
+  };
 }
 
 async function enforceRateLimit(uid) {
   const now = Date.now();
-  const db = admin.database();
-  const hourlyRef = db.ref(`rateLimits/ai/${uid}/hour`);
-  const dailyRef = db.ref(`rateLimits/ai/${uid}/day`);
+  const ref = admin.database().ref(`rateLimits/ai/${uid}`);
 
-  const hourlyOk = await consumeBucket(hourlyRef, HOURLY_LIMIT, 60 * 60 * 1000, now);
-  if (!hourlyOk) return { ok: false, code: "hourly_limit" };
+  const result = await ref.transaction((current) => {
+    const hour = normalizeBucket(current?.hour, 60 * 60 * 1000, now);
+    const day = normalizeBucket(current?.day, 24 * 60 * 60 * 1000, now);
 
-  const dailyOk = await consumeBucket(dailyRef, DAILY_LIMIT, 24 * 60 * 60 * 1000, now);
-  if (!dailyOk) return { ok: false, code: "daily_limit" };
+    if (hour.count >= HOURLY_LIMIT || day.count >= DAILY_LIMIT) return;
 
-  return { ok: true };
+    return {
+      hour: {
+        ...hour,
+        count: hour.count + 1,
+        limit: HOURLY_LIMIT,
+        updatedAt: now,
+      },
+      day: {
+        ...day,
+        count: day.count + 1,
+        limit: DAILY_LIMIT,
+        updatedAt: now,
+      },
+    };
+  }, undefined, false);
+
+  const usage = usageSnapshot(result.snapshot.val(), now);
+  if (!result.committed) {
+    const code = usage.daily.remaining <= 0 ? "daily_limit" : "hourly_limit";
+    return { ok: false, code, usage };
+  }
+
+  return { ok: true, usage };
 }
 
 async function callGroq({ apiKey, systemPrompt, messages, maxTokens }) {
@@ -157,7 +209,7 @@ exports.aiProxy = onRequest({
 
     const decoded = await admin.auth().verifyIdToken(token);
     const limit = await enforceRateLimit(decoded.uid);
-    if (!limit.ok) return json(res, 429, { code: limit.code });
+    if (!limit.ok) return json(res, 429, { code: limit.code, usage: limit.usage });
 
     const payload = parseRequestBody(req);
     const groqKey = groqSecret.value() || "";
@@ -165,11 +217,11 @@ exports.aiProxy = onRequest({
 
     try {
       const reply = await callGroq({ apiKey: groqKey, ...payload });
-      return json(res, 200, { reply, provider: "groq" });
+      return json(res, 200, { reply, provider: "groq", usage: limit.usage });
     } catch (groqError) {
       console.warn("Groq AI failed; trying Gemini fallback", groqError?.message || groqError);
       const reply = await callGemini({ apiKey: geminiKey, ...payload });
-      return json(res, 200, { reply, provider: "gemini" });
+      return json(res, 200, { reply, provider: "gemini", usage: limit.usage });
     }
   } catch (error) {
     console.error("AI proxy failed", error?.message || error);
