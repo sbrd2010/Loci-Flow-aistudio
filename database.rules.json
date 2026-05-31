@@ -2,23 +2,113 @@
   "rules": {
     "sync": {
       "$userId": {
-        ".read":  "auth != null && auth.uid === $userId",
+        ".read": "auth != null && auth.uid === $userId",
         ".write": "auth != null && auth.uid === $userId",
         ".validate": "newData.hasChildren(['userId', 'tasks', 'config'])",
+        "userId": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
         "tasks": {
           "$taskIdx": {
             ".validate": "newData.hasChildren(['id', 'title', 'userId'])",
+            "id": {
+              ".validate": "newData.isNumber() || (newData.isString() && newData.val().length <= 120)"
+            },
+            "uuid": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 120)"
+            },
+            "userId": {
+              ".validate": "newData.isString() && newData.val().length <= 200"
+            },
             "title": {
               ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 300"
             },
             "concreteStep": {
               ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 300)"
             },
-            "$other": { ".validate": true }
+            "priority": {
+              ".validate": "!newData.exists() || newData.val() == 'P1' || newData.val() == 'P2' || newData.val() == 'P3' || newData.val() == 'P4'"
+            },
+            "horizonLevel": {
+              ".validate": "!newData.exists() || newData.val() == 'today' || newData.val() == 'week' || newData.val() == 'month' || newData.val() == 'quarter' || newData.val() == 'halfyear' || newData.val() == 'office'"
+            },
+            "category": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 80)"
+            },
+            "timeEstimateMinutes": {
+              ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 1 && newData.val() <= 720)"
+            },
+            "deadlineTimestamp": {
+              ".validate": "!newData.exists() || newData.isNumber()"
+            },
+            "reminderAt": {
+              ".validate": "!newData.exists() || newData.isNumber()"
+            },
+            "isCompleted": {
+              ".validate": "!newData.exists() || newData.isBoolean()"
+            },
+            "isDeleted": {
+              ".validate": "!newData.exists() || newData.isBoolean()"
+            },
+            "isParked": {
+              ".validate": "!newData.exists() || newData.isBoolean()"
+            },
+            "isNowFocus": {
+              ".validate": "!newData.exists() || newData.isBoolean()"
+            },
+            "isMVD": {
+              ".validate": "!newData.exists() || newData.isBoolean()"
+            },
+            "orderIndex": {
+              ".validate": "!newData.exists() || newData.isNumber()"
+            },
+            "dateCompletedString": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 20)"
+            },
+            "subSteps": {
+              "$stepIdx": {
+                ".validate": "newData.hasChildren(['id', 'text', 'done'])",
+                "id": {
+                  ".validate": "newData.isString() && newData.val().length <= 120"
+                },
+                "text": {
+                  ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 300"
+                },
+                "done": {
+                  ".validate": "newData.isBoolean()"
+                },
+                "$other": {
+                  ".validate": true
+                }
+              }
+            },
+            "$other": {
+              ".validate": true
+            }
+          }
+        },
+        "brainDump": {
+          "$itemIdx": {
+            ".validate": "newData.hasChildren(['id', 'text', 'createdAt'])",
+            "id": {
+              ".validate": "newData.isString() && newData.val().length <= 120"
+            },
+            "text": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000"
+            },
+            "createdAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": true
+            }
           }
         },
         "config": {
           ".validate": "newData.hasChildren(['userId'])",
+          "userId": {
+            ".validate": "newData.isString() && newData.val().length <= 200"
+          },
           "intentionMessage": {
             ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 500)"
           },
@@ -28,24 +118,94 @@
           "mentorName": {
             ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 100)"
           },
+          "challengeType": {
+            ".validate": "!newData.exists() || newData.val() == 'overplanner' || newData.val() == 'overwhelmed' || newData.val() == 'initiation' || newData.val() == 'momentum' || newData.val() == 'starting' || newData.val() == 'focusing' || newData.val() == 'execution' || newData.val() == 'tracking'"
+          },
           "deadlineLabel": {
             ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 100)"
           },
-          "$other": { ".validate": true }
+          "deadlineDate": {
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 20)"
+          },
+          "pomodoroDurationMinutes": {
+            ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 1 && newData.val() <= 120)"
+          },
+          "reminderNagIntervalMinutes": {
+            ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 1 && newData.val() <= 60)"
+          },
+          "dayStartHour": {
+            ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 23)"
+          },
+          "dayEndHour": {
+            ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 1 && newData.val() <= 30)"
+          },
+          "totalXp": {
+            ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+          },
+          "visitStreakCount": {
+            ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+          },
+          "lastUpdated": {
+            ".validate": "!newData.exists() || newData.isNumber()"
+          },
+          "$other": {
+            ".validate": true
+          }
         },
         "chatHistory": {
           "$msgIdx": {
+            ".validate": "newData.hasChildren(['text', 'isUser']) || newData.hasChildren(['content'])",
+            "text": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 5000)"
+            },
             "content": {
               ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 5000)"
             },
-            "$other": { ".validate": true }
+            "isUser": {
+              ".validate": "!newData.exists() || newData.isBoolean()"
+            },
+            "$other": {
+              ".validate": true
+            }
           }
         },
-        "$other": { ".validate": true }
+        "contributions": {
+          "$idx": {
+            ".validate": "newData.hasChildren(['dateString', 'count'])",
+            "compositeKey": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 260)"
+            },
+            "userId": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 200)"
+            },
+            "dateString": {
+              ".validate": "newData.isString() && newData.val().length <= 20"
+            },
+            "count": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000"
+            },
+            "lastUpdated": {
+              ".validate": "!newData.exists() || newData.isNumber()"
+            },
+            "$other": {
+              ".validate": true
+            }
+          }
+        },
+        "$other": {
+          ".validate": true
+        }
+      }
+    },
+    "bugReports": {
+      ".read": false,
+      "$reportId": {
+        ".write": "auth != null && !data.exists() && newData.exists() && newData.hasChildren(['userId', 'message', 'createdAt']) && newData.child('userId').val() === auth.uid",
+        ".validate": "newData.child('userId').isString() && newData.child('userId').val().length <= 200 && newData.child('message').isString() && newData.child('message').val().length >= 1 && newData.child('message').val().length <= 2000 && newData.child('createdAt').isNumber() && (!newData.child('email').exists() || (newData.child('email').isString() && newData.child('email').val().length <= 320)) && (!newData.child('page').exists() || (newData.child('page').isString() && newData.child('page').val().length <= 200)) && (!newData.child('userAgent').exists() || (newData.child('userAgent').isString() && newData.child('userAgent').val().length <= 500))"
       }
     },
     "$other": {
-      ".read":  false,
+      ".read": false,
       ".write": false
     }
   }
