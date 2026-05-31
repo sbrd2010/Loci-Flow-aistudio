@@ -9,6 +9,11 @@ on:
 jobs:
   e2e:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      # E2E runs in demo mode and should not require repository secrets.
+      # Production deploy still requires the real VITE_FIREBASE_APP_ID.
+      VITE_FIREBASE_APP_ID: "1:862993748883:web:0000000000000000"
     defaults:
       run:
         working-directory: web
