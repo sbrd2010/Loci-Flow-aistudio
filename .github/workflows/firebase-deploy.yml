@@ -11,6 +11,7 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       GROQ_API_KEY: ${{ secrets.VITE_GROQ_KEY }}
       GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_KEY }}
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW }}
     steps:
       - uses: actions/checkout@v4
 
@@ -26,12 +27,14 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_GA_MEASUREMENT_ID: ${{ secrets.VITE_GA_MEASUREMENT_ID }}
         run: |
+          test -n "$VITE_FIREBASE_APP_ID"
           npm ci
           npm run build
 
       - name: Prepare Firebase credentials
         run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW }}' > /tmp/sa.json
+          test -n "$FIREBASE_SERVICE_ACCOUNT"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > /tmp/sa.json
 
       - name: Validate deployment secrets
         run: |
