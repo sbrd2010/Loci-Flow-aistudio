@@ -16,16 +16,39 @@ async function writeWithRetry(dbRef, data, retries = 3) {
   }
 }
 
+const cacheKey = (uid) => `loci_payload_v1_${uid}`;
+
+function readCache(uid) {
+  try {
+    const raw = localStorage.getItem(cacheKey(uid));
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    // Require at minimum tasks + config to be considered valid cache
+    if (data && data.tasks && data.config) return data;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(uid, data) {
+  try {
+    localStorage.setItem(cacheKey(uid), JSON.stringify(data));
+  } catch {
+    // Ignore QuotaExceededError — cache is best-effort
+  }
+}
+
 export function useSync(uid, email) {
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [slowLoading, setSlowLoading] = useState(false);
 
   const dbRefPath = uid ? `sync/${uid}` : null;
 
   const payloadRef = useRef(null);
   const timeoutRef = useRef(null);
-  // Stores the most recent remote snapshot that arrived while a local save was pending
   const pendingRemoteRef = useRef(null);
 
   useEffect(() => {
@@ -35,18 +58,40 @@ export function useSync(uid, email) {
     }
 
     setLoading(true);
+    setSlowLoading(false);
     setError(null);
     const userRef = ref(db, dbRefPath);
 
-    // If Firebase RTDB doesn't respond within 15s surface a retryable error.
-    // Brave Shields block WebSocket to *.firebaseio.com — user must disable Shields for this site.
-    const connectTimeoutId = setTimeout(() => {
-      setError("Could not reach sync server. Using Brave? Disable Shields for loci-flow.web.app. Otherwise check your connection and reload.");
-      setLoading(false);
-    }, 15000);
+    // Serve cached data immediately — user sees their app in <100ms on return visits.
+    // We still open the RTDB listener in the background to sync fresh data.
+    const cached = readCache(uid);
+    const hasCachedData = !!cached;
+    if (hasCachedData) {
+      setPayload(cached);
+      payloadRef.current = cached;
+      setLoading(false); // App renders instantly; RTDB syncs in background
+    }
+
+    // "Slow loading" warning at 10s — only shown if we have no cached data
+    const slowWarningId = !hasCachedData
+      ? setTimeout(() => setSlowLoading(true), 10000)
+      : null;
+
+    // Hard timeout: 25s (no cache) — shows error + escape options.
+    // With cache, skip the hard timeout entirely; RTDB syncs silently.
+    const connectTimeoutId = !hasCachedData
+      ? setTimeout(() => {
+          setError("Could not reach sync server. Using Brave? Disable Shields for loci-flow.web.app. Otherwise check your Wi-Fi or mobile data and tap Retry.");
+          setLoading(false);
+          setSlowLoading(false);
+        }, 25000)
+      : null;
 
     const unsubscribe = onValue(userRef, (snapshot) => {
-      clearTimeout(connectTimeoutId);
+      if (connectTimeoutId) clearTimeout(connectTimeoutId);
+      if (slowWarningId) clearTimeout(slowWarningId);
+      setSlowLoading(false);
+
       const data = snapshot.val();
 
       if (!timeoutRef.current) {
@@ -54,8 +99,17 @@ export function useSync(uid, email) {
           setPayload(data);
           payloadRef.current = data;
           pendingRemoteRef.current = null;
+          writeCache(uid, data);
+        } else if (hasCachedData) {
+          // RTDB is empty (new device or cleared DB) but we have local cache —
+          // restore it to RTDB so the user's data isn't lost.
+          runTransaction(ref(db, dbRefPath), (current) => {
+            if (current !== null) return; // another device already initialized
+            return payloadRef.current;
+          }).catch(err => console.error("Cache restore to RTDB failed:", err));
+          // payloadRef.current is already set from cache; leave payload as-is
         } else {
-          // Derive a clean display name from email: john.doe@gmail.com → "John Doe"
+          // Brand-new user — derive a clean display name from email
           const rawName = email.split("@")[0];
           const displayName =
             rawName
@@ -173,40 +227,38 @@ export function useSync(uid, email) {
 
           setPayload(defaultPayload);
           payloadRef.current = defaultPayload;
+          writeCache(uid, defaultPayload);
 
-          // Use a transaction so that two devices opening the app simultaneously
-          // don't overwrite each other — only the first one to reach null wins.
           runTransaction(ref(db, dbRefPath), (current) => {
-            if (current !== null) return; // abort — another device already initialized
+            if (current !== null) return;
             return defaultPayload;
           }).catch(err => console.error("Init transaction failed:", err));
         }
       } else {
-        // A local write is in-flight — store this remote snapshot for deferred merge
-        if (data) {
-          pendingRemoteRef.current = data;
-        }
+        if (data) pendingRemoteRef.current = data;
       }
       setLoading(false);
     }, (err) => {
-      clearTimeout(connectTimeoutId);
+      if (connectTimeoutId) clearTimeout(connectTimeoutId);
+      if (slowWarningId) clearTimeout(slowWarningId);
+      setSlowLoading(false);
       console.error("Error reading RTDB payload:", err);
-      setError("Could not connect to sync server. Check your connection and reload.");
-      setLoading(false);
+      if (!hasCachedData) {
+        setError("Could not connect to sync server. Check your connection and reload.");
+        setLoading(false);
+      }
+      // If we have cached data, don't show an error — user already sees the app
     });
 
     return () => {
-      clearTimeout(connectTimeoutId);
+      if (connectTimeoutId) clearTimeout(connectTimeoutId);
+      if (slowWarningId) clearTimeout(slowWarningId);
       unsubscribe();
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [dbRefPath, uid, email]);
+  }, [dbRefPath, uid, email]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Flush pending debounced write on tab close / mobile background / screen lock.
-  // beforeunload alone is unreliable on iOS Safari and Android Chrome when the user
-  // backgrounds the app or locks the screen — pagehide and visibilitychange cover those cases.
   useEffect(() => {
     const flush = () => {
       if (timeoutRef.current && dbRefPath && payloadRef.current) {
@@ -233,57 +285,45 @@ export function useSync(uid, email) {
     if (!uid || !email) return;
     const legacyId = email.replace(/\./g, "_");
     const legacyPath = `sync/${legacyId}`;
-    if (legacyId === uid) return; // already on uid path, skip
+    if (legacyId === uid) return;
 
     get(ref(db, legacyPath)).then(snapshot => {
       const legacyData = snapshot.val();
-      if (!legacyData) return; // no legacy data, nothing to migrate
+      if (!legacyData) return;
       const uidPath = `sync/${uid}`;
       get(ref(db, uidPath)).then(uidSnap => {
-        if (uidSnap.val()) return; // uid path already has data, don't overwrite
-        // Copy legacy data to uid path
+        if (uidSnap.val()) return;
         set(ref(db, uidPath), { ...legacyData, userId: uid }).then(() => {
           console.log("Migration: legacy data copied to uid path");
         }).catch(err => console.error("Migration write failed:", err));
       });
-    }).catch(() => {}); // silent fail if legacy path unreadable
+    }).catch(() => {});
   }, [uid, email]);
 
-  /**
-   * savePayload — full-payload write with optimistic local update + 1.5s debounce.
-   * Retries up to 3 times on network failure before giving up.
-   */
   const savePayload = (updatedPayload) => {
-    const nextPayload = {
-      ...updatedPayload,
-      timestamp: Date.now()
-    };
-
+    const nextPayload = { ...updatedPayload, timestamp: Date.now() };
     setPayload(nextPayload);
     payloadRef.current = nextPayload;
 
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
+    // Keep local cache up-to-date immediately — protects against network loss
+    if (uid) writeCache(uid, nextPayload);
+
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
     timeoutRef.current = setTimeout(() => {
       if (dbRefPath && payloadRef.current) {
         writeWithRetry(ref(db, dbRefPath), payloadRef.current)
-          .then(() => {
-            console.log("Remote RTDB payload sync successful");
-          })
-          .catch((err) => {
-            console.error("Remote RTDB payload sync failed after retries:", err);
-          })
+          .then(() => console.log("Remote RTDB payload sync successful"))
+          .catch((err) => console.error("Remote RTDB payload sync failed after retries:", err))
           .finally(() => {
             timeoutRef.current = null;
-            // If a remote snapshot arrived while we were writing, apply it only if newer.
             if (pendingRemoteRef.current) {
               const remote = pendingRemoteRef.current;
               pendingRemoteRef.current = null;
               if ((remote.timestamp || 0) > (payloadRef.current?.timestamp || 0)) {
                 setPayload(remote);
                 payloadRef.current = remote;
+                if (uid) writeCache(uid, remote);
               }
             }
           });
@@ -291,10 +331,6 @@ export function useSync(uid, email) {
     }, 1500);
   };
 
-  /**
-   * saveSubPath — granular sub-path write that does NOT overwrite the full payload.
-   * Use for isolated fields like chatHistory to avoid stomping concurrent task writes.
-   */
   const saveSubPath = (subPath, value) => {
     if (!dbRefPath) return;
     const updates = {
@@ -306,5 +342,5 @@ export function useSync(uid, email) {
       .catch(err => console.error(`Sub-path write failed (${subPath}):`, err));
   };
 
-  return { payload, loading, error, savePayload, saveSubPath };
+  return { payload, loading, error, slowLoading, savePayload, saveSubPath };
 }
