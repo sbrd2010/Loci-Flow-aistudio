@@ -32,6 +32,19 @@ function usageNoticeText(usage) {
   return "";
 }
 
+function proxyErrorMessage(code) {
+  if (code === "daily_limit") {
+    return "Shared built-in AI daily limit reached. Please wait until it resets, or add a personal AI key in Settings.";
+  }
+  if (code === "hourly_limit") {
+    return "Shared built-in AI hourly limit reached. Please wait a while before trying again, or add a personal AI key in Settings.";
+  }
+  if (code === "auth_required") {
+    return "Please sign in again to use built-in AI.";
+  }
+  return code;
+}
+
 function showUsageToast(usage) {
   if (typeof window === "undefined" || typeof document === "undefined") return;
   const warning = usage?.daily?.warning;
@@ -96,7 +109,7 @@ async function callBuiltinProxy({ systemPrompt, messages, maxTokens }) {
   emitAIUsage(data.usage);
 
   if (!res.ok) {
-    const err = new Error(data.code || `${res.status}`);
+    const err = new Error(proxyErrorMessage(data.code || `${res.status}`));
     err.usage = data.usage;
     throw err;
   }
