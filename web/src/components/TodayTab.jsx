@@ -12,6 +12,15 @@ export default function TodayTab({ payload, savePayload }) {
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [headerExpanded, setHeaderExpanded] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [showRescue, setShowRescue] = useState(false);
+  const [rescueStep, setRescueStep] = useState(0);
+
+  const rescueSteps = [
+    "Take one deep breath. Breathe in for 4, hold for 4, out for 4.",
+    "What is the laughably smallest first step? A single sentence counts.",
+    "Close all tabs that aren't this task right now.",
+    "Commit to just 2 minutes. You can stop after that.",
+  ];
 
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerSecondsLeft, setTimerSecondsLeft] = useState((config.pomodoroDurationMinutes || 25) * 60);
@@ -630,11 +639,18 @@ export default function TodayTab({ payload, savePayload }) {
               <div className="live-dot"></div>
               ACTIVE FOCUS NOW
             </div>
-            <button className="stuck-btn" disabled style={{ opacity: 0.5 }}>Stuck?</button>
             <button
               className="stuck-btn"
-              onClick={() => { setIsTimerRunning(false); handlePinTask(activeTask); }}
-              title="Unpin and close timer"
+              onClick={() => { setRescueStep(0); setShowRescue(true); }}
+              title="Feeling stuck? Get unstuck in 4 steps"
+            >Stuck?</button>
+            <button
+              className="stuck-btn"
+              onClick={() => {
+                setIsTimerRunning(false);
+                savePayload({ ...payload, tasks: tasks.map(t => t.uuid === activeTask.uuid ? { ...t, isNowFocus: false, lastUpdated: Date.now() } : t) });
+              }}
+              title="Unpin this task and close the timer"
               style={{ color: "var(--text-muted)", background: "var(--bg-secondary)", border: "1px solid var(--border)" }}
             >✕ Unpin</button>
           </div>
@@ -685,6 +701,31 @@ export default function TodayTab({ payload, savePayload }) {
       )}
 
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
+
+      {/* Inline rescue overlay — triggered by Stuck? button on focus card */}
+      {showRescue && (
+        <div className="rescue-overlay" onClick={() => setShowRescue(false)}>
+          <div className="rescue-card card" onClick={e => e.stopPropagation()}>
+            <span className="rescue-icon">⚠️</span>
+            <h3 className="rescue-title">Executive Freeze Rescue Pod</h3>
+            <span className="rescue-step-badge">Step {rescueStep + 1} of {rescueSteps.length}</span>
+            <p className="rescue-step-text">{rescueSteps[rescueStep]}</p>
+            <button
+              className="btn"
+              onClick={() => {
+                if (rescueStep < rescueSteps.length - 1) setRescueStep(rescueStep + 1);
+                else setShowRescue(false);
+              }}
+              style={{ width: "100%", marginTop: "10px" }}
+            >
+              {rescueStep === rescueSteps.length - 1 ? "I'm ready — back to the task!" : "Next Step"}
+            </button>
+            <button className="btn btn-cancel" onClick={() => setShowRescue(false)} style={{ width: "100%" }}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
