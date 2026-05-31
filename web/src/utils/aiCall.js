@@ -53,18 +53,21 @@ async function callGemini(geminiKey, systemPrompt, messages) {
 }
 
 export async function callAI({ groqKey, geminiKey, systemPrompt, messages, maxTokens = 300 }) {
-  if (groqKey) {
+  const cleanGroqKey = (groqKey || "").trim();
+  const cleanGeminiKey = (geminiKey || "").trim();
+
+  if (cleanGroqKey) {
     try {
-      return await callGroq(groqKey, systemPrompt, messages, maxTokens);
+      return await callGroq(cleanGroqKey, systemPrompt, messages, maxTokens);
     } catch (err) {
       // Rate-limited or quota exhausted — fall through to Gemini if available
-      if (!geminiKey) throw err;
+      if (!cleanGeminiKey) throw err;
       console.warn("Groq failed, falling back to Gemini:", err.message);
     }
   }
 
-  if (geminiKey) {
-    return await callGemini(geminiKey, systemPrompt, messages);
+  if (cleanGeminiKey) {
+    return await callGemini(cleanGeminiKey, systemPrompt, messages);
   }
 
   throw new Error("no_key");

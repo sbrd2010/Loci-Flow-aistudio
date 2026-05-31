@@ -2,11 +2,14 @@
 const scheduled = new Map();
 
 function shouldScheduleReminder(task) {
-  return !!(task.reminderAt && !task.isCompleted && !task.isDeleted && !task.isParked);
+  return !!(task?.uuid && task.reminderAt && !task.isCompleted && !task.isDeleted && !task.isParked);
 }
 
 export function scheduleReminder(task) {
-  if (!shouldScheduleReminder(task)) return;
+  if (!shouldScheduleReminder(task)) {
+    if (task?.uuid) cancelReminder(task.uuid);
+    return;
+  }
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
 
   const delay = task.reminderAt - Date.now();
