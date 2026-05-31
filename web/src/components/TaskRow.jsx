@@ -9,6 +9,18 @@ const menuItemStyle = (color) => ({
   borderRadius: "0"
 });
 
+const GripIcon = () => (
+  <svg width="10" height="15" viewBox="0 0 10 15" fill="currentColor">
+    <circle cx="3" cy="2.5" r="1.5"/>
+    <circle cx="3" cy="7.5" r="1.5"/>
+    <circle cx="3" cy="12.5" r="1.5"/>
+    <circle cx="7" cy="2.5" r="1.5"/>
+    <circle cx="7" cy="7.5" r="1.5"/>
+    <circle cx="7" cy="12.5" r="1.5"/>
+  </svg>
+);
+
+
 const PencilIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -16,7 +28,7 @@ const PencilIcon = () => (
   </svg>
 );
 
-export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, onToggleMVD }) {
+export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, onToggleMVD, onGripTap, isLifted, anyLifted }) {
   const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -40,9 +52,37 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   const hasSubSteps = subSteps && subSteps.length > 0;
 
   return (
-    <div className={`task-row ${isCompleted ? "completed" : ""}`} data-testid="task-row" style={menuOpen ? { zIndex: 400, position: "relative" } : undefined}>
+    <div
+      className={`task-row ${isCompleted ? "completed" : ""}`}
+      data-testid="task-row"
+      style={{
+        ...(menuOpen ? { zIndex: 400, position: "relative" } : {}),
+        ...(isLifted ? { background: "var(--accent-ring, rgba(99,102,241,0.08))", border: "1.5px solid var(--accent)", borderRadius: "10px", boxShadow: "0 4px 16px rgba(99,102,241,0.15)" } : {}),
+        ...(anyLifted && !isLifted && !isCompleted ? { cursor: "pointer" } : {})
+      }}
+      onClick={anyLifted && !isLifted && !isCompleted && onGripTap ? () => onGripTap(task) : undefined}
+    >
+      {/* Grip handle — tap to reorder */}
+      {onGripTap && !isCompleted && (
+        <button
+          onClick={e => { e.stopPropagation(); onGripTap(task); }}
+          aria-label={isLifted ? "Cancel reorder" : anyLifted ? "Place here" : "Reorder"}
+          title={isLifted ? "Tap to cancel" : anyLifted ? "Move task here" : "Tap to reorder"}
+          style={{
+            background: "none", border: "none", cursor: "pointer", flexShrink: 0,
+            color: isLifted ? "var(--accent)" : anyLifted ? "var(--accent)" : "var(--text-muted)",
+            opacity: isLifted ? 1 : anyLifted ? 0.85 : 0.3,
+            padding: anyLifted ? "6px 8px" : "4px 6px",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "all 0.15s", borderRadius: "6px",
+            ...(anyLifted && !isLifted ? { background: "var(--accent-ring, rgba(99,102,241,0.08))" } : {})
+          }}
+        >
+          <GripIcon />
+        </button>
+      )}
       {/* Checkbox */}
-      <div className="checkbox-container" data-testid="task-checkbox" onClick={() => onToggleComplete(task)}>
+      <div className="checkbox-container" data-testid="task-checkbox" onClick={e => { e.stopPropagation(); onToggleComplete(task); }}>
         <div className={`custom-checkbox ${isCompleted ? "checked" : ""}`}>
           {isCompleted && <span className="checkmark">✓</span>}
         </div>
