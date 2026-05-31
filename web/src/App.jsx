@@ -136,7 +136,7 @@ export default function App() {
   };
 
   // Load the sync payload from RTDB (skipped in demo mode — uid is null)
-  const { payload: rtdbPayload, loading, error, savePayload: rtdbSave, saveSubPath: rtdbSaveSub } =
+  const { payload: rtdbPayload, loading, error, slowLoading, savePayload: rtdbSave, saveSubPath: rtdbSaveSub } =
     useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
   const payload = demoMode ? demoPayload : rtdbPayload;
@@ -278,10 +278,22 @@ export default function App() {
         <div className="signin-card card" style={{ padding: "40px 20px" }}>
           <span className="signin-emoji">⚠️</span>
           <h2 style={{ fontFamily: "var(--font-display)", fontWeight: "800" }}>Sync Error</h2>
-          <p style={{ color: "var(--text-muted)", fontSize: "13px", marginTop: "8px" }}>{error}</p>
-          <button className="btn" onClick={() => window.location.reload()} style={{ marginTop: "20px" }}>
-            Retry Connection
-          </button>
+          <p style={{ color: "var(--text-muted)", fontSize: "13px", marginTop: "8px", lineHeight: "1.5" }}>{error}</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "20px", width: "100%" }}>
+            <button className="btn" onClick={() => window.location.reload()}>
+              Retry Connection
+            </button>
+            <button
+              className="btn"
+              onClick={enterDemo}
+              style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
+            >
+              Continue in Demo Mode
+            </button>
+          </div>
+          <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "12px", textAlign: "center", lineHeight: "1.5" }}>
+            Demo mode uses sample data — your real tasks will load once connection is restored.
+          </p>
         </div>
       </div>
     );
@@ -293,8 +305,23 @@ export default function App() {
       <div className="signin-overlay">
         <div className="signin-card card" style={{ padding: "40px 20px" }}>
           <span className="signin-emoji" style={{ animationDuration: "1.5s" }}>🧠</span>
-          <h2 style={{ fontFamily: "var(--font-display)", fontWeight: "800" }}>Loading Loci Space...</h2>
-          <p style={{ color: "var(--text-muted)", fontSize: "13px" }}>Synchronizing your commitments with cloud RTDB...</p>
+          <h2 style={{ fontFamily: "var(--font-display)", fontWeight: "800" }}>
+            {slowLoading ? "Still connecting…" : "Loading Loci Space…"}
+          </h2>
+          <p style={{ color: "var(--text-muted)", fontSize: "13px", marginTop: "4px", lineHeight: "1.5" }}>
+            {slowLoading
+              ? "This is taking longer than usual. Check your Wi-Fi or mobile data."
+              : "Synchronizing your commitments…"}
+          </p>
+          {slowLoading && (
+            <button
+              className="btn"
+              onClick={enterDemo}
+              style={{ marginTop: "20px", width: "100%", background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
+            >
+              Continue in Demo Mode
+            </button>
+          )}
         </div>
       </div>
     );
