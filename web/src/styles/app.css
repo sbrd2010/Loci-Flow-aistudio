@@ -1569,9 +1569,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .fab:hover {
-  transform: rotate(90deg) scale(1.05);
   background: var(--accent-dark);
   box-shadow: var(--shadow-lg);
+  filter: brightness(1.08);
 }
 
 .fab-secondary {
@@ -1607,6 +1607,31 @@ h1, h2, h3, h4, h5, h6 {
 @media (min-width: 1024px) {
   .fab-secondary { right: calc(50% - 530px); }
 }
+
+/* FAB speed-dial option pills */
+.fab-option {
+  position: fixed;
+  right: calc(50% - 220px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px 10px 14px;
+  border-radius: 50px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+  cursor: pointer;
+  z-index: 90;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  color: var(--text-primary);
+}
+.fab-option:hover {
+  background: var(--bg-secondary);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.24);
+}
+@media (max-width: 480px) { .fab-option { right: 20px; } }
+@media (min-width: 720px) { .fab-option { right: calc(50% - 340px); } }
+@media (min-width: 1024px) { .fab-option { right: calc(50% - 530px); } }
 
 /* Add Task Dialog Modal */
 .modal-overlay {

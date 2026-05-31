@@ -15,6 +15,7 @@ export default function TodayTab({ payload, savePayload }) {
   const [showRescue, setShowRescue] = useState(false);
   const [rescueStep, setRescueStep] = useState(0);
   const [isMVDMode, setIsMVDMode] = useState(false);
+  const [liftedTaskUuid, setLiftedTaskUuid] = useState(null);
 
   const rescueSteps = [
     "Take one deep breath. Breathe in for 4, hold for 4, out for 4.",
@@ -294,6 +295,33 @@ export default function TodayTab({ payload, savePayload }) {
       return { ...t, subSteps: newSubSteps, lastUpdated: Date.now() };
     });
     savePayload({ ...payload, tasks: updatedTasks });
+  };
+
+  const handleDeleteSubStep = (task, stepId) => {
+    const updatedTasks = tasks.map(t => {
+      if (t.uuid !== task.uuid) return t;
+      return { ...t, subSteps: (t.subSteps || []).filter(s => s.id !== stepId), lastUpdated: Date.now() };
+    });
+    savePayload({ ...payload, tasks: updatedTasks });
+  };
+
+  const handleGripTap = (task) => {
+    if (!liftedTaskUuid) {
+      setLiftedTaskUuid(task.uuid);
+    } else if (liftedTaskUuid === task.uuid) {
+      setLiftedTaskUuid(null);
+    } else {
+      const fromIdx = remainingTasks.findIndex(t => t.uuid === liftedTaskUuid);
+      const toIdx = remainingTasks.findIndex(t => t.uuid === task.uuid);
+      if (fromIdx === -1) { setLiftedTaskUuid(null); return; }
+      const list = [...remainingTasks];
+      [list[fromIdx], list[toIdx]] = [list[toIdx], list[fromIdx]];
+      const orderMap = new Map(list.map((t, i) => [t.uuid, i]));
+      savePayload({ ...payload, tasks: tasks.map(t =>
+        orderMap.has(t.uuid) ? { ...t, orderIndex: orderMap.get(t.uuid), lastUpdated: Date.now() } : t
+      )});
+      setLiftedTaskUuid(null);
+    }
   };
 
   const handleMoveTask = (task, direction) => {
@@ -605,6 +633,16 @@ export default function TodayTab({ payload, savePayload }) {
               </p>
             </div>
           )}
+          {liftedTaskUuid && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "var(--accent-ring, rgba(99,102,241,0.08))", border: "1px solid var(--accent)", borderRadius: "8px", marginBottom: "6px" }}>
+              <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--accent)" }}>
+                ↕ Tap any task to swap positions
+              </span>
+              <button onClick={() => setLiftedTaskUuid(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "12px", color: "var(--text-muted)", fontWeight: "700", padding: "0 4px" }}>
+                Cancel
+              </button>
+            </div>
+          )}
           {todayTasksFiltered.length > 0 && (
             <>
               {remainingTasks.map((task, idx) => (
@@ -660,8 +698,12 @@ export default function TodayTab({ payload, savePayload }) {
                     onMoveDown={idx < remainingTasks.length - 1 ? t => handleMoveTask(t, "down") : undefined}
                     onBreakdown={handleBreakdown}
                     onSubStepToggle={handleSubStepToggle}
+                    onDeleteSubStep={handleDeleteSubStep}
                     isBreakingDown={breakdownLoadingUuid === task.uuid}
                     onToggleMVD={handleToggleMVD}
+                    onGripTap={handleGripTap}
+                    isLifted={liftedTaskUuid === task.uuid}
+                    anyLifted={!!liftedTaskUuid}
                   />
                 )
               ))}

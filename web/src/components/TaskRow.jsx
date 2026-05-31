@@ -3,12 +3,32 @@ import { formatReminderLabel } from "../utils/reminders";
 
 const menuItemStyle = (color) => ({
   display: "flex", alignItems: "center", gap: "10px", width: "100%",
-  background: "none", border: "none", padding: "11px 16px",
+  background: "none", border: "none", padding: "10px 16px",
   cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "600",
-  color
+  color, transition: "background 0.1s",
+  borderRadius: "0"
 });
 
-export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onBreakdown, onSubStepToggle, isBreakingDown, onToggleMVD }) {
+const GripIcon = () => (
+  <svg width="10" height="15" viewBox="0 0 10 15" fill="currentColor">
+    <circle cx="3" cy="2.5" r="1.5"/>
+    <circle cx="3" cy="7.5" r="1.5"/>
+    <circle cx="3" cy="12.5" r="1.5"/>
+    <circle cx="7" cy="2.5" r="1.5"/>
+    <circle cx="7" cy="7.5" r="1.5"/>
+    <circle cx="7" cy="12.5" r="1.5"/>
+  </svg>
+);
+
+
+const PencilIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+);
+
+export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, onToggleMVD, onGripTap, isLifted, anyLifted }) {
   const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -32,9 +52,37 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   const hasSubSteps = subSteps && subSteps.length > 0;
 
   return (
-    <div className={`task-row ${isCompleted ? "completed" : ""}`} data-testid="task-row" style={menuOpen ? { zIndex: 400, position: "relative" } : undefined}>
+    <div
+      className={`task-row ${isCompleted ? "completed" : ""}`}
+      data-testid="task-row"
+      style={{
+        ...(menuOpen ? { zIndex: 400, position: "relative" } : {}),
+        ...(isLifted ? { background: "var(--accent-ring, rgba(99,102,241,0.08))", border: "1.5px solid var(--accent)", borderRadius: "10px", boxShadow: "0 4px 16px rgba(99,102,241,0.15)" } : {}),
+        ...(anyLifted && !isLifted && !isCompleted ? { cursor: "pointer" } : {})
+      }}
+      onClick={anyLifted && !isLifted && !isCompleted && onGripTap ? () => onGripTap(task) : undefined}
+    >
+      {/* Grip handle — tap to reorder */}
+      {onGripTap && !isCompleted && (
+        <button
+          onClick={e => { e.stopPropagation(); onGripTap(task); }}
+          aria-label={isLifted ? "Cancel reorder" : anyLifted ? "Place here" : "Reorder"}
+          title={isLifted ? "Tap to cancel" : anyLifted ? "Move task here" : "Tap to reorder"}
+          style={{
+            background: "none", border: "none", cursor: "pointer", flexShrink: 0,
+            color: isLifted ? "var(--accent)" : anyLifted ? "var(--accent)" : "var(--text-muted)",
+            opacity: isLifted ? 1 : anyLifted ? 0.85 : 0.3,
+            padding: anyLifted ? "6px 8px" : "4px 6px",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "all 0.15s", borderRadius: "6px",
+            ...(anyLifted && !isLifted ? { background: "var(--accent-ring, rgba(99,102,241,0.08))" } : {})
+          }}
+        >
+          <GripIcon />
+        </button>
+      )}
       {/* Checkbox */}
-      <div className="checkbox-container" data-testid="task-checkbox" onClick={() => onToggleComplete(task)}>
+      <div className="checkbox-container" data-testid="task-checkbox" onClick={e => { e.stopPropagation(); onToggleComplete(task); }}>
         <div className={`custom-checkbox ${isCompleted ? "checked" : ""}`}>
           {isCompleted && <span className="checkmark">✓</span>}
         </div>
@@ -71,24 +119,33 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         {hasSubSteps && (
           <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "5px" }}>
             {[...activeSubSteps, ...doneSubSteps].map(step => (
-              <div
-                key={step.id}
-                onClick={() => onSubStepToggle && onSubStepToggle(task, step.id)}
-                style={{ display: "flex", alignItems: "center", gap: "8px", cursor: onSubStepToggle ? "pointer" : "default", padding: "3px 0" }}
-              >
-                <div style={{
-                  width: "14px", height: "14px", borderRadius: "3px", flexShrink: 0,
-                  border: step.done ? "none" : "1.5px solid var(--border)",
-                  background: step.done ? "var(--success)" : "var(--bg-secondary)",
-                  display: "flex", alignItems: "center", justifyContent: "center"
-                }}>
-                  {step.done && <span style={{ color: "#fff", fontSize: "9px", fontWeight: "800", lineHeight: 1 }}>✓</span>}
+              <div key={step.id} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "3px 0" }}>
+                <div
+                  onClick={() => onSubStepToggle && onSubStepToggle(task, step.id)}
+                  style={{ display: "flex", alignItems: "center", gap: "8px", cursor: onSubStepToggle ? "pointer" : "default", flex: 1, minWidth: 0 }}
+                >
+                  <div style={{
+                    width: "14px", height: "14px", borderRadius: "3px", flexShrink: 0,
+                    border: step.done ? "none" : "1.5px solid var(--border)",
+                    background: step.done ? "var(--success)" : "var(--bg-secondary)",
+                    display: "flex", alignItems: "center", justifyContent: "center"
+                  }}>
+                    {step.done && <span style={{ color: "#fff", fontSize: "9px", fontWeight: "800", lineHeight: 1 }}>✓</span>}
+                  </div>
+                  <span style={{
+                    fontSize: "12px", fontWeight: "500", lineHeight: "1.3",
+                    color: step.done ? "var(--text-muted)" : "var(--text-secondary)",
+                    textDecoration: step.done ? "line-through" : "none"
+                  }}>{step.text}</span>
                 </div>
-                <span style={{
-                  fontSize: "12px", fontWeight: "500", lineHeight: "1.3",
-                  color: step.done ? "var(--text-muted)" : "var(--text-secondary)",
-                  textDecoration: step.done ? "line-through" : "none"
-                }}>{step.text}</span>
+                {onDeleteSubStep && (
+                  <button
+                    onClick={e => { e.stopPropagation(); onDeleteSubStep(task, step.id); }}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "var(--text-muted)", padding: "0 2px", lineHeight: 1, flexShrink: 0, opacity: 0.55 }}
+                    title="Remove step"
+                    aria-label="Remove step"
+                  >×</button>
+                )}
               </div>
             ))}
             <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "2px" }}>
@@ -113,21 +170,23 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
             aria-label="Task options"
             data-testid="task-menu-btn"
             style={{
-              background: "var(--bg-secondary)", border: "1.5px solid var(--border)",
-              cursor: "pointer", fontSize: "16px", fontWeight: "900",
-              color: "var(--text-secondary)", lineHeight: 1,
-              padding: "5px 9px", borderRadius: "8px",
-              minWidth: "34px", minHeight: "34px",
+              background: menuOpen ? "var(--bg-secondary)" : "transparent",
+              border: `1.5px solid ${menuOpen ? "var(--border)" : "transparent"}`,
+              cursor: "pointer", fontSize: "18px", fontWeight: "400",
+              color: "var(--text-muted)", lineHeight: 1,
+              padding: "4px 7px", borderRadius: "8px",
+              minWidth: "30px", minHeight: "30px",
               display: "flex", alignItems: "center", justifyContent: "center",
-              letterSpacing: "0.05em"
+              transition: "all 0.15s", letterSpacing: 0
             }}
-          >•••</button>
+          >⋮</button>
           {menuOpen && (
             <div style={{
-              position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 300,
+              position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 300,
               background: "var(--bg-card)", border: "1px solid var(--border)",
-              borderRadius: "12px", boxShadow: "var(--shadow-lg)",
-              minWidth: "178px", overflow: "hidden"
+              borderRadius: "14px", boxShadow: "0 8px 32px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.12)",
+              minWidth: "188px", overflow: "hidden",
+              backdropFilter: "blur(12px)"
             }}>
               {onPin && (
                 <button onClick={() => { onPin(task); setMenuOpen(false); }} style={menuItemStyle(isNowFocus ? "var(--warning)" : "var(--text-primary)")}>
@@ -145,8 +204,8 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
                 </button>
               )}
               {onEdit && (
-                <button data-testid="task-menu-edit" onClick={() => { onEdit(task); setMenuOpen(false); }} style={menuItemStyle("var(--text-primary)")}>
-                  ✏ Edit task
+                <button data-testid="task-menu-edit" onClick={() => { onEdit(task); setMenuOpen(false); }} style={{ ...menuItemStyle("var(--text-primary)"), gap: "9px" }}>
+                  <PencilIcon /> Edit task
                 </button>
               )}
               {(onMoveUp || onMoveDown) && <div style={{ height: "1px", background: "var(--border)" }} />}

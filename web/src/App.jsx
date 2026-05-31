@@ -22,6 +22,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("today");
   const [showAddTask, setShowAddTask] = useState(false);
   const [preselectedHorizon, setPreselectedHorizon] = useState("today");
+  const [editingTask, setEditingTask] = useState(null);
+  const [fabExpanded, setFabExpanded] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("loci_theme") || "glassy");
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState("");
@@ -177,6 +179,7 @@ export default function App() {
   };
 
   const openAddTask = (horizon = "today") => {
+    setEditingTask(null);
     setPreselectedHorizon(horizon);
     setShowAddTask(true);
   };
@@ -348,7 +351,12 @@ export default function App() {
           <TodayTab payload={payload} savePayload={savePayload} onOpenAddTask={() => openAddTask("today")} />
         )}
         {activeTab === "roadmap" && (
-          <RoadmapTab payload={payload} savePayload={savePayload} onOpenAddTask={openAddTask} />
+          <RoadmapTab
+            payload={payload}
+            savePayload={savePayload}
+            onOpenAddTask={openAddTask}
+            onEditTask={(task) => { setEditingTask(task); setShowAddTask(true); }}
+          />
         )}
         {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} />}
         {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} />}
@@ -362,22 +370,58 @@ export default function App() {
         )}
       </main>
 
-      {/* FABs — Brain Dump (secondary) + Add Task (primary) */}
+      {/* FAB — single + expands to two options */}
       {(activeTab === "today" || activeTab === "roadmap") && (
         <>
+          {fabExpanded && (
+            <div
+              style={{ position: "fixed", inset: 0, zIndex: 88 }}
+              onClick={() => setFabExpanded(false)}
+            />
+          )}
+          {/* Option 2: Brain Dump */}
           <button
-            className="fab-secondary"
+            className="fab-option"
             data-testid="fab-brain-dump"
-            onClick={() => setShowQuickDump(true)}
-            title="Quick Brain Dump"
+            onClick={() => { setFabExpanded(false); setShowQuickDump(true); }}
+            style={{
+              opacity: fabExpanded ? 1 : 0,
+              transform: fabExpanded ? "translateY(0) scale(1)" : "translateY(20px) scale(0.85)",
+              pointerEvents: fabExpanded ? "auto" : "none",
+              bottom: `calc(88px + env(safe-area-inset-bottom, 0px) + 130px)`,
+              transitionDelay: fabExpanded ? "0.04s" : "0s"
+            }}
+            title="Brain Dump"
+            aria-label="Brain Dump"
           >
-            📝
+            <span style={{ fontSize: "20px" }}>💭</span>
+            <span style={{ fontSize: "12px", fontWeight: "700", whiteSpace: "nowrap" }}>Brain Dump</span>
           </button>
+          {/* Option 1: Add Task */}
+          <button
+            className="fab-option"
+            data-testid="fab-add-task-option"
+            onClick={() => { setFabExpanded(false); openAddTask(activeTab === "roadmap" ? "week" : "today"); }}
+            style={{
+              opacity: fabExpanded ? 1 : 0,
+              transform: fabExpanded ? "translateY(0) scale(1)" : "translateY(20px) scale(0.85)",
+              pointerEvents: fabExpanded ? "auto" : "none",
+              bottom: `calc(88px + env(safe-area-inset-bottom, 0px) + 68px)`,
+              transitionDelay: fabExpanded ? "0s" : "0.04s"
+            }}
+            title="Add Task"
+            aria-label="Add Task"
+          >
+            <span style={{ fontSize: "18px", fontWeight: "700" }}>✚</span>
+            <span style={{ fontSize: "12px", fontWeight: "700", whiteSpace: "nowrap" }}>Add Task</span>
+          </button>
+          {/* Primary FAB */}
           <button
             className="fab"
             data-testid="fab-add-task"
-            onClick={() => openAddTask(activeTab === "roadmap" ? "week" : "today")}
-            title="Add Focus Commit"
+            onClick={() => setFabExpanded(e => !e)}
+            title={fabExpanded ? "Close" : "Add or Brain Dump"}
+            style={{ transform: fabExpanded ? "rotate(45deg)" : "none" }}
           >
             +
           </button>
@@ -450,14 +494,15 @@ export default function App() {
       {/* Bottom Nav */}
       <BottomNav activeTab={activeTab} onTabSelect={handleTabSelect} />
 
-      {/* Add Task Dialog */}
+      {/* Add / Edit Task Dialog */}
       {showAddTask && (
         <AddTaskDialog
           email={demoMode ? "demo@loci.app" : user?.email}
           payload={payload}
           savePayload={savePayload}
           defaultHorizon={preselectedHorizon}
-          onClose={() => setShowAddTask(false)}
+          editTask={editingTask}
+          onClose={() => { setShowAddTask(false); setEditingTask(null); }}
         />
       )}
     </div>

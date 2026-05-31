@@ -48,7 +48,7 @@ const TABS = [
   { id: "today",    label: "Today",    Icon: TodayIcon,    color: "#3b82f6" },
   { id: "roadmap",  label: "Roadmap",  Icon: RoadmapIcon,  color: "#10b981" },
   { id: "mindbox",  label: "Mind Box", Icon: MindBoxIcon,  color: "#8b5cf6" },
-  { id: "coach",    label: "Coach",    Icon: CoachIcon,    color: "#ec4899" },
+  { id: "coach",    label: "AI Coach", Icon: CoachIcon,    color: "#ec4899" },
   { id: "settings", label: "Settings", Icon: SettingsIcon, color: "#f59e0b" },
 ];
 

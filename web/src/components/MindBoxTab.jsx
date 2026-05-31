@@ -25,6 +25,7 @@ export default function MindBoxTab({ payload, savePayload }) {
   const [organizeResults, setOrganizeResults] = useState([]);
   const [organizeSelected, setOrganizeSelected] = useState(new Set());
   const [organizeError, setOrganizeError] = useState("");
+  const [organizeExpandedIndex, setOrganizeExpandedIndex] = useState(null);
 
   // ── Ritual data ────────────────────────────────────────────────────────────
   const ritualSteps = [
@@ -158,6 +159,30 @@ export default function MindBoxTab({ payload, savePayload }) {
     } finally {
       setOrganizeLoading(false);
     }
+  };
+
+  const updateOrganizeResult = (i, field, value) => {
+    setOrganizeResults(prev => prev.map((t, idx) => idx === i ? { ...t, [field]: value } : t));
+  };
+
+  const moveOrganizeResult = (i, dir) => {
+    const j = dir === "up" ? i - 1 : i + 1;
+    setOrganizeResults(prev => {
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+    setOrganizeSelected(prev => {
+      const j2 = dir === "up" ? i - 1 : i + 1;
+      const next = new Set(prev);
+      const iSel = prev.has(i), jSel = prev.has(j2);
+      if (iSel) next.add(j2); else next.delete(j2);
+      if (jSel) next.add(i); else next.delete(i);
+      return next;
+    });
+    if (organizeExpandedIndex === i) setOrganizeExpandedIndex(dir === "up" ? i - 1 : i + 1);
+    else if (organizeExpandedIndex === (dir === "up" ? i - 1 : i + 1)) setOrganizeExpandedIndex(i);
   };
 
   const handleAddOrganizedTasks = () => {
@@ -318,107 +343,196 @@ export default function MindBoxTab({ payload, savePayload }) {
               <button className="btn" onClick={handleOrganizeDump} style={{ marginTop: "16px", padding: "8px 24px" }}>Try again</button>
             </div>
           )}
-          {!organizeLoading && !organizeError && organizeResults.length > 0 && (
-            <>
-              <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", marginBottom: "14px", lineHeight: "1.55" }}>
-                AI sorted your thoughts into tasks. Tap to select which to add.
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
-                {organizeResults.map((t, i) => {
-                  const isSelected = organizeSelected.has(i);
-                  const horizonLabel = { today: "Today", week: "This Week", month: "Month", quarter: "Quarter", halfyear: "6 Months" }[t.horizonLevel] || t.horizonLevel;
-                  return (
-                    <div
-                      key={i}
-                      onClick={() => {
-                        const next = new Set(organizeSelected);
-                        isSelected ? next.delete(i) : next.add(i);
-                        setOrganizeSelected(next);
-                      }}
-                      style={{
-                        background: isSelected ? "var(--accent-ring, rgba(99,102,241,0.08))" : "var(--bg-card)",
-                        border: `1.5px solid ${isSelected ? "var(--accent)" : "var(--border)"}`,
-                        borderRadius: "12px", padding: "12px 14px", cursor: "pointer", transition: "all 0.15s"
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: t.concreteStep ? "6px" : 0 }}>
-                        <span className={`priority-badge ${t.priority.toLowerCase()}`}>{t.priority}</span>
-                        <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", background: "var(--bg-secondary)", padding: "2px 7px", borderRadius: "4px" }}>{horizonLabel}</span>
-                        <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", flex: 1, lineHeight: "1.3" }}>{t.title}</span>
-                        <span style={{ fontSize: "18px", color: isSelected ? "var(--accent)" : "var(--border)", flexShrink: 0 }}>{isSelected ? "✓" : "○"}</span>
+          {!organizeLoading && !organizeError && organizeResults.length > 0 && (() => {
+            const horizonOptions = ["today","week","month","quarter","halfyear"];
+            const horizonLabel = { today: "Today", week: "This Week", month: "Month", quarter: "Quarter", halfyear: "6 Months" };
+            const priorityOptions = ["P1","P2","P3","P4"];
+            return (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <p style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: "1.5", margin: 0 }}>
+                    Tap card to select · ✎ to edit · ↑↓ to reorder
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { setOrganizeSelected(new Set(organizeResults.map((_, i) => i))); }}
+                    style={{ fontSize: "11px", fontWeight: "700", color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: "2px 4px", whiteSpace: "nowrap" }}
+                  >Select all</button>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
+                  {organizeResults.map((t, i) => {
+                    const isSelected = organizeSelected.has(i);
+                    const isExpanded = organizeExpandedIndex === i;
+                    return (
+                      <div
+                        key={i}
+                        style={{
+                          background: isSelected ? "var(--accent-ring, rgba(99,102,241,0.08))" : "var(--bg-card)",
+                          border: `1.5px solid ${isSelected ? "var(--accent)" : "var(--border)"}`,
+                          borderRadius: "12px", overflow: "hidden", transition: "border-color 0.15s"
+                        }}
+                      >
+                        {/* Card header row */}
+                        <div
+                          onClick={() => { const next = new Set(organizeSelected); isSelected ? next.delete(i) : next.add(i); setOrganizeSelected(next); }}
+                          style={{ display: "flex", alignItems: "center", gap: "8px", padding: "11px 12px", cursor: "pointer" }}
+                        >
+                          <span className={`priority-badge ${t.priority.toLowerCase()}`}>{t.priority}</span>
+                          <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", background: "var(--bg-secondary)", padding: "2px 6px", borderRadius: "4px", flexShrink: 0 }}>{horizonLabel[t.horizonLevel] || t.horizonLevel}</span>
+                          <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", flex: 1, lineHeight: "1.3", minWidth: 0 }}>{t.title}</span>
+                          {/* Sort buttons */}
+                          <button onClick={e => { e.stopPropagation(); moveOrganizeResult(i, "up"); }} disabled={i === 0}
+                            style={{ background: "none", border: "none", cursor: i === 0 ? "default" : "pointer", fontSize: "13px", color: i === 0 ? "var(--border)" : "var(--text-muted)", padding: "0 2px", lineHeight: 1, flexShrink: 0 }}>↑</button>
+                          <button onClick={e => { e.stopPropagation(); moveOrganizeResult(i, "down"); }} disabled={i === organizeResults.length - 1}
+                            style={{ background: "none", border: "none", cursor: i === organizeResults.length - 1 ? "default" : "pointer", fontSize: "13px", color: i === organizeResults.length - 1 ? "var(--border)" : "var(--text-muted)", padding: "0 2px", lineHeight: 1, flexShrink: 0 }}>↓</button>
+                          {/* Edit toggle */}
+                          <button onClick={e => { e.stopPropagation(); setOrganizeExpandedIndex(isExpanded ? null : i); }}
+                            style={{ background: isExpanded ? "var(--accent-ring)" : "none", border: "none", cursor: "pointer", fontSize: "14px", color: isExpanded ? "var(--accent)" : "var(--text-muted)", padding: "2px 4px", borderRadius: "5px", lineHeight: 1, flexShrink: 0 }}>✎</button>
+                          <span style={{ fontSize: "16px", color: isSelected ? "var(--accent)" : "var(--border)", flexShrink: 0 }}>{isSelected ? "✓" : "○"}</span>
+                        </div>
+                        {/* Concrete step (if any) */}
+                        {t.concreteStep && !isExpanded && (
+                          <p style={{ fontSize: "11.5px", color: "var(--text-muted)", margin: "0 12px 10px", lineHeight: "1.4" }}>⚡ {t.concreteStep}</p>
+                        )}
+                        {/* Inline edit panel */}
+                        {isExpanded && (
+                          <div style={{ borderTop: "1px solid var(--border)", padding: "12px", display: "flex", flexDirection: "column", gap: "10px", background: "var(--bg-secondary)" }}>
+                            <input
+                              className="text-input"
+                              value={t.title}
+                              onChange={e => updateOrganizeResult(i, "title", e.target.value)}
+                              placeholder="Task title"
+                              style={{ fontSize: "13px", marginBottom: 0 }}
+                              onClick={e => e.stopPropagation()}
+                            />
+                            <input
+                              className="text-input"
+                              value={t.concreteStep || ""}
+                              onChange={e => updateOrganizeResult(i, "concreteStep", e.target.value)}
+                              placeholder="⚡ First action step (optional)"
+                              style={{ fontSize: "12px", marginBottom: 0 }}
+                              onClick={e => e.stopPropagation()}
+                            />
+                            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                              {priorityOptions.map(p => (
+                                <button key={p} type="button" onClick={e => { e.stopPropagation(); updateOrganizeResult(i, "priority", p); }}
+                                  style={{ padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "800", cursor: "pointer", border: t.priority === p ? "2px solid var(--accent)" : "1.5px solid var(--border)", background: t.priority === p ? "var(--accent)" : "var(--bg-card)", color: t.priority === p ? "#fff" : "var(--text-secondary)" }}>
+                                  {p}
+                                </button>
+                              ))}
+                              <span style={{ fontSize: "11px", color: "var(--text-muted)", alignSelf: "center", marginLeft: "4px" }}>priority</span>
+                            </div>
+                            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                              {horizonOptions.map(h => (
+                                <button key={h} type="button" onClick={e => { e.stopPropagation(); updateOrganizeResult(i, "horizonLevel", h); }}
+                                  style={{ padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "700", cursor: "pointer", border: t.horizonLevel === h ? "2px solid var(--accent)" : "1.5px solid var(--border)", background: t.horizonLevel === h ? "var(--accent)" : "var(--bg-card)", color: t.horizonLevel === h ? "#fff" : "var(--text-secondary)" }}>
+                                  {horizonLabel[h]}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      {t.concreteStep && (
-                        <p style={{ fontSize: "11.5px", color: "var(--text-muted)", margin: "0 0 0 0", lineHeight: "1.4" }}>
-                          ⚡ {t.concreteStep}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              <button
-                className="btn"
-                onClick={handleAddOrganizedTasks}
-                disabled={organizeSelected.size === 0}
-                style={{ width: "100%", fontSize: "14px", fontWeight: "700", padding: "13px" }}
-              >
-                Add {organizeSelected.size} task{organizeSelected.size !== 1 ? "s" : ""} to my plan
-              </button>
-            </>
-          )}
+                    );
+                  })}
+                </div>
+                <button
+                  className="btn"
+                  onClick={handleAddOrganizedTasks}
+                  disabled={organizeSelected.size === 0}
+                  style={{ width: "100%", fontSize: "14px", fontWeight: "700", padding: "13px" }}
+                >
+                  Add {organizeSelected.size} task{organizeSelected.size !== 1 ? "s" : ""} to my plan
+                </button>
+              </>
+            );
+          })()}
         </>
       )}
 
       {/* ── Sub-view: 7-Day Progress */}
-      {toolPanel === "progress" && (
-        <>
-          <div className="mindbox-subview-header">
-            <button className="mindbox-back-btn" onClick={() => setToolPanel(null)}>← Back</button>
-            <h2 className="mindbox-subview-title">📊 Progress</h2>
-          </div>
-          <div style={{ textAlign: "center", padding: "20px 0 28px" }}>
-            <span style={{ fontSize: "clamp(52px, 16vw, 80px)", fontWeight: "700", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-mono)" }}>
-              {config.visitStreakCount || 0}
-            </span>
-            <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "6px", marginBottom: "28px" }}>
-              day streak 🔥
+      {toolPanel === "progress" && (() => {
+        const currentXp = Number(config.totalXp) || 0;
+        const xpInLevel = currentXp % 200;
+        const levelNum = Math.floor(currentXp / 200) + 1;
+        const levelProgress = (xpInLevel / 200) * 100;
+        const levelTitles = ["Focus Seed", "Inertia Crusher", "Momentum Builder", "Flow Finder", "Deep Worker", "Focus Master"];
+        const levelTitle = levelTitles[Math.min(levelNum - 1, levelTitles.length - 1)];
+        const totalDone = tasks.filter(t => !t.isDeleted && t.isCompleted).length;
+        const activeDays = bentoDays.filter(d => d.count > 0).length;
+        return (
+          <>
+            <div className="mindbox-subview-header">
+              <button className="mindbox-back-btn" onClick={() => setToolPanel(null)}>← Back</button>
+              <h2 className="mindbox-subview-title">📊 7-Day Progress</h2>
             </div>
-            <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginBottom: "10px" }}>
-              {bentoDays.map((day, i) => {
-                const isToday = i === 6;
-                const done = day.count > 0;
-                return (
-                  <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
-                    <div style={{ width: isToday ? "36px" : "28px", height: isToday ? "36px" : "28px", borderRadius: "50%", background: done ? "var(--accent)" : "var(--bg-secondary)", border: isToday ? "2.5px solid var(--accent)" : "2px solid var(--border)", transition: "all 0.2s" }} />
-                    <span style={{ fontSize: "9px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>{day.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <p style={{ fontSize: "12px", color: "var(--text-secondary)", fontWeight: "600", marginTop: "4px" }}>Filled circle = tasks completed that day</p>
-          </div>
-          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "16px 20px", display: "flex", justifyContent: "space-around", textAlign: "center" }}>
-            <div>
-              <div style={{ fontSize: "24px", fontWeight: "900", color: "var(--accent)", fontFamily: "var(--font-mono)" }}>{config.totalXp || 0}</div>
-              <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "2px" }}>Total XP</div>
-            </div>
-            <div style={{ width: "1px", background: "var(--border)" }} />
-            <div>
-              <div style={{ fontSize: "24px", fontWeight: "900", color: "var(--success, #22c55e)", fontFamily: "var(--font-mono)" }}>
-                {tasks.filter(t => !t.isDeleted && t.isCompleted).length}
+
+            {/* Streak + bento */}
+            <div style={{ textAlign: "center", padding: "16px 0 20px" }}>
+              <span style={{ fontSize: "clamp(48px, 14vw, 72px)", fontWeight: "700", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-mono)" }}>
+                {config.visitStreakCount || 0}
+              </span>
+              <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "4px", marginBottom: "20px" }}>
+                day streak 🔥
               </div>
-              <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "2px" }}>Tasks Done</div>
-            </div>
-            <div style={{ width: "1px", background: "var(--border)" }} />
-            <div>
-              <div style={{ fontSize: "24px", fontWeight: "900", color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
-                {bentoDays.filter(d => d.count > 0).length}
+              <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginBottom: "8px" }}>
+                {bentoDays.map((day, i) => {
+                  const isToday = i === 6;
+                  const count = day.count;
+                  const intensity = count === 0 ? 0 : count < 2 ? 0.45 : count < 4 ? 0.7 : 1;
+                  return (
+                    <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
+                      <div style={{
+                        width: isToday ? "36px" : "28px", height: isToday ? "36px" : "28px",
+                        borderRadius: "50%",
+                        background: count > 0 ? `rgba(99,102,241,${intensity})` : "var(--bg-secondary)",
+                        border: isToday ? "2.5px solid var(--accent)" : "2px solid var(--border)",
+                        transition: "all 0.2s",
+                        display: "flex", alignItems: "center", justifyContent: "center"
+                      }}>
+                        {count > 0 && <span style={{ fontSize: "9px", fontWeight: "800", color: "#fff" }}>{count}</span>}
+                      </div>
+                      <span style={{ fontSize: "9px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>{day.label}</span>
+                    </div>
+                  );
+                })}
               </div>
-              <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "2px" }}>Days This Week</div>
+              <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" }}>Each circle shows tasks completed that day</p>
             </div>
-          </div>
-        </>
-      )}
+
+            {/* Stats row */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "16px" }}>
+              {[
+                { label: "Total XP", value: currentXp, color: "var(--accent)" },
+                { label: "Tasks Done", value: totalDone, color: "var(--success)" },
+                { label: "Days Active", value: activeDays, color: "var(--text-primary)" }
+              ].map(stat => (
+                <div key={stat.label} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px 8px", textAlign: "center" }}>
+                  <div style={{ fontSize: "22px", fontWeight: "900", color: stat.color, fontFamily: "var(--font-mono)", lineHeight: 1 }}>{stat.value}</div>
+                  <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "4px" }}>{stat.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* XP Level card */}
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "16px 18px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "8px" }}>
+                <div>
+                  <span style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-primary)" }}>{levelTitle}</span>
+                  <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--accent)", marginLeft: "6px" }}>L{levelNum}</span>
+                </div>
+                <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{xpInLevel}/200 XP</span>
+              </div>
+              <div className="progress-track" style={{ height: "7px", marginBottom: "12px" }}>
+                <div className="progress-bar" style={{ width: `${levelProgress}%` }} />
+              </div>
+              <div style={{ fontSize: "11.5px", color: "var(--text-muted)", lineHeight: "1.55" }}>
+                <strong style={{ color: "var(--text-secondary)" }}>How you earn XP:</strong> Complete a task (+20 XP) · Complete a Roadmap task (+100 XP) · Finish Morning Ritual (+80 XP). Levels reset every 200 XP — your total keeps growing.
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* ── Sub-view: Morning Ritual */}
       {toolPanel === "ritual" && (
@@ -548,7 +662,7 @@ export default function MindBoxTab({ payload, savePayload }) {
             </button>
             <button className="mindbox-card mindbox-card--rescue" onClick={openRescueMode}>
               <span className="mindbox-card-icon">🌊</span>
-              <span className="mindbox-card-title">Get Unstuck</span>
+              <span className="mindbox-card-title">Rescue Mode</span>
               <span className="mindbox-card-sub">Step-by-step reset</span>
             </button>
             <button className="mindbox-card" onClick={handleBadDayReset}>
@@ -570,7 +684,7 @@ export default function MindBoxTab({ payload, savePayload }) {
         <div className="rescue-overlay" onClick={() => setShowRescue(false)}>
           <div className="rescue-card card" onClick={e => e.stopPropagation()}>
             <span className="rescue-icon">⚠️</span>
-            <h3 className="rescue-title">Getting Unstuck</h3>
+            <h3 className="rescue-title">Rescue Mode</h3>
             <span className="rescue-step-badge">Step {rescueStepIndex + 1} of {rescueSteps.length}</span>
             <p className="rescue-step-text">{rescueSteps[rescueStepIndex]}</p>
             <button className="btn" onClick={handleNextRescueStep} style={{ width: "100%", marginTop: "10px" }}>
