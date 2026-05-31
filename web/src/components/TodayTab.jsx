@@ -4,6 +4,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
+import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
 
 export default function TodayTab({ payload, savePayload }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
@@ -124,7 +125,7 @@ export default function TodayTab({ payload, savePayload }) {
   const [breakdownLoadingUuid, setBreakdownLoadingUuid] = useState(null);
 
   const [editingTaskUuid, setEditingTaskUuid] = useState(null);
-  const [editFields, setEditFields] = useState({ title: "", concreteStep: "", priority: "P2" });
+  const [editFields, setEditFields] = useState({ title: "", concreteStep: "", priority: "P2", reminderOn: false, reminderDate: "", reminderTime: "" });
   const [undoTask, setUndoTask] = useState(null);
   const undoTimeoutRef = useRef(null);
 
@@ -148,6 +149,7 @@ export default function TodayTab({ payload, savePayload }) {
   const handleToggleComplete = (task) => {
     const todayDateStr = getTodayDateString();
     const isCompleted = !task.isCompleted;
+    if (isCompleted && task.reminderAt) cancelReminder(task.uuid);
     const updatedTasks = tasks.map((t) =>
       t.uuid === task.uuid ? { ...t, isCompleted, isNowFocus: false, dateCompletedString: isCompleted ? todayDateStr : null, lastUpdated: Date.now() } : t
     );
@@ -224,12 +226,29 @@ export default function TodayTab({ payload, savePayload }) {
 
   const handleStartEdit = (task) => {
     setEditingTaskUuid(task.uuid);
-    setEditFields({ title: task.title, concreteStep: task.concreteStep || "", priority: task.priority });
+    let reminderDate = "", reminderTime = "";
+    if (task.reminderAt) {
+      const d = new Date(task.reminderAt);
+      reminderDate = d.toISOString().slice(0, 10);
+      reminderTime = `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+    }
+    setEditFields({ title: task.title, concreteStep: task.concreteStep || "", priority: task.priority, reminderOn: !!task.reminderAt, reminderDate, reminderTime });
   };
   const handleCancelEdit = () => setEditingTaskUuid(null);
   const handleSaveEdit = () => {
     if (!editFields.title.trim()) return;
-    savePayload({ ...payload, tasks: tasks.map(t => t.uuid === editingTaskUuid ? { ...t, title: editFields.title.trim(), concreteStep: editFields.concreteStep.trim(), priority: editFields.priority, lastUpdated: Date.now() } : t) });
+    let reminderAt = null;
+    if (editFields.reminderOn && editFields.reminderDate && editFields.reminderTime) {
+      const ts = new Date(`${editFields.reminderDate}T${editFields.reminderTime}`).getTime();
+      if (!isNaN(ts) && ts > Date.now()) reminderAt = ts;
+    }
+    const updatedTask = tasks.find(t => t.uuid === editingTaskUuid);
+    if (updatedTask) {
+      cancelReminder(editingTaskUuid);
+      const saved = { ...updatedTask, title: editFields.title.trim(), concreteStep: editFields.concreteStep.trim(), priority: editFields.priority, reminderAt, lastUpdated: Date.now() };
+      if (reminderAt) scheduleReminder(saved);
+      savePayload({ ...payload, tasks: tasks.map(t => t.uuid === editingTaskUuid ? saved : t) });
+    }
     setEditingTaskUuid(null);
   };
 
@@ -542,7 +561,7 @@ export default function TodayTab({ payload, savePayload }) {
                     <input className="text-input" value={editFields.concreteStep}
                       onChange={e => setEditFields(f => ({ ...f, concreteStep: e.target.value }))}
                       placeholder="Micro step (optional)" style={{ marginBottom: "8px" }} />
-                    <div style={{ display: "flex", gap: "6px", marginBottom: "12px" }}>
+                    <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
                       {["P1","P2","P3","P4"].map(p => (
                         <button key={p} type="button" className={`priority-badge ${p.toLowerCase()}`}
                           onClick={() => setEditFields(f => ({ ...f, priority: p }))}
@@ -551,6 +570,23 @@ export default function TodayTab({ payload, savePayload }) {
                         </button>
                       ))}
                     </div>
+                    {/* Reminder */}
+                    <button
+                      type="button"
+                      onClick={() => setEditFields(f => ({ ...f, reminderOn: !f.reminderOn }))}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "8px 12px", marginBottom: "8px", background: editFields.reminderOn ? "var(--accent-ring, rgba(99,102,241,0.08))" : "var(--bg-secondary)", border: editFields.reminderOn ? "1.5px solid var(--accent)" : "1.5px solid var(--border)", borderRadius: "8px", cursor: "pointer" }}
+                    >
+                      <span style={{ fontSize: "12px", fontWeight: "700", color: editFields.reminderOn ? "var(--accent)" : "var(--text-secondary)" }}>
+                        🔔 {editFields.reminderOn && editFields.reminderDate && editFields.reminderTime ? formatReminderLabel(new Date(`${editFields.reminderDate}T${editFields.reminderTime}`).getTime()) : "Set reminder"}
+                      </span>
+                      <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{editFields.reminderOn ? "remove" : "+"}</span>
+                    </button>
+                    {editFields.reminderOn && (
+                      <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
+                        <input type="date" className="text-input" value={editFields.reminderDate} min={new Date().toISOString().slice(0,10)} onChange={e => setEditFields(f => ({ ...f, reminderDate: e.target.value }))} style={{ flex: 1.4 }} />
+                        <input type="time" className="text-input" value={editFields.reminderTime} onChange={e => setEditFields(f => ({ ...f, reminderTime: e.target.value }))} style={{ flex: 1 }} />
+                      </div>
+                    )}
                     <div style={{ display: "flex", gap: "8px" }}>
                       <button className="btn" onClick={handleSaveEdit} style={{ flex: 1 }}>Save</button>
                       <button className="btn" onClick={handleCancelEdit}
