@@ -353,6 +353,13 @@ export default function TodayTab({ payload, savePayload }) {
     savePayload({ ...payload, tasks: updatedTasks });
   };
 
+  const handleMoveToHorizon = (task, horizon) => {
+    const count = tasks.filter(t => t.horizonLevel === horizon && !t.isDeleted).length;
+    savePayload({ ...payload, tasks: tasks.map(t =>
+      t.uuid === task.uuid ? { ...t, horizonLevel: horizon, isNowFocus: false, orderIndex: count, lastUpdated: Date.now() } : t
+    )});
+  };
+
   const handleMoveTask = (task, direction) => {
     const list = [...remainingTasks];
     const idx = list.findIndex(t => t.uuid === task.uuid);
@@ -751,6 +758,7 @@ export default function TodayTab({ payload, savePayload }) {
                             onEdit={handleStartEdit}
                             onMoveUp={idx > 0 ? t => handleMoveTask(t, "up") : undefined}
                             onMoveDown={idx < remainingTasks.length - 1 ? t => handleMoveTask(t, "down") : undefined}
+                            onMoveToHorizon={handleMoveToHorizon}
                             onBreakdown={handleBreakdown}
                             onSubStepToggle={handleSubStepToggle}
                             onDeleteSubStep={handleDeleteSubStep}

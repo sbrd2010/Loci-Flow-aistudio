@@ -59,11 +59,14 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const chatBottomRef = useRef(null);
+  const prevHistoryLenRef = useRef(chatHistory.length);
 
   useEffect(() => {
-    if (chatBottomRef.current) {
-      chatBottomRef.current.scrollIntoView({ behavior: "smooth" });
+    // Only scroll when a new message is added — not on tab switch / initial mount
+    if (chatHistory.length > prevHistoryLenRef.current || chatLoading) {
+      chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
+    prevHistoryLenRef.current = chatHistory.length;
   }, [chatHistory, chatLoading]);
 
   const handleSendChat = async (e) => {
