@@ -94,10 +94,25 @@ export default function MindBoxTab({ payload, savePayload }) {
 
   const handleBadDayReset = () => {
     setConfirmDialog({
-      message: "Park all active tasks for today?\n\nYou can restore them from the AI Coach tab.",
-      confirmLabel: "Park all", cancelLabel: "Cancel",
+      message: "Park all active tasks for today?\n\nThis is a restart without shame — everything moves to parked. You can restore tasks from the AI Coach tab whenever you're ready.",
+      confirmLabel: "Yes, restart", cancelLabel: "Not now",
       onConfirm: () => {
         savePayload({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, isNowFocus: false } : t) });
+        setConfirmDialog(null);
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
+  };
+
+  const handleCleanSlate = () => {
+    setConfirmDialog({
+      message: "Move today's unfinished tasks to this week?\n\nNothing is lost — you'll find them in Roadmap → This Week. Fresh start, no shame.",
+      confirmLabel: "Fresh start", cancelLabel: "Keep today",
+      onConfirm: () => {
+        savePayload({ ...payload, tasks: tasks.map(t =>
+          (!t.isCompleted && !t.isDeleted && t.horizonLevel === "today")
+            ? { ...t, horizonLevel: "week", lastUpdated: Date.now() } : t
+        )});
         setConfirmDialog(null);
       },
       onCancel: () => setConfirmDialog(null)
@@ -377,7 +392,12 @@ export default function MindBoxTab({ payload, savePayload }) {
             <button className="mindbox-card" onClick={handleBadDayReset}>
               <span className="mindbox-card-icon">🌪️</span>
               <span className="mindbox-card-title">Bad Day Reset</span>
-              <span className="mindbox-card-sub">Park all tasks</span>
+              <span className="mindbox-card-sub">Restart without shame</span>
+            </button>
+            <button className="mindbox-card" onClick={handleCleanSlate} style={{ gridColumn: "span 2" }}>
+              <span className="mindbox-card-icon">🌱</span>
+              <span className="mindbox-card-title">Clean Slate</span>
+              <span className="mindbox-card-sub">Move today's tasks to this week — nothing lost, fresh start</span>
             </button>
           </div>
         </>

@@ -8,8 +8,8 @@ const menuItemStyle = (color) => ({
   color
 });
 
-export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onBreakdown, onSubStepToggle, isBreakingDown }) {
-  const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt } = task;
+export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onBreakdown, onSubStepToggle, isBreakingDown, onToggleMVD }) {
+  const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -46,6 +46,9 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
           <span className={`priority-badge ${priority.toLowerCase()}`}>{priority}</span>
           {isNowFocus && !isCompleted && (
             <span style={{ fontSize: "9px", fontWeight: "800", color: "var(--warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "4px" }}>FOCUS</span>
+          )}
+          {isMVD && !isCompleted && (
+            <span style={{ fontSize: "9px", fontWeight: "800", color: "var(--accent)", background: "var(--accent-ring, rgba(99,102,241,0.10))", padding: "2px 6px", borderRadius: "4px" }}>⭐ MUST-DO</span>
           )}
           <span className="task-title-text" title={title}>{title}</span>
         </div>
@@ -129,6 +132,11 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
               {onPin && (
                 <button onClick={() => { onPin(task); setMenuOpen(false); }} style={menuItemStyle(isNowFocus ? "var(--warning)" : "var(--text-primary)")}>
                   {isNowFocus ? "📍 Unpin Focus" : "📌 Pin to Focus"}
+                </button>
+              )}
+              {onToggleMVD && (
+                <button onClick={() => { onToggleMVD(task); setMenuOpen(false); }} style={menuItemStyle(isMVD ? "var(--text-muted)" : "var(--accent)")}>
+                  {isMVD ? "✕ Remove must-do" : "⭐ Mark as must-do"}
                 </button>
               )}
               {onBreakdown && !isBreakingDown && (
