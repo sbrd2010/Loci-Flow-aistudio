@@ -9,6 +9,75 @@ function isBuiltinProxyKey(key) {
   return key === BUILTIN_PROXY_KEY;
 }
 
+function usageNoticeText(usage) {
+  const warning = usage?.daily?.warning;
+  if (!warning) return "";
+
+  const used = usage.daily.count;
+  const limit = usage.daily.limit;
+  const remaining = usage.daily.remaining;
+
+  if (warning.code === "day_exhausted") {
+    return `Shared built-in AI limit reached for today (${used}/${limit}). Please wait for reset, or add a personal AI key in Settings.`;
+  }
+  if (warning.code === "day_95") {
+    return `Shared built-in AI is almost used up today (${used}/${limit}; ${remaining} left). Please conserve chats now.`;
+  }
+  if (warning.code === "day_80") {
+    return `Shared built-in AI is 80% used today (${used}/${limit}; ${remaining} left). Use it for important chats.`;
+  }
+  if (warning.code === "day_50") {
+    return `Shared built-in AI is 50% used today (${used}/${limit}; ${remaining} left). You can still chat, but keep an eye on usage.`;
+  }
+  return "";
+}
+
+function showUsageToast(usage) {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  const warning = usage?.daily?.warning;
+  const text = usageNoticeText(usage);
+  if (!warning || !text) return;
+
+  const resetAt = usage?.daily?.resetAt || "unknown";
+  const storageKey = `loci_ai_usage_notice_${warning.code}_${resetAt}`;
+  if (localStorage.getItem(storageKey)) return;
+  localStorage.setItem(storageKey, "1");
+
+  document.getElementById("loci-ai-usage-toast")?.remove();
+
+  const toast = document.createElement("div");
+  toast.id = "loci-ai-usage-toast";
+  toast.textContent = text;
+  toast.setAttribute("role", "status");
+  toast.style.cssText = [
+    "position:fixed",
+    "left:16px",
+    "right:16px",
+    "bottom:calc(88px + env(safe-area-inset-bottom, 0px))",
+    "max-width:480px",
+    "margin:0 auto",
+    "z-index:9999",
+    "padding:12px 14px",
+    "border-radius:12px",
+    "border:1px solid var(--border, rgba(255,255,255,.15))",
+    "background:var(--bg-card, #111827)",
+    "color:var(--text-primary, #fff)",
+    "box-shadow:0 8px 32px rgba(0,0,0,.25)",
+    "font:700 12.5px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    "line-height:1.45",
+    "text-align:left",
+  ].join(";");
+
+  document.body.appendChild(toast);
+  window.setTimeout(() => toast.remove(), warning.code === "day_exhausted" ? 12000 : 9000);
+}
+
+function emitAIUsage(usage) {
+  if (!usage || typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("loci-ai-usage", { detail: usage }));
+  showUsageToast(usage);
+}
+
 async function callBuiltinProxy({ systemPrompt, messages, maxTokens }) {
   const user = auth.currentUser;
   if (!user) throw new Error("auth_required");
@@ -24,7 +93,13 @@ async function callBuiltinProxy({ systemPrompt, messages, maxTokens }) {
   });
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.code || `${res.status}`);
+  emitAIUsage(data.usage);
+
+  if (!res.ok) {
+    const err = new Error(data.code || `${res.status}`);
+    err.usage = data.usage;
+    throw err;
+  }
 
   const reply = data.reply || "";
   if (!reply) throw new Error("empty");
