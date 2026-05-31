@@ -1,8 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// In CI: serve the pre-built dist via `vite preview` (port 4173) — more stable than dev server.
-// Locally: reuse whatever server is already running on port 5173.
+// CI uses port 4173 (vite preview, started manually in workflow).
+// Local dev uses port 5173 (vite dev server).
 const isCI = !!process.env.CI;
+const baseURL = isCI ? "http://localhost:4173" : "http://localhost:5173";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -13,7 +14,7 @@ export default defineConfig({
   retries: isCI ? 2 : 0,
   reporter: isCI ? "github" : "list",
   use: {
-    baseURL: isCI ? "http://localhost:4173" : "http://localhost:5173",
+    baseURL,
     trace: "on-first-retry",
   },
   projects: [
@@ -22,17 +23,12 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  webServer: isCI
-    ? {
-        command: "npm run preview",
-        url: "http://localhost:4173",
-        reuseExistingServer: false,
-        timeout: 60_000,
-      }
-    : {
-        command: "npm run dev",
-        url: "http://localhost:5173",
-        reuseExistingServer: true,
-        timeout: 60_000,
-      },
+  // reuseExistingServer: true — in CI the server is pre-started by the workflow;
+  // locally the dev server is typically already running.
+  webServer: {
+    command: isCI ? "npm run preview" : "npm run dev",
+    url: baseURL,
+    reuseExistingServer: true,
+    timeout: 30_000,
+  },
 });

@@ -31,6 +31,21 @@ jobs:
       - name: Build app
         run: npm run build
 
+      - name: Start preview server in background
+        run: npm run preview &
+
+      - name: Wait for preview server to be ready
+        run: |
+          echo "Waiting for http://localhost:4173..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4173 > /dev/null 2>&1; then
+              echo "Server ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Preview server did not start in time" && exit 1
+
       - name: Run E2E smoke tests
         run: npm run test:e2e
         env:
