@@ -2,11 +2,11 @@ import { initializeApp } from "firebase/app";
 import { getDatabase, forceLongPolling } from "firebase/database";
 import { getAuth } from "firebase/auth";
 
-// NOTE: appId should be the real value from Firebase Console →
-// Project Settings → Your apps → Web app → App ID.
-// The current value "loci-web-app" is a placeholder — replace with the real
-// 16-char hex suffix (format: 1:PROJECT_NUMBER:web:HEX16) to avoid
-// Firebase Installations / App Check failures on real devices.
+const firebaseAppId = import.meta.env.VITE_FIREBASE_APP_ID;
+if (!firebaseAppId) {
+  throw new Error("Missing VITE_FIREBASE_APP_ID. Set the real Firebase Web App ID in GitHub secrets and local .env.");
+}
+
 const firebaseConfig = {
   apiKey: "AIzaSyDKCF2WcJk9kI1YovHBTPrWj2QSdmrjUx0",
   authDomain: "loci-flow.firebaseapp.com",
@@ -14,7 +14,7 @@ const firebaseConfig = {
   projectId: "loci-flow",
   storageBucket: "loci-flow.appspot.com",
   messagingSenderId: "862993748883",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:862993748883:web:loci-web-app"
+  appId: firebaseAppId,
 };
 
 // Use HTTP long-polling instead of WebSocket for RTDB connections.
@@ -34,7 +34,7 @@ const measurementId = import.meta.env.VITE_GA_MEASUREMENT_ID || "";
 let _logEvent = null;
 if (measurementId) {
   import("firebase/analytics").then(({ getAnalytics, logEvent, isSupported }) => {
-    isSupported().then(yes => {
+    isSupported().then((yes) => {
       if (yes) _logEvent = (name, params) => logEvent(getAnalytics(app), name, params);
     }).catch(() => {});
   }).catch(() => {});
