@@ -298,6 +298,7 @@ export default function App() {
 
   // ── RTDB loading (real users only) ────────────────────────────────────────
   if (!demoMode && (loading || !payload)) {
+    const isBrave = !!navigator.brave;
     return (
       <div className="signin-overlay">
         <div className="signin-card card" style={{ padding: "40px 20px" }}>
@@ -306,8 +307,10 @@ export default function App() {
             {slowLoading ? "Still connecting…" : "Loading Loci Space…"}
           </h2>
           <p style={{ color: "var(--text-muted)", fontSize: "13px", marginTop: "4px", lineHeight: "1.5" }}>
-            {slowLoading
-              ? "This is taking longer than usual. Check your Wi-Fi or mobile data."
+            {slowLoading && isBrave
+              ? "Brave Shields may be blocking the connection. Tap the lion icon → disable Shields for this site."
+              : slowLoading
+              ? "Taking longer than usual. Check your Wi-Fi or mobile data."
               : "Synchronizing your commitments…"}
           </p>
           {slowLoading && (

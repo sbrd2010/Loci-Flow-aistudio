@@ -76,19 +76,34 @@ export function useSync(uid, email) {
       setIsSyncingFromCache(true); // Show subtle "syncing…" indicator until RTDB responds
     }
 
-    // "Slow loading" warning at 10s — only shown if we have no cached data
+    // "Slow loading" warning at 7s — only shown when no cached data
     const slowWarningId = !hasCachedData
-      ? setTimeout(() => setSlowLoading(true), 10000)
+      ? setTimeout(() => setSlowLoading(true), 7000)
       : null;
 
-    // Hard timeout: 25s (no cache) — shows error + escape options.
-    // With cache, skip the hard timeout entirely; RTDB syncs silently.
+    // Hard timeout: 12s (no cache). Probe network to give a specific error message.
+    // With cache the hard timeout is skipped; RTDB syncs silently in background.
     const connectTimeoutId = !hasCachedData
-      ? setTimeout(() => {
-          setError("Could not reach sync server. Using Brave? Disable Shields for loci-flow.web.app. Otherwise check your Wi-Fi or mobile data and tap Retry.");
+      ? setTimeout(async () => {
+          // Quick network probe: if we can't reach any HTTPS endpoint, it's a connectivity
+          // issue, not a Firebase-specific block.
+          let isOnline = false;
+          try {
+            await fetch("https://www.gstatic.com/generate_204", { method: "HEAD", mode: "no-cors", cache: "no-store", signal: AbortSignal.timeout(3000) });
+            isOnline = true;
+          } catch { /* offline or blocked */ }
+
+          const isBrave = typeof navigator !== "undefined" && !!navigator.brave;
+          if (!isOnline) {
+            setError("No internet connection detected. Check your Wi-Fi or mobile data, then tap Retry.");
+          } else if (isBrave) {
+            setError("Brave Shields is blocking the sync server. Tap the lion icon → disable Shields for loci-flow.web.app, then tap Retry.");
+          } else {
+            setError("Could not reach the sync server. Your network may be blocking the connection. Try a different network or tap Retry.");
+          }
           setLoading(false);
           setSlowLoading(false);
-        }, 25000)
+        }, 12000)
       : null;
 
     const unsubscribe = onValue(userRef, (snapshot) => {
