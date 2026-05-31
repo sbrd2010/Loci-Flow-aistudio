@@ -44,6 +44,20 @@
         "$other": { ".validate": true }
       }
     },
+    "bugReports": {
+      ".read": false,
+      "$reportId": {
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['what', 'userId', 'submittedAt'])",
+        "what":       { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 2000" },
+        "steps":      { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 2000)" },
+        "device":     { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 300)" },
+        "userId":     { ".validate": "newData.isString() && newData.val().length <= 200" },
+        "appVersion": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 80)" },
+        "submittedAt":{ ".validate": "newData.isNumber()" },
+        "$other":     { ".validate": false }
+      }
+    },
     "$other": {
       ".read":  false,
       ".write": false

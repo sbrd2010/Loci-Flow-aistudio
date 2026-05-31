@@ -1,8 +1,15 @@
 // In-memory map of task UUID → timeout ID (cleared on page refresh, re-scheduled on load)
 const scheduled = new Map();
 
+function shouldScheduleReminder(task) {
+  return !!(task?.uuid && task.reminderAt && !task.isCompleted && !task.isDeleted && !task.isParked);
+}
+
 export function scheduleReminder(task) {
-  if (!task.reminderAt || task.isCompleted || task.isDeleted) return;
+  if (!shouldScheduleReminder(task)) {
+    if (task?.uuid) cancelReminder(task.uuid);
+    return;
+  }
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
 
   const delay = task.reminderAt - Date.now();
@@ -34,9 +41,12 @@ export function cancelReminder(uuid) {
 }
 
 export function scheduleAllReminders(tasks = []) {
-  tasks.forEach(t => {
-    if (t.reminderAt && !t.isCompleted && !t.isDeleted) scheduleReminder(t);
-  });
+  const activeUuids = new Set(tasks.filter(t => t.uuid).map(t => t.uuid));
+  // Cancel any scheduled reminders for tasks no longer in the active list
+  for (const [uuid] of scheduled) {
+    if (!activeUuids.has(uuid)) cancelReminder(uuid);
+  }
+  tasks.forEach(t => scheduleReminder(t));
 }
 
 export function formatReminderLabel(ts) {
