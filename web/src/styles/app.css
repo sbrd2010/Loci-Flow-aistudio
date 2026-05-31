@@ -7,8 +7,9 @@
 :root {
   --radius: 16px;
   --radius-sm: 10px;
-  --font-display: 'Outfit', system-ui, -apple-system, sans-serif;
+  --font-display: 'Montserrat', system-ui, -apple-system, sans-serif;
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Space Mono', 'Courier New', monospace;
   --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -38,8 +39,8 @@ html[data-theme="glassy"] {
   --text-muted: #4a7080;
   --border: rgba(255, 255, 255, 0.08);
   --border-focus: #57f1db;
-  --success: #34d399;
-  --warning: #fbbf24;
+  --success: #A5D6A7;
+  --warning: #FF8F00;
   --danger: #f87171;
   --p1-bg: rgba(248, 113, 113, 0.15); --p1-text: #fca5a5;
   --p2-bg: rgba(251, 191, 36, 0.15);  --p2-text: #fcd34d;
@@ -62,7 +63,7 @@ html[data-theme="glassy"] {
 html[data-theme="coral"] {
   --radius: 14px;
   --radius-sm: 8px;
-  --font-display: 'Outfit', system-ui, -apple-system, sans-serif;
+  --font-display: 'Montserrat', system-ui, -apple-system, sans-serif;
   --bg-primary: #FAF9F7;
   --bg-card: #FFFFFF;
   --bg-card-hover: #F5F3EF;
@@ -101,7 +102,7 @@ html[data-theme="coral"] {
 html[data-theme="teal"] {
   --radius: 14px;
   --radius-sm: 8px;
-  --font-display: 'Outfit', system-ui, -apple-system, sans-serif;
+  --font-display: 'Montserrat', system-ui, -apple-system, sans-serif;
   --bg-primary: #faf8ff;
   --bg-card: #ffffff;
   --bg-card-hover: #f0f0fa;
@@ -140,7 +141,7 @@ html[data-theme="teal"] {
 html[data-theme="sage"] {
   --radius: 24px;
   --radius-sm: 16px;
-  --font-display: 'Outfit', system-ui, -apple-system, sans-serif;
+  --font-display: 'Montserrat', system-ui, -apple-system, sans-serif;
   --bg-primary: #faf9f5;
   --bg-card: #f5f4ef;
   --bg-card-hover: #eeecea;
@@ -179,7 +180,7 @@ html[data-theme="sage"] {
 html[data-theme="polymer"] {
   --radius: 12px;
   --radius-sm: 8px;
-  --font-display: 'Outfit', system-ui, -apple-system, sans-serif;
+  --font-display: 'Montserrat', system-ui, -apple-system, sans-serif;
   --bg-primary: #fcf9f3;
   --bg-card: #fdfaf5;
   --bg-card-hover: #f5f0e8;
@@ -296,7 +297,7 @@ html[data-theme="midnight-neon"] {
 html[data-theme="solar-ember"] {
   --radius: 20px;
   --radius-sm: 12px;
-  --font-display: 'Outfit', system-ui, sans-serif;
+  --font-display: 'Montserrat', system-ui, sans-serif;
   --bg-primary: #fcf9f3;
   --bg-card: #ffffff;
   --bg-card-hover: #f6f3ed;
@@ -335,7 +336,7 @@ html[data-theme="solar-ember"] {
 html[data-theme="arctic-frost"] {
   --radius: 16px;
   --radius-sm: 10px;
-  --font-display: 'Outfit', system-ui, sans-serif;
+  --font-display: 'Montserrat', system-ui, sans-serif;
   --bg-primary: #f7f9fb;
   --bg-card: rgba(255, 255, 255, 0.55);
   --bg-card-hover: #e6e8ea;
@@ -374,7 +375,7 @@ html[data-theme="arctic-frost"] {
 html[data-theme="regal-amethyst"] {
   --radius: 18px;
   --radius-sm: 10px;
-  --font-display: 'Outfit', system-ui, sans-serif;
+  --font-display: 'Montserrat', system-ui, sans-serif;
   --bg-primary: #1a0b2e;
   --bg-card: rgba(61, 46, 82, 0.15);
   --bg-card-hover: rgba(65, 50, 87, 0.25);
@@ -1027,10 +1028,11 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .timer-time {
-  font-family: var(--font-display);
-  font-weight: 400;
+  font-family: var(--font-mono);
+  font-weight: 700;
   font-size: 32px;
   color: var(--text-primary);
+  letter-spacing: 0.04em;
 }
 
 .timer-est {
@@ -2885,7 +2887,7 @@ html[data-theme="glassy"] .theme-dropdown {
 html[data-theme="option-a-amie"] {
   --radius: 20px;
   --radius-sm: 14px;
-  --font-display: 'Outfit', system-ui, sans-serif;
+  --font-display: 'Montserrat', system-ui, sans-serif;
   --bg-primary: #fdf4ff;
   --bg-card: rgba(255, 240, 255, 0.65);
   --bg-card-hover: rgba(250, 225, 255, 0.8);
@@ -3002,7 +3004,7 @@ html[data-theme="option-c-zen"] {
 html[data-theme="option-d-bento"] {
   --radius: 18px;
   --radius-sm: 12px;
-  --font-display: 'Outfit', system-ui, sans-serif;
+  --font-display: 'Montserrat', system-ui, sans-serif;
   --bg-primary: #0d1117;
   --bg-card: #161b22;
   --bg-card-hover: #1c2330;
@@ -3080,7 +3082,7 @@ html[data-theme="option-e-slate"] {
 html[data-theme="option-f-chronos"] {
   --radius: 14px;
   --radius-sm: 8px;
-  --font-display: 'Outfit', system-ui, sans-serif;
+  --font-display: 'Montserrat', system-ui, sans-serif;
   --bg-primary: #0a0818;
   --bg-card: rgba(28, 18, 52, 0.72);
   --bg-card-hover: rgba(38, 26, 68, 0.88);

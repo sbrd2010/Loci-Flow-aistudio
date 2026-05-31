@@ -5,29 +5,29 @@ const TOUR_SLIDES = [
     icon: "🎯",
     tab: "Today",
     color: "#3b82f6",
-    title: "Today — your daily task list",
-    desc: "Add what you want to get done today. Pin the most important one to start a focus timer. Complete tasks one by one."
+    title: "Today — your one-screen execution hub",
+    desc: "Add what matters today, pin the most important task to start a focus timer, and work through your list one step at a time. This is where plans become action."
   },
   {
     icon: "🗺",
     tab: "Roadmap",
     color: "#10b981",
-    title: "Roadmap — plan ahead",
-    desc: "Add tasks for this week, this month, or long-term. Drag them to Today when you're ready to act on them."
+    title: "Roadmap — everything in its horizon",
+    desc: "Place tasks where they actually belong — this week, this month, this quarter. Pull them forward to Today when you're ready to act. No more cluttered lists."
   },
   {
     icon: "🧠",
     tab: "Mind Box",
     color: "#8b5cf6",
-    title: "Mind Box — tools & resets",
-    desc: "Track your streaks, do the morning ritual, brain-dump anything on your mind, or hit the rescue button when you're overwhelmed."
+    title: "Mind Box — capture, organise, reset",
+    desc: "Dump anything on your mind, then use AI to sort your thoughts into a structured plan. Use the Morning Ritual to start well. Tap Get Unstuck when you're stuck."
   },
   {
     icon: "🤖",
     tab: "Coach",
     color: "#ec4899",
-    title: "Coach — your AI partner",
-    desc: "Get unstuck with AI-powered coaching personalised to your focus style. Ask anything."
+    title: "Coach — your personal AI partner",
+    desc: "Get a daily briefing, ask for help when you're stuck, and receive coaching tailored to your exact focus challenge. Calm, practical, no hype."
   }
 ];
 
@@ -35,16 +35,36 @@ export default function OnboardingWizard({ payload, savePayload }) {
   const { config = {} } = payload;
   const [currentStep, setCurrentStep] = useState(1);
   const [userName, setUserName] = useState("");
-  const [selectedChallenge, setSelectedChallenge] = useState("starting");
+  const [selectedChallenge, setSelectedChallenge] = useState("overplanner");
   const [selectedMentor, setSelectedMentor] = useState("Mark");
   const [customMentor, setCustomMentor] = useState("");
   const [tourSlide, setTourSlide] = useState(0);
 
   const challenges = [
-    { key: "starting", label: "Starting Inertia (Getting started on tasks)" },
-    { key: "focusing", label: "Focus & Distractions (Staying focused once)" },
-    { key: "execution", label: "Consistent Execution (Following through)" },
-    { key: "tracking", label: "Calendar Overload (Keeping track of time)" }
+    {
+      key: "overplanner",
+      icon: "🎯",
+      label: "Help me decide what to work on",
+      sub: "Too many options — I need clarity on what actually matters right now"
+    },
+    {
+      key: "initiation",
+      icon: "🧊",
+      label: "Help me just start",
+      sub: "I know what to do — starting is the hard part"
+    },
+    {
+      key: "momentum",
+      icon: "⚡",
+      label: "Keep me moving forward",
+      sub: "I work well once I'm going — I just need momentum"
+    },
+    {
+      key: "overwhelmed",
+      icon: "🌱",
+      label: "Help me recover and catch up",
+      sub: "I've fallen behind and need to reset without losing everything"
+    }
   ];
 
   const mentors = ["Mark", "Steve", "Dianna", "Jenny"];
@@ -89,8 +109,8 @@ export default function OnboardingWizard({ payload, savePayload }) {
           <div style={{ display: "flex", flexDirection: "column", gap: "20px", width: "100%" }}>
             <span className="signin-emoji" style={{ fontSize: "40px" }}>🧠</span>
             <h2 style={{ fontSize: "20px", fontWeight: "800" }}>Welcome to Loci Focus</h2>
-            <p style={{ color: "var(--text-secondary)", fontSize: "13px", lineHeight: "1.5" }}>
-              A mindful workspace for focus-driven people.
+            <p style={{ color: "var(--text-secondary)", fontSize: "13px", lineHeight: "1.6" }}>
+              Your calm execution layer — for ambitious people who know what they want but struggle to act on it consistently.
             </p>
             <div className="form-group">
               <label className="form-label" htmlFor="onboard-name-input">What should Loci call you?</label>
@@ -114,30 +134,44 @@ export default function OnboardingWizard({ payload, savePayload }) {
 
         {/* Step 2 — challenge */}
         {currentStep === 2 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px", width: "100%" }}>
-            <h2 style={{ fontSize: "19px", fontWeight: "800", textAlign: "center" }}>What's your biggest focus challenge?</h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
-              {challenges.map((c) => (
-                <div
-                  key={c.key}
-                  className={`challenge-option ${selectedChallenge === c.key ? "selected" : ""}`}
-                  onClick={() => setSelectedChallenge(c.key)}
-                  style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%" }}
-                >
-                  <input
-                    type="radio"
-                    name="onboard-challenge"
-                    checked={selectedChallenge === c.key}
-                    onChange={() => setSelectedChallenge(c.key)}
-                    style={{ cursor: "pointer" }}
-                  />
-                  <span className="challenge-title" style={{ fontSize: "12.5px", fontWeight: "600", textAlign: "left" }}>
-                    {c.label}
-                  </span>
-                </div>
-              ))}
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px", width: "100%" }}>
+            <div>
+              <h2 style={{ fontSize: "19px", fontWeight: "800", textAlign: "center" }}>What do you need most from Loci?</h2>
+              <p style={{ fontSize: "12px", color: "var(--text-muted)", textAlign: "center", marginTop: "4px" }}>Your coaching and AI suggestions will be tailored to this.</p>
             </div>
-            <div style={{ display: "flex", gap: "10px", marginTop: "8px", width: "100%" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
+              {challenges.map((c) => {
+                const isSelected = selectedChallenge === c.key;
+                return (
+                  <div
+                    key={c.key}
+                    onClick={() => setSelectedChallenge(c.key)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "12px",
+                      padding: "12px 14px", borderRadius: "12px", cursor: "pointer",
+                      background: isSelected ? "var(--accent-ring, rgba(99,102,241,0.08))" : "var(--bg-secondary)",
+                      border: `1.5px solid ${isSelected ? "var(--accent)" : "var(--border)"}`,
+                      transition: "all 0.15s"
+                    }}
+                  >
+                    <span style={{ fontSize: "22px", flexShrink: 0 }}>{c.icon}</span>
+                    <div style={{ flex: 1, textAlign: "left" }}>
+                      <div style={{ fontSize: "13px", fontWeight: "700", color: isSelected ? "var(--accent)" : "var(--text-primary)" }}>{c.label}</div>
+                      <div style={{ fontSize: "11.5px", color: "var(--text-muted)", marginTop: "2px", lineHeight: "1.4" }}>{c.sub}</div>
+                    </div>
+                    <div style={{
+                      width: "18px", height: "18px", borderRadius: "50%", flexShrink: 0,
+                      border: isSelected ? "none" : "2px solid var(--border)",
+                      background: isSelected ? "var(--accent)" : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center"
+                    }}>
+                      {isSelected && <span style={{ color: "#fff", fontSize: "10px", fontWeight: "900" }}>✓</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", gap: "10px", width: "100%" }}>
               <button className="btn" onClick={() => setCurrentStep(1)} style={{ flex: 1, background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>Back</button>
               <button className="btn" onClick={() => setCurrentStep(3)} style={{ flex: 1 }}>Continue</button>
             </div>
@@ -192,13 +226,13 @@ export default function OnboardingWizard({ payload, savePayload }) {
           <div style={{ display: "flex", flexDirection: "column", gap: "18px", width: "100%" }}>
             <span className="signin-emoji" style={{ fontSize: "40px" }}>🎉</span>
             <h2 style={{ fontSize: "20px", fontWeight: "800" }}>You're all set, {userName}!</h2>
-            <p style={{ color: "var(--text-secondary)", fontSize: "13px", lineHeight: "1.5" }}>
-              Your personalized focus workspace is ready. Quick tour before you dive in?
+            <p style={{ color: "var(--text-secondary)", fontSize: "13px", lineHeight: "1.6" }}>
+              Your workspace is ready. A quick tour will show you the four tabs — takes about 90 seconds.
             </p>
             <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px", display: "flex", flexDirection: "column", gap: "10px", width: "100%", fontSize: "12.5px", textAlign: "left" }}>
               {[
                 { label: "Name", value: userName },
-                { label: "Focus Challenge", value: selectedChallenge === "starting" ? "Getting started" : selectedChallenge === "focusing" ? "Staying focused" : selectedChallenge === "execution" ? "Following through" : "Tracking time" },
+                { label: "Profile", value: challenges.find(c => c.key === selectedChallenge)?.label || selectedChallenge },
                 { label: "AI Coach", value: effectiveMentor }
               ].map(({ label, value }) => (
                 <div key={label} style={{ display: "flex", justifyContent: "space-between" }}>
@@ -278,7 +312,7 @@ export default function OnboardingWizard({ payload, savePayload }) {
                 </button>
               ) : (
                 <button className="btn" onClick={handleFinish} style={{ flex: 1 }}>
-                  Let's go! 🚀
+                  Start my first session →
                 </button>
               )}
             </div>
