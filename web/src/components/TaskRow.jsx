@@ -112,7 +112,7 @@ function MenuItem({ onClick, color, danger, testId, children }) {
   );
 }
 
-export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, onToggleMVD, onGripTap, isLifted, anyLifted }) {
+export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, onToggleMVD, dragHandleListeners, dragHandleAttributes }) {
   const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -141,25 +141,24 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
       data-testid="task-row"
       style={{
         ...(menuOpen ? { zIndex: 400, position: "relative" } : {}),
-        ...(isLifted ? { background: "var(--accent-ring, rgba(99,102,241,0.08))", border: "1.5px solid var(--accent)", borderRadius: "10px", boxShadow: "0 4px 16px rgba(99,102,241,0.15)" } : {}),
-        ...(anyLifted && !isLifted && !isCompleted ? { cursor: "pointer" } : {})
       }}
-      onClick={anyLifted && !isLifted && !isCompleted && onGripTap ? () => onGripTap(task) : undefined}
     >
       {/* Grip handle */}
-      {onGripTap && !isCompleted && (
+      {dragHandleListeners && (
         <button
-          onClick={e => { e.stopPropagation(); onGripTap(task); }}
-          aria-label={isLifted ? "Cancel reorder" : anyLifted ? "Place here" : "Reorder"}
-          title={isLifted ? "Tap to cancel" : anyLifted ? "Move task here" : "Tap to reorder"}
+          {...dragHandleListeners}
+          {...(dragHandleAttributes || {})}
+          aria-label="Drag to reorder"
+          title="Drag to reorder"
           style={{
-            background: "none", border: "none", cursor: "pointer", flexShrink: 0,
-            color: isLifted ? "var(--accent)" : anyLifted ? "var(--accent)" : "var(--text-muted)",
-            opacity: isLifted ? 1 : anyLifted ? 0.85 : 0.3,
-            padding: anyLifted ? "6px 8px" : "4px 6px",
+            background: "none", border: "none",
+            cursor: "grab",
+            flexShrink: 0,
+            color: "var(--text-muted)",
+            opacity: 0.35,
+            padding: "4px 6px",
             display: "flex", alignItems: "center", justifyContent: "center",
-            transition: "all 0.15s", borderRadius: "6px",
-            ...(anyLifted && !isLifted ? { background: "var(--accent-ring, rgba(99,102,241,0.08))" } : {})
+            touchAction: "none",
           }}
         >
           <GripIcon />
@@ -248,7 +247,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
 
       {/* ⋮ context menu */}
       {hasActions ? (
-        <div ref={menuRef} style={{ position: "relative", flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+        <div ref={menuRef} style={{ position: "relative", flexShrink: 0 }}>
           <button
             onClick={() => setMenuOpen(o => !o)}
             aria-label="Task options"

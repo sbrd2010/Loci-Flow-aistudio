@@ -5,6 +5,33 @@ import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
+import {
+  DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor,
+  useSensor, useSensors, DragOverlay
+} from "@dnd-kit/core";
+import {
+  SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy,
+  useSortable, arrayMove
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+function SortableTaskItem({ id, children }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0 : 1,
+        position: "relative",
+        zIndex: isDragging ? 0 : "auto",
+      }}
+    >
+      {children({ dragHandleListeners: listeners, dragHandleAttributes: attributes })}
+    </div>
+  );
+}
 
 export default function TodayTab({ payload, savePayload }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
@@ -15,7 +42,13 @@ export default function TodayTab({ payload, savePayload }) {
   const [showRescue, setShowRescue] = useState(false);
   const [rescueStep, setRescueStep] = useState(0);
   const [isMVDMode, setIsMVDMode] = useState(false);
-  const [liftedTaskUuid, setLiftedTaskUuid] = useState(null);
+  const [activeTaskId, setActiveTaskId] = useState(null);
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   const rescueSteps = [
     "Take one deep breath. Breathe in for 4, hold for 4, out for 4.",
@@ -305,36 +338,29 @@ export default function TodayTab({ payload, savePayload }) {
     savePayload({ ...payload, tasks: updatedTasks });
   };
 
-  const getTaskKey = (t) => t.uuid || String(t.id);
-
-  const handleGripTap = (task) => {
-    if (!liftedTaskUuid) {
-      setLiftedTaskUuid(getTaskKey(task));
-    } else if (liftedTaskUuid === getTaskKey(task)) {
-      setLiftedTaskUuid(null);
-    } else {
-      const fromIdx = remainingTasks.findIndex(t => getTaskKey(t) === liftedTaskUuid);
-      const toIdx = remainingTasks.findIndex(t => getTaskKey(t) === getTaskKey(task));
-      if (fromIdx === -1) { setLiftedTaskUuid(null); return; }
-      const list = [...remainingTasks];
-      [list[fromIdx], list[toIdx]] = [list[toIdx], list[fromIdx]];
-      const orderMap = new Map(list.map((t, i) => [getTaskKey(t), i]));
-      savePayload({ ...payload, tasks: tasks.map(t =>
-        orderMap.has(getTaskKey(t)) ? { ...t, orderIndex: orderMap.get(getTaskKey(t)), lastUpdated: Date.now() } : t
-      )});
-      setLiftedTaskUuid(null);
-    }
-  };
-
   const handleMoveTask = (task, direction) => {
-    const taskKey = getTaskKey(task);
     const list = [...remainingTasks];
-    const idx = list.findIndex(t => getTaskKey(t) === taskKey);
-    if (idx === -1) return;
+    const idx = list.findIndex(t => t.uuid === task.uuid);
     const swapIdx = direction === "up" ? idx - 1 : idx + 1;
     if (swapIdx < 0 || swapIdx >= list.length) return;
     [list[idx], list[swapIdx]] = [list[swapIdx], list[idx]];
-    const orderMap = new Map(list.map((t, i) => [getTaskKey(t), i]));
+    // Re-assign clean sequential orderIndex to all visible tasks — heals any existing drift
+    const orderMap = new Map(list.map((t, i) => [t.uuid, i]));
+    savePayload({ ...payload, tasks: tasks.map(t =>
+      orderMap.has(t.uuid) ? { ...t, orderIndex: orderMap.get(t.uuid), lastUpdated: Date.now() } : t
+    )});
+  };
+
+  const getTaskKey = (t) => t.uuid || String(t.id);
+
+  const handleDragEnd = ({ active, over }) => {
+    setActiveTaskId(null);
+    if (!over || active.id === over.id) return;
+    const oldIndex = remainingTasks.findIndex(t => getTaskKey(t) === active.id);
+    const newIndex = remainingTasks.findIndex(t => getTaskKey(t) === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove([...remainingTasks], oldIndex, newIndex);
+    const orderMap = new Map(reordered.map((t, i) => [getTaskKey(t), i]));
     savePayload({ ...payload, tasks: tasks.map(t =>
       orderMap.has(getTaskKey(t)) ? { ...t, orderIndex: orderMap.get(getTaskKey(t)), lastUpdated: Date.now() } : t
     )});
@@ -636,80 +662,113 @@ export default function TodayTab({ payload, savePayload }) {
               </p>
             </div>
           )}
-          {liftedTaskUuid && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "var(--accent-ring, rgba(99,102,241,0.08))", border: "1px solid var(--accent)", borderRadius: "8px", marginBottom: "6px" }}>
-              <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--accent)" }}>
-                ↕ Tap any task to swap positions
-              </span>
-              <button onClick={() => setLiftedTaskUuid(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "12px", color: "var(--text-muted)", fontWeight: "700", padding: "0 4px" }}>
-                Cancel
-              </button>
-            </div>
-          )}
           {todayTasksFiltered.length > 0 && (
             <>
-              {remainingTasks.map((task, idx) => (
-                editingTaskUuid === task.uuid ? (
-                  <div className="task-edit-card" key={task.uuid}>
-                    <input className="text-input" value={editFields.title}
-                      onChange={e => setEditFields(f => ({ ...f, title: e.target.value }))}
-                      placeholder="Task title" style={{ marginBottom: "8px" }} />
-                    <input className="text-input" value={editFields.concreteStep}
-                      onChange={e => setEditFields(f => ({ ...f, concreteStep: e.target.value }))}
-                      placeholder="Micro step (optional)" style={{ marginBottom: "8px" }} />
-                    <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
-                      {["P1","P2","P3","P4"].map(p => (
-                        <button key={p} type="button" className={`priority-badge ${p.toLowerCase()}`}
-                          onClick={() => setEditFields(f => ({ ...f, priority: p }))}
-                          style={{ border: editFields.priority === p ? "2px solid var(--accent)" : "2px solid transparent", cursor: "pointer", padding: "4px 10px", opacity: editFields.priority === p ? 1 : 0.55 }}>
-                          {p}
-                        </button>
-                      ))}
-                    </div>
-                    {/* Reminder */}
-                    <button
-                      type="button"
-                      onClick={() => setEditFields(f => ({ ...f, reminderOn: !f.reminderOn }))}
-                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "8px 12px", marginBottom: "8px", background: editFields.reminderOn ? "var(--accent-ring, rgba(99,102,241,0.08))" : "var(--bg-secondary)", border: editFields.reminderOn ? "1.5px solid var(--accent)" : "1.5px solid var(--border)", borderRadius: "8px", cursor: "pointer" }}
-                    >
-                      <span style={{ fontSize: "12px", fontWeight: "700", color: editFields.reminderOn ? "var(--accent)" : "var(--text-secondary)" }}>
-                        🔔 {editFields.reminderOn && editFields.reminderDate && editFields.reminderTime ? formatReminderLabel(new Date(`${editFields.reminderDate}T${editFields.reminderTime}`).getTime()) : "Set reminder"}
-                      </span>
-                      <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{editFields.reminderOn ? "remove" : "+"}</span>
-                    </button>
-                    {editFields.reminderOn && (
-                      <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
-                        <input type="date" className="text-input" value={editFields.reminderDate} min={new Date().toISOString().slice(0,10)} onChange={e => setEditFields(f => ({ ...f, reminderDate: e.target.value }))} style={{ flex: 1.4 }} />
-                        <input type="time" className="text-input" value={editFields.reminderTime} onChange={e => setEditFields(f => ({ ...f, reminderTime: e.target.value }))} style={{ flex: 1 }} />
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={({ active }) => setActiveTaskId(active.id)}
+                onDragEnd={handleDragEnd}
+                onDragCancel={() => setActiveTaskId(null)}
+              >
+                <SortableContext
+                  items={remainingTasks.map(t => getTaskKey(t))}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {remainingTasks.map((task, idx) => (
+                    editingTaskUuid === task.uuid ? (
+                      <div key={getTaskKey(task)}>
+                        <div className="task-edit-card">
+                          <input className="text-input" value={editFields.title}
+                            onChange={e => setEditFields(f => ({ ...f, title: e.target.value }))}
+                            placeholder="Task title" style={{ marginBottom: "8px" }} />
+                          <input className="text-input" value={editFields.concreteStep}
+                            onChange={e => setEditFields(f => ({ ...f, concreteStep: e.target.value }))}
+                            placeholder="Micro step (optional)" style={{ marginBottom: "8px" }} />
+                          <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
+                            {["P1","P2","P3","P4"].map(p => (
+                              <button key={p} type="button" className={`priority-badge ${p.toLowerCase()}`}
+                                onClick={() => setEditFields(f => ({ ...f, priority: p }))}
+                                style={{ border: editFields.priority === p ? "2px solid var(--accent)" : "2px solid transparent", cursor: "pointer", padding: "4px 10px", opacity: editFields.priority === p ? 1 : 0.55 }}>
+                                {p}
+                              </button>
+                            ))}
+                          </div>
+                          {/* Reminder */}
+                          <button
+                            type="button"
+                            onClick={() => setEditFields(f => ({ ...f, reminderOn: !f.reminderOn }))}
+                            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "8px 12px", marginBottom: "8px", background: editFields.reminderOn ? "var(--accent-ring, rgba(99,102,241,0.08))" : "var(--bg-secondary)", border: editFields.reminderOn ? "1.5px solid var(--accent)" : "1.5px solid var(--border)", borderRadius: "8px", cursor: "pointer" }}
+                          >
+                            <span style={{ fontSize: "12px", fontWeight: "700", color: editFields.reminderOn ? "var(--accent)" : "var(--text-secondary)" }}>
+                              🔔 {editFields.reminderOn && editFields.reminderDate && editFields.reminderTime ? formatReminderLabel(new Date(`${editFields.reminderDate}T${editFields.reminderTime}`).getTime()) : "Set reminder"}
+                            </span>
+                            <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{editFields.reminderOn ? "remove" : "+"}</span>
+                          </button>
+                          {editFields.reminderOn && (
+                            <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
+                              <input type="date" className="text-input" value={editFields.reminderDate} min={new Date().toISOString().slice(0,10)} onChange={e => setEditFields(f => ({ ...f, reminderDate: e.target.value }))} style={{ flex: 1.4 }} />
+                              <input type="time" className="text-input" value={editFields.reminderTime} onChange={e => setEditFields(f => ({ ...f, reminderTime: e.target.value }))} style={{ flex: 1 }} />
+                            </div>
+                          )}
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            <button className="btn" onClick={handleSaveEdit} style={{ flex: 1 }}>Save</button>
+                            <button className="btn" onClick={handleCancelEdit}
+                              style={{ flex: 1, background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>Cancel</button>
+                          </div>
+                        </div>
                       </div>
-                    )}
-                    <div style={{ display: "flex", gap: "8px" }}>
-                      <button className="btn" onClick={handleSaveEdit} style={{ flex: 1 }}>Save</button>
-                      <button className="btn" onClick={handleCancelEdit}
-                        style={{ flex: 1, background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>Cancel</button>
-                    </div>
-                  </div>
-                ) : (
-                  <TaskRow
-                    key={task.uuid}
-                    task={task}
-                    onToggleComplete={handleToggleComplete}
-                    onPin={handlePinTask}
-                    onDelete={handleDeleteTask}
-                    onEdit={handleStartEdit}
-                    onMoveUp={idx > 0 ? t => handleMoveTask(t, "up") : undefined}
-                    onMoveDown={idx < remainingTasks.length - 1 ? t => handleMoveTask(t, "down") : undefined}
-                    onBreakdown={handleBreakdown}
-                    onSubStepToggle={handleSubStepToggle}
-                    onDeleteSubStep={handleDeleteSubStep}
-                    isBreakingDown={breakdownLoadingUuid === task.uuid}
-                    onToggleMVD={handleToggleMVD}
-                    onGripTap={handleGripTap}
-                    isLifted={liftedTaskUuid === getTaskKey(task)}
-                    anyLifted={!!liftedTaskUuid}
-                  />
-                )
-              ))}
+                    ) : (
+                      <SortableTaskItem key={getTaskKey(task)} id={getTaskKey(task)}>
+                        {({ dragHandleListeners, dragHandleAttributes }) => (
+                          <TaskRow
+                            task={task}
+                            onToggleComplete={handleToggleComplete}
+                            onPin={handlePinTask}
+                            onDelete={handleDeleteTask}
+                            onEdit={handleStartEdit}
+                            onMoveUp={idx > 0 ? t => handleMoveTask(t, "up") : undefined}
+                            onMoveDown={idx < remainingTasks.length - 1 ? t => handleMoveTask(t, "down") : undefined}
+                            onBreakdown={handleBreakdown}
+                            onSubStepToggle={handleSubStepToggle}
+                            onDeleteSubStep={handleDeleteSubStep}
+                            isBreakingDown={breakdownLoadingUuid === task.uuid}
+                            onToggleMVD={handleToggleMVD}
+                            dragHandleListeners={dragHandleListeners}
+                            dragHandleAttributes={dragHandleAttributes}
+                          />
+                        )}
+                      </SortableTaskItem>
+                    )
+                  ))}
+                </SortableContext>
+                <DragOverlay dropAnimation={null}>
+                  {activeTaskId ? (() => {
+                    const activeTask = remainingTasks.find(t => getTaskKey(t) === activeTaskId);
+                    if (!activeTask) return null;
+                    return (
+                      <div style={{
+                        background: "var(--bg-card)",
+                        border: "1.5px solid var(--accent)",
+                        borderRadius: "12px",
+                        padding: "12px 14px",
+                        boxShadow: "0 12px 40px rgba(0,0,0,0.28)",
+                        transform: "rotate(1deg) scale(1.02)",
+                        opacity: 0.96,
+                        fontSize: "14px",
+                        fontWeight: "700",
+                        color: "var(--text-primary)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px"
+                      }}>
+                        <span style={{ color: "var(--text-muted)", fontSize: "12px" }}>⠿</span>
+                        {activeTask.title}
+                      </div>
+                    );
+                  })() : null}
+                </DragOverlay>
+              </DndContext>
               {completedTasks.length > 0 && (
                 <>
                   <div className="completed-section-title">Completed</div>
