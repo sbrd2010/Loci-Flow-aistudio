@@ -34,7 +34,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   return (
     <div className={`task-row ${isCompleted ? "completed" : ""}`} data-testid="task-row" style={menuOpen ? { zIndex: 400, position: "relative" } : undefined}>
       {/* Checkbox */}
-      <div className="checkbox-container" onClick={() => onToggleComplete(task)}>
+      <div className="checkbox-container" data-testid="task-checkbox" onClick={() => onToggleComplete(task)}>
         <div className={`custom-checkbox ${isCompleted ? "checked" : ""}`}>
           {isCompleted && <span className="checkmark">✓</span>}
         </div>
@@ -108,6 +108,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
           <button
             onClick={() => setMenuOpen(o => !o)}
             aria-label="Task options"
+            data-testid="task-menu-btn"
             style={{
               background: "var(--bg-secondary)", border: "1.5px solid var(--border)",
               cursor: "pointer", fontSize: "16px", fontWeight: "900",
@@ -136,7 +137,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
                 </button>
               )}
               {onEdit && (
-                <button onClick={() => { onEdit(task); setMenuOpen(false); }} style={menuItemStyle("var(--text-primary)")}>
+                <button data-testid="task-menu-edit" onClick={() => { onEdit(task); setMenuOpen(false); }} style={menuItemStyle("var(--text-primary)")}>
                   ✏ Edit task
                 </button>
               )}
@@ -153,7 +154,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
               )}
               {onDelete && <div style={{ height: "1px", background: "var(--border)" }} />}
               {onDelete && (
-                <button onClick={() => { onDelete(task); setMenuOpen(false); }} style={menuItemStyle("var(--danger)")}>
+                <button data-testid="task-menu-delete" onClick={() => { onDelete(task); setMenuOpen(false); }} style={menuItemStyle("var(--danger)")}>
                   🗑 Delete
                 </button>
               )}

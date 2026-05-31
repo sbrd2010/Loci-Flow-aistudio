@@ -335,6 +335,7 @@ export default function App() {
       {(activeTab === "today" || activeTab === "roadmap") && (
         <button
           className="fab"
+          data-testid="fab-add-task"
           onClick={() => openAddTask(activeTab === "roadmap" ? "week" : "today")}
           title="Add Focus Commit"
         >
