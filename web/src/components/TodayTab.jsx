@@ -63,31 +63,27 @@ export default function TodayTab({ payload, savePayload }) {
   }, [timerSecondsLeft, isTimerRunning]);
 
   const QUOTES = [
-    { quote: "Either you run the day or the day runs you.", author: "Jim Rohn" },
     { quote: "The secret of getting ahead is getting started.", author: "Mark Twain" },
-    { quote: "Procrastination is the thief of time — collar him.", author: "Charles Dickens" },
-    { quote: "You can't build a reputation on what you're going to do.", author: "Henry Ford" },
     { quote: "A goal without a plan is just a wish.", author: "Antoine de Saint-Exupéry" },
-    { quote: "Focus on being productive instead of busy.", author: "Tim Ferriss" },
     { quote: "Schedule your priorities, don't prioritize your schedule.", author: "Stephen Covey" },
     { quote: "Until we can manage time, we can manage nothing else.", author: "Peter Drucker" },
     { quote: "Lost time is never found again.", author: "Benjamin Franklin" },
-    { quote: "Do the hard jobs first. The easy jobs take care of themselves.", author: "Dale Carnegie" },
     { quote: "An hour of planning can save you 10 hours of doing.", author: "Dale Carnegie" },
     { quote: "Deep work is the ability to focus without distraction.", author: "Cal Newport" },
     { quote: "The main thing is to keep the main thing the main thing.", author: "Stephen Covey" },
     { quote: "Start where you are. Use what you have. Do what you can.", author: "Arthur Ashe" },
-    { quote: "The way to get started is to quit talking and begin doing.", author: "Walt Disney" },
-    { quote: "What gets measured gets managed.", author: "Peter Drucker" },
-    { quote: "You don't have to be great to start, but you must start to be great.", author: "Zig Ziglar" },
-    { quote: "Don't count the days — make the days count.", author: "Muhammad Ali" },
     { quote: "Clarity about what matters gives clarity about what does not.", author: "Cal Newport" },
     { quote: "Absorb what is useful, discard what is not.", author: "Bruce Lee" },
-    { quote: "Your future is created by what you do today, not tomorrow.", author: "Robert Kiyosaki" },
-    { quote: "Someday is not a day of the week.", author: "Janet Dailey" },
     { quote: "Begin. The rest is easy.", author: "Seneca" },
     { quote: "Action is the antidote to despair.", author: "Joan Baez" },
-    { quote: "Execution is the strategy.", author: "Anonymous" },
+    { quote: "Progress, not perfection.", author: "Anonymous" },
+    { quote: "What you do every day matters more than what you do once in a while.", author: "Gretchen Rubin" },
+    { quote: "You don't rise to the level of your goals. You fall to the level of your systems.", author: "James Clear" },
+    { quote: "Almost everything will work again if you unplug it for a few minutes — including you.", author: "Anne Lamott" },
+    { quote: "Rest is not idleness.", author: "John Lubbock" },
+    { quote: "It's not about time management. It's about attention management.", author: "Adam Grant" },
+    { quote: "The two most powerful warriors are patience and time.", author: "Leo Tolstoy" },
+    { quote: "Do less, but do it well.", author: "Anonymous" },
   ];
   const currentQuote = QUOTES[Math.floor(Date.now() / (2 * 3600 * 1000)) % QUOTES.length];
 
@@ -759,7 +755,7 @@ export default function TodayTab({ payload, savePayload }) {
         <div className="rescue-overlay" onClick={() => setShowRescue(false)}>
           <div className="rescue-card card" onClick={e => e.stopPropagation()}>
             <span className="rescue-icon">⚠️</span>
-            <h3 className="rescue-title">Executive Freeze Rescue Pod</h3>
+            <h3 className="rescue-title">Getting Unstuck</h3>
             <span className="rescue-step-badge">Step {rescueStep + 1} of {rescueSteps.length}</span>
             <p className="rescue-step-text">{rescueSteps[rescueStep]}</p>
             <button
@@ -770,7 +766,7 @@ export default function TodayTab({ payload, savePayload }) {
               }}
               style={{ width: "100%", marginTop: "10px" }}
             >
-              {rescueStep === rescueSteps.length - 1 ? "I'm ready — back to the task!" : "Next Step"}
+              {rescueStep === rescueSteps.length - 1 ? "I'm ready to try again" : "Next →"}
             </button>
             <button className="btn btn-cancel" onClick={() => setShowRescue(false)} style={{ width: "100%" }}>
               Close

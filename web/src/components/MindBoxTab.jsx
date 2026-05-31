@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
-import { getAIKeys } from "../utils/aiCall";
+import { getAIKeys, callAI } from "../utils/aiCall";
 
 export default function MindBoxTab({ payload, savePayload }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
@@ -21,6 +21,10 @@ export default function MindBoxTab({ payload, savePayload }) {
   const [rescueTask, setRescueTask] = useState(null);
   const [brainDumpText, setBrainDumpText] = useState("");
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [organizeLoading, setOrganizeLoading] = useState(false);
+  const [organizeResults, setOrganizeResults] = useState([]);
+  const [organizeSelected, setOrganizeSelected] = useState(new Set());
+  const [organizeError, setOrganizeError] = useState("");
 
   // ── Ritual data ────────────────────────────────────────────────────────────
   const ritualSteps = [
@@ -67,6 +71,10 @@ export default function MindBoxTab({ payload, savePayload }) {
       setTimeout(() => setRitualSuccess(false), 3500);
     }
   }, [ritualDone]);
+
+  // ── AI keys ────────────────────────────────────────────────────────────────
+  const { groqKey, geminiKey } = getAIKeys();
+  const hasAnyKey = !!(groqKey || geminiKey);
 
   // ── Helper data ────────────────────────────────────────────────────────────
   const getBentoDays = () => {
@@ -117,6 +125,75 @@ export default function MindBoxTab({ payload, savePayload }) {
       },
       onCancel: () => setConfirmDialog(null)
     });
+  };
+
+  const handleOrganizeDump = async () => {
+    const dumpItems = (payload.brainDump || []).map(i => i.text);
+    if (!dumpItems.length) return;
+    setOrganizeLoading(true);
+    setOrganizeResults([]);
+    setOrganizeError("");
+    setOrganizeSelected(new Set());
+    setToolPanel("organize");
+
+    const prompt = `Here are raw thoughts from a brain dump:\n${dumpItems.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\nOrganize each thought into a structured task. For each one determine:\n- title: specific, outcome-oriented (max 60 chars)\n- horizonLevel: "today" (urgent/time-sensitive), "week" (most items), "month", or "quarter"\n- priority: "P1" (urgent), "P2" (important), "P3" (normal), "P4" (quick <15 min)\n- concreteStep: the single easiest first action to start it (max 60 chars)\n\nRules: default to "week" unless clearly urgent. Never use the word "ADHD".\n\nReturn ONLY a JSON array, no markdown:\n[{"title":"...","horizonLevel":"week","priority":"P3","concreteStep":"..."}]`;
+
+    try {
+      const raw = await callAI({
+        groqKey, geminiKey,
+        systemPrompt: "You are a productivity coach. Respond ONLY with a valid JSON array, no markdown.",
+        messages: [{ role: "user", content: prompt }],
+        maxTokens: 800
+      });
+      const cleaned = raw.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      if (!Array.isArray(parsed)) throw new Error("invalid");
+      const valid = parsed
+        .filter(t => t.title && ["today","week","month","quarter","halfyear"].includes(t.horizonLevel) && ["P1","P2","P3","P4"].includes(t.priority))
+        .slice(0, 10);
+      setOrganizeResults(valid);
+      setOrganizeSelected(new Set(valid.map((_, i) => i)));
+    } catch (_) {
+      setOrganizeError("Couldn't organize — try again, or add tasks manually.");
+    } finally {
+      setOrganizeLoading(false);
+    }
+  };
+
+  const handleAddOrganizedTasks = () => {
+    const toAdd = organizeResults.filter((_, i) => organizeSelected.has(i));
+    if (!toAdd.length) return;
+    const baseCounts = {};
+    const newTasks = toAdd.map((t, i) => {
+      const hl = t.horizonLevel;
+      if (baseCounts[hl] === undefined)
+        baseCounts[hl] = (payload.tasks || []).filter(x => x.horizonLevel === hl && !x.isDeleted).length;
+      const orderIndex = baseCounts[hl]++;
+      return {
+        id: Date.now() + i,
+        userId: payload.config?.userId || "",
+        uuid: safeUUID(),
+        title: t.title,
+        concreteStep: t.concreteStep || "Start with the first step",
+        horizonLevel: hl,
+        priority: t.priority,
+        category: "Personal",
+        timeEstimateMinutes: 25,
+        deadlineTimestamp: null,
+        reminderAt: null,
+        isCompleted: false,
+        isParked: false,
+        isNowFocus: false,
+        orderIndex,
+        dateCompletedString: null,
+        isDeleted: false,
+        lastUpdated: Date.now()
+      };
+    });
+    savePayload({ ...payload, tasks: [...(payload.tasks || []), ...newTasks] });
+    setToolPanel(null);
+    setOrganizeResults([]);
+    setOrganizeSelected(new Set());
   };
 
   const handleBrainDumpSubmit = (e) => {
@@ -218,6 +295,76 @@ export default function MindBoxTab({ payload, savePayload }) {
                 </div>
               ))}
             </div>
+          )}
+        </>
+      )}
+
+      {/* ── Sub-view: AI Organize Dump */}
+      {toolPanel === "organize" && (
+        <>
+          <div className="mindbox-subview-header">
+            <button className="mindbox-back-btn" onClick={() => { setToolPanel(null); setOrganizeResults([]); setOrganizeError(""); }}>← Back</button>
+            <h2 className="mindbox-subview-title">✨ Organize Dump</h2>
+          </div>
+          {organizeLoading && (
+            <div style={{ textAlign: "center", padding: "48px 0" }}>
+              <p style={{ fontSize: "15px", fontWeight: "700", color: "var(--accent)" }}>✨ Organizing your thoughts…</p>
+              <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "8px" }}>This takes a few seconds</p>
+            </div>
+          )}
+          {!organizeLoading && organizeError && (
+            <div style={{ textAlign: "center", padding: "32px 0" }}>
+              <p style={{ fontSize: "13px", color: "var(--danger)", fontWeight: "600" }}>{organizeError}</p>
+              <button className="btn" onClick={handleOrganizeDump} style={{ marginTop: "16px", padding: "8px 24px" }}>Try again</button>
+            </div>
+          )}
+          {!organizeLoading && !organizeError && organizeResults.length > 0 && (
+            <>
+              <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", marginBottom: "14px", lineHeight: "1.55" }}>
+                AI sorted your thoughts into tasks. Tap to select which to add.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
+                {organizeResults.map((t, i) => {
+                  const isSelected = organizeSelected.has(i);
+                  const horizonLabel = { today: "Today", week: "This Week", month: "Month", quarter: "Quarter", halfyear: "6 Months" }[t.horizonLevel] || t.horizonLevel;
+                  return (
+                    <div
+                      key={i}
+                      onClick={() => {
+                        const next = new Set(organizeSelected);
+                        isSelected ? next.delete(i) : next.add(i);
+                        setOrganizeSelected(next);
+                      }}
+                      style={{
+                        background: isSelected ? "var(--accent-ring, rgba(99,102,241,0.08))" : "var(--bg-card)",
+                        border: `1.5px solid ${isSelected ? "var(--accent)" : "var(--border)"}`,
+                        borderRadius: "12px", padding: "12px 14px", cursor: "pointer", transition: "all 0.15s"
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: t.concreteStep ? "6px" : 0 }}>
+                        <span className={`priority-badge ${t.priority.toLowerCase()}`}>{t.priority}</span>
+                        <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", background: "var(--bg-secondary)", padding: "2px 7px", borderRadius: "4px" }}>{horizonLabel}</span>
+                        <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", flex: 1, lineHeight: "1.3" }}>{t.title}</span>
+                        <span style={{ fontSize: "18px", color: isSelected ? "var(--accent)" : "var(--border)", flexShrink: 0 }}>{isSelected ? "✓" : "○"}</span>
+                      </div>
+                      {t.concreteStep && (
+                        <p style={{ fontSize: "11.5px", color: "var(--text-muted)", margin: "0 0 0 0", lineHeight: "1.4" }}>
+                          ⚡ {t.concreteStep}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                className="btn"
+                onClick={handleAddOrganizedTasks}
+                disabled={organizeSelected.size === 0}
+                style={{ width: "100%", fontSize: "14px", fontWeight: "700", padding: "13px" }}
+              >
+                Add {organizeSelected.size} task{organizeSelected.size !== 1 ? "s" : ""} to my plan
+              </button>
+            </>
           )}
         </>
       )}
@@ -356,6 +503,21 @@ export default function MindBoxTab({ payload, savePayload }) {
                 disabled={dumpCount >= 50} />
               <button type="submit" className="braindump-submit" disabled={dumpCount >= 50}>➔</button>
             </form>
+            {dumpCount > 0 && hasAnyKey && (
+              <button
+                type="button"
+                onClick={handleOrganizeDump}
+                disabled={organizeLoading}
+                style={{
+                  marginTop: "10px", width: "100%", padding: "9px",
+                  background: "var(--accent-ring, rgba(99,102,241,0.08))", color: "var(--accent)",
+                  border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)",
+                  fontSize: "13px", fontWeight: "700", cursor: "pointer"
+                }}
+              >
+                ✨ Organize into tasks with AI
+              </button>
+            )}
             {recentDump.length > 0 && (
               <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "5px" }}>
                 {recentDump.map(item => (
@@ -385,9 +547,9 @@ export default function MindBoxTab({ payload, savePayload }) {
               <span className="mindbox-card-sub">7 min · +80 XP</span>
             </button>
             <button className="mindbox-card mindbox-card--rescue" onClick={openRescueMode}>
-              <span className="mindbox-card-icon">🚨</span>
-              <span className="mindbox-card-title">Rescue Mode</span>
-              <span className="mindbox-card-sub">I'm stuck</span>
+              <span className="mindbox-card-icon">🌊</span>
+              <span className="mindbox-card-title">Get Unstuck</span>
+              <span className="mindbox-card-sub">Step-by-step reset</span>
             </button>
             <button className="mindbox-card" onClick={handleBadDayReset}>
               <span className="mindbox-card-icon">🌪️</span>
@@ -408,11 +570,11 @@ export default function MindBoxTab({ payload, savePayload }) {
         <div className="rescue-overlay" onClick={() => setShowRescue(false)}>
           <div className="rescue-card card" onClick={e => e.stopPropagation()}>
             <span className="rescue-icon">⚠️</span>
-            <h3 className="rescue-title">Executive Freeze Rescue Pod</h3>
+            <h3 className="rescue-title">Getting Unstuck</h3>
             <span className="rescue-step-badge">Step {rescueStepIndex + 1} of {rescueSteps.length}</span>
             <p className="rescue-step-text">{rescueSteps[rescueStepIndex]}</p>
             <button className="btn" onClick={handleNextRescueStep} style={{ width: "100%", marginTop: "10px" }}>
-              {rescueStepIndex === rescueSteps.length - 1 ? "I am ready to move the needle!" : "Next Step"}
+              {rescueStepIndex === rescueSteps.length - 1 ? "I'm ready to try again" : "Next →"}
             </button>
             <button className="btn btn-cancel" onClick={() => setShowRescue(false)} style={{ width: "100%" }}>
               Close
