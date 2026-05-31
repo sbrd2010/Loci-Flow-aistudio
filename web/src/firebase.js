@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 import { getAuth } from "firebase/auth";
+import { getAnalytics, logEvent, isSupported } from "firebase/analytics";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDKCF2WcJk9kI1YovHBTPrWj2QSdmrjUx0",
@@ -9,9 +10,21 @@ const firebaseConfig = {
   projectId: "loci-flow",
   storageBucket: "loci-flow.appspot.com",
   messagingSenderId: "862993748883",
-  appId: "1:862993748883:web:loci-web-app"
+  appId: "1:862993748883:web:loci-web-app",
+  measurementId: import.meta.env.VITE_GA_MEASUREMENT_ID || ""
 };
 
 const app = initializeApp(firebaseConfig);
 export const db = getDatabase(app);
 export const auth = getAuth(app);
+
+let analyticsInstance = null;
+isSupported().then(yes => {
+  if (yes && firebaseConfig.measurementId) analyticsInstance = getAnalytics(app);
+}).catch(() => {});
+
+export function track(eventName, params = {}) {
+  try {
+    if (analyticsInstance) logEvent(analyticsInstance, eventName, params);
+  } catch (_) {}
+}

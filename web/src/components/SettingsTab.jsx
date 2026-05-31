@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import ConfirmDialog from "./ConfirmDialog";
+import PrivacyPolicy from "./PrivacyPolicy";
 
 export default function SettingsTab({ payload, savePayload, saveSubPath, onSignOut }) {
   const { config = {} } = payload;
@@ -58,6 +59,32 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
 
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [profileOpen, setProfileOpen] = useState(!config.userName);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+  const [notifPermission, setNotifPermission] = useState(() =>
+    typeof Notification !== "undefined" ? Notification.permission : "denied"
+  );
+  const [notifEnabled, setNotifEnabled] = useState(() => localStorage.getItem("loci_notif_enabled") === "1");
+  const [notifTime, setNotifTime] = useState(() => localStorage.getItem("loci_notif_time") || "09:00");
+
+  const requestNotifPermission = async () => {
+    if (typeof Notification === "undefined") return;
+    const result = await Notification.requestPermission();
+    setNotifPermission(result);
+    if (result === "granted") {
+      localStorage.setItem("loci_notif_enabled", "1");
+      setNotifEnabled(true);
+    }
+  };
+
+  const handleSaveNotifTime = () => {
+    localStorage.setItem("loci_notif_time", notifTime);
+    localStorage.setItem("loci_notif_enabled", notifEnabled ? "1" : "0");
+    if (notifPermission === "granted" && notifEnabled) {
+      new Notification("Loci Focus", { body: `Daily reminder set for ${notifTime}. See you then! 🧠`, icon: "/icon-192.png" });
+    }
+  };
   const [progressOpen, setProgressOpen] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
   const [aiKeysOpen, setAiKeysOpen] = useState(false);
@@ -549,6 +576,54 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
         </>}
       </section>
 
+      {/* ── Notifications ────────────────────────────────────────────────── */}
+      <section className="card">
+        <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "14px", color: "var(--text-primary)" }}>
+          🔔 Notifications
+        </h2>
+        {notifPermission === "denied" && (
+          <p style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "10px" }}>
+            Notifications are blocked in your browser. Go to browser settings → Site settings → Notifications to allow them for this site.
+          </p>
+        )}
+        {notifPermission !== "granted" && notifPermission !== "denied" && (
+          <button className="btn" style={{ width: "100%", marginBottom: "12px" }} onClick={requestNotifPermission}>
+            Enable notifications
+          </button>
+        )}
+        {notifPermission === "granted" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", cursor: "pointer" }}>
+              Daily focus reminder
+              <input
+                type="checkbox"
+                checked={notifEnabled}
+                onChange={e => { setNotifEnabled(e.target.checked); localStorage.setItem("loci_notif_enabled", e.target.checked ? "1" : "0"); }}
+                style={{ width: "18px", height: "18px", cursor: "pointer" }}
+              />
+            </label>
+            {notifEnabled && (
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <label className="form-label" style={{ margin: 0, whiteSpace: "nowrap" }}>Remind me at</label>
+                <input
+                  type="time"
+                  className="text-input"
+                  value={notifTime}
+                  onChange={e => setNotifTime(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button className="btn" onClick={handleSaveNotifTime} style={{ whiteSpace: "nowrap", padding: "10px 14px", fontSize: "12px" }}>
+                  Save
+                </button>
+              </div>
+            )}
+            <p style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+              Reminders fire when your browser is open. For reminders when the browser is closed, install the app to your home screen.
+            </p>
+          </div>
+        )}
+      </section>
+
       {/* ── Account ──────────────────────────────────────────────────────── */}
       <section className="card">
         <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "14px", color: "var(--text-primary)" }}>
@@ -559,13 +634,32 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
             className="btn"
             style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
             onClick={() => setConfirmDialog({
-              message: "Reset 7-day tracking data?\n\nThis clears the dots AND the streak counter on the Home tab. Cannot be undone.",
+              message: "Reset 7-day tracking data?\n\nThis clears the dots AND the streak counter on the Mind Box tab. Cannot be undone.",
               confirmLabel: "Reset tracking", cancelLabel: "Cancel",
               onConfirm: () => { savePayload({ ...payload, contributions: [], config: { ...config, visitStreakCount: 0, lastUpdated: Date.now() } }); setConfirmDialog(null); },
               onCancel: () => setConfirmDialog(null)
             })}
           >
             🔄 Reset 7-day tracking data
+          </button>
+          <button
+            className="btn"
+            style={{ width: "100%", background: "rgba(239,68,68,0.08)", color: "var(--danger)", border: "1.5px solid var(--border)", boxShadow: "none" }}
+            onClick={() => {
+              const body = encodeURIComponent(
+                `Bug report for Loci Focus\n\nWhat happened:\n\nSteps to reproduce:\n\nDevice/browser:\n`
+              );
+              window.open(`mailto:rohandas.iitkgp@gmail.com?subject=Loci%20Bug%20Report&body=${body}`, "_blank");
+            }}
+          >
+            🐛 Report a bug
+          </button>
+          <button
+            className="btn"
+            style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-muted)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "12px" }}
+            onClick={() => setShowPrivacy(true)}
+          >
+            Privacy Policy
           </button>
           <button
             className="btn"
@@ -583,6 +677,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
       </section>
 
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
+      {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
     </div>
   );
 }
