@@ -2,6 +2,132 @@ import React, { useState } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { celebrate } from "../utils/celebrations";
+import {
+  DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor,
+  useSensor, useSensors, DragOverlay
+} from "@dnd-kit/core";
+import {
+  SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy,
+  useSortable, arrayMove
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+function SortableRoadmapCard({ id, task, onTaskClick }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0 : 1,
+        position: "relative",
+      }}
+    >
+      <div
+        className="roadmap-task-card"
+        onClick={() => onTaskClick(task)}
+        style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}
+      >
+        <button
+          {...listeners}
+          {...attributes}
+          style={{
+            background: "none", border: "none", cursor: "grab",
+            color: "var(--text-muted)", opacity: 0.3, padding: "2px 4px",
+            flexShrink: 0, lineHeight: 1, fontSize: "14px", marginTop: "1px",
+            touchAction: "none",
+          }}
+          onClick={e => e.stopPropagation()}
+          aria-label="Drag to reorder"
+        >
+          ⠿
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "6px" }}>
+            <span className="roadmap-task-title">{task.title}</span>
+            <span className={`priority-badge ${task.priority?.toLowerCase() || "p3"}`} style={{ flexShrink: 0 }}>
+              {task.priority}
+            </span>
+          </div>
+          {task.concreteStep && (
+            <span className="roadmap-task-step">⚡ {task.concreteStep}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, onTaskClick }) {
+  const [activeId, setActiveId] = useState(null);
+  const getKey = (t) => t.uuid || String(t.id);
+  const ids = colTasks.map(getKey);
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = ({ active, over }) => {
+    setActiveId(null);
+    if (!over || active.id === over.id) return;
+    const oldIdx = colTasks.findIndex(t => getKey(t) === active.id);
+    const newIdx = colTasks.findIndex(t => getKey(t) === over.id);
+    if (oldIdx === -1 || newIdx === -1) return;
+    const reordered = arrayMove([...colTasks], oldIdx, newIdx);
+    const orderMap = new Map(reordered.map((t, i) => [getKey(t), i]));
+    savePayload({ ...payload, tasks: tasks.map(t =>
+      orderMap.has(getKey(t)) ? { ...t, orderIndex: orderMap.get(getKey(t)), lastUpdated: Date.now() } : t
+    )});
+  };
+
+  if (colTasks.length === 0) {
+    return <div className="roadmap-empty-state">No tasks here. Tap + to add one.</div>;
+  }
+
+  const activeTask = activeId ? colTasks.find(t => getKey(t) === activeId) : null;
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={({ active }) => setActiveId(active.id)}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => setActiveId(null)}
+    >
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        {colTasks.map(task => (
+          <SortableRoadmapCard
+            key={getKey(task)}
+            id={getKey(task)}
+            task={task}
+            onTaskClick={onTaskClick}
+          />
+        ))}
+      </SortableContext>
+      <DragOverlay dropAnimation={null}>
+        {activeTask ? (
+          <div style={{
+            background: "var(--bg-card)",
+            border: "1.5px solid var(--accent)",
+            borderRadius: "10px",
+            padding: "10px 12px",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.22)",
+            transform: "rotate(0.8deg) scale(1.02)",
+            opacity: 0.95,
+            fontSize: "13px",
+            fontWeight: "700",
+            color: "var(--text-primary)"
+          }}>
+            {activeTask.title}
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
+  );
+}
 
 export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEditTask }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
@@ -111,22 +237,16 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
     const colTasks = tasks
       .filter(t => t.horizonLevel === colKey && !t.isDeleted && !t.isCompleted)
       .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
-    if (colTasks.length === 0) {
-      return <div className="roadmap-empty-state">No tasks here. Tap + to add one.</div>;
-    }
-    return colTasks.map(task => (
-      <div key={task.uuid} className="roadmap-task-card" onClick={() => setSelectedTask(task)}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "6px" }}>
-          <span className="roadmap-task-title">{task.title}</span>
-          <span className={`priority-badge ${task.priority.toLowerCase()}`} style={{ flexShrink: 0 }}>
-            {task.priority}
-          </span>
-        </div>
-        {task.concreteStep && (
-          <span className="roadmap-task-step">⚡ {task.concreteStep}</span>
-        )}
-      </div>
-    ));
+    return (
+      <SortableRoadmapList
+        colKey={colKey}
+        colTasks={colTasks}
+        tasks={tasks}
+        payload={payload}
+        savePayload={savePayload}
+        onTaskClick={setSelectedTask}
+      />
+    );
   };
 
   const brainDump = payload.brainDump || [];
@@ -263,19 +383,14 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
                 </div>
               </div>
               <div className={`column-tasks-list${isExpanded ? " col-expanded" : " col-collapsed"}`}>
-                {colTasks.length === 0 ? (
-                  <div className="roadmap-empty-state">No tasks here. Add some via + button.</div>
-                ) : (
-                  colTasks.map((task) => (
-                    <div key={task.uuid} className="roadmap-task-card" onClick={() => setSelectedTask(task)}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "6px" }}>
-                        <span className="roadmap-task-title">{task.title}</span>
-                        <span className={`priority-badge ${task.priority.toLowerCase()}`} style={{ flexShrink: 0 }}>{task.priority}</span>
-                      </div>
-                      {task.concreteStep && <span className="roadmap-task-step">⚡ {task.concreteStep}</span>}
-                    </div>
-                  ))
-                )}
+                <SortableRoadmapList
+                  colKey={col.key}
+                  colTasks={colTasks}
+                  tasks={tasks}
+                  payload={payload}
+                  savePayload={savePayload}
+                  onTaskClick={setSelectedTask}
+                />
               </div>
             </div>
           );
