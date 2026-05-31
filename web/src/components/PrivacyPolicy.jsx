@@ -15,7 +15,7 @@ export default function PrivacyPolicy({ onClose }) {
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "var(--text-secondary)", lineHeight: 1 }}>✕</button>
         </div>
 
-        <p style={{ fontSize: "11px", color: "var(--text-muted)" }}>Last updated: May 2026 · Applies to loci-flow.web.app</p>
+        <p style={{ fontSize: "11px", color: "var(--text-muted)" }}>Last updated: May 2026 · Loci Focus (loci-flow.web.app)</p>
 
         {[
           {

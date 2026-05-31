@@ -32,7 +32,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   const hasSubSteps = subSteps && subSteps.length > 0;
 
   return (
-    <div className={`task-row ${isCompleted ? "completed" : ""}`} style={menuOpen ? { zIndex: 400, position: "relative" } : undefined}>
+    <div className={`task-row ${isCompleted ? "completed" : ""}`} data-testid="task-row" style={menuOpen ? { zIndex: 400, position: "relative" } : undefined}>
       {/* Checkbox */}
       <div className="checkbox-container" onClick={() => onToggleComplete(task)}>
         <div className={`custom-checkbox ${isCompleted ? "checked" : ""}`}>

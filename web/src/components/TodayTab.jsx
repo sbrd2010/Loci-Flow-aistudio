@@ -515,7 +515,7 @@ export default function TodayTab({ payload, savePayload }) {
           </div>
         </div>
 
-        <div className="tasks-list">
+        <div className="tasks-list" data-testid="today-tasks-list">
           {todayTasksAll.length === 0 && (() => {
             const hasEverHadTasks = tasks.filter(t => !t.isDeleted).length > 0;
             if (hasEverHadTasks) {

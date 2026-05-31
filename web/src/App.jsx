@@ -214,6 +214,7 @@ export default function App() {
             </div>
             <button
               className="btn"
+              data-testid="demo-btn"
               style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px", fontWeight: "700" }}
               onClick={enterDemo}
             >
@@ -276,7 +277,7 @@ export default function App() {
 
       {/* Demo mode banner */}
       {demoMode && (
-        <div style={{
+        <div data-testid="demo-banner" style={{
           position: "sticky", top: 0, zIndex: 500,
           background: "linear-gradient(90deg, #f59e0b, #f97316)",
           padding: "8px 16px",
