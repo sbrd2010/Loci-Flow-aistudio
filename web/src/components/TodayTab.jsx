@@ -301,13 +301,12 @@ export default function TodayTab({ payload, savePayload }) {
     const idx = list.findIndex(t => t.uuid === task.uuid);
     const swapIdx = direction === "up" ? idx - 1 : idx + 1;
     if (swapIdx < 0 || swapIdx >= list.length) return;
-    const aIdx = list[idx].orderIndex ?? idx;
-    const bIdx = list[swapIdx].orderIndex ?? swapIdx;
-    savePayload({ ...payload, tasks: tasks.map(t => {
-      if (t.uuid === list[idx].uuid) return { ...t, orderIndex: bIdx, lastUpdated: Date.now() };
-      if (t.uuid === list[swapIdx].uuid) return { ...t, orderIndex: aIdx, lastUpdated: Date.now() };
-      return t;
-    })});
+    [list[idx], list[swapIdx]] = [list[swapIdx], list[idx]];
+    // Re-assign clean sequential orderIndex to all visible tasks — heals any existing drift
+    const orderMap = new Map(list.map((t, i) => [t.uuid, i]));
+    savePayload({ ...payload, tasks: tasks.map(t =>
+      orderMap.has(t.uuid) ? { ...t, orderIndex: orderMap.get(t.uuid), lastUpdated: Date.now() } : t
+    )});
   };
 
   const todayTasksAll = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isParked);
