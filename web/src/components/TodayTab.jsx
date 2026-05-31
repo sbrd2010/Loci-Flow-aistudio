@@ -14,6 +14,7 @@ export default function TodayTab({ payload, savePayload }) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [showRescue, setShowRescue] = useState(false);
   const [rescueStep, setRescueStep] = useState(0);
+  const [isMVDMode, setIsMVDMode] = useState(false);
 
   const rescueSteps = [
     "Take one deep breath. Breathe in for 4, hold for 4, out for 4.",
@@ -62,31 +63,27 @@ export default function TodayTab({ payload, savePayload }) {
   }, [timerSecondsLeft, isTimerRunning]);
 
   const QUOTES = [
-    { quote: "Either you run the day or the day runs you.", author: "Jim Rohn" },
     { quote: "The secret of getting ahead is getting started.", author: "Mark Twain" },
-    { quote: "Procrastination is the thief of time — collar him.", author: "Charles Dickens" },
-    { quote: "You can't build a reputation on what you're going to do.", author: "Henry Ford" },
     { quote: "A goal without a plan is just a wish.", author: "Antoine de Saint-Exupéry" },
-    { quote: "Focus on being productive instead of busy.", author: "Tim Ferriss" },
     { quote: "Schedule your priorities, don't prioritize your schedule.", author: "Stephen Covey" },
     { quote: "Until we can manage time, we can manage nothing else.", author: "Peter Drucker" },
     { quote: "Lost time is never found again.", author: "Benjamin Franklin" },
-    { quote: "Do the hard jobs first. The easy jobs take care of themselves.", author: "Dale Carnegie" },
     { quote: "An hour of planning can save you 10 hours of doing.", author: "Dale Carnegie" },
     { quote: "Deep work is the ability to focus without distraction.", author: "Cal Newport" },
     { quote: "The main thing is to keep the main thing the main thing.", author: "Stephen Covey" },
     { quote: "Start where you are. Use what you have. Do what you can.", author: "Arthur Ashe" },
-    { quote: "The way to get started is to quit talking and begin doing.", author: "Walt Disney" },
-    { quote: "What gets measured gets managed.", author: "Peter Drucker" },
-    { quote: "You don't have to be great to start, but you must start to be great.", author: "Zig Ziglar" },
-    { quote: "Don't count the days — make the days count.", author: "Muhammad Ali" },
     { quote: "Clarity about what matters gives clarity about what does not.", author: "Cal Newport" },
     { quote: "Absorb what is useful, discard what is not.", author: "Bruce Lee" },
-    { quote: "Your future is created by what you do today, not tomorrow.", author: "Robert Kiyosaki" },
-    { quote: "Someday is not a day of the week.", author: "Janet Dailey" },
     { quote: "Begin. The rest is easy.", author: "Seneca" },
     { quote: "Action is the antidote to despair.", author: "Joan Baez" },
-    { quote: "Execution is the strategy.", author: "Anonymous" },
+    { quote: "Progress, not perfection.", author: "Anonymous" },
+    { quote: "What you do every day matters more than what you do once in a while.", author: "Gretchen Rubin" },
+    { quote: "You don't rise to the level of your goals. You fall to the level of your systems.", author: "James Clear" },
+    { quote: "Almost everything will work again if you unplug it for a few minutes — including you.", author: "Anne Lamott" },
+    { quote: "Rest is not idleness.", author: "John Lubbock" },
+    { quote: "It's not about time management. It's about attention management.", author: "Adam Grant" },
+    { quote: "The two most powerful warriors are patience and time.", author: "Leo Tolstoy" },
+    { quote: "Do less, but do it well.", author: "Anonymous" },
   ];
   const currentQuote = QUOTES[Math.floor(Date.now() / (2 * 3600 * 1000)) % QUOTES.length];
 
@@ -187,6 +184,10 @@ export default function TodayTab({ payload, savePayload }) {
     })});
   };
 
+  const handleToggleMVD = (task) => {
+    savePayload({ ...payload, tasks: tasks.map(t => t.uuid === task.uuid ? { ...t, isMVD: !t.isMVD, lastUpdated: Date.now() } : t) });
+  };
+
   const handleDeleteTask = (task) => {
     savePayload({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t) });
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
@@ -267,7 +268,7 @@ export default function TodayTab({ payload, savePayload }) {
     try {
       const raw = await callAI({
         groqKey, geminiKey,
-        systemPrompt: "You are an ADHD productivity coach. Respond ONLY with a valid JSON array of strings, no markdown, no explanation.",
+        systemPrompt: "You are a productivity coach. Respond ONLY with a valid JSON array of strings, no markdown, no explanation.",
         messages: [{
           role: "user",
           content: `Break this task into 3–5 tiny, concrete micro-steps that each take under 5 minutes and feel easy to start.\n\nTask: "${task.title}"\nConcrete step: "${task.concreteStep || ""}"\nTime estimate: ${task.timeEstimateMinutes || 25} minutes\n\nReturn ONLY a JSON array of short strings (each under 12 words). Example: ["Open the document", "Write one sentence", "Save the file"]`
@@ -310,7 +311,11 @@ export default function TodayTab({ payload, savePayload }) {
   };
 
   const todayTasksAll = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isParked);
-  const todayTasksFiltered = config.isLowEnergyMode ? todayTasksAll.filter((t) => t.priority === "P4") : todayTasksAll;
+  const todayTasksFiltered = isMVDMode
+    ? todayTasksAll.filter(t => t.isMVD)
+    : config.isLowEnergyMode
+      ? todayTasksAll.filter(t => t.priority === "P4")
+      : todayTasksAll;
   const remainingTasks = todayTasksFiltered.filter((t) => !t.isCompleted).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
   const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted);
 
@@ -500,13 +505,29 @@ export default function TodayTab({ payload, savePayload }) {
         <div className="section-header">
           <h2 className="section-title">
             Today's Focus
-            {config.isLowEnergyMode && (
+            {isMVDMode && (
+              <span style={{ color: "var(--warning)", fontSize: "11px", fontWeight: "700", marginLeft: "8px" }}>
+                ⭐ MUST-DOS
+              </span>
+            )}
+            {!isMVDMode && config.isLowEnergyMode && (
               <span style={{ color: "var(--warning)", fontSize: "11px", fontWeight: "700", marginLeft: "8px" }}>
                 ⚡ LOW ENERGY
               </span>
             )}
           </h2>
-          <div className="section-header-right" style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <div className="section-header-right" style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+            <button
+              className="stuck-btn"
+              onClick={() => setIsMVDMode(m => !m)}
+              title={isMVDMode ? "Must-Do mode ON — tap to show all" : "Show only must-do tasks"}
+              style={{
+                background: isMVDMode ? "var(--warning)" : "var(--bg-secondary)",
+                color: isMVDMode ? "#fff" : "var(--text-secondary)"
+              }}
+            >
+              ⭐ {isMVDMode ? "Must-Dos" : "Must-Do"}
+            </button>
             <button
               className="stuck-btn"
               onClick={handleEnergyToggle}
@@ -519,7 +540,7 @@ export default function TodayTab({ payload, savePayload }) {
               🔋 {config.isLowEnergyMode ? "Low Energy ON" : "Low Energy"}
             </button>
             <span className="section-count-badge">
-              {completedTasks.length}/{todayTasksFiltered.length}
+              {completedTasks.length}/{todayTasksAll.length}
             </span>
           </div>
         </div>
@@ -539,23 +560,49 @@ export default function TodayTab({ payload, savePayload }) {
               );
             }
             return (
-              <div style={{ textAlign: "center", padding: "24px 16px", background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", border: "1px dashed var(--border)" }}>
-                <div style={{ fontSize: "32px", marginBottom: "10px" }}>🧠</div>
-                <p style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "6px" }}>Welcome to Loci!</p>
-                <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: "1.6", marginBottom: "14px" }}>
-                  Loci helps you capture tasks, prioritize them with AI, and build daily focus habits — designed for ADHD brains.
+              <div style={{ padding: "20px 16px", background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", border: "1px dashed var(--border)" }}>
+                <div style={{ fontSize: "28px", marginBottom: "8px", textAlign: "center" }}>🧠</div>
+                <p style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "14px", textAlign: "center" }}>
+                  Your first focus cycle
                 </p>
-                <p style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: "1.5" }}>
-                  Tap the <strong style={{ color: "var(--accent)" }}>+</strong> button below to add your first task. The AI will help you break it down.
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
+                  {[
+                    { n: "1", icon: "💭", text: "Dump what's on your mind", sub: "Tap 📝 above to capture thoughts" },
+                    { n: "2", icon: "➕", text: "Add it as a task", sub: "Tap + below — AI breaks it into a micro-step" },
+                    { n: "3", icon: "🎯", text: "Pick what matters Today", sub: "You're already on the right tab" },
+                    { n: "4", icon: "📍", text: "Pin a task to start the timer", sub: "Tap ••• on any task → Pin to Focus" },
+                    { n: "5", icon: "▶", text: "Work for 25 minutes", sub: "Use the focus timer — single task only" },
+                    { n: "6", icon: "✓", text: "Done or reset gently", sub: "Complete it, or use Bad Day Reset — no shame" },
+                  ].map(item => (
+                    <div key={item.n} style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                      <span style={{ fontSize: "10px", fontWeight: "900", color: "var(--accent)", minWidth: "14px", paddingTop: "3px" }}>{item.n}</span>
+                      <span style={{ fontSize: "16px", lineHeight: "1", paddingTop: "1px" }}>{item.icon}</span>
+                      <div>
+                        <span style={{ fontSize: "12.5px", fontWeight: "700", color: "var(--text-primary)" }}>{item.text}</span>
+                        <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "block", marginTop: "1px" }}>{item.sub}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p style={{ fontSize: "12px", color: "var(--accent)", fontWeight: "700", textAlign: "center" }}>
+                  Start with step 2 — tap + to add your first task.
                 </p>
               </div>
             );
           })()}
-          {todayTasksAll.length > 0 && todayTasksFiltered.length === 0 && config.isLowEnergyMode && (
-            <div style={{ textAlign: "center", padding: "24px 10px", color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
-              <p style={{ fontSize: "13px", fontWeight: "600" }}>No easy wins available right now.</p>
-              <p style={{ fontSize: "12px", marginTop: "6px", lineHeight: "1.5" }}>
-                All your tasks need more energy today. Try <strong>Bad Day Reset</strong> on the AI Coach tab, or turn off Low Energy mode.
+          {todayTasksAll.length > 0 && todayTasksFiltered.length === 0 && isMVDMode && (
+            <div style={{ textAlign: "center", padding: "20px 14px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
+              <p style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "6px" }}>No must-do tasks marked yet.</p>
+              <p style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: "1.5" }}>
+                Tap ••• on any task and choose <strong>⭐ Mark as must-do</strong> to add it to your minimum viable day.
+              </p>
+            </div>
+          )}
+          {todayTasksAll.length > 0 && todayTasksFiltered.length === 0 && !isMVDMode && config.isLowEnergyMode && (
+            <div style={{ textAlign: "center", padding: "20px 14px", color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
+              <p style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "6px" }}>No low-energy tasks available.</p>
+              <p style={{ fontSize: "12px", lineHeight: "1.5" }}>
+                Tag a task P4 to surface it here, or tap 🌱 Clean Slate in Mind Box for a fresh start.
               </p>
             </div>
           )}
@@ -615,6 +662,7 @@ export default function TodayTab({ payload, savePayload }) {
                     onBreakdown={handleBreakdown}
                     onSubStepToggle={handleSubStepToggle}
                     isBreakingDown={breakdownLoadingUuid === task.uuid}
+                    onToggleMVD={handleToggleMVD}
                   />
                 )
               ))}
@@ -707,7 +755,7 @@ export default function TodayTab({ payload, savePayload }) {
         <div className="rescue-overlay" onClick={() => setShowRescue(false)}>
           <div className="rescue-card card" onClick={e => e.stopPropagation()}>
             <span className="rescue-icon">⚠️</span>
-            <h3 className="rescue-title">Executive Freeze Rescue Pod</h3>
+            <h3 className="rescue-title">Getting Unstuck</h3>
             <span className="rescue-step-badge">Step {rescueStep + 1} of {rescueSteps.length}</span>
             <p className="rescue-step-text">{rescueSteps[rescueStep]}</p>
             <button
@@ -718,7 +766,7 @@ export default function TodayTab({ payload, savePayload }) {
               }}
               style={{ width: "100%", marginTop: "10px" }}
             >
-              {rescueStep === rescueSteps.length - 1 ? "I'm ready — back to the task!" : "Next Step"}
+              {rescueStep === rescueSteps.length - 1 ? "I'm ready to try again" : "Next →"}
             </button>
             <button className="btn btn-cancel" onClick={() => setShowRescue(false)} style={{ width: "100%" }}>
               Close

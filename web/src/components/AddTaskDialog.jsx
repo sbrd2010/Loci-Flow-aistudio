@@ -44,15 +44,16 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
       "overthinks and delays finishing (perfectionism/action paralysis)";
     const existingTasks = (payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).slice(0, 8)
       .map(t => `[${t.priority}] ${t.title}`).join(", ") || "none yet";
-    const prompt = `You are an expert ADHD productivity coach. The user typed this rough task idea: "${title.trim()}".
+    const prompt = `You are an expert productivity coach specialising in focus, momentum, and execution support. The user typed this rough task idea: "${title.trim()}".
 
-Transform it into a well-structured, ADHD-friendly task. The user's core challenge: ${challengeLabel}.
+Transform it into a well-structured, focus-friendly task. The user's core challenge: ${challengeLabel}.
 
-ADHD TASK DESIGN RULES:
+TASK DESIGN RULES:
 - Title must be specific and outcome-oriented (not vague verbs like "work on" or "think about")
 - microStep is the DOOR-HANDLE move — the single physical action that takes under 2 minutes and removes the initiation barrier
 - Priority should account for the user's challenge: if they struggle to start, lean P3/P4 to reduce pressure
-- Time estimate should be honest — ADHD tasks often take 1.5x expected time
+- Time estimate should be honest — tasks often take 1.5x expected time
+- Never use the word "ADHD" in your response
 - Their current tasks for context: ${existingTasks}
 
 Respond with ONLY valid JSON (no markdown, no code blocks), exactly this structure:
@@ -64,7 +65,7 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
     try {
       const raw = await callAI({
         groqKey, geminiKey,
-        systemPrompt: "You are an ADHD productivity coach. Respond ONLY with valid JSON, no markdown.",
+        systemPrompt: "You are a productivity coach. Respond ONLY with valid JSON, no markdown.",
         messages: [{ role: "user", content: prompt }],
         maxTokens: 200
       });
