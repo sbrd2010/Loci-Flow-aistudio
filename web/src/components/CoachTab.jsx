@@ -37,9 +37,13 @@ export default function CoachTab({ payload, savePayload, saveSubPath }) {
 
   // ── AI Mentor Chat ────────────────────────────────────────────────────────
   const challengeLabel =
-    config.challengeType === "starting"  ? "Overcoming Inertia" :
-    config.challengeType === "focusing"  ? "Protecting Focus Sessions" :
-    config.challengeType === "tracking"  ? "Time Awareness & Calendar Management" :
+    config.challengeType === "overplanner"  ? "Turning Plans into Action" :
+    config.challengeType === "overwhelmed"  ? "Recovery and Backlog Relief" :
+    config.challengeType === "initiation"   ? "Breaking Initiation Freeze" :
+    config.challengeType === "momentum"     ? "Building Momentum with Quick Wins" :
+    config.challengeType === "starting"     ? "Overcoming Inertia" :
+    config.challengeType === "focusing"     ? "Protecting Focus Sessions" :
+    config.challengeType === "tracking"     ? "Time Awareness" :
     "Action over Perfectionism";
 
   const firstName = (config.userName || "").split(" ")[0] || "friend";
@@ -146,10 +150,14 @@ SESSION: ${timeOfDay}, ${config.visitStreakCount || 0}-day streak, ${todayActive
     setBriefingResult("");
 
     const challengeDesc =
-      config.challengeType === "starting" ? "Overcoming Inertia (struggles to start tasks)" :
-      config.challengeType === "focusing" ? "Protecting Focus Sessions (gets distracted mid-task)" :
-      config.challengeType === "tracking" ? "Time Awareness (loses track of time, misses deadlines)" :
-      "Action over Perfectionism (overthinks and delays finishing)";
+      config.challengeType === "overplanner"  ? "Overplanner — over-researches and plans but rarely starts; needs forced simplicity and execution bias" :
+      config.challengeType === "overwhelmed"  ? "Overwhelmed professional — backlog shame, fear of missing commitments; needs recovery, reassurance, reduced alert fatigue" :
+      config.challengeType === "initiation"   ? "Initiation block — knows what to do but freezes before starting; needs scaffolding, visual cues, micro-starts" :
+      config.challengeType === "momentum"     ? "Momentum seeker — high activation energy needed; needs quick wins and visible forward movement" :
+      config.challengeType === "starting"     ? "Overcoming inertia (struggles to start tasks)" :
+      config.challengeType === "focusing"     ? "Protecting focus sessions (gets distracted mid-task)" :
+      config.challengeType === "tracking"     ? "Time awareness (loses track of time, misses deadlines)" :
+      "Action over perfectionism (overthinks and delays finishing)";
 
     const now = new Date();
     const hour = now.getHours();

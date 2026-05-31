@@ -38,9 +38,13 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
     setAiError("");
     const cfg = payload.config || {};
     const challengeLabel =
-      cfg.challengeType === "starting"  ? "struggles to start tasks (task initiation block)" :
-      cfg.challengeType === "focusing"  ? "gets distracted mid-task (focus protection)" :
-      cfg.challengeType === "tracking"  ? "has trouble tracking progress and staying accountable (needs visible checkpoints)" :
+      cfg.challengeType === "overplanner"  ? "over-plans and researches but rarely starts (needs forced simplicity and an execution nudge)" :
+      cfg.challengeType === "overwhelmed"  ? "feels overwhelmed and guilty about backlog (needs reassurance, recovery framing, and one clear next action)" :
+      cfg.challengeType === "initiation"   ? "freezes before starting despite knowing what to do (needs scaffolding, micro-starts, and low-threshold first steps)" :
+      cfg.challengeType === "momentum"     ? "needs a quick win to get rolling (needs P4 fast-finish tasks and visible forward movement)" :
+      cfg.challengeType === "starting"     ? "struggles to start tasks (task initiation block)" :
+      cfg.challengeType === "focusing"     ? "gets distracted mid-task (focus protection)" :
+      cfg.challengeType === "tracking"     ? "has trouble tracking progress and staying accountable (needs visible checkpoints)" :
       "overthinks and delays finishing (perfectionism/action paralysis)";
     const existingTasks = (payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).slice(0, 8)
       .map(t => `[${t.priority}] ${t.title}`).join(", ") || "none yet";
