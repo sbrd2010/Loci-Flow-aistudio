@@ -2726,6 +2726,84 @@ html[data-theme="glassy"] .theme-dropdown {
   }
 }
 
+/* ── MindBox full-tab layout ──────────────────────────────────────────────── */
+.mindbox-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.mindbox-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 18px 16px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: var(--transition);
+  min-height: 100px;
+}
+.mindbox-card:hover, .mindbox-card:active {
+  background: var(--bg-secondary);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.mindbox-card--rescue {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.04);
+}
+.mindbox-card--rescue:hover, .mindbox-card--rescue:active {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: var(--danger);
+}
+.mindbox-card-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+.mindbox-card-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+.mindbox-card-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.mindbox-subview-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 18px;
+}
+.mindbox-subview-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+  font-family: var(--font-display);
+}
+.mindbox-back-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  padding: 4px 0;
+  flex-shrink: 0;
+}
+.mindbox-back-btn:hover {
+  text-decoration: underline;
+}
+
 /* ── Concept 2: Auto-Hide Header ──────────────────────────────────────────── */
 .header-autohide-wrapper {
   max-height: 500px;
@@ -3036,3 +3114,4 @@ html[data-theme="option-f-chronos"] {
   --bento-l3: rgba(255, 107, 53, 0.58);
   --btn-text: #ffffff;
 }
+
