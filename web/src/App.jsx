@@ -22,6 +22,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("today");
   const [showAddTask, setShowAddTask] = useState(false);
   const [preselectedHorizon, setPreselectedHorizon] = useState("today");
+  const [editingTask, setEditingTask] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem("loci_theme") || "glassy");
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState("");
@@ -177,6 +178,7 @@ export default function App() {
   };
 
   const openAddTask = (horizon = "today") => {
+    setEditingTask(null);
     setPreselectedHorizon(horizon);
     setShowAddTask(true);
   };
@@ -348,7 +350,12 @@ export default function App() {
           <TodayTab payload={payload} savePayload={savePayload} onOpenAddTask={() => openAddTask("today")} />
         )}
         {activeTab === "roadmap" && (
-          <RoadmapTab payload={payload} savePayload={savePayload} onOpenAddTask={openAddTask} />
+          <RoadmapTab
+            payload={payload}
+            savePayload={savePayload}
+            onOpenAddTask={openAddTask}
+            onEditTask={(task) => { setEditingTask(task); setShowAddTask(true); }}
+          />
         )}
         {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} />}
         {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} />}
@@ -450,14 +457,15 @@ export default function App() {
       {/* Bottom Nav */}
       <BottomNav activeTab={activeTab} onTabSelect={handleTabSelect} />
 
-      {/* Add Task Dialog */}
+      {/* Add / Edit Task Dialog */}
       {showAddTask && (
         <AddTaskDialog
           email={demoMode ? "demo@loci.app" : user?.email}
           payload={payload}
           savePayload={savePayload}
           defaultHorizon={preselectedHorizon}
-          onClose={() => setShowAddTask(false)}
+          editTask={editingTask}
+          onClose={() => { setShowAddTask(false); setEditingTask(null); }}
         />
       )}
     </div>

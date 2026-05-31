@@ -12,21 +12,33 @@ function defaultReminderDateTime() {
 }
 
 
-export default function AddTaskDialog({ email, payload, savePayload, defaultHorizon, onClose }) {
-  const [title, setTitle] = useState("");
-  const [concreteStep, setConcreteStep] = useState("");
-  const [horizonLevel, setHorizonLevel] = useState(defaultHorizon || "today");
+export default function AddTaskDialog({ email, payload, savePayload, defaultHorizon, onClose, editTask }) {
+  const isEditMode = !!editTask;
+  const [title, setTitle] = useState(editTask?.title || "");
+  const [concreteStep, setConcreteStep] = useState(editTask?.concreteStep || "");
+  const [horizonLevel, setHorizonLevel] = useState(editTask?.horizonLevel || defaultHorizon || "today");
   const [saved, setSaved] = useState(false);
-  const [priority, setPriority] = useState("P3");
-  const [category, setCategory] = useState("Personal");
-  const [estimateMinutes, setEstimateMinutes] = useState(25);
+  const [priority, setPriority] = useState(editTask?.priority || "P3");
+  const [category, setCategory] = useState(editTask?.category || "Personal");
+  const [estimateMinutes, setEstimateMinutes] = useState(editTask?.timeEstimateMinutes || 25);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
   const [formError, setFormError] = useState("");
-  const [reminderOn, setReminderOn] = useState(false);
-  const [reminderDate, setReminderDate] = useState(() => defaultReminderDateTime().dateStr);
-  const [reminderTime, setReminderTime] = useState(() => defaultReminderDateTime().timeStr);
+  const [reminderOn, setReminderOn] = useState(!!editTask?.reminderAt);
+  const [reminderDate, setReminderDate] = useState(() => {
+    if (editTask?.reminderAt) {
+      return new Date(editTask.reminderAt).toISOString().slice(0, 10);
+    }
+    return defaultReminderDateTime().dateStr;
+  });
+  const [reminderTime, setReminderTime] = useState(() => {
+    if (editTask?.reminderAt) {
+      const d = new Date(editTask.reminderAt);
+      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    }
+    return defaultReminderDateTime().timeStr;
+  });
 
   const { groqKey, geminiKey } = getAIKeys();
   const hasAnyKey = !!(groqKey || geminiKey);
@@ -134,6 +146,26 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
       await Notification.requestPermission();
     }
 
+    if (isEditMode) {
+      const updatedTask = {
+        ...editTask,
+        title: title.trim(),
+        concreteStep: concreteStep.trim() || editTask.concreteStep || "Do first tiny step",
+        horizonLevel,
+        priority,
+        category,
+        timeEstimateMinutes: Number(estimateMinutes),
+        reminderAt,
+        lastUpdated: Date.now()
+      };
+      if (reminderAt && reminderAt !== editTask.reminderAt) scheduleReminder(updatedTask);
+      if (!reminderAt && editTask.reminderAt) cancelReminder(editTask.uuid);
+      savePayload({ ...payload, tasks: (payload.tasks || []).map(t => t.uuid === editTask.uuid ? updatedTask : t) });
+      setSaved(true);
+      setTimeout(onClose, 900);
+      return;
+    }
+
     const freshTask = {
       id: Date.now(),
       userId: email,
@@ -171,7 +203,7 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">Add Task</h2>
+          <h2 className="modal-title">{isEditMode ? "Edit Task" : "Add Task"}</h2>
           <button className="close-btn" onClick={onClose}>✕</button>
         </div>
 

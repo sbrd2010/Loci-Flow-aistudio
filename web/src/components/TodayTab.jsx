@@ -296,6 +296,14 @@ export default function TodayTab({ payload, savePayload }) {
     savePayload({ ...payload, tasks: updatedTasks });
   };
 
+  const handleDeleteSubStep = (task, stepId) => {
+    const updatedTasks = tasks.map(t => {
+      if (t.uuid !== task.uuid) return t;
+      return { ...t, subSteps: (t.subSteps || []).filter(s => s.id !== stepId), lastUpdated: Date.now() };
+    });
+    savePayload({ ...payload, tasks: updatedTasks });
+  };
+
   const handleMoveTask = (task, direction) => {
     const list = [...remainingTasks];
     const idx = list.findIndex(t => t.uuid === task.uuid);
@@ -660,6 +668,7 @@ export default function TodayTab({ payload, savePayload }) {
                     onMoveDown={idx < remainingTasks.length - 1 ? t => handleMoveTask(t, "down") : undefined}
                     onBreakdown={handleBreakdown}
                     onSubStepToggle={handleSubStepToggle}
+                    onDeleteSubStep={handleDeleteSubStep}
                     isBreakingDown={breakdownLoadingUuid === task.uuid}
                     onToggleMVD={handleToggleMVD}
                   />

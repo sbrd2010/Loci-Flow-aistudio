@@ -3,7 +3,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { celebrate } from "../utils/celebrations";
 
-export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
+export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEditTask }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   const columns = [
@@ -318,6 +318,12 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask }) {
               <button className="btn" onClick={() => handleMoveToToday(selectedTask)}>
                 🚀 Move to Today
               </button>
+              {onEditTask && (
+                <button className="btn" onClick={() => { onEditTask(selectedTask); setSelectedTask(null); }}
+                  style={{ background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1.5px solid var(--border)", boxShadow: "none" }}>
+                  ✏ Edit task
+                </button>
+              )}
               <button className="btn" onClick={() => handleMarkDone(selectedTask)} style={{ background: "var(--success)" }}>
                 ✓ Mark Done (+100 XP)
               </button>

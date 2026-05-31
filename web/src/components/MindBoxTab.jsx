@@ -370,55 +370,88 @@ export default function MindBoxTab({ payload, savePayload }) {
       )}
 
       {/* ── Sub-view: 7-Day Progress */}
-      {toolPanel === "progress" && (
-        <>
-          <div className="mindbox-subview-header">
-            <button className="mindbox-back-btn" onClick={() => setToolPanel(null)}>← Back</button>
-            <h2 className="mindbox-subview-title">📊 Progress</h2>
-          </div>
-          <div style={{ textAlign: "center", padding: "20px 0 28px" }}>
-            <span style={{ fontSize: "clamp(52px, 16vw, 80px)", fontWeight: "700", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-mono)" }}>
-              {config.visitStreakCount || 0}
-            </span>
-            <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "6px", marginBottom: "28px" }}>
-              day streak 🔥
+      {toolPanel === "progress" && (() => {
+        const currentXp = Number(config.totalXp) || 0;
+        const xpInLevel = currentXp % 200;
+        const levelNum = Math.floor(currentXp / 200) + 1;
+        const levelProgress = (xpInLevel / 200) * 100;
+        const levelTitles = ["Focus Seed", "Inertia Crusher", "Momentum Builder", "Flow Finder", "Deep Worker", "Focus Master"];
+        const levelTitle = levelTitles[Math.min(levelNum - 1, levelTitles.length - 1)];
+        const totalDone = tasks.filter(t => !t.isDeleted && t.isCompleted).length;
+        const activeDays = bentoDays.filter(d => d.count > 0).length;
+        return (
+          <>
+            <div className="mindbox-subview-header">
+              <button className="mindbox-back-btn" onClick={() => setToolPanel(null)}>← Back</button>
+              <h2 className="mindbox-subview-title">📊 7-Day Progress</h2>
             </div>
-            <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginBottom: "10px" }}>
-              {bentoDays.map((day, i) => {
-                const isToday = i === 6;
-                const done = day.count > 0;
-                return (
-                  <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
-                    <div style={{ width: isToday ? "36px" : "28px", height: isToday ? "36px" : "28px", borderRadius: "50%", background: done ? "var(--accent)" : "var(--bg-secondary)", border: isToday ? "2.5px solid var(--accent)" : "2px solid var(--border)", transition: "all 0.2s" }} />
-                    <span style={{ fontSize: "9px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>{day.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <p style={{ fontSize: "12px", color: "var(--text-secondary)", fontWeight: "600", marginTop: "4px" }}>Filled circle = tasks completed that day</p>
-          </div>
-          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "16px 20px", display: "flex", justifyContent: "space-around", textAlign: "center" }}>
-            <div>
-              <div style={{ fontSize: "24px", fontWeight: "900", color: "var(--accent)", fontFamily: "var(--font-mono)" }}>{config.totalXp || 0}</div>
-              <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "2px" }}>Total XP</div>
-            </div>
-            <div style={{ width: "1px", background: "var(--border)" }} />
-            <div>
-              <div style={{ fontSize: "24px", fontWeight: "900", color: "var(--success, #22c55e)", fontFamily: "var(--font-mono)" }}>
-                {tasks.filter(t => !t.isDeleted && t.isCompleted).length}
+
+            {/* Streak + bento */}
+            <div style={{ textAlign: "center", padding: "16px 0 20px" }}>
+              <span style={{ fontSize: "clamp(48px, 14vw, 72px)", fontWeight: "700", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-mono)" }}>
+                {config.visitStreakCount || 0}
+              </span>
+              <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "4px", marginBottom: "20px" }}>
+                day streak 🔥
               </div>
-              <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "2px" }}>Tasks Done</div>
-            </div>
-            <div style={{ width: "1px", background: "var(--border)" }} />
-            <div>
-              <div style={{ fontSize: "24px", fontWeight: "900", color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
-                {bentoDays.filter(d => d.count > 0).length}
+              <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginBottom: "8px" }}>
+                {bentoDays.map((day, i) => {
+                  const isToday = i === 6;
+                  const count = day.count;
+                  const intensity = count === 0 ? 0 : count < 2 ? 0.45 : count < 4 ? 0.7 : 1;
+                  return (
+                    <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
+                      <div style={{
+                        width: isToday ? "36px" : "28px", height: isToday ? "36px" : "28px",
+                        borderRadius: "50%",
+                        background: count > 0 ? `rgba(99,102,241,${intensity})` : "var(--bg-secondary)",
+                        border: isToday ? "2.5px solid var(--accent)" : "2px solid var(--border)",
+                        transition: "all 0.2s",
+                        display: "flex", alignItems: "center", justifyContent: "center"
+                      }}>
+                        {count > 0 && <span style={{ fontSize: "9px", fontWeight: "800", color: "#fff" }}>{count}</span>}
+                      </div>
+                      <span style={{ fontSize: "9px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>{day.label}</span>
+                    </div>
+                  );
+                })}
               </div>
-              <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "2px" }}>Days This Week</div>
+              <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" }}>Each circle shows tasks completed that day</p>
             </div>
-          </div>
-        </>
-      )}
+
+            {/* Stats row */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "16px" }}>
+              {[
+                { label: "Total XP", value: currentXp, color: "var(--accent)" },
+                { label: "Tasks Done", value: totalDone, color: "var(--success)" },
+                { label: "Days Active", value: activeDays, color: "var(--text-primary)" }
+              ].map(stat => (
+                <div key={stat.label} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px 8px", textAlign: "center" }}>
+                  <div style={{ fontSize: "22px", fontWeight: "900", color: stat.color, fontFamily: "var(--font-mono)", lineHeight: 1 }}>{stat.value}</div>
+                  <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "4px" }}>{stat.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* XP Level card */}
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "16px 18px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "8px" }}>
+                <div>
+                  <span style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-primary)" }}>{levelTitle}</span>
+                  <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--accent)", marginLeft: "6px" }}>L{levelNum}</span>
+                </div>
+                <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{xpInLevel}/200 XP</span>
+              </div>
+              <div className="progress-track" style={{ height: "7px", marginBottom: "12px" }}>
+                <div className="progress-bar" style={{ width: `${levelProgress}%` }} />
+              </div>
+              <div style={{ fontSize: "11.5px", color: "var(--text-muted)", lineHeight: "1.55" }}>
+                <strong style={{ color: "var(--text-secondary)" }}>How you earn XP:</strong> Complete a task (+20 XP) · Complete a Roadmap task (+100 XP) · Finish Morning Ritual (+80 XP). Levels reset every 200 XP — your total keeps growing.
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* ── Sub-view: Morning Ritual */}
       {toolPanel === "ritual" && (
@@ -548,7 +581,7 @@ export default function MindBoxTab({ payload, savePayload }) {
             </button>
             <button className="mindbox-card mindbox-card--rescue" onClick={openRescueMode}>
               <span className="mindbox-card-icon">🌊</span>
-              <span className="mindbox-card-title">Get Unstuck</span>
+              <span className="mindbox-card-title">Rescue Mode</span>
               <span className="mindbox-card-sub">Step-by-step reset</span>
             </button>
             <button className="mindbox-card" onClick={handleBadDayReset}>
@@ -570,7 +603,7 @@ export default function MindBoxTab({ payload, savePayload }) {
         <div className="rescue-overlay" onClick={() => setShowRescue(false)}>
           <div className="rescue-card card" onClick={e => e.stopPropagation()}>
             <span className="rescue-icon">⚠️</span>
-            <h3 className="rescue-title">Getting Unstuck</h3>
+            <h3 className="rescue-title">Rescue Mode</h3>
             <span className="rescue-step-badge">Step {rescueStepIndex + 1} of {rescueSteps.length}</span>
             <p className="rescue-step-text">{rescueSteps[rescueStepIndex]}</p>
             <button className="btn" onClick={handleNextRescueStep} style={{ width: "100%", marginTop: "10px" }}>

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 import PrivacyPolicy from "./PrivacyPolicy";
+import { db } from "../firebase";
+import { ref, push } from "firebase/database";
 
 export default function SettingsTab({ payload, savePayload, saveSubPath, onSignOut }) {
   const { config = {} } = payload;
@@ -16,13 +18,18 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
   const levelTitles = ["Focus Seed", "Inertia Crusher", "Momentum Builder", "Flow Finder", "Deep Worker", "Focus Master"];
   const levelTitle = `${levelTitles[Math.min(levelNum - 1, levelTitles.length - 1)]} (L${levelNum})`;
 
+  const normalizeChallengeKey = (key) => {
+    const legacy = { starting: "initiation", focusing: "momentum", execution: "overplanner", tracking: "overwhelmed" };
+    return legacy[key] || key || "overplanner";
+  };
+
   // ── Profile form state ────────────────────────────────────────────────────
   const [editedName, setEditedName] = useState(config.userName || "");
   const [editedMentor, setEditedMentor] = useState(config.mentorName || "Marcus Aurelius");
   const [editedPomodoro, setEditedPomodoro] = useState(config.pomodoroDurationMinutes || 25);
   const [editedNagInterval, setEditedNagInterval] = useState(config.reminderNagIntervalMinutes || 15);
   const [editedEveningGuard, setEditedEveningGuard] = useState(!!config.eveningGuardWindowActive);
-  const [editedChallenge, setEditedChallenge] = useState(config.challengeType || "starting");
+  const [editedChallenge, setEditedChallenge] = useState(() => normalizeChallengeKey(config.challengeType));
   const [editedDayStart, setEditedDayStart] = useState(config.dayStartHour ?? 7);
   const [editedDayEnd, setEditedDayEnd] = useState(config.dayEndHour ?? 26);
   const [editedHeaderStyle, setEditedHeaderStyle] = useState(config.headerStyle || "full");
@@ -37,7 +44,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
     setEditedPomodoro(config.pomodoroDurationMinutes || 25);
     setEditedNagInterval(config.reminderNagIntervalMinutes || 15);
     setEditedEveningGuard(!!config.eveningGuardWindowActive);
-    setEditedChallenge(config.challengeType || "starting");
+    setEditedChallenge(normalizeChallengeKey(config.challengeType));
     setEditedDayStart(config.dayStartHour ?? 7);
     setEditedDayEnd(config.dayEndHour ?? 26);
     setEditedHeaderStyle(config.headerStyle || "full");
@@ -51,15 +58,64 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
       config.roadmapStyle, config.deadlineLabel, config.deadlineDate]);
 
   const challengeOptions = [
-    { key: "starting",   label: "Overcoming Inertia",    desc: "Can't get started on tasks.", icon: "🏁" },
-    { key: "focusing",   label: "Protecting Focus",       desc: "Getting distracted mid-task.", icon: "🔵" },
-    { key: "execution",  label: "Action over Planning",   desc: "Over-planning, under-doing.", icon: "⚡" },
-    { key: "tracking",   label: "Time Awareness",         desc: "Losing track of time and deadlines.", icon: "🕐" }
+    {
+      key: "overplanner", icon: "🎯",
+      label: "Help me decide what to work on",
+      desc: "AI Coach focuses on priority clarity. You'll get prompts to narrow down to the one thing that matters right now."
+    },
+    {
+      key: "initiation", icon: "🧊",
+      label: "Help me just start",
+      desc: "Coach uses micro-commitments and tiny first steps. Tasks get broken down to reduce the friction of starting."
+    },
+    {
+      key: "momentum", icon: "⚡",
+      label: "Keep me moving forward",
+      desc: "Coach tracks wins and streaks. Reminders focus on sustaining energy and building on each completed task."
+    },
+    {
+      key: "overwhelmed", icon: "🌱",
+      label: "Help me recover and catch up",
+      desc: "Coach uses gentle, shame-free prompts. Clean Slate and Bad Day Reset tools are always front and center."
+    }
   ];
 
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [profileOpen, setProfileOpen] = useState(!config.userName);
   const [showPrivacy, setShowPrivacy] = useState(false);
+
+  // ── Bug report form ──────────────────────────────────────────────────────
+  const [showBugForm, setShowBugForm] = useState(false);
+  const [bugWhat, setBugWhat] = useState("");
+  const [bugSteps, setBugSteps] = useState("");
+  const [bugDevice, setBugDevice] = useState("");
+  const [bugSubmitting, setBugSubmitting] = useState(false);
+  const [bugSuccess, setBugSuccess] = useState(false);
+  const [bugError, setBugError] = useState("");
+
+  const handleBugSubmit = async (e) => {
+    e.preventDefault();
+    if (!bugWhat.trim()) return;
+    setBugSubmitting(true);
+    setBugError("");
+    try {
+      await push(ref(db, "bugReports"), {
+        what: bugWhat.trim(),
+        steps: bugSteps.trim(),
+        device: bugDevice.trim(),
+        userId: config.userId || "unknown",
+        appVersion: import.meta.env.VITE_APP_VERSION || "dev",
+        submittedAt: Date.now()
+      });
+      setBugSuccess(true);
+      setBugWhat(""); setBugSteps(""); setBugDevice("");
+      setTimeout(() => { setBugSuccess(false); setShowBugForm(false); }, 2500);
+    } catch (_) {
+      setBugError("Couldn't submit — check your connection and try again.");
+    } finally {
+      setBugSubmitting(false);
+    }
+  };
 
   // ── Notifications ─────────────────────────────────────────────────────────
   const [notifPermission, setNotifPermission] = useState(() =>
@@ -161,7 +217,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
             </h2>
             {!profileOpen && config.userName && (
               <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                {config.userName} · {challengeOptions.find(o => o.key === (config.challengeType || "starting"))?.label}
+                {config.userName} · {challengeOptions.find(o => o.key === normalizeChallengeKey(config.challengeType))?.label}
               </div>
             )}
           </div>
@@ -307,28 +363,6 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
                     background: editedHeaderStyle === key ? "var(--accent)" : "var(--bg-secondary)",
                     color: editedHeaderStyle === key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
                     border: editedHeaderStyle === key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
-                  }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Tools Layout</label>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
-              {[
-                { key: "inline", label: "Inline (current)" },
-                { key: "dock", label: "Floating Dock" }
-              ].map(({ key, label }) => (
-                <button key={key} type="button"
-                  onClick={() => setEditedToolsStyle(key)}
-                  style={{
-                    padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700",
-                    cursor: "pointer", transition: "all 0.15s",
-                    background: editedToolsStyle === key ? "var(--accent)" : "var(--bg-secondary)",
-                    color: editedToolsStyle === key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
-                    border: editedToolsStyle === key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
                   }}>
                   {label}
                 </button>
@@ -608,12 +642,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
           <button
             className="btn"
             style={{ width: "100%", background: "rgba(239,68,68,0.08)", color: "var(--danger)", border: "1.5px solid var(--border)", boxShadow: "none" }}
-            onClick={() => {
-              const body = encodeURIComponent(
-                `Bug report for Loci Focus\n\nWhat happened:\n\nSteps to reproduce:\n\nDevice/browser:\n`
-              );
-              window.open(`mailto:rohandas.iitkgp@gmail.com?subject=Loci%20Bug%20Report&body=${body}`, "_blank");
-            }}
+            onClick={() => setShowBugForm(true)}
           >
             🐛 Report a bug
           </button>
@@ -641,6 +670,79 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
 
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
       {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
+
+      {/* ── Bug Report Modal ─────────────────────────────────────────────── */}
+      {showBugForm && (
+        <>
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 400, backdropFilter: "blur(4px)" }}
+            onClick={() => { if (!bugSubmitting) setShowBugForm(false); }}
+          />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+            width: "calc(100% - 32px)", maxWidth: "420px",
+            background: "var(--bg-card)", borderRadius: "20px",
+            padding: "24px 22px 28px", zIndex: 401,
+            boxShadow: "0 12px 48px rgba(0,0,0,0.3)"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ fontSize: "16px", fontWeight: "800", margin: 0, color: "var(--text-primary)" }}>🐛 Report a Bug</h3>
+              {!bugSubmitting && (
+                <button onClick={() => setShowBugForm(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "20px", color: "var(--text-muted)", padding: "2px 4px", lineHeight: 1 }}>×</button>
+              )}
+            </div>
+            {bugSuccess ? (
+              <div style={{ textAlign: "center", padding: "24px 0" }}>
+                <div style={{ fontSize: "36px", marginBottom: "10px" }}>✅</div>
+                <p style={{ fontSize: "14px", fontWeight: "700", color: "var(--success)" }}>Bug report submitted!</p>
+                <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "6px" }}>Thank you — we'll look into it.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleBugSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" htmlFor="bug-what">What happened? *</label>
+                  <textarea
+                    id="bug-what"
+                    className="text-input"
+                    placeholder="Describe the issue clearly — what did you expect vs what actually happened?"
+                    value={bugWhat}
+                    onChange={e => setBugWhat(e.target.value)}
+                    rows={3}
+                    style={{ resize: "vertical", minHeight: "72px", fontFamily: "var(--font-sans)" }}
+                    required
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" htmlFor="bug-steps">Steps to reproduce (optional)</label>
+                  <textarea
+                    id="bug-steps"
+                    className="text-input"
+                    placeholder="1. Go to… 2. Tap… 3. See error"
+                    value={bugSteps}
+                    onChange={e => setBugSteps(e.target.value)}
+                    rows={2}
+                    style={{ resize: "vertical", minHeight: "50px", fontFamily: "var(--font-sans)" }}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" htmlFor="bug-device">Device / browser (optional)</label>
+                  <input
+                    id="bug-device"
+                    className="text-input"
+                    placeholder="e.g. iPhone 14, Safari · Android, Chrome"
+                    value={bugDevice}
+                    onChange={e => setBugDevice(e.target.value)}
+                  />
+                </div>
+                {bugError && <p style={{ fontSize: "12px", color: "var(--danger)", fontWeight: "600" }}>{bugError}</p>}
+                <button className="btn" type="submit" disabled={bugSubmitting || !bugWhat.trim()} style={{ width: "100%", marginTop: "4px" }}>
+                  {bugSubmitting ? "Submitting…" : "Submit Bug Report"}
+                </button>
+              </form>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
