@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } from "firebase/database";
-import { db } from "./firebase";
+import { db, auth } from "./firebase";
 import { safeUUID } from "./utils/uuid";
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
@@ -60,6 +60,9 @@ export function useSync(uid, email) {
   const payloadRef = useRef(null);
   const timeoutRef = useRef(null);
   const pendingRemoteRef = useRef(null);
+  // Cached Firebase ID token — refreshed on each save so the pagehide
+  // keepalive fetch has a valid token even if the page is being killed.
+  const tokenRef = useRef(null);
   // Track if RTDB is physically connected (via .info/connected)
   const rtdbConnectedRef = useRef(false);
   // Mutable ref so the timeout callback can see the latest phase without stale closure
@@ -303,6 +306,7 @@ export function useSync(uid, email) {
       if (dataTimeoutRef.current) { clearTimeout(dataTimeoutRef.current); dataTimeoutRef.current = null; }
       console.error("Error reading RTDB payload:", err);
       setIsSyncingFromCache(false);
+      pendingRemoteRef.current = null;
       if (!hasCachedData) {
         setError("Could not connect to sync server. Check your connection and reload.");
         setConnPhase(CONN.ERROR);
@@ -328,10 +332,22 @@ export function useSync(uid, email) {
     let hiddenAt = 0;
 
     const flush = () => {
-      if (timeoutRef.current && dbRefPath && payloadRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-        writeWithRetry(ref(db, dbRefPath), payloadRef.current).catch(() => {});
+      if (!timeoutRef.current || !dbRefPath || !payloadRef.current) return;
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+      const data = payloadRef.current;
+      // keepalive: true guarantees delivery even when iOS/Android kills the page
+      // mid-write. Falls back to the Firebase SDK if no token is cached yet.
+      if (tokenRef.current) {
+        const url = `https://loci-flow-default-rtdb.firebaseio.com/${dbRefPath}.json?auth=${tokenRef.current}`;
+        fetch(url, {
+          method: "PUT",
+          body: JSON.stringify(data),
+          keepalive: true,
+          headers: { "Content-Type": "application/json" },
+        }).catch(() => writeWithRetry(ref(db, dbRefPath), data).catch(() => {}));
+      } else {
+        writeWithRetry(ref(db, dbRefPath), data).catch(() => {});
       }
     };
     const handleVisibilityChange = () => {
@@ -383,6 +399,9 @@ export function useSync(uid, email) {
     // Keep local cache up-to-date immediately — protects against network loss
     if (uid) writeCache(uid, nextPayload);
 
+    // Refresh the cached token so the pagehide keepalive flush is always fresh
+    auth.currentUser?.getIdToken().then(t => { tokenRef.current = t; }).catch(() => {});
+
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
     timeoutRef.current = setTimeout(() => {
@@ -395,7 +414,7 @@ export function useSync(uid, email) {
             if (pendingRemoteRef.current) {
               const remote = pendingRemoteRef.current;
               pendingRemoteRef.current = null;
-              if ((remote.timestamp || 0) > (payloadRef.current?.timestamp || 0)) {
+              if ((remote.timestamp || 0) >= (payloadRef.current?.timestamp || 0)) {
                 setPayload(remote);
                 payloadRef.current = remote;
                 if (uid) writeCache(uid, remote);
@@ -408,6 +427,11 @@ export function useSync(uid, email) {
 
   const saveSubPath = (subPath, value) => {
     if (!dbRefPath) return;
+    // Mirror the update locally so a concurrent savePayload debounce
+    // can't clobber this write when it flushes payloadRef.current
+    if (payloadRef.current) {
+      payloadRef.current = { ...payloadRef.current, [subPath]: value, timestamp: Date.now() };
+    }
     const updates = {
       [`${dbRefPath}/${subPath}`]: value,
       [`${dbRefPath}/timestamp`]: Date.now()

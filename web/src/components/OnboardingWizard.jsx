@@ -91,7 +91,7 @@ export default function OnboardingWizard({ payload, savePayload }) {
   const totalSteps = 5;
 
   return (
-    <div className="signin-overlay" style={{ background: "rgba(26, 25, 21, 0.65)", backdropFilter: "blur(8px)" }}>
+    <div className="signin-overlay" style={{ background: "rgba(26, 25, 21, 0.65)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
       <div className="signin-card card" style={{ maxWidth: "440px", padding: "30px 24px" }}>
 
         {/* Progress bar */}

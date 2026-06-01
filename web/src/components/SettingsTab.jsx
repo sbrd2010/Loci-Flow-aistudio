@@ -620,7 +620,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
       {showBugForm && (
         <>
           <div
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 400, backdropFilter: "blur(4px)" }}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 400, backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}
             onClick={() => { if (!bugSubmitting) setShowBugForm(false); }}
           />
           <div style={{
