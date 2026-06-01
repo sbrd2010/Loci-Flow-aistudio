@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import TaskRow from "./TaskRow";
 import ConfirmDialog from "./ConfirmDialog";
+import AddTaskDialog from "./AddTaskDialog";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
@@ -43,7 +44,6 @@ export default function TodayTab({ payload, savePayload }) {
   const [rescueStep, setRescueStep] = useState(0);
   const [isMVDMode, setIsMVDMode] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState(null);
-  const [reminderPastError, setReminderPastError] = useState(false);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -173,8 +173,7 @@ export default function TodayTab({ payload, savePayload }) {
 
   const [breakdownLoadingUuid, setBreakdownLoadingUuid] = useState(null);
 
-  const [editingTaskUuid, setEditingTaskUuid] = useState(null);
-  const [editFields, setEditFields] = useState({ title: "", concreteStep: "", priority: "P2", reminderOn: false, reminderDate: "", reminderTime: "" });
+  const [editingTask, setEditingTask] = useState(null);
   const [undoTask, setUndoTask] = useState(null);
   const undoTimeoutRef = useRef(null);
 
@@ -277,39 +276,7 @@ export default function TodayTab({ payload, savePayload }) {
     savePayload({ ...payload, config: { ...config, isLowEnergyMode: !config.isLowEnergyMode, lastUpdated: Date.now() } });
   };
 
-  const handleStartEdit = (task) => {
-    setEditingTaskUuid(task.uuid);
-    let reminderDate = "", reminderTime = "";
-    if (task.reminderAt) {
-      const d = new Date(task.reminderAt);
-      reminderDate = d.toISOString().slice(0, 10);
-      reminderTime = `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
-    }
-    setEditFields({ title: task.title, concreteStep: task.concreteStep || "", priority: task.priority, reminderOn: !!task.reminderAt, reminderDate, reminderTime });
-  };
-  const handleCancelEdit = () => setEditingTaskUuid(null);
-  const handleSaveEdit = () => {
-    if (!editFields.title.trim()) return;
-    let reminderAt = null;
-    setReminderPastError(false);
-    if (editFields.reminderOn && editFields.reminderDate && editFields.reminderTime) {
-      const ts = new Date(`${editFields.reminderDate}T${editFields.reminderTime}`).getTime();
-      if (!isNaN(ts) && ts > Date.now()) {
-        reminderAt = ts;
-      } else if (!isNaN(ts)) {
-        setReminderPastError(true);
-        return;
-      }
-    }
-    const updatedTask = tasks.find(t => t.uuid === editingTaskUuid);
-    if (updatedTask) {
-      cancelReminder(editingTaskUuid);
-      const saved = { ...updatedTask, title: editFields.title.trim(), concreteStep: editFields.concreteStep.trim(), priority: editFields.priority, reminderAt, lastUpdated: Date.now() };
-      if (reminderAt) scheduleReminder(saved);
-      savePayload({ ...payload, tasks: tasks.map(t => t.uuid === editingTaskUuid ? saved : t) });
-    }
-    setEditingTaskUuid(null);
-  };
+  const handleStartEdit = (task) => setEditingTask(task);
 
   const handleBreakdown = async (task) => {
     setBreakdownLoadingUuid(task.uuid);
@@ -698,56 +665,6 @@ export default function TodayTab({ payload, savePayload }) {
                   strategy={verticalListSortingStrategy}
                 >
                   {remainingTasks.map((task, idx) => (
-                    editingTaskUuid === task.uuid ? (
-                      <div key={getTaskKey(task)}>
-                        <div className="task-edit-card">
-                          <input className="text-input" value={editFields.title}
-                            onChange={e => setEditFields(f => ({ ...f, title: e.target.value }))}
-                            placeholder="Task title" style={{ marginBottom: "8px" }} />
-                          <input className="text-input" value={editFields.concreteStep}
-                            onChange={e => setEditFields(f => ({ ...f, concreteStep: e.target.value }))}
-                            placeholder="Micro step (optional)" style={{ marginBottom: "8px" }} />
-                          <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
-                            {["P1","P2","P3","P4"].map(p => (
-                              <button key={p} type="button" className={`priority-badge ${p.toLowerCase()}`}
-                                onClick={() => setEditFields(f => ({ ...f, priority: p }))}
-                                style={{ border: editFields.priority === p ? "2px solid var(--accent)" : "2px solid transparent", cursor: "pointer", padding: "4px 10px", opacity: editFields.priority === p ? 1 : 0.55 }}>
-                                {p}
-                              </button>
-                            ))}
-                          </div>
-                          {/* Reminder */}
-                          <button
-                            type="button"
-                            onClick={() => setEditFields(f => ({ ...f, reminderOn: !f.reminderOn }))}
-                            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "8px 12px", marginBottom: "8px", background: editFields.reminderOn ? "var(--accent-ring, rgba(99,102,241,0.08))" : "var(--bg-secondary)", border: editFields.reminderOn ? "1.5px solid var(--accent)" : "1.5px solid var(--border)", borderRadius: "8px", cursor: "pointer" }}
-                          >
-                            <span style={{ fontSize: "12px", fontWeight: "700", color: editFields.reminderOn ? "var(--accent)" : "var(--text-secondary)" }}>
-                              🔔 {editFields.reminderOn && editFields.reminderDate && editFields.reminderTime ? formatReminderLabel(new Date(`${editFields.reminderDate}T${editFields.reminderTime}`).getTime()) : "Set reminder"}
-                            </span>
-                            <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{editFields.reminderOn ? "remove" : "+"}</span>
-                          </button>
-                          {editFields.reminderOn && (
-                            <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexDirection: "column" }}>
-                              <div style={{ display: "flex", gap: "6px" }}>
-                                <input type="date" className="text-input" value={editFields.reminderDate} min={new Date().toISOString().slice(0,10)} onChange={e => { setEditFields(f => ({ ...f, reminderDate: e.target.value })); setReminderPastError(false); }} style={{ flex: 1.4 }} />
-                                <input type="time" className="text-input" value={editFields.reminderTime} onChange={e => { setEditFields(f => ({ ...f, reminderTime: e.target.value })); setReminderPastError(false); }} style={{ flex: 1 }} />
-                              </div>
-                              {reminderPastError && (
-                                <span style={{ fontSize: "11px", color: "var(--danger)", fontWeight: "600" }}>
-                                  ⚠ Reminder time is in the past — pick a future time.
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          <div style={{ display: "flex", gap: "8px" }}>
-                            <button className="btn" onClick={handleSaveEdit} style={{ flex: 1 }}>Save</button>
-                            <button className="btn" onClick={handleCancelEdit}
-                              style={{ flex: 1, background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)" }}>Cancel</button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
                       <SortableTaskItem key={getTaskKey(task)} id={getTaskKey(task)}>
                         {({ dragHandleListeners, dragHandleAttributes }) => (
                           <TaskRow
@@ -769,7 +686,6 @@ export default function TodayTab({ payload, savePayload }) {
                           />
                         )}
                       </SortableTaskItem>
-                    )
                   ))}
                 </SortableContext>
                 <DragOverlay dropAnimation={null}>
@@ -882,6 +798,17 @@ export default function TodayTab({ payload, savePayload }) {
       )}
 
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
+
+      {editingTask && (
+        <AddTaskDialog
+          email={payload.config?.userId || ""}
+          payload={payload}
+          savePayload={savePayload}
+          defaultHorizon="today"
+          editTask={editingTask}
+          onClose={() => setEditingTask(null)}
+        />
+      )}
 
       {/* Inline rescue overlay — triggered by Stuck? button on focus card */}
       {showRescue && (
