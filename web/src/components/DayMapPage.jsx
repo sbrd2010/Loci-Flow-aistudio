@@ -4,64 +4,44 @@ import {
   KeyboardSensor,
   PointerSensor,
   TouchSensor,
-  useDraggable,
-  useDroppable,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import "../styles/dayMap.css";
 import "../styles/dayMapPlanning.css";
 
-const PERIOD_TEMPLATES = [
-  { id: "morning", label: "Morning", start: 5 * 60, end: 12 * 60 },
-  { id: "afternoon", label: "Afternoon", start: 12 * 60, end: 17 * 60 },
-  { id: "evening", label: "Evening", start: 17 * 60, end: 21 * 60 },
-  { id: "night", label: "Night", start: 21 * 60, end: 29 * 60 },
-];
-
-const DEFAULT_DAY_START_HOUR = 8;
-const DEFAULT_DAY_END_HOUR = 26;
-const START_HOUR_OPTIONS = [5, 6, 7, 8, 9, 10, 11, 12];
-const END_HOUR_OPTIONS = [21, 22, 23, 24, 25, 26, 27, 28, 29];
+const TRANSITION_BUFFER = 5;
+const DURATION_OPTIONS = [15, 25, 45, 60, 90, 120, 180, 240, 360];
 const PRIORITY_RANK = { P1: 1, P2: 2, P3: 3, P4: 4 };
-const DURATION_OPTIONS = [15, 25, 45, 60, 120, 240, 360];
-const SCHEDULED_ID_PREFIX = "scheduled-";
+const PERIOD_LABELS = { morning: "Morning", afternoon: "Afternoon", evening: "Evening", night: "Night" };
 
 function toLocalDateStr(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function getTaskId(task) {
-  return String(task.uuid || task.id);
-}
-
-function normalizePriority(priority) {
-  return String(priority || "P3").toUpperCase();
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function roundToQuarter(minutes) {
-  return Math.ceil(minutes / 15) * 15;
-}
+function getTaskId(task) { return String(task.uuid || task.id); }
+function normalizePriority(p) { return String(p || "P3").toUpperCase(); }
+function clamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
+function roundToQuarter(m) { return Math.ceil(m / 15) * 15; }
 
 function currentDayMinutes() {
-  const now = new Date();
-  return now.getHours() * 60 + now.getMinutes();
+  const n = new Date();
+  return n.getHours() * 60 + n.getMinutes();
 }
 
-// When the current time falls inside a period, don't schedule in the past —
-// start from the next quarter-hour at or after now.
-function effectivePeriodStart(period) {
-  const now = currentDayMinutes();
-  if (now > period.start && now < period.end) {
-    return roundToQuarter(now);
-  }
-  return period.start;
+function getPeriodForMinutes(m) {
+  const n = ((m % 1440) + 1440) % 1440;
+  if (n < 720) return "morning";
+  if (n < 1020) return "afternoon";
+  if (n < 1260) return "evening";
+  return "night";
 }
 
 function getEstimate(task) {
@@ -70,68 +50,25 @@ function getEstimate(task) {
 }
 
 function formatClock(minutes) {
-  const normalized = ((minutes % 1440) + 1440) % 1440;
-  const hour24 = Math.floor(normalized / 60);
-  const minute = normalized % 60;
-  const suffix = hour24 >= 12 ? "PM" : "AM";
-  const hour12 = hour24 % 12 || 12;
-  return `${hour12}:${String(minute).padStart(2, "0")} ${suffix}`;
+  const n = ((minutes % 1440) + 1440) % 1440;
+  const h24 = Math.floor(n / 60);
+  const min = n % 60;
+  const suffix = h24 >= 12 ? "PM" : "AM";
+  const h12 = h24 % 12 || 12;
+  return `${h12}:${String(min).padStart(2, "0")} ${suffix}`;
 }
 
-function formatShortClock(minutes) {
-  const normalized = ((minutes % 1440) + 1440) % 1440;
-  const hour24 = Math.floor(normalized / 60);
-  const suffix = hour24 >= 12 ? "PM" : "AM";
-  const hour12 = hour24 % 12 || 12;
-  return `${hour12} ${suffix}`;
-}
-
-function formatDuration(minutes) {
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return mins ? `${hours}h ${mins}m` : `${hours}h`;
-}
-
-function getConfigHour(config, key, fallback, min, max) {
-  const raw = Number(config?.[key]);
-  return Number.isFinite(raw) ? clamp(raw, min, max) : fallback;
-}
-
-function buildPeriods(dayStartHour, dayEndHour) {
-  const windowStart = dayStartHour * 60;
-  const windowEnd = Math.max(dayEndHour * 60, windowStart + 60);
-  return PERIOD_TEMPLATES.map((period) => {
-    const start = Math.max(period.start, windowStart);
-    const end = Math.min(period.end, windowEnd);
-    return end > start ? { ...period, start, end } : null;
-  }).filter(Boolean);
+function formatDuration(m) {
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return r ? `${h}h ${r}m` : `${h}h`;
 }
 
 function sortByPriorityAndOrder(a, b) {
   const pa = PRIORITY_RANK[normalizePriority(a.priority)] || 3;
   const pb = PRIORITY_RANK[normalizePriority(b.priority)] || 3;
-  if (pa !== pb) return pa - pb;
-  return (a.orderIndex ?? 9999) - (b.orderIndex ?? 9999);
-}
-
-function sortByDayMapTime(period) {
-  return (a, b) => {
-    const diff = Number(a.dayMapStartMinutes ?? period.start) - Number(b.dayMapStartMinutes ?? period.start);
-    return diff !== 0 ? diff : sortByPriorityAndOrder(a, b);
-  };
-}
-
-function buildSlotOptions(period) {
-  const slots = [];
-  for (let minutes = period.start; minutes <= period.end - 15; minutes += 15) {
-    slots.push(minutes);
-  }
-  return slots;
-}
-
-function taskIsScheduledToday(task, todayStr) {
-  return task.dayMapDate === todayStr && !!task.dayMapPeriod;
+  return pa !== pb ? pa - pb : (a.orderIndex ?? 9999) - (b.orderIndex ?? 9999);
 }
 
 function removeScheduleFields(task) {
@@ -139,81 +76,50 @@ function removeScheduleFields(task) {
   return { ...rest, lastUpdated: Date.now() };
 }
 
-function getPreferredPeriods(task) {
-  const priority = normalizePriority(task.priority);
-  if (task.isMVD || priority === "P1") return ["morning", "afternoon", "evening", "night"];
-  if (priority === "P2") return ["afternoon", "morning", "evening", "night"];
-  if (priority === "P4") return ["evening", "morning", "afternoon", "night"];
-  return ["afternoon", "evening", "morning", "night"];
-}
-
-function DraggableTaskChip({ task, selected, onSelect }) {
-  const taskId = getTaskId(task);
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: `available-${taskId}`,
-    data: { taskId, source: "available" },
+// Single-pass reflow: assign sequential start times from anchor through the ordered queue.
+// Period is derived from calculated start time — never stored independently.
+function reflowRoute(orderedTasks, anchorMinutes, todayStr) {
+  let cursor = roundToQuarter(anchorMinutes);
+  return orderedTasks.map((task, index) => {
+    const duration = getEstimate(task);
+    const start = cursor;
+    cursor = start + duration + TRANSITION_BUFFER;
+    return {
+      ...task,
+      dayMapStartMinutes: start,
+      dayMapDurationMinutes: duration,
+      dayMapPeriod: getPeriodForMinutes(start),
+      dayMapOrder: index,
+      dayMapDate: todayStr,
+      lastUpdated: Date.now(),
+    };
   });
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.5 : 1, zIndex: isDragging ? 999 : undefined }
-    : { opacity: isDragging ? 0.5 : 1 };
-
-  return (
-    <button
-      ref={setNodeRef}
-      type="button"
-      className={`day-map-task-chip${selected ? " selected" : ""}`}
-      style={style}
-      onClick={() => onSelect(taskId)}
-      {...attributes}
-      {...listeners}
-    >
-      <span className={`day-map-priority ${normalizePriority(task.priority).toLowerCase()}`}>
-        {normalizePriority(task.priority)}
-      </span>
-      <span className="day-map-chip-title">{task.title}</span>
-      <span className="day-map-chip-duration">{formatDuration(getEstimate(task))}</span>
-    </button>
-  );
 }
 
-function DroppablePeriod({ period, isActive, children }) {
-  const { isOver, setNodeRef } = useDroppable({
-    id: period.id,
-    data: { periodId: period.id, source: "period" },
-  });
-  return (
-    <section
-      ref={setNodeRef}
-      className={`day-map-period${isOver ? " is-over" : ""}${isActive ? " has-selection" : ""}`}
-    >
-      {children}
-    </section>
-  );
+function applyReflow(allTasks, reflowed) {
+  const map = new Map(reflowed.map(t => [getTaskId(t), t]));
+  return allTasks.map(t => map.has(getTaskId(t)) ? map.get(getTaskId(t)) : t);
 }
 
-function SortableCompactTaskRow({ task, period, isExpanded, onToggle, onStartChange, onDurationChange, onPeriodChange, onRemove, periods }) {
+function PriorityBadge({ priority }) {
+  const p = normalizePriority(priority);
+  return <span className={`day-map-priority ${p.toLowerCase()}`}>{p}</span>;
+}
+
+function RouteRow({ task, index, total, isExpanded, onToggle, onMoveUp, onMoveDown, onRemove, onDurationChange, onStartFocus }) {
   const taskId = getTaskId(task);
-  const sortableId = `${SCHEDULED_ID_PREFIX}${taskId}`;
+  const isFirst = index === 0;
   const {
-    attributes,
-    listeners,
-    setActivatorNodeRef,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: sortableId,
-    data: { taskId, periodId: period.id, source: "scheduled" },
-  });
+    attributes, listeners, setActivatorNodeRef,
+    setNodeRef, transform, transition, isDragging,
+  } = useSortable({ id: taskId, data: { taskId } });
 
-  const prio = normalizePriority(task.priority);
   const duration = getEstimate(task);
-  const start = Number(task.dayMapStartMinutes ?? period.start);
+  const start = Number(task.dayMapStartMinutes ?? 0);
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.65 : 1,
+    opacity: isDragging ? 0.55 : 1,
     zIndex: isDragging ? 5 : undefined,
   };
 
@@ -221,9 +127,10 @@ function SortableCompactTaskRow({ task, period, isExpanded, onToggle, onStartCha
     <div
       ref={setNodeRef}
       style={style}
-      className={`day-map-compact-wrap${isExpanded ? " expanded" : ""}${isDragging ? " is-dragging" : ""}`}
+      className={`day-map-route-row${isFirst ? " is-now" : ""}${isExpanded ? " expanded" : ""}${isDragging ? " is-dragging" : ""}`}
     >
-      <div className="day-map-compact-row">
+      {isFirst && <div className="day-map-now-badge">NOW</div>}
+      <div className="day-map-route-main">
         <button
           ref={setActivatorNodeRef}
           type="button"
@@ -236,71 +143,93 @@ function SortableCompactTaskRow({ task, period, isExpanded, onToggle, onStartCha
         </button>
         <button
           type="button"
-          className="day-map-compact-main"
+          className="day-map-route-content"
           onClick={onToggle}
           aria-expanded={isExpanded}
         >
-          <span className={`day-map-priority ${prio.toLowerCase()}`}>{prio}</span>
-          <span className="day-map-compact-title">{task.title}</span>
-          <span className="day-map-compact-time">{formatClock(start)} · {formatDuration(duration)}</span>
+          <PriorityBadge priority={task.priority} />
+          <span className="day-map-route-title">{task.title}</span>
+          <span className="day-map-route-time">{formatClock(start)} · {formatDuration(duration)}</span>
         </button>
-        <button
-          type="button"
-          className="day-map-remove-btn"
-          onClick={() => onRemove(taskId)}
-          aria-label="Remove from Day Map"
-        >
-          ×
-        </button>
+        <div className="day-map-row-controls">
+          <button type="button" className="day-map-move-btn" onClick={onMoveUp} disabled={index === 0} aria-label="Move up">↑</button>
+          <button type="button" className="day-map-move-btn" onClick={onMoveDown} disabled={index === total - 1} aria-label="Move down">↓</button>
+          <button type="button" className="day-map-remove-btn" onClick={() => onRemove(taskId)} aria-label="Remove from route">×</button>
+        </div>
       </div>
-
+      {isFirst && (
+        <div className="day-map-now-footer">
+          <button type="button" className="day-map-start-focus-btn" onClick={onStartFocus}>
+            Start Focus →
+          </button>
+        </div>
+      )}
       {isExpanded && (
         <div className="day-map-edit-panel">
-          <div className="day-map-edit-grid">
-            <label>
-              Start
-              <select
-                value={start}
-                onChange={(e) => onStartChange(taskId, Number(e.target.value))}
-                aria-label="Start time"
-              >
-                {buildSlotOptions(period).map((slot) => (
-                  <option key={slot} value={slot}>{formatClock(slot)}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Duration
-              <select
-                value={duration}
-                onChange={(e) => onDurationChange(taskId, Number(e.target.value))}
-                aria-label="Duration"
-              >
-                {DURATION_OPTIONS.map((m) => (
-                  <option key={m} value={m}>{formatDuration(m)}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Period
-              <select
-                value={period.id}
-                onChange={(e) => onPeriodChange(taskId, e.target.value)}
-                aria-label="Time period"
-              >
-                {periods.map((p) => (
-                  <option key={p.id} value={p.id}>{p.label}</option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <label className="day-map-edit-label">
+            Duration
+            <select
+              value={duration}
+              onChange={e => onDurationChange(taskId, Number(e.target.value))}
+            >
+              {DURATION_OPTIONS.map(m => (
+                <option key={m} value={m}>{formatDuration(m)}</option>
+              ))}
+            </select>
+          </label>
         </div>
       )}
     </div>
   );
 }
 
-function AvailableStrip({ tasks, selectedTaskId, onSelect, isOpen, onToggle }) {
+function PeriodDivider({ label }) {
+  return (
+    <div className="day-map-period-divider" aria-hidden="true">
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function AnchorControl({ anchorMinutes, onStartFromNow, onChangeAnchor }) {
+  const now = roundToQuarter(currentDayMinutes());
+  const isAlreadyNow = Math.abs(anchorMinutes - now) < 15;
+
+  const base = Math.max(0, now - 120);
+  const options = [];
+  for (let m = base; m <= now + 600 && m < 1440; m += 15) {
+    options.push(m);
+  }
+  if (!options.includes(anchorMinutes)) {
+    options.push(anchorMinutes);
+    options.sort((a, b) => a - b);
+  }
+
+  return (
+    <div className="day-map-anchor-bar">
+      <span className="day-map-anchor-label">Starting from</span>
+      <select
+        className="day-map-anchor-select"
+        value={anchorMinutes}
+        onChange={e => onChangeAnchor(Number(e.target.value))}
+        aria-label="Route start time"
+      >
+        {options.map(m => (
+          <option key={m} value={m}>
+            {formatClock(m)}{m === now ? " (now)" : ""}
+          </option>
+        ))}
+      </select>
+      {!isAlreadyNow && (
+        <button type="button" className="day-map-now-btn" onClick={onStartFromNow}>
+          Now
+        </button>
+      )}
+    </div>
+  );
+}
+
+function AvailableStrip({ tasks, isOpen, onToggle, onAdd }) {
   return (
     <div className="day-map-available-strip">
       <button type="button" className="day-map-strip-header" onClick={onToggle}>
@@ -308,16 +237,22 @@ function AvailableStrip({ tasks, selectedTaskId, onSelect, isOpen, onToggle }) {
         <span className="day-map-strip-chevron" aria-hidden="true">{isOpen ? "▲" : "▼"}</span>
       </button>
       {isOpen && (
-        <div className="day-map-chip-row" role="group" aria-label="Available Today tasks">
-          {tasks.length ? tasks.map((t) => (
-            <DraggableTaskChip
+        <div className="day-map-chip-row" role="group" aria-label="Unscheduled today tasks">
+          {tasks.length ? tasks.map(t => (
+            <button
               key={getTaskId(t)}
-              task={t}
-              selected={getTaskId(t) === selectedTaskId}
-              onSelect={onSelect}
-            />
+              type="button"
+              className="day-map-task-chip"
+              onClick={() => onAdd(getTaskId(t))}
+            >
+              <span className={`day-map-priority ${normalizePriority(t.priority).toLowerCase()}`}>
+                {normalizePriority(t.priority)}
+              </span>
+              <span className="day-map-chip-title">{t.title}</span>
+              <span className="day-map-chip-duration">{formatDuration(getEstimate(t))}</span>
+            </button>
           )) : (
-            <p className="day-map-all-set">All tasks placed ✓</p>
+            <p className="day-map-all-set">All tasks in the route ✓</p>
           )}
         </div>
       )}
@@ -325,115 +260,13 @@ function AvailableStrip({ tasks, selectedTaskId, onSelect, isOpen, onToggle }) {
   );
 }
 
-function PlanningWindowControls({ dayStartHour, dayEndHour, onChange }) {
-  return (
-    <div className="day-map-window-controls" aria-label="Planning window">
-      <label className="day-map-window-control">
-        <span>Start</span>
-        <select
-          value={dayStartHour}
-          onChange={(e) => onChange(Number(e.target.value), dayEndHour)}
-          aria-label="Planning start time"
-        >
-          {START_HOUR_OPTIONS.map((hour) => (
-            <option key={hour} value={hour}>{formatClock(hour * 60)}</option>
-          ))}
-        </select>
-      </label>
-      <label className="day-map-window-control">
-        <span>Until</span>
-        <select
-          value={dayEndHour}
-          onChange={(e) => onChange(dayStartHour, Number(e.target.value))}
-          aria-label="Planning end time"
-        >
-          {END_HOUR_OPTIONS.map((hour) => (
-            <option key={hour} value={hour}>{formatClock(hour * 60)}</option>
-          ))}
-        </select>
-      </label>
-    </div>
-  );
-}
-
-function PeriodSection({
-  period, periods, tasks, selectedTask, expandedTaskId, onExpandTask,
-  onPlace, onStartChange, onDurationChange, onPeriodChange, onRemove,
-}) {
-  const capacity = period.end - period.start;
-  const planned = tasks.reduce((sum, t) => sum + getEstimate(t), 0);
-  const load = capacity ? Math.round((planned / capacity) * 100) : 0;
-  const isOverbooked = load > 100;
-  const sortableItems = tasks.map((t) => `${SCHEDULED_ID_PREFIX}${getTaskId(t)}`);
-
-  return (
-    <DroppablePeriod period={period} isActive={!!selectedTask}>
-      <div className="day-map-period-head">
-        <div>
-          <h2>{period.label}</h2>
-          <span className="day-map-period-range">
-            {formatShortClock(period.start)} – {formatShortClock(period.end)}
-          </span>
-        </div>
-        {planned > 0 && (
-          <span className={`day-map-load-pill${isOverbooked ? " over" : ""}`}>
-            {formatDuration(planned)}
-          </span>
-        )}
-      </div>
-
-      {planned > 0 && (
-        <div className="day-map-period-meter" aria-hidden="true">
-          <span style={{ width: `${Math.min(load, 100)}%` }} />
-        </div>
-      )}
-
-      <div className="day-map-task-stack">
-        {tasks.length ? (
-          <SortableContext items={sortableItems} strategy={verticalListSortingStrategy}>
-            {tasks.map((t) => (
-              <SortableCompactTaskRow
-                key={getTaskId(t)}
-                task={t}
-                period={period}
-                periods={periods}
-                isExpanded={expandedTaskId === getTaskId(t)}
-                onToggle={() => onExpandTask(expandedTaskId === getTaskId(t) ? null : getTaskId(t))}
-                onStartChange={onStartChange}
-                onDurationChange={onDurationChange}
-                onPeriodChange={onPeriodChange}
-                onRemove={onRemove}
-              />
-            ))}
-          </SortableContext>
-        ) : (
-          <div className="day-map-empty-slot">
-            <span>Open slot</span>
-            <small>{formatDuration(capacity)} available</small>
-          </div>
-        )}
-      </div>
-
-      {selectedTask && (
-        <button type="button" className="day-map-place-btn" onClick={() => onPlace(period.id)}>
-          Place here — {selectedTask.title.length > 24 ? `${selectedTask.title.slice(0, 24)}…` : selectedTask.title}
-        </button>
-      )}
-    </DroppablePeriod>
-  );
-}
-
 export default function DayMapPage({ payload, savePayload, onClose, onAddTask }) {
-  const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [stripOpen, setStripOpen] = useState(true);
+
   const todayStr = toLocalDateStr(new Date());
   const tasks = payload?.tasks || [];
   const config = payload?.config || {};
-  const dayStartHour = getConfigHour(config, "dayStartHour", DEFAULT_DAY_START_HOUR, 5, 12);
-  const dayEndHour = getConfigHour(config, "dayEndHour", DEFAULT_DAY_END_HOUR, 21, 29);
-  const periods = useMemo(() => buildPeriods(dayStartHour, dayEndHour), [dayStartHour, dayEndHour]);
-  const periodById = useMemo(() => Object.fromEntries(periods.map((p) => [p.id, p])), [periods]);
 
   const payloadRef = useRef(payload);
   payloadRef.current = payload;
@@ -446,262 +279,141 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
 
   const activeTodayTasks = useMemo(() => (
     tasks
-      .filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted && !t.isParked)
+      .filter(t => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted && !t.isParked)
       .sort(sortByPriorityAndOrder)
   ), [tasks]);
 
-  const scheduledByPeriod = useMemo(() => {
-    const grouped = Object.fromEntries(periods.map((p) => [p.id, []]));
-    activeTodayTasks.forEach((t) => {
-      if (!taskIsScheduledToday(t, todayStr)) return;
-      if (grouped[t.dayMapPeriod]) grouped[t.dayMapPeriod].push(t);
-    });
-    periods.forEach((p) => {
-      grouped[p.id].sort(sortByDayMapTime(p));
-    });
-    return grouped;
-  }, [activeTodayTasks, periods, todayStr]);
+  const scheduledTasks = useMemo(() => (
+    activeTodayTasks
+      .filter(t => t.dayMapDate === todayStr && t.dayMapOrder != null)
+      .sort((a, b) => (a.dayMapOrder ?? 9999) - (b.dayMapOrder ?? 9999))
+  ), [activeTodayTasks, todayStr]);
 
   const unscheduledTasks = useMemo(() => (
-    activeTodayTasks.filter((t) => !taskIsScheduledToday(t, todayStr) || !periodById[t.dayMapPeriod])
-  ), [activeTodayTasks, periodById, todayStr]);
+    activeTodayTasks.filter(t => t.dayMapDate !== todayStr || t.dayMapOrder == null)
+  ), [activeTodayTasks, todayStr]);
 
-  const selectedTask = activeTodayTasks.find((t) => getTaskId(t) === selectedTaskId) || null;
-  const plannedMinutes = activeTodayTasks.reduce((sum, t) => (
-    taskIsScheduledToday(t, todayStr) && periodById[t.dayMapPeriod] ? sum + getEstimate(t) : sum
-  ), 0);
-  const totalCapacity = periods.reduce((sum, p) => sum + (p.end - p.start), 0);
-  const scheduledCount = activeTodayTasks.length - unscheduledTasks.length;
+  // Anchor: config-persisted → inferred from first scheduled task → current time
+  const anchorMinutes = useMemo(() => {
+    if (config.dayMapDate === todayStr && config.dayMapAnchorMinutes != null) {
+      return Number(config.dayMapAnchorMinutes);
+    }
+    if (scheduledTasks.length > 0 && scheduledTasks[0].dayMapStartMinutes != null) {
+      return Number(scheduledTasks[0].dayMapStartMinutes);
+    }
+    return roundToQuarter(currentDayMinutes());
+  }, [config.dayMapDate, config.dayMapAnchorMinutes, scheduledTasks, todayStr]);
 
-  const saveTasks = (nextTasks) => {
-    const p = payloadRef.current;
-    savePayload({ ...p, tasks: nextTasks, timestamp: Date.now() });
-  };
-
-  const saveConfig = (nextConfig) => {
-    const p = payloadRef.current;
-    savePayload({
-      ...p,
-      config: { ...(p?.config || {}), ...nextConfig, lastUpdated: Date.now() },
-      timestamp: Date.now(),
-    });
-  };
+  const totalDuration = scheduledTasks.reduce((sum, t) => sum + getEstimate(t), 0);
+  const sortableIds = scheduledTasks.map(getTaskId);
 
   const latestTasks = () => payloadRef.current?.tasks || [];
 
-  const getPeriodTasksFrom = (sourceTasks, periodId) => (
-    sourceTasks
-      .filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted && !t.isParked)
-      .filter((t) => taskIsScheduledToday(t, todayStr) && t.dayMapPeriod === periodId)
-      .sort(sortByDayMapTime(periodById[periodId] || periods[0]))
-  );
+  // Reflow ordered tasks from anchor and save everything in one atomic payload write
+  const applyAndSave = (orderedScheduled, anchor, configPatch = null) => {
+    const reflowed = reflowRoute(orderedScheduled, anchor, todayStr);
+    const p = payloadRef.current;
+    const nextTasks = applyReflow(latestTasks(), reflowed);
+    const update = { ...p, tasks: nextTasks, timestamp: Date.now() };
+    if (configPatch) {
+      update.config = { ...(p?.config || {}), ...configPatch, lastUpdated: Date.now() };
+    }
+    savePayload(update);
+  };
 
-  const buildPeriodUpdates = (periodId, orderedTasks, now = Date.now()) => {
-    const period = periodById[periodId];
-    if (!period) return new Map();
-    const updates = new Map();
-    let cursor = effectivePeriodStart(period);
-    orderedTasks.forEach((task, index) => {
-      const duration = getEstimate(task);
-      const start = roundToQuarter(cursor);
-      updates.set(getTaskId(task), {
-        dayMapDate: todayStr,
-        dayMapPeriod: periodId,
-        dayMapStartMinutes: start,
-        dayMapDurationMinutes: duration,
-        dayMapOrder: index,
-        lastUpdated: now,
-      });
-      cursor = start + duration + 10;
+  const startFromNow = () => {
+    const now = roundToQuarter(currentDayMinutes());
+    applyAndSave(scheduledTasks, now, { dayMapDate: todayStr, dayMapAnchorMinutes: now });
+  };
+
+  const setAnchor = (minutes) => {
+    applyAndSave(scheduledTasks, minutes, { dayMapDate: todayStr, dayMapAnchorMinutes: minutes });
+  };
+
+  const addToRoute = (taskId) => {
+    const task = latestTasks().find(t => getTaskId(t) === taskId);
+    if (!task) return;
+    applyAndSave([...scheduledTasks, task], anchorMinutes);
+  };
+
+  const removeFromRoute = (taskId) => {
+    const newScheduled = scheduledTasks.filter(t => getTaskId(t) !== taskId);
+    const reflowed = reflowRoute(newScheduled, anchorMinutes, todayStr);
+    const p = payloadRef.current;
+    const nextTasks = latestTasks().map(t => {
+      if (getTaskId(t) === taskId) return removeScheduleFields(t);
+      const updated = reflowed.find(r => getTaskId(r) === getTaskId(t));
+      return updated || t;
     });
-    return updates;
-  };
-
-  const applyUpdates = (currentTasks, updates) => (
-    currentTasks.map((task) => {
-      const update = updates.get(getTaskId(task));
-      return update ? { ...task, ...update } : task;
-    })
-  );
-
-  const nextSlotForPeriod = (periodId) => {
-    const period = periodById[periodId] || periods[0];
-    const scheduled = scheduledByPeriod[periodId] || [];
-    const cursor = scheduled.reduce((max, t) => {
-      const start = Number(t.dayMapStartMinutes ?? period.start);
-      return Math.max(max, start + getEstimate(t) + 10);
-    }, period.start);
-    return roundToQuarter(Math.max(period.start, cursor));
-  };
-
-  const scheduleTask = (taskId, periodId, startOverride = null) => {
-    const currentTasks = latestTasks();
-    const task = currentTasks.find((t) => getTaskId(t) === taskId);
-    const period = periodById[periodId];
-    if (!task || !period) return;
-    const duration = getEstimate(task);
-    const start = startOverride ?? nextSlotForPeriod(periodId);
-    saveTasks(currentTasks.map((t) =>
-      getTaskId(t) === taskId
-        ? { ...t, dayMapDate: todayStr, dayMapPeriod: periodId, dayMapStartMinutes: start, dayMapDurationMinutes: duration, lastUpdated: Date.now() }
-        : t
-    ));
-    setSelectedTaskId(null);
-  };
-
-  const handleChipSelect = (taskId) => {
-    setSelectedTaskId((cur) => cur === taskId ? null : taskId);
-    setExpandedTaskId(null);
-  };
-
-  const changePlanningWindow = (startHour, endHour) => {
-    const nextStart = clamp(startHour, 5, 12);
-    const nextEnd = clamp(endHour, 21, 29);
-    saveConfig({ dayStartHour: nextStart, dayEndHour: Math.max(nextEnd, nextStart + 1) });
-  };
-
-  const changeStart = (taskId, startMinutes) => {
-    saveTasks(latestTasks().map((t) => getTaskId(t) === taskId ? { ...t, dayMapStartMinutes: startMinutes, lastUpdated: Date.now() } : t));
-  };
-
-  const changeDuration = (taskId, duration) => {
-    saveTasks(latestTasks().map((t) => getTaskId(t) === taskId ? { ...t, dayMapDurationMinutes: duration, lastUpdated: Date.now() } : t));
-  };
-
-  const changePeriod = (taskId, newPeriodId) => {
-    const currentTasks = latestTasks();
-    const task = currentTasks.find((t) => getTaskId(t) === taskId);
-    if (!task || !periodById[newPeriodId]) return;
-    const newStart = nextSlotForPeriod(newPeriodId);
-    saveTasks(currentTasks.map((t) =>
-      getTaskId(t) === taskId
-        ? { ...t, dayMapPeriod: newPeriodId, dayMapStartMinutes: newStart, lastUpdated: Date.now() }
-        : t
-    ));
-    setExpandedTaskId(null);
-  };
-
-  const removeFromMap = (taskId) => {
-    saveTasks(latestTasks().map((t) => getTaskId(t) === taskId ? removeScheduleFields(t) : t));
+    savePayload({ ...p, tasks: nextTasks, timestamp: Date.now() });
     if (expandedTaskId === taskId) setExpandedTaskId(null);
   };
 
-  const clearMap = () => {
-    saveTasks(latestTasks().map((t) => taskIsScheduledToday(t, todayStr) ? removeScheduleFields(t) : t));
-    setSelectedTaskId(null);
-    setExpandedTaskId(null);
+  const changeDuration = (taskId, duration) => {
+    const newScheduled = scheduledTasks.map(t =>
+      getTaskId(t) === taskId ? { ...t, dayMapDurationMinutes: duration } : t
+    );
+    applyAndSave(newScheduled, anchorMinutes);
   };
 
-  const choosePeriodForTask = (task, cursors) => {
-    const duration = getEstimate(task);
-    const preferredIds = getPreferredPeriods(task).filter((id) => periodById[id]);
-    const allIds = periods.map((p) => p.id);
-    return preferredIds.find((id) => cursors[id] + duration <= periodById[id].end)
-      || allIds.find((id) => cursors[id] + duration <= periodById[id].end)
-      || [...preferredIds, ...allIds][0];
+  const moveTask = (taskId, direction) => {
+    const index = scheduledTasks.findIndex(t => getTaskId(t) === taskId);
+    if (index === -1) return;
+    const newIndex = direction === "up" ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= scheduledTasks.length) return;
+    applyAndSave(arrayMove([...scheduledTasks], index, newIndex), anchorMinutes);
   };
 
-  const placeTasksByPriority = (tasksToPlace, seedScheduled = scheduledByPeriod) => {
-    const cursors = {};
-    const orderCounters = {};
-    periods.forEach((p) => {
-      const scheduled = seedScheduled[p.id] || [];
-      cursors[p.id] = scheduled.reduce((max, t) => {
-        const start = Number(t.dayMapStartMinutes ?? p.start);
-        return Math.max(max, start + getEstimate(t) + 10);
-      }, effectivePeriodStart(p));
-      orderCounters[p.id] = scheduled.length;
-    });
-
-    const now = Date.now();
-    const placements = new Map();
-    [...tasksToPlace].sort(sortByPriorityAndOrder).forEach((task) => {
-      const periodId = choosePeriodForTask(task, cursors);
-      if (!periodId) return;
-      const duration = getEstimate(task);
-      const start = roundToQuarter(cursors[periodId]);
-      cursors[periodId] = start + duration + 10;
-      placements.set(getTaskId(task), {
-        dayMapDate: todayStr,
-        dayMapPeriod: periodId,
-        dayMapStartMinutes: start,
-        dayMapDurationMinutes: duration,
-        dayMapOrder: orderCounters[periodId] || 0,
-        lastUpdated: now,
-      });
-      orderCounters[periodId] = (orderCounters[periodId] || 0) + 1;
-    });
-    return placements;
-  };
-
-  const autoFillGaps = () => {
+  const autoFill = () => {
     if (!unscheduledTasks.length) return;
-    const placements = placeTasksByPriority(unscheduledTasks);
-    saveTasks(applyUpdates(latestTasks(), placements));
-    setSelectedTaskId(null);
-    setExpandedTaskId(null);
+    const newScheduled = [...scheduledTasks, ...unscheduledTasks.sort(sortByPriorityAndOrder)];
+    applyAndSave(newScheduled, anchorMinutes);
+    setStripOpen(false);
   };
 
-  const rebuildDay = () => {
-    if (!activeTodayTasks.length) return;
-    const emptyScheduled = Object.fromEntries(periods.map((p) => [p.id, []]));
-    const placements = placeTasksByPriority(activeTodayTasks, emptyScheduled);
-    saveTasks(applyUpdates(latestTasks(), placements));
-    setSelectedTaskId(null);
-    setExpandedTaskId(null);
-  };
-
-  const getDropTarget = (over) => {
-    if (!over?.id) return null;
-    const overId = String(over.id);
-    if (periodById[overId]) {
-      return { periodId: overId, index: (scheduledByPeriod[overId] || []).length };
-    }
-    if (overId.startsWith(SCHEDULED_ID_PREFIX)) {
-      const overTaskId = overId.slice(SCHEDULED_ID_PREFIX.length);
-      for (const period of periods) {
-        const list = scheduledByPeriod[period.id] || [];
-        const index = list.findIndex((task) => getTaskId(task) === overTaskId);
-        if (index !== -1) return { periodId: period.id, index };
-      }
-    }
-    return null;
-  };
-
-  const moveTaskToTarget = (taskId, targetPeriodId, targetIndex, sourcePeriodId = null) => {
-    const currentTasks = latestTasks();
-    const movingTask = currentTasks.find((t) => getTaskId(t) === taskId);
-    if (!movingTask || !periodById[targetPeriodId]) return;
-
-    const periodLists = Object.fromEntries(periods.map((period) => [
-      period.id,
-      getPeriodTasksFrom(currentTasks, period.id).filter((task) => getTaskId(task) !== taskId),
-    ]));
-    const destination = periodLists[targetPeriodId] || [];
-    const insertIndex = clamp(targetIndex ?? destination.length, 0, destination.length);
-    periodLists[targetPeriodId] = [
-      ...destination.slice(0, insertIndex),
-      movingTask,
-      ...destination.slice(insertIndex),
-    ];
-
-    const affectedPeriods = new Set([sourcePeriodId, targetPeriodId].filter(Boolean));
-    const now = Date.now();
-    const updates = new Map();
-    affectedPeriods.forEach((periodId) => {
-      buildPeriodUpdates(periodId, periodLists[periodId] || [], now).forEach((value, key) => updates.set(key, value));
+  const clearRoute = () => {
+    const p = payloadRef.current;
+    savePayload({
+      ...p,
+      tasks: latestTasks().map(t => t.dayMapDate === todayStr ? removeScheduleFields(t) : t),
+      timestamp: Date.now(),
     });
-    saveTasks(applyUpdates(currentTasks, updates));
-    setSelectedTaskId(null);
     setExpandedTaskId(null);
+  };
+
+  const startFocus = (taskId) => {
+    const now = Date.now();
+    const p = payloadRef.current;
+    const nextTasks = latestTasks().map(t => {
+      const shouldFocus = getTaskId(t) === taskId;
+      if (t.isNowFocus === shouldFocus) return t;
+      return { ...t, isNowFocus: shouldFocus, lastUpdated: now };
+    });
+    savePayload({ ...p, tasks: nextTasks, timestamp: Date.now() });
+    onClose();
   };
 
   const handleDragEnd = ({ active, over }) => {
-    const taskId = active?.data?.current?.taskId;
-    const target = getDropTarget(over);
-    if (!taskId || !target) return;
-    moveTaskToTarget(taskId, target.periodId, target.index, active?.data?.current?.periodId || null);
+    if (!over || active.id === over.id) return;
+    const oldIndex = scheduledTasks.findIndex(t => getTaskId(t) === active.id);
+    const newIndex = scheduledTasks.findIndex(t => getTaskId(t) === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    applyAndSave(arrayMove([...scheduledTasks], oldIndex, newIndex), anchorMinutes);
   };
+
+  const routeItems = useMemo(() => {
+    const items = [];
+    let lastPeriod = null;
+    scheduledTasks.forEach((task, index) => {
+      const period = getPeriodForMinutes(Number(task.dayMapStartMinutes ?? 0));
+      if (period !== lastPeriod) {
+        items.push({ type: "divider", id: `div-${period}-${index}`, label: PERIOD_LABELS[period] || period });
+        lastPeriod = period;
+      }
+      items.push({ type: "task", id: getTaskId(task), task, index });
+    });
+    return items;
+  }, [scheduledTasks]);
 
   return (
     <div className="day-map-page">
@@ -712,8 +424,8 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
           <h1>Day Map</h1>
         </div>
         <div className="day-map-stats">
-          <span>{scheduledCount}/{activeTodayTasks.length} placed</span>
-          {plannedMinutes > 0 && <span>{formatDuration(plannedMinutes)} planned</span>}
+          <span>{scheduledTasks.length}/{activeTodayTasks.length} placed</span>
+          {totalDuration > 0 && <span>{formatDuration(totalDuration)}</span>}
         </div>
       </div>
 
@@ -724,56 +436,55 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
           <button type="button" className="day-map-primary" onClick={onAddTask}>Add Today task</button>
         </section>
       ) : (
-        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-          <section className="day-map-overview day-map-planning-overview">
-            <div className="day-map-load-line">
-              <div>
-                <strong>{formatDuration(Math.max(totalCapacity - plannedMinutes, 0))}</strong>
-                <span>open space today</span>
-              </div>
-              <div className="day-map-load-track" aria-hidden="true">
-                <span style={{ width: `${Math.min((plannedMinutes / Math.max(totalCapacity, 1)) * 100, 100)}%` }} />
-              </div>
-            </div>
-            <PlanningWindowControls
-              dayStartHour={dayStartHour}
-              dayEndHour={dayEndHour}
-              onChange={changePlanningWindow}
-            />
-            <div className="day-map-actions">
-              <button type="button" onClick={autoFillGaps} disabled={!unscheduledTasks.length}>Auto-fill</button>
-              <button type="button" className="day-map-rebuild-btn" onClick={rebuildDay} disabled={!activeTodayTasks.length}>Rebuild day</button>
-              <button type="button" onClick={clearMap} disabled={!scheduledCount}>Clear</button>
-            </div>
-          </section>
+        <>
+          <AnchorControl
+            anchorMinutes={anchorMinutes}
+            onStartFromNow={startFromNow}
+            onChangeAnchor={setAnchor}
+          />
+
+          <div className="day-map-actions">
+            <button type="button" onClick={autoFill} disabled={!unscheduledTasks.length}>Auto-fill</button>
+            <button type="button" onClick={clearRoute} disabled={!scheduledTasks.length}>Clear</button>
+          </div>
 
           <AvailableStrip
             tasks={unscheduledTasks}
-            selectedTaskId={selectedTaskId}
-            onSelect={handleChipSelect}
             isOpen={stripOpen}
-            onToggle={() => setStripOpen((o) => !o)}
+            onToggle={() => setStripOpen(o => !o)}
+            onAdd={addToRoute}
           />
 
-          <div className="day-map-timeline">
-            {periods.map((period) => (
-              <PeriodSection
-                key={period.id}
-                period={period}
-                periods={periods}
-                tasks={scheduledByPeriod[period.id] || []}
-                selectedTask={selectedTask}
-                expandedTaskId={expandedTaskId}
-                onExpandTask={setExpandedTaskId}
-                onPlace={(periodId) => scheduleTask(selectedTaskId, periodId)}
-                onStartChange={changeStart}
-                onDurationChange={changeDuration}
-                onPeriodChange={changePeriod}
-                onRemove={removeFromMap}
-              />
-            ))}
-          </div>
-        </DndContext>
+          {scheduledTasks.length === 0 ? (
+            <p className="day-map-route-empty">No tasks in route yet — tap a task above or use Auto-fill.</p>
+          ) : (
+            <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+              <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+                <div className="day-map-route">
+                  {routeItems.map(item =>
+                    item.type === "divider" ? (
+                      <PeriodDivider key={item.id} label={item.label} />
+                    ) : (
+                      <RouteRow
+                        key={item.id}
+                        task={item.task}
+                        index={item.index}
+                        total={scheduledTasks.length}
+                        isExpanded={expandedTaskId === item.id}
+                        onToggle={() => setExpandedTaskId(expandedTaskId === item.id ? null : item.id)}
+                        onMoveUp={() => moveTask(item.id, "up")}
+                        onMoveDown={() => moveTask(item.id, "down")}
+                        onRemove={removeFromRoute}
+                        onDurationChange={changeDuration}
+                        onStartFocus={() => startFocus(item.id)}
+                      />
+                    )
+                  )}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
+        </>
       )}
     </div>
   );
