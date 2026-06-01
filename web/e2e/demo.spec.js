@@ -117,16 +117,15 @@ test("7. User can edit a task", async ({ page }) => {
   await expect(editBtn).toBeVisible({ timeout: 3_000 });
   await editBtn.click();
 
-  // Inline edit card should appear
-  await expect(page.locator(".task-edit-card")).toBeVisible({ timeout: 5_000 });
+  // Full edit dialog (AddTaskDialog) should open
+  await expect(page.locator(".modal-card")).toBeVisible({ timeout: 5_000 });
 
   // Change the title
   const editedTitle = "Edited by Playwright";
-  const titleInput = page.locator(".task-edit-card input.text-input").first();
-  await titleInput.fill(editedTitle);
+  await page.getByTestId("add-task-title").fill(editedTitle);
 
   // Save
-  await page.locator(".task-edit-card").getByText("Save").click();
+  await page.getByTestId("add-task-submit").click();
 
   // Edited title appears in the list
   await expect(tasksList.getByText(editedTitle)).toBeVisible({ timeout: 5_000 });
