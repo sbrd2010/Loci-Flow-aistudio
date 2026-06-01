@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ref, onValue, set, update, runTransaction, get } from "firebase/database";
+import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } from "firebase/database";
 import { db } from "./firebase";
 import { safeUUID } from "./utils/uuid";
 
@@ -311,7 +311,12 @@ export function useSync(uid, email) {
   }, [dbRefPath, uid, email]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Flush pending debounced write on tab close / mobile background / screen lock.
+  // Also force-reconnects Firebase when the tab comes back after OS suspension —
+  // on iOS/Android the long-poll silently drops while backgrounded, and Firebase's
+  // auto-reconnect is unreliable after a deep sleep. goOffline+goOnline kicks it.
   useEffect(() => {
+    let hiddenAt = 0;
+
     const flush = () => {
       if (timeoutRef.current && dbRefPath && payloadRef.current) {
         clearTimeout(timeoutRef.current);
@@ -320,7 +325,13 @@ export function useSync(uid, email) {
       }
     };
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") flush();
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        flush();
+      } else if (Date.now() - hiddenAt > 30_000 && dbRefPath) {
+        goOffline(db);
+        goOnline(db);
+      }
     };
     window.addEventListener("beforeunload", flush);
     window.addEventListener("pagehide", flush);
