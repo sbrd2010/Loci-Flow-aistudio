@@ -306,6 +306,7 @@ export function useSync(uid, email) {
       if (dataTimeoutRef.current) { clearTimeout(dataTimeoutRef.current); dataTimeoutRef.current = null; }
       console.error("Error reading RTDB payload:", err);
       setIsSyncingFromCache(false);
+      pendingRemoteRef.current = null;
       if (!hasCachedData) {
         setError("Could not connect to sync server. Check your connection and reload.");
         setConnPhase(CONN.ERROR);
@@ -413,7 +414,7 @@ export function useSync(uid, email) {
             if (pendingRemoteRef.current) {
               const remote = pendingRemoteRef.current;
               pendingRemoteRef.current = null;
-              if ((remote.timestamp || 0) > (payloadRef.current?.timestamp || 0)) {
+              if ((remote.timestamp || 0) >= (payloadRef.current?.timestamp || 0)) {
                 setPayload(remote);
                 payloadRef.current = remote;
                 if (uid) writeCache(uid, remote);
@@ -426,6 +427,11 @@ export function useSync(uid, email) {
 
   const saveSubPath = (subPath, value) => {
     if (!dbRefPath) return;
+    // Mirror the update locally so a concurrent savePayload debounce
+    // can't clobber this write when it flushes payloadRef.current
+    if (payloadRef.current) {
+      payloadRef.current = { ...payloadRef.current, [subPath]: value, timestamp: Date.now() };
+    }
     const updates = {
       [`${dbRefPath}/${subPath}`]: value,
       [`${dbRefPath}/timestamp`]: Date.now()
