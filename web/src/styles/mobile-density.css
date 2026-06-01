@@ -104,7 +104,9 @@
     border-radius: 10px;
     border-left-width: 3px;
     box-shadow: var(--shadow-sm);
-    background: color-mix(in srgb, var(--accent-ring) 54%, var(--bg-card));
+    background:
+      linear-gradient(90deg, rgba(46, 125, 82, 0.08), rgba(46, 125, 82, 0.04)),
+      var(--bg-card);
   }
 
   .tasks-section .checkbox-container {
