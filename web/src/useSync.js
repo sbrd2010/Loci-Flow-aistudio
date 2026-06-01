@@ -339,7 +339,8 @@ export function useSync(uid, email) {
       // keepalive: true guarantees delivery even when iOS/Android kills the page
       // mid-write. Falls back to the Firebase SDK if no token is cached yet.
       if (tokenRef.current) {
-        const url = `https://loci-flow-default-rtdb.firebaseio.com/${dbRefPath}.json?auth=${tokenRef.current}`;
+        const rtdbUrl = db.app.options.databaseURL;
+        const url = `${rtdbUrl}/${dbRefPath}.json?auth=${tokenRef.current}`;
         fetch(url, {
           method: "PUT",
           body: JSON.stringify(data),

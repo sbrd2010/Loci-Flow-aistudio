@@ -123,7 +123,7 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
     const now = new Date();
     const hour = now.getHours();
     if (payload.config?.eveningGuardWindowActive && hour >= 20) {
-      setFormError("🌙 Evening Guard is active — no new tasks after 8 PM. Go rest!");
+      setFormError("🌙 Evening Guard is active — no new tasks at or after 8 PM. Go rest!");
       return;
     }
     setFormError("");
