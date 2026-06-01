@@ -260,7 +260,7 @@ function AvailableStrip({ tasks, isOpen, onToggle, onAdd }) {
   );
 }
 
-export default function DayMapPage({ payload, savePayload, onClose, onAddTask }) {
+export default function DayMapPage({ payload, savePayload, onClose, onAddTask, flushNow = () => {} }) {
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [stripOpen, setStripOpen] = useState(true);
 
@@ -283,14 +283,20 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
       .sort(sortByPriorityAndOrder)
   ), [tasks]);
 
+  // Include old-format tasks (dayMapPeriod set but no dayMapOrder) for backward compat
   const scheduledTasks = useMemo(() => (
     activeTodayTasks
-      .filter(t => t.dayMapDate === todayStr && t.dayMapOrder != null)
-      .sort((a, b) => (a.dayMapOrder ?? 9999) - (b.dayMapOrder ?? 9999))
+      .filter(t => t.dayMapDate === todayStr && (t.dayMapOrder != null || !!t.dayMapPeriod))
+      .sort((a, b) => {
+        const oa = a.dayMapOrder ?? Infinity;
+        const ob = b.dayMapOrder ?? Infinity;
+        if (oa !== ob) return oa - ob;
+        return (a.dayMapStartMinutes ?? 0) - (b.dayMapStartMinutes ?? 0);
+      })
   ), [activeTodayTasks, todayStr]);
 
   const unscheduledTasks = useMemo(() => (
-    activeTodayTasks.filter(t => t.dayMapDate !== todayStr || t.dayMapOrder == null)
+    activeTodayTasks.filter(t => t.dayMapDate !== todayStr || (t.dayMapOrder == null && !t.dayMapPeriod))
   ), [activeTodayTasks, todayStr]);
 
   // Anchor: config-persisted → inferred from first scheduled task → current time
@@ -390,6 +396,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
       return { ...t, isNowFocus: shouldFocus, lastUpdated: now };
     });
     savePayload({ ...p, tasks: nextTasks, timestamp: Date.now() });
+    flushNow();
     onClose();
   };
 
@@ -418,7 +425,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
   return (
     <div className="day-map-page">
       <div className="day-map-topbar">
-        <button type="button" className="day-map-back" onClick={onClose}>Back</button>
+        <button type="button" className="day-map-back" onClick={() => { flushNow(); onClose(); }}>Back</button>
         <div className="day-map-title">
           <span>Today</span>
           <h1>Day Map</h1>

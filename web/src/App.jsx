@@ -147,12 +147,13 @@ export default function App() {
   };
 
   // Load the sync payload from RTDB (skipped in demo mode — uid is null)
-  const { payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, savePayload: rtdbSave, saveSubPath: rtdbSaveSub } =
+  const { payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, savePayload: rtdbSave, saveSubPath: rtdbSaveSub, flushNow: rtdbFlushNow } =
     useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
   const payload = demoMode ? demoPayload : rtdbPayload;
   const savePayload = demoMode ? saveDemoPayload : rtdbSave;
   const saveSubPath = demoMode ? saveDemoSubPath : rtdbSaveSub;
+  const flushNow = demoMode ? () => {} : (rtdbFlushNow || (() => {}));
 
   // Schedule task reminders whenever payload loads/changes
   useEffect(() => {
@@ -412,6 +413,7 @@ export default function App() {
             savePayload={savePayload}
             onClose={goToday}
             onAddTask={() => openAddTask("today")}
+            flushNow={flushNow}
           />
         )}
         {activeTab === "roadmap" && (
