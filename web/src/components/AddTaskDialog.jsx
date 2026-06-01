@@ -21,7 +21,7 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
   const [priority, setPriority] = useState(editTask?.priority || "P3");
   const [category, setCategory] = useState(editTask?.category || "Personal");
   const [estimateMinutes, setEstimateMinutes] = useState(editTask?.timeEstimateMinutes || 25);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(isEditMode);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
   const [formError, setFormError] = useState("");
@@ -391,7 +391,7 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
           <div className="modal-footer" style={{ padding: "0", marginTop: "8px" }}>
             {saved ? (
               <div style={{ flex: 1, textAlign: "center", padding: "12px", background: "var(--success)", borderRadius: "var(--radius-sm)", color: "#fff", fontWeight: "700", fontSize: "14px" }}>
-                ✓ Task added!
+                {isEditMode ? "✓ Saved!" : "✓ Task added!"}
               </div>
             ) : (
               <>
@@ -399,7 +399,7 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
                   Cancel
                 </button>
                 <button type="submit" className="btn" data-testid="add-task-submit" style={{ flex: 1 }}>
-                  Add Task
+                  {isEditMode ? "Save" : "Add Task"}
                 </button>
               </>
             )}
