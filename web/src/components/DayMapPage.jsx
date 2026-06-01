@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -246,6 +246,10 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
   const todayStr = toLocalDateStr(new Date());
   const tasks = payload?.tasks || [];
 
+  // Always-fresh ref so drag/drop handlers never close over stale payload/tasks
+  const payloadRef = useRef(payload);
+  payloadRef.current = payload;
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
@@ -282,7 +286,14 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
   const totalCapacity = PERIODS.reduce((sum, p) => sum + (p.end - p.start), 0);
   const scheduledCount = activeTodayTasks.length - unscheduledTasks.length;
 
-  const saveTasks = (nextTasks) => savePayload({ ...payload, tasks: nextTasks, timestamp: Date.now() });
+  // Always reads latest payload from ref — avoids stale-closure overwrites when
+  // drag events fire before React has committed the previous render.
+  const saveTasks = (nextTasks) => {
+    const p = payloadRef.current;
+    savePayload({ ...p, tasks: nextTasks, timestamp: Date.now() });
+  };
+
+  const latestTasks = () => payloadRef.current?.tasks || [];
 
   const nextSlotForPeriod = (periodId) => {
     const period = PERIODS.find((p) => p.id === periodId) || PERIODS[0];
@@ -295,11 +306,12 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
   };
 
   const scheduleTask = (taskId, periodId, startOverride = null) => {
-    const task = tasks.find((t) => getTaskId(t) === taskId);
+    const currentTasks = latestTasks();
+    const task = currentTasks.find((t) => getTaskId(t) === taskId);
     if (!task) return;
     const duration = getEstimate(task);
     const start = startOverride ?? nextSlotForPeriod(periodId);
-    saveTasks(tasks.map((t) => (
+    saveTasks(currentTasks.map((t) => (
       getTaskId(t) === taskId
         ? { ...t, dayMapDate: todayStr, dayMapPeriod: periodId, dayMapStartMinutes: start, dayMapDurationMinutes: duration, lastUpdated: Date.now() }
         : t
@@ -314,19 +326,19 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
   };
 
   const changeStart = (taskId, startMinutes) => {
-    saveTasks(tasks.map((t) => getTaskId(t) === taskId ? { ...t, dayMapStartMinutes: startMinutes, lastUpdated: Date.now() } : t));
+    saveTasks(latestTasks().map((t) => getTaskId(t) === taskId ? { ...t, dayMapStartMinutes: startMinutes, lastUpdated: Date.now() } : t));
   };
 
   const changeDuration = (taskId, duration) => {
-    saveTasks(tasks.map((t) => getTaskId(t) === taskId ? { ...t, dayMapDurationMinutes: duration, lastUpdated: Date.now() } : t));
+    saveTasks(latestTasks().map((t) => getTaskId(t) === taskId ? { ...t, dayMapDurationMinutes: duration, lastUpdated: Date.now() } : t));
   };
 
   const removeFromMap = (taskId) => {
-    saveTasks(tasks.map((t) => getTaskId(t) === taskId ? removeScheduleFields(t) : t));
+    saveTasks(latestTasks().map((t) => getTaskId(t) === taskId ? removeScheduleFields(t) : t));
   };
 
   const clearMap = () => {
-    saveTasks(tasks.map((t) => taskIsScheduledToday(t, todayStr) ? removeScheduleFields(t) : t));
+    saveTasks(latestTasks().map((t) => taskIsScheduledToday(t, todayStr) ? removeScheduleFields(t) : t));
     setSelectedTaskId(null);
     setPickerPeriod(null);
   };
@@ -352,7 +364,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
       cursors[periodId] = start + duration + 10;
       placements.set(getTaskId(t), { periodId, start, duration });
     });
-    saveTasks(tasks.map((t) => {
+    saveTasks(latestTasks().map((t) => {
       const p = placements.get(getTaskId(t));
       return p ? { ...t, dayMapDate: todayStr, dayMapPeriod: p.periodId, dayMapStartMinutes: p.start, dayMapDurationMinutes: p.duration, lastUpdated: Date.now() } : t;
     }));
