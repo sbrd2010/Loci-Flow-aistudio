@@ -161,19 +161,25 @@ test("9. Focus timer starts and pauses", async ({ page }) => {
   const focusCard = page.locator(".focus-card");
   await expect(focusCard).toBeVisible({ timeout: 8_000 });
 
+  // Initially stopped — TodayTab play button shows ▶ (only one button at this point)
   const playPauseBtn = page.getByTestId("timer-play-pause");
   await expect(playPauseBtn).toBeVisible({ timeout: 5_000 });
-
-  // Initially stopped — button shows ▶
   await expect(playPauseBtn).toContainText("▶");
 
-  // Start the timer
+  // Start the timer — this opens the full-screen Focus Mode overlay
   await playPauseBtn.click();
-  await expect(playPauseBtn).toContainText("⏸", { timeout: 3_000 });
 
-  // Pause the timer
-  await playPauseBtn.click();
-  await expect(playPauseBtn).toContainText("▶", { timeout: 3_000 });
+  // Overlay should now be visible
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 3_000 });
+
+  // Scope to overlay's play/pause button (avoids strict-mode violation from two matching testids)
+  const overlayPlayBtn = overlay.getByTestId("timer-play-pause");
+  await expect(overlayPlayBtn).toContainText("⏸", { timeout: 3_000 });
+
+  // Pause the timer from within the overlay
+  await overlayPlayBtn.click();
+  await expect(overlayPlayBtn).toContainText("▶", { timeout: 3_000 });
 });
 
 test("10. Demo banner is visible and clearly says data is not saved", async ({ page }) => {
