@@ -408,5 +408,14 @@ export function useSync(uid, email) {
     attempt(3);
   };
 
-  return { payload, loading, error, connPhase, isSyncingFromCache, savePayload, saveSubPath };
+  // Write any pending debounced payload immediately (call before navigating away).
+  const flushNow = () => {
+    if (timeoutRef.current && dbRefPath && payloadRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+      writeWithRetry(ref(db, dbRefPath), payloadRef.current).catch(() => {});
+    }
+  };
+
+  return { payload, loading, error, connPhase, isSyncingFromCache, savePayload, saveSubPath, flushNow };
 }
