@@ -226,8 +226,9 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap }) {
 
   const handlePinTask = (task) => {
     const now = Date.now();
+    const isPinning = !task.isNowFocus;
     savePayload({ ...payload, tasks: tasks.map((t) => {
-      const newFocus = t.uuid === task.uuid;
+      const newFocus = isPinning && t.uuid === task.uuid;
       if (t.isNowFocus === newFocus) return t;
       return { ...t, isNowFocus: newFocus, lastUpdated: now };
     })});
