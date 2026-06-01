@@ -35,6 +35,19 @@ function CheckIcon() {
   );
 }
 
+const hiddenControlTextStyle = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  margin: -1,
+  padding: 0,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  clipPath: "inset(50%)",
+  whiteSpace: "nowrap",
+  border: 0,
+};
+
 /**
  * FocusModePage - full-screen deep focus overlay.
  *
@@ -167,8 +180,12 @@ export default function FocusModePage({
               aria-label={isRunning ? "Pause timer" : "Start timer"}
             >
               {isRunning ? <PauseIcon /> : <PlayIcon />}
-              <span className="focus-mode-control-text" aria-hidden="true">
-                {isRunning ? "⏸" : "▶"}
+              <span
+                className="focus-mode-control-text"
+                aria-hidden="true"
+                style={hiddenControlTextStyle}
+              >
+                {isRunning ? "\u23f8" : "\u25b6"}
               </span>
             </button>
           </div>
