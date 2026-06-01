@@ -104,6 +104,7 @@ export default function FocusModePage({
   return (
     <div className={`focus-mode-overlay${isRunning ? " is-running" : ""}${isComplete ? " is-complete" : ""}`}>
       <button
+        type="button"
         className="focus-mode-exit-btn"
         onClick={onExit}
         aria-label="Exit focus mode"
@@ -165,6 +166,7 @@ export default function FocusModePage({
         {!isComplete && (
           <div className="focus-mode-controls" aria-label="Timer controls">
             <button
+              type="button"
               className="focus-mode-ctrl-btn"
               onClick={onReset}
               title="Reset timer"
@@ -174,6 +176,7 @@ export default function FocusModePage({
             </button>
 
             <button
+              type="button"
               className="focus-mode-ctrl-btn focus-mode-ctrl-play"
               data-testid="timer-play-pause"
               onClick={onPlayPause}
@@ -192,6 +195,7 @@ export default function FocusModePage({
         )}
 
         <button
+          type="button"
           className="focus-mode-done-btn"
           onClick={onDone}
           aria-label="Mark task complete and exit"
