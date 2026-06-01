@@ -167,6 +167,9 @@ export default function FocusModePage({
               aria-label={isRunning ? "Pause timer" : "Start timer"}
             >
               {isRunning ? <PauseIcon /> : <PlayIcon />}
+              <span className="focus-mode-control-text" aria-hidden="true">
+                {isRunning ? "⏸" : "▶"}
+              </span>
             </button>
           </div>
         )}
