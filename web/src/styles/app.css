@@ -3184,3 +3184,15 @@ html[data-theme="option-f-chronos"] {
   --btn-text: #ffffff;
 }
 
+/* Motivation quote — clamp to 1 line on small phones so it doesn't eat screen space */
+@media (max-width: 480px) {
+  .today-quote-secondary {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 11px !important;
+    opacity: 0.8;
+  }
+}
+

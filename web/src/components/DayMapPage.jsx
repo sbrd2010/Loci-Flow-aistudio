@@ -102,6 +102,7 @@ function getPreferredPeriods(task) {
   return ["afternoon", "evening", "morning", "night"];
 }
 
+// ── Draggable chip for the available strip ────────────────────────────────────
 function DraggableTaskChip({ task, selected, onSelect }) {
   const taskId = getTaskId(task);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -109,81 +110,147 @@ function DraggableTaskChip({ task, selected, onSelect }) {
     data: { taskId },
   });
   const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.55 : 1 }
-    : { opacity: isDragging ? 0.55 : 1 };
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.5 : 1, zIndex: isDragging ? 999 : undefined }
+    : { opacity: isDragging ? 0.5 : 1 };
 
   return (
     <button
       ref={setNodeRef}
       type="button"
-      className={`day-map-task-chip ${selected ? "selected" : ""}`}
+      className={`day-map-task-chip${selected ? " selected" : ""}`}
       style={style}
       onClick={() => onSelect(taskId)}
       {...attributes}
       {...listeners}
     >
-      <span className={`day-map-priority ${normalizePriority(task.priority).toLowerCase()}`}>{normalizePriority(task.priority)}</span>
+      <span className={`day-map-priority ${normalizePriority(task.priority).toLowerCase()}`}>
+        {normalizePriority(task.priority)}
+      </span>
       <span className="day-map-chip-title">{task.title}</span>
       <span className="day-map-chip-duration">{formatDuration(getEstimate(task))}</span>
     </button>
   );
 }
 
+// ── Droppable period wrapper ───────────────────────────────────────────────────
 function DroppablePeriod({ period, isActive, children }) {
   const { isOver, setNodeRef } = useDroppable({ id: period.id });
   return (
-    <section ref={setNodeRef} className={`day-map-period ${isOver ? "is-over" : ""} ${isActive ? "has-selection" : ""}`}>
+    <section
+      ref={setNodeRef}
+      className={`day-map-period${isOver ? " is-over" : ""}${isActive ? " has-selection" : ""}`}
+    >
       {children}
     </section>
   );
 }
 
-function ScheduledTaskBlock({ task, period, onStartChange, onDurationChange, onRemove }) {
+// ── Compact task row — read-first, tap to reveal edit controls ────────────────
+function CompactTaskRow({ task, period, isExpanded, onToggle, onStartChange, onDurationChange, onPeriodChange, onRemove }) {
   const taskId = getTaskId(task);
+  const prio = normalizePriority(task.priority);
   const duration = getEstimate(task);
   const start = Number(task.dayMapStartMinutes ?? period.start);
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: `scheduled-${taskId}`,
-    data: { taskId },
-  });
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.55 : 1 }
-    : { opacity: isDragging ? 0.55 : 1 };
 
   return (
-    <div ref={setNodeRef} className="day-map-task-block" style={style}>
-      <button className="day-map-drag-handle" type="button" aria-label="Drag task" {...attributes} {...listeners}>
-        <span /><span /><span />
-      </button>
-      <div className="day-map-task-copy">
-        <div className="day-map-task-title-row">
-          <span className={`day-map-priority ${normalizePriority(task.priority).toLowerCase()}`}>{normalizePriority(task.priority)}</span>
-          <strong>{task.title}</strong>
-        </div>
-        {task.concreteStep && <p>{task.concreteStep}</p>}
-      </div>
-      <div className="day-map-task-controls">
-        <select value={start} onChange={(e) => onStartChange(taskId, Number(e.target.value))} aria-label="Start time">
-          {buildSlotOptions(period).map((slot) => (
-            <option key={slot} value={slot}>{formatClock(slot)}</option>
-          ))}
-        </select>
-        <select value={duration} onChange={(e) => onDurationChange(taskId, Number(e.target.value))} aria-label="Duration">
-          {DURATION_OPTIONS.map((m) => (
-            <option key={m} value={m}>{formatDuration(m)}</option>
-          ))}
-        </select>
-        <button type="button" className="day-map-remove" onClick={() => onRemove(taskId)} aria-label="Remove from Day Map">
+    <div className={`day-map-compact-wrap${isExpanded ? " expanded" : ""}`}>
+      <div className="day-map-compact-row">
+        <button
+          type="button"
+          className="day-map-compact-main"
+          onClick={onToggle}
+          aria-expanded={isExpanded}
+        >
+          <span className={`day-map-priority ${prio.toLowerCase()}`}>{prio}</span>
+          <span className="day-map-compact-title">{task.title}</span>
+          <span className="day-map-compact-time">{formatClock(start)} · {formatDuration(duration)}</span>
+        </button>
+        <button
+          type="button"
+          className="day-map-remove-btn"
+          onClick={() => onRemove(taskId)}
+          aria-label="Remove from Day Map"
+        >
           ×
         </button>
       </div>
+
+      {isExpanded && (
+        <div className="day-map-edit-panel">
+          <div className="day-map-edit-grid">
+            <label>
+              Start
+              <select
+                value={start}
+                onChange={(e) => onStartChange(taskId, Number(e.target.value))}
+                aria-label="Start time"
+              >
+                {buildSlotOptions(period).map((slot) => (
+                  <option key={slot} value={slot}>{formatClock(slot)}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Duration
+              <select
+                value={duration}
+                onChange={(e) => onDurationChange(taskId, Number(e.target.value))}
+                aria-label="Duration"
+              >
+                {DURATION_OPTIONS.map((m) => (
+                  <option key={m} value={m}>{formatDuration(m)}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Period
+              <select
+                value={period.id}
+                onChange={(e) => onPeriodChange(taskId, e.target.value)}
+                aria-label="Time period"
+              >
+                {PERIODS.map((p) => (
+                  <option key={p.id} value={p.id}>{p.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function PeriodPanel({
-  period, tasks, selectedTask, pickerOpen, unscheduledTasks,
-  onSlotClick, onPickTask, onStartChange, onDurationChange, onRemove,
+// ── Collapsible horizontal available tasks strip ───────────────────────────────
+function AvailableStrip({ tasks, selectedTaskId, onSelect, isOpen, onToggle }) {
+  return (
+    <div className="day-map-available-strip">
+      <button type="button" className="day-map-strip-header" onClick={onToggle}>
+        <span>Unscheduled · {tasks.length}</span>
+        <span className="day-map-strip-chevron" aria-hidden="true">{isOpen ? "▲" : "▼"}</span>
+      </button>
+      {isOpen && (
+        <div className="day-map-chip-row" role="group" aria-label="Available Today tasks">
+          {tasks.length ? tasks.map((t) => (
+            <DraggableTaskChip
+              key={getTaskId(t)}
+              task={t}
+              selected={getTaskId(t) === selectedTaskId}
+              onSelect={onSelect}
+            />
+          )) : (
+            <p className="day-map-all-set">All tasks placed ✓</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Period section — single-column layout ─────────────────────────────────────
+function PeriodSection({
+  period, tasks, selectedTask, expandedTaskId, onExpandTask,
+  onPlace, onStartChange, onDurationChange, onPeriodChange, onRemove,
 }) {
   const capacity = period.end - period.start;
   const planned = tasks.reduce((sum, t) => sum + getEstimate(t), 0);
@@ -195,23 +262,34 @@ function PeriodPanel({
       <div className="day-map-period-head">
         <div>
           <h2>{period.label}</h2>
-          <span className="day-map-period-range">{formatShortClock(period.start)} – {formatShortClock(period.end)}</span>
+          <span className="day-map-period-range">
+            {formatShortClock(period.start)} – {formatShortClock(period.end)}
+          </span>
         </div>
-        <span className={`day-map-load-pill ${isOverbooked ? "over" : ""}`}>{formatDuration(planned)}</span>
+        {planned > 0 && (
+          <span className={`day-map-load-pill${isOverbooked ? " over" : ""}`}>
+            {formatDuration(planned)}
+          </span>
+        )}
       </div>
 
-      <div className="day-map-period-meter" aria-hidden="true">
-        <span style={{ width: `${Math.min(load, 100)}%` }} />
-      </div>
+      {planned > 0 && (
+        <div className="day-map-period-meter" aria-hidden="true">
+          <span style={{ width: `${Math.min(load, 100)}%` }} />
+        </div>
+      )}
 
       <div className="day-map-task-stack">
         {tasks.length ? tasks.map((t) => (
-          <ScheduledTaskBlock
+          <CompactTaskRow
             key={getTaskId(t)}
             task={t}
             period={period}
+            isExpanded={expandedTaskId === getTaskId(t)}
+            onToggle={() => onExpandTask(expandedTaskId === getTaskId(t) ? null : getTaskId(t))}
             onStartChange={onStartChange}
             onDurationChange={onDurationChange}
+            onPeriodChange={onPeriodChange}
             onRemove={onRemove}
           />
         )) : (
@@ -222,31 +300,23 @@ function PeriodPanel({
         )}
       </div>
 
-      <button type="button" className="day-map-slot-button" onClick={() => onSlotClick(period.id)}>
-        {selectedTask ? "Place selected" : "Fill slot"}
-      </button>
-
-      {pickerOpen && (
-        <div className="day-map-picker">
-          {unscheduledTasks.length ? unscheduledTasks.map((t) => (
-            <button key={getTaskId(t)} type="button" onClick={() => onPickTask(getTaskId(t), period.id)}>
-              <span className={`day-map-priority ${normalizePriority(t.priority).toLowerCase()}`}>{normalizePriority(t.priority)}</span>
-              <span>{t.title}</span>
-            </button>
-          )) : <span className="day-map-picker-empty">All Today tasks are placed.</span>}
-        </div>
+      {selectedTask && (
+        <button type="button" className="day-map-place-btn" onClick={() => onPlace(period.id)}>
+          Place here — {selectedTask.title.length > 24 ? `${selectedTask.title.slice(0, 24)}…` : selectedTask.title}
+        </button>
       )}
     </DroppablePeriod>
   );
 }
 
+// ── Main export ───────────────────────────────────────────────────────────────
 export default function DayMapPage({ payload, savePayload, onClose, onAddTask }) {
   const [selectedTaskId, setSelectedTaskId] = useState(null);
-  const [pickerPeriod, setPickerPeriod] = useState(null);
+  const [expandedTaskId, setExpandedTaskId] = useState(null);
+  const [stripOpen, setStripOpen] = useState(true);
   const todayStr = toLocalDateStr(new Date());
   const tasks = payload?.tasks || [];
 
-  // Always-fresh ref so drag/drop handlers never close over stale payload/tasks
   const payloadRef = useRef(payload);
   payloadRef.current = payload;
 
@@ -286,8 +356,6 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
   const totalCapacity = PERIODS.reduce((sum, p) => sum + (p.end - p.start), 0);
   const scheduledCount = activeTodayTasks.length - unscheduledTasks.length;
 
-  // Always reads latest payload from ref — avoids stale-closure overwrites when
-  // drag events fire before React has committed the previous render.
   const saveTasks = (nextTasks) => {
     const p = payloadRef.current;
     savePayload({ ...p, tasks: nextTasks, timestamp: Date.now() });
@@ -311,18 +379,17 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
     if (!task) return;
     const duration = getEstimate(task);
     const start = startOverride ?? nextSlotForPeriod(periodId);
-    saveTasks(currentTasks.map((t) => (
+    saveTasks(currentTasks.map((t) =>
       getTaskId(t) === taskId
         ? { ...t, dayMapDate: todayStr, dayMapPeriod: periodId, dayMapStartMinutes: start, dayMapDurationMinutes: duration, lastUpdated: Date.now() }
         : t
-    )));
+    ));
     setSelectedTaskId(null);
-    setPickerPeriod(null);
   };
 
-  const handleSlotClick = (periodId) => {
-    if (selectedTaskId) { scheduleTask(selectedTaskId, periodId); return; }
-    setPickerPeriod((cur) => cur === periodId ? null : periodId);
+  const handleChipSelect = (taskId) => {
+    setSelectedTaskId((cur) => cur === taskId ? null : taskId);
+    setExpandedTaskId(null);
   };
 
   const changeStart = (taskId, startMinutes) => {
@@ -333,14 +400,28 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
     saveTasks(latestTasks().map((t) => getTaskId(t) === taskId ? { ...t, dayMapDurationMinutes: duration, lastUpdated: Date.now() } : t));
   };
 
+  const changePeriod = (taskId, newPeriodId) => {
+    const currentTasks = latestTasks();
+    const task = currentTasks.find((t) => getTaskId(t) === taskId);
+    if (!task) return;
+    const newStart = nextSlotForPeriod(newPeriodId);
+    saveTasks(currentTasks.map((t) =>
+      getTaskId(t) === taskId
+        ? { ...t, dayMapPeriod: newPeriodId, dayMapStartMinutes: newStart, lastUpdated: Date.now() }
+        : t
+    ));
+    setExpandedTaskId(null);
+  };
+
   const removeFromMap = (taskId) => {
     saveTasks(latestTasks().map((t) => getTaskId(t) === taskId ? removeScheduleFields(t) : t));
+    if (expandedTaskId === taskId) setExpandedTaskId(null);
   };
 
   const clearMap = () => {
     saveTasks(latestTasks().map((t) => taskIsScheduledToday(t, todayStr) ? removeScheduleFields(t) : t));
     setSelectedTaskId(null);
-    setPickerPeriod(null);
+    setExpandedTaskId(null);
   };
 
   const autoFillGaps = () => {
@@ -369,7 +450,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
       return p ? { ...t, dayMapDate: todayStr, dayMapPeriod: p.periodId, dayMapStartMinutes: p.start, dayMapDurationMinutes: p.duration, lastUpdated: Date.now() } : t;
     }));
     setSelectedTaskId(null);
-    setPickerPeriod(null);
+    setExpandedTaskId(null);
   };
 
   const handleDragEnd = ({ active, over }) => {
@@ -389,7 +470,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
         </div>
         <div className="day-map-stats">
           <span>{scheduledCount}/{activeTodayTasks.length} placed</span>
-          <span>{formatDuration(plannedMinutes)} planned</span>
+          {plannedMinutes > 0 && <span>{formatDuration(plannedMinutes)} planned</span>}
         </div>
       </div>
 
@@ -405,53 +486,42 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
             <div className="day-map-load-line">
               <div>
                 <strong>{formatDuration(Math.max(totalCapacity - plannedMinutes, 0))}</strong>
-                <span>open space</span>
+                <span>open space today</span>
               </div>
               <div className="day-map-load-track" aria-hidden="true">
                 <span style={{ width: `${Math.min((plannedMinutes / totalCapacity) * 100, 100)}%` }} />
               </div>
             </div>
             <div className="day-map-actions">
-              <button type="button" onClick={autoFillGaps} disabled={!unscheduledTasks.length}>Auto-fill gaps</button>
-              <button type="button" onClick={clearMap} disabled={!scheduledCount}>Clear map</button>
+              <button type="button" onClick={autoFillGaps} disabled={!unscheduledTasks.length}>Auto-fill</button>
+              <button type="button" onClick={clearMap} disabled={!scheduledCount}>Clear</button>
             </div>
           </section>
 
-          <div className="day-map-layout">
-            <aside className="day-map-tray" aria-label="Available Today tasks">
-              <div className="day-map-tray-head">
-                <h2>Available Today</h2>
-                <span>{unscheduledTasks.length}</span>
-              </div>
-              <div className="day-map-chip-list">
-                {unscheduledTasks.length ? unscheduledTasks.map((t) => (
-                  <DraggableTaskChip
-                    key={getTaskId(t)}
-                    task={t}
-                    selected={getTaskId(t) === selectedTaskId}
-                    onSelect={setSelectedTaskId}
-                  />
-                )) : <p className="day-map-all-set">Every Today task is placed.</p>}
-              </div>
-            </aside>
+          <AvailableStrip
+            tasks={unscheduledTasks}
+            selectedTaskId={selectedTaskId}
+            onSelect={handleChipSelect}
+            isOpen={stripOpen}
+            onToggle={() => setStripOpen((o) => !o)}
+          />
 
-            <div className="day-map-timeline">
-              {PERIODS.map((period) => (
-                <PeriodPanel
-                  key={period.id}
-                  period={period}
-                  tasks={scheduledByPeriod[period.id] || []}
-                  selectedTask={selectedTask}
-                  pickerOpen={pickerPeriod === period.id}
-                  unscheduledTasks={unscheduledTasks}
-                  onSlotClick={handleSlotClick}
-                  onPickTask={scheduleTask}
-                  onStartChange={changeStart}
-                  onDurationChange={changeDuration}
-                  onRemove={removeFromMap}
-                />
-              ))}
-            </div>
+          <div className="day-map-timeline">
+            {PERIODS.map((period) => (
+              <PeriodSection
+                key={period.id}
+                period={period}
+                tasks={scheduledByPeriod[period.id] || []}
+                selectedTask={selectedTask}
+                expandedTaskId={expandedTaskId}
+                onExpandTask={setExpandedTaskId}
+                onPlace={(periodId) => scheduleTask(selectedTaskId, periodId)}
+                onStartChange={changeStart}
+                onDurationChange={changeDuration}
+                onPeriodChange={changePeriod}
+                onRemove={removeFromMap}
+              />
+            ))}
           </div>
         </DndContext>
       )}
