@@ -147,13 +147,14 @@ export default function App() {
   };
 
   // Load the sync payload from RTDB (skipped in demo mode — uid is null)
-  const { payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, savePayload: rtdbSave, saveSubPath: rtdbSaveSub, flushNow: rtdbFlushNow } =
+  const { payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, savePayload: rtdbSave, saveSubPath: rtdbSaveSub, flushNow: rtdbFlushNow, clearCache: rtdbClearCache } =
     useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
   const payload = demoMode ? demoPayload : rtdbPayload;
   const savePayload = demoMode ? saveDemoPayload : rtdbSave;
   const saveSubPath = demoMode ? saveDemoSubPath : rtdbSaveSub;
   const flushNow = demoMode ? () => {} : (rtdbFlushNow || (() => {}));
+  const clearCache = demoMode ? () => {} : (rtdbClearCache || (() => {}));
 
   // Schedule task reminders whenever payload loads/changes
   useEffect(() => {
@@ -190,6 +191,10 @@ export default function App() {
   const openDayMap = () => { setFabExpanded(false); setActiveTab("daymap"); track("day_map_open"); };
 
   const handleSwitchUser = () => {
+    // Flush any pending debounced write before signing out, then wipe the
+    // local cache so the next user on this device doesn't see stale data.
+    flushNow();
+    clearCache();
     signOut(auth).then(() => { setUser(null); setActiveTab("today"); });
   };
 
@@ -431,6 +436,7 @@ export default function App() {
             payload={payload}
             savePayload={savePayload}
             saveSubPath={saveSubPath}
+            lastSyncedAt={lastSyncedAt}
             onSignOut={demoMode ? exitDemo : handleSwitchUser}
           />
         )}
