@@ -195,14 +195,6 @@ export default function App() {
   const dumpCount = (payload?.brainDump || []).length;
   const recentDump = [...(payload?.brainDump || [])].slice(-3).reverse();
 
-  const todayForMap = toLocalDateStr(new Date());
-  const todayTasksForMap = (payload?.tasks || []).filter(
-    (t) => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted && !t.isParked
-  );
-  const mappedTodayCount = todayTasksForMap.filter(
-    (t) => t.dayMapDate === todayForMap && t.dayMapPeriod
-  ).length;
-
   const handleQuickDump = (e) => {
     e.preventDefault();
     if (!quickDumpText.trim() || dumpCount >= 50 || !payload) return;
@@ -406,20 +398,7 @@ export default function App() {
       {/* Main Tab Screen Router */}
       <main className={`screen-content${activeTab === "daymap" ? " screen-content-day-map" : ""}`}>
         {activeTab === "today" && (
-          <>
-            <button className="day-map-launcher" type="button" onClick={openDayMap} aria-label="Open Day Map">
-              <span className="day-map-launcher-main">
-                <strong>Day Map</strong>
-                <span>
-                  {todayTasksForMap.length
-                    ? `${mappedTodayCount}/${todayTasksForMap.length} Today tasks placed`
-                    : "Map Today tasks into your day"}
-                </span>
-              </span>
-              <span className="day-map-launcher-cta">Build day</span>
-            </button>
-            <TodayTab payload={payload} savePayload={savePayload} onOpenAddTask={() => openAddTask("today")} />
-          </>
+          <TodayTab payload={payload} savePayload={savePayload} onOpenAddTask={() => openAddTask("today")} onOpenDayMap={openDayMap} />
         )}
         {activeTab === "daymap" && (
           <DayMapPage

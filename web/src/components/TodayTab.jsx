@@ -35,7 +35,7 @@ function SortableTaskItem({ id, children }) {
   );
 }
 
-export default function TodayTab({ payload, savePayload }) {
+export default function TodayTab({ payload, savePayload, onOpenDayMap }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   const [confirmDialog, setConfirmDialog] = useState(null);
@@ -363,6 +363,11 @@ export default function TodayTab({ payload, savePayload }) {
   };
 
   const todayTasksAll = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isParked);
+  const _d = new Date();
+  const _todayStr = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, "0")}-${String(_d.getDate()).padStart(2, "0")}`;
+  const _dayMapActive = todayTasksAll.filter(t => !t.isCompleted);
+  const dayMapTotal = _dayMapActive.length;
+  const dayMapPlaced = _dayMapActive.filter(t => t.dayMapDate === _todayStr && t.dayMapPeriod).length;
   const todayTasksFiltered = isMVDMode
     ? todayTasksAll.filter(t => t.isMVD)
     : config.isLowEnergyMode
@@ -519,7 +524,7 @@ export default function TodayTab({ payload, savePayload }) {
                 <span key={i} style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{label}</span>
               ))}
             </div>
-            <p style={{ margin: 0, fontSize: "12px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
+            <p className="today-quote-secondary" style={{ margin: 0, fontSize: "12px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
               "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
             </p>
           </section>
@@ -554,8 +559,8 @@ export default function TodayTab({ payload, savePayload }) {
 
       {/* ── Today's Focus — tasks dominate the screen */}
       <section className="tasks-section" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-        <div className="section-header">
-          <h2 className="section-title">
+        <div className="section-header" style={{ flexWrap: "wrap", rowGap: "6px", alignItems: "flex-start" }}>
+          <h2 className="section-title" style={{ flex: "1 1 auto" }}>
             Today's Focus
             {isMVDMode && (
               <span style={{ color: "var(--warning)", fontSize: "11px", fontWeight: "700", marginLeft: "8px" }}>
@@ -568,7 +573,21 @@ export default function TodayTab({ payload, savePayload }) {
               </span>
             )}
           </h2>
-          <div className="section-header-right" style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+            {onOpenDayMap && (
+              <button
+                className="stuck-btn"
+                onClick={onOpenDayMap}
+                title="Open Day Map"
+                style={{
+                  background: dayMapPlaced > 0 ? "rgba(99,102,241,0.12)" : "var(--bg-secondary)",
+                  color: dayMapPlaced > 0 ? "var(--accent)" : "var(--text-secondary)",
+                  borderColor: dayMapPlaced > 0 ? "rgba(99,102,241,0.3)" : "var(--border)"
+                }}
+              >
+                Day Map {dayMapPlaced}/{dayMapTotal}
+              </button>
+            )}
             <button
               className="stuck-btn"
               onClick={() => setIsMVDMode(m => !m)}
