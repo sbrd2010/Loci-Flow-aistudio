@@ -56,7 +56,7 @@
   justify-content: flex-end;
 }
 
-.day-map-actions button:nth-child(2) {
+.day-map-rebuild-btn {
   background: var(--bg-secondary);
   color: var(--text-primary);
   border-color: var(--border);
@@ -84,12 +84,12 @@
 .day-map-drag-handle:hover,
 .day-map-drag-handle:focus-visible {
   color: var(--accent);
-  background: rgba(99, 102, 241, 0.06);
+  background: var(--accent-ring);
 }
 
 .day-map-drag-handle:active {
   cursor: grabbing;
-  background: rgba(99, 102, 241, 0.12);
+  background: var(--accent-ring);
 }
 
 .day-map-compact-wrap.is-dragging {

@@ -727,7 +727,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
             />
             <div className="day-map-actions">
               <button type="button" onClick={autoFillGaps} disabled={!unscheduledTasks.length}>Auto-fill</button>
-              <button type="button" onClick={rebuildDay} disabled={!activeTodayTasks.length}>Rebuild day</button>
+              <button type="button" className="day-map-rebuild-btn" onClick={rebuildDay} disabled={!activeTodayTasks.length}>Rebuild day</button>
               <button type="button" onClick={clearMap} disabled={!scheduledCount}>Clear</button>
             </div>
           </section>
