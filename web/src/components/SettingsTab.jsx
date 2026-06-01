@@ -4,7 +4,7 @@ import PrivacyPolicy from "./PrivacyPolicy";
 import { db } from "../firebase";
 import { ref, push } from "firebase/database";
 
-export default function SettingsTab({ payload, savePayload, saveSubPath, onSignOut }) {
+export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyncedAt, onSignOut }) {
   const { config = {} } = payload;
 
   // ── XP / Progress computed values ────────────────────────────────────────
@@ -515,7 +515,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
             </h2>
             {!syncOpen && (
               <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                Last sync: {formatRelativeTime(payload.timestamp)}
+                Last sync: {formatRelativeTime(lastSyncedAt || payload.timestamp)}
               </div>
             )}
           </div>
@@ -528,7 +528,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, onSignO
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {[
               { label: "Account", value: config.userId || "Active User" },
-              { label: "Last Sync", value: formatRelativeTime(payload.timestamp) },
+              { label: "Last Sync", value: formatRelativeTime(lastSyncedAt || payload.timestamp) },
               { label: "Active Tasks", value: `${(payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).length} tasks` },
               { label: "Total XP", value: `${Number(config.totalXp) || 0} XP` }
             ].map(row => (

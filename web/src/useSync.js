@@ -50,6 +50,10 @@ export function useSync(uid, email) {
   const [connPhase, setConnPhase] = useState(CONN.CONNECTING);
   // True while app is rendering from cache and RTDB hasn't responded yet
   const [isSyncingFromCache, setIsSyncingFromCache] = useState(false);
+  // Timestamp of the last successful RTDB delivery — distinct from payload.timestamp
+  // (which is when data was last *written*). This reflects "when did this device
+  // last hear from the server", so "Last Sync" reads "just now" after a fresh login.
+  const [lastSyncedAt, setLastSyncedAt] = useState(null);
 
   const dbRefPath = uid ? `sync/${uid}` : null;
 
@@ -136,6 +140,7 @@ export function useSync(uid, email) {
       if (dataTimeoutRef.current) { clearTimeout(dataTimeoutRef.current); dataTimeoutRef.current = null; }
       setIsSyncingFromCache(false);
       setConnPhase(CONN.CONNECTED);
+      setLastSyncedAt(Date.now());
 
       const data = snapshot.val();
 
@@ -417,5 +422,5 @@ export function useSync(uid, email) {
     }
   };
 
-  return { payload, loading, error, connPhase, isSyncingFromCache, savePayload, saveSubPath, flushNow };
+  return { payload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, savePayload, saveSubPath, flushNow };
 }

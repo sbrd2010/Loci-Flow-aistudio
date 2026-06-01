@@ -147,7 +147,7 @@ export default function App() {
   };
 
   // Load the sync payload from RTDB (skipped in demo mode — uid is null)
-  const { payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, savePayload: rtdbSave, saveSubPath: rtdbSaveSub, flushNow: rtdbFlushNow } =
+  const { payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, savePayload: rtdbSave, saveSubPath: rtdbSaveSub, flushNow: rtdbFlushNow } =
     useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
   const payload = demoMode ? demoPayload : rtdbPayload;
@@ -431,6 +431,7 @@ export default function App() {
             payload={payload}
             savePayload={savePayload}
             saveSubPath={saveSubPath}
+            lastSyncedAt={lastSyncedAt}
             onSignOut={demoMode ? exitDemo : handleSwitchUser}
           />
         )}
