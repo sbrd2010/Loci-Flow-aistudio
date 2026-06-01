@@ -1,18 +1,20 @@
 /* ================================================================
-   Focus Mode — full-screen deep focus overlay
-   No color-mix(). All colors use rgba() or hex literals.
+   Focus Mode - quiet full-screen deep focus overlay
+   Mature Loci dark-sage treatment; no neon/game visual language.
    ================================================================ */
 
-/* ── Overlay container ── */
 .focus-mode-overlay {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: #0a0a14;
+  isolation: isolate;
+  background:
+    linear-gradient(180deg, rgba(10, 21, 18, 0.98), rgba(4, 8, 11, 1) 64%),
+    #05090b;
+  color: #edf7f2;
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* Safe-area insets for iPhone notch / home indicator */
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
@@ -20,82 +22,144 @@
   overflow: hidden;
 }
 
-/* ── Exit button — top-left ── */
-.focus-mode-exit-btn {
+.focus-mode-overlay::before {
+  content: "";
   position: absolute;
-  top: calc(14px + env(safe-area-inset-top, 0px));
-  left: calc(16px + env(safe-area-inset-left, 0px));
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.38);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  padding: 6px 10px;
-  border-radius: 8px;
-  transition: color 0.2s;
-  z-index: 1;
-}
-.focus-mode-exit-btn:hover {
-  color: rgba(255, 255, 255, 0.65);
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(122, 181, 155, 0.06), transparent 22%, transparent 78%, rgba(122, 181, 155, 0.04)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 32%);
+  opacity: 0.9;
 }
 
-/* ── Main content area — vertically centered ── */
+.focus-mode-overlay::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 42vh;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(122, 181, 155, 0.055));
+}
+
+.focus-mode-exit-btn {
+  position: absolute;
+  top: calc(18px + env(safe-area-inset-top, 0px));
+  left: calc(18px + env(safe-area-inset-left, 0px));
+  z-index: 2;
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(237, 247, 242, 0.12);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(237, 247, 242, 0.68);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0;
+  cursor: pointer;
+  transition: color 0.18s, border-color 0.18s, background 0.18s, transform 0.12s;
+}
+
+.focus-mode-exit-btn:hover,
+.focus-mode-exit-btn:focus-visible {
+  color: #edf7f2;
+  border-color: rgba(122, 181, 155, 0.42);
+  background: rgba(122, 181, 155, 0.1);
+  outline: none;
+}
+
+.focus-mode-exit-btn:active {
+  transform: scale(0.97);
+}
+
 .focus-mode-body {
+  position: relative;
+  z-index: 1;
   flex: 1;
+  width: min(100%, 620px);
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  max-width: 600px;
-  gap: 0;
-  padding: 20px 24px;
+  padding: clamp(42px, 8vh, 88px) 24px clamp(28px, 7vh, 72px);
   box-sizing: border-box;
 }
 
-/* ── "DEEP FOCUS" label at top ── */
-.focus-mode-header-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: rgba(99, 102, 241, 0.7);
-  margin-bottom: 32px;
-  text-align: center;
+.focus-mode-session-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: clamp(22px, 4vh, 36px);
 }
 
-/* ── SVG ring container ── */
+.focus-mode-header-label {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(237, 247, 242, 0.72);
+}
+
+.focus-mode-state-pill {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(122, 181, 155, 0.24);
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: rgba(122, 181, 155, 0.08);
+  color: rgba(196, 223, 210, 0.82);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
 .focus-mode-ring-wrapper {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 32px;
+  width: clamp(218px, 38vw, 328px);
+  height: clamp(218px, 38vw, 328px);
+  margin-bottom: clamp(24px, 5vh, 38px);
+}
+
+.focus-mode-ring-wrapper::before {
+  content: "";
+  position: absolute;
+  inset: 11%;
+  border-radius: 50%;
+  border: 1px solid rgba(237, 247, 242, 0.055);
+  background: rgba(255, 255, 255, 0.015);
 }
 
 .focus-mode-svg {
-  width: 220px;
-  height: 220px;
-  /* Rotate so ring starts at top */
+  width: 100%;
+  height: 100%;
   transform: rotate(-90deg);
 }
 
-/* Colour variants applied via JS inline style on the progress circle */
 .focus-mode-ring-bg {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.07);
+  stroke: rgba(237, 247, 242, 0.09);
   stroke-linecap: round;
 }
 
 .focus-mode-ring-progress {
   fill: none;
   stroke-linecap: round;
-  transition: stroke-dashoffset 1s linear, stroke 0.6s ease, filter 0.6s ease;
+  transition: stroke-dashoffset 1s linear, stroke 0.45s ease;
+  filter: drop-shadow(0 0 7px rgba(122, 181, 155, 0.22));
 }
 
-/* ── Time digits overlaid on ring ── */
+.focus-mode-overlay.is-running .focus-mode-ring-progress {
+  filter: drop-shadow(0 0 9px rgba(122, 181, 155, 0.28));
+}
+
 .focus-mode-time-overlay {
   position: absolute;
   inset: 0;
@@ -103,163 +167,235 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding-top: 2px;
 }
 
 .focus-mode-time-digits {
-  font-family: "Courier New", "Courier", "Lucida Console", monospace;
-  font-size: 72px;
+  font-family: var(--font-mono, "Space Mono", "Courier New", monospace);
+  font-size: clamp(50px, 9vw, 74px);
   font-weight: 700;
-  color: #ffffff;
-  letter-spacing: -0.03em;
+  color: #f7fbf8;
+  letter-spacing: 0;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
 }
 
-/* ── Session Complete state ── */
 .focus-mode-complete-text {
-  font-size: 16px;
-  font-weight: 700;
-  color: rgba(99, 102, 241, 0.9);
-  letter-spacing: 0.04em;
-  margin-top: 8px;
-  text-align: center;
-  animation: fm-pulse 0.7s ease-out;
-}
-
-@keyframes fm-pulse {
-  0%   { transform: scale(0.8); opacity: 0; }
-  60%  { transform: scale(1.12); opacity: 1; }
-  100% { transform: scale(1);   opacity: 1; }
-}
-
-/* ── Task title ── */
-.focus-mode-task-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.92);
-  text-align: center;
-  line-height: 1.35;
-  margin-bottom: 10px;
-  max-width: 480px;
-}
-
-/* ── Concrete step ── */
-.focus-mode-concrete-step {
+  margin-top: 10px;
+  color: #a5d6a7;
+  font-family: var(--font-sans);
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.38);
+  font-weight: 900;
+  letter-spacing: 0;
   text-align: center;
-  line-height: 1.5;
-  max-width: 400px;
-  margin-bottom: 0;
+  animation: fm-complete-in 0.42s ease-out;
 }
 
-/* ── Timer controls row ── */
+@keyframes fm-complete-in {
+  0% { transform: translateY(6px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.focus-mode-task-panel {
+  width: min(100%, 520px);
+  text-align: center;
+  margin-bottom: clamp(22px, 4vh, 32px);
+}
+
+.focus-mode-task-kicker {
+  margin-bottom: 8px;
+  color: rgba(196, 223, 210, 0.58);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.focus-mode-task-title {
+  margin: 0;
+  color: #f2f6f3;
+  font-family: var(--font-display);
+  font-size: clamp(22px, 4vw, 30px);
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.focus-mode-concrete-step {
+  width: min(100%, 420px);
+  margin: 10px auto 0;
+  color: rgba(196, 223, 210, 0.7);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .focus-mode-controls {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-top: 36px;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 20px;
 }
 
 .focus-mode-ctrl-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 50%;
   width: 48px;
   height: 48px;
-  font-size: 20px;
-  color: rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  border: 1px solid rgba(237, 247, 242, 0.13);
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(237, 247, 242, 0.78);
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s, transform 0.1s;
+  transition: background 0.18s, border-color 0.18s, transform 0.1s, color 0.18s;
   flex-shrink: 0;
 }
-.focus-mode-ctrl-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
+
+.focus-mode-ctrl-btn svg,
+.focus-mode-done-btn svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
+
+.focus-mode-ctrl-btn:hover,
+.focus-mode-ctrl-btn:focus-visible {
+  color: #edf7f2;
+  border-color: rgba(122, 181, 155, 0.4);
+  background: rgba(122, 181, 155, 0.1);
+  outline: none;
+}
+
 .focus-mode-ctrl-btn:active {
-  transform: scale(0.94);
+  transform: scale(0.95);
 }
 
-/* Play/Pause — larger, accented */
 .focus-mode-ctrl-play {
-  width: 64px;
-  height: 64px;
-  font-size: 26px;
-  background: rgba(99, 102, 241, 0.22);
-  border-color: rgba(99, 102, 241, 0.45);
-  color: #a5b4fc;
-  box-shadow: 0 0 18px rgba(99, 102, 241, 0.25);
-}
-.focus-mode-ctrl-play:hover {
-  background: rgba(99, 102, 241, 0.32);
+  width: 62px;
+  height: 62px;
+  border-color: rgba(122, 181, 155, 0.48);
+  background: rgba(122, 181, 155, 0.16);
+  color: #d9f3e5;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.26);
 }
 
-/* ── Done button — bottom ── */
+.focus-mode-ctrl-play svg {
+  width: 26px;
+  height: 26px;
+}
+
+.focus-mode-ctrl-play:hover,
+.focus-mode-ctrl-play:focus-visible {
+  border-color: rgba(165, 214, 167, 0.68);
+  background: rgba(122, 181, 155, 0.22);
+}
+
 .focus-mode-done-btn {
-  background: rgba(99, 102, 241, 0.18);
-  border: 1.5px solid rgba(99, 102, 241, 0.5);
-  border-radius: 28px;
-  padding: 14px 36px;
-  font-size: 15px;
-  font-weight: 700;
-  color: #a5b4fc;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(165, 214, 167, 0.38);
+  border-radius: 999px;
+  padding: 11px 26px;
+  background: rgba(165, 214, 167, 0.09);
+  color: #d9f3e5;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0;
   cursor: pointer;
-  letter-spacing: 0.04em;
-  transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
-  margin-top: 40px;
-  margin-bottom: 16px;
+  transition: background 0.18s, border-color 0.18s, transform 0.1s, color 0.18s;
 }
-.focus-mode-done-btn:hover {
-  background: rgba(99, 102, 241, 0.28);
-  box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+
+.focus-mode-done-btn svg {
+  width: 18px;
+  height: 18px;
 }
+
+.focus-mode-done-btn:hover,
+.focus-mode-done-btn:focus-visible {
+  color: #ffffff;
+  border-color: rgba(165, 214, 167, 0.68);
+  background: rgba(165, 214, 167, 0.16);
+  outline: none;
+}
+
 .focus-mode-done-btn:active {
   transform: scale(0.97);
 }
 
-/* ================================================================
-   Responsive breakpoints
-   ================================================================ */
+.focus-mode-overlay.is-complete .focus-mode-done-btn {
+  background: rgba(165, 214, 167, 0.18);
+  border-color: rgba(165, 214, 167, 0.7);
+}
 
-/* Desktop: bigger ring */
-@media (min-width: 640px) {
-  .focus-mode-svg {
-    width: 290px;
-    height: 290px;
+@media (max-width: 640px) {
+  .focus-mode-exit-btn {
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    left: calc(12px + env(safe-area-inset-left, 0px));
+    min-height: 34px;
+    padding: 7px 10px;
+    font-size: 12px;
   }
 
-  .focus-mode-time-digits {
-    font-size: 80px;
+  .focus-mode-body {
+    width: 100%;
+    padding-left: 18px;
+    padding-right: 18px;
   }
 
-  .focus-mode-task-title {
-    font-size: 22px;
-  }
-
-  .focus-mode-header-label {
-    margin-bottom: 40px;
+  .focus-mode-session-meta {
+    margin-bottom: 20px;
   }
 
   .focus-mode-ring-wrapper {
-    margin-bottom: 36px;
-  }
-}
-
-/* Small phones (iPhone SE, 320px) */
-@media (max-width: 374px) {
-  .focus-mode-svg {
-    width: 190px;
-    height: 190px;
-  }
-
-  .focus-mode-time-digits {
-    font-size: 60px;
+    width: clamp(212px, 64vw, 260px);
+    height: clamp(212px, 64vw, 260px);
+    margin-bottom: 24px;
   }
 
   .focus-mode-task-title {
-    font-size: 17px;
+    font-size: clamp(20px, 6vw, 25px);
+  }
+
+  .focus-mode-concrete-step {
+    font-size: 13px;
+  }
+
+  .focus-mode-controls {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 374px) {
+  .focus-mode-ring-wrapper {
+    width: 200px;
+    height: 200px;
+  }
+
+  .focus-mode-time-digits {
+    font-size: 46px;
+  }
+
+  .focus-mode-ctrl-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .focus-mode-ctrl-play {
+    width: 56px;
+    height: 56px;
   }
 }
