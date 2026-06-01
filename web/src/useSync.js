@@ -154,6 +154,11 @@ export function useSync(uid, email) {
             payloadRef.current = data;
             pendingRemoteRef.current = null;
             writeCache(uid, data);
+          } else {
+            // Local cache is newer than what RTDB delivered — the app was likely
+            // killed before the last debounced write completed. Push local state
+            // back up so RTDB catches up without waiting for the user to edit.
+            writeWithRetry(ref(db, dbRefPath), payloadRef.current).catch(() => {});
           }
         } else if (hasCachedData) {
           // RTDB is empty (new device or cleared DB) but we have local cache —
@@ -334,8 +339,10 @@ export function useSync(uid, email) {
         hiddenAt = Date.now();
         flush();
       } else if (Date.now() - hiddenAt > 30_000 && dbRefPath) {
+        // Small gap prevents Firebase internal state machine from getting stuck
+        // when goOnline fires immediately after goOffline.
         goOffline(db);
-        goOnline(db);
+        setTimeout(() => goOnline(db), 100);
       }
     };
     window.addEventListener("beforeunload", flush);
@@ -422,5 +429,13 @@ export function useSync(uid, email) {
     }
   };
 
-  return { payload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, savePayload, saveSubPath, flushNow };
+  // Remove this user's localStorage cache — call on logout so stale data
+  // can't be loaded by the next person who opens the app on this device.
+  const clearCache = () => {
+    if (uid) {
+      try { localStorage.removeItem(cacheKey(uid)); } catch {}
+    }
+  };
+
+  return { payload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, savePayload, saveSubPath, flushNow, clearCache };
 }
