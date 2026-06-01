@@ -1,66 +1,6 @@
 /* ================================================================
-   Day Map planning-window and reorder affordances
-   Kept separate so Claude can review the behavior layer independently.
+   Day Map — drag handle and action bar overrides
    ================================================================ */
-
-.day-map-planning-overview {
-  grid-template-columns: minmax(180px, 1fr) auto auto;
-  align-items: end;
-}
-
-.day-map-window-controls {
-  display: flex;
-  align-items: end;
-  gap: 8px;
-  min-width: 0;
-}
-
-.day-map-window-control {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 104px;
-  font-family: var(--font-sans);
-}
-
-.day-map-window-control span {
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 900;
-  line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: 0;
-}
-
-.day-map-window-control select {
-  height: 34px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 800;
-  padding: 0 8px;
-  cursor: pointer;
-}
-
-.day-map-window-control select:focus {
-  outline: 2px solid var(--accent-ring);
-  outline-offset: 1px;
-  border-color: var(--accent);
-}
-
-.day-map-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.day-map-rebuild-btn {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border-color: var(--border);
-}
 
 .day-map-drag-handle {
   flex-shrink: 0;
@@ -92,47 +32,16 @@
   background: var(--accent-ring);
 }
 
-.day-map-compact-wrap.is-dragging {
+.day-map-route-row.is-dragging {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
 }
 
-@media (max-width: 760px) {
-  .day-map-planning-overview {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-
-  .day-map-window-controls {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .day-map-window-control {
-    min-width: 0;
-  }
-
-  .day-map-window-control select {
-    width: 100%;
-  }
-
-  .day-map-actions {
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .day-map-actions button {
-    flex: 1 1 0;
-  }
+.day-map-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
 }
 
 @media (max-width: 430px) {
-  .day-map-window-control select {
-    height: 32px;
-    font-size: 11.5px;
-    padding: 0 6px;
-  }
-
   .day-map-drag-handle {
     width: 30px;
     font-size: 12px;

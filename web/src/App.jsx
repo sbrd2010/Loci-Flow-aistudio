@@ -113,8 +113,10 @@ export default function App() {
       });
     };
 
-    // Brave blocks popups via Shields on all platforms — go straight to redirect
-    if (isBraveBrowser || isIOS) {
+    // Brave blocks popups via Shields on all platforms — go straight to redirect.
+    // iOS must NOT use redirect: iOS WebKit partitions sessionStorage across origins,
+    // causing "missing initial state" when Firebase tries to read back OAuth state.
+    if (isBraveBrowser) {
       doRedirect("Sign-in failed. If using Brave, tap the lion icon → disable Shields for this site, then try again.");
       return;
     }
@@ -123,6 +125,10 @@ export default function App() {
       setSigningIn(false);
       if (err.code === "auth/popup-closed-by-user" || err.code === "auth/cancelled-popup-request") return;
       if (err.code === "auth/popup-blocked") {
+        if (isIOS) {
+          setSignInError("Pop-up blocked by Safari. Go to Settings → Safari → turn off Block Pop-ups, then try again.");
+          return;
+        }
         if (isAndroid) {
           setSigningIn(true);
           doRedirect();
