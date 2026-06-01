@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import TaskRow from "./TaskRow";
 import ConfirmDialog from "./ConfirmDialog";
+import FocusModePage from "./FocusModePage";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
@@ -61,6 +62,7 @@ export default function TodayTab({ payload, savePayload }) {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerSecondsLeft, setTimerSecondsLeft] = useState((config.pomodoroDurationMinutes || 25) * 60);
   const [timerMaxSeconds, setTimerMaxSeconds] = useState((config.pomodoroDurationMinutes || 25) * 60);
+  const [isFocusMode, setIsFocusMode] = useState(false);
   const timerIntervalRef = useRef(null);
 
   const activeTask = tasks.find((t) => t.isNowFocus && !t.isDeleted && !t.isCompleted);
@@ -97,6 +99,11 @@ export default function TodayTab({ payload, savePayload }) {
   useEffect(() => {
     if (isTimerRunning && !activeTask) setIsTimerRunning(false);
   }, [activeTask, isTimerRunning]);
+
+  // Auto-exit focus mode when activeTask is removed externally
+  useEffect(() => {
+    if (!activeTask) setIsFocusMode(false);
+  }, [activeTask]);
 
   useEffect(() => {
     if (isTimerRunning && timerSecondsLeft === 0) {
@@ -851,7 +858,18 @@ export default function TodayTab({ payload, savePayload }) {
               </div>
             </div>
             <div className="timer-controls">
-              <button className="control-btn control-btn-play" data-testid="timer-play-pause" onClick={() => setIsTimerRunning(!isTimerRunning)}>
+              <button
+                className="control-btn control-btn-play"
+                data-testid="timer-play-pause"
+                onClick={() => {
+                  if (!isTimerRunning) {
+                    setIsTimerRunning(true);
+                    setIsFocusMode(true);
+                  } else {
+                    setIsTimerRunning(false);
+                  }
+                }}
+              >
                 {isTimerRunning ? "⏸" : "▶"}
               </button>
               <button className="control-btn" onClick={() => { setIsTimerRunning(false); setTimerSecondsLeft(timerMaxSeconds); }}
@@ -866,6 +884,20 @@ export default function TodayTab({ payload, savePayload }) {
             "{config.intentionMessage}" — {config.mentorName || "Marcus Aurelius"}
           </p>
         </section>
+      )}
+
+      {/* ── Full-Screen Focus Mode Overlay */}
+      {isFocusMode && activeTask && (
+        <FocusModePage
+          task={activeTask}
+          secondsLeft={timerSecondsLeft}
+          maxSeconds={timerMaxSeconds}
+          isRunning={isTimerRunning}
+          onPlayPause={() => setIsTimerRunning(r => !r)}
+          onReset={() => { setIsTimerRunning(false); setTimerSecondsLeft(timerMaxSeconds); }}
+          onDone={() => { handleToggleComplete(activeTask); setIsFocusMode(false); }}
+          onExit={() => setIsFocusMode(false)}
+        />
       )}
 
       {/* ── Undo Delete Toast */}

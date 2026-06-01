@@ -1,0 +1,265 @@
+/* ================================================================
+   Focus Mode — full-screen deep focus overlay
+   No color-mix(). All colors use rgba() or hex literals.
+   ================================================================ */
+
+/* ── Overlay container ── */
+.focus-mode-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #0a0a14;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Safe-area insets for iPhone notch / home indicator */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  overflow: hidden;
+}
+
+/* ── Exit button — top-left ── */
+.focus-mode-exit-btn {
+  position: absolute;
+  top: calc(14px + env(safe-area-inset-top, 0px));
+  left: calc(16px + env(safe-area-inset-left, 0px));
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.38);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 6px 10px;
+  border-radius: 8px;
+  transition: color 0.2s;
+  z-index: 1;
+}
+.focus-mode-exit-btn:hover {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* ── Main content area — vertically centered ── */
+.focus-mode-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 600px;
+  gap: 0;
+  padding: 20px 24px;
+  box-sizing: border-box;
+}
+
+/* ── "DEEP FOCUS" label at top ── */
+.focus-mode-header-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(99, 102, 241, 0.7);
+  margin-bottom: 32px;
+  text-align: center;
+}
+
+/* ── SVG ring container ── */
+.focus-mode-ring-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+
+.focus-mode-svg {
+  width: 220px;
+  height: 220px;
+  /* Rotate so ring starts at top */
+  transform: rotate(-90deg);
+}
+
+/* Colour variants applied via JS inline style on the progress circle */
+.focus-mode-ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.07);
+  stroke-linecap: round;
+}
+
+.focus-mode-ring-progress {
+  fill: none;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear, stroke 0.6s ease, filter 0.6s ease;
+}
+
+/* ── Time digits overlaid on ring ── */
+.focus-mode-time-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.focus-mode-time-digits {
+  font-family: "Courier New", "Courier", "Lucida Console", monospace;
+  font-size: 72px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Session Complete state ── */
+.focus-mode-complete-text {
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(99, 102, 241, 0.9);
+  letter-spacing: 0.04em;
+  margin-top: 8px;
+  text-align: center;
+  animation: fm-pulse 0.7s ease-out;
+}
+
+@keyframes fm-pulse {
+  0%   { transform: scale(0.8); opacity: 0; }
+  60%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+
+/* ── Task title ── */
+.focus-mode-task-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+  text-align: center;
+  line-height: 1.35;
+  margin-bottom: 10px;
+  max-width: 480px;
+}
+
+/* ── Concrete step ── */
+.focus-mode-concrete-step {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.38);
+  text-align: center;
+  line-height: 1.5;
+  max-width: 400px;
+  margin-bottom: 0;
+}
+
+/* ── Timer controls row ── */
+.focus-mode-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 36px;
+}
+
+.focus-mode-ctrl-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, transform 0.1s;
+  flex-shrink: 0;
+}
+.focus-mode-ctrl-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.focus-mode-ctrl-btn:active {
+  transform: scale(0.94);
+}
+
+/* Play/Pause — larger, accented */
+.focus-mode-ctrl-play {
+  width: 64px;
+  height: 64px;
+  font-size: 26px;
+  background: rgba(99, 102, 241, 0.22);
+  border-color: rgba(99, 102, 241, 0.45);
+  color: #a5b4fc;
+  box-shadow: 0 0 18px rgba(99, 102, 241, 0.25);
+}
+.focus-mode-ctrl-play:hover {
+  background: rgba(99, 102, 241, 0.32);
+}
+
+/* ── Done button — bottom ── */
+.focus-mode-done-btn {
+  background: rgba(99, 102, 241, 0.18);
+  border: 1.5px solid rgba(99, 102, 241, 0.5);
+  border-radius: 28px;
+  padding: 14px 36px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #a5b4fc;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+  margin-top: 40px;
+  margin-bottom: 16px;
+}
+.focus-mode-done-btn:hover {
+  background: rgba(99, 102, 241, 0.28);
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+}
+.focus-mode-done-btn:active {
+  transform: scale(0.97);
+}
+
+/* ================================================================
+   Responsive breakpoints
+   ================================================================ */
+
+/* Desktop: bigger ring */
+@media (min-width: 640px) {
+  .focus-mode-svg {
+    width: 290px;
+    height: 290px;
+  }
+
+  .focus-mode-time-digits {
+    font-size: 80px;
+  }
+
+  .focus-mode-task-title {
+    font-size: 22px;
+  }
+
+  .focus-mode-header-label {
+    margin-bottom: 40px;
+  }
+
+  .focus-mode-ring-wrapper {
+    margin-bottom: 36px;
+  }
+}
+
+/* Small phones (iPhone SE, 320px) */
+@media (max-width: 374px) {
+  .focus-mode-svg {
+    width: 190px;
+    height: 190px;
+  }
+
+  .focus-mode-time-digits {
+    font-size: 60px;
+  }
+
+  .focus-mode-task-title {
+    font-size: 17px;
+  }
+}
