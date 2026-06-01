@@ -49,6 +49,21 @@ function roundToQuarter(minutes) {
   return Math.ceil(minutes / 15) * 15;
 }
 
+function currentDayMinutes() {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+}
+
+// When the current time falls inside a period, don't schedule in the past —
+// start from the next quarter-hour at or after now.
+function effectivePeriodStart(period) {
+  const now = currentDayMinutes();
+  if (now > period.start && now < period.end) {
+    return roundToQuarter(now);
+  }
+  return period.start;
+}
+
 function getEstimate(task) {
   const raw = Number(task.dayMapDurationMinutes || task.timeEstimateMinutes || task.estimateMinutes || 25);
   return clamp(Number.isFinite(raw) ? raw : 25, 10, 360);
@@ -485,7 +500,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
     const period = periodById[periodId];
     if (!period) return new Map();
     const updates = new Map();
-    let cursor = period.start;
+    let cursor = effectivePeriodStart(period);
     orderedTasks.forEach((task, index) => {
       const duration = getEstimate(task);
       const start = roundToQuarter(cursor);
@@ -594,7 +609,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask })
       cursors[p.id] = scheduled.reduce((max, t) => {
         const start = Number(t.dayMapStartMinutes ?? p.start);
         return Math.max(max, start + getEstimate(t) + 10);
-      }, p.start);
+      }, effectivePeriodStart(p));
       orderCounters[p.id] = scheduled.length;
     });
 
