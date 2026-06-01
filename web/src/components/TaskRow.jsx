@@ -171,7 +171,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
             flexShrink: 0,
             color: "var(--text-muted)",
             opacity: 0.35,
-            padding: "4px 6px",
+            padding: "2px 4px",
             display: "flex", alignItems: "center", justifyContent: "center",
             touchAction: "none",
           }}
@@ -192,23 +192,23 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         <div className="task-row-top">
           <span className={`priority-badge ${(priority || "P4").toLowerCase()}`}>{priority || "P4"}</span>
           {isNowFocus && !isCompleted && (
-            <span style={{ fontSize: "9px", fontWeight: "800", color: "var(--warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "4px" }}>FOCUS</span>
+            <span style={{ fontSize: "8px", fontWeight: "800", color: "var(--warning)", background: "rgba(245,158,11,0.12)", padding: "1px 5px", borderRadius: "3px", letterSpacing: "0.04em" }}>FOCUS</span>
           )}
           {isMVD && !isCompleted && (
-            <span style={{ fontSize: "9px", fontWeight: "800", color: "var(--accent)", background: "var(--accent-ring, rgba(99,102,241,0.10))", padding: "2px 6px", borderRadius: "4px" }}>⭐ MUST-DO</span>
+            <span style={{ fontSize: "8px", fontWeight: "800", color: "var(--accent)", background: "var(--accent-ring, rgba(99,102,241,0.10))", padding: "1px 5px", borderRadius: "3px", letterSpacing: "0.04em" }}>★ MUST-DO</span>
           )}
           <span className="task-title-text" title={title}>{title}</span>
         </div>
-        {concreteStep && (
+        {concreteStep && concreteStep !== "Do first tiny step" && (
           <span className="task-step-text">⚡ {concreteStep}</span>
         )}
         {reminderAt && !isCompleted && (
           <span style={{
-            display: "inline-flex", alignItems: "center", gap: "4px",
-            fontSize: "10px", fontWeight: "700",
+            display: "inline-flex", alignItems: "center", gap: "3px",
+            fontSize: "10px", fontWeight: "600",
             color: reminderAt < Date.now() ? "var(--danger)" : "var(--accent)",
             background: reminderAt < Date.now() ? "rgba(248,113,113,0.1)" : "var(--accent-ring, rgba(99,102,241,0.08))",
-            padding: "2px 7px", borderRadius: "4px", marginTop: "3px"
+            padding: "1px 6px", borderRadius: "4px", marginTop: "1px"
           }}>
             🔔 {formatReminderLabel(reminderAt)}{reminderAt < Date.now() ? " (overdue)" : ""}
           </span>
@@ -216,7 +216,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
 
         {/* Sub-steps checklist */}
         {hasSubSteps && (
-          <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "5px" }}>
+          <div style={{ marginTop: "5px", display: "flex", flexDirection: "column", gap: "4px" }}>
             {[...activeSubSteps, ...doneSubSteps].map(step => (
               <div key={step.id} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "3px 0" }}>
                 <div
@@ -273,8 +273,8 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
               cursor: "pointer",
               color: menuOpen ? "var(--text-primary)" : "var(--text-muted)",
               opacity: menuOpen ? 1 : 0.45,
-              padding: "5px 7px", borderRadius: "8px",
-              minWidth: "30px", minHeight: "30px",
+              padding: "4px 5px", borderRadius: "7px",
+              minWidth: "26px", minHeight: "26px",
               display: "flex", alignItems: "center", justifyContent: "center",
               transition: "all 0.15s"
             }}

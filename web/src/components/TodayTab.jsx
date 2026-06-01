@@ -579,7 +579,7 @@ export default function TodayTab({ payload, savePayload }) {
       })()}
 
       {/* ── Today's Focus — tasks dominate the screen */}
-      <section className="tasks-section" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <section className="tasks-section" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
         <div className="section-header">
           <h2 className="section-title">
             Today's Focus
