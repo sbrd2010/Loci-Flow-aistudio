@@ -400,7 +400,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap }) {
         // Option E: Auto-hide — wraps the full card, collapses on scroll
         if (headerStyle === "autohide") {
           const fullCard = (
-            <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px 14px" }}>
+            <section className="today-time-card" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px 14px" }}>
               {firstName ? (
                 <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "8px", letterSpacing: "-0.01em" }}>
                   {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
@@ -433,7 +433,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap }) {
         // Option C: Compact strip — tap ▾ to reveal full details
         if (headerStyle === "compact") {
           return (
-            <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "8px 14px" }}>
+            <section className="today-time-card" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "8px 14px" }}>
               <div onClick={() => setHeaderExpanded(e => !e)} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", userSelect: "none" }}>
                 <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-mono)", letterSpacing: "-0.02em", flexShrink: 0 }}>
                   {currentTimeStr}
@@ -471,7 +471,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap }) {
         // Option D: Frameless bar — no card border/padding, all info on two rows
         if (headerStyle === "frameless") {
           return (
-            <div style={{ padding: "4px 2px 8px 2px" }}>
+            <div className="today-time-card" style={{ padding: "4px 2px 8px 2px" }}>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "6px" }}>
                 {firstName ? (
                   <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>
@@ -502,7 +502,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap }) {
 
         // Default ("full"): original 4-row card
         return (
-          <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px 14px" }}>
+          <section className="today-time-card" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px 14px" }}>
             {firstName ? (
               <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "8px", letterSpacing: "-0.01em" }}>
                 {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
@@ -541,7 +541,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap }) {
         const color = days === 0 ? "var(--danger)" : days <= 14 ? "var(--danger)" : days <= 45 ? "var(--warning)" : "var(--accent)";
         const bg = days === 0 ? "rgba(248,113,113,0.13)" : days <= 14 ? "rgba(248,113,113,0.10)" : days <= 45 ? "rgba(251,191,36,0.10)" : "var(--accent-light)";
         return (
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", background: bg, border: `1px solid ${color}`, borderRadius: "var(--radius-sm)", padding: "10px 14px" }}>
+          <div className="today-deadline-card" style={{ display: "flex", alignItems: "center", gap: "10px", background: bg, border: `1px solid ${color}`, borderRadius: "var(--radius-sm)", padding: "10px 14px" }}>
             <span style={{ fontSize: "22px", fontWeight: "900", color, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", lineHeight: 1, flexShrink: 0 }}>
               {days === 0 ? "TODAY" : `${days}d`}
             </span>

@@ -1,0 +1,288 @@
+/* ================================================================
+   Loci v1 mobile density pass
+   Goal: keep the app's warm identity while making Today faster to scan
+   on iPhone 11 Pro / Pixel 6a / common Android phone widths.
+   ================================================================ */
+
+@media (max-width: 640px) {
+  .app-header {
+    min-height: 52px;
+    padding: 8px 14px;
+  }
+
+  .app-brand > div:first-child span:first-child {
+    font-size: 22px !important;
+  }
+
+  .app-brand > div:first-child span:last-child {
+    font-size: 21px !important;
+  }
+
+  .header-subtitle {
+    display: none;
+  }
+
+  .user-badge {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+
+  .screen-content {
+    gap: 10px;
+    padding-top: 10px;
+  }
+
+  /* Today time card: keep the time/progress utility, remove extra breathing room. */
+  .today-time-card {
+    padding: 8px 10px !important;
+    border-radius: 8px !important;
+  }
+
+  .today-time-card > div:first-child {
+    margin-bottom: 6px !important;
+  }
+
+  .today-time-card > div:first-child div:first-child {
+    font-size: 16px !important;
+  }
+
+  .today-time-card > div:nth-of-type(3) {
+    margin-bottom: 0 !important;
+  }
+
+  .today-quote-secondary {
+    display: none !important;
+  }
+
+  /* Deadline card: compact on mobile. */
+  .today-deadline-card {
+    min-height: 42px;
+    padding: 7px 10px !important;
+    border-radius: 8px !important;
+    gap: 8px !important;
+  }
+
+  .today-deadline-card > span:first-child {
+    font-size: 18px !important;
+  }
+
+  .today-deadline-card span {
+    line-height: 1.1 !important;
+  }
+
+  .tasks-section {
+    gap: 6px !important;
+  }
+
+  .tasks-section .section-header {
+    margin-top: 2px !important;
+    row-gap: 5px !important;
+    align-items: center !important;
+  }
+
+  .tasks-section .section-title {
+    font-size: 17px !important;
+    line-height: 1.15 !important;
+  }
+
+  .tasks-section .stuck-btn,
+  .tasks-section .section-count-badge {
+    min-height: 28px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 10.5px;
+    line-height: 1.1;
+  }
+
+  .tasks-list {
+    gap: 8px;
+  }
+
+  .tasks-section .task-row {
+    padding: 6px 7px 6px 8px;
+    gap: 5px;
+    border-radius: 10px;
+    border-left-width: 3px;
+    box-shadow: var(--shadow-sm);
+    background:
+      linear-gradient(90deg, rgba(46, 125, 82, 0.08), rgba(46, 125, 82, 0.04)),
+      var(--bg-card);
+  }
+
+  .tasks-section .checkbox-container {
+    min-width: 28px;
+    min-height: 34px;
+  }
+
+  .tasks-section .custom-checkbox {
+    width: 17px;
+    height: 17px;
+    border-radius: 5px;
+  }
+
+  .tasks-section .task-row-top {
+    gap: 4px;
+  }
+
+  .tasks-section .priority-badge {
+    font-size: 8.5px;
+    padding: 1px 5px;
+  }
+
+  .tasks-section .task-title-text {
+    font-size: 13px;
+    line-height: 1.25;
+    -webkit-line-clamp: 1;
+  }
+
+  .tasks-section .task-step-text {
+    max-width: 100%;
+    font-size: 10.5px;
+    line-height: 1.25;
+  }
+
+  .tasks-section .task-middle > span[style*="inline-flex"] {
+    align-self: flex-start !important;
+    max-width: 100%;
+    font-size: 9.5px !important;
+    padding: 1px 5px !important;
+  }
+
+  .tasks-section .task-row [data-testid="task-menu-btn"] {
+    min-width: 24px !important;
+    min-height: 24px !important;
+    padding: 3px 4px !important;
+  }
+
+  .fab {
+    width: 52px;
+    height: 52px;
+    bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-width: 430px) {
+  .screen-content {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .tasks-section .section-header > div {
+    width: 100%;
+    justify-content: flex-start !important;
+  }
+
+  .tasks-section .section-title {
+    flex-basis: 100% !important;
+  }
+
+  .tasks-section .task-title-text {
+    font-size: 12.8px;
+  }
+
+  .tasks-section .task-row:has(div[style*="margin-top: 5px"]) {
+    align-items: flex-start;
+  }
+}
+
+@supports not selector(:has(*)) {
+  @media (max-width: 640px) {
+    .today-quote-secondary {
+      display: none !important;
+    }
+  }
+}
+
+/* Day Map: keep the timeline dominant after all tasks are placed. */
+@media (max-width: 640px) {
+  .screen-content-day-map {
+    padding-top: 8px;
+  }
+
+  .day-map-page {
+    gap: 9px;
+  }
+
+  .day-map-topbar {
+    padding: 6px 0 8px;
+  }
+
+  .day-map-back {
+    min-height: 36px;
+    padding: 7px 10px;
+  }
+
+  .day-map-title h1 {
+    font-size: 20px;
+  }
+
+  .day-map-stats span {
+    padding: 4px 8px;
+  }
+
+  .day-map-overview,
+  .day-map-period,
+  .day-map-available-strip {
+    border-radius: 8px;
+  }
+
+  .day-map-overview {
+    padding: 10px;
+  }
+
+  .day-map-strip-header {
+    padding: 8px 10px;
+  }
+
+  .day-map-chip-row:has(.day-map-all-set) {
+    display: none;
+  }
+
+  .day-map-period {
+    padding: 10px;
+  }
+
+  .day-map-period-head {
+    margin-bottom: 6px;
+  }
+
+  .day-map-compact-main {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    padding: 8px;
+  }
+
+  .day-map-compact-title {
+    font-size: 12.8px;
+  }
+
+  .day-map-compact-time {
+    grid-column: 2;
+    justify-self: start;
+    text-align: left;
+    font-size: 10.5px;
+  }
+
+  .day-map-remove-btn {
+    width: 34px;
+  }
+
+  .day-map-edit-panel {
+    padding: 8px 10px;
+  }
+}
+
+/* Tablet: avoid excessive white space while preserving the calmer Roadmap feel. */
+@media (min-width: 641px) and (max-width: 900px) {
+  .screen-content {
+    gap: 14px;
+  }
+
+  .tasks-section .task-row {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .day-map-page {
+    gap: 12px;
+  }
+}
