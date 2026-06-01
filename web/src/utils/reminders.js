@@ -1,6 +1,10 @@
 // In-memory map of task UUID → timeout ID (cleared on page refresh, re-scheduled on load)
 const scheduled = new Map();
 
+// JS setTimeout silently wraps around for delays > 2^31 ms (~24.8 days) and fires immediately.
+// Chain a re-schedule callback at this boundary so distant reminders work correctly.
+const MAX_TIMEOUT_MS = 2_000_000_000; // ~23 days — safely below 2^31
+
 function shouldScheduleReminder(task) {
   return !!(task?.uuid && task.reminderAt && !task.isCompleted && !task.isDeleted && !task.isParked);
 }
@@ -15,6 +19,16 @@ export function scheduleReminder(task) {
   const delay = task.reminderAt - Date.now();
   cancelReminder(task.uuid);
   if (delay <= 0) return; // already past — don't fire stale reminder
+
+  if (delay > MAX_TIMEOUT_MS) {
+    // Reschedule at the boundary; the callback recalculates the remaining delay
+    const id = setTimeout(() => {
+      scheduled.delete(task.uuid);
+      scheduleReminder(task);
+    }, MAX_TIMEOUT_MS);
+    scheduled.set(task.uuid, id);
+    return;
+  }
 
   const id = setTimeout(async () => {
     scheduled.delete(task.uuid);

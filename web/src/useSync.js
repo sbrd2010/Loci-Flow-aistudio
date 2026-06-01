@@ -141,10 +141,15 @@ export function useSync(uid, email) {
 
       if (!timeoutRef.current) {
         if (data) {
-          setPayload(data);
-          payloadRef.current = data;
-          pendingRemoteRef.current = null;
-          writeCache(uid, data);
+          // Only apply if server data is at least as fresh as local state —
+          // prevents a stale long-poll snapshot (e.g. after Brave reconnects) from
+          // overwriting optimistic updates that haven't reached Firebase yet.
+          if ((data.timestamp || 0) >= (payloadRef.current?.timestamp || 0)) {
+            setPayload(data);
+            payloadRef.current = data;
+            pendingRemoteRef.current = null;
+            writeCache(uid, data);
+          }
         } else if (hasCachedData) {
           // RTDB is empty (new device or cleared DB) but we have local cache —
           // restore it to RTDB so the user's data isn't lost.
