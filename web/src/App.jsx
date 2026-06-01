@@ -14,7 +14,12 @@ import SettingsTab from "./components/SettingsTab";
 import AddTaskDialog from "./components/AddTaskDialog";
 import OnboardingWizard from "./components/OnboardingWizard";
 import PrivacyPolicy from "./components/PrivacyPolicy";
+import DayMapPage from "./components/DayMapPage";
 import { safeUUID } from "./utils/uuid";
+
+function toLocalDateStr(date) {
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+}
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -152,7 +157,6 @@ export default function App() {
   useEffect(() => {
     if (!payload?.config || !user || demoMode) return;
     const cfg = payload.config;
-    const toLocalDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
     const todayStr = toLocalDateStr(new Date());
     if (cfg.lastVisitDate === todayStr) return;
     const yesterday = new Date();
@@ -172,7 +176,11 @@ export default function App() {
     return unsubscribe;
   }, [demoMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleTabSelect = (tab) => { setActiveTab(tab); track("tab_switch", { tab }); };
+  const handleTabSelect = (tab) => { setFabExpanded(false); setActiveTab(tab); track("tab_switch", { tab }); };
+
+  const goToday = () => { setFabExpanded(false); setActiveTab("today"); };
+
+  const openDayMap = () => { setFabExpanded(false); setActiveTab("daymap"); track("day_map_open"); };
 
   const handleSwitchUser = () => {
     signOut(auth).then(() => { setUser(null); setActiveTab("today"); });
@@ -186,6 +194,14 @@ export default function App() {
 
   const dumpCount = (payload?.brainDump || []).length;
   const recentDump = [...(payload?.brainDump || [])].slice(-3).reverse();
+
+  const todayForMap = toLocalDateStr(new Date());
+  const todayTasksForMap = (payload?.tasks || []).filter(
+    (t) => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted && !t.isParked
+  );
+  const mappedTodayCount = todayTasksForMap.filter(
+    (t) => t.dayMapDate === todayForMap && t.dayMapPeriod
+  ).length;
 
   const handleQuickDump = (e) => {
     e.preventDefault();
@@ -377,18 +393,41 @@ export default function App() {
         </div>
       )}
 
-      {/* Header top bar */}
-      <Header
-        userName={demoMode ? "Demo User" : (payload?.config?.userName || user?.displayName || user?.email)}
-        onGoHome={() => setActiveTab("today")}
-        theme={theme}
-        onThemeChange={setTheme}
-      />
+      {/* Header top bar — hidden on Day Map (full-screen page) */}
+      {activeTab !== "daymap" && (
+        <Header
+          userName={demoMode ? "Demo User" : (payload?.config?.userName || user?.displayName || user?.email)}
+          onGoHome={goToday}
+          theme={theme}
+          onThemeChange={setTheme}
+        />
+      )}
 
       {/* Main Tab Screen Router */}
-      <main className="screen-content">
+      <main className={`screen-content${activeTab === "daymap" ? " screen-content-day-map" : ""}`}>
         {activeTab === "today" && (
-          <TodayTab payload={payload} savePayload={savePayload} onOpenAddTask={() => openAddTask("today")} />
+          <>
+            <button className="day-map-launcher" type="button" onClick={openDayMap} aria-label="Open Day Map">
+              <span className="day-map-launcher-main">
+                <strong>Day Map</strong>
+                <span>
+                  {todayTasksForMap.length
+                    ? `${mappedTodayCount}/${todayTasksForMap.length} Today tasks placed`
+                    : "Map Today tasks into your day"}
+                </span>
+              </span>
+              <span className="day-map-launcher-cta">Build day</span>
+            </button>
+            <TodayTab payload={payload} savePayload={savePayload} onOpenAddTask={() => openAddTask("today")} />
+          </>
+        )}
+        {activeTab === "daymap" && (
+          <DayMapPage
+            payload={payload}
+            savePayload={savePayload}
+            onClose={goToday}
+            onAddTask={() => openAddTask("today")}
+          />
         )}
         {activeTab === "roadmap" && (
           <RoadmapTab
@@ -531,8 +570,8 @@ export default function App() {
         </>
       )}
 
-      {/* Bottom Nav */}
-      <BottomNav activeTab={activeTab} onTabSelect={handleTabSelect} />
+      {/* Bottom Nav — hidden on Day Map (full-screen page) */}
+      {activeTab !== "daymap" && <BottomNav activeTab={activeTab} onTabSelect={handleTabSelect} />}
 
       {/* Add / Edit Task Dialog */}
       {showAddTask && (
