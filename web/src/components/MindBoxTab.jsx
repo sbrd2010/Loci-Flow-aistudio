@@ -12,6 +12,74 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+function IconTrendingUp() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+      <polyline points="17 6 23 6 23 12"/>
+    </svg>
+  );
+}
+function IconSun() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="5"/>
+      <line x1="12" y1="1" x2="12" y2="3"/>
+      <line x1="12" y1="21" x2="12" y2="23"/>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+      <line x1="1" y1="12" x2="3" y2="12"/>
+      <line x1="21" y1="12" x2="23" y2="12"/>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </svg>
+  );
+}
+function IconLifeBuoy() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <circle cx="12" cy="12" r="4"/>
+      <line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/>
+      <line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/>
+      <line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/>
+      <line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/>
+    </svg>
+  );
+}
+function IconRefreshCw() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 4 23 10 17 10"/>
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+    </svg>
+  );
+}
+function IconFeather() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/>
+      <line x1="16" y1="8" x2="2" y2="22"/>
+      <line x1="17.5" y1="15" x2="9" y2="15"/>
+    </svg>
+  );
+}
+function IconInbox() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+      <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+    </svg>
+  );
+}
+function IconChevronRight() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 18 15 12 9 6"/>
+    </svg>
+  );
+}
+
 function SortableDumpItem({ item, onDelete, formatRelTime }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   return (
@@ -349,7 +417,7 @@ export default function MindBoxTab({ payload, savePayload }) {
         <>
           <div className="mindbox-subview-header">
             <button className="mindbox-back-btn" onClick={() => setToolPanel(null)}>← Back</button>
-            <h2 className="mindbox-subview-title">📝 Brain Dump</h2>
+            <h2 className="mindbox-subview-title">Brain Dump</h2>
             {dumpCount > 0 && (
               <span style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700", marginLeft: "auto" }}>{dumpCount}/50</span>
             )}
@@ -391,7 +459,7 @@ export default function MindBoxTab({ payload, savePayload }) {
         <>
           <div className="mindbox-subview-header">
             <button className="mindbox-back-btn" onClick={() => { setToolPanel(null); setOrganizeResults([]); setOrganizeError(""); }}>← Back</button>
-            <h2 className="mindbox-subview-title">✨ Organize Dump</h2>
+            <h2 className="mindbox-subview-title">Organize Dump</h2>
           </div>
           {organizeLoading && (
             <div style={{ textAlign: "center", padding: "48px 0" }}>
@@ -526,7 +594,7 @@ export default function MindBoxTab({ payload, savePayload }) {
           <>
             <div className="mindbox-subview-header">
               <button className="mindbox-back-btn" onClick={() => setToolPanel(null)}>← Back</button>
-              <h2 className="mindbox-subview-title">📊 7-Day Progress</h2>
+              <h2 className="mindbox-subview-title">7-Day Progress</h2>
             </div>
 
             {/* Streak + bento */}
@@ -601,7 +669,7 @@ export default function MindBoxTab({ payload, savePayload }) {
         <>
           <div className="mindbox-subview-header">
             <button className="mindbox-back-btn" onClick={() => setToolPanel(null)}>← Back</button>
-            <h2 className="mindbox-subview-title">🌅 Morning Ritual</h2>
+            <h2 className="mindbox-subview-title">Morning Ritual</h2>
           </div>
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "20px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ritualActive ? "20px" : "16px" }}>
@@ -659,16 +727,19 @@ export default function MindBoxTab({ payload, savePayload }) {
       {!toolPanel && (
         <>
           <div style={{ padding: "0 0 20px 0" }}>
-            <h2 style={{ fontSize: "18px", fontWeight: "800", color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>Mind Box</h2>
-            <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Your tools, streaks, and reset buttons.</p>
+            <h2 style={{ fontSize: "20px", fontWeight: "800", color: "var(--text-primary)", fontFamily: "var(--font-display)", letterSpacing: "-0.02em", margin: "0 0 4px" }}>Mind Box</h2>
+            <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>Tools, streaks &amp; resets.</p>
           </div>
 
           {/* Brain Dump — always-live capture */}
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "14px 16px", marginBottom: "16px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-              <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)" }}>📝 Brain Dump</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+              <span className="mindbox-card-icon mindbox-card-icon--secondary" style={{ width: "36px", height: "36px", borderRadius: "9px" }}>
+                <IconInbox />
+              </span>
+              <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)" }}>Brain Dump</span>
               {dumpCount > 0 && (
-                <span style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700" }}>{dumpCount}/50</span>
+                <span style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700", marginLeft: "auto" }}>{dumpCount}/50</span>
               )}
             </div>
             <form className="braindump-form" onSubmit={handleBrainDumpSubmit}>
@@ -713,29 +784,44 @@ export default function MindBoxTab({ payload, savePayload }) {
           {/* 2×2 tool grid */}
           <div className="mindbox-grid">
             <button className="mindbox-card" onClick={() => setToolPanel("progress")}>
-              <span className="mindbox-card-icon">📊</span>
-              <span className="mindbox-card-title">Progress</span>
-              <span className="mindbox-card-sub">{config.visitStreakCount || 0}d streak 🔥</span>
+              <span className="mindbox-card-icon mindbox-card-icon--accent"><IconTrendingUp /></span>
+              <span className="mindbox-card-body">
+                <span className="mindbox-card-title">Progress</span>
+                <span className="mindbox-card-sub">{config.visitStreakCount || 0}-day streak</span>
+              </span>
+              <span className="mindbox-card-chevron"><IconChevronRight /></span>
             </button>
             <button className="mindbox-card" onClick={() => setToolPanel("ritual")}>
-              <span className="mindbox-card-icon">🌅</span>
-              <span className="mindbox-card-title">Morning Ritual</span>
-              <span className="mindbox-card-sub">7 min · +80 XP</span>
+              <span className="mindbox-card-icon mindbox-card-icon--warning"><IconSun /></span>
+              <span className="mindbox-card-body">
+                <span className="mindbox-card-title">Morning Ritual</span>
+                <span className="mindbox-card-sub">7 min · +80 XP</span>
+              </span>
+              <span className="mindbox-card-chevron"><IconChevronRight /></span>
             </button>
             <button className="mindbox-card mindbox-card--rescue" onClick={openRescueMode}>
-              <span className="mindbox-card-icon">🌊</span>
-              <span className="mindbox-card-title">Rescue Mode</span>
-              <span className="mindbox-card-sub">Step-by-step reset</span>
+              <span className="mindbox-card-icon mindbox-card-icon--danger"><IconLifeBuoy /></span>
+              <span className="mindbox-card-body">
+                <span className="mindbox-card-title">Rescue Mode</span>
+                <span className="mindbox-card-sub">Step-by-step reset</span>
+              </span>
+              <span className="mindbox-card-chevron"><IconChevronRight /></span>
             </button>
             <button className="mindbox-card" onClick={handleBadDayReset}>
-              <span className="mindbox-card-icon">🌪️</span>
-              <span className="mindbox-card-title">Bad Day Reset</span>
-              <span className="mindbox-card-sub">Restart without shame</span>
+              <span className="mindbox-card-icon mindbox-card-icon--secondary"><IconRefreshCw /></span>
+              <span className="mindbox-card-body">
+                <span className="mindbox-card-title">Bad Day Reset</span>
+                <span className="mindbox-card-sub">Restart without shame</span>
+              </span>
+              <span className="mindbox-card-chevron"><IconChevronRight /></span>
             </button>
             <button className="mindbox-card" onClick={handleCleanSlate} style={{ gridColumn: "span 2" }}>
-              <span className="mindbox-card-icon">🌱</span>
-              <span className="mindbox-card-title">Clean Slate</span>
-              <span className="mindbox-card-sub">Move today's tasks to this week — nothing lost, fresh start</span>
+              <span className="mindbox-card-icon mindbox-card-icon--success"><IconFeather /></span>
+              <span className="mindbox-card-body">
+                <span className="mindbox-card-title">Clean Slate</span>
+                <span className="mindbox-card-sub">Move today's tasks to this week — nothing lost, fresh start</span>
+              </span>
+              <span className="mindbox-card-chevron"><IconChevronRight /></span>
             </button>
           </div>
         </>

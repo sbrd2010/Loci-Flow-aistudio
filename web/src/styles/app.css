@@ -2794,22 +2794,44 @@ html[data-theme="glassy"] .theme-dropdown {
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: var(--accent-ring, rgba(99,102,241,0.08));
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--accent);
   flex-shrink: 0;
 }
-.mindbox-card--rescue .mindbox-card-icon {
+.mindbox-card-icon--accent {
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--accent);
+}
+.mindbox-card-icon--warning {
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--warning);
+}
+.mindbox-card-icon--danger {
   background: rgba(248, 113, 113, 0.12);
   color: var(--danger);
+}
+.mindbox-card-icon--success {
+  background: rgba(52, 211, 153, 0.12);
+  color: var(--success);
+}
+.mindbox-card-icon--secondary {
+  background: rgba(167, 139, 250, 0.12);
+  color: var(--accent-secondary);
 }
 .mindbox-card-body {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  flex: 1;
   min-width: 0;
+}
+.mindbox-card-chevron {
+  color: var(--text-muted);
+  opacity: 0.4;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
 .mindbox-card-title {
   font-size: 13px;
