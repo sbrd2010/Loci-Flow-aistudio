@@ -35,19 +35,21 @@
         },
         "chatHistory": {
           "$msgIdx": {
-            "content": {
-              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 5000)"
-            },
-            "$other": { ".validate": true }
+            "text":   { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 5000)" },
+            "isUser": { ".validate": "!newData.exists() || newData.isBoolean()" },
+            "$other": { ".validate": false }
           }
         },
-        "$other": { ".validate": true }
+        "contributions": { ".validate": true },
+        "brainDump":     { ".validate": true },
+        "timestamp":     { ".validate": "!newData.exists() || newData.isNumber()" },
+        "$other": { ".validate": false }
       }
     },
     "bugReports": {
       ".read": false,
       "$reportId": {
-        ".write": "auth != null",
+        ".write": "auth != null && !data.exists() && auth.token.email === newData.child('userId').val()",
         ".validate": "newData.hasChildren(['what', 'userId', 'submittedAt'])",
         "what":       { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 2000" },
         "steps":      { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 2000)" },

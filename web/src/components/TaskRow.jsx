@@ -61,20 +61,6 @@ const BoltIcon = () => (
   </svg>
 );
 
-const ArrowUpIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="19" x2="12" y2="5"/>
-    <polyline points="5 12 12 5 19 12"/>
-  </svg>
-);
-
-const ArrowDownIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="5" x2="12" y2="19"/>
-    <polyline points="19 12 12 19 5 12"/>
-  </svg>
-);
-
 const TrashIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="3 6 5 6 21 6"/>
@@ -130,7 +116,12 @@ const ROADMAP_HORIZONS = [
 export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, onToggleMVD, dragHandleListeners, dragHandleAttributes }) {
   const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showRoadmapOptions, setShowRoadmapOptions] = useState(false);
   const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!menuOpen) setShowRoadmapOptions(false);
+  }, [menuOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -145,7 +136,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
     };
   }, [menuOpen]);
 
-  const hasActions = !isCompleted && (onEdit || onPin || onMoveUp || onMoveDown || onDelete || onBreakdown);
+  const hasActions = !isCompleted && (onEdit || onPin || onDelete || onBreakdown || onMoveToHorizon);
   const activeSubSteps = subSteps?.filter(s => !s.done) ?? [];
   const doneSubSteps = subSteps?.filter(s => s.done) ?? [];
   const hasSubSteps = subSteps && subSteps.length > 0;
@@ -316,30 +307,29 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
                   <PencilIcon /> Edit task
                 </MenuItem>
               )}
-              {(onMoveUp || onMoveDown) && (
-                <div style={{ height: "1px", margin: "5px 8px", background: "var(--border)", opacity: 0.5 }} />
-              )}
-              {onMoveUp && (
-                <MenuItem onClick={() => { onMoveUp(task); setMenuOpen(false); }} color="var(--text-secondary)">
-                  <ArrowUpIcon /> Move up
-                </MenuItem>
-              )}
-              {onMoveDown && (
-                <MenuItem onClick={() => { onMoveDown(task); setMenuOpen(false); }} color="var(--text-secondary)">
-                  <ArrowDownIcon /> Move down
-                </MenuItem>
-              )}
               {onMoveToHorizon && (
                 <>
                   <div style={{ height: "1px", margin: "5px 8px", background: "var(--border)", opacity: 0.5 }} />
-                  <div style={{ fontSize: "9px", fontWeight: "800", color: "var(--text-muted)", padding: "4px 12px 2px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                    Move to roadmap
-                  </div>
-                  {ROADMAP_HORIZONS.map(({ key, label }) => (
-                    <MenuItem key={key} onClick={() => { onMoveToHorizon(task, key); setMenuOpen(false); }} color="var(--text-secondary)">
-                      <ArrowRightIcon /> {label}
+                  {!showRoadmapOptions ? (
+                    <MenuItem onClick={() => setShowRoadmapOptions(true)} color="var(--text-secondary)">
+                      <ArrowRightIcon />
+                      <span style={{ flex: 1 }}>Move to roadmap</span>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4, flexShrink: 0 }}>
+                        <polyline points="9 18 15 12 9 6"/>
+                      </svg>
                     </MenuItem>
-                  ))}
+                  ) : (
+                    <>
+                      <div style={{ fontSize: "9px", fontWeight: "800", color: "var(--text-muted)", padding: "4px 12px 2px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        Move to roadmap
+                      </div>
+                      {ROADMAP_HORIZONS.map(({ key, label }) => (
+                        <MenuItem key={key} onClick={() => { onMoveToHorizon(task, key); setMenuOpen(false); }} color="var(--text-secondary)">
+                          <ArrowRightIcon /> {label}
+                        </MenuItem>
+                      ))}
+                    </>
+                  )}
                 </>
               )}
               {onDelete && (
