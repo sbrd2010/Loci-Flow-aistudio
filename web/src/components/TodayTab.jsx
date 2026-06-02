@@ -6,6 +6,7 @@ import FocusModePage from "./FocusModePage";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
+import { track } from "../firebase";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
 import {
   DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor,
@@ -208,7 +209,10 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap }) {
     const updatedTasks = tasks.map((t) =>
       t.uuid === task.uuid ? { ...t, isCompleted, isNowFocus: false, dateCompletedString: isCompleted ? todayDateStr : null, lastUpdated: Date.now() } : t
     );
-    if (isCompleted) celebrate();
+    if (isCompleted) {
+      celebrate();
+      track("task_completed", { horizon: task.horizonLevel });
+    }
     let nextXp = Number(config.totalXp) || 0;
     let nextContributions = [...contributions];
     if (isCompleted) {

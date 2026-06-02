@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { auth, track } from "./firebase";
+import React, { useState, useEffect, useRef } from "react";
+import { auth, track, setAnalyticsUser } from "./firebase";
 import { scheduleAllReminders } from "./utils/reminders";
 import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
@@ -35,6 +35,9 @@ export default function App() {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showQuickDump, setShowQuickDump] = useState(false);
   const [quickDumpText, setQuickDumpText] = useState("");
+
+  const sessionStartRef = useRef(Date.now());
+  const tabStartRef = useRef(Date.now());
 
   // ── Demo mode ──────────────────────────────────────────────────────────────
   const [demoMode, setDemoMode] = useState(false);
@@ -185,12 +188,31 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setAuthLoading(false);
-      if (firebaseUser && demoMode) exitDemo(); // auto-exit demo if user signs in
+      if (firebaseUser) {
+        setAnalyticsUser(firebaseUser.uid);
+        track("session_start");
+        if (demoMode) exitDemo(); // auto-exit demo if user signs in
+      }
     });
     return unsubscribe;
   }, [demoMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleTabSelect = (tab) => { setFabExpanded(false); setActiveTab(tab); track("tab_switch", { tab }); };
+  // Track session duration when the user closes or navigates away
+  useEffect(() => {
+    const handleUnload = () => {
+      track("session_end", { duration_sec: Math.round((Date.now() - sessionStartRef.current) / 1000) });
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    return () => window.removeEventListener("beforeunload", handleUnload);
+  }, []);
+
+  const handleTabSelect = (tab) => {
+    const dwellSec = Math.round((Date.now() - tabStartRef.current) / 1000);
+    track("tab_switch", { tab, from: activeTab, dwell_sec: dwellSec });
+    tabStartRef.current = Date.now();
+    setFabExpanded(false);
+    setActiveTab(tab);
+  };
 
   const goToday = () => { setFabExpanded(false); setActiveTab("today"); };
 
@@ -217,6 +239,7 @@ export default function App() {
     e.preventDefault();
     if (!quickDumpText.trim() || dumpCount >= 50 || !payload) return;
     savePayload({ ...payload, brainDump: [...(payload.brainDump || []), { id: safeUUID(), text: quickDumpText.trim(), createdAt: Date.now() }] });
+    track("braindump_added");
     setQuickDumpText("");
   };
 

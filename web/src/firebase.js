@@ -27,14 +27,29 @@ export const auth = getAuth(app);
 // so Brave Shields never sees it on page load and can't block the app.
 const measurementId = import.meta.env.VITE_GA_MEASUREMENT_ID || "";
 let _logEvent = null;
+let _analytics = null;
 if (measurementId) {
   import("firebase/analytics").then(({ getAnalytics, logEvent, isSupported }) => {
     isSupported().then(yes => {
-      if (yes) _logEvent = (name, params) => logEvent(getAnalytics(app), name, params);
+      if (yes) {
+        _analytics = getAnalytics(app);
+        _logEvent = (name, params) => logEvent(_analytics, name, params);
+      }
     }).catch(() => {});
   }).catch(() => {});
 }
 
 export function track(eventName, params = {}) {
   try { if (_logEvent) _logEvent(eventName, params); } catch (_) {}
+}
+
+// Links all subsequent events to a specific user identity in Firebase Analytics.
+// Called once on sign-in so Rohan/Sweta sessions are distinguishable in the dashboard.
+export function setAnalyticsUser(uid) {
+  if (!measurementId) return;
+  import("firebase/analytics").then(({ getAnalytics, setUserId, isSupported }) => {
+    isSupported().then(yes => {
+      if (yes) setUserId(getAnalytics(app), uid);
+    }).catch(() => {});
+  }).catch(() => {});
 }
