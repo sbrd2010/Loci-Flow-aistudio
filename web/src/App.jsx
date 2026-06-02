@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { auth, track, setAnalyticsUser } from "./firebase";
+import { computeUserProfile } from "./utils/userProfile";
 import { scheduleAllReminders } from "./utils/reminders";
 import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
@@ -38,6 +39,7 @@ export default function App() {
 
   const sessionStartRef = useRef(Date.now());
   const tabStartRef = useRef(Date.now());
+  const profileComputedRef = useRef(false);
 
   // ── Demo mode ──────────────────────────────────────────────────────────────
   const [demoMode, setDemoMode] = useState(false);
@@ -205,6 +207,19 @@ export default function App() {
     window.addEventListener("beforeunload", handleUnload);
     return () => window.removeEventListener("beforeunload", handleUnload);
   }, []);
+
+  // Compute behavioural profile from fresh RTDB data once per day.
+  // Runs after isSyncingFromCache flips false (real data arrived) — never from stale cache.
+  useEffect(() => {
+    if (!payload || !user || demoMode || isSyncingFromCache) return;
+    if (profileComputedRef.current) return;
+    profileComputedRef.current = true;
+    const todayStr = toLocalDateStr(new Date());
+    const existing = payload.config?.userProfile;
+    if (existing?.lastProfiledAt && toLocalDateStr(new Date(existing.lastProfiledAt)) === todayStr) return;
+    const profile = computeUserProfile(payload);
+    savePayload({ ...payload, config: { ...payload.config, userProfile: profile } });
+  }, [isSyncingFromCache, user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTabSelect = (tab) => {
     const dwellSec = Math.round((Date.now() - tabStartRef.current) / 1000);
