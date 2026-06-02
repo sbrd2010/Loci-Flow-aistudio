@@ -16,12 +16,12 @@ const firebaseConfig = {
 // WebSocket (wss://) is blocked by Brave Shields, carrier-level DPI filters,
 // corporate proxies, and many mobile networks. Long-polling uses standard
 // HTTPS on port 443 which works on virtually every network.
-// MUST be called before getDatabase().
-forceLongPolling();
-
 const app = initializeApp(firebaseConfig);
 export const db = getDatabase(app);
 export const auth = getAuth(app);
+
+// Must be called with the initialized database instance.
+forceLongPolling(db);
 
 // Analytics is loaded lazily only when a Measurement ID is configured,
 // so Brave Shields never sees it on page load and can't block the app.
