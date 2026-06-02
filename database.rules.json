@@ -5,6 +5,9 @@
         ".read":  "auth != null && auth.uid === $userId",
         ".write": "auth != null && auth.uid === $userId",
         ".validate": "newData.hasChildren(['userId', 'tasks', 'config'])",
+        "userId": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
         "tasks": {
           "$taskIdx": {
             ".validate": "newData.hasChildren(['id', 'title', 'userId'])",
