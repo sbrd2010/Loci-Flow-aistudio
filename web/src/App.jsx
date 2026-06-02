@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { auth, track } from "./firebase";
+import React, { useState, useEffect, useRef } from "react";
+import { auth, track, setAnalyticsUser } from "./firebase";
+import { computeUserProfile } from "./utils/userProfile";
 import { scheduleAllReminders } from "./utils/reminders";
 import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
@@ -35,6 +36,10 @@ export default function App() {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showQuickDump, setShowQuickDump] = useState(false);
   const [quickDumpText, setQuickDumpText] = useState("");
+
+  const sessionStartRef = useRef(Date.now());
+  const tabStartRef = useRef(Date.now());
+  const profileComputedRef = useRef(false);
 
   // ── Demo mode ──────────────────────────────────────────────────────────────
   const [demoMode, setDemoMode] = useState(false);
@@ -163,9 +168,13 @@ export default function App() {
     if (payload?.tasks) scheduleAllReminders(payload.tasks);
   }, [payload?.tasks]);
 
-  // Auto-increment visit streak on first open each day (real users only)
+  // Auto-increment visit streak on first open each day (real users only).
+  // Guard: skip while isSyncingFromCache — payload is from stale localStorage at that point.
+  // Without this guard, a second device opening the app would overwrite RTDB with the
+  // stale cache payload (timestamp = now > any recent edit), silently erasing brainDump
+  // items and other changes made on the first device since the cache was last written.
   useEffect(() => {
-    if (!payload?.config || !user || demoMode) return;
+    if (!payload?.config || !user || demoMode || isSyncingFromCache) return;
     const cfg = payload.config;
     const todayStr = toLocalDateStr(new Date());
     if (cfg.lastVisitDate === todayStr) return;
@@ -174,19 +183,51 @@ export default function App() {
     const yesterdayStr = toLocalDateStr(yesterday);
     const newStreak = cfg.lastVisitDate === yesterdayStr ? (cfg.visitStreakCount || 0) + 1 : 1;
     savePayload({ ...payload, config: { ...cfg, visitStreakCount: newStreak, lastVisitDate: todayStr, lastUpdated: Date.now() } });
-  }, [payload?.config?.lastVisitDate, user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [payload?.config?.lastVisitDate, user?.uid, isSyncingFromCache]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Firebase auth state listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setAuthLoading(false);
-      if (firebaseUser && demoMode) exitDemo(); // auto-exit demo if user signs in
+      if (firebaseUser) {
+        setAnalyticsUser(firebaseUser.uid);
+        track("session_start");
+        if (demoMode) exitDemo(); // auto-exit demo if user signs in
+      }
     });
     return unsubscribe;
   }, [demoMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleTabSelect = (tab) => { setFabExpanded(false); setActiveTab(tab); track("tab_switch", { tab }); };
+  // Track session duration when the user closes or navigates away
+  useEffect(() => {
+    const handleUnload = () => {
+      track("session_end", { duration_sec: Math.round((Date.now() - sessionStartRef.current) / 1000) });
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    return () => window.removeEventListener("beforeunload", handleUnload);
+  }, []);
+
+  // Compute behavioural profile from fresh RTDB data once per day.
+  // Runs after isSyncingFromCache flips false (real data arrived) — never from stale cache.
+  useEffect(() => {
+    if (!payload || !user || demoMode || isSyncingFromCache) return;
+    if (profileComputedRef.current) return;
+    profileComputedRef.current = true;
+    const todayStr = toLocalDateStr(new Date());
+    const existing = payload.config?.userProfile;
+    if (existing?.lastProfiledAt && toLocalDateStr(new Date(existing.lastProfiledAt)) === todayStr) return;
+    const profile = computeUserProfile(payload);
+    savePayload({ ...payload, config: { ...payload.config, userProfile: profile } });
+  }, [isSyncingFromCache, user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTabSelect = (tab) => {
+    const dwellSec = Math.round((Date.now() - tabStartRef.current) / 1000);
+    track("tab_switch", { tab, from: activeTab, dwell_sec: dwellSec });
+    tabStartRef.current = Date.now();
+    setFabExpanded(false);
+    setActiveTab(tab);
+  };
 
   const goToday = () => { setFabExpanded(false); setActiveTab("today"); };
 
@@ -213,6 +254,7 @@ export default function App() {
     e.preventDefault();
     if (!quickDumpText.trim() || dumpCount >= 50 || !payload) return;
     savePayload({ ...payload, brainDump: [...(payload.brainDump || []), { id: safeUUID(), text: quickDumpText.trim(), createdAt: Date.now() }] });
+    track("braindump_added");
     setQuickDumpText("");
   };
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { callAI, getAIKeys } from "../utils/aiCall";
 import ConfirmDialog from "./ConfirmDialog";
+import { profileToCoachContext } from "../utils/userProfile";
 
 export default function CoachTab({ payload, savePayload, saveSubPath }) {
   const { tasks = [], config = {} } = payload;
@@ -148,7 +149,7 @@ GUARD RAILS:
 - Stay within: productivity, tasks, focus, execution support, time management, motivation, gentle life-management support.
 
 LANGUAGE: Never use the word "ADHD". Use instead: focus challenge, overwhelm, execution support, momentum, time awareness, micro-step, reset, low-energy mode.
-
+${profileToCoachContext(config.userProfile) ? `\n${profileToCoachContext(config.userProfile)}\n` : ""}
 SESSION: ${timeOfDay}, ${config.visitStreakCount || 0}-day streak, ${todayActive.length} active tasks today.`;
 
     const messages = withUser.map(m => ({ role: m.isUser ? "user" : "assistant", content: m.text }));
@@ -206,7 +207,7 @@ SESSION: ${timeOfDay}, ${config.visitStreakCount || 0}-day streak, ${todayActive
 USER: ${config.userName || "friend"} | Challenge: ${challengeDesc}
 Time: ${timeOfDay} (${hour}:00) — ${energyNote}
 Streak: ${config.visitStreakCount || 0} days
-Today: ${todayTasks.length} tasks (${totalTodayHours}h estimated) | Week backlog: ${weekTasks.length} | Total active: ${backlog.length}
+${profileToCoachContext(config.userProfile) ? profileToCoachContext(config.userProfile) + "\n" : ""}Today: ${todayTasks.length} tasks (${totalTodayHours}h estimated) | Week backlog: ${weekTasks.length} | Total active: ${backlog.length}
 Priority distribution: ${p1Count} P1 of ${backlog.length} total (${Math.round(p1Ratio * 100)}% P1)
 
 LOCI PHILOSOPHY: The app biases toward doing, not planning. Your briefing must close the activation gap — turn intentions into a specific first step. Never suggest "organize more" or "plan better." Suggest starting.

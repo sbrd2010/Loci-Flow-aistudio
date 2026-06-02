@@ -60,23 +60,29 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
       "overthinks and delays finishing (perfectionism/action paralysis)";
     const existingTasks = (payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).slice(0, 8)
       .map(t => `[${t.priority}] ${t.title}`).join(", ") || "none yet";
+    const profile = payload.config?.userProfile;
+    const profileNote = profile && profile.totalTasks >= 5
+      ? `\nUser's task patterns: completion rate ${Math.round(profile.completionRate * 100)}%, dominant horizon "${profile.dominantHorizon}", avg estimate ${profile.avgEstimateMinutes}min. Use these to inform your horizon, priority, and estimate suggestions.`
+      : "";
     const prompt = `You are an expert productivity coach specialising in focus, momentum, and execution support. The user typed this rough task idea: "${title.trim()}".
 
-Transform it into a well-structured, focus-friendly task. The user's core challenge: ${challengeLabel}.
+Transform it into a well-structured, focus-friendly task. The user's core challenge: ${challengeLabel}.${profileNote}
 
 TASK DESIGN RULES:
 - Title must be specific and outcome-oriented (not vague verbs like "work on" or "think about")
 - microStep is the DOOR-HANDLE move — the single physical action that takes under 2 minutes and removes the initiation barrier
 - Priority should account for the user's challenge: if they struggle to start, lean P3/P4 to reduce pressure
 - Time estimate should be honest — tasks often take 1.5x expected time
+- horizonLevel: "today" only if deadline is today or extremely urgent; "week" for most tasks; "month"/"quarter" for longer-term goals
 - Never use the word "ADHD" in your response
 - Their current tasks for context: ${existingTasks}
 
 Respond with ONLY valid JSON (no markdown, no code blocks), exactly this structure:
-{"title":"<specific outcome-oriented title, max 60 chars>","microStep":"<single door-handle action, max 60 chars>","priority":"P2","estimateMinutes":25}
+{"title":"<specific outcome-oriented title, max 60 chars>","microStep":"<single door-handle action, max 60 chars>","priority":"P2","estimateMinutes":25,"horizonLevel":"week"}
 
 priority options: P1 (urgent+must do today), P2 (important this week), P3 (normal queue), P4 (easy quick-win, under 15 min)
-estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
+estimateMinutes options: 15, 25, 45, 60, 120, 240, 360
+horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`;
 
     try {
       const raw = await callAI({
@@ -92,6 +98,7 @@ estimateMinutes options: 15, 25, 45, 60, 120, 240, 360`;
       if (["P1","P2","P3","P4"].includes(parsed.priority)) setPriority(parsed.priority);
       const est = Number(parsed.estimateMinutes);
       if ([15,25,45,60,120,240,360].includes(est)) setEstimateMinutes(est);
+      if (["today","week","month","quarter","halfyear","office"].includes(parsed.horizonLevel)) setHorizonLevel(parsed.horizonLevel);
     } catch (err) {
       setAiError("AI suggestion failed — fill in manually.");
     } finally {

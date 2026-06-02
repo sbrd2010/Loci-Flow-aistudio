@@ -305,7 +305,7 @@ export function useSync(uid, email) {
       if (connTimeoutId) clearTimeout(connTimeoutId);
       if (dataTimeoutRef.current) { clearTimeout(dataTimeoutRef.current); dataTimeoutRef.current = null; }
       console.error("Error reading RTDB payload:", err);
-      setIsSyncingFromCache(false);
+      setIsSyncingFromCache(false); // unblock effects that wait for RTDB
       pendingRemoteRef.current = null;
       if (!hasCachedData) {
         setError("Could not connect to sync server. Check your connection and reload.");

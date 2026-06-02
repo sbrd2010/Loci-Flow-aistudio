@@ -262,7 +262,11 @@ export default function MindBoxTab({ payload, savePayload }) {
     setOrganizeSelected(new Set());
     setToolPanel("organize");
 
-    const prompt = `Here are raw thoughts from a brain dump:\n${dumpItems.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\nOrganize each thought into a structured task. For each one determine:\n- title: specific, outcome-oriented (max 60 chars)\n- horizonLevel: "today" (urgent/time-sensitive), "week" (most items), "month", or "quarter"\n- priority: "P1" (urgent), "P2" (important), "P3" (normal), "P4" (quick <15 min)\n- concreteStep: the single easiest first action to start it (max 60 chars)\n\nRules: default to "week" unless clearly urgent. Never use the word "ADHD".\n\nReturn ONLY a JSON array, no markdown:\n[{"title":"...","horizonLevel":"week","priority":"P3","concreteStep":"..."}]`;
+    const profile = config.userProfile;
+    const profileNote = profile && profile.totalTasks >= 5
+      ? `\nUser context: completion rate ${Math.round(profile.completionRate * 100)}%, dominant horizon "${profile.dominantHorizon}", avg estimate ${profile.avgEstimateMinutes}min. Weight horizon suggestions toward their patterns.`
+      : "";
+    const prompt = `Here are raw thoughts from a brain dump:\n${dumpItems.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\nOrganize each thought into a structured task. For each one determine:\n- title: specific, outcome-oriented (max 60 chars)\n- horizonLevel: "today" (urgent/deadline today), "week" (most items, default), "month", or "quarter"\n- priority: "P1" (urgent), "P2" (important), "P3" (normal), "P4" (quick <15 min)\n- concreteStep: the single easiest first action to start it (max 60 chars)${profileNote}\n\nRules: default to "week" unless clearly urgent. Never use the word "ADHD".\n\nReturn ONLY a JSON array, no markdown:\n[{"title":"...","horizonLevel":"week","priority":"P3","concreteStep":"..."}]`;
 
     try {
       const raw = await callAI({
