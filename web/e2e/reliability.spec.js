@@ -69,22 +69,21 @@ test("reliability: pinning a task sets Now Focus", async ({ page }) => {
 test("reliability: brain dump item survives tab switch and returns to Mind Box", async ({ page }) => {
   await enterDemo(page);
 
-  // Open Brain Dump via floating + button
-  await page.getByTestId("fab-add-task").click();
-  await page.getByTestId("fab-brain-dump").click();
+  // Navigate to Mind Box and add a brain dump item via the inline form
+  await page.getByRole("button", { name: "Mind Box" }).click();
+  await expect(page.locator(".braindump-input").first()).toBeVisible({ timeout: 8_000 });
 
   const thought = "Test brain dump regression item";
-  await page.locator(".braindump-input").fill(thought);
-  await page.locator(".braindump-submit").click();
+  await page.locator(".braindump-input").first().fill(thought);
+  await page.locator(".braindump-submit").first().click();
 
-  // Dismiss the quick dump sheet
-  await page.keyboard.press("Escape");
+  // Item should appear immediately in the recent dump preview
+  await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
 
-  // Switch to Roadmap tab and back
+  // Switch away and back — item must survive the tab switch
   await page.getByRole("button", { name: "Roadmap" }).click();
   await page.getByRole("button", { name: "Mind Box" }).click();
 
-  // Item must still be visible in the Brain Dump inbox
   await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
 });
 
