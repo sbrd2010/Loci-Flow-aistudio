@@ -10,6 +10,7 @@ jobs:
   rules:
     runs-on: ubuntu-latest
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       FIREBASE_DATABASE_NAMESPACE: loci-flow-default-rtdb
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +22,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
 
       - name: Run Firebase RTDB rules emulator tests
         run: npx --yes firebase-tools@latest emulators:exec --project loci-flow --only auth,database "node web/tests/firebase-rules-user-isolation.test.mjs"
