@@ -113,13 +113,11 @@ export default function App() {
       });
     };
 
-    // Brave blocks popups via Shields on all platforms — go straight to redirect.
-    // iOS must NOT use redirect: iOS WebKit partitions sessionStorage across origins,
-    // causing "missing initial state" when Firebase tries to read back OAuth state.
-    if (isBraveBrowser) {
-      doRedirect("Sign-in failed. If using Brave, tap the lion icon → disable Shields for this site, then try again.");
-      return;
-    }
+    // Brave blocks popups via Shields — but signInWithRedirect is also broken in Brave
+    // because Shields clears the OAuth state between redirect hops (same root cause as iOS).
+    // signInWithPopup gives a catchable auth/popup-blocked error, which we can surface
+    // with a clear "disable Shields" message. Redirect gives a silent failure loop.
+    // So: always use popup, handle popup-blocked per platform below.
 
     signInWithPopup(auth, new GoogleAuthProvider()).catch((err) => {
       setSigningIn(false);
@@ -127,6 +125,10 @@ export default function App() {
       if (err.code === "auth/popup-blocked") {
         if (isIOS) {
           setSignInError("Pop-up blocked by Safari. Go to Settings → Safari → turn off Block Pop-ups, then try again.");
+          return;
+        }
+        if (isBraveBrowser) {
+          setSignInError("Brave Shields is blocking sign-in. Tap the lion icon → disable Shields for loci-flow.web.app → try again.");
           return;
         }
         if (isAndroid) {
@@ -256,7 +258,7 @@ export default function App() {
             )}
             {!signInError && !!navigator.brave && (
               <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "6px", textAlign: "center" }}>
-                Brave detected — you'll be redirected to Google and brought back.
+                Brave detected — if sign-in is blocked, tap the lion icon and disable Shields for this site.
               </p>
             )}
 
