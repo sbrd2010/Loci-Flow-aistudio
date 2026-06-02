@@ -184,3 +184,71 @@ test("10. Demo banner is visible and clearly says data is not saved", async ({ p
   await expect(banner).toBeVisible({ timeout: 5_000 });
   await expect(banner).toContainText("not saved");
 });
+
+test("11. User can navigate to Mind Box and add a Brain Dump item", async ({ page }) => {
+  await enterDemo(page);
+
+  // Navigate to Mind Box tab
+  await page.getByLabel("Mind Box").click();
+  await expect(page.locator("h2:has-text('Mind Box')")).toBeVisible({ timeout: 5_000 });
+
+  // Type in the brain dump input and submit
+  const rawThought = "Brainstorming Playwright E2E tests";
+  const dumpInput = page.locator(".braindump-input");
+  await expect(dumpInput).toBeVisible();
+  await dumpInput.fill(rawThought);
+  await page.locator(".braindump-submit").click();
+
+  // The recent thought list should render it
+  await expect(page.locator(".mindbox-card").first()).toBeVisible();
+  await expect(page.getByText(rawThought)).toBeVisible({ timeout: 5_000 });
+});
+
+test("12. User can execute Bad Day Reset in Mind Box", async ({ page }) => {
+  await enterDemo(page);
+
+  // Navigate to Mind Box tab
+  await page.getByLabel("Mind Box").click();
+
+  // Click Bad Day Reset button
+  const badDayBtn = page.locator(".mindbox-card:has-text('Bad Day Reset')");
+  await expect(badDayBtn).toBeVisible();
+  await badDayBtn.click();
+
+  // Confirm dialog should appear
+  const confirmBtn = page.getByRole("button", { name: "Yes, restart" });
+  await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
+  await confirmBtn.click();
+
+  // Unfinished tasks on Today tab should now be parked. Go back to Today tab to check.
+  await page.getByLabel("Today").click();
+  const tasksList = page.getByTestId("today-tasks-list");
+  // There should be no active tasks left in the today queue (all moved to parked)
+  await expect(tasksList.locator(".task-row:not(.completed)")).toHaveCount(0);
+});
+
+test("13. User can change settings in Settings tab", async ({ page }) => {
+  await enterDemo(page);
+
+  // Navigate to Settings
+  await page.getByLabel("Settings").click();
+  await expect(page.locator("h2:has-text('Your Profile')")).toBeVisible({ timeout: 5_000 });
+
+  // Open settings form if closed
+  const nameInput = page.locator("#settings-name");
+  if (!(await nameInput.isVisible())) {
+    await page.getByText("Your Profile").click();
+  }
+  await expect(nameInput).toBeVisible();
+
+  // Fill in new name
+  const newName = "QA Tester";
+  await nameInput.fill(newName);
+
+  // Submit profile settings
+  await page.locator("form button[type='submit']").click();
+
+  // Page header should update with the new name
+  const headerName = page.locator(".user-badge");
+  await expect(headerName).toContainText("QA", { timeout: 5_000 });
+});
