@@ -163,9 +163,13 @@ export default function App() {
     if (payload?.tasks) scheduleAllReminders(payload.tasks);
   }, [payload?.tasks]);
 
-  // Auto-increment visit streak on first open each day (real users only)
+  // Auto-increment visit streak on first open each day (real users only).
+  // Guard: skip while isSyncingFromCache — payload is from stale localStorage at that point.
+  // Without this guard, a second device opening the app would overwrite RTDB with the
+  // stale cache payload (timestamp = now > any recent edit), silently erasing brainDump
+  // items and other changes made on the first device since the cache was last written.
   useEffect(() => {
-    if (!payload?.config || !user || demoMode) return;
+    if (!payload?.config || !user || demoMode || isSyncingFromCache) return;
     const cfg = payload.config;
     const todayStr = toLocalDateStr(new Date());
     if (cfg.lastVisitDate === todayStr) return;
@@ -174,7 +178,7 @@ export default function App() {
     const yesterdayStr = toLocalDateStr(yesterday);
     const newStreak = cfg.lastVisitDate === yesterdayStr ? (cfg.visitStreakCount || 0) + 1 : 1;
     savePayload({ ...payload, config: { ...cfg, visitStreakCount: newStreak, lastVisitDate: todayStr, lastUpdated: Date.now() } });
-  }, [payload?.config?.lastVisitDate, user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [payload?.config?.lastVisitDate, user?.uid, isSyncingFromCache]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Firebase auth state listener
   useEffect(() => {

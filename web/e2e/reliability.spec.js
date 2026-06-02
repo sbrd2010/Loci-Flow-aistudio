@@ -66,6 +66,28 @@ test("reliability: pinning a task sets Now Focus", async ({ page }) => {
   await expect(focusCard).toContainText(title);
 });
 
+test("reliability: brain dump item survives tab switch and returns to Mind Box", async ({ page }) => {
+  await enterDemo(page);
+
+  // Open Brain Dump via floating + button
+  await page.getByTestId("fab-add-task").click();
+  await page.getByTestId("fab-brain-dump").click();
+
+  const thought = "Test brain dump regression item";
+  await page.locator(".braindump-input").fill(thought);
+  await page.locator(".braindump-submit").click();
+
+  // Dismiss the quick dump sheet
+  await page.keyboard.press("Escape");
+
+  // Switch to Roadmap tab and back
+  await page.getByRole("button", { name: "Roadmap" }).click();
+  await page.getByRole("button", { name: "Mind Box" }).click();
+
+  // Item must still be visible in the Brain Dump inbox
+  await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
+});
+
 test("reliability: low-energy mode filters to low-energy tasks and can be toggled off", async ({ page }) => {
   await enterDemo(page);
 
