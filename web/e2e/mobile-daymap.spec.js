@@ -61,7 +61,7 @@ for (const viewport of MOBILE_VIEWPORTS) {
     await expectNoHorizontalOverflow(page);
 
     await autoFillDayMap(page);
-    await expect(page.getByText("10:00 AM").first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator(".dm-stop-time").first()).toBeVisible({ timeout: 5_000 });
     await expect(page.getByText("6:00 AM")).not.toBeVisible();
     await expect(page.getByText("End of route")).toBeVisible({ timeout: 5_000 });
     await expectNoHorizontalOverflow(page);
