@@ -73,6 +73,36 @@
   transform: scale(0.97);
 }
 
+.focus-mode-pip-btn {
+  position: absolute;
+  top: calc(18px + env(safe-area-inset-top, 0px));
+  right: calc(18px + env(safe-area-inset-right, 0px));
+  z-index: 2;
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(237, 247, 242, 0.12);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(237, 247, 242, 0.68);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: color 0.18s, border-color 0.18s, background 0.18s, transform 0.12s;
+}
+
+.focus-mode-pip-btn:hover,
+.focus-mode-pip-btn:focus-visible {
+  color: #edf7f2;
+  border-color: rgba(122, 181, 155, 0.42);
+  background: rgba(122, 181, 155, 0.1);
+  outline: none;
+}
+
+.focus-mode-pip-btn:active {
+  transform: scale(0.97);
+}
+
 .focus-mode-body {
   position: relative;
   z-index: 1;
@@ -454,6 +484,14 @@
   .focus-mode-exit-btn {
     top: calc(12px + env(safe-area-inset-top, 0px));
     left: calc(12px + env(safe-area-inset-left, 0px));
+    min-height: 34px;
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+
+  .focus-mode-pip-btn {
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    right: calc(12px + env(safe-area-inset-right, 0px));
     min-height: 34px;
     padding: 7px 10px;
     font-size: 12px;
