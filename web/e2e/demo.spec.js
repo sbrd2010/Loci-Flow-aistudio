@@ -203,50 +203,11 @@ async function openDayMapWithTasks(page) {
   }
 }
 
-test("11. Day Map view toggle — Route ↔ Blocks (desktop)", async ({ page }) => {
+test("11. Day Map route timeline — always visible, no view toggle", async ({ page }) => {
   await openDayMapWithTasks(page);
 
-  const toggle = page.locator(".dm-view-toggle");
-
-  // Route view is active by default — timeline should be visible
+  // Route timeline is the only view — no toggle present
   await expect(page.locator(".dm-timeline")).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".dm-view-toggle")).not.toBeVisible();
   await expect(page.locator(".dmb-grid")).not.toBeVisible();
-
-  // Switch to Blocks
-  await toggle.getByRole("button", { name: "Blocks" }).click();
-  await expect(page.locator(".dmb-grid")).toBeVisible({ timeout: 3_000 });
-  await expect(page.locator(".dm-timeline")).not.toBeVisible();
-
-  // Switch back to Route
-  await toggle.getByRole("button", { name: "Route" }).click();
-  await expect(page.locator(".dm-timeline")).toBeVisible({ timeout: 3_000 });
-  await expect(page.locator(".dmb-grid")).not.toBeVisible();
-});
-
-test("11b. Day Map view toggle — 375 px viewport", async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 812 });
-  await openDayMapWithTasks(page);
-
-  const toggle = page.locator(".dm-view-toggle");
-  await expect(page.locator(".dm-timeline")).toBeVisible({ timeout: 5_000 });
-
-  await toggle.getByRole("button", { name: "Blocks" }).click();
-  await expect(page.locator(".dmb-grid")).toBeVisible({ timeout: 3_000 });
-
-  await toggle.getByRole("button", { name: "Route" }).click();
-  await expect(page.locator(".dm-timeline")).toBeVisible({ timeout: 3_000 });
-});
-
-test("11c. Day Map view toggle — 412 px viewport", async ({ page }) => {
-  await page.setViewportSize({ width: 412, height: 915 });
-  await openDayMapWithTasks(page);
-
-  const toggle = page.locator(".dm-view-toggle");
-  await expect(page.locator(".dm-timeline")).toBeVisible({ timeout: 5_000 });
-
-  await toggle.getByRole("button", { name: "Blocks" }).click();
-  await expect(page.locator(".dmb-grid")).toBeVisible({ timeout: 3_000 });
-
-  await toggle.getByRole("button", { name: "Route" }).click();
-  await expect(page.locator(".dm-timeline")).toBeVisible({ timeout: 3_000 });
 });
