@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { auth, track, setAnalyticsUser } from "./firebase";
 import { computeUserProfile } from "./utils/userProfile";
 import { scheduleAllReminders } from "./utils/reminders";
@@ -39,11 +39,11 @@ export default function App() {
 
   const sessionStartRef = useRef(Date.now());
   const tabStartRef = useRef(Date.now());
-  const profileComputedRef = useRef(false);
 
   // ── Demo mode ──────────────────────────────────────────────────────────────
   const [demoMode, setDemoMode] = useState(false);
   const [demoPayload, setDemoPayload] = useState(null);
+  const [pendingFocusOpen, setPendingFocusOpen] = useState(false);
 
   const enterDemo = () => {
     setDemoPayload(createDemoPayload());
@@ -208,18 +208,13 @@ export default function App() {
     return () => window.removeEventListener("beforeunload", handleUnload);
   }, []);
 
-  // Compute behavioural profile from fresh RTDB data once per day.
-  // Runs after isSyncingFromCache flips false (real data arrived) — never from stale cache.
-  useEffect(() => {
-    if (!payload || !user || demoMode || isSyncingFromCache) return;
-    if (profileComputedRef.current) return;
-    profileComputedRef.current = true;
-    const todayStr = toLocalDateStr(new Date());
-    const existing = payload.config?.userProfile;
-    if (existing?.lastProfiledAt && toLocalDateStr(new Date(existing.lastProfiledAt)) === todayStr) return;
-    const profile = computeUserProfile(payload);
-    savePayload({ ...payload, config: { ...payload.config, userProfile: profile } });
-  }, [isSyncingFromCache, user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Derive the behavioural profile from the live payload — pure computation,
+  // never saved to Firebase. Eliminates the full-payload-overwrite risk that
+  // savePayload would introduce (same mechanism as the P0 brainDump bug).
+  const userProfile = useMemo(() => {
+    if (!payload || demoMode || isSyncingFromCache) return null;
+    return computeUserProfile(payload);
+  }, [payload, demoMode, isSyncingFromCache]);
 
   const handleTabSelect = (tab) => {
     const dwellSec = Math.round((Date.now() - tabStartRef.current) / 1000);
@@ -454,13 +449,21 @@ export default function App() {
       {/* Main Tab Screen Router */}
       <main className={`screen-content${activeTab === "daymap" ? " screen-content-day-map" : ""}`}>
         {activeTab === "today" && (
-          <TodayTab payload={payload} savePayload={savePayload} onOpenAddTask={() => openAddTask("today")} onOpenDayMap={openDayMap} />
+          <TodayTab
+            payload={payload}
+            savePayload={savePayload}
+            onOpenAddTask={() => openAddTask("today")}
+            onOpenDayMap={openDayMap}
+            autoOpenFocus={pendingFocusOpen}
+            onAutoOpenFocusDone={() => setPendingFocusOpen(false)}
+          />
         )}
         {activeTab === "daymap" && (
           <DayMapPage
             payload={payload}
             savePayload={savePayload}
             onClose={goToday}
+            onStartFocus={() => { setPendingFocusOpen(true); goToday(); }}
             onAddTask={() => openAddTask("today")}
             flushNow={flushNow}
           />
@@ -473,8 +476,8 @@ export default function App() {
             onEditTask={(task) => { setEditingTask(task); setShowAddTask(true); }}
           />
         )}
-        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} />}
-        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} />}
+        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} userProfile={userProfile} />}
+        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} userProfile={userProfile} />}
         {activeTab === "settings" && (
           <SettingsTab
             payload={payload}
@@ -616,6 +619,7 @@ export default function App() {
           email={demoMode ? "demo@loci.app" : user?.email}
           payload={payload}
           savePayload={savePayload}
+          userProfile={userProfile}
           defaultHorizon={preselectedHorizon}
           editTask={editingTask}
           onClose={() => { setShowAddTask(false); setEditingTask(null); }}

@@ -114,7 +114,7 @@ function SortableDumpItem({ item, onDelete, formatRelTime }) {
   );
 }
 
-export default function MindBoxTab({ payload, savePayload }) {
+export default function MindBoxTab({ payload, savePayload, userProfile }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -262,7 +262,7 @@ export default function MindBoxTab({ payload, savePayload }) {
     setOrganizeSelected(new Set());
     setToolPanel("organize");
 
-    const profile = config.userProfile;
+    const profile = userProfile;
     const profileNote = profile && profile.totalTasks >= 5
       ? `\nUser context: completion rate ${Math.round(profile.completionRate * 100)}%, dominant horizon "${profile.dominantHorizon}", avg estimate ${profile.avgEstimateMinutes}min. Weight horizon suggestions toward their patterns.`
       : "";

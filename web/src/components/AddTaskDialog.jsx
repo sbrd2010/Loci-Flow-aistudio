@@ -12,7 +12,7 @@ function defaultReminderDateTime() {
 }
 
 
-export default function AddTaskDialog({ email, payload, savePayload, defaultHorizon, onClose, editTask }) {
+export default function AddTaskDialog({ email, payload, savePayload, userProfile, defaultHorizon, onClose, editTask }) {
   const isEditMode = !!editTask;
   const [title, setTitle] = useState(editTask?.title || "");
   const [concreteStep, setConcreteStep] = useState(editTask?.concreteStep || "");
@@ -60,7 +60,7 @@ export default function AddTaskDialog({ email, payload, savePayload, defaultHori
       "overthinks and delays finishing (perfectionism/action paralysis)";
     const existingTasks = (payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).slice(0, 8)
       .map(t => `[${t.priority}] ${t.title}`).join(", ") || "none yet";
-    const profile = payload.config?.userProfile;
+    const profile = userProfile;
     const profileNote = profile && profile.totalTasks >= 5
       ? `\nUser's task patterns: completion rate ${Math.round(profile.completionRate * 100)}%, dominant horizon "${profile.dominantHorizon}", avg estimate ${profile.avgEstimateMinutes}min. Use these to inform your horizon, priority, and estimate suggestions.`
       : "";

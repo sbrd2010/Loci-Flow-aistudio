@@ -72,8 +72,6 @@ export function computeUserProfile(payload) {
     bestCompletionDay,
     avgCompletionsPerActiveDay,
     brainDumpPending: brainDump.length,
-    lastProfiledAt: Date.now(),
-    profileVersion: 1
   };
 }
 

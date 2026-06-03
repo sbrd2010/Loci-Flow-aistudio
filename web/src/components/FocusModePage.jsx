@@ -1,5 +1,7 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import "../styles/focusMode.css";
+
+const DURATION_OPTIONS = [15, 20, 25, 30, 45, 60, 90];
 
 function ResetIcon() {
   return (
@@ -48,20 +50,6 @@ const hiddenControlTextStyle = {
   border: 0,
 };
 
-/**
- * FocusModePage - full-screen deep focus overlay.
- *
- * Props
- * -----
- * task           Object   Task being focused on (.title, .concreteStep)
- * secondsLeft    number   Seconds remaining
- * maxSeconds     number   Full session length in seconds
- * isRunning      boolean  Timer is ticking
- * onPlayPause    fn()     Toggle running state
- * onReset        fn()     Reset timer to full
- * onDone         fn()     Mark task complete + exit
- * onExit         fn()     Exit overlay without stopping timer
- */
 export default function FocusModePage({
   task,
   secondsLeft,
@@ -71,9 +59,15 @@ export default function FocusModePage({
   onReset,
   onDone,
   onExit,
+  onChangeDuration,
+  onAddBrainDump,
 }) {
   const autoExitRef = useRef(null);
   const isComplete = secondsLeft === 0;
+
+  const [dumpText, setDumpText] = useState("");
+  const [dumpSaved, setDumpSaved] = useState(false);
+  const dumpInputRef = useRef(null);
 
   useEffect(() => {
     if (isComplete) {
@@ -85,6 +79,14 @@ export default function FocusModePage({
       if (autoExitRef.current) clearTimeout(autoExitRef.current);
     };
   }, [isComplete]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const submitDump = () => {
+    if (!dumpText.trim()) return;
+    onAddBrainDump?.(dumpText.trim());
+    setDumpText("");
+    setDumpSaved(true);
+    setTimeout(() => setDumpSaved(false), 1500);
+  };
 
   const R = 110;
   const circ = 2 * Math.PI * R;
@@ -100,6 +102,7 @@ export default function FocusModePage({
   const mins = Math.floor(secondsLeft / 60);
   const secs = String(secondsLeft % 60).padStart(2, "0");
   const stateLabel = isComplete ? "Complete" : isRunning ? "In progress" : "Paused";
+  const currentDurMins = Math.round(maxSeconds / 60);
 
   return (
     <div className={`focus-mode-overlay${isRunning ? " is-running" : ""}${isComplete ? " is-complete" : ""}`}>
@@ -155,6 +158,23 @@ export default function FocusModePage({
           </div>
         </div>
 
+        {/* Duration picker — only when timer is paused/not started */}
+        {!isRunning && !isComplete && (
+          <div className="focus-mode-duration-row" aria-label="Focus duration">
+            {DURATION_OPTIONS.map(m => (
+              <button
+                key={m}
+                type="button"
+                className={`focus-mode-dur-btn${currentDurMins === m ? " active" : ""}`}
+                onClick={() => onChangeDuration?.(m)}
+                aria-pressed={currentDurMins === m}
+              >
+                {m}m
+              </button>
+            ))}
+          </div>
+        )}
+
         <section className="focus-mode-task-panel" aria-label="Focused task">
           <div className="focus-mode-task-kicker">Now focusing on</div>
           <h1 className="focus-mode-task-title">{task.title}</h1>
@@ -188,7 +208,7 @@ export default function FocusModePage({
                 aria-hidden="true"
                 style={hiddenControlTextStyle}
               >
-                {isRunning ? "\u23f8" : "\u25b6"}
+                {isRunning ? "⏸" : "▶"}
               </span>
             </button>
           </div>
@@ -203,6 +223,30 @@ export default function FocusModePage({
           <CheckIcon />
           <span>Done</span>
         </button>
+
+        {/* Brain dump — capture stray thoughts without breaking focus */}
+        {onAddBrainDump && (
+          <div className="focus-mode-dump-row">
+            <input
+              ref={dumpInputRef}
+              type="text"
+              className="focus-mode-dump-input"
+              placeholder="Stray thought? Capture it here ↵"
+              value={dumpText}
+              onChange={e => setDumpText(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") submitDump(); }}
+              aria-label="Capture a thought to Brain Dump"
+            />
+            <button
+              type="button"
+              className={`focus-mode-dump-btn${dumpSaved ? " saved" : ""}`}
+              onClick={submitDump}
+              aria-label="Save thought to Brain Dump"
+            >
+              {dumpSaved ? "✓" : "Save"}
+            </button>
+          </div>
+        )}
       </main>
     </div>
   );

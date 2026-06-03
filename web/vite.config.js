@@ -8,5 +8,9 @@ export default defineConfig({
   },
   build: {
     minify: "terser"
+  },
+  test: {
+    environment: "node",
+    include: ["src/**/*.test.{js,ts}"]
   }
 });
