@@ -1,0 +1,240 @@
+/* ================================================================
+   Day Map — Blocks / Mosaic view  +  shared view toggle
+   ================================================================ */
+
+/* ── View toggle pill ────────────────────────────────────────────── */
+
+.dm-view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  width: fit-content;
+}
+
+.dm-view-btn {
+  min-height: 32px;
+  padding: 5px 18px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.14s, color 0.14s, box-shadow 0.14s;
+}
+
+.dm-view-btn.active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.10);
+}
+
+.dm-view-btn:hover:not(.active) {
+  color: var(--text-secondary);
+}
+
+/* ── Blocks grid container ───────────────────────────────────────── */
+
+.dmb-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ── Block card ──────────────────────────────────────────────────── */
+
+.dmb-block {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  background: var(--bg-card);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Priority tints — border + subtle background */
+.dmb-p1 { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.07); }
+.dmb-p2 { border-left-color: #f59e0b; background: rgba(245, 158, 11, 0.07); }
+.dmb-p3 { border-left-color: #14b8a6; background: rgba(20, 184, 166, 0.07); }
+.dmb-p4 { border-left-color: var(--border); background: var(--bg-card); }
+
+/* Size classes — minimum heights give visual weight to longer tasks */
+.dmb-sm { min-height: 82px; }
+.dmb-md { min-height: 116px; }
+.dmb-lg { min-height: 152px; }
+
+/* NOW / first card gets a subtle lift */
+.dmb-first {
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.10);
+}
+
+/* ── Card header: time · duration · NOW chip ─────────────────────── */
+
+.dmb-block-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 0;
+  flex-wrap: wrap;
+}
+
+.dmb-block-time {
+  font-family: var(--font-mono, "Space Mono", monospace);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.dmb-block-dur {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.dmb-now-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  padding: 1px 8px;
+  background: rgba(99, 102, 241, 0.09);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+/* ── Card body: title + step ─────────────────────────────────────── */
+
+.dmb-block-body {
+  flex: 1;
+  padding: 6px 12px 8px;
+}
+
+.dmb-block-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--text-primary);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.dmb-block-step {
+  margin: 3px 0 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ── Start Focus row (first card only) ───────────────────────────── */
+
+.dmb-focus-row {
+  padding: 0 10px 8px;
+}
+
+.dmb-focus-full-btn {
+  display: block;
+  width: 100%;
+  min-height: 38px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: var(--button-text, #fff);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.dmb-focus-full-btn:hover  { opacity: 0.88; }
+.dmb-focus-full-btn:active { opacity: 0.75; }
+
+/* ── Card footer: priority badge + reorder/remove controls ───────── */
+
+.dmb-block-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+.dmb-block-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.dmb-ctrl-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+
+.dmb-ctrl-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.06);
+  border-color: var(--border);
+}
+
+.dmb-ctrl-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+
+.dmb-ctrl-btn.remove:hover:not(:disabled) {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.07);
+  border-color: rgba(239, 68, 68, 0.22);
+}
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+
+@media (max-width: 560px) {
+  .dm-view-btn       { padding: 5px 14px; font-size: 12px; }
+  .dmb-block-header  { padding: 9px 10px 0; gap: 6px; }
+  .dmb-block-body    { padding: 5px 10px 7px; }
+  .dmb-block-title   { font-size: 14px; }
+  .dmb-block-step    { font-size: 11px; }
+  .dmb-block-footer  { padding: 0 8px 9px; }
+  .dmb-focus-row     { padding: 0 8px 8px; }
+}
+
+@media (min-width: 640px) {
+  .dmb-block-title { font-size: 16px; }
+  .dmb-grid        { gap: 12px; }
+}
