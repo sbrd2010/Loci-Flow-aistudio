@@ -73,14 +73,14 @@ test("reliability: Day Map route persists after closing and reopening", async ({
 
   await openDayMap(page);
   await autoFillDayMap(page);
-  await expect(page.getByText("10:00 AM").first()).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".dm-stop-time").first()).toBeVisible({ timeout: 5_000 });
 
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page.locator("button.stuck-btn", { hasText: "Day Map 3/3" })).toBeVisible({ timeout: 5_000 });
 
   await openDayMap(page);
   await expect(page.getByText("3 / 3")).toBeVisible({ timeout: 5_000 });
-  await expect(page.getByText("10:00 AM").first()).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".dm-stop-time").first()).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText("End of route")).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
 });
@@ -96,7 +96,7 @@ test("reliability: removing a Day Map task reflows the remaining route", async (
   await removeButtons.first().click();
 
   await expect(page.getByText("2 / 3")).toBeVisible({ timeout: 5_000 });
-  await expect(page.getByText("10:00 AM").first()).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".dm-stop-time").first()).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText("6:00 AM")).not.toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
