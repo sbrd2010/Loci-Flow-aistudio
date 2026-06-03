@@ -4,6 +4,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import AddTaskDialog from "./AddTaskDialog";
 import FocusModePage from "./FocusModePage";
 import { safeUUID } from "../utils/uuid";
+import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotifications";
 import { getAIKeys, callAI } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
@@ -65,6 +66,8 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
   const [timerMaxSeconds, setTimerMaxSeconds] = useState((config.pomodoroDurationMinutes || 25) * 60);
   const [isFocusMode, setIsFocusMode] = useState(false);
   const timerIntervalRef = useRef(null);
+  // Absolute deadline for the running timer — lets us snap to correct time on tab-show
+  const deadlineRef = useRef(null);
 
   const activeTask = tasks.find((t) => t.isNowFocus && !t.isDeleted && !t.isCompleted);
 
@@ -86,12 +89,28 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
     if (isTimerRunning) {
       // Anchor to wall-clock time so background tabs / GC pauses don't cause drift
       const targetEndTime = Date.now() + timerSecondsLeft * 1000;
+      deadlineRef.current = targetEndTime;
       timerIntervalRef.current = setInterval(() => {
         const remaining = Math.ceil((targetEndTime - Date.now()) / 1000);
         setTimerSecondsLeft(remaining <= 0 ? 0 : remaining);
       }, 1000);
+      // Snap to correct remaining time the moment the tab becomes visible again —
+      // background timers are throttled so the display may be stale after switching back.
+      const handleVisible = () => {
+        if (document.visibilityState === "visible") {
+          const remaining = Math.ceil((targetEndTime - Date.now()) / 1000);
+          setTimerSecondsLeft(remaining <= 0 ? 0 : remaining);
+        }
+      };
+      document.addEventListener("visibilitychange", handleVisible);
+      return () => {
+        clearInterval(timerIntervalRef.current);
+        document.removeEventListener("visibilitychange", handleVisible);
+        deadlineRef.current = null;
+      };
     } else {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      deadlineRef.current = null;
     }
     return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
   }, [isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -118,8 +137,41 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
     if (isTimerRunning && timerSecondsLeft === 0) {
       setIsTimerRunning(false);
       handlePomodoroCompletion();
+      notifyFocusComplete(activeTask?.title);
     }
-  }, [timerSecondsLeft, isTimerRunning]);
+  }, [timerSecondsLeft, isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tab title: countdown while running, paused label in overlay, restore on exit
+  useEffect(() => {
+    const taskLabel = activeTask?.title || "Deep Focus";
+    const mins = Math.floor(timerSecondsLeft / 60);
+    const secs = String(timerSecondsLeft % 60).padStart(2, "0");
+    if (isTimerRunning && timerSecondsLeft > 0) {
+      document.title = `${mins}:${secs} · ${taskLabel}`;
+    } else if (isFocusMode && !isTimerRunning && timerSecondsLeft > 0) {
+      document.title = `Paused · ${mins}:${secs} · Loci`;
+    } else {
+      document.title = "Loci";
+    }
+  }, [timerSecondsLeft, isTimerRunning, isFocusMode, activeTask?.title]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Restore title on unmount (e.g. user navigates away while timer is running)
+  useEffect(() => () => { document.title = "Loci"; }, []);
+
+  // Expose timer state on window so the Document PiP mini-window can poll it
+  useEffect(() => {
+    window.__lociTimer = {
+      secondsLeft: timerSecondsLeft,
+      isRunning: isTimerRunning,
+      taskTitle: activeTask?.title || "Deep Focus",
+    };
+  }, [timerSecondsLeft, isTimerRunning, activeTask?.title]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { window.__lociTimer = null; }, []);
+
+  // Request notification permission when focus overlay opens (already a user interaction)
+  useEffect(() => {
+    if (isFocusMode) requestNotifPermission();
+  }, [isFocusMode]);
 
   const QUOTES = [
     { quote: "The secret of getting ahead is getting started.", author: "Mark Twain" },

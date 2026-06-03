@@ -50,6 +50,34 @@ const hiddenControlTextStyle = {
   border: 0,
 };
 
+const PIP_SUPPORTED = "documentPictureInPicture" in window;
+
+function buildPiPContent(pipWin) {
+  const style = pipWin.document.createElement("style");
+  style.textContent = [
+    "* { box-sizing: border-box; margin: 0; padding: 0; }",
+    "body { background: #05090b; display: flex; flex-direction: column;",
+    "  align-items: center; justify-content: center; height: 100vh;",
+    "  font-family: system-ui, sans-serif; user-select: none; }",
+    "#pt { font-family: 'Space Mono','Courier New',monospace; font-size: 40px;",
+    "  font-weight: 700; color: #f7fbf8; letter-spacing: -0.02em;",
+    "  font-variant-numeric: tabular-nums; transition: color 0.3s; }",
+    "#pt.paused { color: rgba(247,251,248,0.35); }",
+    "#pl { font-size: 10px; color: rgba(196,223,210,0.65); margin-top: 5px;",
+    "  max-width: 186px; overflow: hidden; text-overflow: ellipsis;",
+    "  white-space: nowrap; text-align: center; }",
+  ].join(" ");
+  pipWin.document.head.appendChild(style);
+
+  const timeEl = pipWin.document.createElement("div");
+  timeEl.id = "pt";
+  pipWin.document.body.appendChild(timeEl);
+
+  const labelEl = pipWin.document.createElement("div");
+  labelEl.id = "pl";
+  pipWin.document.body.appendChild(labelEl);
+}
+
 export default function FocusModePage({
   task,
   secondsLeft,
@@ -68,6 +96,49 @@ export default function FocusModePage({
   const [dumpText, setDumpText] = useState("");
   const [dumpSaved, setDumpSaved] = useState(false);
   const dumpInputRef = useRef(null);
+
+  const [pipOpen, setPipOpen] = useState(false);
+  const pipIntervalRef = useRef(null);
+  const pipWinRef = useRef(null);
+
+  const handleOpenPiP = async () => {
+    if (!PIP_SUPPORTED || pipOpen) return;
+    try {
+      const pipWin = await window.documentPictureInPicture.requestWindow({ width: 200, height: 118 });
+      pipWinRef.current = pipWin;
+      buildPiPContent(pipWin);
+      setPipOpen(true);
+
+      // Poll timer state from parent window every 500ms; parent writes window.__lociTimer
+      const tick = () => {
+        const state = window.__lociTimer;
+        const timeEl = pipWin.document.getElementById("pt");
+        if (!state || !timeEl) return;
+        const mins = Math.floor(state.secondsLeft / 60);
+        const s = String(state.secondsLeft % 60).padStart(2, "0");
+        timeEl.textContent = `${mins}:${s}`;
+        timeEl.className = state.isRunning ? "" : "paused";
+        const labelEl = pipWin.document.getElementById("pl");
+        if (labelEl) labelEl.textContent = state.taskTitle || "Deep Focus";
+      };
+      pipIntervalRef.current = setInterval(tick, 500);
+      tick();
+
+      pipWin.addEventListener("pagehide", () => {
+        clearInterval(pipIntervalRef.current);
+        setPipOpen(false);
+        pipWinRef.current = null;
+      });
+    } catch {
+      // User dismissed or browser blocked — fail silently
+    }
+  };
+
+  // Clean up PiP on focus overlay exit
+  useEffect(() => () => {
+    clearInterval(pipIntervalRef.current);
+    try { pipWinRef.current?.close(); } catch {}
+  }, []);
 
   useEffect(() => {
     if (isComplete) {
@@ -114,6 +185,18 @@ export default function FocusModePage({
       >
         Exit
       </button>
+
+      {PIP_SUPPORTED && !pipOpen && !isComplete && (
+        <button
+          type="button"
+          className="focus-mode-pip-btn"
+          onClick={handleOpenPiP}
+          title="Pop out a floating mini-timer"
+          aria-label="Pop out timer"
+        >
+          Pop out
+        </button>
+      )}
 
       <main className="focus-mode-body" aria-label="Deep focus session">
         <div className="focus-mode-session-meta">
