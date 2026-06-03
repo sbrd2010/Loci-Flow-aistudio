@@ -67,6 +67,18 @@ function formatDuration(m) {
   return r ? `${h}h ${r}m` : `${h}h`;
 }
 
+function formatClockHM(minutes) {
+  const n = ((minutes % 1440) + 1440) % 1440;
+  const h12 = Math.floor(n / 60) % 12 || 12;
+  const min = n % 60;
+  return `${h12}:${String(min).padStart(2, "0")}`;
+}
+
+function formatClockAMPM(minutes) {
+  const n = ((minutes % 1440) + 1440) % 1440;
+  return Math.floor(n / 60) >= 12 ? "PM" : "AM";
+}
+
 function sortByPriorityAndOrder(a, b) {
   const pa = PRIORITY_RANK[normalizePriority(a.priority)] || 3;
   const pb = PRIORITY_RANK[normalizePriority(b.priority)] || 3;
@@ -162,7 +174,10 @@ function TimelineStop({ task, index, total, isFirst, isExpanded, onToggle, onMov
 
   return (
     <div ref={setNodeRef} style={style} className="dm-stop">
-      <div className="dm-stop-time">{formatClock(start)}</div>
+      <div className="dm-stop-time">
+        <span className="dm-time-hm">{formatClockHM(start)}</span>
+        <span className="dm-time-ampm">{formatClockAMPM(start)}</span>
+      </div>
 
       <div className="dm-stop-spine">
         {isNow && <div className="dm-node-now-ring" />}
@@ -170,52 +185,53 @@ function TimelineStop({ task, index, total, isFirst, isExpanded, onToggle, onMov
       </div>
 
       <div className={`dm-card dm-card-${pClass}${isDragging ? " is-dragging" : ""}`}>
-        <div className="dm-card-main">
-          <button
-            ref={setActivatorNodeRef}
-            type="button"
-            className="dm-card-drag"
-            aria-label={`Reorder ${task.title}`}
-            {...attributes}
-            {...listeners}
-          >
-            <span aria-hidden="true">::</span>
-          </button>
-
-          <button
-            type="button"
-            className="dm-card-info"
-            onClick={onToggle}
-            aria-expanded={isExpanded}
-          >
+        <div
+          ref={setActivatorNodeRef}
+          className="dm-card-main"
+          {...attributes}
+          {...listeners}
+        >
+          <div className="dm-card-body">
             {isFirst && <div className="dm-now-badge">{isNow ? "▶ NOW" : "▶ NEXT"}</div>}
             <span className="dm-card-title">{task.title}</span>
-            {task.concreteStep && (
-              <span className="dm-card-step">{task.concreteStep}</span>
-            )}
-            <div className="dm-card-meta">
-              <PriorityBadge priority={task.priority} />
-              <span className="dm-card-dur">{formatDuration(duration)}</span>
-            </div>
-          </button>
-
-          <div className="dm-card-controls">
-            <button type="button" className="dm-btn-icon" onClick={onMoveUp} disabled={index === 0} aria-label="Move up">↑</button>
-            <button type="button" className="dm-btn-icon" onClick={onMoveDown} disabled={index === total - 1} aria-label="Move down">↓</button>
-            <button type="button" className="dm-btn-icon dm-btn-remove" onClick={() => onRemove(taskId)} aria-label="Remove from route">×</button>
+            {task.concreteStep && <span className="dm-card-step">{task.concreteStep}</span>}
           </div>
+          <div className="dm-card-right">
+            <PriorityBadge priority={task.priority} />
+            <span className="dm-card-dur">{formatDuration(duration)}</span>
+          </div>
+          <button
+            type="button"
+            className={`dm-btn-menu${isExpanded ? " is-open" : ""}`}
+            onClick={onToggle}
+            onPointerDown={e => e.stopPropagation()}
+            aria-expanded={isExpanded}
+            aria-label="Card options"
+          >
+            ⋯
+          </button>
         </div>
 
         {isFirst && (
           <div className="dm-focus-row">
-            <button type="button" className="dm-focus-btn" onClick={onStartFocus}>
+            <button
+              type="button"
+              className="dm-focus-btn"
+              onClick={onStartFocus}
+              onPointerDown={e => e.stopPropagation()}
+            >
               Start Focus →
             </button>
           </div>
         )}
 
         {isExpanded && (
-          <div className="dm-edit-panel">
+          <div className="dm-edit-panel" onPointerDown={e => e.stopPropagation()}>
+            <div className="dm-edit-actions">
+              <button type="button" className="dm-btn-icon" onClick={onMoveUp} disabled={index === 0} aria-label="Move up">↑</button>
+              <button type="button" className="dm-btn-icon" onClick={onMoveDown} disabled={index === total - 1} aria-label="Move down">↓</button>
+              <button type="button" className="dm-btn-icon dm-btn-remove" onClick={() => onRemove(taskId)} aria-label="Remove from route">×</button>
+            </div>
             <label className="dm-edit-label">
               Duration
               <select
@@ -557,7 +573,10 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
                 </SortableContext>
               </DndContext>
               <div className="dm-stop dm-stop-end">
-                <div className="dm-stop-time">{formatClock(endTime)}</div>
+                <div className="dm-stop-time">
+                  <span className="dm-time-hm">{formatClockHM(endTime)}</span>
+                  <span className="dm-time-ampm">{formatClockAMPM(endTime)}</span>
+                </div>
                 <div className="dm-stop-spine">
                   <div className="dm-stop-node dm-node-end" />
                 </div>

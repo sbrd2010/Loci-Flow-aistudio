@@ -7,7 +7,7 @@
 .dm-summary {
   display: flex;
   align-items: center;
-  padding: 14px 16px;
+  padding: 12px 16px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.05);
@@ -63,7 +63,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc(52px + 12px);
+  left: calc(44px + 12px);
   width: 2px;
   background: linear-gradient(
     to bottom,
@@ -82,9 +82,9 @@
 
 .dm-period-row {
   display: grid;
-  grid-template-columns: 52px 26px 1fr;
+  grid-template-columns: 44px 24px 1fr;
   align-items: center;
-  padding: 10px 0 5px;
+  padding: 8px 0 4px;
   position: relative;
   z-index: 1;
 }
@@ -104,9 +104,9 @@
 
 .dm-stop {
   display: grid;
-  grid-template-columns: 52px 26px 1fr;
+  grid-template-columns: 44px 24px 1fr;
   align-items: start;
-  padding-bottom: 10px;
+  padding-bottom: 8px;
   position: relative;
   z-index: 1;
 }
@@ -116,17 +116,29 @@
   align-items: center;
 }
 
-/* Left: time label */
+/* Left: two-line time label */
 .dm-stop-time {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding-right: 7px;
+  padding-top: 10px;
+  line-height: 1.2;
+}
+
+.dm-time-hm {
   font-family: var(--font-mono, "Space Mono", "Courier New", monospace);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  color: rgba(232, 238, 255, 0.36);
-  text-align: right;
-  padding-right: 8px;
-  padding-top: 14px;
-  line-height: 1;
+  color: rgba(232, 238, 255, 0.80);
   white-space: nowrap;
+}
+
+.dm-time-ampm {
+  font-family: var(--font-mono, "Space Mono", "Courier New", monospace);
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(232, 238, 255, 0.48);
 }
 
 .dm-stop-end .dm-stop-time {
@@ -144,30 +156,30 @@
 
 /* Node circle */
 .dm-stop-node {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   flex-shrink: 0;
-  margin-top: 13px;
+  margin-top: 11px;
   border: 2px solid rgba(255, 255, 255, 0.20);
   background: rgba(255, 255, 255, 0.08);
   position: relative;
   z-index: 3;
 }
 
-.dm-node-p1 { border-color: #f43f5e; background: rgba(244, 63, 94, 0.22); }
-.dm-node-p2 { border-color: #f59e0b; background: rgba(245, 158, 11, 0.22); }
-.dm-node-p3 { border-color: #14b8a6; background: rgba(20, 184, 166, 0.22); }
+.dm-node-p1 { border-color: #f43f5e; background: rgba(244, 63, 94, 0.30); }
+.dm-node-p2 { border-color: #f59e0b; background: rgba(245, 158, 11, 0.30); }
+.dm-node-p3 { border-color: #14b8a6; background: rgba(20, 184, 166, 0.30); }
 .dm-node-p4 { border-color: rgba(255, 255, 255, 0.20); background: rgba(255, 255, 255, 0.06); }
 
 /* NOW node — filled indigo with glow */
 .dm-node-now {
-  width: 18px;
-  height: 18px;
-  margin-top: 11px;
+  width: 16px;
+  height: 16px;
+  margin-top: 10px;
   background: #6366f1;
   border: 2px solid rgba(99, 102, 241, 0.55);
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.18), 0 0 16px rgba(99, 102, 241, 0.55);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18), 0 0 14px rgba(99, 102, 241, 0.55);
 }
 
 /* End cap */
@@ -182,9 +194,9 @@
 /* Animated pulse ring for NOW */
 .dm-node-now-ring {
   position: absolute;
-  top: 6px;
-  width: 28px;
-  height: 28px;
+  top: 4px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   border: 1.5px solid #6366f1;
   opacity: 0.45;
@@ -210,8 +222,8 @@
 /* ── Task card (right column) ────────────────────────────────────── */
 
 .dm-card {
-  margin-left: 10px;
-  border-radius: 12px;
+  margin-left: 8px;
+  border-radius: 11px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-left-width: 4px;
   background: rgba(16, 18, 26, 0.82);
@@ -243,54 +255,22 @@
   background: rgba(16, 18, 26, 0.75);
 }
 
-/* Main content row */
+/* Main content row — also the drag surface */
 .dm-card-main {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 10px 8px 9px;
-  min-height: 52px;
-}
-
-/* Drag handle */
-.dm-card-drag {
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  background: transparent;
+  gap: 6px;
+  padding: 8px 6px 8px 10px;
+  min-height: 44px;
   cursor: grab;
-  color: rgba(232, 238, 255, 0.26);
-  font-size: 13px;
-  line-height: 1;
-  touch-action: none;
-  padding: 0;
-  transition: color 0.12s, background 0.12s, border-color 0.12s;
 }
 
-.dm-card-drag:hover {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: rgba(232, 238, 255, 0.75);
-}
+.dm-card-main:active { cursor: grabbing; }
 
-.dm-card-drag:active { cursor: grabbing; }
-
-/* Info section — toggle for duration edit */
-.dm-card-info {
+/* Card body: title + step */
+.dm-card-body {
   flex: 1;
   min-width: 0;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  color: inherit;
-  font-family: var(--font-sans);
-  padding: 0 4px;
 }
 
 /* NOW badge */
@@ -299,16 +279,16 @@
   align-items: center;
   border-radius: 999px;
   border: 1px solid rgba(99, 102, 241, 0.50);
-  padding: 2px 8px;
+  padding: 1px 7px;
   background: rgba(99, 102, 241, 0.15);
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 900;
   color: #818cf8;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;
-  margin-bottom: 3px;
+  margin-bottom: 2px;
   line-height: 1.4;
 }
 
@@ -331,23 +311,24 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  margin-top: 2px;
+  margin-top: 1px;
   line-height: 1.3;
 }
 
-.dm-card-meta {
+/* Right column: priority pill + duration stacked */
+.dm-card-right {
+  flex-shrink: 0;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
 }
 
 .dm-card-dur {
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
-  color: rgba(232, 238, 255, 0.38);
+  color: rgba(232, 238, 255, 0.45);
   white-space: nowrap;
 }
 
@@ -357,60 +338,47 @@
 .dm-card .day-map-priority.p3 { background: rgba(20, 184, 166, 0.22);  color: #5eead4; }
 .dm-card .day-map-priority.p4 { background: rgba(255, 255, 255, 0.08); color: rgba(232, 238, 255, 0.48); }
 
-/* Controls: ↑ ↓ × */
-.dm-card-controls {
-  display: flex;
-  align-items: center;
-  gap: 2px;
+/* ⋯ menu button */
+.dm-btn-menu {
   flex-shrink: 0;
-}
-
-.dm-btn-icon {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
-  color: rgba(232, 238, 255, 0.32);
+  color: rgba(232, 238, 255, 0.28);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1;
-  font-family: var(--font-sans);
+  padding: 0;
   transition: color 0.12s, background 0.12s, border-color 0.12s;
 }
 
-.dm-btn-icon:hover:not(:disabled) {
-  color: #e8eeff;
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.13);
-}
-
-.dm-btn-icon:disabled { opacity: 0.22; cursor: not-allowed; }
-
-.dm-btn-remove:hover:not(:disabled) {
-  color: #f87171;
-  background: rgba(248, 113, 113, 0.10);
-  border-color: rgba(248, 113, 113, 0.22);
+.dm-btn-menu:hover,
+.dm-btn-menu.is-open {
+  color: rgba(232, 238, 255, 0.80);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 /* Start Focus row */
 .dm-focus-row {
-  padding: 0 8px 9px;
+  padding: 0 8px 8px;
 }
 
 .dm-focus-btn {
   display: block;
   width: 100%;
-  min-height: 36px;
-  border-radius: 9px;
+  min-height: 32px;
+  border-radius: 8px;
   border: none;
   background: linear-gradient(135deg, #6366f1, #818cf8);
   color: #fff;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 900;
   cursor: pointer;
   transition: opacity 0.15s;
@@ -420,11 +388,19 @@
 .dm-focus-btn:hover  { opacity: 0.88; }
 .dm-focus-btn:active { opacity: 0.75; }
 
-/* Duration edit panel */
+/* Expanded options panel */
 .dm-edit-panel {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 10px;
+  padding: 8px 10px;
   background: rgba(0, 0, 0, 0.28);
+}
+
+/* Reorder + remove row */
+.dm-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
 }
 
 .dm-edit-label {
@@ -452,18 +428,51 @@
   cursor: pointer;
 }
 
+/* Action icon buttons (↑ ↓ × in expanded panel) */
+.dm-btn-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(232, 238, 255, 0.55);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  font-family: var(--font-sans);
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+
+.dm-btn-icon:hover:not(:disabled) {
+  color: #e8eeff;
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.dm-btn-icon:disabled { opacity: 0.22; cursor: not-allowed; }
+
+.dm-btn-remove:hover:not(:disabled) {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.10);
+  border-color: rgba(248, 113, 113, 0.22);
+}
+
 /* ── Responsive ──────────────────────────────────────────────────── */
 
 @media (max-width: 560px) {
-  .dm-stop-time   { font-size: 9px; padding-right: 6px; }
-  .dm-card-main   { padding: 8px 4px 7px; gap: 2px; }
-  .dm-card-title  { font-size: 12px; }
-  .dm-now-badge   { font-size: 9px; padding: 2px 6px; }
+  .dm-time-hm    { font-size: 10px; }
+  .dm-time-ampm  { font-size: 8px; }
+  .dm-card-main  { padding: 7px 4px 7px 8px; gap: 4px; }
+  .dm-card-title { font-size: 12px; }
+  .dm-now-badge  { font-size: 8px; padding: 1px 6px; }
   .dm-summary-val { font-size: 13px; }
 }
 
 @media (max-width: 374px) {
   .dm-summary-key { font-size: 9px; letter-spacing: 0.06em; }
   .dm-stop-time   { padding-right: 4px; }
-  .dm-card        { margin-left: 6px; }
+  .dm-card        { margin-left: 5px; }
 }

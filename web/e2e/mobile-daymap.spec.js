@@ -96,9 +96,11 @@ test("reliability: removing a Day Map task reflows the remaining route", async (
   await openDayMap(page);
   await autoFillDayMap(page);
 
-  const removeButtons = page.getByRole("button", { name: "Remove from route" });
-  expect(await removeButtons.count()).toBeGreaterThan(0);
-  await removeButtons.first().click();
+  // Open ⋯ menu on first card to reveal the remove button
+  await page.locator(".dm-btn-menu").first().click();
+  const removeButton = page.getByRole("button", { name: "Remove from route" });
+  await expect(removeButton).toBeVisible({ timeout: 3_000 });
+  await removeButton.click();
 
   await expect(page.getByText("2 / 3")).toBeVisible({ timeout: 5_000 });
   await expectVisibleRouteTimeLabels(page);
