@@ -1,5 +1,5 @@
 /* ================================================================
-   Day Map — Timeline Route (vertical route map)
+   Day Map — Timeline Route (premium dark glass)
    ================================================================ */
 
 /* ── Summary card ────────────────────────────────────────────────── */
@@ -7,10 +7,10 @@
 .dm-summary {
   display: flex;
   align-items: center;
-  padding: 11px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-card);
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .dm-summary-stat {
@@ -23,17 +23,17 @@
   font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 900;
-  color: var(--text-muted);
+  color: rgba(232, 238, 255, 0.42);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.09em;
   margin-bottom: 2px;
 }
 
 .dm-summary-val {
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 900;
-  color: var(--text-primary);
+  color: #e8eeff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -42,13 +42,13 @@
 .dm-summary-sep {
   width: 1px;
   align-self: stretch;
-  background: var(--border);
+  background: rgba(255, 255, 255, 0.09);
   margin: 2px 0;
   flex-shrink: 0;
 }
 
-.dm-status-good    { color: #5fba8e; }
-.dm-status-neutral { color: var(--text-muted); }
+.dm-status-good    { color: #4ade80; }
+.dm-status-neutral { color: rgba(232, 238, 255, 0.42); }
 
 /* ── Timeline container ──────────────────────────────────────────── */
 
@@ -58,7 +58,7 @@
   padding-bottom: 4px;
 }
 
-/* Vertical spine line */
+/* Vertical spine — gradient purple */
 .dm-tl-line {
   position: absolute;
   top: 0;
@@ -68,10 +68,12 @@
   background: linear-gradient(
     to bottom,
     transparent 0%,
-    var(--border) 6%,
-    var(--border) 94%,
+    #6366f1 8%,
+    #818cf8 50%,
+    #a78bfa 85%,
     transparent 100%
   );
+  opacity: 0.55;
   pointer-events: none;
   z-index: 0;
 }
@@ -82,7 +84,7 @@
   display: grid;
   grid-template-columns: 52px 26px 1fr;
   align-items: center;
-  padding: 8px 0 4px;
+  padding: 10px 0 5px;
   position: relative;
   z-index: 1;
 }
@@ -92,9 +94,9 @@
   font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 900;
-  color: var(--text-muted);
+  color: rgba(232, 238, 255, 0.36);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   padding-left: 10px;
 }
 
@@ -119,7 +121,7 @@
   font-family: var(--font-mono, "Space Mono", "Courier New", monospace);
   font-size: 10px;
   font-weight: 700;
-  color: var(--text-muted);
+  color: rgba(232, 238, 255, 0.36);
   text-align: right;
   padding-right: 8px;
   padding-top: 14px;
@@ -147,59 +149,61 @@
   border-radius: 50%;
   flex-shrink: 0;
   margin-top: 13px;
-  border: 2px solid var(--border);
-  background: var(--bg-card);
+  border: 2px solid rgba(255, 255, 255, 0.20);
+  background: rgba(255, 255, 255, 0.08);
   position: relative;
   z-index: 3;
 }
 
-.dm-node-p1 { border-color: #ef4444; background: rgba(239, 68, 68, 0.12); }
-.dm-node-p2 { border-color: #f59e0b; background: rgba(245, 158, 11, 0.12); }
-.dm-node-p3 { border-color: #14b8a6; background: rgba(20, 184, 166, 0.12); }
-.dm-node-p4 { border-color: var(--text-muted); background: var(--bg-card); }
+.dm-node-p1 { border-color: #f43f5e; background: rgba(244, 63, 94, 0.22); }
+.dm-node-p2 { border-color: #f59e0b; background: rgba(245, 158, 11, 0.22); }
+.dm-node-p3 { border-color: #14b8a6; background: rgba(20, 184, 166, 0.22); }
+.dm-node-p4 { border-color: rgba(255, 255, 255, 0.20); background: rgba(255, 255, 255, 0.06); }
 
-/* NOW node — larger with accent ring */
+/* NOW node — filled indigo with glow */
 .dm-node-now {
   width: 18px;
   height: 18px;
   margin-top: 11px;
-  box-shadow: 0 0 0 3px var(--bg-card), 0 0 0 5px var(--accent);
+  background: #6366f1;
+  border: 2px solid rgba(99, 102, 241, 0.55);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.18), 0 0 16px rgba(99, 102, 241, 0.55);
 }
 
-/* End cap node */
+/* End cap */
 .dm-node-end {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   margin-top: 0;
-  border: 2px solid var(--border);
-  background: var(--bg-secondary);
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* Animated pulse ring for NOW */
 .dm-node-now-ring {
   position: absolute;
-  top: 8px;
-  width: 26px;
-  height: 26px;
+  top: 6px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  border: 1.5px solid var(--accent);
-  opacity: 0.35;
-  animation: dm-pulse 2.2s ease-in-out infinite;
+  border: 1.5px solid #6366f1;
+  opacity: 0.45;
+  animation: dm-pulse 2.4s ease-in-out infinite;
   pointer-events: none;
   z-index: 1;
 }
 
 @keyframes dm-pulse {
-  0%, 100% { transform: scale(1); opacity: 0.35; }
-  50%       { transform: scale(1.3); opacity: 0.08; }
+  0%, 100% { transform: scale(1);   opacity: 0.45; }
+  50%       { transform: scale(1.5); opacity: 0.07; }
 }
 
 /* End label */
 .dm-end-label {
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  color: var(--text-muted);
+  color: rgba(232, 238, 255, 0.30);
   padding-left: 10px;
 }
 
@@ -207,23 +211,37 @@
 
 .dm-card {
   margin-left: 10px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  border-left-width: 3px;
-  background: var(--bg-card);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-left-width: 4px;
+  background: rgba(16, 18, 26, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   overflow: hidden;
   transition: box-shadow 0.15s;
 }
 
 .dm-card.is-dragging {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.60);
 }
 
-/* Priority-colored left border */
-.dm-card-p1 { border-left-color: #ef4444; }
-.dm-card-p2 { border-left-color: #f59e0b; }
-.dm-card-p3 { border-left-color: #14b8a6; }
-.dm-card-p4 { border-left-color: var(--border); }
+/* Priority left border + subtle gradient tint */
+.dm-card-p1 {
+  border-left-color: #f43f5e;
+  background: linear-gradient(110deg, rgba(244, 63, 94, 0.13) 0%, rgba(16, 18, 26, 0.82) 55%);
+}
+.dm-card-p2 {
+  border-left-color: #f59e0b;
+  background: linear-gradient(110deg, rgba(245, 158, 11, 0.13) 0%, rgba(16, 18, 26, 0.82) 55%);
+}
+.dm-card-p3 {
+  border-left-color: #14b8a6;
+  background: linear-gradient(110deg, rgba(20, 184, 166, 0.13) 0%, rgba(16, 18, 26, 0.82) 55%);
+}
+.dm-card-p4 {
+  border-left-color: rgba(255, 255, 255, 0.16);
+  background: rgba(16, 18, 26, 0.75);
+}
 
 /* Main content row */
 .dm-card-main {
@@ -242,11 +260,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 5px;
+  border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
   cursor: grab;
-  color: var(--text-muted);
+  color: rgba(232, 238, 255, 0.26);
   font-size: 13px;
   line-height: 1;
   touch-action: none;
@@ -255,14 +273,14 @@
 }
 
 .dm-card-drag:hover {
-  background: var(--bg-secondary);
-  border-color: var(--border);
-  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(232, 238, 255, 0.75);
 }
 
 .dm-card-drag:active { cursor: grabbing; }
 
-/* Info section — clickable toggle for duration edit */
+/* Info section — toggle for duration edit */
 .dm-card-info {
   flex: 1;
   min-width: 0;
@@ -275,19 +293,19 @@
   padding: 0 4px;
 }
 
-/* NOW badge inside card */
+/* NOW badge */
 .dm-now-badge {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  border: 1px solid var(--accent);
-  padding: 2px 7px;
-  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.50);
+  padding: 2px 8px;
+  background: rgba(99, 102, 241, 0.15);
   font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 900;
-  color: var(--accent);
-  letter-spacing: 0.04em;
+  color: #818cf8;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;
   margin-bottom: 3px;
@@ -298,7 +316,7 @@
   display: block;
   font-size: 13px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: #e8eeff;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -309,19 +327,19 @@
   display: block;
   font-size: 11px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: rgba(232, 238, 255, 0.56);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  margin-top: 1px;
+  margin-top: 2px;
   line-height: 1.3;
 }
 
 .dm-card-meta {
   display: flex;
   align-items: center;
-  gap: 5px;
-  margin-top: 3px;
+  gap: 6px;
+  margin-top: 4px;
   flex-wrap: wrap;
 }
 
@@ -329,9 +347,15 @@
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 800;
-  color: var(--text-muted);
+  color: rgba(232, 238, 255, 0.38);
   white-space: nowrap;
 }
+
+/* Priority badges inside dark cards */
+.dm-card .day-map-priority.p1 { background: rgba(244, 63, 94, 0.22);   color: #fda4af; }
+.dm-card .day-map-priority.p2 { background: rgba(245, 158, 11, 0.22);  color: #fcd34d; }
+.dm-card .day-map-priority.p3 { background: rgba(20, 184, 166, 0.22);  color: #5eead4; }
+.dm-card .day-map-priority.p4 { background: rgba(255, 255, 255, 0.08); color: rgba(232, 238, 255, 0.48); }
 
 /* Controls: ↑ ↓ × */
 .dm-card-controls {
@@ -347,7 +371,7 @@
   border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--text-muted);
+  color: rgba(232, 238, 255, 0.32);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -359,20 +383,20 @@
 }
 
 .dm-btn-icon:hover:not(:disabled) {
-  color: var(--text-primary);
-  background: var(--bg-secondary);
-  border-color: var(--border);
+  color: #e8eeff;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.13);
 }
 
-.dm-btn-icon:disabled { opacity: 0.25; cursor: not-allowed; }
+.dm-btn-icon:disabled { opacity: 0.22; cursor: not-allowed; }
 
 .dm-btn-remove:hover:not(:disabled) {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.07);
-  border-color: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.10);
+  border-color: rgba(248, 113, 113, 0.22);
 }
 
-/* Start Focus row — only on NOW card */
+/* Start Focus row */
 .dm-focus-row {
   padding: 0 8px 9px;
 }
@@ -381,15 +405,16 @@
   display: block;
   width: 100%;
   min-height: 36px;
-  border-radius: 8px;
+  border-radius: 9px;
   border: none;
-  background: var(--accent);
-  color: var(--button-text, #fff);
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+  color: #fff;
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 900;
   cursor: pointer;
   transition: opacity 0.15s;
+  letter-spacing: 0.01em;
 }
 
 .dm-focus-btn:hover  { opacity: 0.88; }
@@ -397,9 +422,9 @@
 
 /* Duration edit panel */
 .dm-edit-panel {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding: 10px;
-  background: var(--bg-secondary);
+  background: rgba(0, 0, 0, 0.28);
 }
 
 .dm-edit-label {
@@ -409,17 +434,17 @@
   font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 800;
-  color: var(--text-muted);
+  color: rgba(232, 238, 255, 0.38);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
 }
 
 .dm-edit-label select {
   height: 32px;
   border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.07);
+  color: #e8eeff;
   font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 700;
