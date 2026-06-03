@@ -18,7 +18,6 @@ import { shouldReflowPastRoute } from "../utils/dayMapRoute";
 import "../styles/dayMap.css";
 import "../styles/dayMapPlanning.css";
 import "../styles/dayMapTimeline.css";
-import "../styles/dayMapBlocks.css";
 
 const TRANSITION_BUFFER = 5;
 const DURATION_OPTIONS = [15, 25, 45, 60, 90, 120, 180, 240, 360];
@@ -235,95 +234,6 @@ function TimelineStop({ task, index, total, isFirst, isExpanded, onToggle, onMov
   );
 }
 
-function ViewToggle({ view, onChange }) {
-  return (
-    <div className="dm-view-toggle" role="group" aria-label="Day Map view">
-      <button
-        type="button"
-        className={`dm-view-btn${view === "route" ? " active" : ""}`}
-        onClick={() => onChange("route")}
-        aria-pressed={view === "route"}
-      >
-        Route
-      </button>
-      <button
-        type="button"
-        className={`dm-view-btn${view === "blocks" ? " active" : ""}`}
-        onClick={() => onChange("blocks")}
-        aria-pressed={view === "blocks"}
-      >
-        Blocks
-      </button>
-    </div>
-  );
-}
-
-function BlockCard({ task, index, total, isFirst, onRemove, onMoveUp, onMoveDown, onStartFocus }) {
-  const taskId = getTaskId(task);
-  const duration = getEstimate(task);
-  const start = Number(task.dayMapStartMinutes ?? 0);
-  const p = normalizePriority(task.priority);
-  const isNow = isFirst && start <= currentDayMinutes() + 15;
-
-  let sizeClass = "dmb-sm";
-  if (duration >= 45) sizeClass = "dmb-lg";
-  else if (duration >= 25) sizeClass = "dmb-md";
-
-  return (
-    <div className={`dmb-block dmb-${p.toLowerCase()} ${sizeClass}${isFirst ? " dmb-first" : ""}`}>
-      <div className="dmb-block-header">
-        <span className="dmb-block-time">{formatClock(start)}</span>
-        <span className="dmb-block-dur">{formatDuration(duration)}</span>
-        {isFirst && <span className="dmb-now-chip">{isNow ? "▶ NOW" : "▶ NEXT"}</span>}
-      </div>
-
-      <div className="dmb-block-body">
-        <h3 className="dmb-block-title">{task.title}</h3>
-        {task.concreteStep && <p className="dmb-block-step">{task.concreteStep}</p>}
-      </div>
-
-      {isFirst && (
-        <div className="dmb-focus-row">
-          <button type="button" className="dmb-focus-full-btn" onClick={onStartFocus}>
-            Start Focus →
-          </button>
-        </div>
-      )}
-
-      <div className="dmb-block-footer">
-        <PriorityBadge priority={task.priority} />
-        <div className="dmb-block-actions">
-          <button type="button" className="dmb-ctrl-btn" onClick={onMoveUp} disabled={index === 0} aria-label="Move up">↑</button>
-          <button type="button" className="dmb-ctrl-btn" onClick={onMoveDown} disabled={index === total - 1} aria-label="Move down">↓</button>
-          <button type="button" className="dmb-ctrl-btn remove" onClick={() => onRemove(taskId)} aria-label="Remove from route">×</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function BlocksView({ scheduledTasks, onRemove, onMoveTask, onStartFocus }) {
-  if (!scheduledTasks.length) {
-    return <p className="day-map-route-empty">No tasks in route yet — tap a task above or use Auto-fill.</p>;
-  }
-  return (
-    <div className="dmb-grid">
-      {scheduledTasks.map((task, index) => (
-        <BlockCard
-          key={getTaskId(task)}
-          task={task}
-          index={index}
-          total={scheduledTasks.length}
-          isFirst={index === 0}
-          onRemove={onRemove}
-          onMoveUp={() => onMoveTask(getTaskId(task), "up")}
-          onMoveDown={() => onMoveTask(getTaskId(task), "down")}
-          onStartFocus={() => onStartFocus(getTaskId(task))}
-        />
-      ))}
-    </div>
-  );
-}
 
 function AnchorControl({ anchorMinutes, onStartFromNow, onChangeAnchor }) {
   const now = roundToQuarter(currentDayMinutes());
@@ -396,17 +306,6 @@ function AvailableStrip({ tasks, isOpen, onToggle, onAdd }) {
 export default function DayMapPage({ payload, savePayload, onClose, onStartFocus, onAddTask, flushNow = () => {} }) {
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [stripOpen, setStripOpen] = useState(true);
-  const [view, setView] = useState(() => {
-    try {
-      const v = localStorage.getItem("loci_daymap_view");
-      return ["route", "blocks"].includes(v) ? v : "route";
-    } catch { return "route"; }
-  });
-
-  const handleViewChange = (v) => {
-    setView(v);
-    try { localStorage.setItem("loci_daymap_view", v); } catch { /* ignore */ }
-  };
 
   const todayStr = toLocalDateStr(new Date());
   const tasks = payload?.tasks || [];
@@ -626,56 +525,45 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
             onAdd={addToRoute}
           />
 
-          <ViewToggle view={view} onChange={handleViewChange} />
-
-          {view === "route" ? (
-            scheduledTasks.length === 0 ? (
-              <p className="day-map-route-empty">No tasks in route yet — tap a task above or use Auto-fill.</p>
-            ) : (
-              <div className="dm-timeline">
-                <div className="dm-tl-line" aria-hidden="true" />
-                <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-                  <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-                    {routeItems.map(item =>
-                      item.type === "divider" ? (
-                        <div key={item.id} className="dm-period-row">
-                          <span className="dm-period-label">{item.label}</span>
-                        </div>
-                      ) : (
-                        <TimelineStop
-                          key={item.id}
-                          task={item.task}
-                          index={item.index}
-                          total={scheduledTasks.length}
-                          isFirst={item.index === 0}
-                          isExpanded={expandedTaskId === item.id}
-                          onToggle={() => setExpandedTaskId(expandedTaskId === item.id ? null : item.id)}
-                          onMoveUp={() => moveTask(item.id, "up")}
-                          onMoveDown={() => moveTask(item.id, "down")}
-                          onRemove={removeFromRoute}
-                          onDurationChange={changeDuration}
-                          onStartFocus={() => startFocus(item.id)}
-                        />
-                      )
-                    )}
-                  </SortableContext>
-                </DndContext>
-                <div className="dm-stop dm-stop-end">
-                  <div className="dm-stop-time">{formatClock(endTime)}</div>
-                  <div className="dm-stop-spine">
-                    <div className="dm-stop-node dm-node-end" />
-                  </div>
-                  <div className="dm-end-label">End of route</div>
-                </div>
-              </div>
-            )
+          {scheduledTasks.length === 0 ? (
+            <p className="day-map-route-empty">No tasks in route yet — tap a task above or use Auto-fill.</p>
           ) : (
-            <BlocksView
-              scheduledTasks={scheduledTasks}
-              onRemove={removeFromRoute}
-              onMoveTask={moveTask}
-              onStartFocus={startFocus}
-            />
+            <div className="dm-timeline">
+              <div className="dm-tl-line" aria-hidden="true" />
+              <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+                <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+                  {routeItems.map(item =>
+                    item.type === "divider" ? (
+                      <div key={item.id} className="dm-period-row">
+                        <span className="dm-period-label">{item.label}</span>
+                      </div>
+                    ) : (
+                      <TimelineStop
+                        key={item.id}
+                        task={item.task}
+                        index={item.index}
+                        total={scheduledTasks.length}
+                        isFirst={item.index === 0}
+                        isExpanded={expandedTaskId === item.id}
+                        onToggle={() => setExpandedTaskId(expandedTaskId === item.id ? null : item.id)}
+                        onMoveUp={() => moveTask(item.id, "up")}
+                        onMoveDown={() => moveTask(item.id, "down")}
+                        onRemove={removeFromRoute}
+                        onDurationChange={changeDuration}
+                        onStartFocus={() => startFocus(item.id)}
+                      />
+                    )
+                  )}
+                </SortableContext>
+              </DndContext>
+              <div className="dm-stop dm-stop-end">
+                <div className="dm-stop-time">{formatClock(endTime)}</div>
+                <div className="dm-stop-spine">
+                  <div className="dm-stop-node dm-node-end" />
+                </div>
+                <div className="dm-end-label">End of route</div>
+              </div>
+            </div>
           )}
         </>
       )}
