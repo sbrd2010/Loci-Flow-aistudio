@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } from "firebase/database";
 import { db, auth } from "./firebase";
 import { safeUUID } from "./utils/uuid";
-import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload } from "./utils/normalizePayload";
+import { normalizePayload, mergeRemotePayload, prepareBrainDumpForSave } from "./utils/normalizePayload";
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
 // This lets the app show specific messages at each stage instead of just "loading".
@@ -18,23 +18,6 @@ async function writeWithRetry(dbRef, data, retries = 3) {
       if (attempt === retries - 1) throw err;
       await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
     }
-  }
-}
-
-function arrayOrEmpty(value) {
-  return Array.isArray(value) ? value : [];
-}
-
-function finiteNumber(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
-function areBrainDumpsEqual(a, b) {
-  try {
-    return JSON.stringify(arrayOrEmpty(a)) === JSON.stringify(arrayOrEmpty(b));
-  } catch {
-    return false;
   }
 }
 
@@ -415,37 +398,8 @@ export function useSync(uid, email) {
   }, [uid, email]);
 
   const savePayload = (updatedPayload) => {
-    const currentBrainDump = arrayOrEmpty(payloadRef.current?.brainDump);
-    const incomingHasBrainDump = updatedPayload.brainDump !== undefined;
-    let nextBrainDump = incomingHasBrainDump
-      ? arrayOrEmpty(updatedPayload.brainDump)
-      : currentBrainDump;
-
-    // Enforce the same Brain Dump limit for every save path, including Focus Mode.
-    // If a stale UI tries to append item 51, keep the current 50 instead of writing
-    // a larger array that would later be difficult to reason about across devices.
-    if (incomingHasBrainDump && nextBrainDump.length > BRAIN_DUMP_LIMIT) {
-      if (currentBrainDump.length >= BRAIN_DUMP_LIMIT && nextBrainDump.length > currentBrainDump.length) {
-        nextBrainDump = currentBrainDump;
-      } else {
-        nextBrainDump = nextBrainDump.slice(0, BRAIN_DUMP_LIMIT);
-      }
-    }
-
-    const brainDumpChanged = incomingHasBrainDump && !areBrainDumpsEqual(nextBrainDump, currentBrainDump);
-    const requestedBrainDumpUpdatedAt = finiteNumber(updatedPayload.brainDumpUpdatedAt);
-    const currentBrainDumpUpdatedAt = finiteNumber(payloadRef.current?.brainDumpUpdatedAt);
-    const safePayload = {
-      ...updatedPayload,
-      brainDump: nextBrainDump,
-    };
-
-    if (brainDumpChanged) {
-      safePayload.brainDumpUpdatedAt = Date.now();
-    } else if (requestedBrainDumpUpdatedAt !== null || currentBrainDumpUpdatedAt !== null) {
-      safePayload.brainDumpUpdatedAt = requestedBrainDumpUpdatedAt ?? currentBrainDumpUpdatedAt;
-    }
-
+    const brainDumpPatch = prepareBrainDumpForSave(updatedPayload, payloadRef.current);
+    const safePayload = { ...updatedPayload, ...brainDumpPatch };
     const nextPayload = { ...normalizePayload(safePayload), timestamp: Date.now() };
     setPayload(nextPayload);
     payloadRef.current = nextPayload;
