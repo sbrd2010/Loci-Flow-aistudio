@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -14,6 +14,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { shouldReflowPastRoute } from "../utils/dayMapRoute";
 import "../styles/dayMap.css";
 import "../styles/dayMapPlanning.css";
 
@@ -269,6 +270,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
 
   const payloadRef = useRef(payload);
   payloadRef.current = payload;
+  const staleRouteReflowKeyRef = useRef(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -327,6 +329,14 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
     }
     savePayload(update);
   };
+
+  useEffect(() => {
+    if (!shouldReflowPastRoute(scheduledTasks, anchorMinutes)) return;
+    const key = `${todayStr}:${anchorMinutes}:${scheduledTasks.map(t => `${getTaskId(t)}:${t.dayMapStartMinutes}`).join("|")}`;
+    if (staleRouteReflowKeyRef.current === key) return;
+    staleRouteReflowKeyRef.current = key;
+    applyAndSave(scheduledTasks, anchorMinutes, { dayMapDate: todayStr, dayMapAnchorMinutes: anchorMinutes });
+  }, [scheduledTasks, anchorMinutes, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startFromNow = () => {
     const now = roundToQuarter(currentDayMinutes());
