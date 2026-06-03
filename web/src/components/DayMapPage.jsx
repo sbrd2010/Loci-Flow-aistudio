@@ -17,6 +17,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { shouldReflowPastRoute } from "../utils/dayMapRoute";
 import "../styles/dayMap.css";
 import "../styles/dayMapPlanning.css";
+import "../styles/dayMapTimeline.css";
 
 const TRANSITION_BUFFER = 5;
 const DURATION_OPTIONS = [15, 25, 45, 60, 90, 120, 180, 240, 360];
@@ -107,9 +108,40 @@ function PriorityBadge({ priority }) {
   return <span className={`day-map-priority ${p.toLowerCase()}`}>{p}</span>;
 }
 
-function RouteRow({ task, index, total, isExpanded, onToggle, onMoveUp, onMoveDown, onRemove, onDurationChange, onStartFocus }) {
+function SummaryCard({ placed, total, totalDuration, anchorMinutes }) {
+  const nowMins = currentDayMinutes();
+  let status = "Plan ahead";
+  let statusClass = "neutral";
+  if (placed > 0) {
+    if (anchorMinutes <= nowMins + 45) {
+      status = "On Track";
+      statusClass = "good";
+    } else {
+      status = "Not started";
+    }
+  }
+  return (
+    <div className="dm-summary">
+      <div className="dm-summary-stat">
+        <div className="dm-summary-key">Tasks</div>
+        <div className="dm-summary-val">{placed} / {total}</div>
+      </div>
+      <div className="dm-summary-sep" />
+      <div className="dm-summary-stat">
+        <div className="dm-summary-key">Planned</div>
+        <div className="dm-summary-val">{totalDuration > 0 ? formatDuration(totalDuration) : "—"}</div>
+      </div>
+      <div className="dm-summary-sep" />
+      <div className="dm-summary-stat">
+        <div className="dm-summary-key">Status</div>
+        <div className={`dm-summary-val dm-status-${statusClass}`}>{status}</div>
+      </div>
+    </div>
+  );
+}
+
+function TimelineStop({ task, index, total, isFirst, isExpanded, onToggle, onMoveUp, onMoveDown, onRemove, onDurationChange, onStartFocus }) {
   const taskId = getTaskId(task);
-  const isFirst = index === 0;
   const {
     attributes, listeners, setActivatorNodeRef,
     setNodeRef, transform, transition, isDragging,
@@ -117,6 +149,9 @@ function RouteRow({ task, index, total, isExpanded, onToggle, onMoveUp, onMoveDo
 
   const duration = getEstimate(task);
   const start = Number(task.dayMapStartMinutes ?? 0);
+  const p = normalizePriority(task.priority);
+  const pClass = p.toLowerCase();
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -125,69 +160,75 @@ function RouteRow({ task, index, total, isExpanded, onToggle, onMoveUp, onMoveDo
   };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`day-map-route-row${isFirst ? " is-now" : ""}${isExpanded ? " expanded" : ""}${isDragging ? " is-dragging" : ""}`}
-    >
-      {isFirst && <div className="day-map-now-badge">NOW</div>}
-      <div className="day-map-route-main">
-        <button
-          ref={setActivatorNodeRef}
-          type="button"
-          className="day-map-drag-handle"
-          aria-label={`Reorder ${task.title}`}
-          {...attributes}
-          {...listeners}
-        >
-          <span aria-hidden="true">::</span>
-        </button>
-        <button
-          type="button"
-          className="day-map-route-content"
-          onClick={onToggle}
-          aria-expanded={isExpanded}
-        >
-          <PriorityBadge priority={task.priority} />
-          <span className="day-map-route-title">{task.title}</span>
-          <span className="day-map-route-time">{formatClock(start)} · {formatDuration(duration)}</span>
-        </button>
-        <div className="day-map-row-controls">
-          <button type="button" className="day-map-move-btn" onClick={onMoveUp} disabled={index === 0} aria-label="Move up">↑</button>
-          <button type="button" className="day-map-move-btn" onClick={onMoveDown} disabled={index === total - 1} aria-label="Move down">↓</button>
-          <button type="button" className="day-map-remove-btn" onClick={() => onRemove(taskId)} aria-label="Remove from route">×</button>
-        </div>
-      </div>
-      {isFirst && (
-        <div className="day-map-now-footer">
-          <button type="button" className="day-map-start-focus-btn" onClick={onStartFocus}>
-            Start Focus →
-          </button>
-        </div>
-      )}
-      {isExpanded && (
-        <div className="day-map-edit-panel">
-          <label className="day-map-edit-label">
-            Duration
-            <select
-              value={duration}
-              onChange={e => onDurationChange(taskId, Number(e.target.value))}
-            >
-              {DURATION_OPTIONS.map(m => (
-                <option key={m} value={m}>{formatDuration(m)}</option>
-              ))}
-            </select>
-          </label>
-        </div>
-      )}
-    </div>
-  );
-}
+    <div ref={setNodeRef} style={style} className="dm-stop">
+      <div className="dm-stop-time">{formatClock(start)}</div>
 
-function PeriodDivider({ label }) {
-  return (
-    <div className="day-map-period-divider" aria-hidden="true">
-      <span>{label}</span>
+      <div className="dm-stop-spine">
+        {isFirst && <div className="dm-node-now-ring" />}
+        <div className={`dm-stop-node dm-node-${pClass}${isFirst ? " dm-node-now" : ""}`} />
+      </div>
+
+      <div className={`dm-card dm-card-${pClass}${isDragging ? " is-dragging" : ""}`}>
+        <div className="dm-card-main">
+          <button
+            ref={setActivatorNodeRef}
+            type="button"
+            className="dm-card-drag"
+            aria-label={`Reorder ${task.title}`}
+            {...attributes}
+            {...listeners}
+          >
+            <span aria-hidden="true">::</span>
+          </button>
+
+          <button
+            type="button"
+            className="dm-card-info"
+            onClick={onToggle}
+            aria-expanded={isExpanded}
+          >
+            {isFirst && <div className="dm-now-badge">▶ NOW</div>}
+            <span className="dm-card-title">{task.title}</span>
+            {task.concreteStep && (
+              <span className="dm-card-step">{task.concreteStep}</span>
+            )}
+            <div className="dm-card-meta">
+              <PriorityBadge priority={task.priority} />
+              <span className="dm-card-dur">{formatDuration(duration)}</span>
+            </div>
+          </button>
+
+          <div className="dm-card-controls">
+            <button type="button" className="dm-btn-icon" onClick={onMoveUp} disabled={index === 0} aria-label="Move up">↑</button>
+            <button type="button" className="dm-btn-icon" onClick={onMoveDown} disabled={index === total - 1} aria-label="Move down">↓</button>
+            <button type="button" className="dm-btn-icon dm-btn-remove" onClick={() => onRemove(taskId)} aria-label="Remove from route">×</button>
+          </div>
+        </div>
+
+        {isFirst && (
+          <div className="dm-focus-row">
+            <button type="button" className="dm-focus-btn" onClick={onStartFocus}>
+              Start Focus →
+            </button>
+          </div>
+        )}
+
+        {isExpanded && (
+          <div className="dm-edit-panel">
+            <label className="dm-edit-label">
+              Duration
+              <select
+                value={duration}
+                onChange={e => onDurationChange(taskId, Number(e.target.value))}
+              >
+                {DURATION_OPTIONS.map(m => (
+                  <option key={m} value={m}>{formatDuration(m)}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -315,6 +356,12 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
 
   const totalDuration = scheduledTasks.reduce((sum, t) => sum + getEstimate(t), 0);
   const sortableIds = scheduledTasks.map(getTaskId);
+
+  const endTime = useMemo(() => {
+    if (!scheduledTasks.length) return anchorMinutes;
+    const last = scheduledTasks[scheduledTasks.length - 1];
+    return Number(last.dayMapStartMinutes ?? 0) + getEstimate(last);
+  }, [scheduledTasks, anchorMinutes]);
 
   const latestTasks = () => payloadRef.current?.tasks || [];
 
@@ -455,6 +502,13 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
         </section>
       ) : (
         <>
+          <SummaryCard
+            placed={scheduledTasks.length}
+            total={activeTodayTasks.length}
+            totalDuration={totalDuration}
+            anchorMinutes={anchorMinutes}
+          />
+
           <AnchorControl
             anchorMinutes={anchorMinutes}
             onStartFromNow={startFromNow}
@@ -476,18 +530,22 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
           {scheduledTasks.length === 0 ? (
             <p className="day-map-route-empty">No tasks in route yet — tap a task above or use Auto-fill.</p>
           ) : (
-            <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-              <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-                <div className="day-map-route">
+            <div className="dm-timeline">
+              <div className="dm-tl-line" aria-hidden="true" />
+              <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+                <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
                   {routeItems.map(item =>
                     item.type === "divider" ? (
-                      <PeriodDivider key={item.id} label={item.label} />
+                      <div key={item.id} className="dm-period-row">
+                        <span className="dm-period-label">{item.label}</span>
+                      </div>
                     ) : (
-                      <RouteRow
+                      <TimelineStop
                         key={item.id}
                         task={item.task}
                         index={item.index}
                         total={scheduledTasks.length}
+                        isFirst={item.index === 0}
                         isExpanded={expandedTaskId === item.id}
                         onToggle={() => setExpandedTaskId(expandedTaskId === item.id ? null : item.id)}
                         onMoveUp={() => moveTask(item.id, "up")}
@@ -498,9 +556,16 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
                       />
                     )
                   )}
+                </SortableContext>
+              </DndContext>
+              <div className="dm-stop dm-stop-end">
+                <div className="dm-stop-time">{formatClock(endTime)}</div>
+                <div className="dm-stop-spine">
+                  <div className="dm-stop-node dm-node-end" />
                 </div>
-              </SortableContext>
-            </DndContext>
+                <div className="dm-end-label">End of route</div>
+              </div>
+            </div>
           )}
         </>
       )}

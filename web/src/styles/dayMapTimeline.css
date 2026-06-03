@@ -1,0 +1,446 @@
+/* ================================================================
+   Day Map — Timeline Route (vertical route map)
+   ================================================================ */
+
+/* ── Summary card ────────────────────────────────────────────────── */
+
+.dm-summary {
+  display: flex;
+  align-items: center;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+}
+
+.dm-summary-stat {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.dm-summary-key {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 2px;
+}
+
+.dm-summary-val {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dm-summary-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+  margin: 2px 0;
+  flex-shrink: 0;
+}
+
+.dm-status-good    { color: #5fba8e; }
+.dm-status-neutral { color: var(--text-muted); }
+
+/* ── Timeline container ──────────────────────────────────────────── */
+
+.dm-timeline {
+  position: relative;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+/* Vertical spine line */
+.dm-tl-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(52px + 12px);
+  width: 2px;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--border) 6%,
+    var(--border) 94%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Period label row ────────────────────────────────────────────── */
+
+.dm-period-row {
+  display: grid;
+  grid-template-columns: 52px 26px 1fr;
+  align-items: center;
+  padding: 8px 0 4px;
+  position: relative;
+  z-index: 1;
+}
+
+.dm-period-label {
+  grid-column: 3;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding-left: 10px;
+}
+
+/* ── Timeline stop ───────────────────────────────────────────────── */
+
+.dm-stop {
+  display: grid;
+  grid-template-columns: 52px 26px 1fr;
+  align-items: start;
+  padding-bottom: 10px;
+  position: relative;
+  z-index: 1;
+}
+
+.dm-stop-end {
+  padding-bottom: 4px;
+  align-items: center;
+}
+
+/* Left: time label */
+.dm-stop-time {
+  font-family: var(--font-mono, "Space Mono", "Courier New", monospace);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: right;
+  padding-right: 8px;
+  padding-top: 14px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.dm-stop-end .dm-stop-time {
+  padding-top: 0;
+}
+
+/* Center: spine column */
+.dm-stop-spine {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+}
+
+/* Node circle */
+.dm-stop-node {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 13px;
+  border: 2px solid var(--border);
+  background: var(--bg-card);
+  position: relative;
+  z-index: 3;
+}
+
+.dm-node-p1 { border-color: #ef4444; background: rgba(239, 68, 68, 0.12); }
+.dm-node-p2 { border-color: #f59e0b; background: rgba(245, 158, 11, 0.12); }
+.dm-node-p3 { border-color: #14b8a6; background: rgba(20, 184, 166, 0.12); }
+.dm-node-p4 { border-color: var(--text-muted); background: var(--bg-card); }
+
+/* NOW node — larger with accent ring */
+.dm-node-now {
+  width: 18px;
+  height: 18px;
+  margin-top: 11px;
+  box-shadow: 0 0 0 3px var(--bg-card), 0 0 0 5px var(--accent);
+}
+
+/* End cap node */
+.dm-node-end {
+  width: 10px;
+  height: 10px;
+  margin-top: 0;
+  border: 2px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+/* Animated pulse ring for NOW */
+.dm-node-now-ring {
+  position: absolute;
+  top: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  opacity: 0.35;
+  animation: dm-pulse 2.2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes dm-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.35; }
+  50%       { transform: scale(1.3); opacity: 0.08; }
+}
+
+/* End label */
+.dm-end-label {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding-left: 10px;
+}
+
+/* ── Task card (right column) ────────────────────────────────────── */
+
+.dm-card {
+  margin-left: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  background: var(--bg-card);
+  overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+
+.dm-card.is-dragging {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+/* Priority-colored left border */
+.dm-card-p1 { border-left-color: #ef4444; }
+.dm-card-p2 { border-left-color: #f59e0b; }
+.dm-card-p3 { border-left-color: #14b8a6; }
+.dm-card-p4 { border-left-color: var(--border); }
+
+/* Main content row */
+.dm-card-main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px 9px;
+  min-height: 52px;
+}
+
+/* Drag handle */
+.dm-card-drag {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: grab;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  touch-action: none;
+  padding: 0;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+
+.dm-card-drag:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.dm-card-drag:active { cursor: grabbing; }
+
+/* Info section — clickable toggle for duration edit */
+.dm-card-info {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font-family: var(--font-sans);
+  padding: 0 4px;
+}
+
+/* NOW badge inside card */
+.dm-now-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  padding: 2px 7px;
+  background: rgba(99, 102, 241, 0.08);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  margin-bottom: 3px;
+  line-height: 1.4;
+}
+
+.dm-card-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.dm-card-step {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+  line-height: 1.3;
+}
+
+.dm-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  flex-wrap: wrap;
+}
+
+.dm-card-dur {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Controls: ↑ ↓ × */
+.dm-card-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.dm-btn-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  font-family: var(--font-sans);
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+
+.dm-btn-icon:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border-color: var(--border);
+}
+
+.dm-btn-icon:disabled { opacity: 0.25; cursor: not-allowed; }
+
+.dm-btn-remove:hover:not(:disabled) {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.07);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+/* Start Focus row — only on NOW card */
+.dm-focus-row {
+  padding: 0 8px 9px;
+}
+
+.dm-focus-btn {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: var(--button-text, #fff);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.dm-focus-btn:hover  { opacity: 0.88; }
+.dm-focus-btn:active { opacity: 0.75; }
+
+/* Duration edit panel */
+.dm-edit-panel {
+  border-top: 1px solid var(--border);
+  padding: 10px;
+  background: var(--bg-secondary);
+}
+
+.dm-edit-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.dm-edit-label select {
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 6px;
+  cursor: pointer;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+
+@media (max-width: 560px) {
+  .dm-stop-time  { font-size: 9px; padding-right: 6px; }
+  .dm-card-main  { padding: 9px 6px 8px; gap: 2px; }
+  .dm-card-title { font-size: 12px; }
+  .dm-card-drag  { width: 22px; height: 22px; font-size: 12px; }
+  .dm-btn-icon   { width: 26px; height: 26px; font-size: 12px; }
+  .dm-now-badge  { font-size: 9px; padding: 2px 6px; }
+  .dm-summary-val { font-size: 13px; }
+}
+
+@media (max-width: 374px) {
+  .dm-summary-key { font-size: 9px; letter-spacing: 0.06em; }
+  .dm-stop-time   { padding-right: 4px; }
+  .dm-card        { margin-left: 6px; }
+}
