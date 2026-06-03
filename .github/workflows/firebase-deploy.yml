@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install and build web
+      - name: Install, test, and build web
         working-directory: web
         env:
           VITE_GROQ_KEY: ${{ secrets.VITE_GROQ_KEY }}
@@ -25,6 +25,7 @@ jobs:
           VITE_GA_MEASUREMENT_ID: ${{ secrets.VITE_GA_MEASUREMENT_ID }}
         run: |
           npm ci
+          npm test
           npm run build
 
       - name: Deploy Database Rules
