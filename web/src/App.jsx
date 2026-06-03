@@ -30,7 +30,11 @@ export default function App() {
   const [preselectedHorizon, setPreselectedHorizon] = useState("today");
   const [editingTask, setEditingTask] = useState(null);
   const [fabExpanded, setFabExpanded] = useState(false);
-  const [theme, setTheme] = useState(() => localStorage.getItem("loci_theme") || "glassy");
+  const [theme, setTheme] = useState(() => {
+    const stored = localStorage.getItem("loci_theme") || "glassy";
+    const removed = ["sage", "option-b-linear", "option-f-chronos"];
+    return removed.includes(stored) ? "glassy" : stored;
+  });
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState("");
   const [showPrivacy, setShowPrivacy] = useState(false);

@@ -4,7 +4,6 @@ const THEMES = [
   { id: "glassy",    label: "Dark Glass",  emoji: "🔮", desc: "Deep navy glassmorphism" },
   { id: "coral",     label: "Warm Coral",  emoji: "🌅", desc: "Terracotta light" },
   { id: "teal",      label: "Executive",   emoji: "🌿", desc: "Corporate teal" },
-  { id: "sage",      label: "Zen Sage",    emoji: "🍃", desc: "Soft sage green" },
   { id: "polymer",   label: "Research",    emoji: "🔬", desc: "Warm cream lab" },
   { id: "editorial", label: "Editorial",   emoji: "📰", desc: "Black & white serif" },
   { id: "midnight-neon", label: "Midnight Neon", emoji: "⚡", desc: "Electric cyan on pure black" },
@@ -12,11 +11,9 @@ const THEMES = [
   { id: "arctic-frost",  label: "Arctic Frost",  emoji: "❄️", desc: "Cool blue, clinical clarity" },
   { id: "regal-amethyst",   label: "Regal Amethyst", emoji: "💜", desc: "Deep purple glassmorphism" },
   { id: "option-a-amie",    label: "Amie Glass",     emoji: "🌸", desc: "Translucent soft glassy pastel" },
-  { id: "option-b-linear",  label: "Linear Dark",    emoji: "🛸", desc: "Industrial high-precision dark" },
   { id: "option-c-zen",     label: "Zen Canvas",     emoji: "🕊️", desc: "Elegant serif, warm cream" },
   { id: "option-d-bento",   label: "Bento Grid",     emoji: "🍱", desc: "iOS compartmental, amber focus" },
   { id: "option-e-slate",   label: "Slate Notebook", emoji: "📓", desc: "Notion-minimal dark notebook" },
-  { id: "option-f-chronos", label: "Chronos Time",   emoji: "⏳", desc: "Cosmic purple, orange highlights" },
 ];
 
 export default function ThemeSwitcher({ theme, onThemeChange }) {
