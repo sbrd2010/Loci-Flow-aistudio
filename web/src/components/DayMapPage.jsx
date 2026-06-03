@@ -151,6 +151,7 @@ function TimelineStop({ task, index, total, isFirst, isExpanded, onToggle, onMov
   const start = Number(task.dayMapStartMinutes ?? 0);
   const p = normalizePriority(task.priority);
   const pClass = p.toLowerCase();
+  const isNow = isFirst && start <= currentDayMinutes() + 15;
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -164,7 +165,7 @@ function TimelineStop({ task, index, total, isFirst, isExpanded, onToggle, onMov
       <div className="dm-stop-time">{formatClock(start)}</div>
 
       <div className="dm-stop-spine">
-        {isFirst && <div className="dm-node-now-ring" />}
+        {isNow && <div className="dm-node-now-ring" />}
         <div className={`dm-stop-node dm-node-${pClass}${isFirst ? " dm-node-now" : ""}`} />
       </div>
 
@@ -187,7 +188,7 @@ function TimelineStop({ task, index, total, isFirst, isExpanded, onToggle, onMov
             onClick={onToggle}
             aria-expanded={isExpanded}
           >
-            {isFirst && <div className="dm-now-badge">▶ NOW</div>}
+            {isFirst && <div className="dm-now-badge">{isNow ? "▶ NOW" : "▶ NEXT"}</div>}
             <span className="dm-card-title">{task.title}</span>
             {task.concreteStep && (
               <span className="dm-card-step">{task.concreteStep}</span>
@@ -487,10 +488,6 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
         <div className="day-map-title">
           <span>Today</span>
           <h1>Day Map</h1>
-        </div>
-        <div className="day-map-stats">
-          <span>{scheduledTasks.length}/{activeTodayTasks.length} placed</span>
-          {totalDuration > 0 && <span>{formatDuration(totalDuration)}</span>}
         </div>
       </div>
 

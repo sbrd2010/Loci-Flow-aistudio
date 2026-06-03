@@ -237,8 +237,8 @@
 /* Drag handle */
 .dm-card-drag {
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
+  width: 36px;
+  height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -342,8 +342,8 @@
 }
 
 .dm-btn-icon {
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
@@ -430,12 +430,10 @@
 /* ── Responsive ──────────────────────────────────────────────────── */
 
 @media (max-width: 560px) {
-  .dm-stop-time  { font-size: 9px; padding-right: 6px; }
-  .dm-card-main  { padding: 9px 6px 8px; gap: 2px; }
-  .dm-card-title { font-size: 12px; }
-  .dm-card-drag  { width: 22px; height: 22px; font-size: 12px; }
-  .dm-btn-icon   { width: 26px; height: 26px; font-size: 12px; }
-  .dm-now-badge  { font-size: 9px; padding: 2px 6px; }
+  .dm-stop-time   { font-size: 9px; padding-right: 6px; }
+  .dm-card-main   { padding: 8px 4px 7px; gap: 2px; }
+  .dm-card-title  { font-size: 12px; }
+  .dm-now-badge   { font-size: 9px; padding: 2px 6px; }
   .dm-summary-val { font-size: 13px; }
 }
 
