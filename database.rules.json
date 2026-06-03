@@ -45,6 +45,7 @@
         },
         "contributions": { ".validate": true },
         "brainDump":     { ".validate": true },
+        "brainDumpUpdatedAt": { ".validate": "!newData.exists() || newData.isNumber()" },
         "timestamp":     { ".validate": "!newData.exists() || newData.isNumber()" },
         "$other": { ".validate": false }
       }
