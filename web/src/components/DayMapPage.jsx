@@ -396,7 +396,17 @@ function AvailableStrip({ tasks, isOpen, onToggle, onAdd }) {
 export default function DayMapPage({ payload, savePayload, onClose, onStartFocus, onAddTask, flushNow = () => {} }) {
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [stripOpen, setStripOpen] = useState(true);
-  const [view, setView] = useState("route");
+  const [view, setView] = useState(() => {
+    try {
+      const v = localStorage.getItem("loci_daymap_view");
+      return ["route", "blocks"].includes(v) ? v : "route";
+    } catch { return "route"; }
+  });
+
+  const handleViewChange = (v) => {
+    setView(v);
+    try { localStorage.setItem("loci_daymap_view", v); } catch { /* ignore */ }
+  };
 
   const todayStr = toLocalDateStr(new Date());
   const tasks = payload?.tasks || [];
@@ -616,7 +626,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
             onAdd={addToRoute}
           />
 
-          <ViewToggle view={view} onChange={setView} />
+          <ViewToggle view={view} onChange={handleViewChange} />
 
           {view === "route" ? (
             scheduledTasks.length === 0 ? (
