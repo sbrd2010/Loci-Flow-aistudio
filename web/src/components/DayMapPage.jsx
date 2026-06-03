@@ -195,12 +195,11 @@ function AnchorControl({ anchorMinutes, onStartFromNow, onChangeAnchor }) {
   const now = roundToQuarter(currentDayMinutes());
   const isAlreadyNow = Math.abs(anchorMinutes - now) < 15;
 
-  const base = Math.max(0, now - 120);
   const options = [];
-  for (let m = base; m <= now + 600 && m < 1440; m += 15) {
+  for (let m = now; m <= now + 600 && m < 1440; m += 15) {
     options.push(m);
   }
-  if (!options.includes(anchorMinutes)) {
+  if (anchorMinutes >= now && !options.includes(anchorMinutes)) {
     options.push(anchorMinutes);
     options.sort((a, b) => a - b);
   }
@@ -260,7 +259,7 @@ function AvailableStrip({ tasks, isOpen, onToggle, onAdd }) {
   );
 }
 
-export default function DayMapPage({ payload, savePayload, onClose, onAddTask, flushNow = () => {} }) {
+export default function DayMapPage({ payload, savePayload, onClose, onStartFocus, onAddTask, flushNow = () => {} }) {
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [stripOpen, setStripOpen] = useState(true);
 
@@ -300,14 +299,16 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask, f
   ), [activeTodayTasks, todayStr]);
 
   // Anchor: config-persisted → inferred from first scheduled task → current time
+  // Clamp to now so a stored past value never produces a past start time.
   const anchorMinutes = useMemo(() => {
+    const now = roundToQuarter(currentDayMinutes());
     if (config.dayMapDate === todayStr && config.dayMapAnchorMinutes != null) {
-      return Number(config.dayMapAnchorMinutes);
+      return Math.max(now, Number(config.dayMapAnchorMinutes));
     }
     if (scheduledTasks.length > 0 && scheduledTasks[0].dayMapStartMinutes != null) {
-      return Number(scheduledTasks[0].dayMapStartMinutes);
+      return Math.max(now, Number(scheduledTasks[0].dayMapStartMinutes));
     }
-    return roundToQuarter(currentDayMinutes());
+    return now;
   }, [config.dayMapDate, config.dayMapAnchorMinutes, scheduledTasks, todayStr]);
 
   const totalDuration = scheduledTasks.reduce((sum, t) => sum + getEstimate(t), 0);
@@ -397,7 +398,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onAddTask, f
     });
     savePayload({ ...p, tasks: nextTasks, timestamp: Date.now() });
     flushNow();
-    onClose();
+    onStartFocus ? onStartFocus() : onClose();
   };
 
   const handleDragEnd = ({ active, over }) => {

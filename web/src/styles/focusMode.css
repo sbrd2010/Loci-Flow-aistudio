@@ -341,6 +341,115 @@
   border-color: rgba(165, 214, 167, 0.7);
 }
 
+/* ── Duration picker ─────────────────────────────────────────────────────── */
+
+.focus-mode-duration-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: clamp(14px, 3vh, 22px);
+}
+
+.focus-mode-dur-btn {
+  min-height: 30px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(237, 247, 242, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(237, 247, 242, 0.55);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+}
+
+.focus-mode-dur-btn:hover,
+.focus-mode-dur-btn:focus-visible {
+  color: rgba(237, 247, 242, 0.9);
+  border-color: rgba(122, 181, 155, 0.38);
+  background: rgba(122, 181, 155, 0.1);
+  outline: none;
+}
+
+.focus-mode-dur-btn:active {
+  transform: scale(0.95);
+}
+
+.focus-mode-dur-btn.active {
+  color: #d9f3e5;
+  border-color: rgba(122, 181, 155, 0.55);
+  background: rgba(122, 181, 155, 0.18);
+}
+
+/* ── Brain dump capture row ──────────────────────────────────────────────── */
+
+.focus-mode-dump-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(100%, 420px);
+  margin-top: clamp(18px, 4vh, 28px);
+}
+
+.focus-mode-dump-input {
+  flex: 1;
+  min-height: 38px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(237, 247, 242, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(237, 247, 242, 0.85);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.focus-mode-dump-input::placeholder {
+  color: rgba(237, 247, 242, 0.28);
+}
+
+.focus-mode-dump-input:focus {
+  border-color: rgba(122, 181, 155, 0.35);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.focus-mode-dump-btn {
+  min-height: 38px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(237, 247, 242, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(237, 247, 242, 0.6);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+}
+
+.focus-mode-dump-btn:hover,
+.focus-mode-dump-btn:focus-visible {
+  color: rgba(237, 247, 242, 0.9);
+  border-color: rgba(122, 181, 155, 0.38);
+  background: rgba(122, 181, 155, 0.1);
+  outline: none;
+}
+
+.focus-mode-dump-btn:active {
+  transform: scale(0.96);
+}
+
+.focus-mode-dump-btn.saved {
+  color: #a5d6a7;
+  border-color: rgba(165, 214, 167, 0.45);
+  background: rgba(165, 214, 167, 0.1);
+}
+
 @media (max-width: 640px) {
   .focus-mode-exit-btn {
     top: calc(12px + env(safe-area-inset-top, 0px));

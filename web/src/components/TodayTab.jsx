@@ -36,7 +36,7 @@ function SortableTaskItem({ id, children }) {
   );
 }
 
-export default function TodayTab({ payload, savePayload, onOpenDayMap }) {
+export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenFocus = false, onAutoOpenFocusDone }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   const [confirmDialog, setConfirmDialog] = useState(null);
@@ -105,6 +105,14 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap }) {
   useEffect(() => {
     if (!activeTask) setIsFocusMode(false);
   }, [activeTask]);
+
+  // Open focus mode immediately when arriving from Day Map Start Focus
+  useEffect(() => {
+    if (autoOpenFocus && activeTask) {
+      setIsFocusMode(true);
+      onAutoOpenFocusDone?.();
+    }
+  }, [autoOpenFocus, activeTask?.uuid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isTimerRunning && timerSecondsLeft === 0) {
@@ -236,6 +244,20 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap }) {
       if (t.isNowFocus === newFocus) return t;
       return { ...t, isNowFocus: newFocus, lastUpdated: now };
     })});
+    if (isPinning) setIsFocusMode(true);
+  };
+
+  const handleFocusBrainDump = (text) => {
+    if (!text.trim()) return;
+    const newItem = { id: `bd_${Date.now()}`, text: text.trim(), createdAt: Date.now() };
+    savePayload({ ...payload, brainDump: [...(payload.brainDump || []), newItem] });
+  };
+
+  const handleChangeFocusDuration = (minutes) => {
+    setIsTimerRunning(false);
+    const secs = minutes * 60;
+    setTimerSecondsLeft(secs);
+    setTimerMaxSeconds(secs);
   };
 
   const handleToggleMVD = (task) => {
@@ -837,6 +859,8 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap }) {
           onReset={() => { setIsTimerRunning(false); setTimerSecondsLeft(timerMaxSeconds); }}
           onDone={() => { handleToggleComplete(activeTask); setIsFocusMode(false); }}
           onExit={() => setIsFocusMode(false)}
+          onChangeDuration={handleChangeFocusDuration}
+          onAddBrainDump={handleFocusBrainDump}
         />
       )}
 
