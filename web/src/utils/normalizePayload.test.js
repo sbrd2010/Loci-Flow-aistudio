@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload } from "./normalizePayload";
+import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, prepareBrainDumpForSave } from "./normalizePayload";
 
 describe("normalizePayload", () => {
   it("fills missing brainDump with []", () => {
@@ -58,6 +58,40 @@ describe("normalizePayload", () => {
   it("returns the raw value unchanged for non-objects", () => {
     expect(normalizePayload(null)).toBeNull();
     expect(normalizePayload(undefined)).toBeUndefined();
+  });
+});
+
+describe("prepareBrainDumpForSave", () => {
+  it("preserves current Brain Dump when a save does not touch Brain Dump", () => {
+    const current = { brainDump: [{ id: "bd_1", text: "keep me" }], brainDumpUpdatedAt: 100 };
+    expect(prepareBrainDumpForSave({ tasks: [] }, current, 200)).toEqual({
+      brainDump: [{ id: "bd_1", text: "keep me" }],
+      brainDumpUpdatedAt: 100,
+    });
+  });
+
+  it("stamps brainDumpUpdatedAt when Brain Dump is intentionally cleared", () => {
+    const current = { brainDump: [{ id: "bd_1", text: "clear me" }], brainDumpUpdatedAt: 100 };
+    expect(prepareBrainDumpForSave({ brainDump: [] }, current, 200)).toEqual({
+      brainDump: [],
+      brainDumpUpdatedAt: 200,
+    });
+  });
+
+  it("rejects Focus Mode item 51 when Brain Dump is already full", () => {
+    const currentDump = Array.from({ length: BRAIN_DUMP_LIMIT }, (_, i) => ({ id: `bd_${i}`, text: `item ${i}` }));
+    const attemptedDump = [...currentDump, { id: "bd_51", text: "too much" }];
+    expect(prepareBrainDumpForSave({ brainDump: attemptedDump }, { brainDump: currentDump, brainDumpUpdatedAt: 100 }, 200)).toEqual({
+      brainDump: currentDump,
+      brainDumpUpdatedAt: 100,
+    });
+  });
+
+  it("caps oversized batch updates to the shared limit", () => {
+    const oversized = Array.from({ length: BRAIN_DUMP_LIMIT + 2 }, (_, i) => ({ id: `bd_${i}`, text: `item ${i}` }));
+    const result = prepareBrainDumpForSave({ brainDump: oversized }, { brainDump: [], brainDumpUpdatedAt: 100 }, 200);
+    expect(result.brainDump).toHaveLength(BRAIN_DUMP_LIMIT);
+    expect(result.brainDumpUpdatedAt).toBe(200);
   });
 });
 
