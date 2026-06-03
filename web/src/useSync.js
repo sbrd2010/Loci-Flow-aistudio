@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } from "firebase/database";
 import { db, auth } from "./firebase";
 import { safeUUID } from "./utils/uuid";
-import { normalizePayload, mergeRemotePayload } from "./utils/normalizePayload";
+import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload } from "./utils/normalizePayload";
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
 // This lets the app show specific messages at each stage instead of just "loading".
@@ -18,6 +18,23 @@ async function writeWithRetry(dbRef, data, retries = 3) {
       if (attempt === retries - 1) throw err;
       await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
     }
+  }
+}
+
+function arrayOrEmpty(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function finiteNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function areBrainDumpsEqual(a, b) {
+  try {
+    return JSON.stringify(arrayOrEmpty(a)) === JSON.stringify(arrayOrEmpty(b));
+  } catch {
+    return false;
   }
 }
 
@@ -192,12 +209,13 @@ export function useSync(uid, email) {
           const todayStr = toDateStr(new Date());
           const d1 = new Date(); d1.setDate(d1.getDate() - 1); const yStr = toDateStr(d1);
           const d2 = new Date(); d2.setDate(d2.getDate() - 2); const d2Str = toDateStr(d2);
+          const now = Date.now();
 
           const defaultPayload = {
             userId: email,
             tasks: [
               {
-                id: Date.now(),
+                id: now,
                 userId: email,
                 uuid: safeUUID(),
                 title: "Optimize resume for tech product role",
@@ -213,10 +231,10 @@ export function useSync(uid, email) {
                 orderIndex: 0,
                 dateCompletedString: null,
                 isDeleted: false,
-                lastUpdated: Date.now()
+                lastUpdated: now
               },
               {
-                id: Date.now() + 1,
+                id: now + 1,
                 userId: email,
                 uuid: safeUUID(),
                 title: "Prep interview answers for star technique",
@@ -232,10 +250,10 @@ export function useSync(uid, email) {
                 orderIndex: 1,
                 dateCompletedString: null,
                 isDeleted: false,
-                lastUpdated: Date.now()
+                lastUpdated: now
               },
               {
-                id: Date.now() + 2,
+                id: now + 2,
                 userId: email,
                 uuid: safeUUID(),
                 title: "Go for a brief outdoor walk to recharge dopamine",
@@ -251,7 +269,7 @@ export function useSync(uid, email) {
                 orderIndex: 2,
                 dateCompletedString: null,
                 isDeleted: false,
-                lastUpdated: Date.now()
+                lastUpdated: now
               }
             ],
             config: {
@@ -269,7 +287,7 @@ export function useSync(uid, email) {
               isOnboardingCompleted: false,
               eveningGuardWindowActive: true,
               roadmapStyle: "compact",
-              lastUpdated: Date.now()
+              lastUpdated: now
             },
             contributions: [
               {
@@ -277,18 +295,19 @@ export function useSync(uid, email) {
                 userId: email,
                 dateString: yStr,
                 count: 3,
-                lastUpdated: Date.now()
+                lastUpdated: now
               },
               {
                 compositeKey: `${email}_${d2Str}`,
                 userId: email,
                 dateString: d2Str,
                 count: 1,
-                lastUpdated: Date.now()
+                lastUpdated: now
               }
             ],
             brainDump: [],
-            timestamp: Date.now()
+            brainDumpUpdatedAt: now,
+            timestamp: now
           };
 
           setPayload(defaultPayload);
@@ -396,14 +415,37 @@ export function useSync(uid, email) {
   }, [uid, email]);
 
   const savePayload = (updatedPayload) => {
-    // Guard against brainDump being undefined — Firebase omits the key when empty,
-    // so spreading a payload received from onValue would silently drop items.
+    const currentBrainDump = arrayOrEmpty(payloadRef.current?.brainDump);
+    const incomingHasBrainDump = updatedPayload.brainDump !== undefined;
+    let nextBrainDump = incomingHasBrainDump
+      ? arrayOrEmpty(updatedPayload.brainDump)
+      : currentBrainDump;
+
+    // Enforce the same Brain Dump limit for every save path, including Focus Mode.
+    // If a stale UI tries to append item 51, keep the current 50 instead of writing
+    // a larger array that would later be difficult to reason about across devices.
+    if (incomingHasBrainDump && nextBrainDump.length > BRAIN_DUMP_LIMIT) {
+      if (currentBrainDump.length >= BRAIN_DUMP_LIMIT && nextBrainDump.length > currentBrainDump.length) {
+        nextBrainDump = currentBrainDump;
+      } else {
+        nextBrainDump = nextBrainDump.slice(0, BRAIN_DUMP_LIMIT);
+      }
+    }
+
+    const brainDumpChanged = incomingHasBrainDump && !areBrainDumpsEqual(nextBrainDump, currentBrainDump);
+    const requestedBrainDumpUpdatedAt = finiteNumber(updatedPayload.brainDumpUpdatedAt);
+    const currentBrainDumpUpdatedAt = finiteNumber(payloadRef.current?.brainDumpUpdatedAt);
     const safePayload = {
       ...updatedPayload,
-      brainDump: updatedPayload.brainDump !== undefined
-        ? updatedPayload.brainDump
-        : (payloadRef.current?.brainDump || []),
+      brainDump: nextBrainDump,
     };
+
+    if (brainDumpChanged) {
+      safePayload.brainDumpUpdatedAt = Date.now();
+    } else if (requestedBrainDumpUpdatedAt !== null || currentBrainDumpUpdatedAt !== null) {
+      safePayload.brainDumpUpdatedAt = requestedBrainDumpUpdatedAt ?? currentBrainDumpUpdatedAt;
+    }
+
     const nextPayload = { ...normalizePayload(safePayload), timestamp: Date.now() };
     setPayload(nextPayload);
     payloadRef.current = nextPayload;
