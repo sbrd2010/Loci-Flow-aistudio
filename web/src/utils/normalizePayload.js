@@ -21,6 +21,14 @@ function hasOwn(obj, key) {
   return Object.prototype.hasOwnProperty.call(obj, key);
 }
 
+function brainDumpsEqual(a, b) {
+  try {
+    return JSON.stringify(arrayOrEmpty(a)) === JSON.stringify(arrayOrEmpty(b));
+  } catch {
+    return false;
+  }
+}
+
 function inferBrainDumpUpdatedAt(raw, brainDump) {
   const explicit = finiteNumber(raw.brainDumpUpdatedAt);
   if (explicit !== null) return explicit;
@@ -46,6 +54,35 @@ export function normalizePayload(raw) {
     brainDump,
     brainDumpUpdatedAt: inferBrainDumpUpdatedAt(raw, brainDump),
   };
+}
+
+export function prepareBrainDumpForSave(updatedPayload = {}, currentPayload = {}, now = Date.now()) {
+  const currentBrainDump = arrayOrEmpty(currentPayload?.brainDump);
+  const incomingHasBrainDump = updatedPayload?.brainDump !== undefined;
+  let nextBrainDump = incomingHasBrainDump
+    ? arrayOrEmpty(updatedPayload.brainDump)
+    : currentBrainDump;
+
+  if (incomingHasBrainDump && nextBrainDump.length > BRAIN_DUMP_LIMIT) {
+    if (currentBrainDump.length >= BRAIN_DUMP_LIMIT && nextBrainDump.length > currentBrainDump.length) {
+      nextBrainDump = currentBrainDump;
+    } else {
+      nextBrainDump = nextBrainDump.slice(0, BRAIN_DUMP_LIMIT);
+    }
+  }
+
+  const patch = { brainDump: nextBrainDump };
+  const brainDumpChanged = incomingHasBrainDump && !brainDumpsEqual(nextBrainDump, currentBrainDump);
+  const requestedBrainDumpUpdatedAt = finiteNumber(updatedPayload?.brainDumpUpdatedAt);
+  const currentBrainDumpUpdatedAt = finiteNumber(currentPayload?.brainDumpUpdatedAt);
+
+  if (brainDumpChanged) {
+    patch.brainDumpUpdatedAt = now;
+  } else if (requestedBrainDumpUpdatedAt !== null || currentBrainDumpUpdatedAt !== null) {
+    patch.brainDumpUpdatedAt = requestedBrainDumpUpdatedAt ?? currentBrainDumpUpdatedAt;
+  }
+
+  return patch;
 }
 
 // Applies a payload received from RTDB on top of the currently-held local payload.
