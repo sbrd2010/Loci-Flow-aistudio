@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } from "firebase/database";
 import { db, auth } from "./firebase";
 import { safeUUID } from "./utils/uuid";
-import { normalizePayload, mergeRemotePayload } from "./utils/normalizePayload";
+import { normalizePayload, mergeRemotePayload, prepareBrainDumpForSave } from "./utils/normalizePayload";
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
 // This lets the app show specific messages at each stage instead of just "loading".
@@ -192,12 +192,13 @@ export function useSync(uid, email) {
           const todayStr = toDateStr(new Date());
           const d1 = new Date(); d1.setDate(d1.getDate() - 1); const yStr = toDateStr(d1);
           const d2 = new Date(); d2.setDate(d2.getDate() - 2); const d2Str = toDateStr(d2);
+          const now = Date.now();
 
           const defaultPayload = {
             userId: email,
             tasks: [
               {
-                id: Date.now(),
+                id: now,
                 userId: email,
                 uuid: safeUUID(),
                 title: "Optimize resume for tech product role",
@@ -213,10 +214,10 @@ export function useSync(uid, email) {
                 orderIndex: 0,
                 dateCompletedString: null,
                 isDeleted: false,
-                lastUpdated: Date.now()
+                lastUpdated: now
               },
               {
-                id: Date.now() + 1,
+                id: now + 1,
                 userId: email,
                 uuid: safeUUID(),
                 title: "Prep interview answers for star technique",
@@ -232,10 +233,10 @@ export function useSync(uid, email) {
                 orderIndex: 1,
                 dateCompletedString: null,
                 isDeleted: false,
-                lastUpdated: Date.now()
+                lastUpdated: now
               },
               {
-                id: Date.now() + 2,
+                id: now + 2,
                 userId: email,
                 uuid: safeUUID(),
                 title: "Go for a brief outdoor walk to recharge dopamine",
@@ -251,7 +252,7 @@ export function useSync(uid, email) {
                 orderIndex: 2,
                 dateCompletedString: null,
                 isDeleted: false,
-                lastUpdated: Date.now()
+                lastUpdated: now
               }
             ],
             config: {
@@ -269,7 +270,7 @@ export function useSync(uid, email) {
               isOnboardingCompleted: false,
               eveningGuardWindowActive: true,
               roadmapStyle: "compact",
-              lastUpdated: Date.now()
+              lastUpdated: now
             },
             contributions: [
               {
@@ -277,18 +278,19 @@ export function useSync(uid, email) {
                 userId: email,
                 dateString: yStr,
                 count: 3,
-                lastUpdated: Date.now()
+                lastUpdated: now
               },
               {
                 compositeKey: `${email}_${d2Str}`,
                 userId: email,
                 dateString: d2Str,
                 count: 1,
-                lastUpdated: Date.now()
+                lastUpdated: now
               }
             ],
             brainDump: [],
-            timestamp: Date.now()
+            brainDumpUpdatedAt: now,
+            timestamp: now
           };
 
           setPayload(defaultPayload);
@@ -396,14 +398,8 @@ export function useSync(uid, email) {
   }, [uid, email]);
 
   const savePayload = (updatedPayload) => {
-    // Guard against brainDump being undefined — Firebase omits the key when empty,
-    // so spreading a payload received from onValue would silently drop items.
-    const safePayload = {
-      ...updatedPayload,
-      brainDump: updatedPayload.brainDump !== undefined
-        ? updatedPayload.brainDump
-        : (payloadRef.current?.brainDump || []),
-    };
+    const brainDumpPatch = prepareBrainDumpForSave(updatedPayload, payloadRef.current);
+    const safePayload = { ...updatedPayload, ...brainDumpPatch };
     const nextPayload = { ...normalizePayload(safePayload), timestamp: Date.now() };
     setPayload(nextPayload);
     payloadRef.current = nextPayload;

@@ -72,6 +72,14 @@ function validSyncPayload(user) {
       userId: user.email,
       userName: "Rules Test User"
     },
+    brainDump: [
+      {
+        id: `bd-${randomUUID()}`,
+        text: "Rules test thought",
+        createdAt: Date.now()
+      }
+    ],
+    brainDumpUpdatedAt: Date.now(),
     timestamp: Date.now()
   };
 }
