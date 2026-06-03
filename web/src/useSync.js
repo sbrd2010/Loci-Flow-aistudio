@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } from "firebase/database";
 import { db, auth } from "./firebase";
 import { safeUUID } from "./utils/uuid";
+import { normalizePayload, mergeRemotePayload } from "./utils/normalizePayload";
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
 // This lets the app show specific messages at each stage instead of just "loading".
@@ -82,7 +83,8 @@ export function useSync(uid, email) {
     const userRef = ref(db, dbRefPath);
 
     // Load from localStorage cache immediately — app is usable in <100ms on return visits.
-    const cached = readCache(uid);
+    const rawCached = readCache(uid);
+    const cached = rawCached ? normalizePayload(rawCached) : null;
     const hasCachedData = !!cached;
     if (hasCachedData) {
       setPayload(cached);
@@ -153,10 +155,11 @@ export function useSync(uid, email) {
           // prevents a stale long-poll snapshot (e.g. after Brave reconnects) from
           // overwriting optimistic updates that haven't reached Firebase yet.
           if ((data.timestamp || 0) >= (payloadRef.current?.timestamp || 0)) {
-            setPayload(data);
-            payloadRef.current = data;
+            const merged = mergeRemotePayload(data, payloadRef.current);
+            setPayload(merged);
+            payloadRef.current = merged;
             pendingRemoteRef.current = null;
-            writeCache(uid, data);
+            writeCache(uid, merged);
           } else {
             // Local cache is newer than what RTDB delivered — the app was likely
             // killed before the last debounced write completed. Push local state
@@ -385,7 +388,7 @@ export function useSync(uid, email) {
       const uidPath = `sync/${uid}`;
       get(ref(db, uidPath)).then(uidSnap => {
         if (uidSnap.val()) return;
-        set(ref(db, uidPath), { ...legacyData, userId: uid }).then(() => {
+        set(ref(db, uidPath), normalizePayload({ ...legacyData, userId: uid })).then(() => {
           console.log("Migration: legacy data copied to uid path");
         }).catch(err => console.error("Migration write failed:", err));
       });
@@ -393,7 +396,15 @@ export function useSync(uid, email) {
   }, [uid, email]);
 
   const savePayload = (updatedPayload) => {
-    const nextPayload = { ...updatedPayload, timestamp: Date.now() };
+    // Guard against brainDump being undefined — Firebase omits the key when empty,
+    // so spreading a payload received from onValue would silently drop items.
+    const safePayload = {
+      ...updatedPayload,
+      brainDump: updatedPayload.brainDump !== undefined
+        ? updatedPayload.brainDump
+        : (payloadRef.current?.brainDump || []),
+    };
+    const nextPayload = { ...normalizePayload(safePayload), timestamp: Date.now() };
     setPayload(nextPayload);
     payloadRef.current = nextPayload;
 
@@ -416,9 +427,10 @@ export function useSync(uid, email) {
               const remote = pendingRemoteRef.current;
               pendingRemoteRef.current = null;
               if ((remote.timestamp || 0) >= (payloadRef.current?.timestamp || 0)) {
-                setPayload(remote);
-                payloadRef.current = remote;
-                if (uid) writeCache(uid, remote);
+                const merged = mergeRemotePayload(remote, payloadRef.current);
+                setPayload(merged);
+                payloadRef.current = merged;
+                if (uid) writeCache(uid, merged);
               }
             }
           });
