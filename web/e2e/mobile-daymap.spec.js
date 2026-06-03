@@ -1,0 +1,102 @@
+import { test, expect } from "@playwright/test";
+
+// Mobile reliability smoke tests run in demo mode so they never mutate Firebase.
+// They protect the small-screen Day Map path before v0.1 is shared with 5-10 testers.
+
+const MOBILE_VIEWPORTS = [
+  { name: "iPhone 11 Pro", width: 375, height: 812 },
+  { name: "Pixel 6a", width: 412, height: 915 },
+  { name: "Tablet portrait", width: 768, height: 1024 },
+];
+
+async function enterDemo(page, viewport) {
+  await page.setViewportSize({ width: viewport.width, height: viewport.height });
+  await page.goto("/");
+  await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
+  await expect(page.getByTestId("demo-btn")).toBeVisible({ timeout: 25_000 });
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+}
+
+async function openDayMap(page) {
+  const dayMapButton = page.locator("button.stuck-btn", { hasText: "Day Map" });
+  await expect(dayMapButton).toBeVisible({ timeout: 8_000 });
+  await dayMapButton.click();
+  await expect(page.getByRole("heading", { name: "Day Map" })).toBeVisible({ timeout: 8_000 });
+}
+
+async function autoFillDayMap(page) {
+  const autoFill = page.getByRole("button", { name: "Auto-fill" });
+  await expect(autoFill).toBeEnabled({ timeout: 5_000 });
+  await autoFill.click();
+  await expect(page.getByText("3 / 3")).toBeVisible({ timeout: 5_000 });
+}
+
+async function expectNoHorizontalOverflow(page) {
+  const widths = await page.evaluate(() => {
+    const measured = [
+      document.documentElement.scrollWidth,
+      document.body?.scrollWidth || 0,
+    ];
+    document.querySelectorAll(".app-container, .screen-content, .day-map-page, .dm-timeline").forEach((el) => {
+      measured.push(el.scrollWidth);
+    });
+    return {
+      innerWidth: window.innerWidth,
+      maxScrollWidth: Math.max(...measured),
+    };
+  });
+
+  expect(widths.maxScrollWidth).toBeLessThanOrEqual(widths.innerWidth + 8);
+}
+
+for (const viewport of MOBILE_VIEWPORTS) {
+  test(`mobile reliability: Today and Day Map do not overflow on ${viewport.name}`, async ({ page }) => {
+    await enterDemo(page, viewport);
+
+    await expect(page.getByTestId("today-tasks-list")).toBeVisible({ timeout: 8_000 });
+    await expectNoHorizontalOverflow(page);
+
+    await openDayMap(page);
+    await expectNoHorizontalOverflow(page);
+
+    await autoFillDayMap(page);
+    await expect(page.getByText("10:00 AM").first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText("6:00 AM")).not.toBeVisible();
+    await expect(page.getByText("End of route")).toBeVisible({ timeout: 5_000 });
+    await expectNoHorizontalOverflow(page);
+  });
+}
+
+test("reliability: Day Map route persists after closing and reopening", async ({ page }) => {
+  await enterDemo(page, { width: 412, height: 915 });
+
+  await openDayMap(page);
+  await autoFillDayMap(page);
+  await expect(page.getByText("10:00 AM").first()).toBeVisible({ timeout: 5_000 });
+
+  await page.getByRole("button", { name: "Back" }).click();
+  await expect(page.locator("button.stuck-btn", { hasText: "Day Map 3/3" })).toBeVisible({ timeout: 5_000 });
+
+  await openDayMap(page);
+  await expect(page.getByText("3 / 3")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText("10:00 AM").first()).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText("End of route")).toBeVisible({ timeout: 5_000 });
+  await expectNoHorizontalOverflow(page);
+});
+
+test("reliability: removing a Day Map task reflows the remaining route", async ({ page }) => {
+  await enterDemo(page, { width: 375, height: 812 });
+
+  await openDayMap(page);
+  await autoFillDayMap(page);
+
+  const removeButtons = page.getByRole("button", { name: "Remove from route" });
+  expect(await removeButtons.count()).toBeGreaterThan(0);
+  await removeButtons.first().click();
+
+  await expect(page.getByText("2 / 3")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText("10:00 AM").first()).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText("6:00 AM")).not.toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
