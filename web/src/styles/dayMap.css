@@ -821,6 +821,11 @@
   border-color: var(--accent);
 }
 
+.day-map-anchor-select option {
+  background-color: #1a1c24;
+  color: #e8eeff;
+}
+
 .day-map-now-btn {
   min-height: 34px;
   padding: 6px 14px;

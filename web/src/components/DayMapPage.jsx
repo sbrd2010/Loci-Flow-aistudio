@@ -121,32 +121,25 @@ function PriorityBadge({ priority }) {
 }
 
 function SummaryCard({ placed, total, totalDuration, anchorMinutes }) {
+  const pct = total > 0 ? Math.round((placed / total) * 100) : 0;
   const nowMins = currentDayMinutes();
-  let status = "Plan ahead";
-  let statusClass = "neutral";
-  if (placed > 0) {
-    if (anchorMinutes <= nowMins + 45) {
-      status = "On Track";
-      statusClass = "good";
-    } else {
-      status = "Not started";
-    }
-  }
+  const isOnTrack = placed > 0 && anchorMinutes <= nowMins + 45;
+  const statusLabel = placed === 0 ? "Plan ahead" : isOnTrack ? "On Track" : "Not started";
+
   return (
-    <div className="dm-summary">
-      <div className="dm-summary-stat">
-        <div className="dm-summary-key">Tasks</div>
-        <div className="dm-summary-val">{placed} / {total}</div>
+    <div className="dm-header-bar">
+      <div className="dm-progress-track">
+        <div className="dm-progress-fill" style={{ width: `${pct}%` }} />
       </div>
-      <div className="dm-summary-sep" />
-      <div className="dm-summary-stat">
-        <div className="dm-summary-key">Planned</div>
-        <div className="dm-summary-val">{totalDuration > 0 ? formatDuration(totalDuration) : "—"}</div>
-      </div>
-      <div className="dm-summary-sep" />
-      <div className="dm-summary-stat">
-        <div className="dm-summary-key">Status</div>
-        <div className={`dm-summary-val dm-status-${statusClass}`}>{status}</div>
+      <div className="dm-header-meta">
+        <span>
+          <span className="dm-meta-val">{placed}</span>
+          <span className="dm-meta-dim"> / {total} tasks</span>
+        </span>
+        {totalDuration > 0 && <span className="dm-meta-dim">·</span>}
+        {totalDuration > 0 && <span className="dm-meta-val">{formatDuration(totalDuration)}</span>}
+        <span className="dm-meta-dim">·</span>
+        <span className={isOnTrack ? "dm-status-good" : "dm-status-neutral"}>{statusLabel}</span>
       </div>
     </div>
   );
@@ -250,14 +243,15 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
 
 
 function AnchorControl({ anchorMinutes, onStartFromNow, onChangeAnchor }) {
-  const now = roundToQuarter(currentDayMinutes());
-  const isAlreadyNow = Math.abs(anchorMinutes - now) < 15;
+  const actualNow = currentDayMinutes();
+  const nextQuarter = roundToQuarter(actualNow);
+  const isAlreadyNow = Math.abs(anchorMinutes - actualNow) < 2;
 
-  const options = [];
-  for (let m = now; m <= now + 600 && m < 1440; m += 15) {
-    options.push(m);
+  const options = [actualNow];
+  for (let m = nextQuarter; m <= actualNow + 600 && m < 1440; m += 15) {
+    if (m !== actualNow) options.push(m);
   }
-  if (anchorMinutes >= now && !options.includes(anchorMinutes)) {
+  if (!options.includes(anchorMinutes) && anchorMinutes >= actualNow) {
     options.push(anchorMinutes);
     options.sort((a, b) => a - b);
   }
@@ -273,7 +267,7 @@ function AnchorControl({ anchorMinutes, onStartFromNow, onChangeAnchor }) {
       >
         {options.map(m => (
           <option key={m} value={m}>
-            {formatClock(m)}{m === now ? " (now)" : ""}
+            {formatClock(m)}{m === actualNow ? " (now)" : ""}
           </option>
         ))}
       </select>
@@ -360,7 +354,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
   // Anchor: config-persisted → inferred from first scheduled task → current time
   // Clamp to now so a stored past value never produces a past start time.
   const anchorMinutes = useMemo(() => {
-    const now = roundToQuarter(currentDayMinutes());
+    const now = currentDayMinutes();
     if (config.dayMapDate === todayStr && config.dayMapAnchorMinutes != null) {
       return Math.max(now, Number(config.dayMapAnchorMinutes));
     }
@@ -402,7 +396,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
   }, [scheduledTasks, anchorMinutes, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startFromNow = () => {
-    const now = roundToQuarter(currentDayMinutes());
+    const now = currentDayMinutes();
     applyAndSave(scheduledTasks, now, { dayMapDate: todayStr, dayMapAnchorMinutes: now });
   };
 
