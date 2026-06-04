@@ -2,49 +2,46 @@
    Day Map — Timeline Route (premium dark glass)
    ================================================================ */
 
-/* ── Summary card ────────────────────────────────────────────────── */
+/* ── Compact header: progress bar + single-line meta ─────────────── */
 
-.dm-summary {
+.dm-header-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dm-progress-track {
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.dm-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #6366f1, #818cf8);
+  transition: width 0.4s ease;
+}
+
+.dm-header-meta {
   display: flex;
   align-items: center;
-  padding: 12px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.dm-summary-stat {
-  flex: 1;
-  min-width: 0;
-  text-align: center;
-}
-
-.dm-summary-key {
+  gap: 6px;
   font-family: var(--font-sans);
-  font-size: 10px;
-  font-weight: 900;
-  color: rgba(232, 238, 255, 0.42);
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(232, 238, 255, 0.55);
+  flex-wrap: wrap;
 }
 
-.dm-summary-val {
-  font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 900;
-  color: #e8eeff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.dm-meta-val {
+  color: rgba(232, 238, 255, 0.90);
+  font-weight: 800;
 }
 
-.dm-summary-sep {
-  width: 1px;
-  align-self: stretch;
-  background: rgba(255, 255, 255, 0.09);
-  margin: 2px 0;
-  flex-shrink: 0;
+.dm-meta-dim {
+  color: rgba(232, 238, 255, 0.30);
 }
 
 .dm-status-good    { color: #4ade80; }
@@ -475,11 +472,9 @@
   .dm-card-main  { padding: 7px 4px 7px 8px; gap: 4px; }
   .dm-card-title { font-size: 12px; }
   .dm-now-badge  { font-size: 8px; padding: 1px 6px; }
-  .dm-summary-val { font-size: 13px; }
 }
 
 @media (max-width: 374px) {
-  .dm-summary-key { font-size: 9px; letter-spacing: 0.06em; }
   .dm-stop-time   { padding-right: 4px; }
   .dm-card        { margin-left: 5px; }
 }
