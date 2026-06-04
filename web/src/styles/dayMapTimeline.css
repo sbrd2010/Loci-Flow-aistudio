@@ -2,38 +2,7 @@
    Day Map — Timeline Route (premium dark glass)
    ================================================================ */
 
-/* ── Compact header: progress bar + single-line meta ─────────────── */
-
-.dm-header-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.dm-progress-track {
-  height: 3px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-}
-
-.dm-progress-fill {
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #6366f1, #818cf8);
-  transition: width 0.4s ease;
-}
-
-.dm-header-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 700;
-  color: rgba(232, 238, 255, 0.55);
-  flex-wrap: wrap;
-}
+/* ── Shared meta tokens (used in topbar title-meta) ──────────────── */
 
 .dm-meta-val {
   color: rgba(232, 238, 255, 0.90);
@@ -41,7 +10,7 @@
 }
 
 .dm-meta-dim {
-  color: rgba(232, 238, 255, 0.30);
+  color: rgba(232, 238, 255, 0.35);
 }
 
 .dm-status-good    { color: #4ade80; }
@@ -91,7 +60,7 @@
   font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 900;
-  color: rgba(232, 238, 255, 0.36);
+  color: rgba(232, 238, 255, 0.62);
   text-transform: uppercase;
   letter-spacing: 0.12em;
   padding-left: 10px;
@@ -125,17 +94,17 @@
 
 .dm-time-hm {
   font-family: var(--font-mono, "Space Mono", "Courier New", monospace);
-  font-size: 12px;
-  font-weight: 700;
-  color: rgba(232, 238, 255, 0.85);
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(232, 238, 255, 0.95);
   white-space: nowrap;
 }
 
 .dm-time-ampm {
   font-family: var(--font-mono, "Space Mono", "Courier New", monospace);
-  font-size: 9px;
-  font-weight: 600;
-  color: rgba(232, 238, 255, 0.52);
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(232, 238, 255, 0.68);
 }
 
 .dm-stop-end .dm-stop-time {
@@ -212,7 +181,7 @@
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 700;
-  color: rgba(232, 238, 255, 0.30);
+  color: rgba(232, 238, 255, 0.55);
   padding-left: 10px;
 }
 
@@ -325,7 +294,7 @@
   font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 800;
-  color: rgba(232, 238, 255, 0.45);
+  color: rgba(232, 238, 255, 0.68);
   white-space: nowrap;
 }
 
@@ -432,6 +401,11 @@
   cursor: pointer;
 }
 
+.dm-edit-label select option {
+  background-color: #1a1c24;
+  color: #e8eeff;
+}
+
 /* Action icon buttons (↑ ↓ × in expanded panel) */
 .dm-btn-icon {
   width: 36px;
@@ -477,4 +451,45 @@
 @media (max-width: 374px) {
   .dm-stop-time   { padding-right: 4px; }
   .dm-card        { margin-left: 5px; }
+}
+
+/* ── NOW card subtle glow ────────────────────────────────────────── */
+
+.dm-card.dm-card-is-now {
+  box-shadow: 0 3px 20px rgba(99, 102, 241, 0.20), 0 0 0 1px rgba(99, 102, 241, 0.18);
+}
+
+/* ── Card row: wraps main + focus btn, stacks on mobile, row on desktop ── */
+
+.dm-card-row {
+  display: block;
+}
+
+@media (min-width: 768px) {
+  .dm-card-row {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .dm-card-row .dm-card-main {
+    flex: 1;
+  }
+
+  .dm-card-row .dm-focus-row {
+    flex-shrink: 0;
+    padding: 6px 8px 6px 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .dm-card-row .dm-focus-btn {
+    width: auto;
+    min-height: 0;
+    height: 100%;
+    padding: 0 18px;
+    white-space: nowrap;
+    font-size: 12px;
+    border-radius: 7px;
+  }
 }
