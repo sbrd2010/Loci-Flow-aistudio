@@ -921,22 +921,23 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-primary);
 }
 
-/* Day Map launcher button — always visually distinct with indigo pulse */
+/* Day Map launcher button — solid indigo pill, clearly distinct from other stuck-btns */
 .day-map-nav-btn {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(129, 140, 248, 0.08)) !important;
-  border-color: rgba(99, 102, 241, 0.42) !important;
+  background: rgba(79, 70, 229, 0.38) !important;
+  border-color: rgba(99, 102, 241, 0.70) !important;
   color: #ffffff !important;
   animation: day-map-btn-glow 2.8s ease-in-out infinite;
 }
 
 .day-map-nav-btn.has-tasks {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.28), rgba(129, 140, 248, 0.15)) !important;
-  border-color: rgba(99, 102, 241, 0.60) !important;
+  background: rgba(79, 70, 229, 0.55) !important;
+  border-color: rgba(99, 102, 241, 0.88) !important;
   color: #ffffff !important;
 }
 
 .day-map-nav-btn:hover {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(129, 140, 248, 0.22)) !important;
+  background: rgba(79, 70, 229, 0.68) !important;
+  border-color: rgba(99, 102, 241, 1.0) !important;
   color: #ffffff !important;
 }
 
