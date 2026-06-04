@@ -1,9 +1,12 @@
+import { auth } from "../firebase";
+import { appendAIUsageWarning, checkAndRecordAIUsage } from "./aiUsageLimits";
+
 const GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 
 /**
- * Unified AI call — prefers Groq (fast, free) over Gemini.
+ * Unified AI call - prefers Groq (fast, free) over Gemini.
  * messages: [{ role: "user"|"assistant", content: string }]
  */
 const AI_TIMEOUT_MS = 30000;
@@ -12,6 +15,16 @@ function fetchWithTimeout(url, opts) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
   return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(id));
+}
+
+function statusError(provider, status) {
+  // CoachTab already maps plain 429/503 to friendly messages.
+  if (status === 429 || status === 503) return new Error(String(status));
+  return new Error(`${provider}_${status}`);
+}
+
+function getAIUsageUserId() {
+  return auth?.currentUser?.uid || auth?.currentUser?.email || "signed-out";
 }
 
 async function callGroq(groqKey, systemPrompt, messages, maxTokens) {
@@ -28,7 +41,7 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens) {
       temperature: 0.8
     })
   });
-  if (!res.ok) throw new Error(`groq_${res.status}`);
+  if (!res.ok) throw statusError("groq", res.status);
   const data = await res.json();
   const reply = data.choices?.[0]?.message?.content || "";
   if (!reply) throw new Error("groq_empty");
@@ -36,7 +49,7 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens) {
 }
 
 async function callGemini(geminiKey, systemPrompt, messages) {
-  // Gemini requires contents to start with "user" role — strip leading AI messages
+  // Gemini requires contents to start with "user" role - strip leading AI messages
   let contents = messages.map(m => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }]
@@ -53,7 +66,7 @@ async function callGemini(geminiKey, systemPrompt, messages) {
       contents
     })
   });
-  if (!res.ok) throw new Error(`gemini_${res.status}`);
+  if (!res.ok) throw statusError("gemini", res.status);
   const data = await res.json();
   const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
   if (!reply) throw new Error("gemini_empty");
@@ -64,18 +77,29 @@ export async function callAI({ groqKey, geminiKey, systemPrompt, messages, maxTo
   const cleanGroqKey = (groqKey || "").trim();
   const cleanGeminiKey = (geminiKey || "").trim();
 
+  if (!cleanGroqKey && !cleanGeminiKey) {
+    throw new Error("no_key");
+  }
+
+  const usage = checkAndRecordAIUsage({ userId: getAIUsageUserId() });
+  if (!usage.allowed) {
+    return usage.message;
+  }
+
   if (cleanGroqKey) {
     try {
-      return await callGroq(cleanGroqKey, systemPrompt, messages, maxTokens);
+      const reply = await callGroq(cleanGroqKey, systemPrompt, messages, maxTokens);
+      return appendAIUsageWarning(reply, usage.warning);
     } catch (err) {
-      // Rate-limited or quota exhausted — fall through to Gemini if available
+      // Rate-limited or quota exhausted - fall through to Gemini if available
       if (!cleanGeminiKey) throw err;
       console.warn("Groq failed, falling back to Gemini:", err.message);
     }
   }
 
   if (cleanGeminiKey) {
-    return await callGemini(cleanGeminiKey, systemPrompt, messages);
+    const reply = await callGemini(cleanGeminiKey, systemPrompt, messages);
+    return appendAIUsageWarning(reply, usage.warning);
   }
 
   throw new Error("no_key");
