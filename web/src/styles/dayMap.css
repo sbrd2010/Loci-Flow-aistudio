@@ -881,19 +881,33 @@
   /* 3. Topbar: title grows, back button stays compact on the right */
   .day-map-topbar { grid-template-columns: 1fr auto; }
 
-  /* Back button: compact pill */
+  /* Back button: icon-only on mobile ("←" without the word "Back") */
   .day-map-back {
-    min-height: 30px;
-    padding: 4px 10px;
-    font-size: 12px;
+    min-height: 28px;
+    padding: 3px 9px;
+    font-size: 14px;
     border-radius: 7px;
   }
+  .day-map-back-word { display: none; }
 
-  /* 5. Anchor bar: single-line, tighter */
-  .day-map-anchor-bar { gap: 5px; padding: 7px 10px; flex-wrap: nowrap; }
-  .day-map-anchor-label { font-size: 10px; white-space: nowrap; }
-  .day-map-anchor-select { min-width: 84px; height: 30px; font-size: 11px; }
-  .day-map-action-btn { min-height: 30px; padding: 4px 8px; font-size: 11px; }
+  /* 5. Anchor bar: all on one line, tighter */
+  .day-map-anchor-bar { gap: 5px; padding: 6px 10px; flex-wrap: nowrap; align-items: center; }
+
+  /* "Starting" on line 1, "from" wraps to line 2 → narrower label, more room for select + buttons */
+  .day-map-anchor-label {
+    font-size: 10px;
+    font-weight: 400;
+    white-space: normal;
+    max-width: 5em;
+    line-height: 1.3;
+  }
+  .day-map-anchor-select { min-width: 80px; height: 28px; font-size: 11px; font-weight: 400; }
+  .day-map-action-btn { min-height: 28px; padding: 3px 8px; font-size: 10px; font-weight: 600; }
+  .day-map-now-btn { min-height: 28px; padding: 3px 8px; font-size: 10px; }
+
+  /* Unscheduled task chips: regular weight, tighter */
+  .day-map-chip-title { font-weight: 400; font-size: 12px; }
+  .day-map-chip-duration { font-weight: 400; font-size: 10px; }
 }
 
 /* ================================================================

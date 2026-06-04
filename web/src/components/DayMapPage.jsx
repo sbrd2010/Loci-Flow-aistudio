@@ -250,14 +250,15 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
 }
 
 function AnchorControl({ anchorMinutes, onStartFromNow, onChangeAnchor, onAutoFill, onClear, canAutoFill, canClear }) {
-  const now = roundToQuarter(currentDayMinutes());
-  const isAlreadyNow = Math.abs(anchorMinutes - now) <= 1;
+  const actualNow = currentDayMinutes();
+  const nextQuarter = Math.ceil(actualNow / 15) * 15;
+  const isAlreadyNow = Math.abs(anchorMinutes - actualNow) <= 2;
 
-  const options = [];
-  for (let m = now; m <= now + 600 && m < 1440; m += 15) {
-    options.push(m);
+  const options = [actualNow];
+  for (let m = nextQuarter; m <= actualNow + 600 && m < 1440; m += 15) {
+    if (m !== actualNow) options.push(m);
   }
-  if (!options.includes(anchorMinutes) && anchorMinutes >= now) {
+  if (!options.includes(anchorMinutes) && anchorMinutes > actualNow) {
     options.push(anchorMinutes);
     options.sort((a, b) => a - b);
   }
@@ -273,7 +274,7 @@ function AnchorControl({ anchorMinutes, onStartFromNow, onChangeAnchor, onAutoFi
       >
         {options.map(m => (
           <option key={m} value={m}>
-            {formatClock(m)}{m === now ? " (now)" : ""}
+            {formatClock(m)}{m === actualNow ? " (now)" : ""}
           </option>
         ))}
       </select>
@@ -363,7 +364,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
   // Anchor: config-persisted → inferred from first scheduled task → current time
   // Clamp to now so a stored past value never produces a past start time.
   const anchorMinutes = useMemo(() => {
-    const now = roundToQuarter(currentDayMinutes());
+    const now = currentDayMinutes();
     if (config.dayMapDate === todayStr && config.dayMapAnchorMinutes != null) {
       return Math.max(now, Number(config.dayMapAnchorMinutes));
     }
@@ -405,7 +406,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
   }, [scheduledTasks, anchorMinutes, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startFromNow = () => {
-    const now = roundToQuarter(currentDayMinutes());
+    const now = currentDayMinutes();
     applyAndSave(scheduledTasks, now, { dayMapDate: todayStr, dayMapAnchorMinutes: now });
   };
 
@@ -507,7 +508,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
             <span className="dm-word-map">Map</span>
           </h1>
         </div>
-        <button type="button" className="day-map-back" onClick={() => { flushNow(); onClose(); }}>← Back</button>
+        <button type="button" className="day-map-back" aria-label="← Back" onClick={() => { flushNow(); onClose(); }}>←<span className="day-map-back-word"> Back</span></button>
       </div>
 
       {activeTodayTasks.length === 0 ? (
