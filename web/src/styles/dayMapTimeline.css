@@ -563,3 +563,45 @@
     border-radius: 7px;
   }
 }
+
+/* ================================================================
+   Mobile-only overrides (≤640 px) — Pixel 6a / iPhone 11 Pro
+   Must appear after the ≤560 px block so these win on small screens.
+   ================================================================ */
+
+@media (max-width: 640px) {
+  /* 4. Compact summary card */
+  .dm-summary-card  { padding: 6px 10px; }
+  .dm-summary-stat  { padding: 1px 3px; }
+  .dm-summary-primary { font-size: 14px; }
+  .dm-summary-key   { font-size: 7.5px; letter-spacing: 0.08em; margin-bottom: 2px; }
+  .dm-summary-unit  { font-size: 7.5px; }
+
+  /* 6+7. Narrower time/spine columns → more horizontal room for cards */
+  .dm-stop { grid-template-columns: 40px 18px 1fr; }
+
+  /* Slightly tighter card body */
+  .dm-card-main { padding: 5px 4px 5px 8px; min-height: 34px; }
+
+  /* Lighter title weight + allow 2-line wrap instead of hard truncation */
+  .dm-card-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: unset;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  /* Subtitle: single-line clamp */
+  .dm-card-step {
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: unset;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+  }
+}

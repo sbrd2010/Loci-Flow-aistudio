@@ -201,12 +201,18 @@
   text-shadow: 0 0 22px rgba(255, 255, 255, 0.12);
 }
 
+/* Option A spans: both inherit the white tone */
+.day-map-title-option-a .dm-word-day,
+.day-map-title-option-a .dm-word-map {
+  color: rgba(255, 255, 255, 0.94);
+}
+
 /* ── Option B: gold "Day" + silver "Map" ───────────────── */
 .day-map-title-option-b {
   font-weight: 700;
 }
 
-.opt-b-day {
+.day-map-title-option-b .dm-word-day {
   color: #E8A820;
   text-decoration: underline;
   text-decoration-color: rgba(232, 168, 32, 0.55);
@@ -214,7 +220,7 @@
   text-decoration-thickness: 2px;
 }
 
-.opt-b-map {
+.day-map-title-option-b .dm-word-map {
   color: #A8B4C0;
 }
 
@@ -845,6 +851,49 @@
   .day-map-anchor-bar {
     flex-wrap: nowrap;
   }
+}
+
+/* ================================================================
+   Mobile-only overrides (≤640 px) — Pixel 6a / iPhone 11 Pro
+   ================================================================ */
+
+@media (max-width: 640px) {
+  /* 1. Hide "TODAY" eyebrow label */
+  .day-map-title-toprow > span { display: none; }
+
+  /* 2. Hide A/B toggle; force Option B appearance regardless of selection */
+  .day-map-ab-toggle { display: none; }
+
+  .day-map-title-option-a {
+    font-weight: 700;
+    color: inherit;
+    text-shadow: none;
+  }
+  .day-map-title-option-a .dm-word-day {
+    color: #E8A820;
+    text-decoration: underline;
+    text-decoration-color: rgba(232, 168, 32, 0.55);
+    text-underline-offset: 3px;
+    text-decoration-thickness: 2px;
+  }
+  .day-map-title-option-a .dm-word-map { color: #A8B4C0; }
+
+  /* 3. Topbar: title grows, back button stays compact on the right */
+  .day-map-topbar { grid-template-columns: 1fr auto; }
+
+  /* Back button: compact pill */
+  .day-map-back {
+    min-height: 30px;
+    padding: 4px 10px;
+    font-size: 12px;
+    border-radius: 7px;
+  }
+
+  /* 5. Anchor bar: single-line, tighter */
+  .day-map-anchor-bar { gap: 5px; padding: 7px 10px; flex-wrap: nowrap; }
+  .day-map-anchor-label { font-size: 10px; white-space: nowrap; }
+  .day-map-anchor-select { min-width: 84px; height: 30px; font-size: 11px; }
+  .day-map-action-btn { min-height: 30px; padding: 4px 8px; font-size: 11px; }
 }
 
 /* ================================================================

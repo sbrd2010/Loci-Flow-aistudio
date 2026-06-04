@@ -503,9 +503,8 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
             </div>
           </div>
           <h1 className={`day-map-title-option-${headerVariant === "A" ? "a" : "b"}`}>
-            {headerVariant === "A" ? "Day Map" : (
-              <><span className="opt-b-day">Day</span>{" "}<span className="opt-b-map">Map</span></>
-            )}
+            <span className="dm-word-day">Day</span>{" "}
+            <span className="dm-word-map">Map</span>
           </h1>
         </div>
         <button type="button" className="day-map-back" onClick={() => { flushNow(); onClose(); }}>← Back</button>
