@@ -16,6 +16,13 @@ function makeStorage() {
   };
 }
 
+function makeThrowingStorage() {
+  return {
+    getItem: () => { throw new Error("storage blocked"); },
+    setItem: () => { throw new Error("storage blocked"); },
+  };
+}
+
 describe("AI usage guardrails", () => {
   const now = new Date(2026, 5, 4, 15, 30, 0);
 
@@ -84,6 +91,14 @@ describe("AI usage guardrails", () => {
     expect(userA.allowed).toBe(false);
     expect(userB.allowed).toBe(true);
     expect(userB.hourly.used).toBe(1);
+  });
+
+  it("fails open when browser storage is unavailable", () => {
+    const result = checkAndRecordAIUsage({ userId: "user-a", now, storage: makeThrowingStorage() });
+
+    expect(result.allowed).toBe(true);
+    expect(result.storageAvailable).toBe(false);
+    expect(result.warning).toBeNull();
   });
 
   it("warns exactly when daily usage crosses 50%, 80%, 95%, and 100%", () => {
