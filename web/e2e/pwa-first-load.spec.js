@@ -54,7 +54,7 @@ test("mobile reliability: refresh and service worker file do not break first loa
 
   const swResponse = await page.request.get("/sw.js");
   expect(swResponse.ok()).toBe(true);
-  await expect(swResponse).toHaveHeader("content-type", /javascript|text\/plain|application\/octet-stream/i);
+  expect(swResponse.headers()["content-type"] || "").toMatch(/javascript|text\/plain|application\/octet-stream/i);
   expect(await swResponse.text()).toContain("notificationclick");
 
   await page.reload();
