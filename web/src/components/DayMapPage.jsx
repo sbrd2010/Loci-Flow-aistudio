@@ -495,7 +495,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
       <div className="day-map-topbar">
         <div className="day-map-title">
           <span>Today</span>
-          <h1>Day Map</h1>
+          <h1><span className="day-title-day">Day</span> <span className="day-title-map">Map</span></h1>
         </div>
         <button type="button" className="day-map-back" onClick={() => { flushNow(); onClose(); }}>← Back</button>
       </div>

@@ -159,15 +159,17 @@
   font-family: var(--font-display);
   font-size: 24px;
   font-weight: 900;
-  display: inline-block;
-  width: fit-content;
-  color: #22C55E; /* fallback for browsers without background-clip:text */
-  background: linear-gradient(90deg, #00D5FF 0%, #2563EB 18%, #22C55E 38%, #FFE600 56%, #FF8A00 70%, #F20505 84%, #EC1E9A 100%);
-  background-size: 100% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
   letter-spacing: 0;
+}
+
+.day-title-day {
+  color: #38D9FF;
+  text-shadow: 0 0 14px rgba(56, 217, 255, 0.30);
+}
+
+.day-title-map {
+  color: #FBBF24;
+  text-shadow: 0 0 14px rgba(251, 191, 36, 0.25);
 }
 
 .day-map-title-meta {
