@@ -18,6 +18,16 @@ function getDefaultStorage() {
   }
 }
 
+function storageUnavailableResult(limits) {
+  return {
+    allowed: true,
+    storageAvailable: false,
+    warning: null,
+    hourly: { used: 0, limit: limits.hourly },
+    daily: { used: 0, limit: limits.daily },
+  };
+}
+
 function safeUserId(userId) {
   return String(userId || "signed-out")
     .replace(/[^a-zA-Z0-9._-]/g, "_")
@@ -95,18 +105,21 @@ export function checkAndRecordAIUsage({
   limits = AI_USAGE_LIMITS,
 } = {}) {
   if (!storage) {
-    return {
-      allowed: true,
-      storageAvailable: false,
-      warning: null,
-      hourly: { used: 0, limit: limits.hourly },
-      daily: { used: 0, limit: limits.daily },
-    };
+    return storageUnavailableResult(limits);
   }
 
-  const { dayKey, hourKey } = getAIUsageStorageKeys(userId, now);
-  const dayUsed = readCount(storage, dayKey);
-  const hourUsed = readCount(storage, hourKey);
+  let dayKey;
+  let hourKey;
+  let dayUsed;
+  let hourUsed;
+
+  try {
+    ({ dayKey, hourKey } = getAIUsageStorageKeys(userId, now));
+    dayUsed = readCount(storage, dayKey);
+    hourUsed = readCount(storage, hourKey);
+  } catch {
+    return storageUnavailableResult(limits);
+  }
 
   if (dayUsed >= limits.daily) {
     return {
@@ -130,8 +143,13 @@ export function checkAndRecordAIUsage({
 
   const nextDayUsed = dayUsed + 1;
   const nextHourUsed = hourUsed + 1;
-  writeCount(storage, dayKey, nextDayUsed);
-  writeCount(storage, hourKey, nextHourUsed);
+
+  try {
+    writeCount(storage, dayKey, nextDayUsed);
+    writeCount(storage, hourKey, nextHourUsed);
+  } catch {
+    return storageUnavailableResult(limits);
+  }
 
   return {
     allowed: true,
