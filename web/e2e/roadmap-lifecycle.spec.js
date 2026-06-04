@@ -43,8 +43,8 @@ test("reliability: roadmap task can be added, edited, and moved to Today", async
   await enterDemo(page);
   await openRoadmap(page);
 
-  const originalTitle = "Roadmap lifecycle task";
-  const editedTitle = "Edited roadmap lifecycle task";
+  const originalTitle = "Roadmap lifecycle seed task";
+  const editedTitle = "Ready for Today smoke task";
 
   await page.locator(".horizon-panel .column-add-btn").click();
   await expect(page.locator(".modal-card")).toBeVisible({ timeout: 5_000 });
@@ -87,7 +87,7 @@ test("reliability: roadmap task can be deleted through confirmation", async ({ p
   await page.getByRole("button", { name: /Delete Task/i }).click();
 
   await expect(page.getByText(`Delete "${title}"?`)).toBeVisible({ timeout: 5_000 });
-  await page.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
 
   await expect(roadmapCard(page, title)).not.toBeVisible({ timeout: 5_000 });
   await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible({ timeout: 5_000 });
