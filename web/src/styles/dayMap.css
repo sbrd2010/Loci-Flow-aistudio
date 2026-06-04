@@ -145,7 +145,13 @@
   min-width: 0;
 }
 
-.day-map-title > span {
+.day-map-title-toprow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.day-map-title-toprow > span {
   display: block;
   font-size: 10px;
   font-weight: 900;
@@ -154,22 +160,62 @@
   letter-spacing: 0.12em;
 }
 
+/* A/B preview toggle */
+.day-map-ab-toggle {
+  display: flex;
+  gap: 2px;
+}
+
+.ab-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.40);
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 5px;
+  cursor: pointer;
+  line-height: 1.4;
+  font-family: var(--font-sans);
+  letter-spacing: 0.04em;
+}
+
+.ab-btn.ab-active {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Shared h1 base */
 .day-map-title h1 {
   margin: 0;
   font-family: var(--font-display);
   font-size: 24px;
-  font-weight: 900;
-  letter-spacing: 0;
+  letter-spacing: -0.01em;
 }
 
-.day-title-day {
-  color: #38D9FF;
-  text-shadow: 0 0 14px rgba(56, 217, 255, 0.30);
+/* ── Option A: minimal white premium ───────────────────── */
+.day-map-title-option-a {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow: 0 0 22px rgba(255, 255, 255, 0.12);
 }
 
-.day-title-map {
-  color: #FBBF24;
-  text-shadow: 0 0 14px rgba(251, 191, 36, 0.25);
+/* ── Option B: gold "Day" + silver "Map" ───────────────── */
+.day-map-title-option-b {
+  font-weight: 700;
+}
+
+.opt-b-day {
+  color: #E8A820;
+  text-decoration: underline;
+  text-decoration-color: rgba(232, 168, 32, 0.55);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 2px;
+}
+
+.opt-b-map {
+  color: #A8B4C0;
 }
 
 .day-map-title-meta {
