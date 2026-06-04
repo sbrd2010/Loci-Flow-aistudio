@@ -120,31 +120,6 @@ function PriorityBadge({ priority }) {
   return <span className={`day-map-priority ${p.toLowerCase()}`}>{p}</span>;
 }
 
-function SummaryCard({ placed, total, totalDuration, anchorMinutes }) {
-  const pct = total > 0 ? Math.round((placed / total) * 100) : 0;
-  const nowMins = currentDayMinutes();
-  const isOnTrack = placed > 0 && anchorMinutes <= nowMins + 45;
-  const statusLabel = placed === 0 ? "Plan ahead" : isOnTrack ? "On Track" : "Not started";
-
-  return (
-    <div className="dm-header-bar">
-      <div className="dm-progress-track">
-        <div className="dm-progress-fill" style={{ width: `${pct}%` }} />
-      </div>
-      <div className="dm-header-meta">
-        <span>
-          <span className="dm-meta-val">{placed}</span>
-          <span className="dm-meta-dim"> / {total} tasks</span>
-        </span>
-        {totalDuration > 0 && <span className="dm-meta-dim">·</span>}
-        {totalDuration > 0 && <span className="dm-meta-val">{formatDuration(totalDuration)}</span>}
-        <span className="dm-meta-dim">·</span>
-        <span className={isOnTrack ? "dm-status-good" : "dm-status-neutral"}>{statusLabel}</span>
-      </div>
-    </div>
-  );
-}
-
 function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDurationChange, onStartFocus }) {
   const taskId = getTaskId(task);
   const {
@@ -177,46 +152,48 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
         <div className={`dm-stop-node dm-node-${pClass}${isFirst ? " dm-node-now" : ""}`} />
       </div>
 
-      <div className={`dm-card dm-card-${pClass}${isDragging ? " is-dragging" : ""}`}>
-        <div
-          ref={setActivatorNodeRef}
-          className="dm-card-main"
-          {...attributes}
-          {...listeners}
-        >
-          <div className="dm-card-body">
-            {isFirst && <div className="dm-now-badge">{isNow ? "▶ NOW" : "▶ NEXT"}</div>}
-            <span className="dm-card-title">{task.title}</span>
-            {task.concreteStep && <span className="dm-card-step">{task.concreteStep}</span>}
-          </div>
-          <div className="dm-card-right">
-            <PriorityBadge priority={task.priority} />
-            <span className="dm-card-dur">{formatDuration(duration)}</span>
-          </div>
-          <button
-            type="button"
-            className={`dm-btn-menu${isExpanded ? " is-open" : ""}`}
-            onClick={onToggle}
-            onPointerDown={e => e.stopPropagation()}
-            aria-expanded={isExpanded}
-            aria-label="Card options"
+      <div className={`dm-card dm-card-${pClass}${isDragging ? " is-dragging" : ""}${isNow ? " dm-card-is-now" : ""}`}>
+        <div className="dm-card-row">
+          <div
+            ref={setActivatorNodeRef}
+            className="dm-card-main"
+            {...attributes}
+            {...listeners}
           >
-            ⋯
-          </button>
-        </div>
-
-        {isFirst && (
-          <div className="dm-focus-row">
+            <div className="dm-card-body">
+              {isFirst && <div className="dm-now-badge">{isNow ? "▶ NOW" : "▶ NEXT"}</div>}
+              <span className="dm-card-title">{task.title}</span>
+              {task.concreteStep && <span className="dm-card-step">{task.concreteStep}</span>}
+            </div>
+            <div className="dm-card-right">
+              <PriorityBadge priority={task.priority} />
+              <span className="dm-card-dur">{formatDuration(duration)}</span>
+            </div>
             <button
               type="button"
-              className="dm-focus-btn"
-              onClick={onStartFocus}
+              className={`dm-btn-menu${isExpanded ? " is-open" : ""}`}
+              onClick={onToggle}
               onPointerDown={e => e.stopPropagation()}
+              aria-expanded={isExpanded}
+              aria-label="Card options"
             >
-              Start Focus →
+              ⋯
             </button>
           </div>
-        )}
+
+          {isFirst && (
+            <div className="dm-focus-row">
+              <button
+                type="button"
+                className="dm-focus-btn"
+                onClick={onStartFocus}
+                onPointerDown={e => e.stopPropagation()}
+              >
+                Start Focus →
+              </button>
+            </div>
+          )}
+        </div>
 
         {isExpanded && (
           <div className="dm-edit-panel" onPointerDown={e => e.stopPropagation()}>
@@ -242,7 +219,7 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
 }
 
 
-function AnchorControl({ anchorMinutes, onStartFromNow, onChangeAnchor }) {
+function AnchorControl({ anchorMinutes, onStartFromNow, onChangeAnchor, onAutoFill, onClear, canAutoFill, canClear }) {
   const actualNow = currentDayMinutes();
   const nextQuarter = roundToQuarter(actualNow);
   const isAlreadyNow = Math.abs(anchorMinutes - actualNow) < 2;
@@ -271,11 +248,13 @@ function AnchorControl({ anchorMinutes, onStartFromNow, onChangeAnchor }) {
           </option>
         ))}
       </select>
-      {!isAlreadyNow && (
-        <button type="button" className="day-map-now-btn" onClick={onStartFromNow}>
-          Now
-        </button>
-      )}
+      <div className="day-map-anchor-actions">
+        {!isAlreadyNow && (
+          <button type="button" className="day-map-now-btn" onClick={onStartFromNow}>Now</button>
+        )}
+        <button type="button" className="day-map-action-btn" onClick={onAutoFill} disabled={!canAutoFill}>Auto-fill</button>
+        <button type="button" className="day-map-action-btn day-map-action-btn-clear" onClick={onClear} disabled={!canClear}>Clear</button>
+      </div>
     </div>
   );
 }
@@ -366,6 +345,9 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
 
   const totalDuration = scheduledTasks.reduce((sum, t) => sum + getEstimate(t), 0);
   const sortableIds = scheduledTasks.map(getTaskId);
+
+  const isOnTrack = scheduledTasks.length > 0 && anchorMinutes <= currentDayMinutes() + 45;
+  const statusLabel = scheduledTasks.length === 0 ? null : isOnTrack ? "On Track" : "Not started";
 
   const endTime = useMemo(() => {
     if (!scheduledTasks.length) return anchorMinutes;
@@ -485,11 +467,19 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
   return (
     <div className="day-map-page">
       <div className="day-map-topbar">
-        <button type="button" className="day-map-back" onClick={() => { flushNow(); onClose(); }}>Back</button>
         <div className="day-map-title">
           <span>Today</span>
           <h1>Day Map</h1>
+          {activeTodayTasks.length > 0 && (
+            <div className="day-map-title-meta">
+              <span className="dm-meta-val">{scheduledTasks.length}</span>
+              <span className="dm-meta-dim"> / {activeTodayTasks.length}</span>
+              {totalDuration > 0 && <><span className="dm-meta-dim"> · </span><span className="dm-meta-val">{formatDuration(totalDuration)}</span></>}
+              {statusLabel && <><span className="dm-meta-dim"> · </span><span className={isOnTrack ? "dm-status-good" : "dm-status-neutral"}>{statusLabel}</span></>}
+            </div>
+          )}
         </div>
+        <button type="button" className="day-map-back" onClick={() => { flushNow(); onClose(); }}>← Back</button>
       </div>
 
       {activeTodayTasks.length === 0 ? (
@@ -500,23 +490,15 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
         </section>
       ) : (
         <>
-          <SummaryCard
-            placed={scheduledTasks.length}
-            total={activeTodayTasks.length}
-            totalDuration={totalDuration}
-            anchorMinutes={anchorMinutes}
-          />
-
           <AnchorControl
             anchorMinutes={anchorMinutes}
             onStartFromNow={startFromNow}
             onChangeAnchor={setAnchor}
+            onAutoFill={autoFill}
+            onClear={clearRoute}
+            canAutoFill={unscheduledTasks.length > 0}
+            canClear={scheduledTasks.length > 0}
           />
-
-          <div className="day-map-actions">
-            <button type="button" onClick={autoFill} disabled={!unscheduledTasks.length}>Auto-fill</button>
-            <button type="button" onClick={clearRoute} disabled={!scheduledTasks.length}>Clear</button>
-          </div>
 
           <AvailableStrip
             tasks={unscheduledTasks}

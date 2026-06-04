@@ -655,14 +655,9 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
           <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
             {onOpenDayMap && (
               <button
-                className="stuck-btn"
+                className={`stuck-btn day-map-nav-btn${dayMapPlaced > 0 ? " has-tasks" : ""}`}
                 onClick={onOpenDayMap}
                 title="Open Day Map"
-                style={{
-                  background: dayMapPlaced > 0 ? "rgba(99,102,241,0.12)" : "var(--bg-secondary)",
-                  color: dayMapPlaced > 0 ? "var(--accent)" : "var(--text-secondary)",
-                  borderColor: dayMapPlaced > 0 ? "rgba(99,102,241,0.3)" : "var(--border)"
-                }}
               >
                 Day Map {dayMapPlaced}/{dayMapTotal}
               </button>
