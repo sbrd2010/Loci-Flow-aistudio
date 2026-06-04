@@ -54,7 +54,7 @@ test("mobile reliability: Brain Dump item survives navigation and can be deleted
   await openTab(page, "Mind Box");
   await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
 
-  await page.getByRole("button", { name: /See all 4 items/i }).click();
+  await page.getByRole("button", { name: /See all \d+ items/i }).click();
   await expect(page.getByRole("heading", { name: "Brain Dump" })).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
