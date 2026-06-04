@@ -508,7 +508,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
             <span className="dm-word-map">Map</span>
           </h1>
         </div>
-        <button type="button" className="day-map-back" onClick={() => { flushNow(); onClose(); }}>←<span className="day-map-back-word"> Back</span></button>
+        <button type="button" className="day-map-back" aria-label="← Back" onClick={() => { flushNow(); onClose(); }}>←<span className="day-map-back-word"> Back</span></button>
       </div>
 
       {activeTodayTasks.length === 0 ? (
