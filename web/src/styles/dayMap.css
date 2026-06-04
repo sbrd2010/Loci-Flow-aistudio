@@ -756,6 +756,19 @@
   .day-map-task-chip { min-width: 240px; }
 }
 
+/* On tablet and desktop, expand to fill the app container like all other pages */
+@media (min-width: 768px) {
+  .day-map-page {
+    max-width: 100%;
+    padding: 0 24px;
+  }
+
+  .day-map-topbar {
+    margin: 0 -24px;
+    padding: 12px 24px 14px;
+  }
+}
+
 /* ================================================================
    Day Map V1 — Execution Route
    ================================================================ */

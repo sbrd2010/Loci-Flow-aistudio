@@ -152,7 +152,7 @@ function SummaryCard({ placed, total, totalDuration, anchorMinutes }) {
   );
 }
 
-function TimelineStop({ task, index, total, isFirst, isExpanded, onToggle, onMoveUp, onMoveDown, onRemove, onDurationChange, onStartFocus }) {
+function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDurationChange, onStartFocus }) {
   const taskId = getTaskId(task);
   const {
     attributes, listeners, setActivatorNodeRef,
@@ -227,22 +227,20 @@ function TimelineStop({ task, index, total, isFirst, isExpanded, onToggle, onMov
 
         {isExpanded && (
           <div className="dm-edit-panel" onPointerDown={e => e.stopPropagation()}>
-            <div className="dm-edit-actions">
-              <button type="button" className="dm-btn-icon" onClick={onMoveUp} disabled={index === 0} aria-label="Move up">↑</button>
-              <button type="button" className="dm-btn-icon" onClick={onMoveDown} disabled={index === total - 1} aria-label="Move down">↓</button>
+            <div className="dm-edit-row">
+              <label className="dm-edit-label">
+                Duration
+                <select
+                  value={duration}
+                  onChange={e => onDurationChange(taskId, Number(e.target.value))}
+                >
+                  {DURATION_OPTIONS.map(m => (
+                    <option key={m} value={m}>{formatDuration(m)}</option>
+                  ))}
+                </select>
+              </label>
               <button type="button" className="dm-btn-icon dm-btn-remove" onClick={() => onRemove(taskId)} aria-label="Remove from route">×</button>
             </div>
-            <label className="dm-edit-label">
-              Duration
-              <select
-                value={duration}
-                onChange={e => onDurationChange(taskId, Number(e.target.value))}
-              >
-                {DURATION_OPTIONS.map(m => (
-                  <option key={m} value={m}>{formatDuration(m)}</option>
-                ))}
-              </select>
-            </label>
           </div>
         )}
       </div>
@@ -438,14 +436,6 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
     applyAndSave(newScheduled, anchorMinutes);
   };
 
-  const moveTask = (taskId, direction) => {
-    const index = scheduledTasks.findIndex(t => getTaskId(t) === taskId);
-    if (index === -1) return;
-    const newIndex = direction === "up" ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= scheduledTasks.length) return;
-    applyAndSave(arrayMove([...scheduledTasks], index, newIndex), anchorMinutes);
-  };
-
   const autoFill = () => {
     if (!unscheduledTasks.length) return;
     const newScheduled = [...scheduledTasks, ...unscheduledTasks.sort(sortByPriorityAndOrder)];
@@ -557,13 +547,9 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
                       <TimelineStop
                         key={item.id}
                         task={item.task}
-                        index={item.index}
-                        total={scheduledTasks.length}
                         isFirst={item.index === 0}
                         isExpanded={expandedTaskId === item.id}
                         onToggle={() => setExpandedTaskId(expandedTaskId === item.id ? null : item.id)}
-                        onMoveUp={() => moveTask(item.id, "up")}
-                        onMoveDown={() => moveTask(item.id, "down")}
                         onRemove={removeFromRoute}
                         onDurationChange={changeDuration}
                         onStartFocus={() => startFocus(item.id)}

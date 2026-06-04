@@ -63,7 +63,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc(44px + 12px);
+  left: calc(48px + 12px);
   width: 2px;
   background: linear-gradient(
     to bottom,
@@ -82,7 +82,7 @@
 
 .dm-period-row {
   display: grid;
-  grid-template-columns: 44px 24px 1fr;
+  grid-template-columns: 48px 24px 1fr;
   align-items: center;
   padding: 8px 0 4px;
   position: relative;
@@ -104,7 +104,7 @@
 
 .dm-stop {
   display: grid;
-  grid-template-columns: 44px 24px 1fr;
+  grid-template-columns: 48px 24px 1fr;
   align-items: start;
   padding-bottom: 8px;
   position: relative;
@@ -121,16 +121,16 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  padding-right: 7px;
+  padding-right: 3px;
   padding-top: 10px;
   line-height: 1.2;
 }
 
 .dm-time-hm {
   font-family: var(--font-mono, "Space Mono", "Courier New", monospace);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  color: rgba(232, 238, 255, 0.80);
+  color: rgba(232, 238, 255, 0.85);
   white-space: nowrap;
 }
 
@@ -138,7 +138,7 @@
   font-family: var(--font-mono, "Space Mono", "Courier New", monospace);
   font-size: 9px;
   font-weight: 600;
-  color: rgba(232, 238, 255, 0.48);
+  color: rgba(232, 238, 255, 0.52);
 }
 
 .dm-stop-end .dm-stop-time {
@@ -395,12 +395,19 @@
   background: rgba(0, 0, 0, 0.28);
 }
 
-/* Reorder + remove row */
-.dm-edit-actions {
+/* Compact single row: duration select + × remove */
+.dm-edit-row {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 8px;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.dm-edit-row .dm-edit-label {
+  flex: 1;
+}
+
+.dm-edit-row .dm-edit-label select {
+  width: 100%;
 }
 
 .dm-edit-label {
