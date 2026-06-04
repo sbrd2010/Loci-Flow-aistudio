@@ -925,19 +925,19 @@ h1, h2, h3, h4, h5, h6 {
 .day-map-nav-btn {
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(129, 140, 248, 0.08)) !important;
   border-color: rgba(99, 102, 241, 0.42) !important;
-  color: #a5b4fc !important;
+  color: #ffffff !important;
   animation: day-map-btn-glow 2.8s ease-in-out infinite;
 }
 
 .day-map-nav-btn.has-tasks {
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.28), rgba(129, 140, 248, 0.15)) !important;
   border-color: rgba(99, 102, 241, 0.60) !important;
-  color: #c4b5fd !important;
+  color: #ffffff !important;
 }
 
 .day-map-nav-btn:hover {
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(129, 140, 248, 0.22)) !important;
-  color: #e0d9ff !important;
+  color: #ffffff !important;
 }
 
 @keyframes day-map-btn-glow {

@@ -22,6 +22,7 @@ import "../styles/dayMapTimeline.css";
 const TRANSITION_BUFFER = 5;
 const DURATION_OPTIONS = [15, 25, 45, 60, 90, 120, 180, 240, 360];
 const PRIORITY_RANK = { P1: 1, P2: 2, P3: 3, P4: 4 };
+const PRIORITY_LINE_COLORS = { P1: '#f43f5e', P2: '#f59e0b', P3: '#14b8a6', P4: 'rgba(255,255,255,0.20)' };
 const PERIOD_LABELS = { morning: "Morning", afternoon: "Afternoon", evening: "Evening", night: "Night" };
 
 function toLocalDateStr(date) {
@@ -120,6 +121,34 @@ function PriorityBadge({ priority }) {
   return <span className={`day-map-priority ${p.toLowerCase()}`}>{p}</span>;
 }
 
+function SummaryCard({ placed, total, totalDuration, anchorMinutes }) {
+  const nowMins = currentDayMinutes();
+  const isOnTrack = placed > 0 && anchorMinutes <= nowMins + 45;
+  const statusText = placed === 0 ? "Plan ahead" : isOnTrack ? "On Track" : "Not started";
+
+  return (
+    <div className="dm-summary-card">
+      <div className="dm-summary-stat">
+        <div className="dm-summary-key">Tasks</div>
+        <div className="dm-summary-primary">{placed} / {total}</div>
+        <div className="dm-summary-unit">placed</div>
+      </div>
+      <div className="dm-summary-sep" />
+      <div className="dm-summary-stat">
+        <div className="dm-summary-key">Planned</div>
+        <div className="dm-summary-primary">{totalDuration > 0 ? formatDuration(totalDuration) : "—"}</div>
+        <div className="dm-summary-unit">focus time</div>
+      </div>
+      <div className="dm-summary-sep" />
+      <div className="dm-summary-stat">
+        <div className="dm-summary-key">Status</div>
+        <div className={`dm-summary-primary${placed > 0 && isOnTrack ? " dm-status-good" : " dm-status-neutral"}`}>{statusText}</div>
+        {placed > 0 && isOnTrack && <div className="dm-summary-unit"><span className="dm-status-dot" />live</div>}
+      </div>
+    </div>
+  );
+}
+
 function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDurationChange, onStartFocus }) {
   const taskId = getTaskId(task);
   const {
@@ -132,6 +161,7 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
   const p = normalizePriority(task.priority);
   const pClass = p.toLowerCase();
   const isNow = isFirst && start <= currentDayMinutes() + 15;
+  const lineColor = PRIORITY_LINE_COLORS[p] || PRIORITY_LINE_COLORS.P4;
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -148,7 +178,9 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
       </div>
 
       <div className="dm-stop-spine">
-        {isNow && <div className="dm-node-now-ring" />}
+        <div className="dm-tl-segment" style={{ background: lineColor }} aria-hidden="true" />
+        {isNow && <div className="dm-now-badge-route">▶ NOW</div>}
+        {isNow && <div className="dm-node-now-ring" style={{ borderColor: lineColor }} />}
         <div className={`dm-stop-node dm-node-${pClass}${isFirst ? " dm-node-now" : ""}`} />
       </div>
 
@@ -161,7 +193,6 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
             {...listeners}
           >
             <div className="dm-card-body">
-              {isFirst && <div className="dm-now-badge">{isNow ? "▶ NOW" : "▶ NEXT"}</div>}
               <span className="dm-card-title">{task.title}</span>
               {task.concreteStep && <span className="dm-card-step">{task.concreteStep}</span>}
             </div>
@@ -218,17 +249,15 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
   );
 }
 
-
 function AnchorControl({ anchorMinutes, onStartFromNow, onChangeAnchor, onAutoFill, onClear, canAutoFill, canClear }) {
-  const actualNow = currentDayMinutes();
-  const nextQuarter = roundToQuarter(actualNow);
-  const isAlreadyNow = Math.abs(anchorMinutes - actualNow) < 2;
+  const now = roundToQuarter(currentDayMinutes());
+  const isAlreadyNow = Math.abs(anchorMinutes - now) <= 1;
 
-  const options = [actualNow];
-  for (let m = nextQuarter; m <= actualNow + 600 && m < 1440; m += 15) {
-    if (m !== actualNow) options.push(m);
+  const options = [];
+  for (let m = now; m <= now + 600 && m < 1440; m += 15) {
+    options.push(m);
   }
-  if (!options.includes(anchorMinutes) && anchorMinutes >= actualNow) {
+  if (!options.includes(anchorMinutes) && anchorMinutes >= now) {
     options.push(anchorMinutes);
     options.sort((a, b) => a - b);
   }
@@ -244,7 +273,7 @@ function AnchorControl({ anchorMinutes, onStartFromNow, onChangeAnchor, onAutoFi
       >
         {options.map(m => (
           <option key={m} value={m}>
-            {formatClock(m)}{m === actualNow ? " (now)" : ""}
+            {formatClock(m)}{m === now ? " (now)" : ""}
           </option>
         ))}
       </select>
@@ -333,7 +362,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
   // Anchor: config-persisted → inferred from first scheduled task → current time
   // Clamp to now so a stored past value never produces a past start time.
   const anchorMinutes = useMemo(() => {
-    const now = currentDayMinutes();
+    const now = roundToQuarter(currentDayMinutes());
     if (config.dayMapDate === todayStr && config.dayMapAnchorMinutes != null) {
       return Math.max(now, Number(config.dayMapAnchorMinutes));
     }
@@ -345,9 +374,6 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
 
   const totalDuration = scheduledTasks.reduce((sum, t) => sum + getEstimate(t), 0);
   const sortableIds = scheduledTasks.map(getTaskId);
-
-  const isOnTrack = scheduledTasks.length > 0 && anchorMinutes <= currentDayMinutes() + 45;
-  const statusLabel = scheduledTasks.length === 0 ? null : isOnTrack ? "On Track" : "Not started";
 
   const endTime = useMemo(() => {
     if (!scheduledTasks.length) return anchorMinutes;
@@ -378,7 +404,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
   }, [scheduledTasks, anchorMinutes, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startFromNow = () => {
-    const now = currentDayMinutes();
+    const now = roundToQuarter(currentDayMinutes());
     applyAndSave(scheduledTasks, now, { dayMapDate: todayStr, dayMapAnchorMinutes: now });
   };
 
@@ -470,14 +496,6 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
         <div className="day-map-title">
           <span>Today</span>
           <h1>Day Map</h1>
-          {activeTodayTasks.length > 0 && (
-            <div className="day-map-title-meta">
-              <span className="dm-meta-val">{scheduledTasks.length}</span>
-              <span className="dm-meta-dim"> / {activeTodayTasks.length}</span>
-              {totalDuration > 0 && <><span className="dm-meta-dim"> · </span><span className="dm-meta-val">{formatDuration(totalDuration)}</span></>}
-              {statusLabel && <><span className="dm-meta-dim"> · </span><span className={isOnTrack ? "dm-status-good" : "dm-status-neutral"}>{statusLabel}</span></>}
-            </div>
-          )}
         </div>
         <button type="button" className="day-map-back" onClick={() => { flushNow(); onClose(); }}>← Back</button>
       </div>
@@ -490,6 +508,13 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
         </section>
       ) : (
         <>
+          <SummaryCard
+            placed={scheduledTasks.length}
+            total={activeTodayTasks.length}
+            totalDuration={totalDuration}
+            anchorMinutes={anchorMinutes}
+          />
+
           <AnchorControl
             anchorMinutes={anchorMinutes}
             onStartFromNow={startFromNow}
@@ -511,12 +536,12 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
             <p className="day-map-route-empty">No tasks in route yet — tap a task above or use Auto-fill.</p>
           ) : (
             <div className="dm-timeline">
-              <div className="dm-tl-line" aria-hidden="true" />
               <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
                 <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
                   {routeItems.map(item =>
                     item.type === "divider" ? (
                       <div key={item.id} className="dm-period-row">
+                        <div className="dm-period-spine-line" aria-hidden="true" />
                         <span className="dm-period-label">{item.label}</span>
                       </div>
                     ) : (

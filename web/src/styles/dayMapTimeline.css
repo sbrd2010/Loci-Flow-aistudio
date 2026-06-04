@@ -2,19 +2,73 @@
    Day Map — Timeline Route (premium dark glass)
    ================================================================ */
 
-/* ── Shared meta tokens (used in topbar title-meta) ──────────────── */
+/* ── Shared meta tokens ──────────────────────────────────────────── */
 
-.dm-meta-val {
-  color: rgba(232, 238, 255, 0.90);
-  font-weight: 800;
-}
-
-.dm-meta-dim {
-  color: rgba(232, 238, 255, 0.35);
-}
-
+.dm-meta-val  { color: rgba(232, 238, 255, 0.90); font-weight: 800; }
+.dm-meta-dim  { color: rgba(232, 238, 255, 0.35); }
 .dm-status-good    { color: #4ade80; }
 .dm-status-neutral { color: rgba(232, 238, 255, 0.42); }
+.dm-status-dot {
+  display: inline-block;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: #4ade80;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* ── Summary card (3-column stats) ──────────────────────────────── */
+
+.dm-summary-card {
+  display: flex;
+  align-items: stretch;
+  padding: 11px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  gap: 0;
+}
+
+.dm-summary-stat {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  padding: 2px 6px;
+}
+
+.dm-summary-sep {
+  width: 1px;
+  background: rgba(255, 255, 255, 0.09);
+  flex-shrink: 0;
+  margin: 2px 0;
+}
+
+.dm-summary-key {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 900;
+  color: rgba(232, 238, 255, 0.42);
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  margin-bottom: 3px;
+}
+
+.dm-summary-primary {
+  font-family: var(--font-sans);
+  font-size: 18px;
+  font-weight: 900;
+  color: #e8eeff;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.dm-summary-unit {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(232, 238, 255, 0.42);
+  margin-top: 2px;
+}
 
 /* ── Timeline container ──────────────────────────────────────────── */
 
@@ -22,26 +76,6 @@
   position: relative;
   padding-top: 4px;
   padding-bottom: 4px;
-}
-
-/* Vertical spine — gradient purple */
-.dm-tl-line {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: calc(48px + 12px);
-  width: 2px;
-  background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    #6366f1 8%,
-    #818cf8 50%,
-    #a78bfa 85%,
-    transparent 100%
-  );
-  opacity: 0.55;
-  pointer-events: none;
-  z-index: 0;
 }
 
 /* ── Period label row ────────────────────────────────────────────── */
@@ -55,12 +89,29 @@
   z-index: 1;
 }
 
+.dm-period-spine-line {
+  grid-column: 2;
+  position: relative;
+}
+
+.dm-period-spine-line::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+}
+
 .dm-period-label {
   grid-column: 3;
   font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 900;
-  color: rgba(232, 238, 255, 0.62);
+  color: rgba(232, 238, 255, 0.75);
   text-transform: uppercase;
   letter-spacing: 0.12em;
   padding-left: 10px;
@@ -96,7 +147,7 @@
   font-family: var(--font-mono, "Space Mono", "Courier New", monospace);
   font-size: 13px;
   font-weight: 800;
-  color: rgba(232, 238, 255, 0.95);
+  color: #e8eeff;
   white-space: nowrap;
 }
 
@@ -104,7 +155,7 @@
   font-family: var(--font-mono, "Space Mono", "Courier New", monospace);
   font-size: 10px;
   font-weight: 700;
-  color: rgba(232, 238, 255, 0.68);
+  color: rgba(232, 238, 255, 0.70);
 }
 
 .dm-stop-end .dm-stop-time {
@@ -113,6 +164,7 @@
 
 /* Center: spine column */
 .dm-stop-spine {
+  align-self: stretch;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -120,60 +172,95 @@
   z-index: 2;
 }
 
-/* Node circle */
+/* Priority-colored route line segment (per stop) */
+.dm-tl-segment {
+  position: absolute;
+  top: 0;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  border-radius: 2px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Node circle — filled with priority color + white ring */
 .dm-stop-node {
   width: 13px;
   height: 13px;
   border-radius: 50%;
   flex-shrink: 0;
   margin-top: 11px;
-  border: 2px solid rgba(255, 255, 255, 0.20);
-  background: rgba(255, 255, 255, 0.08);
+  border: 2.5px solid rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.20);
   position: relative;
   z-index: 3;
 }
 
-.dm-node-p1 { border-color: #f43f5e; background: rgba(244, 63, 94, 0.30); }
-.dm-node-p2 { border-color: #f59e0b; background: rgba(245, 158, 11, 0.30); }
-.dm-node-p3 { border-color: #14b8a6; background: rgba(20, 184, 166, 0.30); }
-.dm-node-p4 { border-color: rgba(255, 255, 255, 0.20); background: rgba(255, 255, 255, 0.06); }
+.dm-node-p1 { background: #f43f5e; border-color: rgba(255, 255, 255, 0.80); }
+.dm-node-p2 { background: #f59e0b; border-color: rgba(255, 255, 255, 0.80); }
+.dm-node-p3 { background: #14b8a6; border-color: rgba(255, 255, 255, 0.80); }
+.dm-node-p4 { background: rgba(255, 255, 255, 0.28); border-color: rgba(255, 255, 255, 0.45); }
 
-/* NOW node — filled indigo with glow */
+/* NOW node — larger, inherits priority fill + white ring */
 .dm-node-now {
   width: 16px;
   height: 16px;
   margin-top: 10px;
-  background: #6366f1;
-  border: 2px solid rgba(99, 102, 241, 0.55);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18), 0 0 14px rgba(99, 102, 241, 0.55);
 }
+
+/* Priority-specific glow for NOW node */
+.dm-node-p1.dm-node-now { box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.25), 0 0 12px rgba(244, 63, 94, 0.60); }
+.dm-node-p2.dm-node-now { box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25), 0 0 12px rgba(245, 158, 11, 0.60); }
+.dm-node-p3.dm-node-now { box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.25), 0 0 12px rgba(20, 184, 166, 0.60); }
+.dm-node-p4.dm-node-now { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12), 0 0 8px rgba(255, 255, 255, 0.25); }
 
 /* End cap */
 .dm-node-end {
   width: 8px;
   height: 8px;
   margin-top: 0;
-  border: 2px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid rgba(255, 255, 255, 0.40);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 /* Animated pulse ring for NOW */
 .dm-node-now-ring {
   position: absolute;
   top: 4px;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  border: 1.5px solid #6366f1;
-  opacity: 0.45;
+  border: 1.5px solid #f43f5e;
+  opacity: 0.50;
   animation: dm-pulse 2.4s ease-in-out infinite;
   pointer-events: none;
   z-index: 1;
 }
 
 @keyframes dm-pulse {
-  0%, 100% { transform: scale(1);   opacity: 0.45; }
-  50%       { transform: scale(1.5); opacity: 0.07; }
+  0%, 100% { transform: scale(1);   opacity: 0.50; }
+  50%       { transform: scale(1.6); opacity: 0.06; }
+}
+
+/* NOW badge — positioned in spine, overflows left into time area */
+.dm-now-badge-route {
+  position: absolute;
+  right: calc(100% + 2px);
+  top: 9px;
+  background: #2563eb;
+  color: #ffffff;
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
 }
 
 /* End label */
@@ -181,7 +268,7 @@
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 700;
-  color: rgba(232, 238, 255, 0.55);
+  color: rgba(232, 238, 255, 0.65);
   padding-left: 10px;
 }
 
@@ -189,10 +276,10 @@
 
 .dm-card {
   margin-left: 8px;
-  border-radius: 11px;
+  border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-left-width: 4px;
-  background: rgba(16, 18, 26, 0.82);
+  background: rgba(16, 18, 26, 0.88);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   overflow: hidden;
@@ -206,28 +293,34 @@
 /* Priority left border + subtle gradient tint */
 .dm-card-p1 {
   border-left-color: #f43f5e;
-  background: linear-gradient(110deg, rgba(244, 63, 94, 0.13) 0%, rgba(16, 18, 26, 0.82) 55%);
+  background: linear-gradient(110deg, rgba(244, 63, 94, 0.16) 0%, rgba(16, 18, 26, 0.88) 50%);
 }
 .dm-card-p2 {
   border-left-color: #f59e0b;
-  background: linear-gradient(110deg, rgba(245, 158, 11, 0.13) 0%, rgba(16, 18, 26, 0.82) 55%);
+  background: linear-gradient(110deg, rgba(245, 158, 11, 0.16) 0%, rgba(16, 18, 26, 0.88) 50%);
 }
 .dm-card-p3 {
   border-left-color: #14b8a6;
-  background: linear-gradient(110deg, rgba(20, 184, 166, 0.13) 0%, rgba(16, 18, 26, 0.82) 55%);
+  background: linear-gradient(110deg, rgba(20, 184, 166, 0.16) 0%, rgba(16, 18, 26, 0.88) 50%);
 }
 .dm-card-p4 {
-  border-left-color: rgba(255, 255, 255, 0.16);
-  background: rgba(16, 18, 26, 0.75);
+  border-left-color: rgba(255, 255, 255, 0.20);
+  background: rgba(16, 18, 26, 0.82);
 }
+
+/* NOW card — priority-specific glow */
+.dm-card.dm-card-p1.dm-card-is-now { box-shadow: 0 3px 20px rgba(244, 63, 94, 0.22), 0 0 0 1px rgba(244, 63, 94, 0.22); }
+.dm-card.dm-card-p2.dm-card-is-now { box-shadow: 0 3px 20px rgba(245, 158, 11, 0.22), 0 0 0 1px rgba(245, 158, 11, 0.22); }
+.dm-card.dm-card-p3.dm-card-is-now { box-shadow: 0 3px 20px rgba(20, 184, 166, 0.22), 0 0 0 1px rgba(20, 184, 166, 0.22); }
+.dm-card.dm-card-p4.dm-card-is-now { box-shadow: 0 3px 18px rgba(255, 255, 255, 0.10), 0 0 0 1px rgba(255, 255, 255, 0.12); }
 
 /* Main content row — also the drag surface */
 .dm-card-main {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 6px 8px 10px;
-  min-height: 44px;
+  padding: 7px 6px 7px 10px;
+  min-height: 42px;
   cursor: grab;
 }
 
@@ -237,25 +330,6 @@
 .dm-card-body {
   flex: 1;
   min-width: 0;
-}
-
-/* NOW badge */
-.dm-now-badge {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  border: 1px solid rgba(99, 102, 241, 0.50);
-  padding: 1px 7px;
-  background: rgba(99, 102, 241, 0.15);
-  font-family: var(--font-sans);
-  font-size: 9px;
-  font-weight: 900;
-  color: #818cf8;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  margin-bottom: 2px;
-  line-height: 1.4;
 }
 
 .dm-card-title {
@@ -294,21 +368,21 @@
   font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 800;
-  color: rgba(232, 238, 255, 0.68);
+  color: rgba(232, 238, 255, 0.72);
   white-space: nowrap;
 }
 
 /* Priority badges inside dark cards */
-.dm-card .day-map-priority.p1 { background: rgba(244, 63, 94, 0.22);   color: #fda4af; }
-.dm-card .day-map-priority.p2 { background: rgba(245, 158, 11, 0.22);  color: #fcd34d; }
-.dm-card .day-map-priority.p3 { background: rgba(20, 184, 166, 0.22);  color: #5eead4; }
-.dm-card .day-map-priority.p4 { background: rgba(255, 255, 255, 0.08); color: rgba(232, 238, 255, 0.48); }
+.dm-card .day-map-priority.p1 { background: rgba(244, 63, 94, 0.25);   color: #fda4af; border: 1px solid rgba(244,63,94,0.35); }
+.dm-card .day-map-priority.p2 { background: rgba(245, 158, 11, 0.25);  color: #fcd34d; border: 1px solid rgba(245,158,11,0.35); }
+.dm-card .day-map-priority.p3 { background: rgba(20, 184, 166, 0.25);  color: #5eead4; border: 1px solid rgba(20,184,166,0.35); }
+.dm-card .day-map-priority.p4 { background: rgba(255, 255, 255, 0.08); color: rgba(232, 238, 255, 0.50); border: 1px solid rgba(255,255,255,0.12); }
 
 /* ⋯ menu button */
 .dm-btn-menu {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
@@ -332,14 +406,14 @@
 
 /* Start Focus row */
 .dm-focus-row {
-  padding: 0 8px 8px;
+  padding: 0 8px 7px;
 }
 
 .dm-focus-btn {
   display: block;
   width: 100%;
-  min-height: 32px;
-  border-radius: 8px;
+  min-height: 30px;
+  border-radius: 7px;
   border: none;
   background: linear-gradient(135deg, #6366f1, #818cf8);
   color: #fff;
@@ -406,7 +480,7 @@
   color: #e8eeff;
 }
 
-/* Action icon buttons (↑ ↓ × in expanded panel) */
+/* Action icon buttons */
 .dm-btn-icon {
   width: 36px;
   height: 36px;
@@ -441,25 +515,21 @@
 /* ── Responsive ──────────────────────────────────────────────────── */
 
 @media (max-width: 560px) {
-  .dm-time-hm    { font-size: 10px; }
-  .dm-time-ampm  { font-size: 8px; }
-  .dm-card-main  { padding: 7px 4px 7px 8px; gap: 4px; }
-  .dm-card-title { font-size: 12px; }
-  .dm-now-badge  { font-size: 8px; padding: 1px 6px; }
+  .dm-summary-primary { font-size: 15px; }
+  .dm-summary-key     { font-size: 8px; }
+  .dm-time-hm         { font-size: 11px; }
+  .dm-time-ampm       { font-size: 9px; }
+  .dm-card-main       { padding: 6px 4px 6px 8px; gap: 4px; }
+  .dm-card-title      { font-size: 12px; }
 }
 
 @media (max-width: 374px) {
-  .dm-stop-time   { padding-right: 4px; }
-  .dm-card        { margin-left: 5px; }
+  .dm-stop-time   { padding-right: 2px; }
+  .dm-card        { margin-left: 4px; }
+  .dm-now-badge-route { font-size: 8px; padding: 1px 4px; }
 }
 
-/* ── NOW card subtle glow ────────────────────────────────────────── */
-
-.dm-card.dm-card-is-now {
-  box-shadow: 0 3px 20px rgba(99, 102, 241, 0.20), 0 0 0 1px rgba(99, 102, 241, 0.18);
-}
-
-/* ── Card row: wraps main + focus btn, stacks on mobile, row on desktop ── */
+/* ── Card row: wraps main + focus btn ────────────────────────────── */
 
 .dm-card-row {
   display: block;
@@ -478,7 +548,7 @@
 
   .dm-card-row .dm-focus-row {
     flex-shrink: 0;
-    padding: 6px 8px 6px 0;
+    padding: 5px 8px 5px 0;
     display: flex;
     align-items: center;
   }
