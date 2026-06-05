@@ -665,8 +665,8 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
 
       {/* ── Today's Focus — tasks dominate the screen */}
       <section className="tasks-section" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-        <div className="section-header" style={{ flexWrap: "wrap", rowGap: "6px", alignItems: "flex-start" }}>
-          <h2 className="section-title" style={{ flex: "1 1 auto" }}>
+        <div className="section-header" style={{ gap: "8px", alignItems: "center", justifyContent: "flex-start" }}>
+          <h2 className="section-title" style={{ flex: "0 0 auto", margin: 0 }}>
             Today's Focus
             {isMVDMode && (
               <span style={{ color: "var(--warning)", fontSize: "11px", fontWeight: "700", marginLeft: "8px" }}>
@@ -679,7 +679,8 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               </span>
             )}
           </h2>
-          <div className="focus-now-chip-row" style={{ flex: "0 0 100%" }}>
+          <div className="focus-now-chip-shell">
+          <div className="focus-now-chip-row">
             <button
               className={`stuck-btn focus-now-chip${focusNowMode ? " focus-now-chip--active" : ""}`}
               onClick={() => {
@@ -725,6 +726,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
             >
               🔋 {config.isLowEnergyMode ? "Low Energy ON" : "Low Energy"}
             </button>
+          </div>
           </div>
         </div>
 

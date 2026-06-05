@@ -322,7 +322,6 @@ function AvailableStrip({ tasks, isOpen, onToggle, onAdd }) {
 }
 
 export default function DayMapPage({ payload, savePayload, onClose, onStartFocus, onAddTask, flushNow = () => {} }) {
-  const [headerVariant, setHeaderVariant] = useState("A");
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [stripOpen, setStripOpen] = useState(true);
 
@@ -492,14 +491,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
     <div className="day-map-page">
       <div className="day-map-topbar">
         <div className="day-map-title">
-          <div className="day-map-title-toprow">
-            <span>Today</span>
-            <div className="day-map-ab-toggle" aria-label="Header style preview">
-              <button type="button" className={`ab-btn${headerVariant === "A" ? " ab-active" : ""}`} onClick={() => setHeaderVariant("A")}>A</button>
-              <button type="button" className={`ab-btn${headerVariant === "B" ? " ab-active" : ""}`} onClick={() => setHeaderVariant("B")}>B</button>
-            </div>
-          </div>
-          <h1 className={`day-map-title-option-${headerVariant === "A" ? "a" : "b"}`}>
+          <h1 className="day-map-title-option-b">
             <span className="dm-word-day">Day</span>{" "}
             <span className="dm-word-map">Map</span>
           </h1>
