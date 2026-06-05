@@ -1,0 +1,365 @@
+/* ================================================================
+   Focus Now — Today tab single-task mode
+   All classes namespaced focus-now-* to avoid collision
+   ================================================================ */
+
+/* ── Chip row: horizontal scroll on mobile, no wrap ─────────── */
+.focus-now-chip-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 2px;
+}
+.focus-now-chip-row::-webkit-scrollbar { display: none; }
+
+/* ── Focus Now chip ──────────────────────────────────────────── */
+.focus-now-chip { flex-shrink: 0; white-space: nowrap; }
+
+.focus-now-chip--active {
+  background: var(--accent) !important;
+  color: var(--btn-text, #0a1a26) !important;
+  border-color: var(--accent) !important;
+}
+
+/* ── Priority badge (local, uses app-level CSS vars) ─────────── */
+.focus-now-priority {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 20px;
+  border-radius: 5px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 800;
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+}
+.focus-now-priority.p1 { background: var(--p1-bg); color: var(--p1-text); }
+.focus-now-priority.p2 { background: var(--p2-bg); color: var(--p2-text); }
+.focus-now-priority.p3 { background: var(--p3-bg); color: var(--p3-text); }
+.focus-now-priority.p4 { background: var(--p4-bg); color: var(--p4-text); }
+
+/* ── Bottom sheet backdrop ───────────────────────────────────── */
+.focus-now-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+/* ── Bottom sheet container ──────────────────────────────────── */
+.focus-now-sheet {
+  width: 100%;
+  max-width: 620px;
+  max-height: 70vh;
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.focus-now-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+
+.focus-now-sheet-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.focus-now-sheet-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+}
+.focus-now-sheet-close:hover { background: rgba(255, 255, 255, 0.14); }
+
+.focus-now-sheet-body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1;
+  padding: 6px 0 8px;
+}
+
+/* ── Picker section labels ───────────────────────────────────── */
+.focus-now-section-label {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 8px 16px 4px;
+  font-family: var(--font-sans);
+}
+
+/* ── Individual task row in picker ───────────────────────────── */
+.focus-now-pick-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background 0.12s;
+}
+.focus-now-pick-row:hover,
+.focus-now-pick-row:active { background: rgba(255, 255, 255, 0.05); }
+.focus-now-pick-row.is-selected { background: rgba(87, 241, 219, 0.08); }
+
+.focus-now-pick-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.focus-now-pick-dur {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.focus-now-pick-recommended {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Focus Now single-task view ──────────────────────────────── */
+.focus-now-view {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 2px 0;
+}
+
+.focus-now-headline {
+  margin: 0;
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--text-muted);
+  text-align: center;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0.015em;
+  font-family: var(--font-sans);
+}
+
+/* ── Focused task card ───────────────────────────────────────── */
+.focus-now-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(87, 241, 219, 0.18);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.focus-now-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.focus-now-card-dur {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-left: auto;
+  font-family: var(--font-sans);
+}
+
+.focus-now-card-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.4;
+  font-family: var(--font-sans);
+}
+
+.focus-now-card-step {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  font-weight: 500;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 8px;
+  font-family: var(--font-sans);
+}
+
+.focus-now-substeps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.focus-now-substep {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+  line-height: 1.4;
+  font-family: var(--font-sans);
+}
+
+/* ── Action buttons ──────────────────────────────────────────── */
+.focus-now-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.focus-now-actions-row {
+  display: flex;
+  gap: 8px;
+}
+
+.focus-now-btn {
+  min-height: 44px;
+  border-radius: 10px;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.12s;
+  width: 100%;
+  padding: 0 12px;
+}
+.focus-now-btn:active { opacity: 0.78; }
+
+.focus-now-btn--primary {
+  background: var(--accent);
+  color: var(--btn-text, #0a1a26);
+}
+.focus-now-btn--primary:hover { opacity: 0.90; }
+
+.focus-now-btn--done {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--text-primary);
+}
+.focus-now-btn--done:hover { background: rgba(255, 255, 255, 0.12); }
+
+.focus-now-btn--ghost {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+  font-size: 13px;
+  min-height: 38px;
+  flex: 1;
+}
+.focus-now-btn--ghost:hover { background: rgba(255, 255, 255, 0.05); }
+
+/* ── Hidden note ─────────────────────────────────────────────── */
+.focus-now-hidden-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  font-weight: 500;
+  font-family: var(--font-sans);
+}
+
+/* ── Completed state ─────────────────────────────────────────── */
+.focus-now-completed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 16px;
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.focus-now-completed-icon {
+  font-size: 30px;
+  color: var(--success);
+  line-height: 1;
+}
+
+.focus-now-completed-text {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.focus-now-completed-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+/* ── Empty picker state ──────────────────────────────────────── */
+.focus-now-empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  line-height: 1.5;
+}
+
+/* ── Tablet / desktop adjustments ────────────────────────────── */
+@media (min-width: 641px) {
+  .focus-now-sheet {
+    border-radius: 12px;
+    align-self: flex-end;
+  }
+  .focus-now-card-title { font-size: 17px; }
+  .focus-now-btn { font-size: 15px; }
+}
