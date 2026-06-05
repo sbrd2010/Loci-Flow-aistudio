@@ -249,10 +249,14 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
   );
 }
 
-function AnchorControl({ anchorMinutes, onStartFromNow, onChangeAnchor, onAutoFill, onClear, canAutoFill, canClear }) {
-  const actualNow = currentDayMinutes();
+function AnchorControl({ anchorMinutes, onChangeAnchor, onAutoFill, onClear, canAutoFill, canClear }) {
+  const [actualNow, setActualNow] = useState(currentDayMinutes);
+  useEffect(() => {
+    const id = setInterval(() => setActualNow(currentDayMinutes()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   const nextQuarter = Math.ceil(actualNow / 15) * 15;
-  const isAlreadyNow = Math.abs(anchorMinutes - actualNow) <= 2;
 
   const options = [actualNow];
   for (let m = nextQuarter; m <= actualNow + 600 && m < 1440; m += 15) {
@@ -279,9 +283,6 @@ function AnchorControl({ anchorMinutes, onStartFromNow, onChangeAnchor, onAutoFi
         ))}
       </select>
       <div className="day-map-anchor-actions">
-        {!isAlreadyNow && (
-          <button type="button" className="day-map-now-btn" onClick={onStartFromNow}>Now</button>
-        )}
         <button type="button" className="day-map-action-btn" onClick={onAutoFill} disabled={!canAutoFill}>Auto-fill</button>
         <button type="button" className="day-map-action-btn day-map-action-btn-clear" onClick={onClear} disabled={!canClear}>Clear</button>
       </div>
@@ -405,11 +406,6 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
     applyAndSave(scheduledTasks, anchorMinutes, { dayMapDate: todayStr, dayMapAnchorMinutes: anchorMinutes });
   }, [scheduledTasks, anchorMinutes, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const startFromNow = () => {
-    const now = currentDayMinutes();
-    applyAndSave(scheduledTasks, now, { dayMapDate: todayStr, dayMapAnchorMinutes: now });
-  };
-
   const setAnchor = (minutes) => {
     applyAndSave(scheduledTasks, minutes, { dayMapDate: todayStr, dayMapAnchorMinutes: minutes });
   };
@@ -508,7 +504,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
             <span className="dm-word-map">Map</span>
           </h1>
         </div>
-        <button type="button" className="day-map-back" aria-label="← Back" onClick={() => { flushNow(); onClose(); }}>←<span className="day-map-back-word"> Back</span></button>
+        <button type="button" className="day-map-back" aria-label="Back" onClick={() => { flushNow(); onClose(); }}>↩<span className="day-map-back-word"> Back</span></button>
       </div>
 
       {activeTodayTasks.length === 0 ? (
@@ -528,7 +524,6 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
 
           <AnchorControl
             anchorMinutes={anchorMinutes}
-            onStartFromNow={startFromNow}
             onChangeAnchor={setAnchor}
             onAutoFill={autoFill}
             onClear={clearRoute}
