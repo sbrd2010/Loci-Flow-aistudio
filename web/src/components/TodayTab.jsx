@@ -679,6 +679,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               </span>
             )}
           </h2>
+          <div style={{ flex: "1 1 0", minWidth: "0", overflow: "hidden" }}>
           <div className="focus-now-chip-row">
             <button
               className={`stuck-btn focus-now-chip${focusNowMode ? " focus-now-chip--active" : ""}`}
@@ -725,6 +726,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
             >
               🔋 {config.isLowEnergyMode ? "Low Energy ON" : "Low Energy"}
             </button>
+          </div>
           </div>
         </div>
 

@@ -14,9 +14,6 @@
   scrollbar-width: none;
   -ms-overflow-style: none;
   padding-bottom: 2px;
-  /* as a flex item inside section-header */
-  flex: 1 1 0;
-  min-width: 0;                /* allows row to shrink below its content size */
 }
 .focus-now-chip-row::-webkit-scrollbar { display: none; }
 
