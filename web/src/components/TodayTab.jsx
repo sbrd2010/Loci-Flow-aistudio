@@ -9,6 +9,7 @@ import { getAIKeys, callAI } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
+import { getCurrentFocusQuote } from "../utils/focusQuotes";
 import "../styles/focusNow.css";
 import {
   DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor,
@@ -185,30 +186,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
     }
   }, [tasks, focusNowMode, focusNowTaskId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const QUOTES = [
-    { quote: "The secret of getting ahead is getting started.", author: "Mark Twain" },
-    { quote: "A goal without a plan is just a wish.", author: "Antoine de Saint-Exupéry" },
-    { quote: "Schedule your priorities, don't prioritize your schedule.", author: "Stephen Covey" },
-    { quote: "Until we can manage time, we can manage nothing else.", author: "Peter Drucker" },
-    { quote: "Lost time is never found again.", author: "Benjamin Franklin" },
-    { quote: "An hour of planning can save you 10 hours of doing.", author: "Dale Carnegie" },
-    { quote: "Deep work is the ability to focus without distraction.", author: "Cal Newport" },
-    { quote: "The main thing is to keep the main thing the main thing.", author: "Stephen Covey" },
-    { quote: "Start where you are. Use what you have. Do what you can.", author: "Arthur Ashe" },
-    { quote: "Clarity about what matters gives clarity about what does not.", author: "Cal Newport" },
-    { quote: "Absorb what is useful, discard what is not.", author: "Bruce Lee" },
-    { quote: "Begin. The rest is easy.", author: "Seneca" },
-    { quote: "Action is the antidote to despair.", author: "Joan Baez" },
-    { quote: "Progress, not perfection.", author: "Anonymous" },
-    { quote: "What you do every day matters more than what you do once in a while.", author: "Gretchen Rubin" },
-    { quote: "You don't rise to the level of your goals. You fall to the level of your systems.", author: "James Clear" },
-    { quote: "Almost everything will work again if you unplug it for a few minutes — including you.", author: "Anne Lamott" },
-    { quote: "Rest is not idleness.", author: "John Lubbock" },
-    { quote: "It's not about time management. It's about attention management.", author: "Adam Grant" },
-    { quote: "The two most powerful warriors are patience and time.", author: "Leo Tolstoy" },
-    { quote: "Do less, but do it well.", author: "Anonymous" },
-  ];
-  const currentQuote = QUOTES[Math.floor(Date.now() / (2 * 3600 * 1000)) % QUOTES.length];
+  const currentQuote = getCurrentFocusQuote();
 
   const [timelineProgress, setTimelineProgress] = useState(0.5);
   const [currentTimeStr, setCurrentTimeStr] = useState("");
