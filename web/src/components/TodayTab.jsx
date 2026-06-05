@@ -9,6 +9,7 @@ import { getAIKeys, callAI } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
+import "../styles/focusNow.css";
 import {
   DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor,
   useSensor, useSensors, DragOverlay
@@ -47,6 +48,9 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
   const [rescueStep, setRescueStep] = useState(0);
   const [isMVDMode, setIsMVDMode] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState(null);
+  const [focusNowMode, setFocusNowMode] = useState(false);
+  const [focusNowTaskId, setFocusNowTaskId] = useState(null);
+  const [showFocusNowPicker, setShowFocusNowPicker] = useState(false);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -172,6 +176,14 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
   useEffect(() => {
     if (isFocusMode) requestNotifPermission();
   }, [isFocusMode]);
+
+  // Auto-exit Focus Now if the selected task is deleted externally
+  useEffect(() => {
+    if (focusNowMode && focusNowTaskId && !tasks.find(t => t.uuid === focusNowTaskId && !t.isDeleted)) {
+      setFocusNowMode(false);
+      setFocusNowTaskId(null);
+    }
+  }, [tasks, focusNowMode, focusNowTaskId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const QUOTES = [
     { quote: "The secret of getting ahead is getting started.", author: "Mark Twain" },
@@ -455,6 +467,21 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
   const remainingTasks = todayTasksFiltered.filter((t) => !t.isCompleted).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
   const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted);
 
+  // Focus Now: first incomplete task in Day Map order for today (shown as "Recommended")
+  const dayMapNextTask = todayTasksAll
+    .filter(t => !t.isCompleted && t.dayMapDate === _todayStr && t.dayMapOrder != null)
+    .sort((a, b) => (a.dayMapOrder ?? 999) - (b.dayMapOrder ?? 999))[0] || null;
+
+  // All incomplete today tasks for the picker (unfiltered by mode chips)
+  const focusNowPickerTasks = todayTasksAll
+    .filter(t => !t.isCompleted)
+    .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+
+  // The currently selected Focus Now task (null if deleted mid-session)
+  const focusNowTask = (focusNowMode && focusNowTaskId)
+    ? tasks.find(t => t.uuid === focusNowTaskId && !t.isDeleted)
+    : null;
+
   const progressRatio = timerMaxSeconds > 0 ? timerSecondsLeft / timerMaxSeconds : 0;
   const strokeDashoffset = 439.8 * (1 - progressRatio);
   const formatTimerMinutes = Math.floor(timerSecondsLeft / 60);
@@ -652,14 +679,28 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               </span>
             )}
           </h2>
-          <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <div className="focus-now-chip-row" style={{ flex: "0 0 100%" }}>
+            <button
+              className={`stuck-btn focus-now-chip${focusNowMode ? " focus-now-chip--active" : ""}`}
+              onClick={() => {
+                if (focusNowMode) {
+                  setFocusNowMode(false);
+                  setFocusNowTaskId(null);
+                } else {
+                  setShowFocusNowPicker(true);
+                }
+              }}
+              title={focusNowMode ? "Exit Focus Now" : "Focus on one task"}
+            >
+              🎯 Focus Now
+            </button>
             {onOpenDayMap && (
               <button
                 className={`stuck-btn day-map-nav-btn${dayMapPlaced > 0 ? " has-tasks" : ""}`}
                 onClick={onOpenDayMap}
                 title="Open Day Map"
               >
-                Day Map {dayMapPlaced}/{dayMapTotal}
+                Day Map
               </button>
             )}
             <button
@@ -684,14 +725,101 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
             >
               🔋 {config.isLowEnergyMode ? "Low Energy ON" : "Low Energy"}
             </button>
-            <span className="section-count-badge">
-              {completedTasks.length}/{todayTasksAll.length}
-            </span>
           </div>
         </div>
 
         <div className="tasks-list" data-testid="today-tasks-list">
-          {todayTasksAll.length === 0 && (() => {
+          {/* ── Focus Now single-task view ─────────────────────────── */}
+          {focusNowMode && focusNowTask && (
+            <div className="focus-now-view">
+              <p className="focus-now-headline">Stay here. This task. This moment.</p>
+
+              {focusNowTask.isCompleted ? (
+                <div className="focus-now-completed">
+                  <div className="focus-now-completed-icon">✓</div>
+                  <p className="focus-now-completed-text">Done. That&apos;s one down.</p>
+                  <div className="focus-now-completed-actions">
+                    <button
+                      className="focus-now-btn focus-now-btn--done"
+                      onClick={() => setShowFocusNowPicker(true)}
+                    >
+                      Pick next task
+                    </button>
+                    <button
+                      className="focus-now-btn focus-now-btn--ghost"
+                      onClick={() => { setFocusNowMode(false); setFocusNowTaskId(null); }}
+                    >
+                      Exit
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="focus-now-card">
+                    <div className="focus-now-card-header">
+                      <span className={`focus-now-priority ${(focusNowTask.priority || "P3").toLowerCase()}`}>
+                        {focusNowTask.priority || "P3"}
+                      </span>
+                      {focusNowTask.timeEstimateMinutes > 0 && (
+                        <span className="focus-now-card-dur">{focusNowTask.timeEstimateMinutes}m</span>
+                      )}
+                    </div>
+                    <h3 className="focus-now-card-title">{focusNowTask.title}</h3>
+                    {focusNowTask.concreteStep && (
+                      <p className="focus-now-card-step">{focusNowTask.concreteStep}</p>
+                    )}
+                    {focusNowTask.subSteps && focusNowTask.subSteps.filter(s => !s.done).length > 0 && (
+                      <div className="focus-now-substeps">
+                        {focusNowTask.subSteps.filter(s => !s.done).slice(0, 3).map(s => (
+                          <div key={s.id} className="focus-now-substep">· {s.text}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="focus-now-actions">
+                    <button
+                      className="focus-now-btn focus-now-btn--primary"
+                      onClick={() => {
+                        if (!focusNowTask.isNowFocus) {
+                          handlePinTask(focusNowTask);
+                        } else {
+                          setIsFocusMode(true);
+                        }
+                      }}
+                    >
+                      ▶ Start Focus
+                    </button>
+                    <button
+                      className="focus-now-btn focus-now-btn--done"
+                      onClick={() => handleToggleComplete(focusNowTask)}
+                    >
+                      ✓ Done
+                    </button>
+                    <div className="focus-now-actions-row">
+                      <button
+                        className="focus-now-btn focus-now-btn--ghost"
+                        onClick={() => setShowFocusNowPicker(true)}
+                      >
+                        Switch Task
+                      </button>
+                      <button
+                        className="focus-now-btn focus-now-btn--ghost"
+                        onClick={() => { setFocusNowMode(false); setFocusNowTaskId(null); }}
+                      >
+                        Exit
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <p className="focus-now-hidden-note">Other tasks are hidden while you focus.</p>
+            </div>
+          )}
+
+          {/* ── Normal task list (hidden when Focus Now mode is active) ── */}
+          {(!focusNowMode || !focusNowTask) && todayTasksAll.length === 0 && (() => {
             const hasEverHadTasks = tasks.filter(t => !t.isDeleted).length > 0;
             if (hasEverHadTasks) {
               return (
@@ -735,7 +863,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               </div>
             );
           })()}
-          {todayTasksAll.length > 0 && todayTasksFiltered.length === 0 && isMVDMode && (
+          {(!focusNowMode || !focusNowTask) && todayTasksAll.length > 0 && todayTasksFiltered.length === 0 && isMVDMode && (
             <div style={{ textAlign: "center", padding: "20px 14px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
               <p style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "6px" }}>No must-do tasks marked yet.</p>
               <p style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: "1.5" }}>
@@ -743,7 +871,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               </p>
             </div>
           )}
-          {todayTasksAll.length > 0 && todayTasksFiltered.length === 0 && !isMVDMode && config.isLowEnergyMode && (
+          {(!focusNowMode || !focusNowTask) && todayTasksAll.length > 0 && todayTasksFiltered.length === 0 && !isMVDMode && config.isLowEnergyMode && (
             <div style={{ textAlign: "center", padding: "20px 14px", color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
               <p style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "6px" }}>No low-energy tasks available.</p>
               <p style={{ fontSize: "12px", lineHeight: "1.5" }}>
@@ -751,7 +879,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               </p>
             </div>
           )}
-          {todayTasksFiltered.length > 0 && (
+          {(!focusNowMode || !focusNowTask) && todayTasksFiltered.length > 0 && (
             <>
               <DndContext
                 sensors={sensors}
@@ -828,8 +956,8 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
         </div>
       </section>
 
-      {/* ── Active Focus Block — only when a task is pinned */}
-      {activeTask && (
+      {/* ── Active Focus Block — only when a task is pinned and not in Focus Now mode */}
+      {!focusNowMode && activeTask && (
         <section className="card focus-card">
           <div className="focus-top-bar">
             <div className="focus-live-indicator">
@@ -935,6 +1063,65 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
           editTask={editingTask}
           onClose={() => setEditingTask(null)}
         />
+      )}
+
+      {/* ── Focus Now: task picker bottom sheet ─────────────────── */}
+      {showFocusNowPicker && (
+        <div className="focus-now-backdrop" onClick={() => setShowFocusNowPicker(false)}>
+          <div className="focus-now-sheet" onClick={e => e.stopPropagation()}>
+            <div className="focus-now-sheet-header">
+              <span className="focus-now-sheet-title">Pick one task</span>
+              <button className="focus-now-sheet-close" onClick={() => setShowFocusNowPicker(false)} aria-label="Close picker">✕</button>
+            </div>
+            <div className="focus-now-sheet-body">
+              {focusNowPickerTasks.length === 0 ? (
+                <p className="focus-now-empty">No tasks to focus on yet. Add a task to get started.</p>
+              ) : (
+                <>
+                  {dayMapNextTask && (
+                    <>
+                      <div className="focus-now-section-label">Recommended · Day Map</div>
+                      <button
+                        className={`focus-now-pick-row${focusNowTaskId === dayMapNextTask.uuid ? " is-selected" : ""}`}
+                        onClick={() => { setFocusNowTaskId(dayMapNextTask.uuid); setFocusNowMode(true); setShowFocusNowPicker(false); }}
+                      >
+                        <span className={`focus-now-priority ${(dayMapNextTask.priority || "P3").toLowerCase()}`}>
+                          {dayMapNextTask.priority || "P3"}
+                        </span>
+                        <span className="focus-now-pick-title">{dayMapNextTask.title}</span>
+                        {dayMapNextTask.timeEstimateMinutes > 0 && (
+                          <span className="focus-now-pick-dur">{dayMapNextTask.timeEstimateMinutes}m</span>
+                        )}
+                        <span className="focus-now-pick-recommended">Next up</span>
+                      </button>
+                    </>
+                  )}
+                  <div className="focus-now-section-label">
+                    {dayMapNextTask ? "All tasks" : "Today's tasks"}
+                  </div>
+                  {focusNowPickerTasks
+                    .filter(t => !dayMapNextTask || t.uuid !== dayMapNextTask.uuid)
+                    .map(task => (
+                      <button
+                        key={task.uuid}
+                        className={`focus-now-pick-row${focusNowTaskId === task.uuid ? " is-selected" : ""}`}
+                        onClick={() => { setFocusNowTaskId(task.uuid); setFocusNowMode(true); setShowFocusNowPicker(false); }}
+                      >
+                        <span className={`focus-now-priority ${(task.priority || "P3").toLowerCase()}`}>
+                          {task.priority || "P3"}
+                        </span>
+                        <span className="focus-now-pick-title">{task.title}</span>
+                        {task.timeEstimateMinutes > 0 && (
+                          <span className="focus-now-pick-dur">{task.timeEstimateMinutes}m</span>
+                        )}
+                      </button>
+                    ))
+                  }
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Inline rescue overlay — triggered by Stuck? button on focus card */}
