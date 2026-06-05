@@ -854,80 +854,6 @@
 }
 
 /* ================================================================
-   Mobile-only overrides (≤640 px) — Pixel 6a / iPhone 11 Pro
-   ================================================================ */
-
-@media (max-width: 640px) {
-  /* 1. Hide "TODAY" eyebrow label */
-  .day-map-title-toprow > span { display: none; }
-
-  /* 2. Hide A/B toggle; force Option B appearance regardless of selection */
-  .day-map-ab-toggle { display: none; }
-
-  .day-map-title-option-a {
-    font-weight: 700;
-    color: inherit;
-    text-shadow: none;
-  }
-  .day-map-title-option-a .dm-word-day {
-    color: #E8A820;
-    text-decoration: underline;
-    text-decoration-color: rgba(232, 168, 32, 0.55);
-    text-underline-offset: 3px;
-    text-decoration-thickness: 2px;
-  }
-  .day-map-title-option-a .dm-word-map { color: #A8B4C0; }
-
-  /* 3. Title: nudge slightly away from extreme left */
-  .day-map-topbar { grid-template-columns: 1fr auto; }
-  .day-map-title { padding-left: 20px; }
-
-  /* Back button: ↩ symbol, prominent 44×44px square tap target */
-  .day-map-back {
-    width: 44px;
-    height: 44px;
-    min-height: 44px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    font-weight: 800;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    background: rgba(255, 255, 255, 0.09);
-  }
-  .day-map-back-word { display: none; }
-
-  /* 5. Anchor bar: single flex row — label | select | auto-fill | clear */
-  .day-map-anchor-bar { gap: 6px; padding: 5px 10px; flex-wrap: nowrap; align-items: center; }
-
-  /* Label: fixed 56px, "Starting" line 1 / "from" line 2, regular weight */
-  .day-map-anchor-label {
-    flex: 0 0 56px;
-    width: 56px;
-    max-width: none;
-    white-space: normal;
-    font-size: 10px;
-    font-weight: 400;
-    line-height: 1.35;
-  }
-
-  /* Select: flex:1 fills remaining space on any screen width */
-  .day-map-anchor-select { flex: 1; min-width: 0; height: 28px; font-size: 11px; font-weight: 400; }
-
-  /* Action buttons: compact, nowrap */
-  .day-map-action-btn { min-height: 28px; padding: 3px 8px; font-size: 10px; font-weight: 600; white-space: nowrap; }
-
-  /* Now button removed from JSX; hide via CSS as belt-and-suspenders */
-  .day-map-now-btn { display: none; }
-
-  /* Unscheduled task chips: regular weight, tighter */
-  .day-map-chip-title { font-weight: 400; font-size: 12px; }
-  .day-map-chip-duration { font-weight: 400; font-size: 10px; }
-}
-
-/* ================================================================
    Day Map V1 — Execution Route
    ================================================================ */
 
@@ -1257,4 +1183,77 @@
   }
   .day-map-route-time { display: none; }
   .day-map-now-badge { padding: 5px 12px 4px; }
+}
+
+/* ================================================================
+   Mobile-only overrides (≤640 px) — must be last to win the cascade
+   ================================================================ */
+
+@media (max-width: 640px) {
+  /* Hide "TODAY" eyebrow label */
+  .day-map-title-toprow > span { display: none; }
+
+  /* Hide A/B toggle; force Option B appearance regardless of selection */
+  .day-map-ab-toggle { display: none; }
+
+  .day-map-title-option-a {
+    font-weight: 700;
+    color: inherit;
+    text-shadow: none;
+  }
+  .day-map-title-option-a .dm-word-day {
+    color: #E8A820;
+    text-decoration: underline;
+    text-decoration-color: rgba(232, 168, 32, 0.55);
+    text-underline-offset: 3px;
+    text-decoration-thickness: 2px;
+  }
+  .day-map-title-option-a .dm-word-map { color: #A8B4C0; }
+
+  /* Title: nudge away from extreme left; back button icon-only */
+  .day-map-topbar { grid-template-columns: 1fr auto; }
+  .day-map-title { padding-left: 20px; }
+
+  .day-map-back {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 800;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.09);
+  }
+  .day-map-back-word { display: none; }
+
+  /* Anchor bar: single flex row — label | select | auto-fill | clear */
+  .day-map-anchor-bar { gap: 6px; padding: 5px 10px; flex-wrap: nowrap; align-items: center; }
+
+  /* Label: fixed 56px, wraps "Starting / from" to 2 lines */
+  .day-map-anchor-label {
+    flex: 0 0 56px;
+    width: 56px;
+    max-width: none;
+    white-space: normal;
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1.35;
+  }
+
+  /* Select: fills remaining row space, never forces minimum width */
+  .day-map-anchor-select { flex: 1; min-width: 0; height: 28px; font-size: 11px; font-weight: 400; }
+
+  /* Action buttons: compact, stay on same row */
+  .day-map-action-btn { min-height: 28px; padding: 3px 8px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+
+  /* Now button removed from JSX; belt-and-suspenders hide */
+  .day-map-now-btn { display: none; }
+
+  /* Unscheduled task chips: regular weight */
+  .day-map-chip-title { font-weight: 400; font-size: 12px; }
+  .day-map-chip-duration { font-weight: 400; font-size: 10px; }
 }
