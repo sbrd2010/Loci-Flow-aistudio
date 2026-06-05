@@ -658,53 +658,53 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
             )}
           </h2>
           <div className="focus-now-chip-shell">
-          <div className="focus-now-chip-row">
-            <button
-              className={`stuck-btn focus-now-chip${focusNowMode ? " focus-now-chip--active" : ""}`}
-              onClick={() => {
-                if (focusNowMode) {
-                  setFocusNowMode(false);
-                  setFocusNowTaskId(null);
-                } else {
-                  setShowFocusNowPicker(true);
-                }
-              }}
-              title={focusNowMode ? "Exit Focus Now" : "Focus on one task"}
-            >
-              🎯 Focus Now
-            </button>
-            {onOpenDayMap && (
+            <div className="focus-now-chip-row">
               <button
-                className={`stuck-btn day-map-nav-btn${dayMapPlaced > 0 ? " has-tasks" : ""}`}
-                onClick={onOpenDayMap}
-                title="Open Day Map"
+                className={`stuck-btn focus-now-chip${focusNowMode ? " focus-now-chip--active" : ""}`}
+                onClick={() => {
+                  if (focusNowMode) {
+                    setFocusNowMode(false);
+                    setFocusNowTaskId(null);
+                  } else {
+                    setShowFocusNowPicker(true);
+                  }
+                }}
+                title={focusNowMode ? "Exit Focus Now" : "Focus on one task"}
               >
-                Day Map
+                🎯 Focus Now
               </button>
-            )}
-            <button
-              className="stuck-btn"
-              onClick={() => setIsMVDMode(m => !m)}
-              title={isMVDMode ? "Must-Do mode ON — tap to show all" : "Show only must-do tasks"}
-              style={{
-                background: isMVDMode ? "var(--warning)" : "var(--bg-secondary)",
-                color: isMVDMode ? "#fff" : "var(--text-secondary)"
-              }}
-            >
-              ⭐ {isMVDMode ? "Must-Dos" : "Must-Do"}
-            </button>
-            <button
-              className="stuck-btn"
-              onClick={handleEnergyToggle}
-              title={config.isLowEnergyMode ? "Low Energy ON — tap to disable" : "Enable Low Energy mode"}
-              style={{
-                background: config.isLowEnergyMode ? "var(--success)" : "var(--bg-secondary)",
-                color: config.isLowEnergyMode ? "#fff" : "var(--text-secondary)"
-              }}
-            >
-              🔋 {config.isLowEnergyMode ? "Low Energy ON" : "Low Energy"}
-            </button>
-          </div>
+              {onOpenDayMap && (
+                <button
+                  className={`stuck-btn day-map-nav-btn${dayMapPlaced > 0 ? " has-tasks" : ""}`}
+                  onClick={onOpenDayMap}
+                  title="Open Day Map"
+                >
+                  Day Map
+                </button>
+              )}
+              <button
+                className="stuck-btn"
+                onClick={() => setIsMVDMode(m => !m)}
+                title={isMVDMode ? "Must-Do mode ON — tap to show all" : "Show only must-do tasks"}
+                style={{
+                  background: isMVDMode ? "var(--warning)" : "var(--bg-secondary)",
+                  color: isMVDMode ? "#fff" : "var(--text-secondary)"
+                }}
+              >
+                ⭐ {isMVDMode ? "Must-Dos" : "Must-Do"}
+              </button>
+              <button
+                className="stuck-btn"
+                onClick={handleEnergyToggle}
+                title={config.isLowEnergyMode ? "Low Energy ON — tap to disable" : "Enable Low Energy mode"}
+                style={{
+                  background: config.isLowEnergyMode ? "var(--success)" : "var(--bg-secondary)",
+                  color: config.isLowEnergyMode ? "#fff" : "var(--text-secondary)"
+                }}
+              >
+                🔋 {config.isLowEnergyMode ? "Low Energy ON" : "Low Energy"}
+              </button>
+            </div>
           </div>
         </div>
 
