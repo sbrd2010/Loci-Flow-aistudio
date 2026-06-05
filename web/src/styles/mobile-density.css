@@ -167,13 +167,18 @@
     padding-right: 10px;
   }
 
-  .tasks-section .section-header > div {
-    width: 100%;
-    justify-content: flex-start !important;
+  /* Two-line layout on small phones: heading row 1, chips row 2 */
+  .tasks-section .section-header {
+    flex-wrap: wrap !important;
   }
 
   .tasks-section .section-title {
-    flex-basis: 100% !important;
+    flex: 0 0 100% !important;
+  }
+
+  .tasks-section .focus-now-chip-shell {
+    flex: 0 0 100% !important;
+    min-width: 0;
   }
 
   .tasks-section .task-title-text {

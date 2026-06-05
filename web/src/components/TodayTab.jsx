@@ -666,7 +666,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
       {/* ── Today's Focus — tasks dominate the screen */}
       <section className="tasks-section" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
         <div className="section-header" style={{ gap: "8px", alignItems: "center", justifyContent: "flex-start" }}>
-          <h2 className="section-title" style={{ flex: "0 0 auto", margin: 0, pointerEvents: "none" }}>
+          <h2 className="section-title" style={{ flex: "0 0 auto", margin: 0 }}>
             Today's Focus
             {isMVDMode && (
               <span style={{ color: "var(--warning)", fontSize: "11px", fontWeight: "700", marginLeft: "8px" }}>
@@ -679,7 +679,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               </span>
             )}
           </h2>
-          <div style={{ flex: "1 1 0", minWidth: "0", overflow: "hidden" }}>
+          <div className="focus-now-chip-shell">
           <div className="focus-now-chip-row">
             <button
               className={`stuck-btn focus-now-chip${focusNowMode ? " focus-now-chip--active" : ""}`}

@@ -3,6 +3,13 @@
    All classes namespaced focus-now-* to avoid collision
    ================================================================ */
 
+/* ── Chip shell: flex item that holds the scrollable chip row ─── */
+.focus-now-chip-shell {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
 /* ── Chip row: sits inline with heading, scrolls on small screens ── */
 .focus-now-chip-row {
   display: flex;
