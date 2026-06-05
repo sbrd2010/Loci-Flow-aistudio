@@ -1,21 +1,51 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Loci
 
-# Run and deploy your AI Studio app
+A personal productivity web app for managing your day — task lists, deep focus sessions, and a visual Day Map to schedule where each task fits in your week.
 
-This contains everything you need to run your app locally.
+## Tech stack
 
-View your app in AI Studio: https://ai.studio/apps/56266790-f731-4a4c-be32-2a94124ff101
+- **Frontend** — React 18 + Vite
+- **Backend / sync** — Firebase Realtime Database
+- **Testing** — Vitest (unit), Playwright (E2E)
 
-## Run Locally
+## Run locally
 
-**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
+**Prerequisites:** Node.js 18+, npm
 
+```bash
+# 1. Install dependencies
+cd web
+npm install
 
-1. Open Android Studio
-2. Select **Open** and choose the directory containing this project
-3. Allow Android Studio to fix any incompatibilities as it imports the project.
-4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
-5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
-6. Run the app on an emulator or physical device
+# 2. Configure environment
+cp .env.example .env
+# Edit .env — see comments inside for which keys are optional
+
+# 3. Start dev server
+npm run dev
+```
+
+The app opens at `http://localhost:5173`. A **Try Demo** button on the landing page lets you explore without signing in or configuring Firebase.
+
+## Available scripts
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Start local dev server with hot reload |
+| `npm run build` | Production build into `web/dist/` |
+| `npm run preview` | Serve the production build locally |
+| `npm test` | Run unit tests with Vitest |
+| `npm run test:e2e` | Run Playwright E2E tests (requires dev server running) |
+
+## Environment variables
+
+Copy `web/.env.example` to `web/.env`. All variables are optional for local development — the app runs in demo mode without them.
+
+| Variable | Purpose |
+|---|---|
+| `VITE_FIREBASE_APP_ID` | Firebase web app ID (enables cloud sync) |
+| `VITE_GA_MEASUREMENT_ID` | Google Analytics (optional) |
+| `VITE_GROQ_KEY` | Groq API key for AI features (optional) |
+| `VITE_GEMINI_KEY` | Gemini API key for AI features (optional) |
+
+Firebase config beyond the app ID (API key, project ID, etc.) is baked into the app for the hosted version. For your own Firebase project, update `web/src/firebase.js`.
