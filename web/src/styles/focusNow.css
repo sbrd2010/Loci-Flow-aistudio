@@ -3,19 +3,35 @@
    All classes namespaced focus-now-* to avoid collision
    ================================================================ */
 
-/* ── Chip row: horizontal scroll on mobile, no wrap ─────────── */
+/* ── Chip row: sits inline with heading, scrolls on small screens ── */
 .focus-now-chip-row {
   display: flex;
   gap: 6px;
   align-items: center;
-  flex-wrap: nowrap;
-  overflow-x: auto;
+  flex-wrap: nowrap;           /* never wrap to a second row */
+  overflow-x: auto;            /* scroll when chips exceed available width */
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   -ms-overflow-style: none;
   padding-bottom: 2px;
+  /* as a flex item inside section-header */
+  flex: 1 1 0;
+  min-width: 0;                /* allows row to shrink below its content size */
 }
 .focus-now-chip-row::-webkit-scrollbar { display: none; }
+
+/* Every chip must not shrink or wrap */
+.focus-now-chip-row .stuck-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* Desktop/tablet: right-align chips within their available space */
+@media (min-width: 641px) {
+  .focus-now-chip-row {
+    justify-content: flex-end;
+  }
+}
 
 /* ── Focus Now chip ──────────────────────────────────────────── */
 .focus-now-chip { flex-shrink: 0; white-space: nowrap; }

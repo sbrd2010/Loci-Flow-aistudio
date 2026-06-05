@@ -145,47 +145,6 @@
   min-width: 0;
 }
 
-.day-map-title-toprow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.day-map-title-toprow > span {
-  display: block;
-  font-size: 10px;
-  font-weight: 900;
-  color: rgba(129, 140, 248, 0.90);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-/* A/B preview toggle */
-.day-map-ab-toggle {
-  display: flex;
-  gap: 2px;
-}
-
-.ab-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.40);
-  border-radius: 4px;
-  font-size: 9px;
-  font-weight: 800;
-  padding: 1px 5px;
-  cursor: pointer;
-  line-height: 1.4;
-  font-family: var(--font-sans);
-  letter-spacing: 0.04em;
-}
-
-.ab-btn.ab-active {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.35);
-  color: rgba(255, 255, 255, 0.85);
-}
-
 /* Shared h1 base */
 .day-map-title h1 {
   margin: 0;
@@ -194,20 +153,7 @@
   letter-spacing: -0.01em;
 }
 
-/* ── Option A: minimal white premium ───────────────────── */
-.day-map-title-option-a {
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.94);
-  text-shadow: 0 0 22px rgba(255, 255, 255, 0.12);
-}
-
-/* Option A spans: both inherit the white tone */
-.day-map-title-option-a .dm-word-day,
-.day-map-title-option-a .dm-word-map {
-  color: rgba(255, 255, 255, 0.94);
-}
-
-/* ── Option B: gold "Day" + silver "Map" ───────────────── */
+/* ── Day Map title: gold "Day" + silver "Map" ──────────── */
 .day-map-title-option-b {
   font-weight: 700;
 }
@@ -1190,26 +1136,6 @@
    ================================================================ */
 
 @media (max-width: 640px) {
-  /* Hide "TODAY" eyebrow label */
-  .day-map-title-toprow > span { display: none; }
-
-  /* Hide A/B toggle; force Option B appearance regardless of selection */
-  .day-map-ab-toggle { display: none; }
-
-  .day-map-title-option-a {
-    font-weight: 700;
-    color: inherit;
-    text-shadow: none;
-  }
-  .day-map-title-option-a .dm-word-day {
-    color: #E8A820;
-    text-decoration: underline;
-    text-decoration-color: rgba(232, 168, 32, 0.55);
-    text-underline-offset: 3px;
-    text-decoration-thickness: 2px;
-  }
-  .day-map-title-option-a .dm-word-map { color: #A8B4C0; }
-
   /* Title: nudge away from extreme left; back button icon-only */
   .day-map-topbar { grid-template-columns: 1fr auto; }
   .day-map-title { padding-left: 20px; }
