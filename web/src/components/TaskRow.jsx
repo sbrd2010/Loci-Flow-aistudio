@@ -12,14 +12,6 @@ const GripIcon = () => (
   </svg>
 );
 
-const MoreVertIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="12" cy="5" r="2.2"/>
-    <circle cx="12" cy="12" r="2.2"/>
-    <circle cx="12" cy="19" r="2.2"/>
-  </svg>
-);
-
 const PencilIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
@@ -145,8 +137,11 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
     <div
       className={`task-row ${isCompleted ? "completed" : ""}`}
       data-testid="task-row"
+      ref={menuRef}
+      onClick={hasActions ? () => setMenuOpen(o => !o) : undefined}
       style={{
         ...(menuOpen ? { zIndex: 400, position: "relative" } : {}),
+        ...(hasActions ? { cursor: "pointer" } : {}),
       }}
     >
       {/* Grip handle */}
@@ -154,6 +149,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         <button
           {...dragHandleListeners}
           {...(dragHandleAttributes || {})}
+          onClick={e => e.stopPropagation()}
           aria-label="Drag to reorder"
           title="Drag to reorder"
           style={{
@@ -211,7 +207,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
             {[...activeSubSteps, ...doneSubSteps].map(step => (
               <div key={step.id} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "3px 0" }}>
                 <div
-                  onClick={() => onSubStepToggle && onSubStepToggle(task, step.id)}
+                  onClick={e => { e.stopPropagation(); onSubStepToggle && onSubStepToggle(task, step.id); }}
                   style={{ display: "flex", alignItems: "center", gap: "8px", cursor: onSubStepToggle ? "pointer" : "default", flex: 1, minWidth: 0 }}
                 >
                   <div style={{
@@ -251,106 +247,86 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         )}
       </div>
 
-      {/* ⋮ context menu */}
-      {hasActions ? (
-        <div ref={menuRef} style={{ position: "relative", flexShrink: 0 }}>
-          <button
-            onClick={() => setMenuOpen(o => !o)}
-            aria-label="Task options"
-            data-testid="task-menu-btn"
-            style={{
-              background: menuOpen ? "rgba(255,255,255,0.08)" : "transparent",
-              border: `1px solid ${menuOpen ? "var(--border)" : "transparent"}`,
-              cursor: "pointer",
-              color: menuOpen ? "var(--text-primary)" : "var(--text-muted)",
-              opacity: menuOpen ? 1 : 0.45,
-              padding: "4px 5px", borderRadius: "7px",
-              minWidth: "26px", minHeight: "26px",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "all 0.15s"
-            }}
-          >
-            <MoreVertIcon />
-          </button>
-
-          {menuOpen && (
-            <div style={{
-              position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 300,
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              borderRadius: "16px",
-              boxShadow: "0 16px 48px rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.18)",
-              minWidth: "200px",
-              padding: "6px",
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)"
-            }}>
-              {onPin && (
-                <MenuItem onClick={() => { onPin(task); setMenuOpen(false); }} color={isNowFocus ? "var(--warning)" : "var(--text-primary)"}>
-                  {isNowFocus ? <UnpinIcon /> : <PinIcon />}
-                  {isNowFocus ? "Unpin from Focus" : "Pin to Focus"}
+      {/* options dropdown — triggered by tapping the card body */}
+      {menuOpen && (
+        <div
+          data-testid="task-options-menu"
+          onClick={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
+          style={{
+          position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 300,
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
+          borderRadius: "16px",
+          boxShadow: "0 16px 48px rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.18)",
+          minWidth: "200px",
+          padding: "6px",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)"
+        }}>
+          {onPin && (
+            <MenuItem onClick={() => { onPin(task); setMenuOpen(false); }} color={isNowFocus ? "var(--warning)" : "var(--text-primary)"}>
+              {isNowFocus ? <UnpinIcon /> : <PinIcon />}
+              {isNowFocus ? "Unpin from Focus" : "Pin to Focus"}
+            </MenuItem>
+          )}
+          {onToggleMVD && (
+            <MenuItem onClick={() => { onToggleMVD(task); setMenuOpen(false); }} color={isMVD ? "var(--text-muted)" : "var(--accent)"}>
+              {isMVD ? <StarOffIcon /> : <StarIcon />}
+              {isMVD ? "Remove must-do" : "Mark as must-do"}
+            </MenuItem>
+          )}
+          {onBreakdown && !isBreakingDown && (
+            <MenuItem onClick={() => { onBreakdown(task); setMenuOpen(false); }} color="var(--accent)">
+              <BoltIcon /> Break it down
+            </MenuItem>
+          )}
+          {onEdit && (
+            <MenuItem testId="task-menu-edit" onClick={() => { onEdit(task); setMenuOpen(false); }}>
+              <PencilIcon /> Edit task
+            </MenuItem>
+          )}
+          {onMoveToHorizon && (
+            <>
+              <div style={{ height: "1px", margin: "5px 8px", background: "var(--border)", opacity: 0.5 }} />
+              {!showRoadmapOptions ? (
+                <MenuItem onClick={() => setShowRoadmapOptions(true)} color="var(--text-secondary)">
+                  <ArrowRightIcon />
+                  <span style={{ flex: 1 }}>Move to roadmap</span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4, flexShrink: 0 }}>
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
                 </MenuItem>
-              )}
-              {onToggleMVD && (
-                <MenuItem onClick={() => { onToggleMVD(task); setMenuOpen(false); }} color={isMVD ? "var(--text-muted)" : "var(--accent)"}>
-                  {isMVD ? <StarOffIcon /> : <StarIcon />}
-                  {isMVD ? "Remove must-do" : "Mark as must-do"}
-                </MenuItem>
-              )}
-              {onBreakdown && !isBreakingDown && (
-                <MenuItem onClick={() => { onBreakdown(task); setMenuOpen(false); }} color="var(--accent)">
-                  <BoltIcon /> Break it down
-                </MenuItem>
-              )}
-              {onEdit && (
-                <MenuItem testId="task-menu-edit" onClick={() => { onEdit(task); setMenuOpen(false); }}>
-                  <PencilIcon /> Edit task
-                </MenuItem>
-              )}
-              {onMoveToHorizon && (
+              ) : (
                 <>
-                  <div style={{ height: "1px", margin: "5px 8px", background: "var(--border)", opacity: 0.5 }} />
-                  {!showRoadmapOptions ? (
-                    <MenuItem onClick={() => setShowRoadmapOptions(true)} color="var(--text-secondary)">
-                      <ArrowRightIcon />
-                      <span style={{ flex: 1 }}>Move to roadmap</span>
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4, flexShrink: 0 }}>
-                        <polyline points="9 18 15 12 9 6"/>
-                      </svg>
+                  <div style={{ fontSize: "9px", fontWeight: "800", color: "var(--text-muted)", padding: "4px 12px 2px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    Move to roadmap
+                  </div>
+                  {ROADMAP_HORIZONS.map(({ key, label }) => (
+                    <MenuItem key={key} onClick={() => { onMoveToHorizon(task, key); setMenuOpen(false); }} color="var(--text-secondary)">
+                      <ArrowRightIcon /> {label}
                     </MenuItem>
-                  ) : (
-                    <>
-                      <div style={{ fontSize: "9px", fontWeight: "800", color: "var(--text-muted)", padding: "4px 12px 2px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                        Move to roadmap
-                      </div>
-                      {ROADMAP_HORIZONS.map(({ key, label }) => (
-                        <MenuItem key={key} onClick={() => { onMoveToHorizon(task, key); setMenuOpen(false); }} color="var(--text-secondary)">
-                          <ArrowRightIcon /> {label}
-                        </MenuItem>
-                      ))}
-                    </>
-                  )}
+                  ))}
                 </>
               )}
-              {onDelete && (
-                <>
-                  <div style={{ height: "1px", margin: "5px 8px", background: "var(--border)", opacity: 0.5 }} />
-                  <MenuItem testId="task-menu-delete" danger onClick={() => { onDelete(task); setMenuOpen(false); }} color="var(--danger)">
-                    <TrashIcon /> Delete
-                  </MenuItem>
-                </>
-              )}
-            </div>
+            </>
+          )}
+          {onDelete && (
+            <>
+              <div style={{ height: "1px", margin: "5px 8px", background: "var(--border)", opacity: 0.5 }} />
+              <MenuItem testId="task-menu-delete" danger onClick={() => { onDelete(task); setMenuOpen(false); }} color="var(--danger)">
+                <TrashIcon /> Delete
+              </MenuItem>
+            </>
           )}
         </div>
-      ) : (
-        isCompleted && onDelete && (
-          <button
-            className="action-btn action-btn-delete"
-            onClick={() => onDelete(task)}
-            title="Delete"
-          >🗑</button>
-        )
+      )}
+      {isCompleted && onDelete && (
+        <button
+          className="action-btn action-btn-delete"
+          onClick={e => { e.stopPropagation(); onDelete(task); }}
+          title="Delete"
+        >🗑</button>
       )}
     </div>
   );

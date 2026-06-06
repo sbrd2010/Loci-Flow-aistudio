@@ -132,7 +132,6 @@
   .tasks-section .task-title-text {
     font-size: 13px;
     line-height: 1.25;
-    -webkit-line-clamp: 1;
   }
 
   .tasks-section .task-step-text {
