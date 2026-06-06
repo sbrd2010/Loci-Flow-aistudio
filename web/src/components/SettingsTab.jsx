@@ -31,6 +31,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   const [editedDeadlineDate, setEditedDeadlineDate] = useState(config.deadlineDate || "");
   const [editedDeadlineStartDate, setEditedDeadlineStartDate] = useState(config.deadlineStartDate || "");
   const [editedDeadlineAction, setEditedDeadlineAction] = useState(config.deadlineAction || "");
+  const [editedDeadlineCardStyle, setEditedDeadlineCardStyle] = useState(config.deadlineCardStyle || "compact");
 
   useEffect(() => {
     setEditedName(config.userName || "");
@@ -48,11 +49,12 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
     setEditedDeadlineDate(config.deadlineDate || "");
     setEditedDeadlineStartDate(config.deadlineStartDate || "");
     setEditedDeadlineAction(config.deadlineAction || "");
+    setEditedDeadlineCardStyle(config.deadlineCardStyle || "compact");
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
       config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType,
       config.dayStartHour, config.dayEndHour, config.headerStyle, config.toolsStyle,
       config.roadmapStyle, config.deadlineLabel, config.deadlineDate,
-      config.deadlineStartDate, config.deadlineAction]);
+      config.deadlineStartDate, config.deadlineAction, config.deadlineCardStyle]);
 
   const challengeOptions = [
     {
@@ -150,6 +152,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
         deadlineDate: editedDeadlineDate,
         deadlineStartDate: editedDeadlineStartDate,
         deadlineAction: editedDeadlineAction.trim(),
+        deadlineCardStyle: editedDeadlineCardStyle,
         lastUpdated: Date.now()
       }
     });
@@ -410,7 +413,29 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
             <input className="text-input" type="text"
               value={editedDeadlineAction}
               onChange={e => setEditedDeadlineAction(e.target.value)}
-              placeholder="Daily action nudge (e.g. Complete one application step today)" />
+              placeholder="Daily action nudge (e.g. Complete one application step today)"
+              style={{ marginBottom: "8px" }} />
+            <div style={{ marginBottom: "4px", fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Card style
+            </div>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              {[
+                { key: "compact", label: "Compact" },
+                { key: "detailed", label: "Detailed" }
+              ].map(({ key, label }) => (
+                <button key={key} type="button"
+                  onClick={() => setEditedDeadlineCardStyle(key)}
+                  style={{
+                    padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700",
+                    cursor: "pointer", transition: "all 0.15s",
+                    background: editedDeadlineCardStyle === key ? "var(--accent)" : "var(--bg-secondary)",
+                    color: editedDeadlineCardStyle === key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
+                    border: editedDeadlineCardStyle === key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
+                  }}>
+                  {label}
+                </button>
+              ))}
+            </div>
             {editedDeadlineDate && (
               <button type="button"
                 onClick={() => { setEditedDeadlineDate(""); setEditedDeadlineLabel(""); setEditedDeadlineStartDate(""); setEditedDeadlineAction(""); }}
