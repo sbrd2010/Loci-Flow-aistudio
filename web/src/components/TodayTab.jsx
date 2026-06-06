@@ -752,30 +752,29 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                     </span>
                   </div>
 
-                  {/* Action nudge */}
+                  {/* TODAY'S MOVE */}
                   {config.deadlineAction && (
-                    <div style={{ fontSize: "11px", color: "var(--text-secondary)", lineHeight: 1.35 }}>
-                      <span style={{ fontWeight: "600", color: "var(--text-muted)" }}>{"Today's move: "}</span>
-                      <span style={{ fontStyle: "italic" }}>{config.deadlineAction}</span>
+                    <div style={{ fontSize: "11px", lineHeight: 1.4 }}>
+                      <span style={{ fontWeight: "900", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontSize: "9px" }}>{"Today's Move: "}</span>
+                      <span style={{ fontWeight: "700", color: "var(--text-primary)" }}>{config.deadlineAction}</span>
                     </div>
                   )}
 
-                  {/* Status line + Done today button */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: "11px", fontWeight: "600", color: isDoneToday ? "var(--accent)" : "var(--text-muted)" }}>
-                      {isDoneToday ? "Today protected ✓" : "One move protects today"}
-                    </span>
-                    {!isDoneToday && (
-                      <button
-                        type="button"
-                        data-testid="deadline-done-btn"
-                        onClick={handleDeadlineDoneToday}
-                        style={{ fontSize: "11px", fontWeight: "700", padding: "4px 10px", borderRadius: "20px", background: "transparent", border: `1px solid ${color}`, color, cursor: "pointer", flexShrink: 0, lineHeight: 1.4, minHeight: "28px", whiteSpace: "nowrap" }}
-                      >
-                        Done today
-                      </button>
-                    )}
-                  </div>
+                  {/* Done state or button */}
+                  {isDoneToday ? (
+                    <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--accent)" }}>
+                      TODAY'S MOVE DONE ✓
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      data-testid="deadline-done-btn"
+                      onClick={handleDeadlineDoneToday}
+                      style={{ fontSize: "11px", fontWeight: "700", padding: "4px 10px", borderRadius: "20px", background: "transparent", border: `1px solid ${color}`, color, cursor: "pointer", lineHeight: 1.4, minHeight: "28px", whiteSpace: "nowrap", alignSelf: "flex-start" }}
+                    >
+                      Mark move done
+                    </button>
+                  )}
                 </>
               )}
 
@@ -787,7 +786,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
           );
         }
 
-        // ── Compact card (two-zone: strategic + ADHD anchor) ────────────────────
+        // ── Compact card ──────────────────────────────────────────────────────────
         return (
           <div
             className="today-deadline-card"
@@ -796,10 +795,10 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               background: bg,
               border: `1px solid ${color}`,
               borderRadius: "var(--radius-sm)",
-              padding: "8px 12px",
+              padding: "10px 12px",
               display: "flex",
               flexDirection: "column",
-              gap: "5px",
+              gap: "6px",
               animation: isCritical ? "deadline-pulse 2.5s ease-in-out infinite" : "none",
             }}
           >
@@ -809,50 +808,77 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               </div>
             ) : (
               <>
-                {/* Zone 1 — Deadline context: label + day count */}
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <span style={{ fontSize: "15px", flexShrink: 0, lineHeight: 1 }}>🎯</span>
-                  <span style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-                    {label}
-                  </span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "13px", fontWeight: "800", color, flexShrink: 0 }}>
-                    {days === 0 ? "TODAY" : `${days}d`}
-                  </span>
+                {/* Header: icon + eyebrow + label */}
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                  <span style={{ fontSize: "16px", flexShrink: 0, lineHeight: 1.3 }}>🎯</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.10em", textTransform: "uppercase", color, lineHeight: 1 }}>
+                      Key Deadline
+                    </div>
+                    <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: "2px" }}>
+                      {label}
+                    </div>
+                  </div>
                 </div>
 
-                {/* Progress bar */}
+                {/* Full deadline countdown */}
+                <div style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "13px", fontWeight: "700", color, letterSpacing: "0.02em" }}>
+                  {deadlineCountdown ? `${deadlineCountdown} left` : `${days === 0 ? "TODAY" : `${days}d`} left`}
+                </div>
+
+                {/* Shrinking progress bar */}
                 <div style={{ height: "3px", background: "rgba(0,0,0,0.10)", borderRadius: "2px", overflow: "hidden" }}>
                   <div style={{ height: "100%", width: `${barPct}%`, background: color, borderRadius: "2px", transition: "width 1s linear" }} />
                 </div>
 
-                {/* Zone separator */}
-                <div style={{ height: "1px", background: "rgba(0,0,0,0.08)", margin: "1px 0" }} />
+                {/* Section separator */}
+                <div style={{ height: "1px", background: "rgba(0,0,0,0.10)", margin: "2px 0" }} />
 
-                {/* Zone 2 — Today anchor */}
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "9px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", lineHeight: 1 }}>
-                      Today closes in
-                    </div>
-                    <div style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "15px", fontWeight: "800", color: "var(--text-primary)", lineHeight: 1.2, marginTop: "2px" }}>
-                      {todayCountdown || "--h --m"}
-                    </div>
+                {/* TODAY row: time left + OPEN/DONE status chip */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "15px", fontWeight: "800", color: "var(--text-primary)", lineHeight: 1 }}>
+                    {todayCountdown ? `${todayCountdown} left today` : "--h --m left today"}
+                  </span>
+                  <span style={{
+                    fontSize: "9px", fontWeight: "900", letterSpacing: "0.08em", textTransform: "uppercase",
+                    padding: "3px 7px", borderRadius: "4px",
+                    border: `1.5px solid ${isDoneToday ? "var(--accent)" : color}`,
+                    color: isDoneToday ? "var(--accent)" : color,
+                    flexShrink: 0,
+                  }}>
+                    {isDoneToday ? "DONE" : "OPEN"}
+                  </span>
+                </div>
+
+                {/* TODAY'S MOVE section */}
+                {isDoneToday ? (
+                  <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--accent)" }}>
+                    TODAY'S MOVE DONE ✓
                   </div>
-                  {isDoneToday ? (
-                    <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--accent)", flexShrink: 0, whiteSpace: "nowrap" }}>
-                      Today protected ✓
-                    </span>
-                  ) : (
+                ) : (
+                  <>
+                    {config.deadlineAction && (
+                      <div style={{ fontSize: "11px", lineHeight: 1.4 }}>
+                        <span style={{ fontWeight: "900", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontSize: "9px" }}>{"Today's Move: "}</span>
+                        <span style={{ fontWeight: "700", color: "var(--text-primary)" }}>{config.deadlineAction}</span>
+                      </div>
+                    )}
                     <button
                       type="button"
                       data-testid="deadline-done-btn"
                       onClick={handleDeadlineDoneToday}
-                      style={{ fontSize: "11px", fontWeight: "700", padding: "5px 11px", borderRadius: "20px", background: "transparent", border: `1.5px solid ${color}`, color, cursor: "pointer", flexShrink: 0, lineHeight: 1.3, minHeight: "30px", whiteSpace: "nowrap" }}
+                      style={{
+                        fontSize: "11px", fontWeight: "700", padding: "6px 14px",
+                        borderRadius: "20px", background: "transparent",
+                        border: `1.5px solid ${color}`, color, cursor: "pointer",
+                        lineHeight: 1.3, minHeight: "30px", alignSelf: "flex-start",
+                        letterSpacing: "0.02em", whiteSpace: "nowrap",
+                      }}
                     >
-                      Done today
+                      Mark move done
                     </button>
-                  )}
-                </div>
+                  </>
+                )}
               </>
             )}
           </div>

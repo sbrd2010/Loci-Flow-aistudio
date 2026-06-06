@@ -218,11 +218,11 @@ test("12. Deadline card shows compact layout with today countdown in demo mode",
   const card = page.getByTestId("deadline-card");
   await expect(card).toBeVisible({ timeout: 5_000 });
 
-  // Compact layout: day count + today closes in (no "KEY DEADLINE" eyebrow)
+  // Compact layout: full deadline countdown + today countdown
   await expect(card).toContainText("d");
-  await expect(card).toContainText("Today closes in");
+  await expect(card).toContainText("left today");
 
-  // "Done today" button is visible (demo config has no done date set)
+  // "Mark move done" button is visible (demo config has no done date set)
   await expect(page.getByTestId("deadline-done-btn")).toBeVisible();
 
   // Card label shown
