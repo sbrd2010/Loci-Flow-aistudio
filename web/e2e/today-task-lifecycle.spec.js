@@ -28,7 +28,7 @@ async function openTaskMenu(page, title) {
   const row = todayRow(page, title);
   await row.scrollIntoViewIfNeeded();
   await expect(row).toBeVisible({ timeout: 5_000 });
-  await row.click();
+  await row.locator(".task-middle").click();
 }
 
 async function expectNoHorizontalOverflow(page) {

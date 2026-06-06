@@ -249,7 +249,11 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
 
       {/* options dropdown — triggered by tapping the card body */}
       {menuOpen && (
-        <div style={{
+        <div
+          data-testid="task-options-menu"
+          onClick={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
+          style={{
           position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 300,
           background: "var(--bg-card)",
           border: "1px solid var(--border)",
