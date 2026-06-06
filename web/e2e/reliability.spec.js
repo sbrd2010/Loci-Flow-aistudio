@@ -26,7 +26,7 @@ test("reliability: deleted today task can be undone", async ({ page }) => {
   const row = taskRowByTitle(page, title);
   await expect(row).toBeVisible({ timeout: 8_000 });
 
-  await row.getByTestId("task-menu-btn").click();
+  await row.click();
   await row.getByTestId("task-menu-delete").click();
 
   await expect(tasksList.getByText(title)).not.toBeVisible({ timeout: 5_000 });
@@ -42,7 +42,7 @@ test("reliability: today task can be moved to the roadmap", async ({ page }) => 
   const row = taskRowByTitle(page, title);
   await expect(row).toBeVisible({ timeout: 8_000 });
 
-  await row.getByTestId("task-menu-btn").click();
+  await row.click();
   await row.getByText("Move to roadmap").click();
   await row.getByText("This Week").click();
 
@@ -58,7 +58,7 @@ test("reliability: pinning a task sets Now Focus", async ({ page }) => {
   const row = taskRowByTitle(page, title);
   await expect(row).toBeVisible({ timeout: 8_000 });
 
-  await row.getByTestId("task-menu-btn").click();
+  await row.click();
   await row.getByText("Pin to Focus").click();
 
   const focusCard = page.locator(".focus-card");
