@@ -211,3 +211,17 @@ test("11. Day Map route timeline — always visible, no view toggle", async ({ p
   await expect(page.locator(".dm-view-toggle")).not.toBeVisible();
   await expect(page.locator(".dmb-grid")).not.toBeVisible();
 });
+
+test("12. Deadline card shows live countdown in demo mode", async ({ page }) => {
+  await enterDemo(page);
+
+  const card = page.getByTestId("deadline-card");
+  await expect(card).toBeVisible({ timeout: 5_000 });
+  await expect(card).toContainText("KEY DEADLINE");
+  // Countdown format: "Xd XXh XXm XXs"
+  await expect(card).toContainText("d ");
+  await expect(card).toContainText("h ");
+  await expect(card).toContainText("m ");
+  // Action nudge from demo config
+  await expect(card).toContainText("Apply to one job today");
+});

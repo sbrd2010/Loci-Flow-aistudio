@@ -10,6 +10,7 @@ import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
 import { getCurrentFocusQuote } from "../utils/focusQuotes";
+import { formatCountdown } from "../utils/deadlineCountdown";
 import "../styles/focusNow.css";
 import {
   DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor,
@@ -187,6 +188,18 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
   }, [tasks, focusNowMode, focusNowTaskId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentQuote = getCurrentFocusQuote();
+
+  const [deadlineCountdown, setDeadlineCountdown] = useState(null);
+  useEffect(() => {
+    if (!config.deadlineDate) { setDeadlineCountdown(null); return; }
+    const tick = () => {
+      const target = new Date(config.deadlineDate + "T23:59:59");
+      setDeadlineCountdown(formatCountdown(target - Date.now()));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [config.deadlineDate]);
 
   const [timelineProgress, setTimelineProgress] = useState(0.5);
   const [currentTimeStr, setCurrentTimeStr] = useState("");
@@ -620,22 +633,97 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const target = new Date(config.deadlineDate + "T00:00:00");
         const days = Math.round((target - today) / 86400000);
-        if (days < 0) return null;
         const label = (config.deadlineLabel || "Deadline").trim();
-        const color = days === 0 ? "var(--danger)" : days <= 14 ? "var(--danger)" : days <= 45 ? "var(--warning)" : "var(--accent)";
-        const bg = days === 0 ? "rgba(248,113,113,0.13)" : days <= 14 ? "rgba(248,113,113,0.10)" : days <= 45 ? "rgba(251,191,36,0.10)" : "var(--accent-light)";
+        const isExpired = days < 0;
+
+        const isCritical = !isExpired && days <= 14;
+        const isWarning  = !isExpired && days > 14 && days <= 30;
+        const color = isExpired ? "var(--text-muted)"
+          : isCritical ? "var(--danger)"
+          : isWarning  ? "var(--warning)"
+          : "var(--accent)";
+        const bg = isExpired ? "rgba(255,255,255,0.04)"
+          : isCritical ? "rgba(248,113,113,0.12)"
+          : isWarning  ? "rgba(251,191,36,0.10)"
+          : "var(--accent-light)";
+        const icon = isExpired ? "✅"
+          : days === 0 ? "🔴"
+          : isCritical ? "⚡"
+          : isWarning  ? "⏳"
+          : "📅";
+
+        // Shrinking bar: remaining / total window; falls back to days/365 if no start date
+        let barPct = 50;
+        if (!isExpired) {
+          if (config.deadlineStartDate) {
+            const start = new Date(config.deadlineStartDate + "T00:00:00");
+            const total = target - start;
+            const remaining = target - today;
+            barPct = total > 0 ? Math.min(100, Math.max(2, (remaining / total) * 100)) : 50;
+          } else {
+            barPct = Math.min(98, Math.max(2, (days / 365) * 100));
+          }
+        } else {
+          barPct = 2;
+        }
+
         return (
-          <div className="today-deadline-card" style={{ display: "flex", alignItems: "center", gap: "10px", background: bg, border: `1px solid ${color}`, borderRadius: "var(--radius-sm)", padding: "10px 14px" }}>
-            <span style={{ fontSize: "22px", fontWeight: "900", color, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", lineHeight: 1, flexShrink: 0 }}>
-              {days === 0 ? "TODAY" : `${days}d`}
-            </span>
-            <div style={{ display: "flex", flexDirection: "column", gap: "1px", minWidth: 0 }}>
-              <span style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.1em", textTransform: "uppercase", color }}>
-                KEY DEADLINE
+          <div
+            className="today-deadline-card"
+            data-testid="deadline-card"
+            style={{
+              background: bg,
+              border: `1px solid ${color}`,
+              borderRadius: "var(--radius-sm)",
+              padding: "10px 14px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "7px",
+              animation: isCritical ? "deadline-pulse 2.5s ease-in-out infinite" : "none",
+            }}
+          >
+            {/* Row 1: icon · eyebrow label · day count */}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "18px", flexShrink: 0, lineHeight: 1 }}>{icon}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.1em", textTransform: "uppercase", color, lineHeight: 1 }}>
+                  KEY DEADLINE
+                </div>
+                <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: "2px" }}>
+                  {label}
+                </div>
+              </div>
+              <span style={{ fontSize: "24px", fontWeight: "900", color, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", lineHeight: 1, flexShrink: 0 }}>
+                {isExpired ? "—" : days === 0 ? "TODAY" : `${days}d`}
               </span>
-              <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {label}
-              </span>
+            </div>
+
+            {/* Row 2: live ticking countdown OR expired notice */}
+            {isExpired ? (
+              <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-muted)" }}>
+                Deadline reached
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+                <span style={{ fontSize: "9px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", flexShrink: 0 }}>
+                  Time left
+                </span>
+                <span className="deadline-countdown" style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "14px", fontWeight: "700", color, letterSpacing: "0.02em" }}>
+                  {deadlineCountdown || `${days}d`}
+                </span>
+              </div>
+            )}
+
+            {/* Row 3: optional action nudge */}
+            {!isExpired && config.deadlineAction && (
+              <div style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "500", lineHeight: 1.35, fontStyle: "italic" }}>
+                {config.deadlineAction}
+              </div>
+            )}
+
+            {/* Row 4: shrinking progress bar */}
+            <div style={{ height: "3px", background: "rgba(255,255,255,0.07)", borderRadius: "2px", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${barPct}%`, background: color, borderRadius: "2px", transition: "width 1s linear" }} />
             </div>
           </div>
         );
