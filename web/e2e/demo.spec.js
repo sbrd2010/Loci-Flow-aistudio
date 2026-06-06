@@ -212,25 +212,19 @@ test("11. Day Map route timeline — always visible, no view toggle", async ({ p
   await expect(page.locator(".dmb-grid")).not.toBeVisible();
 });
 
-test("12. Deadline card shows live countdown and today checkpoint in demo mode", async ({ page }) => {
+test("12. Deadline card shows compact layout with today countdown in demo mode", async ({ page }) => {
   await enterDemo(page);
 
   const card = page.getByTestId("deadline-card");
   await expect(card).toBeVisible({ timeout: 5_000 });
-  await expect(card).toContainText("KEY DEADLINE");
 
-  // Final deadline countdown: "Xd XXh XXm XXs"
-  await expect(card).toContainText("d ");
-  await expect(card).toContainText("h ");
-  await expect(card).toContainText("m ");
-
-  // Today checkpoint section
+  // Compact layout: day count + today closes in (no "KEY DEADLINE" eyebrow)
+  await expect(card).toContainText("d");
   await expect(card).toContainText("Today closes in");
-  await expect(card).toContainText("Today's move is still open");
-
-  // Action nudge from demo config
-  await expect(card).toContainText("Apply to one job today");
 
   // "Done today" button is visible (demo config has no done date set)
   await expect(page.getByTestId("deadline-done-btn")).toBeVisible();
+
+  // Card label shown
+  await expect(card).toContainText("Visa & career deadline");
 });

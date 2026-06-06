@@ -685,6 +685,106 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
           barPct = 2;
         }
 
+        // ── Detailed card (7-row, full information) ──────────────────────────
+        if (config.deadlineCardStyle === "detailed") {
+          return (
+            <div
+              className="today-deadline-card"
+              data-testid="deadline-card"
+              style={{
+                background: bg,
+                border: `1px solid ${color}`,
+                borderRadius: "var(--radius-sm)",
+                padding: "10px 14px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "7px",
+                animation: isCritical ? "deadline-pulse 2.5s ease-in-out infinite" : "none",
+              }}
+            >
+              {/* Row 1: icon · eyebrow label · day count */}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "18px", flexShrink: 0, lineHeight: 1 }}>{icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.1em", textTransform: "uppercase", color, lineHeight: 1 }}>
+                    KEY DEADLINE
+                  </div>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: "2px" }}>
+                    {label}
+                  </div>
+                </div>
+                <span style={{ fontSize: "24px", fontWeight: "900", color, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", lineHeight: 1, flexShrink: 0 }}>
+                  {isExpired ? "—" : days === 0 ? "TODAY" : `${days}d`}
+                </span>
+              </div>
+
+              {/* Row 2: live ticking countdown OR expired notice */}
+              {isExpired ? (
+                <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-muted)" }}>
+                  Deadline reached
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+                  <span style={{ fontSize: "9px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", flexShrink: 0 }}>
+                    Time left
+                  </span>
+                  <span className="deadline-countdown" style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "14px", fontWeight: "700", color, letterSpacing: "0.02em" }}>
+                    {deadlineCountdown || `${days}d`}
+                  </span>
+                </div>
+              )}
+
+              {/* Today checkpoint — only for active deadlines */}
+              {!isExpired && (
+                <>
+                  <div style={{ height: "1px", background: "rgba(255,255,255,0.08)" }} />
+
+                  {/* Today closes in */}
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+                    <span style={{ fontSize: "9px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", flexShrink: 0 }}>
+                      Today closes in
+                    </span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", letterSpacing: "0.02em" }}>
+                      {todayCountdown || "--h --m"}
+                    </span>
+                  </div>
+
+                  {/* Action nudge */}
+                  {config.deadlineAction && (
+                    <div style={{ fontSize: "11px", color: "var(--text-secondary)", lineHeight: 1.35 }}>
+                      <span style={{ fontWeight: "600", color: "var(--text-muted)" }}>{"Today's move: "}</span>
+                      <span style={{ fontStyle: "italic" }}>{config.deadlineAction}</span>
+                    </div>
+                  )}
+
+                  {/* Status line + Done today button */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "11px", fontWeight: "600", color: isDoneToday ? "var(--accent)" : "var(--text-muted)" }}>
+                      {isDoneToday ? "Today protected ✓" : "Today's move is still open"}
+                    </span>
+                    {!isDoneToday && (
+                      <button
+                        type="button"
+                        data-testid="deadline-done-btn"
+                        onClick={handleDeadlineDoneToday}
+                        style={{ fontSize: "11px", fontWeight: "700", padding: "4px 10px", borderRadius: "20px", background: "transparent", border: `1px solid ${color}`, color, cursor: "pointer", flexShrink: 0, lineHeight: 1.4, minHeight: "28px", whiteSpace: "nowrap" }}
+                      >
+                        Done today
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Shrinking progress bar */}
+              <div style={{ height: "3px", background: "rgba(255,255,255,0.07)", borderRadius: "2px", overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${barPct}%`, background: color, borderRadius: "2px", transition: "width 1s linear" }} />
+              </div>
+            </div>
+          );
+        }
+
+        // ── Compact card (2-row strip, default) ───────────────────────────────
         return (
           <div
             className="today-deadline-card"
@@ -693,91 +793,65 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               background: bg,
               border: `1px solid ${color}`,
               borderRadius: "var(--radius-sm)",
-              padding: "10px 14px",
+              padding: "8px 12px",
               display: "flex",
               flexDirection: "column",
-              gap: "7px",
+              gap: "6px",
               animation: isCritical ? "deadline-pulse 2.5s ease-in-out infinite" : "none",
             }}
           >
-            {/* Row 1: icon · eyebrow label · day count */}
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "18px", flexShrink: 0, lineHeight: 1 }}>{icon}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.1em", textTransform: "uppercase", color, lineHeight: 1 }}>
-                  KEY DEADLINE
-                </div>
-                <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: "2px" }}>
-                  {label}
-                </div>
-              </div>
-              <span style={{ fontSize: "24px", fontWeight: "900", color, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", lineHeight: 1, flexShrink: 0 }}>
-                {isExpired ? "—" : days === 0 ? "TODAY" : `${days}d`}
-              </span>
-            </div>
-
-            {/* Row 2: live ticking countdown OR expired notice */}
             {isExpired ? (
               <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-muted)" }}>
-                Deadline reached
+                {icon} {label} · Deadline reached
               </div>
             ) : (
-              <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                <span style={{ fontSize: "9px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", flexShrink: 0 }}>
-                  Time left
-                </span>
-                <span className="deadline-countdown" style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "14px", fontWeight: "700", color, letterSpacing: "0.02em" }}>
-                  {deadlineCountdown || `${days}d`}
-                </span>
-              </div>
-            )}
-
-            {/* Today checkpoint — only for active deadlines */}
-            {!isExpired && (
               <>
-                <div style={{ height: "1px", background: "rgba(255,255,255,0.08)" }} />
-
-                {/* Today closes in */}
-                <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                  <span style={{ fontSize: "9px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", flexShrink: 0 }}>
-                    Today closes in
+                {/* Row 1: icon + day count · divider · Today closes in countdown + Done button */}
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "16px", flexShrink: 0, lineHeight: 1 }}>{icon}</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "13px", fontWeight: "800", color, flexShrink: 0 }}>
+                    {days === 0 ? "TODAY" : `${days}d`}
                   </span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", letterSpacing: "0.02em" }}>
+                  <span style={{ color: "var(--text-muted)", fontSize: "12px", flexShrink: 0 }}>·</span>
+                  <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", whiteSpace: "nowrap", flexShrink: 0 }}>Today closes in</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", whiteSpace: "nowrap", flexShrink: 0 }}>
                     {todayCountdown || "--h --m"}
                   </span>
-                </div>
-
-                {/* Action nudge */}
-                {config.deadlineAction && (
-                  <div style={{ fontSize: "11px", color: "var(--text-secondary)", lineHeight: 1.35 }}>
-                    <span style={{ fontWeight: "600", color: "var(--text-muted)" }}>{"Today's move: "}</span>
-                    <span style={{ fontStyle: "italic" }}>{config.deadlineAction}</span>
-                  </div>
-                )}
-
-                {/* Status line + Done today button */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "11px", fontWeight: "600", color: isDoneToday ? "var(--accent)" : "var(--text-muted)" }}>
-                    {isDoneToday ? "Today protected ✓" : "Today's move is still open"}
-                  </span>
-                  {!isDoneToday && (
+                  <div style={{ flex: 1, minWidth: 0 }} />
+                  {isDoneToday ? (
+                    <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--accent)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                      Today protected ✓
+                    </span>
+                  ) : (
                     <button
                       type="button"
                       data-testid="deadline-done-btn"
                       onClick={handleDeadlineDoneToday}
-                      style={{ fontSize: "11px", fontWeight: "700", padding: "4px 10px", borderRadius: "20px", background: "transparent", border: `1px solid ${color}`, color, cursor: "pointer", flexShrink: 0, lineHeight: 1.4, minHeight: "28px", whiteSpace: "nowrap" }}
+                      style={{ fontSize: "11px", fontWeight: "700", padding: "3px 9px", borderRadius: "20px", background: "transparent", border: `1px solid ${color}`, color, cursor: "pointer", flexShrink: 0, lineHeight: 1.4, minHeight: "26px", whiteSpace: "nowrap" }}
                     >
                       Done today
                     </button>
                   )}
                 </div>
+
+                {/* Row 2: label (left) + days-left note (right when not done) */}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+                    {label}
+                  </span>
+                  {!isDoneToday && (
+                    <span style={{ fontSize: "10px", fontWeight: "600", color: "var(--text-muted)", flexShrink: 0, whiteSpace: "nowrap" }}>
+                      {days === 0 ? "last day" : `${days}d left`}
+                    </span>
+                  )}
+                </div>
+
+                {/* Row 3: shrinking progress bar */}
+                <div style={{ height: "3px", background: "rgba(255,255,255,0.07)", borderRadius: "2px", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${barPct}%`, background: color, borderRadius: "2px", transition: "width 1s linear" }} />
+                </div>
               </>
             )}
-
-            {/* Shrinking progress bar */}
-            <div style={{ height: "3px", background: "rgba(255,255,255,0.07)", borderRadius: "2px", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${barPct}%`, background: color, borderRadius: "2px", transition: "width 1s linear" }} />
-            </div>
           </div>
         );
       })()}
