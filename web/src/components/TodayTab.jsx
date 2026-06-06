@@ -668,7 +668,10 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
           : days === 0 ? "🔴"
           : isCritical ? "⚡"
           : isWarning  ? "⏳"
-          : "📅";
+          : "🎯";
+
+        // Strip day prefix so TIME LEFT shows only intra-day precision (e.g. "03h 33m 46s")
+        const intraCountdown = deadlineCountdown ? deadlineCountdown.replace(/^\d+d /, "") : null;
 
         // Shrinking bar: remaining / total window; falls back to days/365 if no start date
         let barPct = 50;
@@ -729,7 +732,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                     Time left
                   </span>
                   <span className="deadline-countdown" style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "14px", fontWeight: "700", color, letterSpacing: "0.02em" }}>
-                    {deadlineCountdown || `${days}d`}
+                    {intraCountdown || "--h --m --s"}
                   </span>
                 </div>
               )}
@@ -760,7 +763,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                   {/* Status line + Done today button */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", flexWrap: "wrap" }}>
                     <span style={{ fontSize: "11px", fontWeight: "600", color: isDoneToday ? "var(--accent)" : "var(--text-muted)" }}>
-                      {isDoneToday ? "Today protected ✓" : "Today's move is still open"}
+                      {isDoneToday ? "Today protected ✓" : "One move protects today"}
                     </span>
                     {!isDoneToday && (
                       <button
@@ -777,7 +780,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               )}
 
               {/* Shrinking progress bar */}
-              <div style={{ height: "3px", background: "rgba(255,255,255,0.07)", borderRadius: "2px", overflow: "hidden" }}>
+              <div style={{ height: "3px", background: "rgba(0,0,0,0.10)", borderRadius: "2px", overflow: "hidden" }}>
                 <div style={{ height: "100%", width: `${barPct}%`, background: color, borderRadius: "2px", transition: "width 1s linear" }} />
               </div>
             </div>
