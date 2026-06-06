@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatCountdown } from "./deadlineCountdown.js";
+import { formatCountdown, formatTodayCountdown, isDailyDone } from "./deadlineCountdown.js";
 
 describe("formatCountdown", () => {
   it("formats exactly one day", () => {
@@ -30,5 +30,59 @@ describe("formatCountdown", () => {
 
   it("formats less than one hour", () => {
     expect(formatCountdown((14 * 60 + 5) * 1000)).toBe("0d 00h 14m 05s");
+  });
+});
+
+describe("formatTodayCountdown", () => {
+  it("formats 9h 32m", () => {
+    expect(formatTodayCountdown((9 * 60 + 32) * 60 * 1000)).toBe("09h 32m");
+  });
+
+  it("formats midnight boundary (full day)", () => {
+    expect(formatTodayCountdown(24 * 60 * 60 * 1000)).toBe("24h 00m");
+  });
+
+  it("formats under one hour", () => {
+    expect(formatTodayCountdown(45 * 60 * 1000)).toBe("00h 45m");
+  });
+
+  it("returns null for 0ms", () => {
+    expect(formatTodayCountdown(0)).toBeNull();
+  });
+
+  it("returns null for negative ms", () => {
+    expect(formatTodayCountdown(-5000)).toBeNull();
+  });
+
+  it("returns null for NaN / undefined / null", () => {
+    expect(formatTodayCountdown(NaN)).toBeNull();
+    expect(formatTodayCountdown(undefined)).toBeNull();
+    expect(formatTodayCountdown(null)).toBeNull();
+  });
+});
+
+describe("isDailyDone", () => {
+  it("returns true when saved date matches today", () => {
+    expect(isDailyDone("2026-06-06", "2026-06-06")).toBe(true);
+  });
+
+  it("returns false on the next day (checkpoint resets)", () => {
+    expect(isDailyDone("2026-06-06", "2026-06-07")).toBe(false);
+  });
+
+  it("returns false when savedDate is undefined (never done)", () => {
+    expect(isDailyDone(undefined, "2026-06-06")).toBe(false);
+  });
+
+  it("returns false when savedDate is null", () => {
+    expect(isDailyDone(null, "2026-06-06")).toBe(false);
+  });
+
+  it("returns false when savedDate is empty string", () => {
+    expect(isDailyDone("", "2026-06-06")).toBe(false);
+  });
+
+  it("returns false when savedDate is a past date", () => {
+    expect(isDailyDone("2026-01-01", "2026-06-06")).toBe(false);
   });
 });

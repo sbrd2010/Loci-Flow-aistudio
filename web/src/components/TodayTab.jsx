@@ -10,7 +10,7 @@ import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
 import { getCurrentFocusQuote } from "../utils/focusQuotes";
-import { formatCountdown } from "../utils/deadlineCountdown";
+import { formatCountdown, formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
 import "../styles/focusNow.css";
 import {
   DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor,
@@ -200,6 +200,24 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [config.deadlineDate]);
+
+  const [todayCountdown, setTodayCountdown] = useState(null);
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      const midnight = new Date(now); midnight.setHours(24, 0, 0, 0);
+      setTodayCountdown(formatTodayCountdown(midnight - now));
+    };
+    tick();
+    const id = setInterval(tick, 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const isDoneToday = isDailyDone(config.deadlineDailyDoneDate, todayStr);
+  const handleDeadlineDoneToday = () => {
+    savePayload({ ...payload, config: { ...config, deadlineDailyDoneDate: todayStr, lastUpdated: Date.now() } });
+  };
 
   const [timelineProgress, setTimelineProgress] = useState(0.5);
   const [currentTimeStr, setCurrentTimeStr] = useState("");
@@ -714,14 +732,49 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               </div>
             )}
 
-            {/* Row 3: optional action nudge */}
-            {!isExpired && config.deadlineAction && (
-              <div style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "500", lineHeight: 1.35, fontStyle: "italic" }}>
-                {config.deadlineAction}
-              </div>
+            {/* Today checkpoint — only for active deadlines */}
+            {!isExpired && (
+              <>
+                <div style={{ height: "1px", background: "rgba(255,255,255,0.08)" }} />
+
+                {/* Today closes in */}
+                <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+                  <span style={{ fontSize: "9px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", flexShrink: 0 }}>
+                    Today closes in
+                  </span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", letterSpacing: "0.02em" }}>
+                    {todayCountdown || "--h --m"}
+                  </span>
+                </div>
+
+                {/* Action nudge */}
+                {config.deadlineAction && (
+                  <div style={{ fontSize: "11px", color: "var(--text-secondary)", lineHeight: 1.35 }}>
+                    <span style={{ fontWeight: "600", color: "var(--text-muted)" }}>{"Today's move: "}</span>
+                    <span style={{ fontStyle: "italic" }}>{config.deadlineAction}</span>
+                  </div>
+                )}
+
+                {/* Status line + Done today button */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "11px", fontWeight: "600", color: isDoneToday ? "var(--accent)" : "var(--text-muted)" }}>
+                    {isDoneToday ? "Today protected ✓" : "Today's move is still open"}
+                  </span>
+                  {!isDoneToday && (
+                    <button
+                      type="button"
+                      data-testid="deadline-done-btn"
+                      onClick={handleDeadlineDoneToday}
+                      style={{ fontSize: "11px", fontWeight: "700", padding: "4px 10px", borderRadius: "20px", background: "transparent", border: `1px solid ${color}`, color, cursor: "pointer", flexShrink: 0, lineHeight: 1.4, minHeight: "28px", whiteSpace: "nowrap" }}
+                    >
+                      Done today
+                    </button>
+                  )}
+                </div>
+              </>
             )}
 
-            {/* Row 4: shrinking progress bar */}
+            {/* Shrinking progress bar */}
             <div style={{ height: "3px", background: "rgba(255,255,255,0.07)", borderRadius: "2px", overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${barPct}%`, background: color, borderRadius: "2px", transition: "width 1s linear" }} />
             </div>
