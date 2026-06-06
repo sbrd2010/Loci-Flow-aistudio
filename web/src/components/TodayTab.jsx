@@ -787,7 +787,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
           );
         }
 
-        // ── Compact card (2-row strip, default) ───────────────────────────────
+        // ── Compact card (two-zone: strategic + ADHD anchor) ────────────────────
         return (
           <div
             className="today-deadline-card"
@@ -799,30 +799,47 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               padding: "8px 12px",
               display: "flex",
               flexDirection: "column",
-              gap: "6px",
+              gap: "5px",
               animation: isCritical ? "deadline-pulse 2.5s ease-in-out infinite" : "none",
             }}
           >
             {isExpired ? (
               <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-muted)" }}>
-                {icon} {label} · Deadline reached
+                🎯 {label} · Deadline reached
               </div>
             ) : (
               <>
-                {/* Row 1: icon + day count · divider · Today closes in countdown + Done button */}
-                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "16px", flexShrink: 0, lineHeight: 1 }}>{icon}</span>
+                {/* Zone 1 — Deadline context: label + day count */}
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={{ fontSize: "15px", flexShrink: 0, lineHeight: 1 }}>🎯</span>
+                  <span style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+                    {label}
+                  </span>
                   <span style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "13px", fontWeight: "800", color, flexShrink: 0 }}>
                     {days === 0 ? "TODAY" : `${days}d`}
                   </span>
-                  <span style={{ color: "var(--text-muted)", fontSize: "12px", flexShrink: 0 }}>·</span>
-                  <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", whiteSpace: "nowrap", flexShrink: 0 }}>Today closes in</span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", whiteSpace: "nowrap", flexShrink: 0 }}>
-                    {todayCountdown || "--h --m"}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }} />
+                </div>
+
+                {/* Progress bar */}
+                <div style={{ height: "3px", background: "rgba(0,0,0,0.10)", borderRadius: "2px", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${barPct}%`, background: color, borderRadius: "2px", transition: "width 1s linear" }} />
+                </div>
+
+                {/* Zone separator */}
+                <div style={{ height: "1px", background: "rgba(0,0,0,0.08)", margin: "1px 0" }} />
+
+                {/* Zone 2 — Today anchor */}
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "9px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", lineHeight: 1 }}>
+                      Today closes in
+                    </div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "15px", fontWeight: "800", color: "var(--text-primary)", lineHeight: 1.2, marginTop: "2px" }}>
+                      {todayCountdown || "--h --m"}
+                    </div>
+                  </div>
                   {isDoneToday ? (
-                    <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--accent)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--accent)", flexShrink: 0, whiteSpace: "nowrap" }}>
                       Today protected ✓
                     </span>
                   ) : (
@@ -830,28 +847,11 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                       type="button"
                       data-testid="deadline-done-btn"
                       onClick={handleDeadlineDoneToday}
-                      style={{ fontSize: "11px", fontWeight: "700", padding: "3px 9px", borderRadius: "20px", background: "transparent", border: `1px solid ${color}`, color, cursor: "pointer", flexShrink: 0, lineHeight: 1.4, minHeight: "26px", whiteSpace: "nowrap" }}
+                      style={{ fontSize: "11px", fontWeight: "700", padding: "5px 11px", borderRadius: "20px", background: "transparent", border: `1.5px solid ${color}`, color, cursor: "pointer", flexShrink: 0, lineHeight: 1.3, minHeight: "30px", whiteSpace: "nowrap" }}
                     >
                       Done today
                     </button>
                   )}
-                </div>
-
-                {/* Row 2: label (left) + days-left note (right when not done) */}
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-                    {label}
-                  </span>
-                  {!isDoneToday && (
-                    <span style={{ fontSize: "10px", fontWeight: "600", color: "var(--text-muted)", flexShrink: 0, whiteSpace: "nowrap" }}>
-                      {days === 0 ? "last day" : `${days}d left`}
-                    </span>
-                  )}
-                </div>
-
-                {/* Row 3: shrinking progress bar */}
-                <div style={{ height: "3px", background: "rgba(255,255,255,0.07)", borderRadius: "2px", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${barPct}%`, background: color, borderRadius: "2px", transition: "width 1s linear" }} />
                 </div>
               </>
             )}
