@@ -54,20 +54,15 @@
     display: none !important;
   }
 
-  /* Deadline card: compact on mobile. */
+  /* Deadline card: compact on mobile (column layout). */
   .today-deadline-card {
-    min-height: 42px;
-    padding: 7px 10px !important;
+    padding: 8px 10px !important;
     border-radius: 8px !important;
-    gap: 8px !important;
+    gap: 5px !important;
   }
 
-  .today-deadline-card > span:first-child {
-    font-size: 18px !important;
-  }
-
-  .today-deadline-card span {
-    line-height: 1.1 !important;
+  .today-deadline-card .deadline-countdown {
+    font-size: 12px !important;
   }
 
   .tasks-section {

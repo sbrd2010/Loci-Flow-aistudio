@@ -88,6 +88,10 @@ export function createDemoPayload() {
       roadmapStyle: "compact",
       headerStyle: "full",
       toolsStyle: "inline",
+      deadlineLabel: "Visa & career deadline",
+      deadlineDate: (() => { const d = new Date(); d.setFullYear(d.getFullYear() + 1); return d.toISOString().slice(0, 10); })(),
+      deadlineStartDate: new Date().toISOString().slice(0, 10),
+      deadlineAction: "Apply to one job today",
       lastUpdated: Date.now(),
     },
 

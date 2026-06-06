@@ -29,6 +29,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   const [editedRoadmapStyle, setEditedRoadmapStyle] = useState(config.roadmapStyle || "compact");
   const [editedDeadlineLabel, setEditedDeadlineLabel] = useState(config.deadlineLabel || "");
   const [editedDeadlineDate, setEditedDeadlineDate] = useState(config.deadlineDate || "");
+  const [editedDeadlineStartDate, setEditedDeadlineStartDate] = useState(config.deadlineStartDate || "");
+  const [editedDeadlineAction, setEditedDeadlineAction] = useState(config.deadlineAction || "");
 
   useEffect(() => {
     setEditedName(config.userName || "");
@@ -44,10 +46,13 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
     setEditedRoadmapStyle(config.roadmapStyle || "compact");
     setEditedDeadlineLabel(config.deadlineLabel || "");
     setEditedDeadlineDate(config.deadlineDate || "");
+    setEditedDeadlineStartDate(config.deadlineStartDate || "");
+    setEditedDeadlineAction(config.deadlineAction || "");
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
       config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType,
       config.dayStartHour, config.dayEndHour, config.headerStyle, config.toolsStyle,
-      config.roadmapStyle, config.deadlineLabel, config.deadlineDate]);
+      config.roadmapStyle, config.deadlineLabel, config.deadlineDate,
+      config.deadlineStartDate, config.deadlineAction]);
 
   const challengeOptions = [
     {
@@ -143,6 +148,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
         roadmapStyle: editedRoadmapStyle,
         deadlineLabel: editedDeadlineLabel.trim(),
         deadlineDate: editedDeadlineDate,
+        deadlineStartDate: editedDeadlineStartDate,
+        deadlineAction: editedDeadlineAction.trim(),
         lastUpdated: Date.now()
       }
     });
@@ -392,10 +399,21 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
               style={{ marginBottom: "8px" }} />
             <input className="text-input" type="date"
               value={editedDeadlineDate}
-              onChange={e => setEditedDeadlineDate(e.target.value)} />
+              onChange={e => setEditedDeadlineDate(e.target.value)}
+              style={{ marginBottom: "8px" }} />
+            <input className="text-input" type="date"
+              value={editedDeadlineStartDate}
+              onChange={e => setEditedDeadlineStartDate(e.target.value)}
+              placeholder="Start date (for progress bar)"
+              title="Start date — sets the full width of the shrinking progress bar"
+              style={{ marginBottom: "8px" }} />
+            <input className="text-input" type="text"
+              value={editedDeadlineAction}
+              onChange={e => setEditedDeadlineAction(e.target.value)}
+              placeholder="Daily action nudge (e.g. Complete one application step today)" />
             {editedDeadlineDate && (
               <button type="button"
-                onClick={() => { setEditedDeadlineDate(""); setEditedDeadlineLabel(""); }}
+                onClick={() => { setEditedDeadlineDate(""); setEditedDeadlineLabel(""); setEditedDeadlineStartDate(""); setEditedDeadlineAction(""); }}
                 style={{ marginTop: "6px", fontSize: "11px", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                 ✕ Clear deadline
               </button>
