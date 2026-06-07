@@ -6,12 +6,12 @@ export function computeUserProfile(payload) {
   const brainDump = payload.brainDump || [];
 
   const completed = tasks.filter(t => t.isCompleted);
-  const active = tasks.filter(t => !t.isCompleted);
+  const active = tasks.filter(t => !t.isCompleted && !t.isParked);
   const total = tasks.length;
 
   const completionRate = total > 0 ? Math.round((completed.length / total) * 100) / 100 : 0;
 
-  // Horizon distribution across active tasks
+  // Horizon distribution across active, non-parked tasks.
   const horizonCounts = {};
   active.forEach(t => {
     const h = t.horizonLevel || "today";
@@ -22,15 +22,15 @@ export function computeUserProfile(payload) {
     horizonMix[h] = active.length > 0 ? Math.round((n / active.length) * 100) / 100 : 0;
   });
 
-  // Priority distribution across all tasks
+  // Priority distribution across active, non-parked tasks.
   const priorityCounts = {};
-  tasks.forEach(t => {
+  active.forEach(t => {
     const p = t.priority || "P3";
     priorityCounts[p] = (priorityCounts[p] || 0) + 1;
   });
   const priorityMix = {};
   Object.entries(priorityCounts).forEach(([p, n]) => {
-    priorityMix[p] = total > 0 ? Math.round((n / total) * 100) / 100 : 0;
+    priorityMix[p] = active.length > 0 ? Math.round((n / active.length) * 100) / 100 : 0;
   });
 
   // Average time estimate (only tasks that have one)
@@ -102,7 +102,7 @@ export function profileToCoachContext(profile) {
   else if (rate > 80) lines.push(`- Pattern flag: high executor — completes most of what is added`);
 
   const p1Rate = profile.priorityMix?.P1 || 0;
-  if (p1Rate > 0.35) lines.push(`- Priority flag: ${Math.round(p1Rate * 100)}% of tasks marked P1 — may be overusing urgency`);
+  if (p1Rate > 0.35) lines.push(`- Priority flag: ${Math.round(p1Rate * 100)}% of active tasks marked P1 — may be overusing urgency`);
 
   return lines.join("\n");
 }
