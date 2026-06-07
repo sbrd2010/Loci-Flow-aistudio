@@ -145,8 +145,6 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
 
   const isVisibleRoadmapTask = (t) => !t.isDeleted && !t.isCompleted && !t.isParked;
 
-  const isVisibleRoadmapTask = (task) => !task.isDeleted && !task.isCompleted && !task.isParked;
-
   const getTodayDateString = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
