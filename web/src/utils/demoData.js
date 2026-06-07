@@ -94,7 +94,8 @@ export function createDemoPayload() {
       deadlineAction: "Apply to one job today",
       deadlineCardStyle: "compact",
       deadlineTodayHours: 6,
-      deadlineTodayDate: todayStr,
+      deadlineTodayDate: (() => { const n = new Date(); return toDateStr(n); })(),
+      deadlineTodayExpiresAt: (() => { const n = new Date(); return n.getTime() + 6 * 3600 * 1000; })(),
       lastUpdated: Date.now(),
     },
 
