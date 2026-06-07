@@ -490,7 +490,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
               <button type="button"
                 onClick={() => {
                   setEditedDeadlineDate(""); setEditedDeadlineLabel(""); setEditedDeadlineStartDate(""); setEditedDeadlineAction("");
-                  savePayload({ ...payload, config: { ...config, deadlineTodayHours: null, deadlineTodayDate: null, deadlineTodayExpiresAt: null, lastUpdated: Date.now() } });
+                  savePayload({ ...payload, config: { ...config, deadlineLabel: "", deadlineDate: "", deadlineStartDate: "", deadlineAction: "", deadlineTodayHours: null, deadlineTodayDate: null, deadlineTodayExpiresAt: null, deadlineCardStyle: "compact", lastUpdated: Date.now() } });
                 }}
                 style={{ marginTop: "6px", fontSize: "11px", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                 ✕ Clear deadline
