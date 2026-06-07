@@ -43,6 +43,18 @@ function getWorkWindowEnd(dayStartHour, dayEndHour) {
   return end;
 }
 
+// "before" = window hasn't started yet today, "during" = inside window, "after" = window closed
+function getWorkWindowState(dayStartHour, dayEndHour) {
+  const nowH = new Date().getHours() + new Date().getMinutes() / 60;
+  if (dayEndHour >= 24) {
+    const wrapH = dayEndHour - 24;
+    if (nowH >= dayStartHour || nowH < wrapH) return "during";
+    return "before";
+  }
+  if (nowH >= dayStartHour && nowH < dayEndHour) return "during";
+  return nowH < dayStartHour ? "before" : "after";
+}
+
 function SortableTaskItem({ id, children }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   return (
@@ -674,20 +686,9 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
           : isWarning  ? "⏳"
           : "🎯";
 
-        // Shrinking bar: remaining / total window; falls back to days/365 if no start date
-        let barPct = 50;
-        if (!isExpired) {
-          if (config.deadlineStartDate) {
-            const start = new Date(config.deadlineStartDate + "T00:00:00");
-            const total = target - start;
-            const remaining = target - today;
-            barPct = total > 0 ? Math.min(100, Math.max(2, (remaining / total) * 100)) : 50;
-          } else {
-            barPct = Math.min(98, Math.max(2, (days / 365) * 100));
-          }
-        } else {
-          barPct = 2;
-        }
+        const windowState = getWorkWindowState(config.dayStartHour ?? 7, config.dayEndHour ?? 26);
+        const startLabel = formatHourLabel(config.dayStartHour ?? 7);
+        const endLabel = formatHourLabel(config.dayEndHour ?? 26);
 
         // ── Compact card ──────────────────────────────────────────────────────────
         return (
@@ -698,9 +699,10 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               background: bg,
               border: `1px solid ${color}`,
               borderRadius: "var(--radius-sm)",
-              padding: "8px 10px",
+              padding: "7px 10px",
               display: "flex",
               flexDirection: "column",
+              gap: "5px",
               animation: isCritical ? "deadline-pulse 2.5s ease-in-out infinite" : "none",
             }}
           >
@@ -710,23 +712,25 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               </div>
             ) : (
               <>
-                {/* Row 1: icon + eyebrow + label + countdown */}
-                <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "6px" }}>
-                  <span style={{ fontSize: "16px", flexShrink: 0, lineHeight: 1.3 }}>🎯</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.10em", textTransform: "uppercase", color, lineHeight: 1 }}>
+                {/* Row 1: icon + eyebrow LEFT · day count RIGHT */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                    <span style={{ fontSize: "14px", lineHeight: 1 }}>{icon}</span>
+                    <span style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.10em", textTransform: "uppercase", color }}>
                       KEY DEADLINE
-                    </div>
-                    <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: "2px" }}>
-                      {label}
-                    </div>
-                    <div style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "14px", fontWeight: "800", color: "#EF4444", letterSpacing: "0.02em", marginTop: "4px" }}>
-                      {`${days === 0 ? "TODAY" : `${days}d`} left`}
-                    </div>
+                    </span>
                   </div>
+                  <span style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "13px", fontWeight: "800", color: "#EF4444", letterSpacing: "0.02em", flexShrink: 0 }}>
+                    {days === 0 ? "TODAY" : `${days}d`} left
+                  </span>
                 </div>
 
-                {/* Row 2: TODAY'S MOVE (primary anchor) + OPEN / STILL OPEN / DONE button */}
+                {/* Row 2: deadline sentence */}
+                <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {label}
+                </div>
+
+                {/* Row 3: TODAY'S MOVE + OPEN / STILL OPEN / DONE button */}
                 {(() => {
                   const isStillOpen = !isDoneToday && timelineProgress >= 0.5;
                   const btnBg = isDoneToday ? "#15803D" : isStillOpen ? "#D97706" : "#EAB308";
@@ -736,21 +740,15 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                   const rowLabel = isDoneToday ? "TODAY'S MOVE DONE ✓" : "TODAY'S MOVE";
                   const rowLabelColor = isDoneToday ? "#15803D" : "#D97706";
                   return (
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.08em", textTransform: "uppercase", color: rowLabelColor, lineHeight: 1 }}>
+                        <span style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.08em", textTransform: "uppercase", color: rowLabelColor }}>
                           {rowLabel}
-                        </div>
+                        </span>
                         {config.deadlineAction && (
-                          <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", marginTop: "3px", lineHeight: 1.4 }}>
+                          <span style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-primary)", marginLeft: "5px" }}>
                             {config.deadlineAction}
-                          </div>
-                        )}
-                        {/* Work-window countdown */}
-                        {todayLiveDisplay && (
-                          <div style={{ marginTop: "4px", fontSize: "11px", lineHeight: 1.4, color: "#D97706", fontWeight: "800" }}>
-                            {todayLiveDisplay} left today
-                          </div>
+                          </span>
                         )}
                       </div>
                       <button
@@ -759,12 +757,11 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                         onClick={isDoneToday ? handleDeadlineReopenToday : handleDeadlineDoneToday}
                         title={btnTitle}
                         style={{
-                          fontSize: "11px", fontWeight: "900", letterSpacing: "0.08em", textTransform: "uppercase",
-                          padding: "6px 14px", borderRadius: "20px", border: "none", cursor: "pointer",
+                          fontSize: "11px", fontWeight: "900", letterSpacing: "0.06em", textTransform: "uppercase",
+                          padding: "5px 12px", borderRadius: "20px", border: "none", cursor: "pointer",
                           flexShrink: 0, lineHeight: 1,
-                          background: btnBg,
-                          color: btnTextColor,
-                          whiteSpace: "nowrap",
+                          background: btnBg, color: btnTextColor, whiteSpace: "nowrap",
+                          minHeight: "30px",
                         }}
                       >
                         {btnLabel}
@@ -773,14 +770,32 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                   );
                 })()}
 
-                {/* Row 3: Day mini-timeline */}
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
-                    <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>{formatHourLabel(config.dayStartHour ?? 7)}</span>
-                    <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>{formatHourLabel(config.dayEndHour ?? 26)}</span>
+                {/* Row 4: thin day-progress bar with window-state awareness */}
+                <div style={{ marginTop: "1px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
+                    <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>{startLabel}</span>
+                    {windowState === "before" && (
+                      <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>
+                        opens {startLabel}
+                      </span>
+                    )}
+                    {windowState === "during" && todayLiveDisplay && (
+                      <span style={{ fontSize: "9px", color: "#D97706", fontWeight: "700" }}>
+                        {todayLiveDisplay} left
+                      </span>
+                    )}
+                    {windowState === "after" && (
+                      <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>closed</span>
+                    )}
+                    <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>{endLabel}</span>
                   </div>
-                  <div style={{ height: "6px", background: "var(--bg-secondary)", borderRadius: "3px", overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "3px", transition: "width 1s linear" }} />
+                  <div style={{ height: "3px", background: "var(--bg-secondary)", borderRadius: "2px", overflow: "hidden" }}>
+                    {windowState === "during" && (
+                      <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "2px", transition: "width 1s linear" }} />
+                    )}
+                    {windowState === "after" && (
+                      <div style={{ height: "100%", width: "100%", background: "var(--bg-tertiary, var(--bg-secondary))", borderRadius: "2px" }} />
+                    )}
                   </div>
                 </div>
               </>
