@@ -852,13 +852,13 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                         {showTodayHoursPicker && !todayAvailableDisplay && (
                           <div style={{ marginTop: "6px" }}>
                             {!showCustomHoursInput ? (
-                              <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
+                              <div style={{ display: "flex", gap: "5px" }}>
                                 {[1, 2, 4, 6].map(h => (
                                   <button
                                     key={h}
                                     type="button"
                                     onClick={() => handleDeadlineTodayHours(h)}
-                                    style={{ padding: "4px 10px", borderRadius: "14px", fontSize: "11px", fontWeight: "700", background: "var(--bg-secondary)", border: "1.5px solid var(--border)", color: "var(--text-primary)", cursor: "pointer" }}
+                                    style={{ flex: 1, padding: "7px 0", textAlign: "center", borderRadius: "14px", fontSize: "12px", fontWeight: "700", background: "var(--bg-secondary)", border: "1.5px solid var(--border)", color: "var(--text-primary)", cursor: "pointer" }}
                                   >
                                     {h}h
                                   </button>
@@ -866,7 +866,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                                 <button
                                   type="button"
                                   onClick={() => setShowCustomHoursInput(true)}
-                                  style={{ padding: "4px 10px", borderRadius: "14px", fontSize: "11px", fontWeight: "700", background: "var(--bg-secondary)", border: "1.5px solid var(--border)", color: "var(--text-secondary)", cursor: "pointer" }}
+                                  style={{ flex: 1, padding: "7px 0", textAlign: "center", borderRadius: "14px", fontSize: "12px", fontWeight: "700", background: "var(--bg-secondary)", border: "1.5px solid var(--border)", color: "var(--text-secondary)", cursor: "pointer" }}
                                 >
                                   Other…
                                 </button>
