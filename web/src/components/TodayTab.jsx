@@ -228,13 +228,31 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
   };
 
   const handleDeadlineTodayHours = (hours) => {
-    savePayload({ ...payload, config: { ...config, deadlineTodayHours: hours, deadlineTodayDate: todayStr, lastUpdated: Date.now() } });
+    savePayload({ ...payload, config: { ...config, deadlineTodayHours: hours, deadlineTodayDate: todayStr, deadlineTodayExpiresAt: Date.now() + hours * 3600 * 1000, lastUpdated: Date.now() } });
     setShowTodayHoursPicker(false);
     setShowCustomHoursInput(false);
     setCustomHoursValue("");
   };
 
   const isTodayDate = (dateStr) => dateStr === todayStr;
+
+  const [todayDeadlineRemaining, setTodayDeadlineRemaining] = useState(null);
+  useEffect(() => {
+    const tick = () => {
+      if (!isTodayDate(config.deadlineTodayDate) || !config.deadlineTodayExpiresAt) {
+        setTodayDeadlineRemaining(null);
+        return;
+      }
+      setTodayDeadlineRemaining(Math.max(0, config.deadlineTodayExpiresAt - Date.now()));
+    };
+    tick();
+    const id = setInterval(tick, 60000);
+    return () => clearInterval(id);
+  }, [config.deadlineTodayDate, config.deadlineTodayExpiresAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const todayLiveDisplay = todayDeadlineRemaining === null ? null
+    : todayDeadlineRemaining === 0 ? "0h 00m"
+    : formatTodayCountdown(todayDeadlineRemaining);
 
   const todayAvailableDisplay = (() => {
     if (!isTodayDate(config.deadlineTodayDate)) return null;
@@ -783,7 +801,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               background: bg,
               border: `1px solid ${color}`,
               borderRadius: "var(--radius-sm)",
-              padding: "10px 12px",
+              padding: "8px 10px",
               display: "flex",
               flexDirection: "column",
               animation: isCritical ? "deadline-pulse 2.5s ease-in-out infinite" : "none",
@@ -796,7 +814,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
             ) : (
               <>
                 {/* Row 1: icon + eyebrow + label + countdown */}
-                <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "10px" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "6px" }}>
                   <span style={{ fontSize: "16px", flexShrink: 0, lineHeight: 1.3 }}>🎯</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.10em", textTransform: "uppercase", color, lineHeight: 1 }}>
@@ -805,7 +823,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                     <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: "2px" }}>
                       {label}
                     </div>
-                    <div style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "12px", fontWeight: "700", color, letterSpacing: "0.02em", marginTop: "4px" }}>
+                    <div style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "14px", fontWeight: "800", color: "#EF4444", letterSpacing: "0.02em", marginTop: "4px" }}>
                       {deadlineCountdown ? `${deadlineCountdown} left` : `${days === 0 ? "TODAY" : `${days}d`} left`}
                     </div>
                   </div>
@@ -819,9 +837,9 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                   const btnLabel = isDoneToday ? "DONE" : isStillOpen ? "STILL OPEN" : "OPEN";
                   const btnTitle = isDoneToday ? "Reopen today's move" : "Mark today's move done";
                   const rowLabel = isDoneToday ? "TODAY'S MOVE DONE ✓" : "TODAY'S MOVE";
-                  const rowLabelColor = isDoneToday ? "#15803D" : "var(--text-muted)";
+                  const rowLabelColor = isDoneToday ? "#15803D" : "#D97706";
                   return (
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "10px" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "6px" }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.08em", textTransform: "uppercase", color: rowLabelColor, lineHeight: 1 }}>
                           {rowLabel}
@@ -832,9 +850,9 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                           </div>
                         )}
                         {/* Planned today sub-line */}
-                        <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--text-muted)", lineHeight: 1.4 }}>
-                          {todayAvailableDisplay ? (
-                            `${todayAvailableDisplay} planned today`
+                        <div style={{ marginTop: "4px", fontSize: "11px", lineHeight: 1.4, color: todayLiveDisplay ? "#D97706" : "var(--text-muted)", fontWeight: todayLiveDisplay ? "800" : "400" }}>
+                          {todayLiveDisplay ? (
+                            `${todayLiveDisplay} left today`
                           ) : (
                             <>
                               — planned today{" "}
