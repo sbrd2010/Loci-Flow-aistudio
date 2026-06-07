@@ -179,11 +179,7 @@ SESSION: ${timeOfDay}, ${config.visitStreakCount || 0}-day streak, ${todayActive
     const totalTodayHours = (totalTodayMins / 60).toFixed(1);
     const p1Count = backlog.filter(t => t.priority === "P1").length;
     const p1Ratio = p1Count / backlog.length;
-    const focusCoreInstruction = buildLociCoreInstruction({ firstName });
-
-    const prompt = `${focusCoreInstruction}
-
-You are ${config.mentorName || "Loci AI Coach"}, an expert productivity mentor inside Loci Focus — an app built to help people close the gap between intention and action.
+    const prompt = `You are ${config.mentorName || "Loci AI Coach"}, an expert productivity mentor inside Loci Focus — an app built to help people close the gap between intention and action.
 
 USER: ${config.userName || "friend"} | Challenge: ${challengeDesc}
 Time: ${timeOfDay} (${hour}:00) — ${energyNote}
@@ -222,7 +218,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
     try {
       const reply = await callAI({
         groqKey, geminiKey,
-        systemPrompt: `${buildLociCoreInstruction({ firstName })}\n\nYou are ${config.mentorName || "a focus coach"}, an expert productivity coach. Never use the word "ADHD" in responses.`,
+        systemPrompt: `${buildLociCoreInstruction({ firstName })}\n\nYou are ${config.mentorName || "a focus coach"}, an expert productivity coach.`,
         messages: [{ role: "user", content: prompt }],
         maxTokens: 800
       });
