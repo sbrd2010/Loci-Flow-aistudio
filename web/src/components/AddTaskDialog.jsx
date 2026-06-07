@@ -24,6 +24,8 @@ export default function AddTaskDialog({ email, payload, savePayload, userProfile
   const [advancedOpen, setAdvancedOpen] = useState(isEditMode);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
+  const [aiSuggestion, setAiSuggestion] = useState(null);
+  const [subSteps, setSubSteps] = useState(editTask?.subSteps || []);
   const [formError, setFormError] = useState("");
   const [reminderOn, setReminderOn] = useState(!!editTask?.reminderAt);
   const [reminderDate, setReminderDate] = useState(() => {
@@ -48,6 +50,7 @@ export default function AddTaskDialog({ email, payload, savePayload, userProfile
     if (!hasAnyKey) { setAiError("No AI key — add one in Settings."); return; }
     setAiLoading(true);
     setAiError("");
+    setAiSuggestion(null);
     const cfg = payload.config || {};
     const challengeLabel =
       cfg.challengeType === "overplanner"  ? "over-plans and researches but rarely starts (needs forced simplicity and an execution nudge)" :
@@ -76,9 +79,10 @@ TASK DESIGN RULES:
 - horizonLevel: "today" only if deadline is today or extremely urgent; "week" for most tasks; "month"/"quarter" for longer-term goals
 - Never use the word "ADHD" in your response
 - Their current tasks for context: ${existingTasks}
+- subSteps: extract 2-4 key points or sub-tasks from the original input that would be lost in the shortened title. Use [] if the input is short or the title already captures everything.
 
 Respond with ONLY valid JSON (no markdown, no code blocks), exactly this structure:
-{"title":"<specific outcome-oriented title, max 60 chars>","microStep":"<single door-handle action, max 60 chars>","priority":"P2","estimateMinutes":25,"horizonLevel":"week"}
+{"title":"<specific outcome-oriented title, max 60 chars>","microStep":"<single door-handle action, max 60 chars>","priority":"P2","estimateMinutes":25,"horizonLevel":"week","subSteps":[{"text":"key point 1"},{"text":"key point 2"}]}
 
 priority options: P1 (urgent+must do today), P2 (important this week), P3 (normal queue), P4 (easy quick-win, under 15 min)
 estimateMinutes options: 15, 25, 45, 60, 120, 240, 360
@@ -89,21 +93,45 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
         groqKey, geminiKey,
         systemPrompt: "You are a productivity coach. Respond ONLY with valid JSON, no markdown.",
         messages: [{ role: "user", content: prompt }],
-        maxTokens: 200
+        maxTokens: 350
       });
-      const cleaned = raw.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(cleaned);
-      if (parsed.title) setTitle(parsed.title);
-      if (parsed.microStep) setConcreteStep(parsed.microStep);
-      if (["P1","P2","P3","P4"].includes(parsed.priority)) setPriority(parsed.priority);
-      const est = Number(parsed.estimateMinutes);
-      if ([15,25,45,60,120,240,360].includes(est)) setEstimateMinutes(est);
-      if (["today","week","month","quarter","halfyear","office"].includes(parsed.horizonLevel)) setHorizonLevel(parsed.horizonLevel);
+      let cleaned = raw.replace(/```json|```/g, "").trim();
+      let parsed;
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch {
+        const match = cleaned.match(/\{[\s\S]*\}/);
+        if (match) parsed = JSON.parse(match[0]);
+        else throw new Error("No JSON");
+      }
+      setAiSuggestion({
+        title: parsed.title || title.trim(),
+        microStep: parsed.microStep || "",
+        priority: parsed.priority,
+        estimateMinutes: parsed.estimateMinutes,
+        horizonLevel: parsed.horizonLevel,
+        subSteps: Array.isArray(parsed.subSteps) ? parsed.subSteps.filter(s => s && s.text) : [],
+      });
     } catch (err) {
       setAiError("AI suggestion failed — fill in manually.");
     } finally {
       setAiLoading(false);
     }
+  };
+
+  const handleApplyAISuggestion = () => {
+    if (!aiSuggestion) return;
+    if (aiSuggestion.title) setTitle(aiSuggestion.title);
+    if (aiSuggestion.microStep) { setConcreteStep(aiSuggestion.microStep); setAdvancedOpen(true); }
+    if (["P1","P2","P3","P4"].includes(aiSuggestion.priority)) setPriority(aiSuggestion.priority);
+    const est = Number(aiSuggestion.estimateMinutes);
+    if ([15,25,45,60,120,240,360].includes(est)) setEstimateMinutes(est);
+    if (["today","week","month","quarter","halfyear","office"].includes(aiSuggestion.horizonLevel)) setHorizonLevel(aiSuggestion.horizonLevel);
+    if (aiSuggestion.subSteps.length > 0) {
+      const now = Date.now();
+      setSubSteps(aiSuggestion.subSteps.map((s, i) => ({ id: `ai-ss-${i}-${now}`, text: s.text, done: false })));
+    }
+    setAiSuggestion(null);
   };
 
   const horizons = [
@@ -163,6 +191,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
         category,
         timeEstimateMinutes: Number(estimateMinutes),
         reminderAt,
+        subSteps: subSteps.length > 0 ? subSteps : (editTask.subSteps || undefined),
         lastUpdated: Date.now()
       };
       if (reminderAt && reminderAt !== editTask.reminderAt) scheduleReminder(updatedTask);
@@ -191,7 +220,8 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       orderIndex,
       dateCompletedString: null,
       isDeleted: false,
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
+      ...(subSteps.length > 0 && { subSteps }),
     };
 
     if (reminderAt) scheduleReminder(freshTask);
@@ -252,6 +282,20 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
             )}
             {aiError && (
               <p style={{ fontSize: "11.5px", color: "var(--danger)", marginTop: "4px" }}>{aiError}</p>
+            )}
+            {aiSuggestion && (
+              <div style={{ background: "var(--accent-ring)", border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)", padding: "10px 12px", marginTop: "8px" }}>
+                <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>✨ AI Suggestion — review before applying</div>
+                <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "3px" }}>{aiSuggestion.title}</div>
+                {aiSuggestion.microStep && <div style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "3px" }}>First step: {aiSuggestion.microStep}</div>}
+                {aiSuggestion.subSteps.length > 0 && (
+                  <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "6px" }}>{aiSuggestion.subSteps.length} key point{aiSuggestion.subSteps.length > 1 ? "s" : ""} saved as sub-steps</div>
+                )}
+                <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                  <button type="button" onClick={handleApplyAISuggestion} style={{ flex: 1, padding: "8px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: "var(--radius-sm)", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>Apply</button>
+                  <button type="button" onClick={() => setAiSuggestion(null)} style={{ flex: 1, padding: "8px", background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>Keep my text</button>
+                </div>
+              </div>
             )}
           </div>
 
