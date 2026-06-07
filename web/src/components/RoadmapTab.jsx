@@ -369,7 +369,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
                 Move as-is
               </button>
               <button
-                onClick={() => { setAiBreakdownSuggestion(null); setLongDumpWarning(null); }}
+                onClick={() => { setAiBreakdownSuggestion(null); setLongDumpWarning(null); setEditingDumpItem(null); }}
                 style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}>
                 Cancel
               </button>
