@@ -695,7 +695,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
         }
 
         // ── Detailed card (7-row, full information) ──────────────────────────
-        if (config.deadlineCardStyle === "detailed") {
+        if (false) { // detailed card removed; always render compact
           return (
             <div
               className="today-deadline-card"
@@ -899,7 +899,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                                   value={customHoursValue}
                                   onChange={e => setCustomHoursValue(e.target.value)}
                                   placeholder="e.g. 3.5"
-                                  style={{ width: "70px", padding: "4px 8px", borderRadius: "8px", border: "1.5px solid var(--border)", background: "var(--bg-secondary)", color: "var(--text-primary)", fontSize: "12px" }}
+                                  style={{ flex: 1, minWidth: "110px", padding: "4px 8px", borderRadius: "8px", border: "1.5px solid var(--border)", background: "var(--bg-secondary)", color: "var(--text-primary)", fontSize: "12px" }}
                                 />
                                 <button
                                   type="button"
