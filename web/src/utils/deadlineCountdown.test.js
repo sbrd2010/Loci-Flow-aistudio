@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { formatCountdown, formatTodayCountdown, isDailyDone } from "./deadlineCountdown.js";
+import {
+  buildDeadlineMoveRollover,
+  formatCountdown,
+  formatTodayCountdown,
+  getLocalDateString,
+  isDailyDone,
+  markDeadlineMoveDone,
+  markDeadlineMoveOpen
+} from "./deadlineCountdown.js";
 
 describe("formatCountdown", () => {
   it("formats exactly one day", () => {
@@ -84,5 +92,94 @@ describe("isDailyDone", () => {
 
   it("returns false when savedDate is a past date", () => {
     expect(isDailyDone("2026-01-01", "2026-06-06")).toBe(false);
+  });
+});
+
+describe("getLocalDateString", () => {
+  it("uses local calendar fields, not UTC slicing", () => {
+    expect(getLocalDateString(new Date(2026, 5, 7, 23, 30))).toBe("2026-06-07");
+  });
+});
+
+describe("deadline move history helpers", () => {
+  const baseConfig = {
+    deadlineLabel: "Job contract by September",
+    deadlineDate: "2026-09-30",
+    deadlineAction: "Apply to one job today"
+  };
+
+  it("starts tracking on first seen day without backfilling old missed days", () => {
+    const next = buildDeadlineMoveRollover(baseConfig, "2026-06-07");
+
+    expect(next.deadlineMoveLastCheckedDate).toBe("2026-06-07");
+    expect(next.deadlineMoveTrackingStartDate).toBe("2026-06-07");
+    expect(next.deadlineMoveHistory).toEqual({});
+  });
+
+  it("marks the previous tracked day missed after the local day rolls over", () => {
+    const next = buildDeadlineMoveRollover({
+      ...baseConfig,
+      deadlineMoveLastCheckedDate: "2026-06-06",
+      deadlineMoveTrackingStartDate: "2026-06-06"
+    }, "2026-06-07");
+
+    expect(next.deadlineMoveHistory["2026-06-06"]).toBe("missed");
+    expect(next.deadlineMoveLastCheckedDate).toBe("2026-06-07");
+  });
+
+  it("preserves a previous done mark instead of overwriting it as missed", () => {
+    const next = buildDeadlineMoveRollover({
+      ...baseConfig,
+      deadlineDailyDoneDate: "2026-06-06",
+      deadlineMoveHistory: { "2026-06-06": "done" },
+      deadlineMoveLastCheckedDate: "2026-06-06",
+      deadlineMoveTrackingStartDate: "2026-06-06"
+    }, "2026-06-07");
+
+    expect(next.deadlineMoveHistory["2026-06-06"]).toBe("done");
+  });
+
+  it("marks skipped tracked days missed up to today", () => {
+    const next = buildDeadlineMoveRollover({
+      ...baseConfig,
+      deadlineMoveLastCheckedDate: "2026-06-04",
+      deadlineMoveTrackingStartDate: "2026-06-04"
+    }, "2026-06-07");
+
+    expect(next.deadlineMoveHistory["2026-06-04"]).toBe("missed");
+    expect(next.deadlineMoveHistory["2026-06-05"]).toBe("missed");
+    expect(next.deadlineMoveHistory["2026-06-06"]).toBe("missed");
+    expect(next.deadlineMoveHistory["2026-06-07"]).toBeUndefined();
+  });
+
+  it("returns null when already checked today", () => {
+    expect(buildDeadlineMoveRollover({
+      ...baseConfig,
+      deadlineMoveLastCheckedDate: "2026-06-07"
+    }, "2026-06-07")).toBeNull();
+  });
+
+  it("does nothing when no deadline is configured", () => {
+    expect(buildDeadlineMoveRollover({}, "2026-06-07")).toBeNull();
+  });
+
+  it("records today's move as done", () => {
+    const next = markDeadlineMoveDone(baseConfig, "2026-06-07");
+
+    expect(next.deadlineDailyDoneDate).toBe("2026-06-07");
+    expect(next.deadlineMoveHistory["2026-06-07"]).toBe("done");
+    expect(next.deadlineMoveLastCheckedDate).toBe("2026-06-07");
+  });
+
+  it("reopens today's move by removing today's history entry", () => {
+    const next = markDeadlineMoveOpen({
+      ...baseConfig,
+      deadlineDailyDoneDate: "2026-06-07",
+      deadlineMoveHistory: { "2026-06-07": "done", "2026-06-06": "missed" }
+    }, "2026-06-07");
+
+    expect(next.deadlineDailyDoneDate).toBeNull();
+    expect(next.deadlineMoveHistory["2026-06-07"]).toBeUndefined();
+    expect(next.deadlineMoveHistory["2026-06-06"]).toBe("missed");
   });
 });
