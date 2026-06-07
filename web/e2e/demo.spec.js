@@ -266,3 +266,21 @@ test("12. Deadline card shows redesigned compact layout in demo mode", async ({ 
   // Card label shown
   await expect(card).toContainText("Visa & career deadline");
 });
+
+test("14. Settings hours sync to Today card live countdown", async ({ page }) => {
+  await enterDemo(page);
+
+  // Navigate to Settings and set 2h for today
+  await page.getByRole("button", { name: "Settings" }).click();
+  const twoHourBtn = page.locator('button').filter({ hasText: /^2h$/ }).first();
+  await expect(twoHourBtn).toBeVisible({ timeout: 5_000 });
+  await twoHourBtn.click();
+
+  // Navigate back to Today tab
+  await page.getByRole("button", { name: "Today" }).click();
+
+  // Deadline card should now show a live countdown ("left today"), not the fallback
+  const card = page.getByTestId("deadline-card");
+  await expect(card).toBeVisible({ timeout: 5_000 });
+  await expect(card).toContainText("left today", { timeout: 5_000 });
+});

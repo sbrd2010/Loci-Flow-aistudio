@@ -36,7 +36,6 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   const [editedDeadlineDate, setEditedDeadlineDate] = useState(config.deadlineDate || "");
   const [editedDeadlineStartDate, setEditedDeadlineStartDate] = useState(config.deadlineStartDate || "");
   const [editedDeadlineAction, setEditedDeadlineAction] = useState(config.deadlineAction || "");
-  const [editedDeadlineCardStyle, setEditedDeadlineCardStyle] = useState(config.deadlineCardStyle || "compact");
 
   useEffect(() => {
     setEditedName(config.userName || "");
@@ -54,12 +53,11 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
     setEditedDeadlineDate(config.deadlineDate || "");
     setEditedDeadlineStartDate(config.deadlineStartDate || "");
     setEditedDeadlineAction(config.deadlineAction || "");
-    setEditedDeadlineCardStyle(config.deadlineCardStyle || "compact");
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
       config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType,
       config.dayStartHour, config.dayEndHour, config.headerStyle, config.toolsStyle,
       config.roadmapStyle, config.deadlineLabel, config.deadlineDate,
-      config.deadlineStartDate, config.deadlineAction, config.deadlineCardStyle]);
+      config.deadlineStartDate, config.deadlineAction]);
 
   const challengeOptions = [
     {
@@ -157,7 +155,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
         deadlineDate: editedDeadlineDate,
         deadlineStartDate: editedDeadlineStartDate,
         deadlineAction: editedDeadlineAction.trim(),
-        deadlineCardStyle: editedDeadlineCardStyle,
+        deadlineCardStyle: "compact",
         lastUpdated: Date.now()
       }
     });
@@ -423,7 +421,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
             {editedDeadlineDate && (() => {
               const currentHours = config.deadlineTodayDate === settingsTodayStr ? config.deadlineTodayHours : null;
               const handleSettingsTodayHours = (h) => {
-                savePayload({ ...payload, config: { ...config, deadlineTodayHours: h, deadlineTodayDate: settingsTodayStr, lastUpdated: Date.now() } });
+                savePayload({ ...payload, config: { ...config, deadlineTodayHours: Number(h), deadlineTodayDate: settingsTodayStr, deadlineTodayExpiresAt: Date.now() + Number(h) * 3600 * 1000, lastUpdated: Date.now() } });
                 setSettingsShowCustomHours(false);
                 setSettingsCustomHoursValue("");
               };
@@ -465,7 +463,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
                         value={settingsCustomHoursValue}
                         onChange={e => setSettingsCustomHoursValue(e.target.value)}
                         placeholder="e.g. 3.5"
-                        style={{ width: "70px", padding: "4px 8px", borderRadius: "8px", border: "1.5px solid var(--border)", background: "var(--bg-secondary)", color: "var(--text-primary)", fontSize: "12px" }}
+                        style={{ flex: 1, minWidth: "110px", padding: "4px 8px", borderRadius: "8px", border: "1.5px solid var(--border)", background: "var(--bg-secondary)", color: "var(--text-primary)", fontSize: "12px" }}
                       />
                       <button type="button"
                         onClick={() => { const h = parseFloat(settingsCustomHoursValue); if (h > 0) handleSettingsTodayHours(h); }}
@@ -478,7 +476,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
                     <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--text-muted)" }}>
                       {currentHours}h planned today ·{" "}
                       <button type="button"
-                        onClick={() => savePayload({ ...payload, config: { ...config, deadlineTodayHours: null, deadlineTodayDate: null, lastUpdated: Date.now() } })}
+                        onClick={() => savePayload({ ...payload, config: { ...config, deadlineTodayHours: null, deadlineTodayDate: null, deadlineTodayExpiresAt: null, lastUpdated: Date.now() } })}
                         style={{ fontSize: "11px", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                         Clear
                       </button>
@@ -487,30 +485,12 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
                 </div>
               );
             })()}
-            <div style={{ marginBottom: "4px", fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Card style
-            </div>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              {[
-                { key: "compact", label: "Compact" },
-                { key: "detailed", label: "Detailed" }
-              ].map(({ key, label }) => (
-                <button key={key} type="button"
-                  onClick={() => setEditedDeadlineCardStyle(key)}
-                  style={{
-                    padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700",
-                    cursor: "pointer", transition: "all 0.15s",
-                    background: editedDeadlineCardStyle === key ? "var(--accent)" : "var(--bg-secondary)",
-                    color: editedDeadlineCardStyle === key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
-                    border: editedDeadlineCardStyle === key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
-                  }}>
-                  {label}
-                </button>
-              ))}
-            </div>
             {editedDeadlineDate && (
               <button type="button"
-                onClick={() => { setEditedDeadlineDate(""); setEditedDeadlineLabel(""); setEditedDeadlineStartDate(""); setEditedDeadlineAction(""); }}
+                onClick={() => {
+                  setEditedDeadlineDate(""); setEditedDeadlineLabel(""); setEditedDeadlineStartDate(""); setEditedDeadlineAction("");
+                  savePayload({ ...payload, config: { ...config, deadlineTodayHours: null, deadlineTodayDate: null, deadlineTodayExpiresAt: null, lastUpdated: Date.now() } });
+                }}
                 style={{ marginTop: "6px", fontSize: "11px", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                 ✕ Clear deadline
               </button>
