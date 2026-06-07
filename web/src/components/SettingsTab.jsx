@@ -15,6 +15,10 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
     return legacy[key] || key || "overplanner";
   };
 
+  const settingsTodayStr = new Date().toISOString().slice(0, 10);
+  const [settingsShowCustomHours, setSettingsShowCustomHours] = useState(false);
+  const [settingsCustomHoursValue, setSettingsCustomHoursValue] = useState("");
+
   // ── Profile form state ────────────────────────────────────────────────────
   const [editedName, setEditedName] = useState(config.userName || "");
   const [editedMentor, setEditedMentor] = useState(config.mentorName || "Marcus Aurelius");
@@ -415,6 +419,73 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
               onChange={e => setEditedDeadlineAction(e.target.value)}
               placeholder="Daily action nudge (e.g. Complete one application step today)"
               style={{ marginBottom: "8px" }} />
+            {editedDeadlineDate && (() => {
+              const currentHours = config.deadlineTodayDate === settingsTodayStr ? config.deadlineTodayHours : null;
+              const handleSettingsTodayHours = (h) => {
+                savePayload({ ...payload, config: { ...config, deadlineTodayHours: h, deadlineTodayDate: settingsTodayStr, lastUpdated: Date.now() } });
+                setSettingsShowCustomHours(false);
+                setSettingsCustomHoursValue("");
+              };
+              return (
+                <div style={{ marginBottom: "8px" }}>
+                  <div style={{ marginBottom: "4px", fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    Hours planned today
+                  </div>
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                    {[1, 2, 4, 6].map(h => (
+                      <button key={h} type="button"
+                        onClick={() => handleSettingsTodayHours(h)}
+                        style={{
+                          padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700",
+                          cursor: "pointer", transition: "all 0.15s",
+                          background: currentHours === h ? "var(--accent)" : "var(--bg-secondary)",
+                          color: currentHours === h ? "var(--btn-text, #fff)" : "var(--text-secondary)",
+                          border: currentHours === h ? "2px solid var(--accent)" : "1.5px solid var(--border)"
+                        }}>
+                        {h}h
+                      </button>
+                    ))}
+                    <button type="button"
+                      onClick={() => setSettingsShowCustomHours(v => !v)}
+                      style={{
+                        padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700",
+                        cursor: "pointer",
+                        background: (currentHours && ![1,2,4,6].includes(currentHours)) ? "var(--accent)" : "var(--bg-secondary)",
+                        color: (currentHours && ![1,2,4,6].includes(currentHours)) ? "var(--btn-text, #fff)" : "var(--text-secondary)",
+                        border: (currentHours && ![1,2,4,6].includes(currentHours)) ? "2px solid var(--accent)" : "1.5px solid var(--border)"
+                      }}>
+                      {(currentHours && ![1,2,4,6].includes(currentHours)) ? `${currentHours}h` : "Other…"}
+                    </button>
+                  </div>
+                  {settingsShowCustomHours && (
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "6px" }}>
+                      <input
+                        type="number" step="0.5" min="0.5" max="16"
+                        value={settingsCustomHoursValue}
+                        onChange={e => setSettingsCustomHoursValue(e.target.value)}
+                        placeholder="e.g. 3.5"
+                        style={{ width: "70px", padding: "4px 8px", borderRadius: "8px", border: "1.5px solid var(--border)", background: "var(--bg-secondary)", color: "var(--text-primary)", fontSize: "12px" }}
+                      />
+                      <button type="button"
+                        onClick={() => { const h = parseFloat(settingsCustomHoursValue); if (h > 0) handleSettingsTodayHours(h); }}
+                        style={{ padding: "4px 10px", borderRadius: "14px", fontSize: "11px", fontWeight: "700", background: "var(--accent)", color: "#fff", border: "none", cursor: "pointer" }}>
+                        Set
+                      </button>
+                    </div>
+                  )}
+                  {currentHours && (
+                    <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--text-muted)" }}>
+                      {currentHours}h planned today ·{" "}
+                      <button type="button"
+                        onClick={() => savePayload({ ...payload, config: { ...config, deadlineTodayHours: null, deadlineTodayDate: null, lastUpdated: Date.now() } })}
+                        style={{ fontSize: "11px", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                        Clear
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             <div style={{ marginBottom: "4px", fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Card style
             </div>

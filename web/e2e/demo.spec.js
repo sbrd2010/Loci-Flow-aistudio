@@ -212,18 +212,28 @@ test("11. Day Map route timeline — always visible, no view toggle", async ({ p
   await expect(page.locator(".dmb-grid")).not.toBeVisible();
 });
 
-test("12. Deadline card shows compact layout with today countdown in demo mode", async ({ page }) => {
+test("12. Deadline card shows redesigned compact layout in demo mode", async ({ page }) => {
   await enterDemo(page);
 
   const card = page.getByTestId("deadline-card");
   await expect(card).toBeVisible({ timeout: 5_000 });
 
-  // Compact layout: full deadline countdown + today countdown
+  // Row 1: deadline countdown (days + "left")
   await expect(card).toContainText("d");
-  await expect(card).toContainText("left today");
+  await expect(card).toContainText("left");
 
-  // "Mark move done" button is visible (demo config has no done date set)
-  await expect(page.getByTestId("deadline-done-btn")).toBeVisible();
+  // Row 2: TODAY'S MOVE is visible as the primary action anchor
+  await expect(card).toContainText("TODAY'S MOVE");
+  await expect(card).toContainText("Apply to one job today");
+
+  // Demo config sets deadlineTodayHours:6 so planned hours appear
+  await expect(card).toContainText("planned today");
+
+  // OPEN/STILL OPEN/DONE button present (demo config has no done date)
+  const btn = page.getByTestId("deadline-done-btn");
+  await expect(btn).toBeVisible();
+  const btnText = await btn.textContent();
+  expect(["OPEN", "STILL OPEN"].includes(btnText.trim())).toBe(true);
 
   // Card label shown
   await expect(card).toContainText("Visa & career deadline");

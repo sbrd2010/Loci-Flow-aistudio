@@ -93,6 +93,8 @@ export function createDemoPayload() {
       deadlineStartDate: new Date().toISOString().slice(0, 10),
       deadlineAction: "Apply to one job today",
       deadlineCardStyle: "compact",
+      deadlineTodayHours: 6,
+      deadlineTodayDate: todayStr,
       lastUpdated: Date.now(),
     },
 
