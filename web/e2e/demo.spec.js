@@ -273,7 +273,11 @@ test("14. Settings hours sync to Today card live countdown", async ({ page }) =>
   // Navigate to Settings tab
   await page.getByRole("button", { name: "Settings" }).click();
 
-  // Wait for the Key Deadline hours chip section to render (requires editedDeadlineDate to be truthy)
+  // Profile section is collapsed when the user has a name set (demo has "Demo User").
+  // Click the toggle to expand it so the deadline hours section is rendered.
+  await page.getByRole("button", { name: /Your Profile/ }).click();
+
+  // Now the Key Deadline chip buttons are in the DOM
   const twoHourBtn = page.getByTestId("settings-today-hours-2h");
   await expect(twoHourBtn).toBeVisible({ timeout: 8_000 });
   await twoHourBtn.click();
