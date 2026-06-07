@@ -85,6 +85,8 @@ export function createDemoPayload() {
       isLowEnergyMode: false,
       isOnboardingCompleted: true,
       eveningGuardWindowActive: true,
+      dayStartHour: 7,
+      dayEndHour: 26,
       roadmapStyle: "compact",
       headerStyle: "full",
       toolsStyle: "inline",
@@ -93,9 +95,6 @@ export function createDemoPayload() {
       deadlineStartDate: new Date().toISOString().slice(0, 10),
       deadlineAction: "Apply to one job today",
       deadlineCardStyle: "compact",
-      deadlineTodayHours: 6,
-      deadlineTodayDate: (() => { const n = new Date(); return toDateStr(n); })(),
-      deadlineTodayExpiresAt: (() => { const n = new Date(); return n.getTime() + 6 * 3600 * 1000; })(),
       lastUpdated: Date.now(),
     },
 

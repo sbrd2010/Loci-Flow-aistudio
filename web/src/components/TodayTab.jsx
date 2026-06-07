@@ -10,7 +10,7 @@ import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
 import { getCurrentFocusQuote } from "../utils/focusQuotes";
-import { formatCountdown, formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
+import { formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
 import "../styles/focusNow.css";
 import {
   DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor,
@@ -21,6 +21,27 @@ import {
   useSortable, arrayMove
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+
+function getWorkWindowEnd(dayStartHour, dayEndHour) {
+  const now = new Date();
+  const nowH = now.getHours() + now.getMinutes() / 60;
+  const end = new Date(now);
+  if (dayEndHour >= 24) {
+    const wrapH = dayEndHour - 24;
+    if (nowH >= dayStartHour) {
+      end.setDate(now.getDate() + 1);
+      end.setHours(wrapH, 0, 0, 0);
+    } else if (nowH < wrapH) {
+      end.setHours(wrapH, 0, 0, 0);
+    } else {
+      return null;
+    }
+  } else {
+    if (nowH < dayStartHour || nowH >= dayEndHour) return null;
+    end.setHours(dayEndHour, 0, 0, 0);
+  }
+  return end;
+}
 
 function SortableTaskItem({ id, children }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -53,9 +74,6 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
   const [focusNowMode, setFocusNowMode] = useState(false);
   const [focusNowTaskId, setFocusNowTaskId] = useState(null);
   const [showFocusNowPicker, setShowFocusNowPicker] = useState(false);
-  const [showTodayHoursPicker, setShowTodayHoursPicker] = useState(false);
-  const [showCustomHoursInput, setShowCustomHoursInput] = useState(false);
-  const [customHoursValue, setCustomHoursValue] = useState("");
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -192,29 +210,16 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
 
   const currentQuote = getCurrentFocusQuote();
 
-  const [deadlineCountdown, setDeadlineCountdown] = useState(null);
-  useEffect(() => {
-    if (!config.deadlineDate) { setDeadlineCountdown(null); return; }
-    const tick = () => {
-      const target = new Date(config.deadlineDate + "T23:59:59");
-      setDeadlineCountdown(formatCountdown(target - Date.now()));
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [config.deadlineDate]);
-
   const [todayCountdown, setTodayCountdown] = useState(null);
   useEffect(() => {
     const tick = () => {
-      const now = new Date();
-      const midnight = new Date(now); midnight.setHours(24, 0, 0, 0);
-      setTodayCountdown(formatTodayCountdown(midnight - now));
+      const end = getWorkWindowEnd(config.dayStartHour ?? 7, config.dayEndHour ?? 26);
+      setTodayCountdown(end ? formatTodayCountdown(end - Date.now()) : null);
     };
     tick();
     const id = setInterval(tick, 60000);
     return () => clearInterval(id);
-  }, []);
+  }, [config.dayStartHour, config.dayEndHour]);
 
   const _tsd = new Date();
   const todayStr = `${_tsd.getFullYear()}-${String(_tsd.getMonth() + 1).padStart(2, "0")}-${String(_tsd.getDate()).padStart(2, "0")}`;
@@ -227,38 +232,21 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
     savePayload({ ...payload, config: { ...config, deadlineDailyDoneDate: null, lastUpdated: Date.now() } });
   };
 
-  const handleDeadlineTodayHours = (hours) => {
-    savePayload({ ...payload, config: { ...config, deadlineTodayHours: hours, deadlineTodayDate: todayStr, deadlineTodayExpiresAt: Date.now() + hours * 3600 * 1000, lastUpdated: Date.now() } });
-    setShowTodayHoursPicker(false);
-    setShowCustomHoursInput(false);
-    setCustomHoursValue("");
-  };
-
-  const isTodayDate = (dateStr) => dateStr === todayStr;
-
   const [todayDeadlineRemaining, setTodayDeadlineRemaining] = useState(null);
   useEffect(() => {
     const tick = () => {
-      if (!isTodayDate(config.deadlineTodayDate) || !config.deadlineTodayExpiresAt) {
-        setTodayDeadlineRemaining(null);
-        return;
-      }
-      setTodayDeadlineRemaining(Math.max(0, config.deadlineTodayExpiresAt - Date.now()));
+      if (!config.deadlineDate) { setTodayDeadlineRemaining(null); return; }
+      const end = getWorkWindowEnd(config.dayStartHour ?? 7, config.dayEndHour ?? 26);
+      setTodayDeadlineRemaining(end ? Math.max(0, end - Date.now()) : null);
     };
     tick();
     const id = setInterval(tick, 60000);
     return () => clearInterval(id);
-  }, [config.deadlineTodayDate, config.deadlineTodayExpiresAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [config.deadlineDate, config.dayStartHour, config.dayEndHour]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const todayLiveDisplay = todayDeadlineRemaining === null ? null
     : todayDeadlineRemaining === 0 ? "0h 00m"
     : formatTodayCountdown(todayDeadlineRemaining);
-
-  const todayAvailableDisplay = (() => {
-    if (!isTodayDate(config.deadlineTodayDate)) return null;
-    const ms = (config.deadlineTodayHours || 0) * 3600 * 1000;
-    return formatTodayCountdown(ms);
-  })();
 
   const [timelineProgress, setTimelineProgress] = useState(0.5);
   const [currentTimeStr, setCurrentTimeStr] = useState("");
@@ -421,7 +409,17 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
   };
 
   const handleEnergyToggle = () => {
-    savePayload({ ...payload, config: { ...config, isLowEnergyMode: !config.isLowEnergyMode, lastUpdated: Date.now() } });
+    const enabling = !config.isLowEnergyMode;
+    if (enabling) setIsMVDMode(false);
+    savePayload({ ...payload, config: { ...config, isLowEnergyMode: enabling, lastUpdated: Date.now() } });
+  };
+
+  const handleMVDModeToggle = () => {
+    const enabling = !isMVDMode;
+    if (enabling && config.isLowEnergyMode) {
+      savePayload({ ...payload, config: { ...config, isLowEnergyMode: false, lastUpdated: Date.now() } });
+    }
+    setIsMVDMode(enabling);
   };
 
   const handleStartEdit = (task) => setEditingTask(task);
@@ -551,7 +549,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
         const nowHour = new Date().getHours();
         const greeting = nowHour < 12 ? "Good morning" : nowHour < 17 ? "Good afternoon" : "Good evening";
         const firstName = (config.userName || "").split(" ")[0];
-        const headerStyle = config.headerStyle || "full";
+        const headerStyle = config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full");
 
         // Option E: Auto-hide — wraps the full card, collapses on scroll
         if (headerStyle === "autohide") {
@@ -824,7 +822,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                       {label}
                     </div>
                     <div style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "14px", fontWeight: "800", color: "#EF4444", letterSpacing: "0.02em", marginTop: "4px" }}>
-                      {deadlineCountdown ? `${deadlineCountdown} left` : `${days === 0 ? "TODAY" : `${days}d`} left`}
+                      {`${days === 0 ? "TODAY" : `${days}d`} left`}
                     </div>
                   </div>
                 </div>
@@ -849,67 +847,10 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                             {config.deadlineAction}
                           </div>
                         )}
-                        {/* Planned today sub-line */}
-                        <div style={{ marginTop: "4px", fontSize: "11px", lineHeight: 1.4, color: todayLiveDisplay ? "#D97706" : "var(--text-muted)", fontWeight: todayLiveDisplay ? "800" : "400" }}>
-                          {todayLiveDisplay ? (
-                            `${todayLiveDisplay} left today`
-                          ) : (
-                            <>
-                              — planned today{" "}
-                              <button
-                                type="button"
-                                onClick={() => { setShowTodayHoursPicker(v => !v); setShowCustomHoursInput(false); }}
-                                style={{ background: "none", border: "none", color: "var(--accent)", fontSize: "11px", cursor: "pointer", padding: 0, fontWeight: "700" }}
-                              >
-                                · Set
-                              </button>
-                            </>
-                          )}
-                        </div>
-                        {/* Inline hours picker */}
-                        {showTodayHoursPicker && !todayAvailableDisplay && (
-                          <div style={{ marginTop: "6px" }}>
-                            {!showCustomHoursInput ? (
-                              <div style={{ display: "flex", gap: "5px" }}>
-                                {[1, 2, 4, 6].map(h => (
-                                  <button
-                                    key={h}
-                                    type="button"
-                                    onClick={() => handleDeadlineTodayHours(h)}
-                                    style={{ flex: 1, padding: "7px 0", textAlign: "center", borderRadius: "14px", fontSize: "12px", fontWeight: "700", background: "var(--bg-secondary)", border: "1.5px solid var(--border)", color: "var(--text-primary)", cursor: "pointer" }}
-                                  >
-                                    {h}h
-                                  </button>
-                                ))}
-                                <button
-                                  type="button"
-                                  onClick={() => setShowCustomHoursInput(true)}
-                                  style={{ flex: 1, padding: "7px 0", textAlign: "center", borderRadius: "14px", fontSize: "12px", fontWeight: "700", background: "var(--bg-secondary)", border: "1.5px solid var(--border)", color: "var(--text-secondary)", cursor: "pointer" }}
-                                >
-                                  Other…
-                                </button>
-                              </div>
-                            ) : (
-                              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                                <input
-                                  type="number"
-                                  step="0.5"
-                                  min="0.5"
-                                  max="16"
-                                  value={customHoursValue}
-                                  onChange={e => setCustomHoursValue(e.target.value)}
-                                  placeholder="e.g. 3.5"
-                                  style={{ flex: 1, minWidth: "110px", padding: "4px 8px", borderRadius: "8px", border: "1.5px solid var(--border)", background: "var(--bg-secondary)", color: "var(--text-primary)", fontSize: "12px" }}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => { const h = parseFloat(customHoursValue); if (h > 0) handleDeadlineTodayHours(h); }}
-                                  style={{ padding: "4px 10px", borderRadius: "14px", fontSize: "11px", fontWeight: "700", background: "var(--accent)", color: "#fff", border: "none", cursor: "pointer" }}
-                                >
-                                  Set
-                                </button>
-                              </div>
-                            )}
+                        {/* Work-window countdown */}
+                        {todayLiveDisplay && (
+                          <div style={{ marginTop: "4px", fontSize: "11px", lineHeight: 1.4, color: "#D97706", fontWeight: "800" }}>
+                            {todayLiveDisplay} left today
                           </div>
                         )}
                       </div>
@@ -992,7 +933,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               )}
               <button
                 className="stuck-btn"
-                onClick={() => setIsMVDMode(m => !m)}
+                onClick={handleMVDModeToggle}
                 title={isMVDMode ? "Must-Do mode ON — tap to show all" : "Show only must-do tasks"}
                 style={{
                   background: isMVDMode ? "var(--warning)" : "var(--bg-secondary)",

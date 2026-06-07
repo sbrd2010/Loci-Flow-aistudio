@@ -15,10 +15,6 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
     return legacy[key] || key || "overplanner";
   };
 
-  const _stsd = new Date();
-  const settingsTodayStr = `${_stsd.getFullYear()}-${String(_stsd.getMonth() + 1).padStart(2, "0")}-${String(_stsd.getDate()).padStart(2, "0")}`;
-  const [settingsShowCustomHours, setSettingsShowCustomHours] = useState(false);
-  const [settingsCustomHoursValue, setSettingsCustomHoursValue] = useState("");
 
   // ── Profile form state ────────────────────────────────────────────────────
   const [editedName, setEditedName] = useState(config.userName || "");
@@ -29,9 +25,10 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   const [editedChallenge, setEditedChallenge] = useState(() => normalizeChallengeKey(config.challengeType));
   const [editedDayStart, setEditedDayStart] = useState(config.dayStartHour ?? 7);
   const [editedDayEnd, setEditedDayEnd] = useState(config.dayEndHour ?? 26);
-  const [editedHeaderStyle, setEditedHeaderStyle] = useState(config.headerStyle || "full");
+  const [editedHeaderStyle, setEditedHeaderStyle] = useState(
+    config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full")
+  );
   const [editedToolsStyle, setEditedToolsStyle] = useState(config.toolsStyle || "inline");
-  const [editedRoadmapStyle, setEditedRoadmapStyle] = useState(config.roadmapStyle || "compact");
   const [editedDeadlineLabel, setEditedDeadlineLabel] = useState(config.deadlineLabel || "");
   const [editedDeadlineDate, setEditedDeadlineDate] = useState(config.deadlineDate || "");
   const [editedDeadlineStartDate, setEditedDeadlineStartDate] = useState(config.deadlineStartDate || "");
@@ -46,9 +43,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
     setEditedChallenge(normalizeChallengeKey(config.challengeType));
     setEditedDayStart(config.dayStartHour ?? 7);
     setEditedDayEnd(config.dayEndHour ?? 26);
-    setEditedHeaderStyle(config.headerStyle || "full");
+    setEditedHeaderStyle(config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full"));
     setEditedToolsStyle(config.toolsStyle || "inline");
-    setEditedRoadmapStyle(config.roadmapStyle || "compact");
     setEditedDeadlineLabel(config.deadlineLabel || "");
     setEditedDeadlineDate(config.deadlineDate || "");
     setEditedDeadlineStartDate(config.deadlineStartDate || "");
@@ -56,7 +52,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
       config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType,
       config.dayStartHour, config.dayEndHour, config.headerStyle, config.toolsStyle,
-      config.roadmapStyle, config.deadlineLabel, config.deadlineDate,
+      config.deadlineLabel, config.deadlineDate,
       config.deadlineStartDate, config.deadlineAction]);
 
   const challengeOptions = [
@@ -150,7 +146,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
         dayEndHour: editedDayEnd,
         headerStyle: editedHeaderStyle,
         toolsStyle: editedToolsStyle,
-        roadmapStyle: editedRoadmapStyle,
+        roadmapStyle: "compact",
         deadlineLabel: editedDeadlineLabel.trim(),
         deadlineDate: editedDeadlineDate,
         deadlineStartDate: editedDeadlineStartDate,
@@ -356,8 +352,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
               {[
                 { key: "full", label: "Full card" },
                 { key: "compact", label: "Compact (tap)" },
-                { key: "frameless", label: "Frameless" },
-                { key: "autohide", label: "Auto-hide" }
+                { key: "frameless", label: "Frameless" }
               ].map(({ key, label }) => (
                 <button key={key} type="button"
                   onClick={() => setEditedHeaderStyle(key)}
@@ -367,28 +362,6 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
                     background: editedHeaderStyle === key ? "var(--accent)" : "var(--bg-secondary)",
                     color: editedHeaderStyle === key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
                     border: editedHeaderStyle === key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
-                  }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Plan Page Layout</label>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
-              {[
-                { key: "compact", label: "Compact (pills)" },
-                { key: "grid",    label: "Grid (columns)" }
-              ].map(({ key, label }) => (
-                <button key={key} type="button"
-                  onClick={() => setEditedRoadmapStyle(key)}
-                  style={{
-                    padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700",
-                    cursor: "pointer", transition: "all 0.15s",
-                    background: editedRoadmapStyle === key ? "var(--accent)" : "var(--bg-secondary)",
-                    color: editedRoadmapStyle === key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
-                    border: editedRoadmapStyle === key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
                   }}>
                   {label}
                 </button>
@@ -418,79 +391,11 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
               onChange={e => setEditedDeadlineAction(e.target.value)}
               placeholder="Daily action nudge (e.g. Complete one application step today)"
               style={{ marginBottom: "8px" }} />
-            {editedDeadlineDate && (() => {
-              const currentHours = config.deadlineTodayDate === settingsTodayStr ? config.deadlineTodayHours : null;
-              const handleSettingsTodayHours = (h) => {
-                savePayload({ ...payload, config: { ...config, deadlineTodayHours: Number(h), deadlineTodayDate: settingsTodayStr, deadlineTodayExpiresAt: Date.now() + Number(h) * 3600 * 1000, lastUpdated: Date.now() } });
-                setSettingsShowCustomHours(false);
-                setSettingsCustomHoursValue("");
-              };
-              return (
-                <div style={{ marginBottom: "8px" }}>
-                  <div style={{ marginBottom: "4px", fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                    Hours planned today
-                  </div>
-                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                    {[1, 2, 4, 6].map(h => (
-                      <button key={h} type="button"
-                        data-testid={`settings-today-hours-${h}h`}
-                        onClick={() => handleSettingsTodayHours(h)}
-                        style={{
-                          padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700",
-                          cursor: "pointer", transition: "all 0.15s",
-                          background: currentHours === h ? "var(--accent)" : "var(--bg-secondary)",
-                          color: currentHours === h ? "var(--btn-text, #fff)" : "var(--text-secondary)",
-                          border: currentHours === h ? "2px solid var(--accent)" : "1.5px solid var(--border)"
-                        }}>
-                        {h}h
-                      </button>
-                    ))}
-                    <button type="button"
-                      onClick={() => setSettingsShowCustomHours(v => !v)}
-                      style={{
-                        padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700",
-                        cursor: "pointer",
-                        background: (currentHours && ![1,2,4,6].includes(currentHours)) ? "var(--accent)" : "var(--bg-secondary)",
-                        color: (currentHours && ![1,2,4,6].includes(currentHours)) ? "var(--btn-text, #fff)" : "var(--text-secondary)",
-                        border: (currentHours && ![1,2,4,6].includes(currentHours)) ? "2px solid var(--accent)" : "1.5px solid var(--border)"
-                      }}>
-                      {(currentHours && ![1,2,4,6].includes(currentHours)) ? `${currentHours}h` : "Other…"}
-                    </button>
-                  </div>
-                  {settingsShowCustomHours && (
-                    <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "6px" }}>
-                      <input
-                        type="number" step="0.5" min="0.5" max="16"
-                        value={settingsCustomHoursValue}
-                        onChange={e => setSettingsCustomHoursValue(e.target.value)}
-                        placeholder="e.g. 3.5"
-                        style={{ flex: 1, minWidth: "110px", padding: "4px 8px", borderRadius: "8px", border: "1.5px solid var(--border)", background: "var(--bg-secondary)", color: "var(--text-primary)", fontSize: "12px" }}
-                      />
-                      <button type="button"
-                        onClick={() => { const h = parseFloat(settingsCustomHoursValue); if (h > 0) handleSettingsTodayHours(h); }}
-                        style={{ padding: "4px 10px", borderRadius: "14px", fontSize: "11px", fontWeight: "700", background: "var(--accent)", color: "#fff", border: "none", cursor: "pointer" }}>
-                        Set
-                      </button>
-                    </div>
-                  )}
-                  {currentHours && (
-                    <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--text-muted)" }}>
-                      {currentHours}h planned today ·{" "}
-                      <button type="button"
-                        onClick={() => savePayload({ ...payload, config: { ...config, deadlineTodayHours: null, deadlineTodayDate: null, deadlineTodayExpiresAt: null, lastUpdated: Date.now() } })}
-                        style={{ fontSize: "11px", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                        Clear
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
             {editedDeadlineDate && (
               <button type="button"
                 onClick={() => {
                   setEditedDeadlineDate(""); setEditedDeadlineLabel(""); setEditedDeadlineStartDate(""); setEditedDeadlineAction("");
-                  savePayload({ ...payload, config: { ...config, deadlineLabel: "", deadlineDate: "", deadlineStartDate: "", deadlineAction: "", deadlineTodayHours: null, deadlineTodayDate: null, deadlineTodayExpiresAt: null, deadlineCardStyle: "compact", lastUpdated: Date.now() } });
+                  savePayload({ ...payload, config: { ...config, deadlineLabel: "", deadlineDate: "", deadlineStartDate: "", deadlineAction: "", deadlineCardStyle: "compact", lastUpdated: Date.now() } });
                 }}
                 style={{ marginTop: "6px", fontSize: "11px", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                 ✕ Clear deadline

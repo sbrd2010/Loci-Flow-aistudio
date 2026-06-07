@@ -254,7 +254,7 @@ test("12. Deadline card shows redesigned compact layout in demo mode", async ({ 
   await expect(card).toContainText("TODAY'S MOVE");
   await expect(card).toContainText("Apply to one job today");
 
-  // Demo config sets deadlineTodayExpiresAt (6h from load) so live countdown appears
+  // Clock mocked to 10am; dayStartHour=7, dayEndHour=26 — inside work window → countdown visible
   await expect(card).toContainText("left today");
 
   // OPEN/STILL OPEN/DONE button present (demo config has no done date)
@@ -267,26 +267,3 @@ test("12. Deadline card shows redesigned compact layout in demo mode", async ({ 
   await expect(card).toContainText("Visa & career deadline");
 });
 
-test("14. Settings hours sync to Today card live countdown", async ({ page }) => {
-  await enterDemo(page);
-
-  // Navigate to Settings tab
-  await page.getByRole("button", { name: "Settings" }).click();
-
-  // Profile section is collapsed when the user has a name set (demo has "Demo User").
-  // Click the toggle to expand it so the deadline hours section is rendered.
-  await page.getByRole("button", { name: /Your Profile/ }).click();
-
-  // Now the Key Deadline chip buttons are in the DOM
-  const twoHourBtn = page.getByTestId("settings-today-hours-2h");
-  await expect(twoHourBtn).toBeVisible({ timeout: 8_000 });
-  await twoHourBtn.click();
-
-  // Navigate back to Today tab
-  await page.getByRole("button", { name: "Today" }).click();
-
-  // Deadline card should now show a live countdown ("left today"), not the fallback
-  const card = page.getByTestId("deadline-card");
-  await expect(card).toBeVisible({ timeout: 5_000 });
-  await expect(card).toContainText("left today", { timeout: 5_000 });
-});

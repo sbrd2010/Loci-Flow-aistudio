@@ -11,12 +11,12 @@ import {
 
 describe("formatCountdown", () => {
   it("formats exactly one day", () => {
-    expect(formatCountdown(86400 * 1000)).toBe("1d 00h 00m 00s");
+    expect(formatCountdown(86400 * 1000)).toBe("1d");
   });
 
-  it("formats 119d 08h 14m 22s", () => {
+  it("formats 119 days", () => {
     const ms = (119 * 86400 + 8 * 3600 + 14 * 60 + 22) * 1000;
-    expect(formatCountdown(ms)).toBe("119d 08h 14m 22s");
+    expect(formatCountdown(ms)).toBe("119d");
   });
 
   it("returns null for 0ms (expired)", () => {
@@ -36,8 +36,8 @@ describe("formatCountdown", () => {
     expect(formatCountdown(null)).toBeNull();
   });
 
-  it("formats less than one hour", () => {
-    expect(formatCountdown((14 * 60 + 5) * 1000)).toBe("0d 00h 14m 05s");
+  it("returns null for less than one day remaining", () => {
+    expect(formatCountdown((14 * 60 + 5) * 1000)).toBeNull();
   });
 });
 
