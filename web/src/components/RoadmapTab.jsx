@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { celebrate } from "../utils/celebrations";
+import { getAIKeys, callAI } from "../utils/aiCall";
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor,
   useSensor, useSensors, DragOverlay
@@ -137,6 +138,10 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   // "week" by default; "inbox" when brain dump pill is selected on mobile
   const [expandedCol, setExpandedCol] = useState("week");
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [longDumpWarning, setLongDumpWarning] = useState(null); // {id, horizon}
+  const [aiBreakdownSuggestion, setAiBreakdownSuggestion] = useState(null); // {id, title, concreteStep}
+  const [aiBreakdownLoading, setAiBreakdownLoading] = useState(null); // item.id
+  const [editingDumpItem, setEditingDumpItem] = useState(null); // {id, text}
 
   const getTodayDateString = () => {
     const d = new Date();
@@ -180,27 +185,81 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
     setSelectedTask(null);
   };
 
-  const handleTriageBrainDump = (item, horizon) => {
+  const doTriageBrainDump = (item, horizon, overrideText) => {
     const userId = payload.userId || payload.config?.userId || "";
+    const titleText = overrideText !== undefined ? overrideText : item.text;
     const freshTask = {
-      id: Date.now(), userId,
-      uuid: safeUUID(),
-      title: item.text,
+      id: Date.now(), userId, uuid: safeUUID(),
+      title: titleText,
       concreteStep: "Do first tiny step",
-      horizonLevel: horizon,
-      priority: "P3",
-      category: "Personal",
-      timeEstimateMinutes: 25,
-      deadlineTimestamp: null,
+      horizonLevel: horizon, priority: "P3", category: "Personal",
+      timeEstimateMinutes: 25, deadlineTimestamp: null,
       isCompleted: false, isParked: false, isNowFocus: false,
       orderIndex: tasks.filter(t => t.horizonLevel === horizon && !t.isDeleted).length,
       dateCompletedString: null, isDeleted: false, lastUpdated: Date.now()
     };
     savePayload({ ...payload, tasks: [...tasks, freshTask], brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) });
+    setLongDumpWarning(null);
+    setAiBreakdownSuggestion(null);
+    setEditingDumpItem(null);
+  };
+
+  const handleTriageBrainDump = (item, horizon) => {
+    const text = editingDumpItem?.id === item.id ? editingDumpItem.text : item.text;
+    const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+    if (wordCount > 20) {
+      setLongDumpWarning({ id: item.id, horizon });
+      return;
+    }
+    doTriageBrainDump(item, horizon, editingDumpItem?.id === item.id ? editingDumpItem.text : undefined);
   };
 
   const handleDeleteBrainDump = (item) => {
     savePayload({ ...payload, brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) });
+  };
+
+  const handleAIBreakdown = async (item) => {
+    setAiBreakdownLoading(item.id);
+    try {
+      const keys = getAIKeys();
+      const result = await callAI({
+        ...keys,
+        systemPrompt: "You are a productivity assistant. Extract ONE specific, actionable task from the user's note. Return ONLY valid JSON with two fields: title (max 10 words, action-focused) and concreteStep (max 12 words, the very next physical action). No markdown, no explanation.",
+        messages: [{ role: "user", content: item.text }],
+        maxTokens: 100,
+      });
+      let parsed;
+      try {
+        const jsonMatch = result.match(/\{[\s\S]*?\}/);
+        parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result);
+      } catch {
+        parsed = { title: item.text.substring(0, 60), concreteStep: "Do first tiny step" };
+      }
+      setAiBreakdownSuggestion({ id: item.id, title: parsed.title || item.text.substring(0, 60), concreteStep: parsed.concreteStep || "Do first tiny step" });
+    } catch {
+      setAiBreakdownSuggestion({ id: item.id, title: null, concreteStep: null });
+    }
+    setAiBreakdownLoading(null);
+  };
+
+  const handleConfirmAISuggestion = (item) => {
+    if (!aiBreakdownSuggestion || aiBreakdownSuggestion.id !== item.id) return;
+    const horizon = longDumpWarning?.horizon || "today";
+    const userId = payload.userId || payload.config?.userId || "";
+    const freshTask = {
+      id: Date.now(), userId, uuid: safeUUID(),
+      title: aiBreakdownSuggestion.title,
+      concreteStep: aiBreakdownSuggestion.concreteStep || "Do first tiny step",
+      horizonLevel: horizon, priority: "P3", category: "Personal",
+      timeEstimateMinutes: 25, deadlineTimestamp: null,
+      isCompleted: false, isParked: false, isNowFocus: false,
+      orderIndex: tasks.filter(t => t.horizonLevel === horizon && !t.isDeleted).length,
+      dateCompletedString: null, isDeleted: false, lastUpdated: Date.now()
+    };
+    savePayload({ ...payload, tasks: [...tasks, freshTask], brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) });
+    setLongDumpWarning(null);
+    setAiBreakdownSuggestion(null);
+    setEditingDumpItem(null);
   };
 
   const handleDelete = (task) => {
@@ -223,6 +282,109 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
       onConfirm: () => { savePayload({ ...payload, brainDump: [] }); setConfirmDialog(null); },
       onCancel: () => setConfirmDialog(null)
     });
+  };
+
+  const renderDumpItem = (item) => {
+    const isWarning = longDumpWarning?.id === item.id;
+    const isLoadingAI = aiBreakdownLoading === item.id;
+    const hasSuggestion = aiBreakdownSuggestion?.id === item.id;
+    const isEditing = editingDumpItem?.id === item.id;
+    const showHorizonBtns = !isWarning && !isLoadingAI && !hasSuggestion;
+
+    return (
+      <div key={item.id} style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px", marginBottom: "8px" }}>
+        {isEditing ? (
+          <textarea
+            value={editingDumpItem.text}
+            onChange={e => setEditingDumpItem({ id: item.id, text: e.target.value })}
+            style={{ width: "100%", fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", background: "var(--bg-card)", border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)", padding: "6px 8px", marginBottom: "8px", resize: "vertical", minHeight: "60px", fontFamily: "inherit", boxSizing: "border-box" }}
+          />
+        ) : (
+          <p style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "8px" }}>{item.text}</p>
+        )}
+
+        {isWarning && !hasSuggestion && !isLoadingAI && (
+          <div style={{ marginBottom: "8px" }}>
+            <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "6px" }}>
+              {isEditing ? "Still long — break it down or move as-is." : "This note is long. Edit first, break it down, or move as-is."}
+            </p>
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+              {!isEditing && (
+                <button
+                  onClick={() => { setEditingDumpItem({ id: item.id, text: item.text }); setLongDumpWarning(null); }}
+                  style={{ fontSize: "11px", padding: "5px 10px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--text-primary)", cursor: "pointer" }}>
+                  ✏ Edit first
+                </button>
+              )}
+              <button
+                onClick={() => handleAIBreakdown(item)}
+                style={{ fontSize: "11px", padding: "5px 10px", background: "var(--accent)", border: "none", borderRadius: "var(--radius-sm)", color: "#fff", cursor: "pointer" }}>
+                ✦ Break down
+              </button>
+              <button
+                onClick={() => doTriageBrainDump(item, longDumpWarning.horizon, isEditing ? editingDumpItem.text : undefined)}
+                style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--text-secondary)", cursor: "pointer" }}>
+                Move as-is
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isLoadingAI && (
+          <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "8px" }}>✦ Breaking down with AI...</p>
+        )}
+
+        {hasSuggestion && (
+          <div style={{ marginBottom: "8px" }}>
+            {aiBreakdownSuggestion.title ? (
+              <div style={{ background: "var(--bg-card)", border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)", padding: "8px 10px", marginBottom: "6px" }}>
+                <p style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" }}>AI suggestion</p>
+                <p style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "2px" }}>{aiBreakdownSuggestion.title}</p>
+                {aiBreakdownSuggestion.concreteStep && (
+                  <p style={{ fontSize: "11px", color: "var(--text-secondary)" }}>⚡ {aiBreakdownSuggestion.concreteStep}</p>
+                )}
+              </div>
+            ) : (
+              <p style={{ fontSize: "11px", color: "var(--danger)", marginBottom: "6px" }}>AI unavailable. Edit or move as-is.</p>
+            )}
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+              {aiBreakdownSuggestion.title && (
+                <button
+                  onClick={() => handleConfirmAISuggestion(item)}
+                  style={{ fontSize: "11px", padding: "5px 12px", background: "var(--accent)", border: "none", borderRadius: "var(--radius-sm)", color: "#fff", cursor: "pointer", fontWeight: "700" }}>
+                  Use this →
+                </button>
+              )}
+              <button
+                onClick={() => doTriageBrainDump(item, longDumpWarning?.horizon || "today")}
+                style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--text-secondary)", cursor: "pointer" }}>
+                Move as-is
+              </button>
+              <button
+                onClick={() => { setAiBreakdownSuggestion(null); setLongDumpWarning(null); }}
+                style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showHorizonBtns && (
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+            {[["today","Today"],["week","Week"],["month","Month"],["quarter","Qtr"]].map(([h, label]) => (
+              <button key={h} className="btn" onClick={() => handleTriageBrainDump(item, h)}
+                style={{ fontSize: "11px", padding: "5px 10px", background: "var(--bg-card)", color: "var(--accent)", border: "1px solid var(--accent)" }}>
+                → {label}
+              </button>
+            ))}
+            <button onClick={() => handleDeleteBrainDump(item)}
+              style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--danger)", cursor: "pointer" }}>
+              🗑
+            </button>
+          </div>
+        )}
+      </div>
+    );
   };
 
   // Shared task list renderer used by both mobile panel and desktop column
@@ -269,7 +431,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
         })}
       </div>
 
-      <div className="horizon-panel">
+      <div className="horizon-panel" style={{ paddingBottom: "80px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)" }}>
             {expandedCol === "inbox" ? "📥 Brain Dump Inbox" : currentCol?.label || ""}
@@ -295,23 +457,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
               <p style={{ fontSize: "11.5px", color: brainDump.length >= 50 ? "var(--danger)" : "var(--text-secondary)", fontWeight: brainDump.length >= 50 ? "700" : "400" }}>
                 {brainDump.length}/50 {brainDump.length >= 50 ? "— inbox full! Triage before adding more." : `item${brainDump.length !== 1 ? "s" : ""}. Send each to the right horizon.`}
               </p>
-              {brainDump.map(item => (
-                <div key={item.id} style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px" }}>
-                  <p style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "8px" }}>{item.text}</p>
-                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                    {[["today","Today"],["week","Week"],["month","Month"],["quarter","Qtr"]].map(([h, label]) => (
-                      <button key={h} className="btn" onClick={() => handleTriageBrainDump(item, h)}
-                        style={{ fontSize: "11px", padding: "5px 10px", background: "var(--bg-card)", color: "var(--accent)", border: "1px solid var(--accent)" }}>
-                        → {label}
-                      </button>
-                    ))}
-                    <button onClick={() => handleDeleteBrainDump(item)}
-                      style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--danger)", cursor: "pointer" }}>
-                      🗑
-                    </button>
-                  </div>
-                </div>
-              ))}
+              {brainDump.map(item => renderDumpItem(item))}
             </>
           )
         ) : (
@@ -339,23 +485,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
             {brainDump.length}/50 {brainDump.length >= 50 ? "— inbox full! Triage before adding more." : `unprocessed idea${brainDump.length !== 1 ? "s" : ""}. Send each to the right horizon.`}
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {brainDump.map(item => (
-              <div key={item.id} style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px" }}>
-                <p style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "8px" }}>{item.text}</p>
-                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                  {[["today","→ Today"],["week","→ Week"],["month","→ Month"],["quarter","→ Quarter"]].map(([h, label]) => (
-                    <button key={h} className="btn" onClick={() => handleTriageBrainDump(item, h)}
-                      style={{ fontSize: "11px", padding: "5px 10px", background: "var(--bg-card)", color: "var(--accent)", border: "1px solid var(--accent)" }}>
-                      {label}
-                    </button>
-                  ))}
-                  <button onClick={() => handleDeleteBrainDump(item)}
-                    style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--danger)", cursor: "pointer" }}>
-                    🗑
-                  </button>
-                </div>
-              </div>
-            ))}
+            {brainDump.map(item => renderDumpItem(item))}
           </div>
         </section>
       )}
