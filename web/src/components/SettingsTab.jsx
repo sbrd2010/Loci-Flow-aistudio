@@ -433,6 +433,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
                   <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                     {[1, 2, 4, 6].map(h => (
                       <button key={h} type="button"
+                        data-testid={`settings-today-hours-${h}h`}
                         onClick={() => handleSettingsTodayHours(h)}
                         style={{
                           padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700",
