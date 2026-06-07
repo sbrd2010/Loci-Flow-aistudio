@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { callAI, getAIKeys } from "../utils/aiCall";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
+import { buildLociCoreInstruction, buildLociTaskContext, isActiveLociTask } from "../utils/lociAIContext";
 
 export default function CoachTab({ payload, savePayload, saveSubPath, userProfile }) {
   const { tasks = [], config = {} } = payload;
@@ -10,33 +11,7 @@ export default function CoachTab({ payload, savePayload, saveSubPath, userProfil
 
   const [confirmDialog, setConfirmDialog] = useState(null);
 
-  // ── Task context builder ──────────────────────────────────────────────────
-  const buildTaskContext = (allTasks) => {
-    const active = (allTasks || []).filter(t => !t.isDeleted && !t.isCompleted);
-    const horizonOrder = ["today", "week", "month", "quarter", "halfyear", "office"];
-    const horizonLabels = { today: "TODAY", week: "THIS WEEK", month: "THIS MONTH", quarter: "QUARTER", halfyear: "6 MONTHS", office: "WORK" };
-    const lines = [];
-    let total = 0;
-    for (const h of horizonOrder) {
-      const hTasks = active.filter(t => t.horizonLevel === h);
-      if (hTasks.length === 0) continue;
-      total += hTasks.length;
-      lines.push(`${horizonLabels[h]} (${hTasks.length}):`);
-      hTasks.slice(0, 8).forEach(t => {
-        const focus = t.isNowFocus ? " [NOW FOCUS]" : "";
-        lines.push(`  • [${t.priority}]${focus} ${t.title}${t.timeEstimateMinutes ? ` (${t.timeEstimateMinutes}min)` : ""}`);
-      });
-      if (hTasks.length > 8) lines.push(`  … +${hTasks.length - 8} more`);
-    }
-    const completed = (allTasks || []).filter(t => t.isCompleted && !t.isDeleted);
-    const now2 = new Date();
-    const todayStr = `${now2.getFullYear()}-${String(now2.getMonth()+1).padStart(2,"0")}-${String(now2.getDate()).padStart(2,"0")}`;
-    const doneToday = completed.filter(t => t.dateCompletedString === todayStr).length;
-    if (doneToday > 0) lines.push(`\nCOMPLETED TODAY: ${doneToday} task${doneToday > 1 ? "s" : ""}`);
-    return total === 0 ? "No active tasks yet." : lines.join("\n");
-  };
-
-  // ── AI Mentor Chat ────────────────────────────────────────────────────────
+  // -- AI Mentor Chat --------------------------------------------------------
   const challengeLabel =
     config.challengeType === "overplanner"  ? "Turning Plans into Action" :
     config.challengeType === "overwhelmed"  ? "Recovery and Backlog Relief" :
@@ -89,13 +64,16 @@ export default function CoachTab({ payload, savePayload, saveSubPath, userProfil
     const now = new Date();
     const hour = now.getHours();
     const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
-    const todayActive = tasks.filter(t => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted);
-    const taskContext = buildTaskContext(tasks);
+    const todayActive = tasks.filter(t => t.horizonLevel === "today" && isActiveLociTask(t));
+    const taskContext = buildLociTaskContext(tasks);
+    const lociCoreInstruction = buildLociCoreInstruction({ firstName });
 
     const userMessageCount = withUser.filter(m => m.isUser).length;
     const isEarlyConversation = userMessageCount <= 1;
 
-    const systemInstruction = `You are ${config.mentorName || "Loci AI Coach"}, an expert productivity mentor and motivating friend inside Loci Focus — an app that helps people cut through overwhelm and actually start working.
+    const systemInstruction = `${lociCoreInstruction}
+
+You are ${config.mentorName || "Loci AI Coach"}, an expert productivity mentor and motivating friend inside Loci Focus — an app that helps people cut through overwhelm and actually start working.
 
 YOUR CLIENT: ${config.userName || "a user"} — call them "${firstName}". Core challenge: "${challengeLabel}".
 
@@ -165,13 +143,13 @@ SESSION: ${timeOfDay}, ${config.visitStreakCount || 0}-day streak, ${todayActive
     }
   };
 
-  // ── Focus Briefing (AI task analysis across all horizons) ─────────────────
+  // -- Focus Briefing (AI task analysis across all horizons) -----------------
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [briefingResult, setBriefingResult] = useState("");
 
   const handleFocusBriefing = async () => {
     if (!hasAnyKey) return;
-    const backlog = tasks.filter(t => !t.isDeleted && !t.isCompleted);
+    const backlog = tasks.filter(isActiveLociTask);
     if (backlog.length === 0) {
       setBriefingResult(`No tasks yet, ${firstName}. Tap + on the Home tab to add your first task, or use the Plan tab to map goals across horizons — then come back for your Focus Briefing.`);
       return;
@@ -201,7 +179,6 @@ SESSION: ${timeOfDay}, ${config.visitStreakCount || 0}-day streak, ${todayActive
     const totalTodayHours = (totalTodayMins / 60).toFixed(1);
     const p1Count = backlog.filter(t => t.priority === "P1").length;
     const p1Ratio = p1Count / backlog.length;
-
     const prompt = `You are ${config.mentorName || "Loci AI Coach"}, an expert productivity mentor inside Loci Focus — an app built to help people close the gap between intention and action.
 
 USER: ${config.userName || "friend"} | Challenge: ${challengeDesc}
@@ -241,7 +218,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
     try {
       const reply = await callAI({
         groqKey, geminiKey,
-        systemPrompt: `You are ${config.mentorName || "a focus coach"}, an expert productivity coach. Never use the word "ADHD" in responses.`,
+        systemPrompt: `${buildLociCoreInstruction({ firstName })}\n\nYou are ${config.mentorName || "a focus coach"}, an expert productivity coach.`,
         messages: [{ role: "user", content: prompt }],
         maxTokens: 800
       });
@@ -253,14 +230,14 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // -- Render ----------------------------------------------------------------
   const parkedTasks = tasks.filter(t => t.isParked && !t.isDeleted && !t.isCompleted);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
 
-      {/* 1 ── AI Mentor Chat */}
+      {/* 1 -- AI Mentor Chat */}
       <section className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
           <div>
@@ -318,7 +295,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
         )}
       </section>
 
-      {/* 2 ── Focus Briefing */}
+      {/* 2 -- Focus Briefing */}
       <section className="card">
         <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "4px", color: "var(--text-primary)" }}>
           ⚡ AI Focus Brief
@@ -329,7 +306,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
 
         {/* Task Snapshot — always-visible data viz */}
         {(() => {
-          const active = tasks.filter(t => !t.isDeleted && !t.isCompleted);
+          const active = tasks.filter(isActiveLociTask);
           const horizons = ["today", "week", "month", "quarter", "halfyear", "office"];
           const hLabels = { today: "Today", week: "Week", month: "Month", quarter: "Quarter", halfyear: "6 Mo.", office: "Work" };
           const hCounts = horizons.map(h => active.filter(t => t.horizonLevel === h).length);
@@ -422,7 +399,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
         )}
       </section>
 
-      {/* 3 ── Parked Archive */}
+      {/* 3 -- Parked Archive */}
       {parkedTasks.length > 0 && (
         <section className="card">
           <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "4px", color: "var(--text-primary)" }}>
