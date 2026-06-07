@@ -254,8 +254,8 @@ test("12. Deadline card shows redesigned compact layout in demo mode", async ({ 
   await expect(card).toContainText("TODAY'S MOVE");
   await expect(card).toContainText("Apply to one job today");
 
-  // Clock mocked to 10am; dayStartHour=7, dayEndHour=26 — inside work window → countdown visible
-  await expect(card).toContainText("left today");
+  // Clock mocked to 10am; dayStartHour=7, dayEndHour=26 — inside work window → bar shows "Xh Ym left"
+  await expect(card).toContainText(/\d+h \d+m left/);
 
   // OPEN/STILL OPEN/DONE button present (demo config has no done date)
   const btn = page.getByTestId("deadline-done-btn");
