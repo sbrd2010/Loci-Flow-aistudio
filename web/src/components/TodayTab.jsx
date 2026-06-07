@@ -216,7 +216,8 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
     return () => clearInterval(id);
   }, []);
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const _tsd = new Date();
+  const todayStr = `${_tsd.getFullYear()}-${String(_tsd.getMonth() + 1).padStart(2, "0")}-${String(_tsd.getDate()).padStart(2, "0")}`;
   const isDoneToday = isDailyDone(config.deadlineDailyDoneDate, todayStr);
   const handleDeadlineDoneToday = () => {
     savePayload({ ...payload, config: { ...config, deadlineDailyDoneDate: todayStr, lastUpdated: Date.now() } });

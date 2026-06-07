@@ -15,7 +15,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
     return legacy[key] || key || "overplanner";
   };
 
-  const settingsTodayStr = new Date().toISOString().slice(0, 10);
+  const _stsd = new Date();
+  const settingsTodayStr = `${_stsd.getFullYear()}-${String(_stsd.getMonth() + 1).padStart(2, "0")}-${String(_stsd.getDate()).padStart(2, "0")}`;
   const [settingsShowCustomHours, setSettingsShowCustomHours] = useState(false);
   const [settingsCustomHoursValue, setSettingsCustomHoursValue] = useState("");
 

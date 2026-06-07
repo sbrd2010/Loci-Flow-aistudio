@@ -143,6 +143,8 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   const [aiBreakdownLoading, setAiBreakdownLoading] = useState(null); // item.id
   const [editingDumpItem, setEditingDumpItem] = useState(null); // {id, text}
 
+  const isVisibleRoadmapTask = (t) => !t.isDeleted && !t.isCompleted && !t.isParked;
+
   const getTodayDateString = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -161,7 +163,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   };
 
   const handleMoveToToday = (task) => {
-    const todayTasksCount = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted).length;
+    const todayTasksCount = tasks.filter((t) => t.horizonLevel === "today" && isVisibleRoadmapTask(t)).length;
     savePayload({
       ...payload,
       tasks: tasks.map((t) =>
@@ -195,7 +197,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
       horizonLevel: horizon, priority: "P3", category: "Personal",
       timeEstimateMinutes: 25, deadlineTimestamp: null,
       isCompleted: false, isParked: false, isNowFocus: false,
-      orderIndex: tasks.filter(t => t.horizonLevel === horizon && !t.isDeleted).length,
+      orderIndex: tasks.filter(t => t.horizonLevel === horizon && isVisibleRoadmapTask(t)).length,
       dateCompletedString: null, isDeleted: false, lastUpdated: Date.now()
     };
     savePayload({ ...payload, tasks: [...tasks, freshTask], brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) });
@@ -219,13 +221,14 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   };
 
   const handleAIBreakdown = async (item) => {
+    const textToBreakdown = editingDumpItem?.id === item.id ? editingDumpItem.text : item.text;
     setAiBreakdownLoading(item.id);
     try {
       const keys = getAIKeys();
       const result = await callAI({
         ...keys,
         systemPrompt: "You are a productivity assistant. Extract ONE specific, actionable task from the user's note. Return ONLY valid JSON with two fields: title (max 10 words, action-focused) and concreteStep (max 12 words, the very next physical action). No markdown, no explanation.",
-        messages: [{ role: "user", content: item.text }],
+        messages: [{ role: "user", content: textToBreakdown }],
         maxTokens: 100,
       });
       let parsed;
@@ -233,9 +236,9 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
         const jsonMatch = result.match(/\{[\s\S]*?\}/);
         parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result);
       } catch {
-        parsed = { title: item.text.substring(0, 60), concreteStep: "Do first tiny step" };
+        parsed = { title: textToBreakdown.substring(0, 60), concreteStep: "Do first tiny step" };
       }
-      setAiBreakdownSuggestion({ id: item.id, title: parsed.title || item.text.substring(0, 60), concreteStep: parsed.concreteStep || "Do first tiny step" });
+      setAiBreakdownSuggestion({ id: item.id, title: parsed.title || textToBreakdown.substring(0, 60), concreteStep: parsed.concreteStep || "Do first tiny step" });
     } catch {
       setAiBreakdownSuggestion({ id: item.id, title: null, concreteStep: null });
     }
@@ -253,7 +256,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
       horizonLevel: horizon, priority: "P3", category: "Personal",
       timeEstimateMinutes: 25, deadlineTimestamp: null,
       isCompleted: false, isParked: false, isNowFocus: false,
-      orderIndex: tasks.filter(t => t.horizonLevel === horizon && !t.isDeleted).length,
+      orderIndex: tasks.filter(t => t.horizonLevel === horizon && isVisibleRoadmapTask(t)).length,
       dateCompletedString: null, isDeleted: false, lastUpdated: Date.now()
     };
     savePayload({ ...payload, tasks: [...tasks, freshTask], brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) });
@@ -292,7 +295,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
     const showHorizonBtns = !isWarning && !isLoadingAI && !hasSuggestion;
 
     return (
-      <div key={item.id} style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px", marginBottom: "8px" }}>
+      <div key={item.id} data-testid="dump-item" style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px", marginBottom: "8px" }}>
         {isEditing ? (
           <textarea
             value={editingDumpItem.text}
@@ -306,12 +309,12 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
         {isWarning && !hasSuggestion && !isLoadingAI && (
           <div style={{ marginBottom: "8px" }}>
             <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "6px" }}>
-              {isEditing ? "Still long — break it down or move as-is." : "This note is long. Edit first, break it down, or move as-is."}
+              {isEditing ? "Edited above — break it down or move as-is." : "This note is long. Edit first, break it down, or move as-is."}
             </p>
             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
               {!isEditing && (
                 <button
-                  onClick={() => { setEditingDumpItem({ id: item.id, text: item.text }); setLongDumpWarning(null); }}
+                  onClick={() => setEditingDumpItem({ id: item.id, text: item.text })}
                   style={{ fontSize: "11px", padding: "5px 10px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--text-primary)", cursor: "pointer" }}>
                   ✏ Edit first
                 </button>
@@ -325,6 +328,11 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
                 onClick={() => doTriageBrainDump(item, longDumpWarning.horizon, isEditing ? editingDumpItem.text : undefined)}
                 style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--text-secondary)", cursor: "pointer" }}>
                 Move as-is
+              </button>
+              <button
+                onClick={() => { setLongDumpWarning(null); setEditingDumpItem(null); }}
+                style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}>
+                Cancel
               </button>
             </div>
           </div>
@@ -356,7 +364,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
                 </button>
               )}
               <button
-                onClick={() => doTriageBrainDump(item, longDumpWarning?.horizon || "today")}
+                onClick={() => doTriageBrainDump(item, longDumpWarning?.horizon || "today", editingDumpItem?.id === item.id ? editingDumpItem.text : undefined)}
                 style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--text-secondary)", cursor: "pointer" }}>
                 Move as-is
               </button>
@@ -390,7 +398,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   // Shared task list renderer used by both mobile panel and desktop column
   const renderTaskList = (colKey) => {
     const colTasks = tasks
-      .filter(t => t.horizonLevel === colKey && !t.isDeleted && !t.isCompleted)
+      .filter(t => t.horizonLevel === colKey && isVisibleRoadmapTask(t))
       .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
     return (
       <SortableRoadmapList
@@ -418,7 +426,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
           </button>
         )}
         {columns.map(col => {
-          const count = tasks.filter(t => t.horizonLevel === col.key && !t.isDeleted && !t.isCompleted).length;
+          const count = tasks.filter(t => t.horizonLevel === col.key && isVisibleRoadmapTask(t)).length;
           return (
             <button key={col.key} role="tab"
               className={`horizon-pill${expandedCol === col.key ? " active" : ""}`}
@@ -492,7 +500,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
       <div className="roadmap-scroll-container">
         {columns.map((col) => {
           const colTasks = tasks
-            .filter((t) => t.horizonLevel === col.key && !t.isDeleted && !t.isCompleted)
+            .filter((t) => t.horizonLevel === col.key && isVisibleRoadmapTask(t))
             .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
           const isExpanded = expandedCol === col.key;
           return (

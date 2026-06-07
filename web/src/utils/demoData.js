@@ -110,6 +110,7 @@ export function createDemoPayload() {
       { id:"bd1", text:"Look into freelancing or consulting on the side — is the market there?", createdAt: Date.now() - 86400000 },
       { id:"bd2", text:"Reach out to that person from last year — it's been too long", createdAt: Date.now() - 3600000 },
       { id:"bd3", text:"Figure out if this current path is leading somewhere or just keeping me busy", createdAt: Date.now() - 7200000 },
+      { id:"bd4", text:"I need to figure out if I should change career paths or double down on what I am currently doing professionally", createdAt: Date.now() - 900000 },
     ],
 
     timestamp: Date.now(),
