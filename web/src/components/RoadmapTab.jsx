@@ -138,6 +138,8 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   const [expandedCol, setExpandedCol] = useState("week");
   const [confirmDialog, setConfirmDialog] = useState(null);
 
+  const isVisibleRoadmapTask = (task) => !task.isDeleted && !task.isCompleted && !task.isParked;
+
   const getTodayDateString = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -156,7 +158,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   };
 
   const handleMoveToToday = (task) => {
-    const todayTasksCount = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted).length;
+    const todayTasksCount = tasks.filter((t) => t.horizonLevel === "today" && isVisibleRoadmapTask(t)).length;
     savePayload({
       ...payload,
       tasks: tasks.map((t) =>
@@ -193,7 +195,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
       timeEstimateMinutes: 25,
       deadlineTimestamp: null,
       isCompleted: false, isParked: false, isNowFocus: false,
-      orderIndex: tasks.filter(t => t.horizonLevel === horizon && !t.isDeleted).length,
+      orderIndex: tasks.filter(t => t.horizonLevel === horizon && isVisibleRoadmapTask(t)).length,
       dateCompletedString: null, isDeleted: false, lastUpdated: Date.now()
     };
     savePayload({ ...payload, tasks: [...tasks, freshTask], brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) });
@@ -228,7 +230,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   // Shared task list renderer used by both mobile panel and desktop column
   const renderTaskList = (colKey) => {
     const colTasks = tasks
-      .filter(t => t.horizonLevel === colKey && !t.isDeleted && !t.isCompleted)
+      .filter(t => t.horizonLevel === colKey && isVisibleRoadmapTask(t))
       .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
     return (
       <SortableRoadmapList
@@ -256,7 +258,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
           </button>
         )}
         {columns.map(col => {
-          const count = tasks.filter(t => t.horizonLevel === col.key && !t.isDeleted && !t.isCompleted).length;
+          const count = tasks.filter(t => t.horizonLevel === col.key && isVisibleRoadmapTask(t)).length;
           return (
             <button key={col.key} role="tab"
               className={`horizon-pill${expandedCol === col.key ? " active" : ""}`}
@@ -362,7 +364,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
       <div className="roadmap-scroll-container">
         {columns.map((col) => {
           const colTasks = tasks
-            .filter((t) => t.horizonLevel === col.key && !t.isDeleted && !t.isCompleted)
+            .filter((t) => t.horizonLevel === col.key && isVisibleRoadmapTask(t))
             .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
           const isExpanded = expandedCol === col.key;
           return (
