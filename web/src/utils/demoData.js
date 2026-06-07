@@ -95,6 +95,7 @@ export function createDemoPayload() {
       deadlineCardStyle: "compact",
       deadlineTodayHours: 6,
       deadlineTodayDate: todayStr,
+      deadlineTodayExpiresAt: Date.now() + 6 * 3600 * 1000,
       lastUpdated: Date.now(),
     },
 

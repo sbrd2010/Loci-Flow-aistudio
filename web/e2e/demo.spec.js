@@ -254,8 +254,8 @@ test("12. Deadline card shows redesigned compact layout in demo mode", async ({ 
   await expect(card).toContainText("TODAY'S MOVE");
   await expect(card).toContainText("Apply to one job today");
 
-  // Demo config sets deadlineTodayHours:6 so planned hours appear
-  await expect(card).toContainText("planned today");
+  // Demo config sets deadlineTodayExpiresAt (6h from load) so live countdown appears
+  await expect(card).toContainText("left today");
 
   // OPEN/STILL OPEN/DONE button present (demo config has no done date)
   const btn = page.getByTestId("deadline-done-btn");
