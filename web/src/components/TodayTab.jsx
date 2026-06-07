@@ -674,9 +674,6 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
           : isWarning  ? "⏳"
           : "🎯";
 
-        // Strip day prefix so TIME LEFT shows only intra-day precision (e.g. "03h 33m 46s")
-        const intraCountdown = deadlineCountdown ? deadlineCountdown.replace(/^\d+d /, "") : null;
-
         // Shrinking bar: remaining / total window; falls back to days/365 if no start date
         let barPct = 50;
         if (!isExpired) {
@@ -690,104 +687,6 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
           }
         } else {
           barPct = 2;
-        }
-
-        // ── Detailed card (7-row, full information) ──────────────────────────
-        if (false) { // detailed card removed; always render compact
-          return (
-            <div
-              className="today-deadline-card"
-              data-testid="deadline-card"
-              style={{
-                background: bg,
-                border: `1px solid ${color}`,
-                borderRadius: "var(--radius-sm)",
-                padding: "10px 14px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "7px",
-                animation: isCritical ? "deadline-pulse 2.5s ease-in-out infinite" : "none",
-              }}
-            >
-              {/* Row 1: icon · eyebrow label · day count */}
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ fontSize: "18px", flexShrink: 0, lineHeight: 1 }}>{icon}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.1em", textTransform: "uppercase", color, lineHeight: 1 }}>
-                    KEY DEADLINE
-                  </div>
-                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: "2px" }}>
-                    {label}
-                  </div>
-                </div>
-                <span style={{ fontSize: "24px", fontWeight: "900", color, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", lineHeight: 1, flexShrink: 0 }}>
-                  {isExpired ? "—" : days === 0 ? "TODAY" : `${days}d`}
-                </span>
-              </div>
-
-              {/* Row 2: live ticking countdown OR expired notice */}
-              {isExpired ? (
-                <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-muted)" }}>
-                  Deadline reached
-                </div>
-              ) : (
-                <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                  <span style={{ fontSize: "9px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", flexShrink: 0 }}>
-                    Time left
-                  </span>
-                  <span className="deadline-countdown" style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "14px", fontWeight: "700", color, letterSpacing: "0.02em" }}>
-                    {intraCountdown || "--h --m --s"}
-                  </span>
-                </div>
-              )}
-
-              {/* Today checkpoint — only for active deadlines */}
-              {!isExpired && (
-                <>
-                  <div style={{ height: "1px", background: "rgba(255,255,255,0.08)" }} />
-
-                  {/* Today closes in */}
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                    <span style={{ fontSize: "9px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", flexShrink: 0 }}>
-                      Today closes in
-                    </span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", letterSpacing: "0.02em" }}>
-                      {todayCountdown || "--h --m"}
-                    </span>
-                  </div>
-
-                  {/* TODAY'S MOVE */}
-                  {config.deadlineAction && (
-                    <div style={{ fontSize: "11px", lineHeight: 1.4 }}>
-                      <span style={{ fontWeight: "900", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontSize: "9px" }}>{"Today's Move: "}</span>
-                      <span style={{ fontWeight: "700", color: "var(--text-primary)" }}>{config.deadlineAction}</span>
-                    </div>
-                  )}
-
-                  {/* Done state or button */}
-                  {isDoneToday ? (
-                    <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--accent)" }}>
-                      TODAY'S MOVE DONE ✓
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      data-testid="deadline-done-btn"
-                      onClick={handleDeadlineDoneToday}
-                      style={{ fontSize: "11px", fontWeight: "700", padding: "4px 10px", borderRadius: "20px", background: "transparent", border: `1px solid ${color}`, color, cursor: "pointer", lineHeight: 1.4, minHeight: "28px", whiteSpace: "nowrap", alignSelf: "flex-start" }}
-                    >
-                      Mark move done
-                    </button>
-                  )}
-                </>
-              )}
-
-              {/* Shrinking progress bar */}
-              <div style={{ height: "3px", background: "rgba(0,0,0,0.10)", borderRadius: "2px", overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${barPct}%`, background: color, borderRadius: "2px", transition: "width 1s linear" }} />
-              </div>
-            </div>
-          );
         }
 
         // ── Compact card ──────────────────────────────────────────────────────────
