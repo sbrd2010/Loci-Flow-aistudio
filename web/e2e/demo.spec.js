@@ -190,6 +190,34 @@ test("10. Demo banner is visible and clearly says data is not saved", async ({ p
   await expect(banner).toContainText("not saved");
 });
 
+test("13. Brain dump long-note gate — move as-is lands in horizon", async ({ page }) => {
+  await enterDemo(page);
+
+  // Navigate to Roadmap and open Brain Dump Inbox
+  await page.getByRole("button", { name: "Roadmap" }).click();
+  await page.getByRole("tab", { name: /Inbox/ }).click();
+
+  // Demo item bd4 is > 20 words — it should be in the inbox
+  const longItemText = "I need to figure out if I should change";
+  const dumpItem = page.locator('[data-testid="dump-item"]').filter({ hasText: longItemText });
+  await expect(dumpItem).toBeVisible({ timeout: 5_000 });
+
+  // Clicking "→ Week" should trigger the long-note gate, not move immediately
+  await dumpItem.getByRole("button", { name: "→ Week" }).click();
+  await expect(dumpItem.getByText("This note is long")).toBeVisible({ timeout: 3_000 });
+
+  // Item still in inbox (not yet moved — waiting for user decision)
+  await expect(dumpItem).toBeVisible();
+
+  // Choose "Move as-is" — task should land in Week, item should leave inbox
+  await dumpItem.getByRole("button", { name: "Move as-is" }).click();
+  await expect(dumpItem).not.toBeVisible({ timeout: 5_000 });
+
+  // Switch to Week horizon and verify the task is there
+  await page.getByRole("tab", { name: /^Week/ }).click();
+  await expect(page.getByText(longItemText)).toBeVisible({ timeout: 5_000 });
+});
+
 // Helper: open Day Map, auto-fill, and return it ready for toggle tests
 async function openDayMapWithTasks(page) {
   await enterDemo(page);
@@ -212,18 +240,28 @@ test("11. Day Map route timeline — always visible, no view toggle", async ({ p
   await expect(page.locator(".dmb-grid")).not.toBeVisible();
 });
 
-test("12. Deadline card shows compact layout with today countdown in demo mode", async ({ page }) => {
+test("12. Deadline card shows redesigned compact layout in demo mode", async ({ page }) => {
   await enterDemo(page);
 
   const card = page.getByTestId("deadline-card");
   await expect(card).toBeVisible({ timeout: 5_000 });
 
-  // Compact layout: full deadline countdown + today countdown
+  // Row 1: deadline countdown (days + "left")
   await expect(card).toContainText("d");
-  await expect(card).toContainText("left today");
+  await expect(card).toContainText("left");
 
-  // "Mark move done" button is visible (demo config has no done date set)
-  await expect(page.getByTestId("deadline-done-btn")).toBeVisible();
+  // Row 2: TODAY'S MOVE is visible as the primary action anchor
+  await expect(card).toContainText("TODAY'S MOVE");
+  await expect(card).toContainText("Apply to one job today");
+
+  // Demo config sets deadlineTodayHours:6 so planned hours appear
+  await expect(card).toContainText("planned today");
+
+  // OPEN/STILL OPEN/DONE button present (demo config has no done date)
+  const btn = page.getByTestId("deadline-done-btn");
+  await expect(btn).toBeVisible();
+  const btnText = await btn.textContent();
+  expect(["OPEN", "STILL OPEN"].includes(btnText.trim())).toBe(true);
 
   // Card label shown
   await expect(card).toContainText("Visa & career deadline");

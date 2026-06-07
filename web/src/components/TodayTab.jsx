@@ -53,6 +53,9 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
   const [focusNowMode, setFocusNowMode] = useState(false);
   const [focusNowTaskId, setFocusNowTaskId] = useState(null);
   const [showFocusNowPicker, setShowFocusNowPicker] = useState(false);
+  const [showTodayHoursPicker, setShowTodayHoursPicker] = useState(false);
+  const [showCustomHoursInput, setShowCustomHoursInput] = useState(false);
+  const [customHoursValue, setCustomHoursValue] = useState("");
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -213,11 +216,31 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
     return () => clearInterval(id);
   }, []);
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const _tsd = new Date();
+  const todayStr = `${_tsd.getFullYear()}-${String(_tsd.getMonth() + 1).padStart(2, "0")}-${String(_tsd.getDate()).padStart(2, "0")}`;
   const isDoneToday = isDailyDone(config.deadlineDailyDoneDate, todayStr);
   const handleDeadlineDoneToday = () => {
     savePayload({ ...payload, config: { ...config, deadlineDailyDoneDate: todayStr, lastUpdated: Date.now() } });
   };
+
+  const handleDeadlineReopenToday = () => {
+    savePayload({ ...payload, config: { ...config, deadlineDailyDoneDate: null, lastUpdated: Date.now() } });
+  };
+
+  const handleDeadlineTodayHours = (hours) => {
+    savePayload({ ...payload, config: { ...config, deadlineTodayHours: hours, deadlineTodayDate: todayStr, lastUpdated: Date.now() } });
+    setShowTodayHoursPicker(false);
+    setShowCustomHoursInput(false);
+    setCustomHoursValue("");
+  };
+
+  const isTodayDate = (dateStr) => dateStr === todayStr;
+
+  const todayAvailableDisplay = (() => {
+    if (!isTodayDate(config.deadlineTodayDate)) return null;
+    const ms = (config.deadlineTodayHours || 0) * 3600 * 1000;
+    return formatTodayCountdown(ms);
+  })();
 
   const [timelineProgress, setTimelineProgress] = useState(0.5);
   const [currentTimeStr, setCurrentTimeStr] = useState("");
@@ -525,15 +548,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                 <div style={{ fontSize: "18px", fontWeight: "800", color: "var(--text-primary)", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-mono)", lineHeight: 1 }}>{currentTimeStr}</div>
                 <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>{currentDateStr}</div>
               </div>
-              <div style={{ height: "8px", background: "var(--bg-secondary)", borderRadius: "4px", overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "4px", transition: "width 1s linear" }} />
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", marginBottom: "10px" }}>
-                {timeLabels.map((label, i) => (
-                  <span key={i} style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{label}</span>
-                ))}
-              </div>
-              <p style={{ margin: 0, fontSize: "12px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
+              <p style={{ margin: 0, fontSize: "13px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
                 "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
               </p>
             </section>
@@ -550,12 +565,9 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
           return (
             <section className="today-time-card" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "8px 14px" }}>
               <div onClick={() => setHeaderExpanded(e => !e)} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", userSelect: "none" }}>
-                <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-mono)", letterSpacing: "-0.02em", flexShrink: 0 }}>
+                <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-mono)", letterSpacing: "-0.02em", flexShrink: 0, flex: 1 }}>
                   {currentTimeStr}
                 </span>
-                <div style={{ flex: 1, height: "6px", background: "var(--bg-secondary)", borderRadius: "3px", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "3px", transition: "width 1s linear" }} />
-                </div>
                 <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600", flexShrink: 0 }}>{currentDateStr}</span>
                 <span style={{ fontSize: "12px", color: "var(--text-muted)", flexShrink: 0 }}>{headerExpanded ? "▴" : "▾"}</span>
               </div>
@@ -566,15 +578,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                       {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
                     </div>
                   )}
-                  <div style={{ height: "8px", background: "var(--bg-secondary)", borderRadius: "4px", overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "4px", transition: "width 1s linear" }} />
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", marginBottom: "8px" }}>
-                    {timeLabels.map((label, i) => (
-                      <span key={i} style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{label}</span>
-                    ))}
-                  </div>
-                  <p style={{ margin: 0, fontSize: "12px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
+                  <p style={{ margin: 0, fontSize: "13px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
                     "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
                   </p>
                 </div>
@@ -600,16 +604,8 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                   <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>{currentDateStr}</span>
                 </div>
               </div>
-              <div style={{ height: "6px", background: "var(--bg-secondary)", borderRadius: "3px", overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "3px", transition: "width 1s linear" }} />
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "3px", marginBottom: "6px" }}>
-                {timeLabels.map((label, i) => (
-                  <span key={i} style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{label}</span>
-                ))}
-              </div>
-              <p style={{ margin: 0, fontSize: "11px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.4, fontWeight: "600" }}>
-                "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "10px" }}>— {currentQuote.author}</span>
+              <p style={{ margin: 0, fontSize: "13px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.4, fontWeight: "600" }}>
+                "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
               </p>
             </div>
           );
@@ -631,15 +627,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                 {currentDateStr}
               </div>
             </div>
-            <div style={{ height: "8px", background: "var(--bg-secondary)", borderRadius: "4px", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "4px", transition: "width 1s linear" }} />
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", marginBottom: "10px" }}>
-              {timeLabels.map((label, i) => (
-                <span key={i} style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600" }}>{label}</span>
-              ))}
-            </div>
-            <p className="today-quote-secondary" style={{ margin: 0, fontSize: "12px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
+            <p className="today-quote-secondary" style={{ margin: 0, fontSize: "13px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
               "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
             </p>
           </section>
@@ -798,7 +786,6 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               padding: "10px 12px",
               display: "flex",
               flexDirection: "column",
-              gap: "6px",
               animation: isCritical ? "deadline-pulse 2.5s ease-in-out infinite" : "none",
             }}
           >
@@ -808,77 +795,136 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
               </div>
             ) : (
               <>
-                {/* Header: icon + eyebrow + label */}
-                <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                {/* Row 1: icon + eyebrow + label + countdown */}
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "10px" }}>
                   <span style={{ fontSize: "16px", flexShrink: 0, lineHeight: 1.3 }}>🎯</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.10em", textTransform: "uppercase", color, lineHeight: 1 }}>
-                      Key Deadline
+                      KEY DEADLINE
                     </div>
                     <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: "2px" }}>
                       {label}
                     </div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "12px", fontWeight: "700", color, letterSpacing: "0.02em", marginTop: "4px" }}>
+                      {deadlineCountdown ? `${deadlineCountdown} left` : `${days === 0 ? "TODAY" : `${days}d`} left`}
+                    </div>
                   </div>
                 </div>
 
-                {/* Full deadline countdown */}
-                <div style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "13px", fontWeight: "700", color, letterSpacing: "0.02em" }}>
-                  {deadlineCountdown ? `${deadlineCountdown} left` : `${days === 0 ? "TODAY" : `${days}d`} left`}
-                </div>
-
-                {/* Shrinking progress bar */}
-                <div style={{ height: "3px", background: "rgba(0,0,0,0.10)", borderRadius: "2px", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${barPct}%`, background: color, borderRadius: "2px", transition: "width 1s linear" }} />
-                </div>
-
-                {/* Section separator */}
-                <div style={{ height: "1px", background: "rgba(0,0,0,0.10)", margin: "2px 0" }} />
-
-                {/* TODAY row: time left + OPEN/DONE status chip */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "15px", fontWeight: "800", color: "var(--text-primary)", lineHeight: 1 }}>
-                    {todayCountdown ? `${todayCountdown} left today` : "--h --m left today"}
-                  </span>
-                  <span style={{
-                    fontSize: "9px", fontWeight: "900", letterSpacing: "0.08em", textTransform: "uppercase",
-                    padding: "3px 7px", borderRadius: "4px",
-                    border: `1.5px solid ${isDoneToday ? "var(--accent)" : color}`,
-                    color: isDoneToday ? "var(--accent)" : color,
-                    flexShrink: 0,
-                  }}>
-                    {isDoneToday ? "DONE" : "OPEN"}
-                  </span>
-                </div>
-
-                {/* TODAY'S MOVE section */}
-                {isDoneToday ? (
-                  <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--accent)" }}>
-                    TODAY'S MOVE DONE ✓
-                  </div>
-                ) : (
-                  <>
-                    {config.deadlineAction && (
-                      <div style={{ fontSize: "11px", lineHeight: 1.4 }}>
-                        <span style={{ fontWeight: "900", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontSize: "9px" }}>{"Today's Move: "}</span>
-                        <span style={{ fontWeight: "700", color: "var(--text-primary)" }}>{config.deadlineAction}</span>
+                {/* Row 2: TODAY'S MOVE (primary anchor) + OPEN / STILL OPEN / DONE button */}
+                {(() => {
+                  const isStillOpen = !isDoneToday && timelineProgress >= 0.5;
+                  const btnBg = isDoneToday ? "#15803D" : isStillOpen ? "#D97706" : "#EAB308";
+                  const btnTextColor = isDoneToday ? "#ffffff" : "#1a1a1a";
+                  const btnLabel = isDoneToday ? "DONE" : isStillOpen ? "STILL OPEN" : "OPEN";
+                  const btnTitle = isDoneToday ? "Reopen today's move" : "Mark today's move done";
+                  const rowLabel = isDoneToday ? "TODAY'S MOVE DONE ✓" : "TODAY'S MOVE";
+                  const rowLabelColor = isDoneToday ? "#15803D" : "var(--text-muted)";
+                  return (
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "10px" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.08em", textTransform: "uppercase", color: rowLabelColor, lineHeight: 1 }}>
+                          {rowLabel}
+                        </div>
+                        {config.deadlineAction && (
+                          <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", marginTop: "3px", lineHeight: 1.4 }}>
+                            {config.deadlineAction}
+                          </div>
+                        )}
+                        {/* Planned today sub-line */}
+                        <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--text-muted)", lineHeight: 1.4 }}>
+                          {todayAvailableDisplay ? (
+                            `${todayAvailableDisplay} planned today`
+                          ) : (
+                            <>
+                              — planned today{" "}
+                              <button
+                                type="button"
+                                onClick={() => { setShowTodayHoursPicker(v => !v); setShowCustomHoursInput(false); }}
+                                style={{ background: "none", border: "none", color: "var(--accent)", fontSize: "11px", cursor: "pointer", padding: 0, fontWeight: "700" }}
+                              >
+                                · Set
+                              </button>
+                            </>
+                          )}
+                        </div>
+                        {/* Inline hours picker */}
+                        {showTodayHoursPicker && !todayAvailableDisplay && (
+                          <div style={{ marginTop: "6px" }}>
+                            {!showCustomHoursInput ? (
+                              <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
+                                {[1, 2, 4, 6].map(h => (
+                                  <button
+                                    key={h}
+                                    type="button"
+                                    onClick={() => handleDeadlineTodayHours(h)}
+                                    style={{ padding: "4px 10px", borderRadius: "14px", fontSize: "11px", fontWeight: "700", background: "var(--bg-secondary)", border: "1.5px solid var(--border)", color: "var(--text-primary)", cursor: "pointer" }}
+                                  >
+                                    {h}h
+                                  </button>
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() => setShowCustomHoursInput(true)}
+                                  style={{ padding: "4px 10px", borderRadius: "14px", fontSize: "11px", fontWeight: "700", background: "var(--bg-secondary)", border: "1.5px solid var(--border)", color: "var(--text-secondary)", cursor: "pointer" }}
+                                >
+                                  Other…
+                                </button>
+                              </div>
+                            ) : (
+                              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  min="0.5"
+                                  max="16"
+                                  value={customHoursValue}
+                                  onChange={e => setCustomHoursValue(e.target.value)}
+                                  placeholder="e.g. 3.5"
+                                  style={{ width: "70px", padding: "4px 8px", borderRadius: "8px", border: "1.5px solid var(--border)", background: "var(--bg-secondary)", color: "var(--text-primary)", fontSize: "12px" }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => { const h = parseFloat(customHoursValue); if (h > 0) handleDeadlineTodayHours(h); }}
+                                  style={{ padding: "4px 10px", borderRadius: "14px", fontSize: "11px", fontWeight: "700", background: "var(--accent)", color: "#fff", border: "none", cursor: "pointer" }}
+                                >
+                                  Set
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    )}
-                    <button
-                      type="button"
-                      data-testid="deadline-done-btn"
-                      onClick={handleDeadlineDoneToday}
-                      style={{
-                        fontSize: "11px", fontWeight: "700", padding: "6px 14px",
-                        borderRadius: "20px", background: "transparent",
-                        border: `1.5px solid ${color}`, color, cursor: "pointer",
-                        lineHeight: 1.3, minHeight: "30px", alignSelf: "flex-start",
-                        letterSpacing: "0.02em", whiteSpace: "nowrap",
-                      }}
-                    >
-                      Mark move done
-                    </button>
-                  </>
-                )}
+                      <button
+                        type="button"
+                        data-testid="deadline-done-btn"
+                        onClick={isDoneToday ? handleDeadlineReopenToday : handleDeadlineDoneToday}
+                        title={btnTitle}
+                        style={{
+                          fontSize: "11px", fontWeight: "900", letterSpacing: "0.08em", textTransform: "uppercase",
+                          padding: "6px 14px", borderRadius: "20px", border: "none", cursor: "pointer",
+                          flexShrink: 0, lineHeight: 1,
+                          background: btnBg,
+                          color: btnTextColor,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {btnLabel}
+                      </button>
+                    </div>
+                  );
+                })()}
+
+                {/* Row 3: Day mini-timeline */}
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                    <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>{formatHourLabel(config.dayStartHour ?? 7)}</span>
+                    <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>{formatHourLabel(config.dayEndHour ?? 26)}</span>
+                  </div>
+                  <div style={{ height: "6px", background: "var(--bg-secondary)", borderRadius: "3px", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "3px", transition: "width 1s linear" }} />
+                  </div>
+                </div>
               </>
             )}
           </div>
