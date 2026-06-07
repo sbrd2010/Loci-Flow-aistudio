@@ -52,6 +52,31 @@ test("reliability: today task can be moved to the roadmap", async ({ page }) => 
   await expect(page.getByText(title)).toBeVisible({ timeout: 5_000 });
 });
 
+test("reliability: parked roadmap tasks are hidden after Bad Day Reset", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "25-minute deep work block";
+  const tasksList = page.getByTestId("today-tasks-list");
+  const row = taskRowByTitle(page, title);
+  await expect(row).toBeVisible({ timeout: 8_000 });
+
+  await row.locator(".task-row-top").click();
+  await row.getByText("Move to roadmap").click();
+  await expect(row.getByText("This Week")).toBeVisible({ timeout: 3_000 });
+  await row.getByText("This Week").click();
+
+  await expect(tasksList.getByText(title)).not.toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "Roadmap" }).click();
+  await expect(page.getByText(title)).toBeVisible({ timeout: 5_000 });
+
+  await page.getByRole("button", { name: "Mind Box" }).click();
+  await page.getByRole("button", { name: /Bad Day Reset/ }).click();
+  await page.getByRole("button", { name: "Yes, restart" }).click();
+
+  await page.getByRole("button", { name: "Roadmap" }).click();
+  await expect(page.getByText(title)).not.toBeVisible({ timeout: 5_000 });
+});
+
 test("reliability: pinning a task sets Now Focus", async ({ page }) => {
   await enterDemo(page);
 
