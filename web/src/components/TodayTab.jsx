@@ -368,7 +368,6 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, onOpenMin
       if (t.isNowFocus === newFocus) return t;
       return { ...t, isNowFocus: newFocus, lastUpdated: now };
     })});
-    if (isPinning) setIsFocusMode(true);
   };
 
   const handleFocusBrainDump = (text) => {
@@ -582,7 +581,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, onOpenMin
     : config.isLowEnergyMode
       ? todayTasksAll.filter(t => t.priority === "P4")
       : todayTasksAll;
-  const remainingTasks = todayTasksFiltered.filter((t) => !t.isCompleted).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+  const remainingTasks = todayTasksFiltered.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
   const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted);
 
   // Focus Now: first incomplete task in Day Map order for today (shown as "Recommended")
@@ -943,26 +942,34 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, onOpenMin
         </div>
 
         {!focusNowMode && pinnedFocusTask && (
-          <div className="pinned-focus-strip">
-            <span className="pinned-focus-icon" aria-hidden="true">🎯</span>
-            <div className="pinned-focus-body">
-              <span className="pinned-focus-label">PINNED FOCUS</span>
-              <div className="pinned-focus-title">{pinnedFocusTask.title}</div>
-              {pinnedFocusTask.concreteStep && (
-                <div className="pinned-focus-step">→ {pinnedFocusTask.concreteStep}</div>
-              )}
+          <div className="pinned-focus-section">
+            <div className="pinned-focus-topbar">
+              <span className="pinned-focus-label">📍 PINNED FOCUS</span>
+              <button
+                type="button"
+                className="pinned-focus-start-btn"
+                aria-label={`Start focus timer for ${pinnedFocusTask.title}`}
+                onClick={() => {
+                  setIsFocusMode(true);
+                  setIsTimerRunning(true);
+                }}
+              >
+                Start Focus →
+              </button>
             </div>
-            <button
-              type="button"
-              className="pinned-focus-btn"
-              aria-label={`Focus on ${pinnedFocusTask.title}`}
-              onClick={() => {
-                setFocusNowMode(true);
-                setFocusNowTaskId(pinnedFocusTask.uuid);
-              }}
-            >
-              Focus →
-            </button>
+            <TaskRow
+              task={pinnedFocusTask}
+              onToggleComplete={handleToggleComplete}
+              onPin={handlePinTask}
+              onDelete={handleDeleteTask}
+              onEdit={handleStartEdit}
+              onMoveToHorizon={handleMoveToHorizon}
+              onBreakdown={handleBreakdown}
+              onSubStepToggle={handleSubStepToggle}
+              onDeleteSubStep={handleDeleteSubStep}
+              isBreakingDown={breakdownLoadingUuid === pinnedFocusTask.uuid}
+              onToggleMVD={handleToggleMVD}
+            />
           </div>
         )}
 
@@ -1194,72 +1201,6 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, onOpenMin
         </div>
       </section>
 
-      {/* ── Active Focus Block — only when a task is pinned and not in Focus Now mode */}
-      {!focusNowMode && activeTask && (
-        <section className="card focus-card">
-          <div className="focus-top-bar">
-            <div className="focus-live-indicator">
-              <div className="live-dot"></div>
-              ACTIVE FOCUS NOW
-            </div>
-            <button
-              className="stuck-btn"
-              onClick={() => { setRescueStep(0); setShowRescue(true); }}
-              title="Feeling stuck? Get unstuck in 4 steps"
-            >Stuck?</button>
-            <button
-              className="stuck-btn"
-              onClick={() => {
-                setIsTimerRunning(false);
-                savePayload({ ...payload, tasks: tasks.map(t => t.uuid === activeTask.uuid ? { ...t, isNowFocus: false, lastUpdated: Date.now() } : t) });
-              }}
-              title="Unpin this task and close the timer"
-              style={{ color: "var(--text-muted)", background: "var(--bg-secondary)", border: "1px solid var(--border)" }}
-            >✕ Unpin</button>
-          </div>
-          <div style={{ textAlign: "center", marginTop: "16px" }}>
-            <h3 className="focus-title">{activeTask.title}</h3>
-            <div className="step-badge">
-              <span>⚡</span> First small step: {activeTask.concreteStep}
-            </div>
-            <div className="timer-circle-container">
-              <svg className="timer-svg" viewBox="0 0 160 160">
-                <circle className="timer-ring-bg" cx="80" cy="80" r="70" strokeWidth="8" />
-                <circle className="timer-ring-progress" cx="80" cy="80" r="70" strokeWidth="8" style={{ strokeDashoffset }} />
-              </svg>
-              <div className="timer-text-container">
-                <span className="timer-time">{formatTimerMinutes}:{formatTimerSeconds}</span>
-                <span className="timer-est">EST: {activeTask.timeEstimateMinutes} MIN</span>
-              </div>
-            </div>
-            <div className="timer-controls">
-              <button
-                className="control-btn control-btn-play"
-                data-testid="timer-play-pause"
-                onClick={() => {
-                  if (!isTimerRunning) {
-                    setIsTimerRunning(true);
-                    setIsFocusMode(true);
-                  } else {
-                    setIsTimerRunning(false);
-                  }
-                }}
-              >
-                {isTimerRunning ? "⏸" : "▶"}
-              </button>
-              <button className="control-btn" onClick={() => { setIsTimerRunning(false); setTimerSecondsLeft(timerMaxSeconds); }}
-                title="Reset timer" style={{ fontSize: "16px" }}>
-                ↺
-              </button>
-              <button className="control-btn control-btn-done" onClick={() => handleToggleComplete(activeTask)}>✓</button>
-            </div>
-          </div>
-          <div className="focus-coach-divider"></div>
-          <p className="coach-statement">
-            "{config.intentionMessage}" — {config.mentorName || "Marcus Aurelius"}
-          </p>
-        </section>
-      )}
 
       {/* ── Full-Screen Focus Mode Overlay */}
       {isFocusMode && activeTask && (
