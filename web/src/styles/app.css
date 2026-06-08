@@ -3357,12 +3357,12 @@ html[data-theme="option-e-slate"] {
   position: relative;
 }
 .pinned-focus-inner > .task-row {
-  padding-bottom: 40px;
+  padding-right: 88px;
 }
 .pinned-focus-start-btn {
   position: absolute;
-  bottom: 10px;
-  right: 10px;
+  top: 7px;
+  right: 8px;
   background: var(--accent);
   color: var(--btn-text, #0b1326);
   border: none;
