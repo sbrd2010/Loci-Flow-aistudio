@@ -945,8 +945,21 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, onOpenMin
 
         {!focusNowMode && pinnedFocusTask && (
           <div className="pinned-focus-section">
-            <div className="pinned-focus-topbar">
-              <span className="pinned-focus-label">📍 PINNED FOCUS</span>
+            <span className="pinned-focus-label">📍 PINNED FOCUS</span>
+            <div className="pinned-focus-inner">
+              <TaskRow
+                task={pinnedFocusTask}
+                onToggleComplete={handleToggleComplete}
+                onPin={handlePinTask}
+                onDelete={handleDeleteTask}
+                onEdit={handleStartEdit}
+                onMoveToHorizon={handleMoveToHorizon}
+                onBreakdown={handleBreakdown}
+                onSubStepToggle={handleSubStepToggle}
+                onDeleteSubStep={handleDeleteSubStep}
+                isBreakingDown={breakdownLoadingUuid === pinnedFocusTask.uuid}
+                onToggleMVD={handleToggleMVD}
+              />
               <button
                 type="button"
                 className="pinned-focus-start-btn"
@@ -959,19 +972,6 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, onOpenMin
                 Focus →
               </button>
             </div>
-            <TaskRow
-              task={pinnedFocusTask}
-              onToggleComplete={handleToggleComplete}
-              onPin={handlePinTask}
-              onDelete={handleDeleteTask}
-              onEdit={handleStartEdit}
-              onMoveToHorizon={handleMoveToHorizon}
-              onBreakdown={handleBreakdown}
-              onSubStepToggle={handleSubStepToggle}
-              onDeleteSubStep={handleDeleteSubStep}
-              isBreakingDown={breakdownLoadingUuid === pinnedFocusTask.uuid}
-              onToggleMVD={handleToggleMVD}
-            />
           </div>
         )}
 
