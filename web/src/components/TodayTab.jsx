@@ -720,7 +720,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                       KEY DEADLINE
                     </span>
                   </div>
-                  <span style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "13px", fontWeight: "800", color: "#EF4444", letterSpacing: "0.02em", flexShrink: 0 }}>
+                  <span className="dc-days" style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "16px", fontWeight: "900", color: "#EF4444", letterSpacing: "0.02em", flexShrink: 0 }}>
                     {days === 0 ? "TODAY" : `${days}d`} left
                   </span>
                 </div>
@@ -780,8 +780,8 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                       </span>
                     )}
                     {windowState === "during" && todayLiveDisplay && (
-                      <span style={{ fontSize: "9px", color: "#D97706", fontWeight: "700" }}>
-                        {todayLiveDisplay} left
+                      <span className="dc-countdown" style={{ fontSize: "10px", color: "#D97706", fontWeight: "800" }}>
+                        {todayLiveDisplay} left today
                       </span>
                     )}
                     {windowState === "after" && (
@@ -789,12 +789,12 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                     )}
                     <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>{endLabel}</span>
                   </div>
-                  <div style={{ height: "3px", background: "var(--bg-secondary)", borderRadius: "2px", overflow: "hidden" }}>
+                  <div className="dc-bar-track" style={{ position: "relative", height: "6px", background: "var(--bg-secondary)", borderRadius: "999px", overflow: "visible" }}>
                     {windowState === "during" && (
-                      <div style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "var(--accent)", borderRadius: "2px", transition: "width 1s linear" }} />
+                      <div className="dc-bar-fill" style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "linear-gradient(90deg, #374151 0%, #1d70a0 55%, #d97706 100%)", borderRadius: "999px", transition: "width 1s linear" }} />
                     )}
                     {windowState === "after" && (
-                      <div style={{ height: "100%", width: "100%", background: "var(--bg-tertiary, var(--bg-secondary))", borderRadius: "2px" }} />
+                      <div style={{ height: "100%", width: "100%", background: "var(--bg-tertiary, var(--bg-secondary))", borderRadius: "999px", opacity: 0.5 }} />
                     )}
                   </div>
                 </div>

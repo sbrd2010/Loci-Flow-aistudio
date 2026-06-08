@@ -26,6 +26,37 @@
   50%       { box-shadow: 0 0 14px 4px rgba(248, 113, 113, 0.30); }
 }
 
+/* ── Key Deadline card — urgency rail ────────────────────────── */
+.dc-bar-track::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(15, 23, 42, 0.15);
+  transform: translateX(-50%);
+  z-index: 1;
+}
+.dc-bar-fill {
+  position: relative;
+  overflow: visible;
+}
+.dc-bar-fill::after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2.5px solid #f97316;
+  transform: translateY(-50%);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.22);
+  z-index: 2;
+}
+
 /* ---- THEME 1: Dark Glassy (DEFAULT) ---- */
 :root,
 html[data-theme="glassy"] {
