@@ -320,9 +320,26 @@ export function useSync(uid, email) {
           }).catch(err => console.error("Init transaction failed:", err));
         }
       } else {
-        if (data) pendingRemoteRef.current = data;
+        if (data) {
+          if (localWriteBeforeFirstRtdbRef.current) {
+            // A savePayload fired during the cache-only window before RTDB responded.
+            // The pending debounce would push fake-fresh stale data to RTDB — cancel it
+            // and let RTDB win instead, the same as the !timeoutRef path above.
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+            const merged = mergeRemotePayload(data, payloadRef.current);
+            setPayload(merged);
+            payloadRef.current = merged;
+            pendingRemoteRef.current = null;
+            writeCache(uid, merged);
+          } else {
+            pendingRemoteRef.current = data;
+          }
+        }
       }
       hasReceivedFirstRtdbRef.current = true;
+      // Reset so future legitimate local edits are never treated as suspicious.
+      localWriteBeforeFirstRtdbRef.current = false;
       setLoading(false);
     }, (err) => {
       if (connTimeoutId) clearTimeout(connTimeoutId);
