@@ -66,6 +66,13 @@ function buildPiPContent(pipWin) {
     "#pl { font-size: 10px; color: rgba(196,223,210,0.65); margin-top: 5px;",
     "  max-width: 186px; overflow: hidden; text-overflow: ellipsis;",
     "  white-space: nowrap; text-align: center; }",
+    "#pip-btns { display: flex; gap: 10px; margin-top: 12px; }",
+    "#pip-play, #pip-reset { background: rgba(255,255,255,0.10);",
+    "  border: 1px solid rgba(255,255,255,0.18); color: #f7fbf8;",
+    "  border-radius: 8px; font-size: 18px; width: 44px; height: 36px;",
+    "  display: flex; align-items: center; justify-content: center;",
+    "  cursor: pointer; line-height: 1; }",
+    "#pip-play:active, #pip-reset:active { opacity: 0.6; }",
   ].join(" ");
   pipWin.document.head.appendChild(style);
 
@@ -76,6 +83,23 @@ function buildPiPContent(pipWin) {
   const labelEl = pipWin.document.createElement("div");
   labelEl.id = "pl";
   pipWin.document.body.appendChild(labelEl);
+
+  const btnsEl = pipWin.document.createElement("div");
+  btnsEl.id = "pip-btns";
+
+  const playBtn = pipWin.document.createElement("button");
+  playBtn.id = "pip-play";
+  playBtn.textContent = "▶";
+  playBtn.addEventListener("click", () => window.__lociTimer?.onPlayPause?.());
+
+  const resetBtn = pipWin.document.createElement("button");
+  resetBtn.id = "pip-reset";
+  resetBtn.textContent = "↺";
+  resetBtn.addEventListener("click", () => window.__lociTimer?.onReset?.());
+
+  btnsEl.appendChild(playBtn);
+  btnsEl.appendChild(resetBtn);
+  pipWin.document.body.appendChild(btnsEl);
 }
 
 export default function FocusModePage({
@@ -104,7 +128,7 @@ export default function FocusModePage({
   const handleOpenPiP = async () => {
     if (!PIP_SUPPORTED || pipOpen) return;
     try {
-      const pipWin = await window.documentPictureInPicture.requestWindow({ width: 200, height: 118 });
+      const pipWin = await window.documentPictureInPicture.requestWindow({ width: 200, height: 165 });
       pipWinRef.current = pipWin;
       buildPiPContent(pipWin);
       setPipOpen(true);
@@ -120,6 +144,8 @@ export default function FocusModePage({
         timeEl.className = state.isRunning ? "" : "paused";
         const labelEl = pipWin.document.getElementById("pl");
         if (labelEl) labelEl.textContent = state.taskTitle || "Deep Focus";
+        const playBtn = pipWin.document.getElementById("pip-play");
+        if (playBtn) playBtn.textContent = state.isRunning ? "⏸" : "▶";
       };
       pipIntervalRef.current = setInterval(tick, 500);
       tick();
