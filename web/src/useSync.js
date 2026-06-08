@@ -68,6 +68,10 @@ export function useSync(uid, email) {
   const rtdbConnectedRef = useRef(false);
   // Mutable ref so the timeout callback can see the latest phase without stale closure
   const dataTimeoutRef = useRef(null);
+  // Sync safety: detect premature savePayload calls during the isSyncingFromCache window.
+  // Reset at the start of each uid effect so they clear on login/uid change.
+  const hasReceivedFirstRtdbRef = useRef(false);
+  const localWriteBeforeFirstRtdbRef = useRef(false);
 
   useEffect(() => {
     if (!dbRefPath) {
@@ -80,6 +84,8 @@ export function useSync(uid, email) {
     setError(null);
     setIsSyncingFromCache(false);
     rtdbConnectedRef.current = false;
+    hasReceivedFirstRtdbRef.current = false;
+    localWriteBeforeFirstRtdbRef.current = false;
     const userRef = ref(db, dbRefPath);
 
     // Load from localStorage cache immediately — app is usable in <100ms on return visits.
@@ -161,10 +167,21 @@ export function useSync(uid, email) {
             pendingRemoteRef.current = null;
             writeCache(uid, merged);
           } else {
-            // Local cache is newer than what RTDB delivered — the app was likely
-            // killed before the last debounced write completed. Push local state
-            // back up so RTDB catches up without waiting for the user to edit.
-            writeWithRetry(ref(db, dbRefPath), payloadRef.current).catch(() => {});
+            // Local timestamp appears newer than RTDB.
+            if (!localWriteBeforeFirstRtdbRef.current) {
+              // No savePayload fired during the cache-only window — local is genuinely
+              // newer (app was killed before the last debounce flushed). Push it back.
+              writeWithRetry(ref(db, dbRefPath), payloadRef.current).catch(() => {});
+            } else {
+              // savePayload fired before RTDB responded (e.g. a mount-effect on stale
+              // cache), giving local a fake-fresh timestamp. Trust RTDB instead of
+              // pushing the stale cache back up.
+              const merged = mergeRemotePayload(data, payloadRef.current);
+              setPayload(merged);
+              payloadRef.current = merged;
+              pendingRemoteRef.current = null;
+              writeCache(uid, merged);
+            }
           }
         } else if (hasCachedData) {
           // RTDB is empty (new device or cleared DB) but we have local cache —
@@ -305,6 +322,7 @@ export function useSync(uid, email) {
       } else {
         if (data) pendingRemoteRef.current = data;
       }
+      hasReceivedFirstRtdbRef.current = true;
       setLoading(false);
     }, (err) => {
       if (connTimeoutId) clearTimeout(connTimeoutId);
@@ -398,6 +416,12 @@ export function useSync(uid, email) {
   }, [uid, email]);
 
   const savePayload = (updatedPayload) => {
+    // Track if savePayload fires before the first RTDB response — used in onValue
+    // to distinguish a fake-fresh timestamp (from a premature mount effect) from a
+    // legitimate unsaved edit (app killed before the last debounce flushed).
+    if (!hasReceivedFirstRtdbRef.current) {
+      localWriteBeforeFirstRtdbRef.current = true;
+    }
     const brainDumpPatch = prepareBrainDumpForSave(updatedPayload, payloadRef.current);
     const safePayload = { ...updatedPayload, ...brainDumpPatch };
     const nextPayload = { ...normalizePayload(safePayload), timestamp: Date.now() };

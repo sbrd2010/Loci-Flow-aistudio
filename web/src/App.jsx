@@ -456,6 +456,7 @@ export default function App() {
           <TodayTab
             payload={payload}
             savePayload={savePayload}
+            isSyncingFromCache={isSyncingFromCache}
             onOpenAddTask={() => openAddTask("today")}
             onOpenDayMap={openDayMap}
             onOpenMindBox={() => handleTabSelect("mindbox")}
