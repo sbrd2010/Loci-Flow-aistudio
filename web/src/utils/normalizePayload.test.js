@@ -176,4 +176,49 @@ describe("mergeRemotePayload", () => {
     const remote = { tasks: [], config: {}, chatHistory: [{ role: "user", content: "hi" }], timestamp: 100 };
     expect(mergeRemotePayload(remote, null).chatHistory).toEqual([{ role: "user", content: "hi" }]);
   });
+
+  // Sync safety: stale-cache rollback prevention.
+  // When useSync detects a premature savePayload (localWriteBeforeFirstRtdbRef),
+  // it calls mergeRemotePayload(rtdbData, staleLocal) and discards the pending
+  // debounce. These tests verify the data-correctness of that decision.
+  it("RTDB tasks win over stale local tasks even when local has a fake-fresh timestamp", () => {
+    const fakeNow = 1_700_000_000_000;
+    // Local was from 2 days ago but stamped with Date.now() by a premature savePayload
+    const staleLocal = {
+      tasks: [{ uuid: "stale", title: "2-day-old task", lastUpdated: fakeNow - 172_800_000 }],
+      config: { visitStreakCount: 1 },
+      brainDump: [],
+      timestamp: fakeNow, // fake-fresh — set by premature savePayload
+    };
+    // RTDB has real current data; its timestamp is 1 hour before fakeNow
+    const freshRtdb = {
+      tasks: [{ uuid: "fresh", title: "real current task", lastUpdated: fakeNow - 3_600_000 }],
+      config: { visitStreakCount: 7 },
+      brainDump: [],
+      timestamp: fakeNow - 3_600_000,
+    };
+    const result = mergeRemotePayload(freshRtdb, staleLocal);
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0].uuid).toBe("fresh");
+    expect(result.config.visitStreakCount).toBe(7);
+    expect(result.timestamp).toBe(fakeNow - 3_600_000);
+  });
+
+  it("RTDB config wins over stale local config on first load", () => {
+    const staleLocal = {
+      tasks: [],
+      config: { deadlineLabel: "Old Sprint", visitStreakCount: 2 },
+      brainDump: [],
+      timestamp: Date.now(), // fake-fresh
+    };
+    const freshRtdb = {
+      tasks: [],
+      config: { deadlineLabel: "New Sprint", visitStreakCount: 10 },
+      brainDump: [],
+      timestamp: Date.now() - 3_600_000,
+    };
+    const result = mergeRemotePayload(freshRtdb, staleLocal);
+    expect(result.config.deadlineLabel).toBe("New Sprint");
+    expect(result.config.visitStreakCount).toBe(10);
+  });
 });

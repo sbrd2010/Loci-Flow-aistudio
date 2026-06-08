@@ -8,11 +8,15 @@ import {
 } from "../utils/deadlineCountdown";
 
 export default function TodayTabWithDeadlineHistory(props) {
-  const { payload, savePayload } = props;
+  const { payload, savePayload, isSyncingFromCache } = props;
   const config = payload?.config || {};
   const todayStr = getLocalDateString();
 
   useEffect(() => {
+    // Don't run while RTDB hasn't responded yet — cache payload may be stale and
+    // calling savePayload here would stamp it with Date.now(), causing the stale
+    // cache to win the timestamp comparison and overwrite fresher RTDB data.
+    if (isSyncingFromCache) return;
     const nextConfig = buildDeadlineMoveRollover(config, todayStr);
     if (!nextConfig) return;
 
@@ -24,6 +28,7 @@ export default function TodayTabWithDeadlineHistory(props) {
       }
     });
   }, [
+    isSyncingFromCache,
     todayStr,
     config.deadlineLabel,
     config.deadlineDate,
