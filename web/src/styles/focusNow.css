@@ -1,16 +1,16 @@
 /* ================================================================
-   Focus Now — Today tab single-task mode
+   Focus Now - Today tab single-task mode
    All classes namespaced focus-now-* to avoid collision
    ================================================================ */
 
-/* ── Chip shell: flex item that holds the scrollable chip row ─── */
+/* -- Chip shell: flex item that holds the scrollable chip row --- */
 .focus-now-chip-shell {
   flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
 }
 
-/* ── Chip row: sits inline with heading, scrolls on small screens ── */
+/* -- Chip row: sits inline with heading, scrolls on small screens -- */
 .focus-now-chip-row {
   display: flex;
   gap: 6px;
@@ -37,7 +37,7 @@
   }
 }
 
-/* ── Focus Now chip ──────────────────────────────────────────── */
+/* -- Focus Now chip --------------------------------------------- */
 .focus-now-chip { flex-shrink: 0; white-space: nowrap; }
 
 .focus-now-chip--active {
@@ -46,7 +46,7 @@
   border-color: var(--accent) !important;
 }
 
-/* ── Priority badge (local, uses app-level CSS vars) ─────────── */
+/* -- Priority badge (local, uses app-level CSS vars) ------------ */
 .focus-now-priority {
   display: inline-flex;
   align-items: center;
@@ -65,7 +65,7 @@
 .focus-now-priority.p3 { background: var(--p3-bg); color: var(--p3-text); }
 .focus-now-priority.p4 { background: var(--p4-bg); color: var(--p4-text); }
 
-/* ── Bottom sheet backdrop ───────────────────────────────────── */
+/* -- Bottom sheet backdrop -------------------------------------- */
 .focus-now-backdrop {
   position: fixed;
   inset: 0;
@@ -76,7 +76,7 @@
   justify-content: center;
 }
 
-/* ── Bottom sheet container ──────────────────────────────────── */
+/* -- Bottom sheet container ------------------------------------- */
 .focus-now-sheet {
   width: 100%;
   max-width: 620px;
@@ -131,7 +131,7 @@
   padding: 6px 0 8px;
 }
 
-/* ── Picker section labels ───────────────────────────────────── */
+/* -- Picker section labels -------------------------------------- */
 .focus-now-section-label {
   font-size: 9px;
   font-weight: 900;
@@ -142,7 +142,7 @@
   font-family: var(--font-sans);
 }
 
-/* ── Individual task row in picker ───────────────────────────── */
+/* -- Individual task row in picker ------------------------------ */
 .focus-now-pick-row {
   width: 100%;
   display: flex;
@@ -189,7 +189,7 @@
   flex-shrink: 0;
 }
 
-/* ── Focus Now single-task view ──────────────────────────────── */
+/* -- Focus Now single-task view --------------------------------- */
 .focus-now-view {
   display: flex;
   flex-direction: column;
@@ -209,7 +209,7 @@
   font-family: var(--font-sans);
 }
 
-/* ── Focused task card ───────────────────────────────────────── */
+/* -- Focused task card ------------------------------------------ */
 .focus-now-card {
   background: var(--bg-card);
   border: 1px solid rgba(87, 241, 219, 0.18);
@@ -268,7 +268,7 @@
   font-family: var(--font-sans);
 }
 
-/* ── Action buttons ──────────────────────────────────────────── */
+/* -- Action buttons --------------------------------------------- */
 .focus-now-actions {
   display: flex;
   flex-direction: column;
@@ -320,7 +320,7 @@
 }
 .focus-now-btn--ghost:hover { background: rgba(255, 255, 255, 0.05); }
 
-/* ── Hidden note ─────────────────────────────────────────────── */
+/* -- Hidden note ------------------------------------------------ */
 .focus-now-hidden-note {
   margin: 0;
   font-size: 11px;
@@ -330,7 +330,7 @@
   font-family: var(--font-sans);
 }
 
-/* ── Completed state ─────────────────────────────────────────── */
+/* -- Completed state -------------------------------------------- */
 .focus-now-completed {
   display: flex;
   flex-direction: column;
@@ -363,7 +363,7 @@
   width: 100%;
 }
 
-/* ── Empty picker state ──────────────────────────────────────── */
+/* -- Empty picker state ----------------------------------------- */
 .focus-now-empty {
   padding: 28px 16px;
   text-align: center;
@@ -374,7 +374,7 @@
   line-height: 1.5;
 }
 
-/* ── Tablet / desktop adjustments ────────────────────────────── */
+/* -- Tablet / desktop adjustments ------------------------------- */
 @media (min-width: 641px) {
   .focus-now-sheet {
     border-radius: 12px;
@@ -382,4 +382,135 @@
   }
   .focus-now-card-title { font-size: 17px; }
   .focus-now-btn { font-size: 15px; }
+}
+
+/* ================================================================
+   Key Deadline urgency rail polish
+   Visual-only override for the compact deadline card from PR #176.
+   ================================================================ */
+
+.today-deadline-card > div:first-child > span:last-child {
+  font-size: clamp(16px, 2.4vw, 22px) !important;
+  font-weight: 950 !important;
+  color: #ef4444 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+
+.today-deadline-card > div:nth-child(4) {
+  margin-top: 2px !important;
+}
+
+.today-deadline-card > div:nth-child(4) > div:first-child {
+  position: relative !important;
+  height: 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin-bottom: 5px !important;
+}
+
+.today-deadline-card > div:nth-child(4) > div:first-child > span:first-child,
+.today-deadline-card > div:nth-child(4) > div:first-child > span:last-child {
+  font-size: 9px !important;
+  color: #64748b !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.01em !important;
+}
+
+.today-deadline-card > div:nth-child(4) > div:first-child > span[style*="#D97706"] {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 2 !important;
+  padding: 2px 7px !important;
+  border-radius: 999px !important;
+  background: rgba(255, 252, 246, 0.78) !important;
+  color: #0f172a !important;
+  font-size: clamp(12px, 2.5vw, 15px) !important;
+  font-weight: 950 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.15 !important;
+  white-space: nowrap !important;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08) !important;
+}
+
+.today-deadline-card > div:nth-child(4) > div:first-child > span[style*="#D97706"]::after {
+  content: " today";
+}
+
+.today-deadline-card > div:nth-child(4) > div:nth-child(2) {
+  position: relative !important;
+  height: 11px !important;
+  overflow: visible !important;
+  border-radius: 999px !important;
+  background: linear-gradient(90deg, #eef2f6 0%, #f3e5c7 50%, #f1c9b2 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06), inset 0 1px 3px rgba(15, 23, 42, 0.10) !important;
+}
+
+.today-deadline-card > div:nth-child(4) > div:nth-child(2)::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 3;
+  width: 2px;
+  height: 19px;
+  border-radius: 999px;
+  background: #e11d48;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.14);
+}
+
+.today-deadline-card > div:nth-child(4) > div:nth-child(2)::after {
+  content: "HALF";
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  z-index: 3;
+  transform: translateX(-50%);
+  color: #be123c;
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.today-deadline-card > div:nth-child(4) > div:nth-child(2) > div {
+  position: relative !important;
+  height: 100% !important;
+  border-radius: 999px !important;
+  background: linear-gradient(90deg, #334155 0%, #2f6f8f 60%, #f59e0b 100%) !important;
+  transition: width 1s linear !important;
+}
+
+.today-deadline-card > div:nth-child(4) > div:nth-child(2) > div::after {
+  content: "";
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  z-index: 4;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #fffaf0;
+  border: 3px solid #f97316;
+  transform: translateY(-50%);
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.22);
+}
+
+@media (max-width: 430px) {
+  .today-deadline-card > div:first-child > span:last-child {
+    font-size: 17px !important;
+  }
+
+  .today-deadline-card > div:nth-child(4) > div:first-child > span[style*="#D97706"] {
+    font-size: 12px !important;
+    padding: 2px 6px !important;
+  }
+
+  .today-deadline-card > div:nth-child(4) > div:nth-child(2)::after {
+    content: "";
+  }
 }
