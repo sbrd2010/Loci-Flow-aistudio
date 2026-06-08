@@ -157,23 +157,17 @@ test("8. User can delete a task", async ({ page }) => {
 test("9. Focus timer starts and pauses", async ({ page }) => {
   await enterDemo(page);
 
-  // Demo task demo-t1 has isNowFocus:true, so the focus card is immediately visible
-  const focusCard = page.locator(".focus-card");
-  await expect(focusCard).toBeVisible({ timeout: 8_000 });
+  // Demo task demo-t1 has isNowFocus:true, so pinned section is immediately visible
+  const pinnedSection = page.locator(".pinned-focus-section");
+  await expect(pinnedSection).toBeVisible({ timeout: 8_000 });
 
-  // Initially stopped — TodayTab play button shows ▶ (only one button at this point)
-  const playPauseBtn = page.getByTestId("timer-play-pause");
-  await expect(playPauseBtn).toBeVisible({ timeout: 5_000 });
-  await expect(playPauseBtn).toContainText("▶");
+  // Click "Focus →" to open full-screen timer (starts immediately)
+  await pinnedSection.locator(".pinned-focus-start-btn").click();
 
-  // Start the timer — this opens the full-screen Focus Mode overlay
-  await playPauseBtn.click();
-
-  // Overlay should now be visible
+  // Overlay should now be visible and timer running
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 3_000 });
 
-  // Scope to overlay's play/pause button (avoids strict-mode violation from two matching testids)
   const overlayPlayBtn = overlay.getByTestId("timer-play-pause");
   await expect(overlayPlayBtn).toContainText("⏸", { timeout: 3_000 });
 
