@@ -50,17 +50,17 @@ const SettingsIcon = () => (
 );
 
 const TABS = [
-  { id: "today",    label: "Today",    Icon: TodayIcon,    color: "var(--accent)" },
-  { id: "roadmap",  label: "Roadmap",  Icon: RoadmapIcon,  color: "var(--success)" },
-  { id: "mindbox",  label: "Mind Box", Icon: MindBoxIcon,  color: "var(--accent-secondary)" },
-  { id: "coach",    label: "AI Coach", Icon: CoachIcon,    color: "var(--p1-text)" },
-  { id: "settings", label: "Settings", Icon: SettingsIcon, color: "var(--warning)" },
+  { id: "today",    label: "Today",    Icon: TodayIcon,    color: "var(--accent)",           bgActive: "var(--accent-light)" },
+  { id: "roadmap",  label: "Roadmap",  Icon: RoadmapIcon,  color: "var(--success)",           bgActive: "rgba(165,214,167,0.15)" },
+  { id: "mindbox",  label: "Mind Box", Icon: MindBoxIcon,  color: "var(--accent-secondary)", bgActive: "rgba(221,183,255,0.15)" },
+  { id: "coach",    label: "AI Coach", Icon: CoachIcon,    color: "var(--p1-text)",           bgActive: "rgba(252,165,165,0.15)" },
+  { id: "settings", label: "Settings", Icon: SettingsIcon, color: "var(--warning)",           bgActive: "rgba(251,191,36,0.15)" },
 ];
 
 export default function BottomNav({ activeTab, onTabSelect }) {
   return (
     <nav className="bottom-nav" role="navigation" aria-label="Main navigation">
-      {TABS.map(({ id, label, Icon, color }) => {
+      {TABS.map(({ id, label, Icon, color, bgActive }) => {
         const isActive = activeTab === id;
         return (
           <button
@@ -76,7 +76,7 @@ export default function BottomNav({ activeTab, onTabSelect }) {
               aria-hidden="true"
               style={{
                 color: isActive ? color : "var(--text-secondary)",
-                background: isActive ? "var(--accent-light)" : "transparent",
+                background: isActive ? bgActive : "transparent",
                 transform: isActive ? "scale(1.08)" : "scale(1)",
               }}
             >

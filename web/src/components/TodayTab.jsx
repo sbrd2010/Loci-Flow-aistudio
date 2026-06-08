@@ -890,9 +890,9 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, onOpenMin
                     setShowFocusNowPicker(true);
                   }
                 }}
-                title={focusNowMode ? "Exit Focus Now" : "Focus on one task"}
+                title={focusNowMode ? "Exit One Task Focus" : "One Task Focus"}
               >
-                🎯 Focus Now
+                🎯 One Task
               </button>
               {onOpenDayMap && (
                 <button
