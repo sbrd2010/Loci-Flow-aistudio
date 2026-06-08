@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Anchors — Mobile Mockup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #1a1a2e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 16px;
+    gap: 60px;
+    color: #dceef5;
+    min-height: 100vh;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #57f1db;
+    text-align: center;
+    margin-bottom: 12px;
+  }
+
+  /* Phone frame */
+  .phone {
+    width: 390px;
+    min-height: 600px;
+    background: #0b1326;
+    border-radius: 40px;
+    border: 2px solid rgba(255,255,255,0.12);
+    box-shadow: 0 32px 80px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.08);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .phone-screen {
+    padding: 0;
+    background: #0b1326;
+    min-height: 600px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Status bar */
+  .status-bar {
+    height: 44px;
+    background: rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #dceef5;
+  }
+
+  /* App header */
+  .app-header {
+    padding: 12px 16px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .app-header h1 {
+    font-size: 22px;
+    font-weight: 800;
+    color: #dceef5;
+    letter-spacing: -0.5px;
+  }
+  .app-header .date-sub {
+    font-size: 11px;
+    color: #8ab0c0;
+    margin-top: 2px;
+  }
+
+  /* Control row with pills */
+  .control-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 16px;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 11px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1.5px solid rgba(255,255,255,0.12);
+    color: #8ab0c0;
+    background: transparent;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .chip.active {
+    border-color: #57f1db;
+    color: #57f1db;
+    background: rgba(87,241,219,0.08);
+  }
+  .chip.anchors-done {
+    border-color: #A5D6A7;
+    color: #A5D6A7;
+    background: rgba(165,214,167,0.08);
+  }
+  .chip.anchors-partial {
+    border-color: #57f1db;
+    color: #57f1db;
+    background: rgba(87,241,219,0.06);
+  }
+
+  /* Task list */
+  .task-section {
+    padding: 12px 16px 0;
+  }
+  .task-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #4a7080;
+    margin-bottom: 8px;
+  }
+  .task-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.055);
+    border-radius: 12px;
+    margin-bottom: 6px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .task-check {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.2);
+    flex-shrink: 0;
+  }
+  .task-title {
+    font-size: 13px;
+    color: #dceef5;
+  }
+  .task-time {
+    font-size: 11px;
+    color: #4a7080;
+    margin-left: auto;
+  }
+
+  /* Bottom nav */
+  .bottom-nav {
+    display: flex;
+    justify-content: space-around;
+    padding: 12px 0 20px;
+    background: rgba(0,0,0,0.3);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    margin-top: 12px;
+  }
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    color: #4a7080;
+  }
+  .nav-item.active { color: #57f1db; }
+  .nav-icon { font-size: 18px; }
+
+  /* ===== ANCHOR SHEET OVERLAY ===== */
+  .overlay-dim {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 10;
+    display: flex;
+    align-items: flex-end;
+  }
+  .anchor-sheet {
+    width: 100%;
+    background: #111d35;
+    border-radius: 20px 20px 0 0;
+    padding: 20px 18px 36px;
+    box-shadow: 0 -8px 40px rgba(0,0,0,0.5);
+    border-top: 1px solid rgba(255,255,255,0.1);
+  }
+  .anchor-sheet-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding-left: 12px;
+    border-left: 3px solid #57f1db;
+    margin-bottom: 18px;
+  }
+  .anchor-sheet-icon { font-size: 22px; line-height: 1; }
+  .anchor-sheet-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #dceef5;
+    line-height: 1.2;
+  }
+  .anchor-sheet-intro {
+    font-size: 12px;
+    color: #8ab0c0;
+    margin-top: 2px;
+  }
+  .anchor-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .anchor-chip {
+    padding: 8px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1.5px solid rgba(87,241,219,0.35);
+    color: #57f1db;
+    background: transparent;
+    cursor: pointer;
+  }
+  .anchor-chip.checked {
+    background: rgba(165,214,167,0.15);
+    border-color: rgba(165,214,167,0.4);
+    color: #A5D6A7;
+  }
+  .anchor-sheet-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .anchor-btn-primary {
+    padding: 9px 20px;
+    border-radius: 12px;
+    background: #57f1db;
+    color: #0b1326;
+    font-size: 13px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+  }
+  .anchor-btn-ghost {
+    padding: 9px 14px;
+    border-radius: 12px;
+    background: transparent;
+    color: #8ab0c0;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid rgba(255,255,255,0.1);
+    cursor: pointer;
+  }
+
+  /* ===== MIND BOX ===== */
+  .mindbox-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 14px 16px;
+  }
+  .tool-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 12px;
+    background: rgba(255,255,255,0.055);
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.06);
+    cursor: pointer;
+    position: relative;
+  }
+  .tool-card.highlight {
+    border-color: rgba(87,241,219,0.3);
+    background: rgba(87,241,219,0.05);
+  }
+  .tool-icon { font-size: 20px; margin-bottom: 4px; }
+  .tool-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #dceef5;
+  }
+  .tool-sub {
+    font-size: 11px;
+    color: #8ab0c0;
+  }
+  .tool-chevron {
+    position: absolute;
+    right: 10px;
+    top: 12px;
+    font-size: 18px;
+    color: #4a7080;
+  }
+
+  /* ===== ANCHOR MANAGEMENT PANEL ===== */
+  .panel {
+    padding: 0 16px;
+  }
+  .panel-back {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #8ab0c0;
+    padding: 14px 0 10px;
+    cursor: pointer;
+  }
+  .panel h2 {
+    font-size: 18px;
+    font-weight: 800;
+    color: #dceef5;
+    margin-bottom: 4px;
+  }
+  .panel-sub {
+    font-size: 12px;
+    color: #8ab0c0;
+    margin-bottom: 16px;
+  }
+  .anchor-edit-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.055);
+    border-radius: 10px;
+    margin-bottom: 6px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .anchor-edit-text {
+    font-size: 13px;
+    color: #dceef5;
+  }
+  .anchor-delete-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(248,113,113,0.15);
+    color: #f87171;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .anchor-add-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    margin-bottom: 8px;
+  }
+  .anchor-input {
+    flex: 1;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.07);
+    border: 1.5px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    color: #dceef5;
+    font-size: 13px;
+  }
+  .anchor-add-btn {
+    padding: 10px 16px;
+    background: #57f1db;
+    color: #0b1326;
+    font-size: 13px;
+    font-weight: 700;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .anchor-hint {
+    font-size: 11px;
+    color: #4a7080;
+    text-align: center;
+    padding: 4px 0 16px;
+  }
+
+  /* Amber variant */
+  .amber .anchor-sheet-header { border-left-color: #d97706; }
+  .amber .anchor-chip { border-color: rgba(217,119,6,0.35); color: #fbbf24; }
+  .amber .anchor-chip.checked { background: rgba(217,119,6,0.15); border-color: rgba(217,119,6,0.4); }
+
+  /* Page subtitle */
+  .page-title {
+    font-size: 28px;
+    font-weight: 900;
+    color: #dceef5;
+    text-align: center;
+    letter-spacing: -1px;
+    margin-bottom: 6px;
+  }
+  .page-desc {
+    font-size: 14px;
+    color: #8ab0c0;
+    text-align: center;
+    max-width: 420px;
+    line-height: 1.6;
+    margin-bottom: 0;
+  }
+
+  .screen-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+  }
+
+  @media (max-width: 500px) {
+    .phone { width: 100%; border-radius: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ─────────────── INTRO ─────────────── -->
+<div style="text-align:center;padding-top:8px;">
+  <div class="page-title">📌 Daily Anchors</div>
+  <p class="page-desc">How the feature looks on your phone (Pixel 6a / iPhone 11 Pro).<br>Scroll down to see all 4 screens.</p>
+</div>
+
+<!-- ─────────────── SCREEN 1: Today page — Anchors pill (unchecked) ─────────────── -->
+<div class="screen-group">
+  <div class="section-label">Screen 1 — Today tab: Anchors pill (none checked yet)</div>
+  <div class="phone">
+    <div class="phone-screen">
+      <div class="status-bar"><span>9:41</span><span>🔋</span></div>
+      <div class="app-header">
+        <h1>Today</h1>
+        <div class="date-sub">Monday, June 8</div>
+      </div>
+      <div class="control-row">
+        <div class="chip active">🗓 Day Map</div>
+        <div class="chip anchors-partial">📌 Anchors</div>
+        <div class="chip active">⭐ Must-do</div>
+        <div class="chip">⚡ Low energy</div>
+      </div>
+      <div class="task-section">
+        <div class="task-section-label">Pinned focus</div>
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-title">Apply to one job today</div>
+          <div class="task-time">🎯 Focus</div>
+        </div>
+        <div class="task-section-label" style="margin-top:10px;">Tasks</div>
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-title">Review project proposal</div>
+          <div class="task-time">10:00</div>
+        </div>
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-title">Reply to client email</div>
+          <div class="task-time">11:30</div>
+        </div>
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-title">Gym workout</div>
+          <div class="task-time">—</div>
+        </div>
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item active"><div class="nav-icon">☀️</div>Today</div>
+        <div class="nav-item"><div class="nav-icon">🗺</div>Roadmap</div>
+        <div class="nav-item"><div class="nav-icon">🧠</div>Mind Box</div>
+        <div class="nav-item"><div class="nav-icon">💬</div>Coach</div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:12px;color:#8ab0c0;margin-top:10px;text-align:center;">
+    📌 <strong style="color:#57f1db;">Anchors</strong> pill appears in the control row next to Day Map. Tap it to open the check-in sheet.
+  </p>
+</div>
+
+<!-- ─────────────── SCREEN 2: Check-in sheet auto-appears ─────────────── -->
+<div class="screen-group">
+  <div class="section-label">Screen 2 — Auto check-in sheet (green accent, morning slot)</div>
+  <div class="phone">
+    <div class="phone-screen" style="position:relative;">
+      <div class="status-bar"><span>9:41</span><span>🔋</span></div>
+      <div class="app-header">
+        <h1>Today</h1>
+        <div class="date-sub">Monday, June 8</div>
+      </div>
+      <div class="control-row">
+        <div class="chip active">🗓 Day Map</div>
+        <div class="chip anchors-partial">📌 Anchors</div>
+        <div class="chip active">⭐ Must-do</div>
+        <div class="chip">⚡ Low energy</div>
+      </div>
+      <div class="task-section">
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-title">Apply to one job today</div>
+        </div>
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-title">Review project proposal</div>
+        </div>
+      </div>
+      <!-- Sheet overlay -->
+      <div class="overlay-dim">
+        <div class="anchor-sheet">
+          <div class="anchor-sheet-header">
+            <div class="anchor-sheet-icon">📌</div>
+            <div>
+              <div class="anchor-sheet-title">One small check-in</div>
+              <div class="anchor-sheet-intro">Before the day runs away.</div>
+            </div>
+          </div>
+          <div class="anchor-chips">
+            <div class="anchor-chip">One thing at a time</div>
+            <div class="anchor-chip">Protein in the morning</div>
+            <div class="anchor-chip">Move your body today</div>
+            <div class="anchor-chip">Take your supplements</div>
+            <div class="anchor-chip">You don't have to do this alone</div>
+          </div>
+          <div class="anchor-sheet-actions">
+            <button class="anchor-btn-primary">Done</button>
+            <button class="anchor-btn-ghost">Later</button>
+            <button class="anchor-btn-ghost">Skip today</button>
+            <button class="anchor-btn-ghost">Manage</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:12px;color:#8ab0c0;margin-top:10px;text-align:center;">
+    Appears automatically ~2.5s after you open the app (once per slot: morning/afternoon/evening).<br>
+    Tap any anchor to check it off. Tap <strong style="color:#dceef5;">Later</strong> = snooze 90 min.
+  </p>
+</div>
+
+<!-- ─────────────── SCREEN 3: Sheet with 2 anchors checked ─────────────── -->
+<div class="screen-group">
+  <div class="section-label">Screen 3 — After tapping 2 anchors (amber accent, afternoon slot)</div>
+  <div class="phone">
+    <div class="phone-screen" style="position:relative;">
+      <div class="status-bar"><span>1:15</span><span>🔋</span></div>
+      <div class="app-header">
+        <h1>Today</h1>
+        <div class="date-sub">Monday, June 8</div>
+      </div>
+      <div class="control-row">
+        <div class="chip active">🗓 Day Map</div>
+        <div class="chip anchors-partial">📌 2/5</div>
+        <div class="chip active">⭐ Must-do</div>
+        <div class="chip">⚡ Low energy</div>
+      </div>
+      <div class="task-section">
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-title">Apply to one job today</div>
+        </div>
+      </div>
+      <!-- Sheet overlay (amber variant + 2 checked) -->
+      <div class="overlay-dim">
+        <div class="anchor-sheet amber">
+          <div class="anchor-sheet-header" style="border-left-color:#d97706">
+            <div class="anchor-sheet-icon">📌</div>
+            <div>
+              <div class="anchor-sheet-title">Quick reset</div>
+              <div class="anchor-sheet-intro">A moment for what actually matters.</div>
+            </div>
+          </div>
+          <div class="anchor-chips">
+            <div class="anchor-chip checked">✓ One thing at a time</div>
+            <div class="anchor-chip" style="border-color:rgba(217,119,6,0.35);color:#fbbf24;">Protein in the morning</div>
+            <div class="anchor-chip checked">✓ Move your body today</div>
+            <div class="anchor-chip" style="border-color:rgba(217,119,6,0.35);color:#fbbf24;">Take your supplements</div>
+            <div class="anchor-chip" style="border-color:rgba(217,119,6,0.35);color:#fbbf24;">You don't have to do this alone</div>
+          </div>
+          <div class="anchor-sheet-actions">
+            <button class="anchor-btn-primary">Done</button>
+            <button class="anchor-btn-ghost">Later</button>
+            <button class="anchor-btn-ghost">Skip today</button>
+            <button class="anchor-btn-ghost">Manage</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:12px;color:#8ab0c0;margin-top:10px;text-align:center;">
+    Checked anchors turn green. Pill updates to <strong style="color:#57f1db;">2/5</strong> in real time.<br>
+    Afternoon slot gets a different title + amber accent so it never feels repetitive.
+  </p>
+</div>
+
+<!-- ─────────────── SCREEN 4: Mind Box — Daily Anchors card ─────────────── -->
+<div class="screen-group">
+  <div class="section-label">Screen 4 — Mind Box: new Daily Anchors card in the grid</div>
+  <div class="phone">
+    <div class="phone-screen">
+      <div class="status-bar"><span>9:41</span><span>🔋</span></div>
+      <div class="app-header">
+        <h1>Mind Box</h1>
+        <div class="date-sub">Clarity tools</div>
+      </div>
+      <div class="mindbox-grid">
+        <div class="tool-card">
+          <div class="tool-icon">🆘</div>
+          <div class="tool-title">Rescue Mode</div>
+          <div class="tool-sub">Overwhelmed? Start here</div>
+          <div class="tool-chevron">›</div>
+        </div>
+        <div class="tool-card">
+          <div class="tool-icon">🌙</div>
+          <div class="tool-title">Wind-down</div>
+          <div class="tool-sub">End the day right</div>
+          <div class="tool-chevron">›</div>
+        </div>
+        <div class="tool-card highlight">
+          <div class="tool-icon">📌</div>
+          <div class="tool-title">Daily Anchors</div>
+          <div class="tool-sub">5 anchors</div>
+          <div class="tool-chevron">›</div>
+        </div>
+        <div class="tool-card">
+          <div class="tool-icon">🧘</div>
+          <div class="tool-title">Morning Ritual</div>
+          <div class="tool-sub">Set up the day</div>
+          <div class="tool-chevron">›</div>
+        </div>
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item"><div class="nav-icon">☀️</div>Today</div>
+        <div class="nav-item"><div class="nav-icon">🗺</div>Roadmap</div>
+        <div class="nav-item active"><div class="nav-icon">🧠</div>Mind Box</div>
+        <div class="nav-item"><div class="nav-icon">💬</div>Coach</div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:12px;color:#8ab0c0;margin-top:10px;text-align:center;">
+    Daily Anchors appears as a card in the Mind Box grid. Tap it to manage anchors.
+  </p>
+</div>
+
+<!-- ─────────────── SCREEN 5: Anchor management panel ─────────────── -->
+<div class="screen-group">
+  <div class="section-label">Screen 5 — Mind Box: Manage your anchors (add / delete)</div>
+  <div class="phone">
+    <div class="phone-screen">
+      <div class="status-bar"><span>9:41</span><span>🔋</span></div>
+      <div class="panel">
+        <div class="panel-back">← Back</div>
+        <h2>Daily Anchors</h2>
+        <p class="panel-sub">Short principles you want to keep front of mind.</p>
+        <div class="anchor-edit-row">
+          <span class="anchor-edit-text">One thing at a time</span>
+          <button class="anchor-delete-btn">×</button>
+        </div>
+        <div class="anchor-edit-row">
+          <span class="anchor-edit-text">Protein in the morning</span>
+          <button class="anchor-delete-btn">×</button>
+        </div>
+        <div class="anchor-edit-row">
+          <span class="anchor-edit-text">Move your body today</span>
+          <button class="anchor-delete-btn">×</button>
+        </div>
+        <div class="anchor-edit-row">
+          <span class="anchor-edit-text">Take your supplements</span>
+          <button class="anchor-delete-btn">×</button>
+        </div>
+        <div class="anchor-edit-row">
+          <span class="anchor-edit-text">You don't have to do this alone</span>
+          <button class="anchor-delete-btn">×</button>
+        </div>
+        <div class="anchor-add-row">
+          <input class="anchor-input" type="text" placeholder="Type a new anchor…" />
+          <button class="anchor-add-btn">Add</button>
+        </div>
+        <p class="anchor-hint">Aim for 3–7 anchors. Short phrases work best.</p>
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item"><div class="nav-icon">☀️</div>Today</div>
+        <div class="nav-item"><div class="nav-icon">🗺</div>Roadmap</div>
+        <div class="nav-item active"><div class="nav-icon">🧠</div>Mind Box</div>
+        <div class="nav-item"><div class="nav-icon">💬</div>Coach</div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:12px;color:#8ab0c0;margin-top:10px;text-align:center;">
+    Type a new anchor in the input box → tap Add. Tap × on any anchor to delete it.<br>
+    Changes save instantly to your account.
+  </p>
+</div>
+
+<!-- ─────────────── SCREEN 6: Pill all done ─────────────── -->
+<div class="screen-group">
+  <div class="section-label">Screen 6 — Today tab: all anchors checked (green pill)</div>
+  <div class="phone">
+    <div class="phone-screen">
+      <div class="status-bar"><span>3:22</span><span>🔋</span></div>
+      <div class="app-header">
+        <h1>Today</h1>
+        <div class="date-sub">Monday, June 8</div>
+      </div>
+      <div class="control-row">
+        <div class="chip active">🗓 Day Map</div>
+        <div class="chip anchors-done">📌 5/5 ✓</div>
+        <div class="chip active">⭐ Must-do</div>
+        <div class="chip">⚡ Low energy</div>
+      </div>
+      <div class="task-section">
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-title">Apply to one job today</div>
+          <div class="task-time">🎯 Focus</div>
+        </div>
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-title">Review project proposal</div>
+          <div class="task-time">10:00</div>
+        </div>
+        <div class="task-row">
+          <div class="task-check"></div>
+          <div class="task-title">Reply to client email</div>
+          <div class="task-time">11:30</div>
+        </div>
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item active"><div class="nav-icon">☀️</div>Today</div>
+        <div class="nav-item"><div class="nav-icon">🗺</div>Roadmap</div>
+        <div class="nav-item"><div class="nav-icon">🧠</div>Mind Box</div>
+        <div class="nav-item"><div class="nav-icon">💬</div>Coach</div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:12px;color:#8ab0c0;margin-top:10px;text-align:center;">
+    Once all 5 anchors are ticked, the pill turns <strong style="color:#A5D6A7;">green</strong> showing "5/5 ✓".<br>
+    Tomorrow it resets automatically back to "Anchors".
+  </p>
+</div>
+
+<div style="height:40px;"></div>
+
+</body>
+</html>
