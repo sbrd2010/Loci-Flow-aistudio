@@ -571,6 +571,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, onOpenMin
   };
 
   const todayTasksAll = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isParked);
+  const pinnedFocusTask = todayTasksAll.find(t => t.isNowFocus && !t.isCompleted && !t.isDeleted) || null;
   const _d = new Date();
   const _todayStr = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, "0")}-${String(_d.getDate()).padStart(2, "0")}`;
   const _dayMapActive = todayTasksAll.filter(t => !t.isCompleted);
@@ -940,6 +941,30 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, onOpenMin
             </div>
           </div>
         </div>
+
+        {!focusNowMode && pinnedFocusTask && (
+          <div className="pinned-focus-strip">
+            <span className="pinned-focus-icon" aria-hidden="true">🎯</span>
+            <div className="pinned-focus-body">
+              <span className="pinned-focus-label">PINNED FOCUS</span>
+              <div className="pinned-focus-title">{pinnedFocusTask.title}</div>
+              {pinnedFocusTask.concreteStep && (
+                <div className="pinned-focus-step">→ {pinnedFocusTask.concreteStep}</div>
+              )}
+            </div>
+            <button
+              type="button"
+              className="pinned-focus-btn"
+              aria-label={`Focus on ${pinnedFocusTask.title}`}
+              onClick={() => {
+                setFocusNowMode(true);
+                setFocusNowTaskId(pinnedFocusTask.uuid);
+              }}
+            >
+              Focus →
+            </button>
+          </div>
+        )}
 
         <div className="tasks-list" data-testid="today-tasks-list">
           {/* ── Focus Now single-task view ─────────────────────────── */}
