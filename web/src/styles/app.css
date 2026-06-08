@@ -3340,3 +3340,69 @@ html[data-theme="option-e-slate"] {
   .anchor-btn-ghost { padding: 7px 10px; font-size: 11px; }
 }
 
+/* ── Pinned Focus strip ─────────────────────────────────────── */
+.pinned-focus-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--accent-ring, rgba(87, 241, 219, 0.10));
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  margin-bottom: 2px;
+}
+.pinned-focus-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.pinned-focus-body {
+  flex: 1;
+  min-width: 0;
+}
+.pinned-focus-label {
+  display: block;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.pinned-focus-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pinned-focus-step {
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+.pinned-focus-btn {
+  flex-shrink: 0;
+  background: var(--accent);
+  color: var(--btn-text, #0b1326);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 12px;
+  cursor: pointer;
+  min-height: 36px;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+}
+.pinned-focus-btn:active { opacity: 0.8; }
+@media (max-width: 430px) {
+  .pinned-focus-strip { padding: 8px 10px; }
+  .pinned-focus-btn { padding: 6px 10px; font-size: 11px; min-height: 32px; }
+}
+
