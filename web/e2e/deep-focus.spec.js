@@ -35,12 +35,14 @@ async function expectNoHorizontalOverflow(page) {
 test("mobile reliability: Deep Focus overlay supports pause, resume, and brain-dump capture", async ({ page }) => {
   await enterDemo(page);
 
-  const focusCard = page.locator(".focus-card");
-  await focusCard.scrollIntoViewIfNeeded();
-  await expect(focusCard).toBeVisible({ timeout: 8_000 });
-  await expect(focusCard).toContainText("ACTIVE FOCUS NOW");
+  // Demo task demo-t1 is pinned — pinned section is immediately visible
+  const pinnedSection = page.locator(".pinned-focus-section");
+  await pinnedSection.scrollIntoViewIfNeeded();
+  await expect(pinnedSection).toBeVisible({ timeout: 8_000 });
+  await expect(pinnedSection).toContainText("PINNED FOCUS");
 
-  await focusCard.locator("[data-testid='timer-play-pause']").click();
+  // Open full-screen timer via Focus → button (starts timer immediately)
+  await pinnedSection.locator(".pinned-focus-start-btn").click();
 
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 5_000 });

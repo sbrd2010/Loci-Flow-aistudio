@@ -77,26 +77,36 @@ test("mobile reliability: Today task can be added, edited, focused, completed, r
 
   await openTaskMenu(page, editedTitle);
   await page.getByText("Pin to Focus", { exact: true }).click();
+  // Task moves to pinned section — overlay does not auto-open on pin
+  const pinnedSection = page.locator(".pinned-focus-section");
+  await expect(pinnedSection).toBeVisible({ timeout: 5_000 });
+  // Open full-screen timer via the Focus → button
+  await page.locator(".pinned-focus-start-btn").click();
   const focusOverlay = page.locator(".focus-mode-overlay");
   await expect(focusOverlay).toBeVisible({ timeout: 5_000 });
   await expect(focusOverlay.getByRole("heading", { name: editedTitle })).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
   await focusOverlay.getByLabel("Exit focus mode").click();
   await expect(focusOverlay).not.toBeVisible({ timeout: 5_000 });
-  await expect(todayRow(page, editedTitle)).toContainText("FOCUS");
+  // Task stays in pinned section with its FOCUS badge
+  await expect(pinnedSection).toContainText("FOCUS");
 
-  await todayRow(page, editedTitle).getByTestId("task-checkbox").click();
-  await expect(todayRow(page, editedTitle)).toHaveClass(/completed/, { timeout: 5_000 });
+  // After pinning the task lives in the pinned section, not today-tasks-list;
+  // use a page-wide row locator for all subsequent interactions
+  const editedRow = page.locator("[data-testid='task-row']", { hasText: editedTitle }).first();
 
-  await todayRow(page, editedTitle).getByTestId("task-checkbox").click();
-  await expect(todayRow(page, editedTitle)).not.toHaveClass(/completed/, { timeout: 5_000 });
+  await editedRow.getByTestId("task-checkbox").click();
+  await expect(editedRow).toHaveClass(/completed/, { timeout: 5_000 });
 
-  await openTaskMenu(page, editedTitle);
+  await editedRow.getByTestId("task-checkbox").click();
+  await expect(editedRow).not.toHaveClass(/completed/, { timeout: 5_000 });
+
+  await editedRow.locator(".task-row-top").click();
   await page.getByTestId("task-menu-delete").click();
-  await expect(todayRow(page, editedTitle)).not.toBeVisible({ timeout: 5_000 });
+  await expect(editedRow).not.toBeVisible({ timeout: 5_000 });
   await expect(page.getByText(/deleted/i)).toBeVisible({ timeout: 5_000 });
 
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect(todayRow(page, editedTitle)).toBeVisible({ timeout: 5_000 });
+  await expect(editedRow).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
 });

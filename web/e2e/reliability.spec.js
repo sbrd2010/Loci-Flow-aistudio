@@ -87,9 +87,10 @@ test("reliability: pinning a task sets Now Focus", async ({ page }) => {
   await row.locator(".task-row-top").click();
   await row.getByText("Pin to Focus").click();
 
-  const focusCard = page.locator(".focus-card");
-  await expect(focusCard).toBeVisible({ timeout: 5_000 });
-  await expect(focusCard).toContainText(title);
+  // Task appears in pinned section — overlay does not auto-open on pin
+  const pinnedSection = page.locator(".pinned-focus-section");
+  await expect(pinnedSection).toBeVisible({ timeout: 5_000 });
+  await expect(pinnedSection).toContainText(title);
 });
 
 test("reliability: brain dump item survives tab switch and returns to Mind Box", async ({ page }) => {
@@ -117,13 +118,15 @@ test("reliability: low-energy mode filters to low-energy tasks and can be toggle
   await enterDemo(page);
 
   const tasksList = page.getByTestId("today-tasks-list");
-  await expect(tasksList.getByText("Reply to the important message")).toBeVisible({ timeout: 8_000 });
+  // "25-minute deep work block" is P2 — visible in normal mode
+  await expect(tasksList.getByText("25-minute deep work block")).toBeVisible({ timeout: 8_000 });
 
   await page.locator("button.stuck-btn", { hasText: "Low Energy" }).click();
 
+  // Low energy shows only P4 tasks; P4 "10-minute walk" visible, P2 block hidden
   await expect(tasksList.getByText("10-minute walk")).toBeVisible({ timeout: 5_000 });
-  await expect(tasksList.getByText("Reply to the important message")).not.toBeVisible({ timeout: 5_000 });
+  await expect(tasksList.getByText("25-minute deep work block")).not.toBeVisible({ timeout: 5_000 });
 
   await page.locator("button.stuck-btn", { hasText: "Low Energy ON" }).click();
-  await expect(tasksList.getByText("Reply to the important message")).toBeVisible({ timeout: 5_000 });
+  await expect(tasksList.getByText("25-minute deep work block")).toBeVisible({ timeout: 5_000 });
 });
