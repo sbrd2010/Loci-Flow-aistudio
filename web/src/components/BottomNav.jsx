@@ -22,10 +22,15 @@ const RoadmapIcon = () => (
 );
 
 const MindBoxIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 12l2-5h14l2 5" fill="none" stroke="currentColor" strokeWidth="2"/>
-    <rect x="3" y="12" width="18" height="8" rx="1" fill="none" stroke="currentColor" strokeWidth="2"/>
-    <path d="M9 16h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9.5 5.25A3.25 3.25 0 0 0 5.8 8.4 3.15 3.15 0 0 0 4 11.25c0 1.16.62 2.18 1.55 2.74A3.25 3.25 0 0 0 9 18.25h.5"/>
+    <path d="M14.5 5.25a3.25 3.25 0 0 1 3.7 3.15A3.15 3.15 0 0 1 20 11.25c0 1.16-.62 2.18-1.55 2.74A3.25 3.25 0 0 1 15 18.25h-.5"/>
+    <path d="M9.5 5.25v13"/>
+    <path d="M14.5 5.25v13"/>
+    <path d="M8.2 9.1c.7-.55 1.58-.72 2.35-.45"/>
+    <path d="M15.8 9.1c-.7-.55-1.58-.72-2.35-.45"/>
+    <path d="M7.85 13.1c.82.25 1.72.12 2.4-.34"/>
+    <path d="M16.15 13.1c-.82.25-1.72.12-2.4-.34"/>
   </svg>
 );
 
