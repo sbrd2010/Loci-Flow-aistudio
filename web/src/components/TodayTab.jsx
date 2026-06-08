@@ -205,8 +205,10 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, onOpenMin
       secondsLeft: timerSecondsLeft,
       isRunning: isTimerRunning,
       taskTitle: activeTask?.title || "Deep Focus",
+      onPlayPause: () => setIsTimerRunning(r => !r),
+      onReset: () => { setIsTimerRunning(false); setTimerSecondsLeft(timerMaxSeconds); },
     };
-  }, [timerSecondsLeft, isTimerRunning, activeTask?.title]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [timerSecondsLeft, isTimerRunning, activeTask?.title, timerMaxSeconds]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { window.__lociTimer = null; }, []);
 
   // Request notification permission when focus overlay opens (already a user interaction)
