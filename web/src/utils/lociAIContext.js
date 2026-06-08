@@ -45,6 +45,12 @@ export function buildLociTaskContext(allTasks = [], date = new Date()) {
   return total === 0 ? "No active tasks yet." : lines.join("\n");
 }
 
+export function buildLociAnchorsContext(anchors = [], checkedIds = []) {
+  if (!anchors || anchors.length === 0) return "";
+  const lines = anchors.map(a => `  [${checkedIds.includes(a.id) ? "✓" : " "}] ${a.text}`);
+  return "DAILY ANCHORS:\n" + lines.join("\n");
+}
+
 export function buildLociCoreInstruction({ firstName = "friend" } = {}) {
   return `LOCI AI BRAIN - NON-NEGOTIABLE RULES:
 - You are Loci's execution coach, not a generic chatbot.

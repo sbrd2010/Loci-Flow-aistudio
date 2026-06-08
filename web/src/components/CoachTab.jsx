@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { callAI, getAIKeys } from "../utils/aiCall";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
-import { buildLociCoreInstruction, buildLociTaskContext, isActiveLociTask } from "../utils/lociAIContext";
+import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, isActiveLociTask } from "../utils/lociAIContext";
+import { getTodayCheckedIds, getLociDayStr } from "../utils/dailyAnchors";
 
 export default function CoachTab({ payload, savePayload, saveSubPath, userProfile }) {
   const { tasks = [], config = {} } = payload;
@@ -66,6 +67,10 @@ export default function CoachTab({ payload, savePayload, saveSubPath, userProfil
     const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
     const todayActive = tasks.filter(t => t.horizonLevel === "today" && isActiveLociTask(t));
     const taskContext = buildLociTaskContext(tasks);
+    const anchorContext = buildLociAnchorsContext(
+      config.dailyAnchors || [],
+      getTodayCheckedIds(config, getLociDayStr(new Date(), config.dayStartHour ?? 7, config.dayEndHour ?? 26))
+    );
     const lociCoreInstruction = buildLociCoreInstruction({ firstName });
 
     const userMessageCount = withUser.filter(m => m.isUser).length;
@@ -87,7 +92,7 @@ ${firstName} could be a student, graduate researcher, early-career professional,
 
 THEIR FULL TASK LIST (you can see ALL of this — reference specific task names in your replies):
 ${taskContext}
-
+${anchorContext ? `\n${anchorContext}\n` : ""}
 LOCI'S PHILOSOPHY — you embody this:
 Loci is built to bias people toward DOING, not just planning. Your role is to reduce friction and close the gap between intention and action.
 - Planning Paradox: If ${firstName} is reorganizing or adding tasks but not starting any, gently redirect — "You've got a solid plan. What's the ONE thing to actually start right now?"
@@ -179,6 +184,10 @@ SESSION: ${timeOfDay}, ${config.visitStreakCount || 0}-day streak, ${todayActive
     const totalTodayHours = (totalTodayMins / 60).toFixed(1);
     const p1Count = backlog.filter(t => t.priority === "P1").length;
     const p1Ratio = p1Count / backlog.length;
+    const briefingAnchorContext = buildLociAnchorsContext(
+      config.dailyAnchors || [],
+      getTodayCheckedIds(config, getLociDayStr(new Date(), config.dayStartHour ?? 7, config.dayEndHour ?? 26))
+    );
     const prompt = `You are ${config.mentorName || "Loci AI Coach"}, an expert productivity mentor inside Loci Focus — an app built to help people close the gap between intention and action.
 
 USER: ${config.userName || "friend"} | Challenge: ${challengeDesc}
@@ -191,7 +200,7 @@ LOCI PHILOSOPHY: The app biases toward doing, not planning. Your briefing must c
 
 FULL TASK LIST (key: [priority] [horizon] title | est minutes):
 ${backlog.map(t => `[${t.priority}] [${t.horizonLevel}] ${t.title} | ${t.timeEstimateMinutes || 25}min | ${t.category || "–"}`).join("\n")}
-
+${briefingAnchorContext ? `\n${briefingAnchorContext}\n` : ""}
 PRODUCE A FOCUS BRIEFING with these sections:
 
 **📊 Load Check**

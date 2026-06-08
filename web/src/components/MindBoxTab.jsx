@@ -119,6 +119,10 @@ export default function MindBoxTab({ payload, savePayload, userProfile }) {
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [toolPanel, setToolPanel] = useState(null);
+  const [editedAnchors, setEditedAnchors] = useState(config.dailyAnchors || []);
+  const [newAnchorText, setNewAnchorText] = useState("");
+  const [editingAnchorId, setEditingAnchorId] = useState(null);
+  const [editAnchorText, setEditAnchorText] = useState("");
   const [ritualActive, setRitualActive] = useState(false);
   const [ritualStepIndex, setRitualStepIndex] = useState(-1);
   const [ritualSecondsLeft, setRitualSecondsLeft] = useState(0);
@@ -155,6 +159,10 @@ export default function MindBoxTab({ payload, savePayload, userProfile }) {
     "Close all tabs that aren't this task right now.",
     "Commit to just 2 minutes. You can stop after that."
   ];
+
+  useEffect(() => {
+    setEditedAnchors(config.dailyAnchors || []);
+  }, [config.dailyAnchors]);
 
   // ── Ritual useEffects ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -396,6 +404,28 @@ export default function MindBoxTab({ payload, savePayload, userProfile }) {
   // ── Render ─────────────────────────────────────────────────────────────────
   const recentDump = [...(payload.brainDump || [])].slice(-3).reverse();
 
+  const handleAddAnchor = () => {
+    if (!newAnchorText.trim()) return;
+    const next = [...editedAnchors, { id: safeUUID(), text: newAnchorText.trim() }];
+    setEditedAnchors(next);
+    setNewAnchorText("");
+    savePayload({ ...payload, config: { ...config, dailyAnchors: next, lastUpdated: Date.now() } });
+  };
+
+  const handleDeleteAnchor = (id) => {
+    const next = editedAnchors.filter(a => a.id !== id);
+    setEditedAnchors(next);
+    savePayload({ ...payload, config: { ...config, dailyAnchors: next, lastUpdated: Date.now() } });
+  };
+
+  const handleEditAnchorSave = (id) => {
+    if (!editAnchorText.trim()) { setEditingAnchorId(null); return; }
+    const next = editedAnchors.map(a => a.id === id ? { ...a, text: editAnchorText.trim() } : a);
+    setEditedAnchors(next);
+    setEditingAnchorId(null);
+    savePayload({ ...payload, config: { ...config, dailyAnchors: next, lastUpdated: Date.now() } });
+  };
+
   const handleDeleteDumpItem = (id) => {
     savePayload({ ...payload, brainDump: (payload.brainDump || []).filter(item => item.id !== id) });
   };
@@ -581,6 +611,69 @@ export default function MindBoxTab({ payload, savePayload, userProfile }) {
               </>
             );
           })()}
+        </>
+      )}
+
+      {/* ── Sub-view: Daily Anchors */}
+      {toolPanel === "anchors" && (
+        <>
+          <div className="mindbox-subview-header">
+            <button className="mindbox-back-btn" onClick={() => { setToolPanel(null); setEditingAnchorId(null); }}>&#8592; Back</button>
+            <h2 className="mindbox-subview-title">Daily Anchors</h2>
+          </div>
+          <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "14px", lineHeight: "1.5" }}>
+            Short principles to keep front of mind. Aim for 3&#8211;7. Short phrases work best.
+          </p>
+          {editedAnchors.length === 0 && (
+            <p style={{ fontSize: "13px", color: "var(--text-muted)", textAlign: "center", padding: "20px 0" }}>
+              No anchors yet. Add your first one below.
+            </p>
+          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px" }}>
+            {editedAnchors.map(a => (
+              <div key={a.id} className="anchor-edit-row">
+                {editingAnchorId === a.id ? (
+                  <input
+                    className="anchor-edit-input"
+                    autoFocus
+                    value={editAnchorText}
+                    onChange={e => setEditAnchorText(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") handleEditAnchorSave(a.id);
+                      if (e.key === "Escape") setEditingAnchorId(null);
+                    }}
+                    maxLength={80}
+                  />
+                ) : (
+                  <span
+                    className="anchor-edit-text"
+                    onClick={() => { setEditingAnchorId(a.id); setEditAnchorText(a.text); }}
+                    title="Tap to edit"
+                  >{a.text}</span>
+                )}
+                <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
+                  {editingAnchorId === a.id ? (
+                    <button className="anchor-save-btn" onClick={() => handleEditAnchorSave(a.id)}>Save</button>
+                  ) : (
+                    <button className="anchor-edit-btn" onClick={() => { setEditingAnchorId(a.id); setEditAnchorText(a.text); }} aria-label="Edit">&#9998;</button>
+                  )}
+                  <button className="anchor-delete-btn" onClick={() => handleDeleteAnchor(a.id)} aria-label="Delete">&#215;</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="anchor-add-row">
+            <input
+              className="anchor-input"
+              type="text"
+              placeholder="Type a new anchor&#8230;"
+              value={newAnchorText}
+              onChange={e => setNewAnchorText(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleAddAnchor()}
+              maxLength={80}
+            />
+            <button className="anchor-add-btn" onClick={handleAddAnchor} disabled={!newAnchorText.trim()}>Add</button>
+          </div>
         </>
       )}
 
@@ -816,6 +909,18 @@ export default function MindBoxTab({ payload, savePayload, userProfile }) {
               <span className="mindbox-card-body">
                 <span className="mindbox-card-title">Bad Day Reset</span>
                 <span className="mindbox-card-sub">Restart without shame</span>
+              </span>
+              <span className="mindbox-card-chevron"><IconChevronRight /></span>
+            </button>
+            <button className="mindbox-card" onClick={() => setToolPanel("anchors")} style={{ gridColumn: "span 2" }}>
+              <span className="mindbox-card-icon mindbox-card-icon--accent" style={{ fontSize: "18px", lineHeight: 1 }}>&#128204;</span>
+              <span className="mindbox-card-body">
+                <span className="mindbox-card-title">Daily Anchors</span>
+                <span className="mindbox-card-sub">
+                  {(config.dailyAnchors || []).length === 0
+                    ? "Add your daily principles"
+                    : `${(config.dailyAnchors || []).length} anchor${(config.dailyAnchors || []).length === 1 ? "" : "s"}`}
+                </span>
               </span>
               <span className="mindbox-card-chevron"><IconChevronRight /></span>
             </button>

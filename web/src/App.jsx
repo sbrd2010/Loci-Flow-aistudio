@@ -458,6 +458,7 @@ export default function App() {
             savePayload={savePayload}
             onOpenAddTask={() => openAddTask("today")}
             onOpenDayMap={openDayMap}
+            onOpenMindBox={() => handleTabSelect("mindbox")}
             autoOpenFocus={pendingFocusOpen}
             onAutoOpenFocusDone={() => setPendingFocusOpen(false)}
           />

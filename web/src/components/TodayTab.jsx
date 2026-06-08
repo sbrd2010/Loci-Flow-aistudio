@@ -11,6 +11,7 @@ import { track } from "../firebase";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
 import { getCurrentFocusQuote } from "../utils/focusQuotes";
 import { formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
+import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
 import "../styles/focusNow.css";
 import {
   DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor,
@@ -73,7 +74,7 @@ function SortableTaskItem({ id, children }) {
   );
 }
 
-export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenFocus = false, onAutoOpenFocusDone }) {
+export default function TodayTab({ payload, savePayload, onOpenDayMap, onOpenMindBox, autoOpenFocus = false, onAutoOpenFocusDone }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   const [confirmDialog, setConfirmDialog] = useState(null);
@@ -86,6 +87,7 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
   const [focusNowMode, setFocusNowMode] = useState(false);
   const [focusNowTaskId, setFocusNowTaskId] = useState(null);
   const [showFocusNowPicker, setShowFocusNowPicker] = useState(false);
+  const [showAnchorSheet, setShowAnchorSheet] = useState(false);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -236,6 +238,14 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
   const _tsd = new Date();
   const todayStr = `${_tsd.getFullYear()}-${String(_tsd.getMonth() + 1).padStart(2, "0")}-${String(_tsd.getDate()).padStart(2, "0")}`;
   const isDoneToday = isDailyDone(config.deadlineDailyDoneDate, todayStr);
+
+  // ── Daily Anchors derived state ────────────────────────────────────────────
+  const anchors = config.dailyAnchors || [];
+  const anchorTodayStr = getLociDayStr(new Date(), config.dayStartHour ?? 7, config.dayEndHour ?? 26);
+  const todayCheckedIds = getTodayCheckedIds(config, anchorTodayStr);
+  const todayShownSlots = getTodayShownSlots(config, anchorTodayStr);
+  const anchorsCheckedCount = anchors.filter(a => todayCheckedIds.includes(a.id)).length;
+  const todayShownSlotsKey = todayShownSlots.join(",");
   const handleDeadlineDoneToday = () => {
     savePayload({ ...payload, config: { ...config, deadlineDailyDoneDate: todayStr, lastUpdated: Date.now() } });
   };
@@ -432,6 +442,53 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
       savePayload({ ...payload, config: { ...config, isLowEnergyMode: false, lastUpdated: Date.now() } });
     }
     setIsMVDMode(enabling);
+  };
+
+  // ── Daily Anchors auto-show ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!anchors.length) return;
+    if (focusNowMode || editingTask || showFocusNowPicker || confirmDialog) return;
+    const slot = getCurrentAnchorSlot(new Date(), config.dayStartHour ?? 7, config.dayEndHour ?? 26);
+    if (!slot) return;
+    if (todayShownSlots.includes(slot)) return;
+    const snoozeUntil = config.anchorsSnoozeUntil;
+    if (snoozeUntil && Date.now() < snoozeUntil) return;
+    const timer = setTimeout(() => setShowAnchorSheet(true), 2500);
+    return () => clearTimeout(timer);
+  }, [anchors.length, todayShownSlotsKey, focusNowMode, !!editingTask, showFocusNowPicker, !!confirmDialog, config.anchorsSnoozeUntil]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleAnchorCheck = (id) => {
+    const next = todayCheckedIds.includes(id)
+      ? todayCheckedIds.filter(x => x !== id)
+      : [...todayCheckedIds, id];
+    savePayload({ ...payload, config: { ...config,
+      anchorsCheckedIds: next, anchorsCheckedDate: anchorTodayStr, lastUpdated: Date.now()
+    }});
+  };
+
+  const handleAnchorSheetDone = () => {
+    const slot = getCurrentAnchorSlot(new Date(), config.dayStartHour ?? 7, config.dayEndHour ?? 26);
+    const nextSlots = slot && !todayShownSlots.includes(slot) ? [...todayShownSlots, slot] : todayShownSlots;
+    savePayload({ ...payload, config: { ...config,
+      anchorsShownSlots: nextSlots, anchorsSlotsDate: anchorTodayStr,
+      anchorsSnoozeUntil: null, lastUpdated: Date.now()
+    }});
+    setShowAnchorSheet(false);
+  };
+
+  const handleAnchorLater = () => {
+    savePayload({ ...payload, config: { ...config,
+      anchorsSnoozeUntil: Date.now() + 90 * 60 * 1000, lastUpdated: Date.now()
+    }});
+    setShowAnchorSheet(false);
+  };
+
+  const handleAnchorSkipToday = () => {
+    savePayload({ ...payload, config: { ...config,
+      anchorsShownSlots: ["morning", "afternoon", "evening"], anchorsSlotsDate: anchorTodayStr,
+      anchorsSnoozeUntil: null, lastUpdated: Date.now()
+    }});
+    setShowAnchorSheet(false);
   };
 
   const handleStartEdit = (task) => setEditingTask(task);
@@ -845,6 +902,19 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
                   Day Map
                 </button>
               )}
+              {anchors.length > 0 && (
+                <button
+                  className="stuck-btn"
+                  onClick={() => setShowAnchorSheet(true)}
+                  title="Daily Anchors"
+                  style={{
+                    background: anchorsCheckedCount === anchors.length ? "rgba(165,214,167,0.15)" : "var(--bg-secondary)",
+                    color: anchorsCheckedCount === anchors.length ? "var(--success)" : "var(--text-secondary)"
+                  }}
+                >
+                  &#128204;{anchorsCheckedCount > 0 ? ` ${anchorsCheckedCount}/${anchors.length}` : " Anchors"}
+                </button>
+              )}
               <button
                 className="stuck-btn"
                 onClick={handleMVDModeToggle}
@@ -1207,6 +1277,45 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, autoOpenF
           onClose={() => setEditingTask(null)}
         />
       )}
+
+      {/* ── Daily Anchors check-in sheet ────────────────────────── */}
+      {showAnchorSheet && anchors.length > 0 && (() => {
+        const variant = getAnchorVariant(new Date());
+        return (
+          <div className="focus-now-backdrop" onClick={handleAnchorSheetDone}>
+            <div className="anchor-sheet" onClick={e => e.stopPropagation()}>
+              <div className="anchor-sheet-header" style={{ borderLeftColor: variant.accentColor }}>
+                <span className="anchor-sheet-icon">&#128204;</span>
+                <div>
+                  <div className="anchor-sheet-title">{variant.title}</div>
+                  <div className="anchor-sheet-intro">{variant.intro}</div>
+                </div>
+              </div>
+              <div className="anchor-chips">
+                {anchors.map(a => {
+                  const checked = todayCheckedIds.includes(a.id);
+                  return (
+                    <button
+                      key={a.id}
+                      className={`anchor-chip${checked ? " anchor-chip--checked" : ""}`}
+                      style={{ borderColor: checked ? "transparent" : variant.accentColor, color: checked ? "var(--success)" : variant.accentColor }}
+                      onClick={() => handleAnchorCheck(a.id)}
+                    >
+                      {checked ? "✓ " : ""}{a.text}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="anchor-sheet-actions">
+                <button className="anchor-btn-primary" onClick={handleAnchorSheetDone}>All good</button>
+                <button className="anchor-btn-ghost" onClick={handleAnchorLater}>Later</button>
+                <button className="anchor-btn-ghost" onClick={handleAnchorSkipToday}>Skip today</button>
+                <button className="anchor-btn-ghost" onClick={() => { setShowAnchorSheet(false); onOpenMindBox?.(); }}>Manage</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Focus Now: task picker bottom sheet ─────────────────── */}
       {showFocusNowPicker && (

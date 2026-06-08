@@ -96,6 +96,18 @@ export function createDemoPayload() {
       deadlineAction: "Apply to one job today",
       deadlineCardStyle: "compact",
       lastUpdated: Date.now(),
+      dailyAnchors: [
+        { id: "da1", text: "One thing at a time" },
+        { id: "da2", text: "Protein in the morning" },
+        { id: "da3", text: "Move your body today" },
+        { id: "da4", text: "Take your supplements" },
+        { id: "da5", text: "You don't have to do this alone" },
+      ],
+      anchorsCheckedIds: [],
+      anchorsCheckedDate: null,
+      anchorsShownSlots: ["morning", "afternoon", "evening"],
+      anchorsSlotsDate: todayStr,
+      anchorsSnoozeUntil: null,
     },
 
     contributions: [
