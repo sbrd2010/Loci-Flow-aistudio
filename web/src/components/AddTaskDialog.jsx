@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { callAI, getAIKeys } from "../utils/aiCall";
 import { safeUUID } from "../utils/uuid";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
+import { applyAiRewriteToTask } from "../utils/taskOps";
 
 function defaultReminderDateTime() {
   const d = new Date();
@@ -121,15 +122,27 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
   const handleApplyAISuggestion = () => {
     if (!aiSuggestion) return;
-    if (aiSuggestion.title) setTitle(aiSuggestion.title);
-    if (aiSuggestion.microStep) { setConcreteStep(aiSuggestion.microStep); setAdvancedOpen(true); }
-    if (["P1","P2","P3","P4"].includes(aiSuggestion.priority)) setPriority(aiSuggestion.priority);
-    const est = Number(aiSuggestion.estimateMinutes);
-    if ([15,25,45,60,120,240,360].includes(est)) setEstimateMinutes(est);
-    if (["today","week","month","quarter","halfyear","office"].includes(aiSuggestion.horizonLevel)) setHorizonLevel(aiSuggestion.horizonLevel);
-    if (aiSuggestion.subSteps.length > 0) {
-      const now = Date.now();
-      setSubSteps(aiSuggestion.subSteps.map((s, i) => ({ id: `ai-ss-${i}-${now}`, text: s.text, done: false })));
+    if (isEditMode) {
+      // Rewrite mode: only update text content; preserve ALL planning metadata
+      // (horizonLevel, priority, timeEstimate, uuid, id, dayMap fields, etc.)
+      const merged = applyAiRewriteToTask(editTask, aiSuggestion);
+      setTitle(merged.title);
+      setConcreteStep(merged.concreteStep);
+      setSubSteps(merged.subSteps || []);
+      setAdvancedOpen(true);
+    } else {
+      // New task: AI may suggest all fields
+      if (aiSuggestion.title) setTitle(aiSuggestion.title);
+      if (aiSuggestion.microStep) { setConcreteStep(aiSuggestion.microStep); setAdvancedOpen(true); }
+      if (["P1","P2","P3","P4"].includes(aiSuggestion.priority)) setPriority(aiSuggestion.priority);
+      const est = Number(aiSuggestion.estimateMinutes);
+      if ([15,25,45,60,120,240,360].includes(est)) setEstimateMinutes(est);
+      if (["today","week","month","quarter","halfyear","office"].includes(aiSuggestion.horizonLevel)) setHorizonLevel(aiSuggestion.horizonLevel);
+      if (aiSuggestion.subSteps.length > 0) {
+        const now = Date.now();
+        setSubSteps(aiSuggestion.subSteps.map((s, i) => ({ id: `ai-ss-${i}-${now}`, text: s.text, done: false })));
+        setAdvancedOpen(true);
+      }
     }
     setAiSuggestion(null);
   };
@@ -430,6 +443,19 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
                   ))}
                 </div>
               </div>
+              {subSteps.length > 0 && (
+                <div className="form-group">
+                  <label className="form-label">SUB-STEPS ({subSteps.length})</label>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                    {subSteps.map((s) => (
+                      <div key={s.id} style={{ fontSize: "12px", color: "var(--text-secondary)", display: "flex", gap: "6px", padding: "3px 0" }}>
+                        <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>·</span>
+                        <span>{s.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
 
