@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, prepareBrainDumpForSave, isTaskCountDropSuspicious } from "./normalizePayload";
+import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious } from "./normalizePayload";
 
 describe("normalizePayload", () => {
   it("fills missing brainDump with []", () => {
@@ -273,6 +273,214 @@ describe("mergeRemotePayload", () => {
     const result = mergeRemotePayload(freshRtdb, staleLocal);
     expect(result.config.deadlineLabel).toBe("New Sprint");
     expect(result.config.visitStreakCount).toBe(10);
+  });
+});
+
+describe("mergeRemotePayloadWithMeta - hasLocalContribution flag (write-back detection)", () => {
+  const base = { config: {}, brainDump: [], timestamp: 1000 };
+  const task = (uuid, overrides = {}) => ({ uuid, title: uuid, isDeleted: false, ...overrides });
+
+  it("returns false when remote fully wins all same-UUID conflicts", () => {
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1", { title: "New remote", lastUpdated: 200 })] },
+      { ...base, tasks: [task("t1", { title: "Old local", lastUpdated: 100 })] }
+    );
+    expect(hasLocalContribution).toBe(false);
+  });
+
+  it("returns false when there are no local tasks at all", () => {
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1")] },
+      { ...base, tasks: [] }
+    );
+    expect(hasLocalContribution).toBe(false);
+  });
+
+  it("returns true when a local-newer same-UUID task wins the conflict", () => {
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1", { lastUpdated: 100 })] },
+      { ...base, tasks: [task("t1", { lastUpdated: 200 })] }
+    );
+    expect(hasLocalContribution).toBe(true);
+  });
+
+  it("returns false for equal timestamps (remote wins tie, no write-back needed)", () => {
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1", { title: "Remote version", lastUpdated: 100 })] },
+      { ...base, tasks: [task("t1", { title: "Local version", lastUpdated: 100 })] }
+    );
+    expect(hasLocalContribution).toBe(false);
+  });
+
+  it("returns true when a local-only non-deleted task is appended", () => {
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1")] },
+      { ...base, tasks: [task("t1"), task("t2", { isDeleted: false })] }
+    );
+    expect(hasLocalContribution).toBe(true);
+  });
+
+  it("returns false when local-only task is soft-deleted (not appended)", () => {
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1")] },
+      { ...base, tasks: [task("t1"), task("t2", { isDeleted: true })] }
+    );
+    expect(hasLocalContribution).toBe(false);
+  });
+
+  it("returns true and merged contains local-newer task (write-back carries correct data)", () => {
+    const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1", { title: "Old remote", lastUpdated: 100 })] },
+      { ...base, tasks: [task("t1", { title: "New local", lastUpdated: 200 })] }
+    );
+    expect(hasLocalContribution).toBe(true);
+    expect(merged.tasks[0].title).toBe("New local");
+  });
+
+  it("newer deleted task wins and does not cause spurious write-back when remote wins", () => {
+    // Remote has the newer delete — remote wins, no write-back
+    const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1", { isDeleted: true, lastUpdated: 200 })] },
+      { ...base, tasks: [task("t1", { isDeleted: false, lastUpdated: 100 })] }
+    );
+    expect(hasLocalContribution).toBe(false);
+    expect(merged.tasks[0].isDeleted).toBe(true);
+  });
+
+  it("newer local delete wins and signals write-back so RTDB gets the deletion", () => {
+    // Local has the newer delete — local wins, write-back needed
+    const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1", { isDeleted: false, lastUpdated: 100 })] },
+      { ...base, tasks: [task("t1", { isDeleted: true, lastUpdated: 200 })] }
+    );
+    expect(hasLocalContribution).toBe(true);
+    expect(merged.tasks[0].isDeleted).toBe(true);
+  });
+
+  it("no write-back when remote has no tasks and local has only deleted tasks", () => {
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [] },
+      { ...base, tasks: [task("t1", { isDeleted: true })] }
+    );
+    expect(hasLocalContribution).toBe(false);
+  });
+});
+
+describe("mergeRemotePayload - task-level conflict resolution", () => {
+  const base = { config: {}, brainDump: [], timestamp: 1000 };
+  const task = (uuid, overrides = {}) => ({ uuid, title: uuid, isDeleted: false, ...overrides });
+
+  it("1. remote-only task is kept", () => {
+    const result = mergeRemotePayload(
+      { ...base, tasks: [task("r1")] },
+      { ...base, tasks: [] }
+    );
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0].uuid).toBe("r1");
+  });
+
+  it("2. local-only non-deleted task is preserved", () => {
+    const result = mergeRemotePayload(
+      { ...base, tasks: [] },
+      { ...base, tasks: [task("l1", { lastUpdated: 100 })] }
+    );
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0].uuid).toBe("l1");
+  });
+
+  it("3. local-only soft-deleted task is not resurrected", () => {
+    const result = mergeRemotePayload(
+      { ...base, tasks: [] },
+      { ...base, tasks: [task("l1", { isDeleted: true, lastUpdated: 100 })] }
+    );
+    expect(result.tasks).toHaveLength(0);
+  });
+
+  it("4. same UUID: newer local task beats older remote task", () => {
+    const result = mergeRemotePayload(
+      { ...base, tasks: [task("t1", { title: "Old remote", lastUpdated: 100 })] },
+      { ...base, tasks: [task("t1", { title: "New local", lastUpdated: 200 })] }
+    );
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0].title).toBe("New local");
+  });
+
+  it("5. same UUID: newer remote task beats older local task", () => {
+    const result = mergeRemotePayload(
+      { ...base, tasks: [task("t1", { title: "New remote", lastUpdated: 200 })] },
+      { ...base, tasks: [task("t1", { title: "Old local", lastUpdated: 100 })] }
+    );
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0].title).toBe("New remote");
+  });
+
+  it("6. same UUID: completed local task with newer lastUpdated is preserved", () => {
+    const result = mergeRemotePayload(
+      { ...base, tasks: [task("t1", { isCompleted: false, lastUpdated: 100 })] },
+      { ...base, tasks: [task("t1", { isCompleted: true, lastUpdated: 200 })] }
+    );
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0].isCompleted).toBe(true);
+  });
+
+  it("7. same UUID: parked local task with newer lastUpdated is preserved", () => {
+    const result = mergeRemotePayload(
+      { ...base, tasks: [task("t1", { isParked: false, lastUpdated: 100 })] },
+      { ...base, tasks: [task("t1", { isParked: true, lastUpdated: 200 })] }
+    );
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0].isParked).toBe(true);
+  });
+
+  it("8a. same UUID: newer remote-deleted beats older local-active", () => {
+    const result = mergeRemotePayload(
+      { ...base, tasks: [task("t1", { isDeleted: true, lastUpdated: 200 })] },
+      { ...base, tasks: [task("t1", { isDeleted: false, lastUpdated: 100 })] }
+    );
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0].isDeleted).toBe(true);
+  });
+
+  it("8b. same UUID: newer local-deleted beats older remote-active", () => {
+    const result = mergeRemotePayload(
+      { ...base, tasks: [task("t1", { isDeleted: false, lastUpdated: 100 })] },
+      { ...base, tasks: [task("t1", { isDeleted: true, lastUpdated: 200 })] }
+    );
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0].isDeleted).toBe(true);
+  });
+
+  it("9. same UUID: equal timestamps prefer remote", () => {
+    const result = mergeRemotePayload(
+      { ...base, tasks: [task("t1", { title: "Remote version", lastUpdated: 100 })] },
+      { ...base, tasks: [task("t1", { title: "Local version", lastUpdated: 100 })] }
+    );
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0].title).toBe("Remote version");
+  });
+
+  it("10. missing/invalid lastUpdated does not crash, falls back to 0 (remote wins on tie)", () => {
+    expect(() => mergeRemotePayload(
+      { ...base, tasks: [task("t1", { title: "Remote" })] },
+      { ...base, tasks: [task("t1", { title: "Local", lastUpdated: "bad" })] }
+    )).not.toThrow();
+    const result = mergeRemotePayload(
+      { ...base, tasks: [task("t1", { title: "Remote" })] },
+      { ...base, tasks: [task("t1", { title: "Local", lastUpdated: null })] }
+    );
+    expect(result.tasks[0].title).toBe("Remote");
+  });
+
+  it("11. no duplicate UUIDs in merged output", () => {
+    const result = mergeRemotePayload(
+      { ...base, tasks: [task("t1"), task("t2")] },
+      { ...base, tasks: [task("t1", { lastUpdated: 999 }), task("t3")] }
+    );
+    const uuids = result.tasks.map(t => t.uuid);
+    expect(new Set(uuids).size).toBe(uuids.length);
+    expect(uuids).toContain("t1");
+    expect(uuids).toContain("t2");
+    expect(uuids).toContain("t3");
   });
 });
 
