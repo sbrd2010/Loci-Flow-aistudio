@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildToggleCompletedTasks, applyAiRewriteToTask } from "./taskOps";
+import { buildToggleCompletedTasks, applyAiRewriteToTask, normalizeAiOrganizeSuggestions, buildClearedBrainDump } from "./taskOps";
 
 const T = (overrides = {}) => ({
   uuid: "task-1",
@@ -187,5 +187,86 @@ describe("applyAiRewriteToTask", () => {
     const result = applyAiRewriteToTask(task, AI());
     expect(result.futureField).toBe("keep-me");
     expect(result.anotherField).toBe(42);
+  });
+});
+
+// ── normalizeAiOrganizeSuggestions ────────────────────────────────────────────
+
+const DUMP_ITEMS = [
+  { id: "d1", text: "Buy groceries" },
+  { id: "d2", text: "Review PR" },
+  { id: "d3", text: "Call dentist" },
+];
+
+describe("normalizeAiOrganizeSuggestions", () => {
+  it("accepts all valid horizons including office", () => {
+    const raw = [
+      { sourceId: "d1", title: "Buy groceries", horizonLevel: "today", priority: "P3" },
+      { sourceId: "d2", title: "Review PR", horizonLevel: "office", priority: "P2" },
+      { sourceId: "d3", title: "Call dentist", horizonLevel: "week", priority: "P3" },
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result).toHaveLength(3);
+    expect(result[1].horizonLevel).toBe("office");
+  });
+
+  it("discards suggestions with invalid horizonLevel", () => {
+    const raw = [
+      { sourceId: "d1", title: "Valid task", horizonLevel: "week", priority: "P2" },
+      { sourceId: "d2", title: "Bad horizon", horizonLevel: "someday", priority: "P2" },
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result).toHaveLength(1);
+    expect(result[0].title).toBe("Valid task");
+  });
+
+  it("discards suggestions with invalid priority", () => {
+    const raw = [
+      { sourceId: "d1", title: "Valid task", horizonLevel: "week", priority: "P2" },
+      { sourceId: "d2", title: "Bad priority", horizonLevel: "week", priority: "P5" },
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result).toHaveLength(1);
+  });
+
+  it("sets sourceId to null when AI returns an unrecognised id", () => {
+    const raw = [
+      { sourceId: "unknown-999", title: "Garbled source", horizonLevel: "week", priority: "P3" },
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result).toHaveLength(1);
+    expect(result[0].sourceId).toBeNull();
+  });
+
+  it("trims whitespace from title", () => {
+    const raw = [{ sourceId: "d1", title: "  Trimmed  ", horizonLevel: "week", priority: "P2" }];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].title).toBe("Trimmed");
+  });
+});
+
+// ── buildClearedBrainDump ─────────────────────────────────────────────────────
+
+describe("buildClearedBrainDump", () => {
+  it("removes brain dump items whose id matches a sourceId in accepted suggestions", () => {
+    const accepted = [
+      { sourceId: "d1", title: "Buy groceries", horizonLevel: "today", priority: "P3" },
+    ];
+    const result = buildClearedBrainDump(DUMP_ITEMS, accepted);
+    expect(result).toHaveLength(2);
+    expect(result.find(d => d.id === "d1")).toBeUndefined();
+  });
+
+  it("never removes items whose id is not referenced by any accepted suggestion", () => {
+    const accepted = [
+      { sourceId: null, title: "Title match would be wrong", horizonLevel: "week", priority: "P3" },
+    ];
+    const result = buildClearedBrainDump(DUMP_ITEMS, accepted);
+    expect(result).toHaveLength(3);
+  });
+
+  it("handles empty accepted suggestions gracefully", () => {
+    const result = buildClearedBrainDump(DUMP_ITEMS, []);
+    expect(result).toHaveLength(3);
   });
 });

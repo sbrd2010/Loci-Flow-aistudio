@@ -3,6 +3,7 @@ import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI } from "../utils/aiCall";
+import { normalizeAiOrganizeSuggestions, buildClearedBrainDump } from "../utils/taskOps";
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor,
   useSensor, useSensors
@@ -262,8 +263,8 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
   };
 
   const handleOrganizeDump = async () => {
-    const dumpItems = (payload.brainDump || []).map(i => i.text);
-    if (!dumpItems.length) return;
+    const brainDumpItems = payload.brainDump || [];
+    if (!brainDumpItems.length) return;
     setOrganizeLoading(true);
     setOrganizeResults([]);
     setOrganizeError("");
@@ -274,21 +275,20 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
     const profileNote = profile && profile.totalTasks >= 5
       ? `\nUser context: completion rate ${Math.round(profile.completionRate * 100)}%, dominant horizon "${profile.dominantHorizon}", avg estimate ${profile.avgEstimateMinutes}min. Weight horizon suggestions toward their patterns.`
       : "";
-    const prompt = `Here are raw thoughts from a brain dump:\n${dumpItems.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\nOrganize each thought into a structured task. For each one determine:\n- title: specific, outcome-oriented (max 60 chars)\n- horizonLevel: "today" (urgent/deadline today), "week" (most items, default), "month", or "quarter"\n- priority: "P1" (urgent), "P2" (important), "P3" (normal), "P4" (quick <15 min)\n- concreteStep: the single easiest first action to start it (max 60 chars)${profileNote}\n\nRules: default to "week" unless clearly urgent. Never use the word "ADHD".\n\nReturn ONLY a JSON array, no markdown:\n[{"title":"...","horizonLevel":"week","priority":"P3","concreteStep":"..."}]`;
+    // Include each item's stable ID so AI can return sourceId for safe brain-dump clearing
+    const prompt = `Here are raw thoughts from a brain dump:\n${brainDumpItems.map((item, i) => `${i + 1}. [id:${item.id}] ${item.text}`).join("\n")}\n\nOrganize each thought into a structured task. For each one determine:\n- sourceId: the id value from the [id:...] tag in the original list\n- title: specific, outcome-oriented (max 60 chars)\n- horizonLevel: "today" (urgent/deadline today), "week" (most items, default), "month", "quarter", "halfyear" (6 months / long-term), or "office" (work or professional tasks)\n- priority: "P1" (urgent), "P2" (important), "P3" (normal), "P4" (quick <15 min)\n- concreteStep: the single easiest first action to start it (max 60 chars)${profileNote}\n\nRules: default to "week" unless clearly urgent or work-related. Never use the word "ADHD".\n\nReturn ONLY a JSON array, no markdown:\n[{"sourceId":"<id from list>","title":"...","horizonLevel":"week","priority":"P3","concreteStep":"..."}]`;
 
     try {
       const raw = await callAI({
         groqKey, geminiKey,
         systemPrompt: "You are a productivity coach. Respond ONLY with a valid JSON array, no markdown.",
         messages: [{ role: "user", content: prompt }],
-        maxTokens: 800
+        maxTokens: 900
       });
       const cleaned = raw.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
       const parsed = JSON.parse(cleaned);
       if (!Array.isArray(parsed)) throw new Error("invalid");
-      const valid = parsed
-        .filter(t => t.title && ["today","week","month","quarter","halfyear"].includes(t.horizonLevel) && ["P1","P2","P3","P4"].includes(t.priority))
-        .slice(0, 10);
+      const valid = normalizeAiOrganizeSuggestions(parsed, brainDumpItems);
       setOrganizeResults(valid);
       setOrganizeSelected(new Set(valid.map((_, i) => i)));
     } catch (_) {
@@ -352,8 +352,7 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
         lastUpdated: Date.now()
       };
     });
-    const addedTexts = new Set(toAdd.map(t => t.title?.toLowerCase().trim()).filter(Boolean));
-    const clearedDump = (payload.brainDump || []).filter(d => !addedTexts.has(d.text?.toLowerCase().trim()));
+    const clearedDump = buildClearedBrainDump(payload.brainDump || [], toAdd);
     savePayload({ ...payload, tasks: [...(payload.tasks || []), ...newTasks], brainDump: clearedDump });
     setToolPanel(null);
     setOrganizeResults([]);
@@ -508,8 +507,8 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
             </div>
           )}
           {!organizeLoading && !organizeError && organizeResults.length > 0 && (() => {
-            const horizonOptions = ["today","week","month","quarter","halfyear"];
-            const horizonLabel = { today: "Today", week: "This Week", month: "Month", quarter: "Quarter", halfyear: "6 Months" };
+            const horizonOptions = ["today","week","month","quarter","halfyear","office"];
+            const horizonLabel = { today: "Today", week: "This Week", month: "Month", quarter: "Quarter", halfyear: "6 Months", office: "Work" };
             const priorityOptions = ["P1","P2","P3","P4"];
             return (
               <>
