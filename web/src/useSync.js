@@ -55,6 +55,9 @@ export function useSync(uid, email) {
   // (which is when data was last *written*). This reflects "when did this device
   // last hear from the server", so "Last Sync" reads "just now" after a fresh login.
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
+  // Non-null when RTDB is unreachable with cached data ("offline") or a write failed ("write-failed").
+  // Cleared on every successful RTDB delivery.
+  const [syncWarning, setSyncWarning] = useState(null);
 
   const dbRefPath = uid ? `sync/${uid}` : null;
 
@@ -72,6 +75,7 @@ export function useSync(uid, email) {
   // Reset at the start of each uid effect so they clear on login/uid change.
   const hasReceivedFirstRtdbRef = useRef(false);
   const localWriteBeforeFirstRtdbRef = useRef(false);
+  const offlineWarnTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (!dbRefPath) {
@@ -86,6 +90,8 @@ export function useSync(uid, email) {
     rtdbConnectedRef.current = false;
     hasReceivedFirstRtdbRef.current = false;
     localWriteBeforeFirstRtdbRef.current = false;
+    setSyncWarning(null);
+    if (offlineWarnTimeoutRef.current) { clearTimeout(offlineWarnTimeoutRef.current); offlineWarnTimeoutRef.current = null; }
     const userRef = ref(db, dbRefPath);
 
     // Load from localStorage cache immediately — app is usable in <100ms on return visits.
@@ -97,6 +103,15 @@ export function useSync(uid, email) {
       payloadRef.current = cached;
       setLoading(false);
       setIsSyncingFromCache(true);
+      // If RTDB doesn't respond within 15s, surface a visible warning so the user
+      // knows they're looking at potentially stale cached data (e.g. Brave Shields
+      // blocking the connection on mobile).
+      offlineWarnTimeoutRef.current = setTimeout(() => {
+        if (!hasReceivedFirstRtdbRef.current) {
+          setSyncWarning("offline");
+          setIsSyncingFromCache(false); // unblock effects that guard on this flag
+        }
+      }, 15000);
     }
 
     // ── Phase 1: monitor raw TCP/WebSocket/long-poll connectivity via .info/connected ──
@@ -149,7 +164,9 @@ export function useSync(uid, email) {
     const unsubscribe = onValue(userRef, (snapshot) => {
       if (connTimeoutId) clearTimeout(connTimeoutId);
       if (dataTimeoutRef.current) { clearTimeout(dataTimeoutRef.current); dataTimeoutRef.current = null; }
+      if (offlineWarnTimeoutRef.current) { clearTimeout(offlineWarnTimeoutRef.current); offlineWarnTimeoutRef.current = null; }
       setIsSyncingFromCache(false);
+      setSyncWarning(null);
       setConnPhase(CONN.CONNECTED);
       setLastSyncedAt(Date.now());
 
@@ -351,13 +368,17 @@ export function useSync(uid, email) {
         setError("Could not connect to sync server. Check your connection and reload.");
         setConnPhase(CONN.ERROR);
         setLoading(false);
+      } else {
+        // Cached data is showing, but RTDB is unreachable — warn so the user knows
+        // the data may be stale (e.g. Brave Shields blocking on mobile).
+        setSyncWarning("offline");
       }
-      // If we have cached data, don't show an error — user already sees the app
     });
 
     return () => {
       if (connTimeoutId) clearTimeout(connTimeoutId);
       if (dataTimeoutRef.current) clearTimeout(dataTimeoutRef.current);
+      if (offlineWarnTimeoutRef.current) clearTimeout(offlineWarnTimeoutRef.current);
       unsubConn();
       unsubscribe();
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -457,7 +478,7 @@ export function useSync(uid, email) {
       if (dbRefPath && payloadRef.current) {
         writeWithRetry(ref(db, dbRefPath), payloadRef.current)
           .then(() => console.log("Remote RTDB payload sync successful"))
-          .catch((err) => console.error("Remote RTDB payload sync failed after retries:", err))
+          .catch((err) => { console.error("Remote RTDB payload sync failed after retries:", err); setSyncWarning("write-failed"); })
           .finally(() => {
             timeoutRef.current = null;
             if (pendingRemoteRef.current) {
@@ -511,5 +532,5 @@ export function useSync(uid, email) {
     }
   };
 
-  return { payload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, savePayload, saveSubPath, flushNow, clearCache };
+  return { payload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning, savePayload, saveSubPath, flushNow, clearCache };
 }
