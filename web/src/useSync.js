@@ -6,6 +6,14 @@ import { normalizePayload, mergeRemotePayload, prepareBrainDumpForSave, isTaskCo
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
 // This lets the app show specific messages at each stage instead of just "loading".
+// Pure helper: returns payload only if it belongs to the current uid.
+// Exported so it can be unit-tested independently of Firebase/React.
+export function gatePayloadToUid(payload, payloadUid, currentUid) {
+  if (!currentUid) return null;
+  if (payloadUid !== currentUid) return null;
+  return payload;
+}
+
 export const CONN = { CONNECTING: "connecting", CONNECTED: "connected", OFFLINE: "offline", ERROR: "error" };
 
 // Retry a Firebase set() up to `retries` times with exponential backoff (500ms, 1s, 2s).
@@ -64,6 +72,11 @@ export function useSync(uid, email) {
   const payloadRef = useRef(null);
   const timeoutRef = useRef(null);
   const pendingRemoteRef = useRef(null);
+  // Tracks which uid the current `payload` state was loaded for.
+  // Compared against the current uid in the return value — if they differ,
+  // effectivePayload is null so App-level effects cannot read or write
+  // a previous user's data during the uid-change render gap.
+  const payloadUidRef = useRef(null);
   // Cached Firebase ID token — refreshed on each save so the pagehide
   // keepalive fetch has a valid token even if the page is being killed.
   const tokenRef = useRef(null);
@@ -79,6 +92,10 @@ export function useSync(uid, email) {
 
   useEffect(() => {
     if (!dbRefPath) {
+      payloadRef.current = null;
+      pendingRemoteRef.current = null;
+      payloadUidRef.current = null;
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
       setLoading(false);
       return;
     }
@@ -87,6 +104,12 @@ export function useSync(uid, email) {
     setConnPhase(CONN.CONNECTING);
     setError(null);
     setIsSyncingFromCache(false);
+    // Clear previous user's data immediately so the payload gate returns null
+    // for the current render cycle before the new uid's data arrives.
+    payloadRef.current = null;
+    pendingRemoteRef.current = null;
+    payloadUidRef.current = null;
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
     rtdbConnectedRef.current = false;
     hasReceivedFirstRtdbRef.current = false;
     localWriteBeforeFirstRtdbRef.current = false;
@@ -99,6 +122,7 @@ export function useSync(uid, email) {
     const cached = rawCached ? normalizePayload(rawCached) : null;
     const hasCachedData = !!cached;
     if (hasCachedData) {
+      payloadUidRef.current = uid;
       setPayload(cached);
       payloadRef.current = cached;
       setLoading(false);
@@ -179,6 +203,7 @@ export function useSync(uid, email) {
           // overwriting optimistic updates that haven't reached Firebase yet.
           if ((data.timestamp || 0) >= (payloadRef.current?.timestamp || 0)) {
             const merged = mergeRemotePayload(data, payloadRef.current);
+            payloadUidRef.current = uid;
             setPayload(merged);
             payloadRef.current = merged;
             pendingRemoteRef.current = null;
@@ -194,6 +219,7 @@ export function useSync(uid, email) {
               // cache), giving local a fake-fresh timestamp. Trust RTDB instead of
               // pushing the stale cache back up.
               const merged = mergeRemotePayload(data, payloadRef.current);
+              payloadUidRef.current = uid;
               setPayload(merged);
               payloadRef.current = merged;
               pendingRemoteRef.current = null;
@@ -327,6 +353,7 @@ export function useSync(uid, email) {
             timestamp: now
           };
 
+          payloadUidRef.current = uid;
           setPayload(defaultPayload);
           payloadRef.current = defaultPayload;
           writeCache(uid, defaultPayload);
@@ -345,6 +372,7 @@ export function useSync(uid, email) {
             clearTimeout(timeoutRef.current);
             timeoutRef.current = null;
             const merged = mergeRemotePayload(data, payloadRef.current);
+            payloadUidRef.current = uid;
             setPayload(merged);
             payloadRef.current = merged;
             pendingRemoteRef.current = null;
@@ -482,6 +510,7 @@ export function useSync(uid, email) {
       return;
     }
 
+    payloadUidRef.current = uid;
     setPayload(nextPayload);
     payloadRef.current = nextPayload;
 
@@ -505,6 +534,7 @@ export function useSync(uid, email) {
               pendingRemoteRef.current = null;
               if ((remote.timestamp || 0) >= (payloadRef.current?.timestamp || 0)) {
                 const merged = mergeRemotePayload(remote, payloadRef.current);
+                payloadUidRef.current = uid;
                 setPayload(merged);
                 payloadRef.current = merged;
                 if (uid) writeCache(uid, merged);
@@ -551,5 +581,9 @@ export function useSync(uid, email) {
     }
   };
 
-  return { payload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning, savePayload, saveSubPath, flushNow, clearCache };
+  // Gate payload: if the stored payload belongs to a different uid (uid-change render gap),
+  // return null so App-level effects cannot read or write the previous user's data.
+  const effectivePayload = gatePayloadToUid(payload, payloadUidRef.current, uid);
+  const effectiveLoading = loading || (!!uid && payloadUidRef.current !== uid);
+  return { payload: effectivePayload, loading: effectiveLoading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning, savePayload, saveSubPath, flushNow, clearCache };
 }
