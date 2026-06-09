@@ -57,11 +57,11 @@ function makeFilename(ext, prefix = "loci-tasks-backup") {
 export function buildPayloadBackupData(payload) {
   const safe = normalizePayload(payload);
   return {
+    ...safe,
     app: "Loci",
     exportType: "full-payload-backup",
     exportedAt: new Date().toISOString(),
     taskCount: safe.tasks.length,
-    ...safe,
   };
 }
 

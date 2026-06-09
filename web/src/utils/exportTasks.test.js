@@ -60,4 +60,14 @@ describe("buildPayloadBackupData", () => {
     const result = buildPayloadBackupData({ tasks: [], timestamp: 12345 });
     expect(result.timestamp).toBe(12345);
   });
+
+  it("backup metadata overrides any same-named fields in the payload", () => {
+    const result = buildPayloadBackupData({
+      tasks: [TASK, TASK],
+      exportType: "bad",
+      taskCount: 999,
+    });
+    expect(result.exportType).toBe("full-payload-backup");
+    expect(result.taskCount).toBe(2);
+  });
 });
