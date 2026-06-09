@@ -66,7 +66,9 @@ export default function App() {
     setDemoPayload({ ...updated, timestamp: Date.now() });
   };
 
-  const saveDemoSubPath = () => {};
+  const saveDemoSubPath = (subPath, value) => {
+    setDemoPayload(prev => prev ? { ...prev, [subPath]: value, timestamp: Date.now() } : prev);
+  };
 
   // ── Service worker ─────────────────────────────────────────────────────────
   useEffect(() => {

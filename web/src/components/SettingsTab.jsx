@@ -628,7 +628,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
             onClick={() => setConfirmDialog({
               message: "Reset 7-day tracking data?\n\nThis clears the dots AND the streak counter on the Mind Box tab. Cannot be undone.",
               confirmLabel: "Reset tracking", cancelLabel: "Cancel",
-              onConfirm: () => { savePayload({ ...payload, contributions: [], config: { ...config, visitStreakCount: 0, lastUpdated: Date.now() } }); setConfirmDialog(null); },
+              onConfirm: () => { saveSubPath("contributions", []); saveSubPath("config", { ...config, visitStreakCount: 0, lastUpdated: Date.now() }); setConfirmDialog(null); },
               onCancel: () => setConfirmDialog(null)
             })}
           >
