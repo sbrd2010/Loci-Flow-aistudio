@@ -158,7 +158,7 @@ export default function App() {
   };
 
   // Load the sync payload from RTDB (skipped in demo mode — uid is null)
-  const { payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, savePayload: rtdbSave, saveSubPath: rtdbSaveSub, flushNow: rtdbFlushNow, clearCache: rtdbClearCache } =
+  const { payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning: rtdbSyncWarning, savePayload: rtdbSave, saveSubPath: rtdbSaveSub, flushNow: rtdbFlushNow, clearCache: rtdbClearCache } =
     useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
   const payload = demoMode ? demoPayload : rtdbPayload;
@@ -166,6 +166,7 @@ export default function App() {
   const saveSubPath = demoMode ? saveDemoSubPath : rtdbSaveSub;
   const flushNow = demoMode ? () => {} : (rtdbFlushNow || (() => {}));
   const clearCache = demoMode ? () => {} : (rtdbClearCache || (() => {}));
+  const syncWarning = demoMode ? null : rtdbSyncWarning;
 
   // Schedule task reminders whenever payload loads/changes
   useEffect(() => {
@@ -409,6 +410,29 @@ export default function App() {
           boxShadow: "0 2px 12px rgba(0,0,0,0.18)"
         }}>
           ↻ Syncing with cloud…
+        </div>
+      )}
+
+      {/* Sync warning — shown when RTDB is unreachable (stale cache) or a write failed */}
+      {syncWarning && (
+        <div
+          role="alert"
+          onClick={() => window.location.reload()}
+          style={{
+            position: "fixed", bottom: "72px", left: "50%", transform: "translateX(-50%)",
+            background: "var(--bg-card)", border: "1px solid #f59e0b",
+            borderRadius: "20px", padding: "6px 16px",
+            fontSize: "11px", fontWeight: "600", color: "#f59e0b",
+            zIndex: 490, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+            cursor: "pointer", whiteSpace: "nowrap", maxWidth: "calc(100vw - 32px)",
+            boxShadow: "0 2px 12px rgba(0,0,0,0.18)", textAlign: "center"
+          }}
+        >
+          {syncWarning === "write-failed"
+            ? "⚠️ Changes saved locally — cloud sync failed. Tap to retry."
+            : (!!navigator.brave
+              ? "⚠️ Sync offline. Brave Shields may be blocking — tap to reload."
+              : "⚠️ Sync offline — data may be out of date. Tap to retry.")}
         </div>
       )}
 
