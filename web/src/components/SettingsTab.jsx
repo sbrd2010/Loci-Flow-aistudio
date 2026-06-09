@@ -3,7 +3,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import PrivacyPolicy from "./PrivacyPolicy";
 import { db } from "../firebase";
 import { ref, push } from "firebase/database";
-import { exportTasksAsJson, exportTasksAsCsv } from "../utils/exportTasks";
+import { exportPayloadAsJson, exportTasksAsCsv } from "../utils/exportTasks";
 
 export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyncedAt, onSignOut }) {
   const { config = {} } = payload;
@@ -562,7 +562,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
                 style={{ width: "100%" }}
                 onClick={() => {
                   setExportError("");
-                  try { exportTasksAsJson(payload.tasks || []); }
+                  try { exportPayloadAsJson(payload); }
                   catch (_) { setExportError("Export failed. Your tasks were not changed."); }
                 }}
               >
