@@ -55,9 +55,67 @@ describe("normalizePayload", () => {
     expect(BRAIN_DUMP_LIMIT).toBe(50);
   });
 
-  it("returns the raw value unchanged for non-objects", () => {
-    expect(normalizePayload(null)).toBeNull();
-    expect(normalizePayload(undefined)).toBeUndefined();
+  it("null input returns safe empty payload", () => {
+    const result = normalizePayload(null);
+    expect(result.tasks).toEqual([]);
+    expect(result.config).toEqual({});
+    expect(result.contributions).toEqual([]);
+    expect(result.brainDump).toEqual([]);
+    expect(result.brainDumpUpdatedAt).toBe(0);
+  });
+
+  it("undefined input returns safe empty payload", () => {
+    const result = normalizePayload(undefined);
+    expect(result.tasks).toEqual([]);
+    expect(result.config).toEqual({});
+    expect(result.contributions).toEqual([]);
+    expect(result.brainDump).toEqual([]);
+    expect(result.brainDumpUpdatedAt).toBe(0);
+  });
+
+  it("numeric input returns safe empty payload", () => {
+    const result = normalizePayload(42);
+    expect(result.tasks).toEqual([]);
+    expect(result.config).toEqual({});
+  });
+
+  it("string input returns safe empty payload", () => {
+    const result = normalizePayload("bad");
+    expect(result.tasks).toEqual([]);
+    expect(result.config).toEqual({});
+  });
+
+  it("array input returns safe empty payload (not spread with numeric keys)", () => {
+    const result = normalizePayload([{ uuid: "t1" }]);
+    expect(result.tasks).toEqual([]);
+    expect(result.config).toEqual({});
+  });
+
+  it("valid payload preserves existing custom fields", () => {
+    const result = normalizePayload({ tasks: [], config: {}, customField: "keep me", timestamp: 500 });
+    expect(result.customField).toBe("keep me");
+    expect(result.timestamp).toBe(500);
+  });
+
+  it("missing arrays on a valid object are normalized to empty arrays", () => {
+    const result = normalizePayload({ config: {} });
+    expect(result.tasks).toEqual([]);
+    expect(result.contributions).toEqual([]);
+    expect(result.brainDump).toEqual([]);
+  });
+
+  it("missing config on a valid object is normalized to {}", () => {
+    expect(normalizePayload({ tasks: [] }).config).toEqual({});
+  });
+
+  it("valid brainDumpUpdatedAt is preserved", () => {
+    const result = normalizePayload({ tasks: [], config: {}, brainDump: [], brainDumpUpdatedAt: 9999 });
+    expect(result.brainDumpUpdatedAt).toBe(9999);
+  });
+
+  it("invalid brainDumpUpdatedAt safely becomes 0", () => {
+    const result = normalizePayload({ tasks: [], config: {}, brainDump: [], brainDumpUpdatedAt: "bad" });
+    expect(result.brainDumpUpdatedAt).toBe(0);
   });
 });
 

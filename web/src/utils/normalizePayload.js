@@ -44,7 +44,9 @@ function inferBrainDumpUpdatedAt(raw, brainDump) {
 }
 
 export function normalizePayload(raw) {
-  if (!raw || typeof raw !== "object") return raw;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { tasks: [], config: {}, contributions: [], brainDump: [], brainDumpUpdatedAt: 0 };
+  }
   const brainDump = arrayOrEmpty(raw.brainDump);
   return {
     ...raw,
