@@ -430,6 +430,8 @@ export default function App() {
         >
           {syncWarning === "write-failed"
             ? "⚠️ Changes saved locally — cloud sync failed. Tap to retry."
+            : syncWarning === "drop-guard"
+            ? "⚠️ A suspicious task-count drop was blocked. Your data was not overwritten."
             : (!!navigator.brave
               ? "⚠️ Sync offline. Brave Shields may be blocking — tap to reload."
               : "⚠️ Sync offline — data may be out of date. Tap to retry.")}
