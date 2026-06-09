@@ -97,7 +97,36 @@ export function isTaskCountDropSuspicious(nextTasks, currentTasks, threshold = 3
   return (currentActive - nextActive) >= threshold;
 }
 
-// Applies a payload received from RTDB on top of the currently-held local payload.
+// Merges remote and local task arrays by uuid.
+// For shared UUIDs: the task with the newer lastUpdated wins; remote wins on tie
+// (avoids endless local/remote flip-flopping when timestamps are equal or absent).
+// Local-only non-deleted tasks are appended (unsynced additions from another device).
+// Local-only soft-deleted tasks are not resurrected.
+function mergeTasks(remoteTasks, localTasks) {
+  const localByUuid = new Map(
+    arrayOrEmpty(localTasks)
+      .filter(t => t.uuid)
+      .map(t => [t.uuid, t])
+  );
+
+  const merged = arrayOrEmpty(remoteTasks).map(remoteTask => {
+    if (!remoteTask.uuid) return remoteTask;
+    const localTask = localByUuid.get(remoteTask.uuid);
+    if (!localTask) return remoteTask;
+    const localTs = finiteNumber(localTask.lastUpdated) ?? 0;
+    const remoteTs = finiteNumber(remoteTask.lastUpdated) ?? 0;
+    return localTs > remoteTs ? localTask : remoteTask;
+  });
+
+  const remoteUuids = new Set(arrayOrEmpty(remoteTasks).map(t => t.uuid).filter(Boolean));
+  const localOnlyTasks = arrayOrEmpty(localTasks).filter(
+    t => t.uuid && !remoteUuids.has(t.uuid) && !t.isDeleted
+  );
+
+  return [...merged, ...localOnlyTasks];
+}
+
+
 // If RTDB omits `brainDump`, field-level metadata tells us whether that omission
 // means "legacy/missing key, preserve newer local items" or "newer remote clear".
 export function mergeRemotePayload(remote, local) {
@@ -120,16 +149,7 @@ export function mergeRemotePayload(remote, local) {
     }
   }
 
-  // Preserve tasks added locally but not yet synced to RTDB (identified by uuid absence).
-  // Guards against a fresh-load browser writing a stale full payload that overwrites
-  // unsynced additions made on another device.
-  const remoteUuids = new Set((normalized.tasks || []).map(t => t.uuid).filter(Boolean));
-  const localOnlyTasks = arrayOrEmpty(local?.tasks).filter(
-    t => t.uuid && !remoteUuids.has(t.uuid) && !t.isDeleted
-  );
-  if (localOnlyTasks.length > 0) {
-    normalized.tasks = [...normalized.tasks, ...localOnlyTasks];
-  }
+  normalized.tasks = mergeTasks(normalized.tasks, local?.tasks);
 
   return normalized;
 }
