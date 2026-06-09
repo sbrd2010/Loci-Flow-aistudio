@@ -509,7 +509,7 @@ export default function App() {
             onEditTask={(task) => { setEditingTask(task); setShowAddTask(true); }}
           />
         )}
-        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} userProfile={userProfile} />}
+        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} userProfile={userProfile} />}
         {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} userProfile={userProfile} />}
         {activeTab === "settings" && (
           <SettingsTab

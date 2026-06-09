@@ -135,28 +135,25 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   const [savedProfile, setSavedProfile] = useState(false);
   const handleSaveSettings = (e) => {
     e.preventDefault();
-    savePayload({
-      ...payload,
-      config: {
-        ...config,
-        userName: editedName.trim(),
-        mentorName: editedMentor.trim(),
-        challengeType: editedChallenge,
-        pomodoroDurationMinutes: Math.min(120, Math.max(1, parseInt(editedPomodoro) || 25)),
-        reminderNagIntervalMinutes: Math.min(60, Math.max(1, parseInt(editedNagInterval) || 15)),
-        eveningGuardWindowActive: editedEveningGuard,
-        dayStartHour: editedDayStart,
-        dayEndHour: editedDayEnd,
-        headerStyle: editedHeaderStyle,
-        toolsStyle: editedToolsStyle,
-        roadmapStyle: "compact",
-        deadlineLabel: editedDeadlineLabel.trim(),
-        deadlineDate: editedDeadlineDate,
-        deadlineStartDate: editedDeadlineStartDate,
-        deadlineAction: editedDeadlineAction.trim(),
-        deadlineCardStyle: "compact",
-        lastUpdated: Date.now()
-      }
+    saveSubPath("config", {
+      ...config,
+      userName: editedName.trim(),
+      mentorName: editedMentor.trim(),
+      challengeType: editedChallenge,
+      pomodoroDurationMinutes: Math.min(120, Math.max(1, parseInt(editedPomodoro) || 25)),
+      reminderNagIntervalMinutes: Math.min(60, Math.max(1, parseInt(editedNagInterval) || 15)),
+      eveningGuardWindowActive: editedEveningGuard,
+      dayStartHour: editedDayStart,
+      dayEndHour: editedDayEnd,
+      headerStyle: editedHeaderStyle,
+      toolsStyle: editedToolsStyle,
+      roadmapStyle: "compact",
+      deadlineLabel: editedDeadlineLabel.trim(),
+      deadlineDate: editedDeadlineDate,
+      deadlineStartDate: editedDeadlineStartDate,
+      deadlineAction: editedDeadlineAction.trim(),
+      deadlineCardStyle: "compact",
+      lastUpdated: Date.now()
     });
     setSavedProfile(true);
     setTimeout(() => setSavedProfile(false), 2000);
@@ -398,7 +395,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
               <button type="button"
                 onClick={() => {
                   setEditedDeadlineDate(""); setEditedDeadlineLabel(""); setEditedDeadlineStartDate(""); setEditedDeadlineAction("");
-                  savePayload({ ...payload, config: { ...config, deadlineLabel: "", deadlineDate: "", deadlineStartDate: "", deadlineAction: "", deadlineCardStyle: "compact", lastUpdated: Date.now() } });
+                  saveSubPath("config", { ...config, deadlineLabel: "", deadlineDate: "", deadlineStartDate: "", deadlineAction: "", deadlineCardStyle: "compact", lastUpdated: Date.now() });
                 }}
                 style={{ marginTop: "6px", fontSize: "11px", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                 ✕ Clear deadline
