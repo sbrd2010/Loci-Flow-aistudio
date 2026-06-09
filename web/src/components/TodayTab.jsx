@@ -4,6 +4,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import AddTaskDialog from "./AddTaskDialog";
 import FocusModePage from "./FocusModePage";
 import { safeUUID } from "../utils/uuid";
+import { buildToggleCompletedTasks } from "../utils/taskOps";
 import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotifications";
 import { getAIKeys, callAI } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
@@ -340,9 +341,13 @@ export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayM
     const todayDateStr = getTodayDateString();
     const isCompleted = !task.isCompleted;
     if (isCompleted && task.reminderAt) cancelReminder(task.uuid);
-    const updatedTasks = tasks.map((t) =>
-      t.uuid === task.uuid ? { ...t, isCompleted, isNowFocus: false, dateCompletedString: isCompleted ? todayDateStr : null, lastUpdated: Date.now() } : t
-    );
+    // Synchronously stop timer/focus overlay when completing the active focused task,
+    // so the UI clears in the same render cycle rather than waiting for effects.
+    if (isCompleted && task.isNowFocus) {
+      setIsTimerRunning(false);
+      setIsFocusMode(false);
+    }
+    const updatedTasks = buildToggleCompletedTasks(tasks, task.uuid, isCompleted, todayDateStr);
     if (isCompleted) {
       celebrate();
       track("task_completed", { horizon: task.horizonLevel });
