@@ -66,7 +66,9 @@ export default function App() {
     setDemoPayload({ ...updated, timestamp: Date.now() });
   };
 
-  const saveDemoSubPath = () => {};
+  const saveDemoSubPath = (subPath, value) => {
+    setDemoPayload(prev => prev ? { ...prev, [subPath]: value, timestamp: Date.now() } : prev);
+  };
 
   // ── Service worker ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -509,7 +511,7 @@ export default function App() {
             onEditTask={(task) => { setEditingTask(task); setShowAddTask(true); }}
           />
         )}
-        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} userProfile={userProfile} />}
+        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} userProfile={userProfile} />}
         {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} userProfile={userProfile} />}
         {activeTab === "settings" && (
           <SettingsTab

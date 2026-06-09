@@ -547,10 +547,14 @@ export function useSync(uid, email) {
 
   const saveSubPath = (subPath, value) => {
     if (!dbRefPath) return;
-    // Mirror the update locally so a concurrent savePayload debounce
-    // can't clobber this write when it flushes payloadRef.current
+    // Mirror the update locally: update both the mutable ref and React state so
+    // the UI re-renders immediately (same as savePayload, but without touching tasks).
     if (payloadRef.current) {
-      payloadRef.current = { ...payloadRef.current, [subPath]: value, timestamp: Date.now() };
+      const next = { ...payloadRef.current, [subPath]: value, timestamp: Date.now() };
+      payloadRef.current = next;
+      payloadUidRef.current = uid;
+      setPayload(next);
+      if (uid) writeCache(uid, next);
     }
     const updates = {
       [`${dbRefPath}/${subPath}`]: value,

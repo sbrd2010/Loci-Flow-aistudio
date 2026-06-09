@@ -114,7 +114,7 @@ function SortableDumpItem({ item, onDelete, formatRelTime }) {
   );
 }
 
-export default function MindBoxTab({ payload, savePayload, userProfile }) {
+export default function MindBoxTab({ payload, savePayload, saveSubPath, userProfile }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -184,7 +184,7 @@ export default function MindBoxTab({ payload, savePayload, userProfile }) {
 
   useEffect(() => {
     if (ritualDone) {
-      savePayload({ ...payload, config: { ...config, totalXp: (Number(config.totalXp) || 0) + 80, lastUpdated: Date.now() } });
+      saveSubPath("config", { ...config, totalXp: (Number(config.totalXp) || 0) + 80, lastUpdated: Date.now() });
       setRitualDone(false);
       setRitualSuccess(true);
       setTimeout(() => setRitualSuccess(false), 3500);
@@ -409,13 +409,13 @@ export default function MindBoxTab({ payload, savePayload, userProfile }) {
     const next = [...editedAnchors, { id: safeUUID(), text: newAnchorText.trim() }];
     setEditedAnchors(next);
     setNewAnchorText("");
-    savePayload({ ...payload, config: { ...config, dailyAnchors: next, lastUpdated: Date.now() } });
+    saveSubPath("config", { ...config, dailyAnchors: next, lastUpdated: Date.now() });
   };
 
   const handleDeleteAnchor = (id) => {
     const next = editedAnchors.filter(a => a.id !== id);
     setEditedAnchors(next);
-    savePayload({ ...payload, config: { ...config, dailyAnchors: next, lastUpdated: Date.now() } });
+    saveSubPath("config", { ...config, dailyAnchors: next, lastUpdated: Date.now() });
   };
 
   const handleEditAnchorSave = (id) => {
@@ -423,7 +423,7 @@ export default function MindBoxTab({ payload, savePayload, userProfile }) {
     const next = editedAnchors.map(a => a.id === id ? { ...a, text: editAnchorText.trim() } : a);
     setEditedAnchors(next);
     setEditingAnchorId(null);
-    savePayload({ ...payload, config: { ...config, dailyAnchors: next, lastUpdated: Date.now() } });
+    saveSubPath("config", { ...config, dailyAnchors: next, lastUpdated: Date.now() });
   };
 
   const handleDeleteDumpItem = (id) => {

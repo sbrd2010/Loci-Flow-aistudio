@@ -74,7 +74,7 @@ function SortableTaskItem({ id, children }) {
   );
 }
 
-export default function TodayTab({ payload, savePayload, onOpenDayMap, onOpenMindBox, autoOpenFocus = false, onAutoOpenFocusDone }) {
+export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayMap, onOpenMindBox, autoOpenFocus = false, onAutoOpenFocusDone }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   const [confirmDialog, setConfirmDialog] = useState(null);
@@ -249,11 +249,11 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, onOpenMin
   const anchorsCheckedCount = anchors.filter(a => todayCheckedIds.includes(a.id)).length;
   const todayShownSlotsKey = todayShownSlots.join(",");
   const handleDeadlineDoneToday = () => {
-    savePayload({ ...payload, config: { ...config, deadlineDailyDoneDate: todayStr, lastUpdated: Date.now() } });
+    saveSubPath("config", { ...config, deadlineDailyDoneDate: todayStr, lastUpdated: Date.now() });
   };
 
   const handleDeadlineReopenToday = () => {
-    savePayload({ ...payload, config: { ...config, deadlineDailyDoneDate: null, lastUpdated: Date.now() } });
+    saveSubPath("config", { ...config, deadlineDailyDoneDate: null, lastUpdated: Date.now() });
   };
 
   const [todayDeadlineRemaining, setTodayDeadlineRemaining] = useState(null);
@@ -422,25 +422,25 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, onOpenMin
           setConfirmDialog(null);
         },
         onCancel: () => {
-          savePayload({ ...payload, config: { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() } });
+          saveSubPath("config", { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() });
           setConfirmDialog(null);
         }
       });
     } else {
-      savePayload({ ...payload, config: { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() } });
+      saveSubPath("config", { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() });
     }
   };
 
   const handleEnergyToggle = () => {
     const enabling = !config.isLowEnergyMode;
     if (enabling) setIsMVDMode(false);
-    savePayload({ ...payload, config: { ...config, isLowEnergyMode: enabling, lastUpdated: Date.now() } });
+    saveSubPath("config", { ...config, isLowEnergyMode: enabling, lastUpdated: Date.now() });
   };
 
   const handleMVDModeToggle = () => {
     const enabling = !isMVDMode;
     if (enabling && config.isLowEnergyMode) {
-      savePayload({ ...payload, config: { ...config, isLowEnergyMode: false, lastUpdated: Date.now() } });
+      saveSubPath("config", { ...config, isLowEnergyMode: false, lastUpdated: Date.now() });
     }
     setIsMVDMode(enabling);
   };
@@ -462,33 +462,33 @@ export default function TodayTab({ payload, savePayload, onOpenDayMap, onOpenMin
     const next = todayCheckedIds.includes(id)
       ? todayCheckedIds.filter(x => x !== id)
       : [...todayCheckedIds, id];
-    savePayload({ ...payload, config: { ...config,
+    saveSubPath("config", { ...config,
       anchorsCheckedIds: next, anchorsCheckedDate: anchorTodayStr, lastUpdated: Date.now()
-    }});
+    });
   };
 
   const handleAnchorSheetDone = () => {
     const slot = getCurrentAnchorSlot(new Date(), config.dayStartHour ?? 7, config.dayEndHour ?? 26);
     const nextSlots = slot && !todayShownSlots.includes(slot) ? [...todayShownSlots, slot] : todayShownSlots;
-    savePayload({ ...payload, config: { ...config,
+    saveSubPath("config", { ...config,
       anchorsShownSlots: nextSlots, anchorsSlotsDate: anchorTodayStr,
       anchorsSnoozeUntil: null, lastUpdated: Date.now()
-    }});
+    });
     setShowAnchorSheet(false);
   };
 
   const handleAnchorLater = () => {
-    savePayload({ ...payload, config: { ...config,
+    saveSubPath("config", { ...config,
       anchorsSnoozeUntil: Date.now() + 90 * 60 * 1000, lastUpdated: Date.now()
-    }});
+    });
     setShowAnchorSheet(false);
   };
 
   const handleAnchorSkipToday = () => {
-    savePayload({ ...payload, config: { ...config,
+    saveSubPath("config", { ...config,
       anchorsShownSlots: ["morning", "afternoon", "evening"], anchorsSlotsDate: anchorTodayStr,
       anchorsSnoozeUntil: null, lastUpdated: Date.now()
-    }});
+    });
     setShowAnchorSheet(false);
   };
 
