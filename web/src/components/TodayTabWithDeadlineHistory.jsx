@@ -8,7 +8,7 @@ import {
 } from "../utils/deadlineCountdown";
 
 export default function TodayTabWithDeadlineHistory(props) {
-  const { payload, savePayload, isSyncingFromCache } = props;
+  const { payload, savePayload, saveSubPath, isSyncingFromCache } = props;
   const config = payload?.config || {};
   const todayStr = getLocalDateString();
 
@@ -20,13 +20,7 @@ export default function TodayTabWithDeadlineHistory(props) {
     const nextConfig = buildDeadlineMoveRollover(config, todayStr);
     if (!nextConfig) return;
 
-    savePayload({
-      ...payload,
-      config: {
-        ...nextConfig,
-        lastUpdated: Date.now()
-      }
-    });
+    saveSubPath("config", { ...nextConfig, lastUpdated: Date.now() });
   }, [
     isSyncingFromCache,
     todayStr,
