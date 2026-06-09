@@ -3,6 +3,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import PrivacyPolicy from "./PrivacyPolicy";
 import { db } from "../firebase";
 import { ref, push } from "firebase/database";
+import { exportTasksAsJson, exportTasksAsCsv } from "../utils/exportTasks";
 
 export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyncedAt, onSignOut }) {
   const { config = {} } = payload;
@@ -128,6 +129,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   const [syncOpen, setSyncOpen] = useState(false);
   const [aiKeysOpen, setAiKeysOpen] = useState(false);
   const [challengeOpen, setChallengeOpen] = useState(false);
+  const [backupOpen, setBackupOpen] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   const [savedProfile, setSavedProfile] = useState(false);
   const handleSaveSettings = (e) => {
@@ -540,6 +543,55 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
             ))}
           </div>
         </>}
+      </section>
+
+      {/* ── Data Backup ─────────────────────────────────────────────────── */}
+      <section className="card">
+        <button type="button" onClick={() => { setBackupOpen(o => !o); setExportError(""); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: backupOpen ? "12px" : 0 }}>
+          <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", color: "var(--text-primary)" }}>
+            💾 Data Backup
+          </h2>
+          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: backupOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
+        </button>
+        {backupOpen && (
+          <>
+            <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "14px", lineHeight: "1.5" }}>
+              Download a copy of all your Loci tasks. This only creates a local file on your device — it does not change, delete, or re-sync any of your tasks.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <button
+                className="btn"
+                type="button"
+                style={{ width: "100%" }}
+                onClick={() => {
+                  setExportError("");
+                  try { exportTasksAsJson(payload.tasks || []); }
+                  catch (_) { setExportError("Export failed. Your tasks were not changed."); }
+                }}
+              >
+                ⬇ Download JSON Backup
+              </button>
+              <button
+                className="btn"
+                type="button"
+                style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1.5px solid var(--border)", boxShadow: "none" }}
+                onClick={() => {
+                  setExportError("");
+                  try { exportTasksAsCsv(payload.tasks || []); }
+                  catch (_) { setExportError("Export failed. Your tasks were not changed."); }
+                }}
+              >
+                ⬇ Download CSV Backup
+              </button>
+              {exportError && (
+                <p style={{ fontSize: "12px", color: "var(--danger)", fontWeight: "600", margin: 0 }}>{exportError}</p>
+              )}
+              <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: 0 }}>
+                Includes all tasks across all horizons — active, completed, and parked. JSON preserves all fields; CSV is readable in Excel and Google Sheets.
+              </p>
+            </div>
+          </>
+        )}
       </section>
 
       {/* ── Notifications ────────────────────────────────────────────────── */}
