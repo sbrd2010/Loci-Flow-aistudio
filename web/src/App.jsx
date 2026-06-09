@@ -187,7 +187,7 @@ export default function App() {
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = toLocalDateStr(yesterday);
     const newStreak = cfg.lastVisitDate === yesterdayStr ? (cfg.visitStreakCount || 0) + 1 : 1;
-    savePayload({ ...payload, config: { ...cfg, visitStreakCount: newStreak, lastVisitDate: todayStr, lastUpdated: Date.now() } });
+    saveSubPath("config", { ...cfg, visitStreakCount: newStreak, lastVisitDate: todayStr, lastUpdated: Date.now() });
   }, [payload?.config?.lastVisitDate, user?.uid, isSyncingFromCache]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Firebase auth state listener
