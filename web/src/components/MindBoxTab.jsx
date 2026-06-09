@@ -4,6 +4,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI } from "../utils/aiCall";
 import { normalizeAiOrganizeSuggestions, buildClearedBrainDump } from "../utils/taskOps";
+import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor,
   useSensor, useSensors
@@ -130,6 +131,7 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
   const [ritualDone, setRitualDone] = useState(false);
   const [ritualSuccess, setRitualSuccess] = useState(false);
   const ritualIntervalRef = useRef(null);
+  const stepEndAtRef = useRef(null);
   const [showRescue, setShowRescue] = useState(false);
   const [rescueStepIndex, setRescueStepIndex] = useState(0);
   const [rescueActive, setRescueActive] = useState(false);
@@ -165,23 +167,40 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
     setEditedAnchors(config.dailyAnchors || []);
   }, [config.dailyAnchors]);
 
-  // ── Ritual useEffects ──────────────────────────────────────────────────────
+  // ── Ritual timer (wall-clock anchored) ────────────────────────────────────
+  // Keyed on [ritualActive, ritualStepIndex] only — no dependency on ritualSecondsLeft.
+  // stepEndAtRef stores the absolute end time so background-tab drift is corrected
+  // on every tick. Advancement happens inside the interval (not a second effect),
+  // eliminating the stale-closure risk of calling handleAdvanceRitualStep from an effect.
   useEffect(() => {
-    if (ritualActive && ritualStepIndex >= 0 && ritualSecondsLeft > 0) {
-      ritualIntervalRef.current = setInterval(() => {
-        setRitualSecondsLeft(prev => prev <= 1 ? 0 : prev - 1);
-      }, 1000);
-    } else {
+    if (!ritualActive || ritualStepIndex < 0) {
       clearInterval(ritualIntervalRef.current);
+      return;
     }
+    stepEndAtRef.current = Date.now() + ritualSteps[ritualStepIndex].seconds * 1000;
+    setRitualSecondsLeft(ritualSteps[ritualStepIndex].seconds);
+    clearInterval(ritualIntervalRef.current);
+    ritualIntervalRef.current = setInterval(() => {
+      const remaining = computeRitualSecondsLeft(stepEndAtRef.current);
+      setRitualSecondsLeft(remaining);
+      if (remaining === 0) {
+        clearInterval(ritualIntervalRef.current);
+        const { done, nextIndex } = nextRitualStep(ritualStepIndex, ritualSteps.length);
+        if (done) {
+          setRitualActive(false);
+          setRitualStepIndex(-1);
+          setRitualSecondsLeft(0);
+          setRitualDone(true);
+        } else {
+          // Set display immediately to avoid a 0:00 flash on the new step
+          setRitualSecondsLeft(ritualSteps[nextIndex].seconds);
+          setRitualStepIndex(nextIndex);
+          // Effect re-runs for nextIndex, resets stepEndAtRef and creates new interval
+        }
+      }
+    }, 1000);
     return () => clearInterval(ritualIntervalRef.current);
-  }, [ritualActive, ritualStepIndex, ritualSecondsLeft > 0]);
-
-  useEffect(() => {
-    if (ritualActive && ritualStepIndex >= 0 && ritualSecondsLeft === 0) {
-      handleAdvanceRitualStep();
-    }
-  }, [ritualSecondsLeft, ritualActive, ritualStepIndex]);
+  }, [ritualActive, ritualStepIndex]);
 
   useEffect(() => {
     if (ritualDone) {
@@ -374,15 +393,16 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
   };
 
   const handleAdvanceRitualStep = () => {
-    if (ritualStepIndex < ritualSteps.length - 1) {
-      const next = ritualStepIndex + 1;
-      setRitualStepIndex(next);
-      setRitualSecondsLeft(ritualSteps[next].seconds);
-    } else {
+    clearInterval(ritualIntervalRef.current);
+    const { done, nextIndex } = nextRitualStep(ritualStepIndex, ritualSteps.length);
+    if (done) {
+      stepEndAtRef.current = null;
       setRitualActive(false);
       setRitualStepIndex(-1);
       setRitualSecondsLeft(0);
       setRitualDone(true);
+    } else {
+      setRitualStepIndex(nextIndex);
     }
   };
 
@@ -395,6 +415,7 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
 
   const handleAbortRitual = () => {
     clearInterval(ritualIntervalRef.current);
+    stepEndAtRef.current = null;
     setRitualActive(false);
     setRitualStepIndex(-1);
     setRitualSecondsLeft(0);
