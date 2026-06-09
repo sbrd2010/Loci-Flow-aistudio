@@ -8,7 +8,7 @@ import { normalizePayload, mergeRemotePayload, prepareBrainDumpForSave, isTaskCo
 // This lets the app show specific messages at each stage instead of just "loading".
 // Pure helper: returns payload only if it belongs to the current uid.
 // Exported so it can be unit-tested independently of Firebase/React.
-export function gatePaylodToUid(payload, payloadUid, currentUid) {
+export function gatePayloadToUid(payload, payloadUid, currentUid) {
   if (!currentUid) return null;
   if (payloadUid !== currentUid) return null;
   return payload;
@@ -583,7 +583,7 @@ export function useSync(uid, email) {
 
   // Gate payload: if the stored payload belongs to a different uid (uid-change render gap),
   // return null so App-level effects cannot read or write the previous user's data.
-  const effectivePayload = gatePaylodToUid(payload, payloadUidRef.current, uid);
+  const effectivePayload = gatePayloadToUid(payload, payloadUidRef.current, uid);
   const effectiveLoading = loading || (!!uid && payloadUidRef.current !== uid);
   return { payload: effectivePayload, loading: effectiveLoading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning, savePayload, saveSubPath, flushNow, clearCache };
 }
