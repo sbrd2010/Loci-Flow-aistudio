@@ -1,3 +1,5 @@
+import { normalizePayload } from "./normalizePayload";
+
 // Preferred CSV column order. Any extra fields found on actual task objects are
 // appended after these so no field is ever silently dropped.
 const CSV_FIELDS_BASE = [
@@ -44,12 +46,23 @@ function downloadBlob(content, filename, mimeType) {
   URL.revokeObjectURL(url);
 }
 
-function makeFilename(ext) {
+function makeFilename(ext, prefix = "loci-tasks-backup") {
   const now = new Date();
   const pad = n => String(n).padStart(2, "0");
   const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   const time = `${pad(now.getHours())}${pad(now.getMinutes())}`;
-  return `loci-tasks-backup-${date}-${time}.${ext}`;
+  return `${prefix}-${date}-${time}.${ext}`;
+}
+
+export function buildPayloadBackupData(payload) {
+  const safe = normalizePayload(payload);
+  return {
+    app: "Loci",
+    exportType: "full-payload-backup",
+    exportedAt: new Date().toISOString(),
+    taskCount: safe.tasks.length,
+    ...safe,
+  };
 }
 
 export function exportTasksAsJson(tasks) {
@@ -73,4 +86,10 @@ export function exportTasksAsCsv(tasks) {
   // BOM kept for CSV — Excel/Google Sheets needs it to detect UTF-8 correctly
   const content = "﻿" + [header, ...rows].join("\r\n");
   downloadBlob(content, makeFilename("csv"), "text/csv;charset=utf-8");
+}
+
+export function exportPayloadAsJson(payload) {
+  const data = buildPayloadBackupData(payload);
+  // No BOM — plain UTF-8 so strict JSON parsers (Python, Node, jq) can read it
+  downloadBlob(JSON.stringify(data, null, 2), makeFilename("json", "loci-payload-backup"), "application/json;charset=utf-8");
 }
