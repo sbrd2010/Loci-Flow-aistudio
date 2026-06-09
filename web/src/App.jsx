@@ -480,6 +480,7 @@ export default function App() {
           <TodayTab
             payload={payload}
             savePayload={savePayload}
+            saveSubPath={saveSubPath}
             isSyncingFromCache={isSyncingFromCache}
             onOpenAddTask={() => openAddTask("today")}
             onOpenDayMap={openDayMap}
