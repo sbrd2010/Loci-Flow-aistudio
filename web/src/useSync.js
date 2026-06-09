@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } from "firebase/database";
 import { db, auth } from "./firebase";
 import { safeUUID } from "./utils/uuid";
-import { normalizePayload, mergeRemotePayload, prepareBrainDumpForSave, isTaskCountDropSuspicious } from "./utils/normalizePayload";
+import { normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious } from "./utils/normalizePayload";
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
 // This lets the app show specific messages at each stage instead of just "loading".
@@ -202,12 +202,16 @@ export function useSync(uid, email) {
           // prevents a stale long-poll snapshot (e.g. after Brave reconnects) from
           // overwriting optimistic updates that haven't reached Firebase yet.
           if ((data.timestamp || 0) >= (payloadRef.current?.timestamp || 0)) {
-            const merged = mergeRemotePayload(data, payloadRef.current);
+            const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current);
+            const toApply = hasLocalContribution ? { ...merged, timestamp: Date.now() } : merged;
             payloadUidRef.current = uid;
-            setPayload(merged);
-            payloadRef.current = merged;
+            setPayload(toApply);
+            payloadRef.current = toApply;
             pendingRemoteRef.current = null;
-            writeCache(uid, merged);
+            writeCache(uid, toApply);
+            if (hasLocalContribution && !timeoutRef.current) {
+              writeWithRetry(ref(db, dbRefPath), toApply).catch(() => {});
+            }
           } else {
             // Local timestamp appears newer than RTDB.
             if (!localWriteBeforeFirstRtdbRef.current) {
@@ -218,12 +222,16 @@ export function useSync(uid, email) {
               // savePayload fired before RTDB responded (e.g. a mount-effect on stale
               // cache), giving local a fake-fresh timestamp. Trust RTDB instead of
               // pushing the stale cache back up.
-              const merged = mergeRemotePayload(data, payloadRef.current);
+              const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current);
+              const toApply = hasLocalContribution ? { ...merged, timestamp: Date.now() } : merged;
               payloadUidRef.current = uid;
-              setPayload(merged);
-              payloadRef.current = merged;
+              setPayload(toApply);
+              payloadRef.current = toApply;
               pendingRemoteRef.current = null;
-              writeCache(uid, merged);
+              writeCache(uid, toApply);
+              if (hasLocalContribution && !timeoutRef.current) {
+                writeWithRetry(ref(db, dbRefPath), toApply).catch(() => {});
+              }
             }
           }
         } else if (hasCachedData) {
@@ -371,12 +379,16 @@ export function useSync(uid, email) {
             // and let RTDB win instead, the same as the !timeoutRef path above.
             clearTimeout(timeoutRef.current);
             timeoutRef.current = null;
-            const merged = mergeRemotePayload(data, payloadRef.current);
+            const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current);
+            const toApply = hasLocalContribution ? { ...merged, timestamp: Date.now() } : merged;
             payloadUidRef.current = uid;
-            setPayload(merged);
-            payloadRef.current = merged;
+            setPayload(toApply);
+            payloadRef.current = toApply;
             pendingRemoteRef.current = null;
-            writeCache(uid, merged);
+            writeCache(uid, toApply);
+            if (hasLocalContribution) {
+              writeWithRetry(ref(db, dbRefPath), toApply).catch(() => {});
+            }
           } else {
             pendingRemoteRef.current = data;
           }
@@ -533,11 +545,15 @@ export function useSync(uid, email) {
               const remote = pendingRemoteRef.current;
               pendingRemoteRef.current = null;
               if ((remote.timestamp || 0) >= (payloadRef.current?.timestamp || 0)) {
-                const merged = mergeRemotePayload(remote, payloadRef.current);
+                const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(remote, payloadRef.current);
+                const toApply = hasLocalContribution ? { ...merged, timestamp: Date.now() } : merged;
                 payloadUidRef.current = uid;
-                setPayload(merged);
-                payloadRef.current = merged;
-                if (uid) writeCache(uid, merged);
+                setPayload(toApply);
+                payloadRef.current = toApply;
+                if (uid) writeCache(uid, toApply);
+                if (hasLocalContribution && !timeoutRef.current) {
+                  writeWithRetry(ref(db, dbRefPath), toApply).catch(() => {});
+                }
               }
             }
           });

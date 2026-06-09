@@ -102,6 +102,10 @@ export function isTaskCountDropSuspicious(nextTasks, currentTasks, threshold = 3
 // (avoids endless local/remote flip-flopping when timestamps are equal or absent).
 // Local-only non-deleted tasks are appended (unsynced additions from another device).
 // Local-only soft-deleted tasks are not resurrected.
+// Returns { tasks, hasLocalContribution } where hasLocalContribution is true when
+// any local-newer task won a conflict or any local-only non-deleted task was appended.
+// Callers use hasLocalContribution to know whether to write the merged result back
+// to RTDB for cross-device convergence.
 function mergeTasks(remoteTasks, localTasks) {
   const localByUuid = new Map(
     arrayOrEmpty(localTasks)
@@ -109,13 +113,19 @@ function mergeTasks(remoteTasks, localTasks) {
       .map(t => [t.uuid, t])
   );
 
+  let hasLocalContribution = false;
+
   const merged = arrayOrEmpty(remoteTasks).map(remoteTask => {
     if (!remoteTask.uuid) return remoteTask;
     const localTask = localByUuid.get(remoteTask.uuid);
     if (!localTask) return remoteTask;
     const localTs = finiteNumber(localTask.lastUpdated) ?? 0;
     const remoteTs = finiteNumber(remoteTask.lastUpdated) ?? 0;
-    return localTs > remoteTs ? localTask : remoteTask;
+    if (localTs > remoteTs) {
+      hasLocalContribution = true;
+      return localTask;
+    }
+    return remoteTask;
   });
 
   const remoteUuids = new Set(arrayOrEmpty(remoteTasks).map(t => t.uuid).filter(Boolean));
@@ -123,15 +133,20 @@ function mergeTasks(remoteTasks, localTasks) {
     t => t.uuid && !remoteUuids.has(t.uuid) && !t.isDeleted
   );
 
-  return [...merged, ...localOnlyTasks];
+  if (localOnlyTasks.length > 0) hasLocalContribution = true;
+
+  return { tasks: [...merged, ...localOnlyTasks], hasLocalContribution };
 }
 
 
 // If RTDB omits `brainDump`, field-level metadata tells us whether that omission
 // means "legacy/missing key, preserve newer local items" or "newer remote clear".
-export function mergeRemotePayload(remote, local) {
+// Returns { merged, hasLocalContribution } where hasLocalContribution signals that
+// the merged payload differs from remote due to local-newer tasks, and must be
+// written back to RTDB so other devices converge on the correct state.
+export function mergeRemotePayloadWithMeta(remote, local) {
   const normalized = normalizePayload(remote);
-  if (!remote || typeof remote !== "object") return normalized;
+  if (!remote || typeof remote !== "object") return { merged: normalized, hasLocalContribution: false };
 
   const remoteHasBrainDump = hasOwn(remote, "brainDump");
   const remoteHasBrainDumpMeta = hasOwn(remote, "brainDumpUpdatedAt");
@@ -149,7 +164,12 @@ export function mergeRemotePayload(remote, local) {
     }
   }
 
-  normalized.tasks = mergeTasks(normalized.tasks, local?.tasks);
+  const { tasks, hasLocalContribution } = mergeTasks(normalized.tasks, local?.tasks);
+  normalized.tasks = tasks;
 
-  return normalized;
+  return { merged: normalized, hasLocalContribution };
+}
+
+export function mergeRemotePayload(remote, local) {
+  return mergeRemotePayloadWithMeta(remote, local).merged;
 }

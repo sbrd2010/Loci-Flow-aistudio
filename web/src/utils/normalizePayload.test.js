@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, prepareBrainDumpForSave, isTaskCountDropSuspicious } from "./normalizePayload";
+import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious } from "./normalizePayload";
 
 describe("normalizePayload", () => {
   it("fills missing brainDump with []", () => {
@@ -273,6 +273,96 @@ describe("mergeRemotePayload", () => {
     const result = mergeRemotePayload(freshRtdb, staleLocal);
     expect(result.config.deadlineLabel).toBe("New Sprint");
     expect(result.config.visitStreakCount).toBe(10);
+  });
+});
+
+describe("mergeRemotePayloadWithMeta - hasLocalContribution flag (write-back detection)", () => {
+  const base = { config: {}, brainDump: [], timestamp: 1000 };
+  const task = (uuid, overrides = {}) => ({ uuid, title: uuid, isDeleted: false, ...overrides });
+
+  it("returns false when remote fully wins all same-UUID conflicts", () => {
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1", { title: "New remote", lastUpdated: 200 })] },
+      { ...base, tasks: [task("t1", { title: "Old local", lastUpdated: 100 })] }
+    );
+    expect(hasLocalContribution).toBe(false);
+  });
+
+  it("returns false when there are no local tasks at all", () => {
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1")] },
+      { ...base, tasks: [] }
+    );
+    expect(hasLocalContribution).toBe(false);
+  });
+
+  it("returns true when a local-newer same-UUID task wins the conflict", () => {
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1", { lastUpdated: 100 })] },
+      { ...base, tasks: [task("t1", { lastUpdated: 200 })] }
+    );
+    expect(hasLocalContribution).toBe(true);
+  });
+
+  it("returns false for equal timestamps (remote wins tie, no write-back needed)", () => {
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1", { title: "Remote version", lastUpdated: 100 })] },
+      { ...base, tasks: [task("t1", { title: "Local version", lastUpdated: 100 })] }
+    );
+    expect(hasLocalContribution).toBe(false);
+  });
+
+  it("returns true when a local-only non-deleted task is appended", () => {
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1")] },
+      { ...base, tasks: [task("t1"), task("t2", { isDeleted: false })] }
+    );
+    expect(hasLocalContribution).toBe(true);
+  });
+
+  it("returns false when local-only task is soft-deleted (not appended)", () => {
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1")] },
+      { ...base, tasks: [task("t1"), task("t2", { isDeleted: true })] }
+    );
+    expect(hasLocalContribution).toBe(false);
+  });
+
+  it("returns true and merged contains local-newer task (write-back carries correct data)", () => {
+    const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1", { title: "Old remote", lastUpdated: 100 })] },
+      { ...base, tasks: [task("t1", { title: "New local", lastUpdated: 200 })] }
+    );
+    expect(hasLocalContribution).toBe(true);
+    expect(merged.tasks[0].title).toBe("New local");
+  });
+
+  it("newer deleted task wins and does not cause spurious write-back when remote wins", () => {
+    // Remote has the newer delete — remote wins, no write-back
+    const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1", { isDeleted: true, lastUpdated: 200 })] },
+      { ...base, tasks: [task("t1", { isDeleted: false, lastUpdated: 100 })] }
+    );
+    expect(hasLocalContribution).toBe(false);
+    expect(merged.tasks[0].isDeleted).toBe(true);
+  });
+
+  it("newer local delete wins and signals write-back so RTDB gets the deletion", () => {
+    // Local has the newer delete — local wins, write-back needed
+    const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [task("t1", { isDeleted: false, lastUpdated: 100 })] },
+      { ...base, tasks: [task("t1", { isDeleted: true, lastUpdated: 200 })] }
+    );
+    expect(hasLocalContribution).toBe(true);
+    expect(merged.tasks[0].isDeleted).toBe(true);
+  });
+
+  it("no write-back when remote has no tasks and local has only deleted tasks", () => {
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(
+      { ...base, tasks: [] },
+      { ...base, tasks: [task("t1", { isDeleted: true })] }
+    );
+    expect(hasLocalContribution).toBe(false);
   });
 });
 
