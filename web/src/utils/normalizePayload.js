@@ -85,6 +85,18 @@ export function prepareBrainDumpForSave(updatedPayload = {}, currentPayload = {}
   return patch;
 }
 
+// Returns true when a savePayload call would reduce the active (non-deleted) task
+// count by `threshold` or more relative to the currently-held payload. Completed
+// and parked tasks are counted as active — only `isDeleted: true` is excluded.
+// The guard is skipped when the current active count is below `threshold` itself
+// (e.g. fresh user, demo mode) so it never fires on an empty or near-empty state.
+export function isTaskCountDropSuspicious(nextTasks, currentTasks, threshold = 3) {
+  const currentActive = arrayOrEmpty(currentTasks).filter(t => !t.isDeleted).length;
+  if (currentActive < threshold) return false;
+  const nextActive = arrayOrEmpty(nextTasks).filter(t => !t.isDeleted).length;
+  return (currentActive - nextActive) >= threshold;
+}
+
 // Applies a payload received from RTDB on top of the currently-held local payload.
 // If RTDB omits `brainDump`, field-level metadata tells us whether that omission
 // means "legacy/missing key, preserve newer local items" or "newer remote clear".

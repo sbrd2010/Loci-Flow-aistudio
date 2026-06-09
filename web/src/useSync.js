@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } from "firebase/database";
 import { db, auth } from "./firebase";
 import { safeUUID } from "./utils/uuid";
-import { normalizePayload, mergeRemotePayload, prepareBrainDumpForSave } from "./utils/normalizePayload";
+import { normalizePayload, mergeRemotePayload, prepareBrainDumpForSave, isTaskCountDropSuspicious } from "./utils/normalizePayload";
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
 // This lets the app show specific messages at each stage instead of just "loading".
@@ -463,6 +463,25 @@ export function useSync(uid, email) {
     const brainDumpPatch = prepareBrainDumpForSave(updatedPayload, payloadRef.current);
     const safePayload = { ...updatedPayload, ...brainDumpPatch };
     const nextPayload = { ...normalizePayload(safePayload), timestamp: Date.now() };
+
+    // Drop guard: block any full-payload write that would silently reduce the
+    // active (non-deleted) task count by 3 or more. This catches stale-cache
+    // overwrites that slipped past earlier defenses. User-triggered one-at-a-time
+    // deletes never trigger this (they only drop by 1).
+    if (payloadRef.current?.tasks && isTaskCountDropSuspicious(nextPayload.tasks, payloadRef.current.tasks)) {
+      const currentActive = payloadRef.current.tasks.filter(t => !t.isDeleted).length;
+      const nextActive = nextPayload.tasks.filter(t => !t.isDeleted).length;
+      const nextUuids = new Set(nextPayload.tasks.map(t => t.uuid).filter(Boolean));
+      const dropped = payloadRef.current.tasks.filter(t => !t.isDeleted && t.uuid && !nextUuids.has(t.uuid));
+      console.error(
+        `[Loci drop-guard] Blocked suspicious write — would reduce active tasks from ${currentActive} to ${nextActive} (drop: ${currentActive - nextActive}).\n` +
+        `  Missing UUIDs:  ${dropped.map(t => t.uuid).join(", ")}\n` +
+        `  Missing titles: ${dropped.map(t => t.title || "(untitled)").join(", ")}`
+      );
+      setSyncWarning("drop-guard");
+      return;
+    }
+
     setPayload(nextPayload);
     payloadRef.current = nextPayload;
 

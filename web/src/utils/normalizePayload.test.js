@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, prepareBrainDumpForSave } from "./normalizePayload";
+import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, prepareBrainDumpForSave, isTaskCountDropSuspicious } from "./normalizePayload";
 
 describe("normalizePayload", () => {
   it("fills missing brainDump with []", () => {
@@ -273,5 +273,81 @@ describe("mergeRemotePayload", () => {
     const result = mergeRemotePayload(freshRtdb, staleLocal);
     expect(result.config.deadlineLabel).toBe("New Sprint");
     expect(result.config.visitStreakCount).toBe(10);
+  });
+});
+
+describe("isTaskCountDropSuspicious", () => {
+  const active = (n) => Array.from({ length: n }, (_, i) => ({ uuid: `t${i}`, isDeleted: false }));
+  const deleted = (n) => Array.from({ length: n }, (_, i) => ({ uuid: `d${i}`, isDeleted: true }));
+
+  it("returns false when task count stays the same", () => {
+    expect(isTaskCountDropSuspicious(active(5), active(5))).toBe(false);
+  });
+
+  it("returns false when task count increases", () => {
+    expect(isTaskCountDropSuspicious(active(8), active(5))).toBe(false);
+  });
+
+  it("returns false when active count drops by 1", () => {
+    expect(isTaskCountDropSuspicious(active(4), active(5))).toBe(false);
+  });
+
+  it("returns false when active count drops by 2", () => {
+    expect(isTaskCountDropSuspicious(active(3), active(5))).toBe(false);
+  });
+
+  it("returns true when active count drops by exactly the threshold (3)", () => {
+    expect(isTaskCountDropSuspicious(active(2), active(5))).toBe(true);
+  });
+
+  it("returns true when active count drops by more than the threshold", () => {
+    expect(isTaskCountDropSuspicious(active(1), active(10))).toBe(true);
+  });
+
+  it("returns false when current active count is below the threshold (new/empty state)", () => {
+    expect(isTaskCountDropSuspicious([], active(2))).toBe(false);
+  });
+
+  it("counts completed but non-deleted tasks as active", () => {
+    const current = [
+      { uuid: "t1", isDeleted: false, isCompleted: false },
+      { uuid: "t2", isDeleted: false, isCompleted: true },
+      { uuid: "t3", isDeleted: false, isCompleted: true },
+      { uuid: "t4", isDeleted: false, isCompleted: true },
+      { uuid: "t5", isDeleted: false, isCompleted: false },
+    ];
+    // Drop from 5 active (completed but not deleted count) to 1 → suspicious
+    expect(isTaskCountDropSuspicious([{ uuid: "t1", isDeleted: false }], current)).toBe(true);
+  });
+
+  it("counts parked but non-deleted tasks as active", () => {
+    const current = [
+      { uuid: "t1", isDeleted: false, isParked: false },
+      { uuid: "t2", isDeleted: false, isParked: true },
+      { uuid: "t3", isDeleted: false, isParked: true },
+      { uuid: "t4", isDeleted: false, isParked: true },
+      { uuid: "t5", isDeleted: false, isParked: false },
+    ];
+    expect(isTaskCountDropSuspicious([{ uuid: "t1", isDeleted: false }], current)).toBe(true);
+  });
+
+  it("does not count deleted tasks in either direction", () => {
+    // Current: 2 active + 10 deleted. Next: 2 active + 0 deleted.
+    // Drop of 0 active tasks → not suspicious.
+    const current = [...active(2), ...deleted(10)];
+    const next = active(2);
+    expect(isTaskCountDropSuspicious(next, current)).toBe(false);
+  });
+
+  it("respects a custom threshold", () => {
+    expect(isTaskCountDropSuspicious(active(3), active(5), 2)).toBe(true);
+    expect(isTaskCountDropSuspicious(active(4), active(5), 2)).toBe(false);
+  });
+
+  it("handles null/undefined task arrays without throwing", () => {
+    expect(isTaskCountDropSuspicious(null, active(5))).toBe(true);
+    expect(isTaskCountDropSuspicious(undefined, active(5))).toBe(true);
+    expect(isTaskCountDropSuspicious(active(5), null)).toBe(false);
+    expect(isTaskCountDropSuspicious(active(5), undefined)).toBe(false);
   });
 });
