@@ -1,14 +1,27 @@
-// CSV field order — matches actual task object shape found in the data model.
-// Unknown/extra fields on a task are preserved in JSON export; CSV uses this fixed list.
-const CSV_FIELDS = [
+// Preferred CSV column order. Any extra fields found on actual task objects are
+// appended after these so no field is ever silently dropped.
+const CSV_FIELDS_BASE = [
   "id", "uuid", "userId",
   "title", "concreteStep",
   "horizonLevel", "priority", "category",
   "timeEstimateMinutes", "deadlineTimestamp", "reminderAt",
-  "isCompleted", "isParked", "isNowFocus", "isDeleted",
+  "isCompleted", "isParked", "isNowFocus", "isDeleted", "isMVD",
   "orderIndex", "dateCompletedString", "lastUpdated",
+  "dayMapDate", "dayMapDurationMinutes", "dayMapOrder",
+  "dayMapPeriod", "dayMapStartMinutes",
   "subSteps"
 ];
+
+function buildCsvFields(tasks) {
+  const known = new Set(CSV_FIELDS_BASE);
+  const extra = new Set();
+  for (const task of tasks) {
+    for (const key of Object.keys(task)) {
+      if (!known.has(key)) extra.add(key);
+    }
+  }
+  return extra.size ? [...CSV_FIELDS_BASE, ...extra] : CSV_FIELDS_BASE;
+}
 
 function escapeCsvCell(value) {
   if (value === null || value === undefined) return "";
@@ -47,16 +60,17 @@ export function exportTasksAsJson(tasks) {
     taskCount: tasks.length,
     tasks
   };
-  // "﻿" BOM ensures editors/spreadsheets read UTF-8 correctly
-  downloadBlob("﻿" + JSON.stringify(data, null, 2), makeFilename("json"), "application/json;charset=utf-8");
+  // No BOM — plain UTF-8 so strict JSON parsers (Python, Node, jq) can read it
+  downloadBlob(JSON.stringify(data, null, 2), makeFilename("json"), "application/json;charset=utf-8");
 }
 
 export function exportTasksAsCsv(tasks) {
-  const header = CSV_FIELDS.join(",");
+  const fields = buildCsvFields(tasks);
+  const header = fields.join(",");
   const rows = tasks.map(task =>
-    CSV_FIELDS.map(field => escapeCsvCell(task[field])).join(",")
+    fields.map(field => escapeCsvCell(task[field])).join(",")
   );
-  // "﻿" BOM makes Excel/Google Sheets handle UTF-8 titles without garbling
+  // BOM kept for CSV — Excel/Google Sheets needs it to detect UTF-8 correctly
   const content = "﻿" + [header, ...rows].join("\r\n");
   downloadBlob(content, makeFilename("csv"), "text/csv;charset=utf-8");
 }
