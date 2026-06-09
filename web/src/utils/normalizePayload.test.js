@@ -183,25 +183,78 @@ describe("mergeRemotePayload", () => {
   // debounce. These tests verify the data-correctness of that decision.
   it("RTDB tasks win over stale local tasks even when local has a fake-fresh timestamp", () => {
     const fakeNow = 1_700_000_000_000;
+    const sharedUuid = "task-abc";
     // Local was from 2 days ago but stamped with Date.now() by a premature savePayload
     const staleLocal = {
-      tasks: [{ uuid: "stale", title: "2-day-old task", lastUpdated: fakeNow - 172_800_000 }],
+      tasks: [{ uuid: sharedUuid, title: "2-day-old version", lastUpdated: fakeNow - 172_800_000 }],
       config: { visitStreakCount: 1 },
       brainDump: [],
       timestamp: fakeNow, // fake-fresh — set by premature savePayload
     };
-    // RTDB has real current data; its timestamp is 1 hour before fakeNow
+    // RTDB has the real current version of the same task edited on another device
     const freshRtdb = {
-      tasks: [{ uuid: "fresh", title: "real current task", lastUpdated: fakeNow - 3_600_000 }],
+      tasks: [{ uuid: sharedUuid, title: "real current version", lastUpdated: fakeNow - 3_600_000 }],
       config: { visitStreakCount: 7 },
       brainDump: [],
       timestamp: fakeNow - 3_600_000,
     };
     const result = mergeRemotePayload(freshRtdb, staleLocal);
     expect(result.tasks).toHaveLength(1);
-    expect(result.tasks[0].uuid).toBe("fresh");
+    expect(result.tasks[0].title).toBe("real current version");
     expect(result.config.visitStreakCount).toBe(7);
     expect(result.timestamp).toBe(fakeNow - 3_600_000);
+  });
+
+  it("preserves local-only tasks not present in RTDB (unsynced additions from another device)", () => {
+    const fakeNow = 1_700_000_000_000;
+    // RTDB has 6 tasks; another device added 2 more but they haven't reached RTDB yet
+    const rtdb = {
+      tasks: [
+        { uuid: "t1", title: "Task 1", isDeleted: false },
+        { uuid: "t2", title: "Task 2", isDeleted: false },
+      ],
+      config: {},
+      brainDump: [],
+      timestamp: fakeNow,
+    };
+    const localWithUnsynced = {
+      tasks: [
+        { uuid: "t1", title: "Task 1", isDeleted: false },
+        { uuid: "t2", title: "Task 2", isDeleted: false },
+        { uuid: "t3", title: "Unsynced Task A", isDeleted: false },
+        { uuid: "t4", title: "Unsynced Task B", isDeleted: false },
+      ],
+      config: {},
+      brainDump: [],
+      timestamp: fakeNow - 5_000,
+    };
+    const result = mergeRemotePayload(rtdb, localWithUnsynced);
+    expect(result.tasks).toHaveLength(4);
+    const uuids = result.tasks.map(t => t.uuid);
+    expect(uuids).toContain("t3");
+    expect(uuids).toContain("t4");
+  });
+
+  it("does not preserve local-only tasks that are soft-deleted", () => {
+    const fakeNow = 1_700_000_000_000;
+    const rtdb = {
+      tasks: [{ uuid: "t1", title: "Task 1", isDeleted: false }],
+      config: {},
+      brainDump: [],
+      timestamp: fakeNow,
+    };
+    const local = {
+      tasks: [
+        { uuid: "t1", title: "Task 1", isDeleted: false },
+        { uuid: "t2", title: "Deleted local task", isDeleted: true },
+      ],
+      config: {},
+      brainDump: [],
+      timestamp: fakeNow - 5_000,
+    };
+    const result = mergeRemotePayload(rtdb, local);
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0].uuid).toBe("t1");
   });
 
   it("RTDB config wins over stale local config on first load", () => {

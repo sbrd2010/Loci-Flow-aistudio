@@ -108,5 +108,16 @@ export function mergeRemotePayload(remote, local) {
     }
   }
 
+  // Preserve tasks added locally but not yet synced to RTDB (identified by uuid absence).
+  // Guards against a fresh-load browser writing a stale full payload that overwrites
+  // unsynced additions made on another device.
+  const remoteUuids = new Set((normalized.tasks || []).map(t => t.uuid).filter(Boolean));
+  const localOnlyTasks = arrayOrEmpty(local?.tasks).filter(
+    t => t.uuid && !remoteUuids.has(t.uuid) && !t.isDeleted
+  );
+  if (localOnlyTasks.length > 0) {
+    normalized.tasks = [...normalized.tasks, ...localOnlyTasks];
+  }
+
   return normalized;
 }
