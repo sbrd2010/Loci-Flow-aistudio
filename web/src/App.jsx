@@ -16,6 +16,9 @@ import AddTaskDialog from "./components/AddTaskDialog";
 import OnboardingWizard from "./components/OnboardingWizard";
 import PrivacyPolicy from "./components/PrivacyPolicy";
 import DayMapPage from "./components/DayMapPage";
+import FloatingFocusTimer from "./components/FloatingFocusTimer";
+import { useFocusTimer } from "./hooks/useFocusTimer";
+import { shouldShowFloatingTimer } from "./utils/focusSession";
 import { safeUUID } from "./utils/uuid";
 
 function toLocalDateStr(date) {
@@ -222,6 +225,30 @@ export default function App() {
     if (!payload || demoMode || isSyncingFromCache) return null;
     return computeUserProfile(payload);
   }, [payload, demoMode, isSyncingFromCache]);
+
+  // Focus timer state lives here (not in TodayTab) so it survives tab switches
+  // and can be surfaced via the floating timer across pages.
+  const focusTimer = useFocusTimer(payload?.tasks || [], payload?.config || {});
+
+  // Auto-start the timer when arriving from Day Map's "Start Focus" action
+  useEffect(() => {
+    if (pendingFocusOpen && focusTimer.activeTask) {
+      focusTimer.setIsFocusMode(true);
+      focusTimer.setIsTimerRunning(true);
+      setPendingFocusOpen(false);
+    }
+  }, [pendingFocusOpen, focusTimer.activeTask?.uuid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleReturnToFocus = () => {
+    setActiveTab("today");
+    focusTimer.setIsFocusMode(true);
+  };
+
+  const handleEndFocusSession = () => {
+    focusTimer.setIsTimerRunning(false);
+    focusTimer.setIsFocusMode(false);
+    focusTimer.setFocusSessionActive(false);
+  };
 
   const handleTabSelect = (tab) => {
     const dwellSec = Math.round((Date.now() - tabStartRef.current) / 1000);
@@ -489,8 +516,7 @@ export default function App() {
             onOpenAddTask={() => openAddTask("today")}
             onOpenDayMap={openDayMap}
             onOpenMindBox={() => handleTabSelect("mindbox")}
-            autoOpenFocus={pendingFocusOpen}
-            onAutoOpenFocusDone={() => setPendingFocusOpen(false)}
+            {...focusTimer}
           />
         )}
         {activeTab === "daymap" && (
@@ -643,6 +669,25 @@ export default function App() {
             )}
           </div>
         </>
+      )}
+
+      {/* Floating Focus timer — visible across pages while a session is active,
+          hidden on Day Map and on the dark Focus overlay itself */}
+      {shouldShowFloatingTimer({
+        activeTab,
+        focusSessionActive: focusTimer.focusSessionActive,
+        hasActiveTask: !!focusTimer.activeTask,
+        isFocusMode: focusTimer.isFocusMode,
+      }) && (
+        <FloatingFocusTimer
+          task={focusTimer.activeTask}
+          secondsLeft={focusTimer.timerSecondsLeft}
+          maxSeconds={focusTimer.timerMaxSeconds}
+          isRunning={focusTimer.isTimerRunning}
+          onPlayPause={() => focusTimer.setIsTimerRunning(r => !r)}
+          onReturnToFocus={handleReturnToFocus}
+          onEndSession={handleEndFocusSession}
+        />
       )}
 
       {/* Bottom Nav — hidden on Day Map (full-screen page) */}

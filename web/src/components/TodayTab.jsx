@@ -5,7 +5,8 @@ import AddTaskDialog from "./AddTaskDialog";
 import FocusModePage from "./FocusModePage";
 import { safeUUID } from "../utils/uuid";
 import { buildToggleCompletedTasks } from "../utils/taskOps";
-import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotifications";
+import { notifyFocusComplete } from "../utils/focusNotifications";
+import { shouldStopFocusOnComplete } from "../utils/focusSession";
 import { getAIKeys, callAI } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
@@ -23,6 +24,8 @@ import {
   useSortable, arrayMove
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+
+const EXTEND_DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
 
 function getWorkWindowEnd(dayStartHour, dayEndHour) {
   const now = new Date();
@@ -75,7 +78,12 @@ function SortableTaskItem({ id, children }) {
   );
 }
 
-export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayMap, onOpenMindBox, autoOpenFocus = false, onAutoOpenFocusDone }) {
+export default function TodayTab({
+  payload, savePayload, saveSubPath, onOpenDayMap, onOpenMindBox,
+  activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft, setTimerSecondsLeft,
+  timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
+  focusSessionActive, setFocusSessionActive, extendTimer,
+}) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   const [confirmDialog, setConfirmDialog] = useState(null);
@@ -89,6 +97,7 @@ export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayM
   const [focusNowTaskId, setFocusNowTaskId] = useState(null);
   const [showFocusNowPicker, setShowFocusNowPicker] = useState(false);
   const [showAnchorSheet, setShowAnchorSheet] = useState(false);
+  const [showExtendPicker, setShowExtendPicker] = useState(false);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -103,78 +112,6 @@ export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayM
     "Commit to just 2 minutes. You can stop after that.",
   ];
 
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [timerSecondsLeft, setTimerSecondsLeft] = useState((config.pomodoroDurationMinutes || 25) * 60);
-  const [timerMaxSeconds, setTimerMaxSeconds] = useState((config.pomodoroDurationMinutes || 25) * 60);
-  const [isFocusMode, setIsFocusMode] = useState(false);
-  const timerIntervalRef = useRef(null);
-  // Absolute deadline for the running timer — lets us snap to correct time on tab-show
-  const deadlineRef = useRef(null);
-
-  const activeTask = tasks.find((t) => t.isNowFocus && !t.isDeleted && !t.isCompleted);
-
-  useEffect(() => {
-    if (activeTask) {
-      const rawMins = Number(activeTask.timeEstimateMinutes);
-      const taskSecs = (rawMins > 0 ? rawMins : 25) * 60;
-      setTimerMaxSeconds(taskSecs);
-      if (!isTimerRunning) setTimerSecondsLeft(taskSecs);
-    } else {
-      const rawMins = Number(config.pomodoroDurationMinutes);
-      const defaultSecs = (rawMins > 0 ? rawMins : 25) * 60;
-      setTimerMaxSeconds(defaultSecs);
-      if (!isTimerRunning) setTimerSecondsLeft(defaultSecs);
-    }
-  }, [activeTask?.uuid, activeTask?.timeEstimateMinutes, config.pomodoroDurationMinutes]);
-
-  useEffect(() => {
-    if (isTimerRunning) {
-      // Anchor to wall-clock time so background tabs / GC pauses don't cause drift
-      const targetEndTime = Date.now() + timerSecondsLeft * 1000;
-      deadlineRef.current = targetEndTime;
-      timerIntervalRef.current = setInterval(() => {
-        const remaining = Math.ceil((targetEndTime - Date.now()) / 1000);
-        setTimerSecondsLeft(remaining <= 0 ? 0 : remaining);
-      }, 1000);
-      // Snap to correct remaining time the moment the tab becomes visible again —
-      // background timers are throttled so the display may be stale after switching back.
-      const handleVisible = () => {
-        if (document.visibilityState === "visible") {
-          const remaining = Math.ceil((targetEndTime - Date.now()) / 1000);
-          setTimerSecondsLeft(remaining <= 0 ? 0 : remaining);
-        }
-      };
-      document.addEventListener("visibilitychange", handleVisible);
-      return () => {
-        clearInterval(timerIntervalRef.current);
-        document.removeEventListener("visibilitychange", handleVisible);
-        deadlineRef.current = null;
-      };
-    } else {
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-      deadlineRef.current = null;
-    }
-    return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
-  }, [isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Stop timer automatically if the focused task is deleted or completed mid-session
-  useEffect(() => {
-    if (isTimerRunning && !activeTask) setIsTimerRunning(false);
-  }, [activeTask, isTimerRunning]);
-
-  // Auto-exit focus mode when activeTask is removed externally
-  useEffect(() => {
-    if (!activeTask) setIsFocusMode(false);
-  }, [activeTask]);
-
-  // Open focus mode immediately when arriving from Day Map Start Focus
-  useEffect(() => {
-    if (autoOpenFocus && activeTask) {
-      setIsFocusMode(true);
-      onAutoOpenFocusDone?.();
-    }
-  }, [autoOpenFocus, activeTask?.uuid]); // eslint-disable-line react-hooks/exhaustive-deps
-
   useEffect(() => {
     if (isTimerRunning && timerSecondsLeft === 0) {
       setIsTimerRunning(false);
@@ -182,40 +119,6 @@ export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayM
       notifyFocusComplete(activeTask?.title);
     }
   }, [timerSecondsLeft, isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Tab title: countdown while running, paused label in overlay, restore on exit
-  useEffect(() => {
-    const taskLabel = activeTask?.title || "Deep Focus";
-    const mins = Math.floor(timerSecondsLeft / 60);
-    const secs = String(timerSecondsLeft % 60).padStart(2, "0");
-    if (isTimerRunning && timerSecondsLeft > 0) {
-      document.title = `${mins}:${secs} · ${taskLabel}`;
-    } else if (isFocusMode && !isTimerRunning && timerSecondsLeft > 0) {
-      document.title = `Paused · ${mins}:${secs} · Loci`;
-    } else {
-      document.title = "Loci";
-    }
-  }, [timerSecondsLeft, isTimerRunning, isFocusMode, activeTask?.title]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Restore title on unmount (e.g. user navigates away while timer is running)
-  useEffect(() => () => { document.title = "Loci"; }, []);
-
-  // Expose timer state on window so the Document PiP mini-window can poll it
-  useEffect(() => {
-    window.__lociTimer = {
-      secondsLeft: timerSecondsLeft,
-      isRunning: isTimerRunning,
-      taskTitle: activeTask?.title || "Deep Focus",
-      onPlayPause: () => setIsTimerRunning(r => !r),
-      onReset: () => { setIsTimerRunning(false); setTimerSecondsLeft(timerMaxSeconds); },
-    };
-  }, [timerSecondsLeft, isTimerRunning, activeTask?.title, timerMaxSeconds]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => { window.__lociTimer = null; }, []);
-
-  // Request notification permission when focus overlay opens (already a user interaction)
-  useEffect(() => {
-    if (isFocusMode) requestNotifPermission();
-  }, [isFocusMode]);
 
   // Auto-exit Focus Now if the selected task is deleted externally
   useEffect(() => {
@@ -343,9 +246,10 @@ export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayM
     if (isCompleted && task.reminderAt) cancelReminder(task.uuid);
     // Synchronously stop timer/focus overlay when completing the active focused task,
     // so the UI clears in the same render cycle rather than waiting for effects.
-    if (isCompleted && task.isNowFocus) {
+    if (shouldStopFocusOnComplete(task, isCompleted)) {
       setIsTimerRunning(false);
       setIsFocusMode(false);
+      setFocusSessionActive(false);
     }
     const updatedTasks = buildToggleCompletedTasks(tasks, task.uuid, isCompleted, todayDateStr);
     if (isCompleted) {
@@ -429,11 +333,18 @@ export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayM
         onCancel: () => {
           saveSubPath("config", { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() });
           setConfirmDialog(null);
+          setShowExtendPicker(true);
         }
       });
     } else {
       saveSubPath("config", { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() });
     }
+  };
+
+  // "Keep going" — restart the timer on the same task with a fresh duration
+  const handleExtendFocus = (minutes) => {
+    extendTimer(minutes);
+    setShowExtendPicker(false);
   };
 
   const handleEnergyToggle = () => {
@@ -1035,9 +946,9 @@ export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayM
                       onClick={() => {
                         if (!focusNowTask.isNowFocus) {
                           handlePinTask(focusNowTask);
-                        } else {
-                          setIsFocusMode(true);
                         }
+                        setIsFocusMode(true);
+                        setIsTimerRunning(true);
                       }}
                     >
                       ▶ Start Focus
@@ -1239,6 +1150,38 @@ export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayM
       )}
 
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
+
+      {/* ── Keep Going: pick a fresh focus block for the same task ── */}
+      {showExtendPicker && activeTask && (
+        <div
+          className="focus-now-backdrop"
+          onClick={() => handleExtendFocus(Math.round(timerMaxSeconds / 60) || 15)}
+        >
+          <div className="focus-now-sheet" onClick={e => e.stopPropagation()}>
+            <div className="focus-now-sheet-header">
+              <span className="focus-now-sheet-title">Keep going on "{activeTask.title}"</span>
+            </div>
+            <div className="focus-now-sheet-body" style={{ padding: "4px 16px 16px" }}>
+              <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", margin: "0 0 12px" }}>
+                Pick your next focus block. The timer restarts on this same task.
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                {EXTEND_DURATION_OPTIONS.map((mins) => (
+                  <button
+                    key={mins}
+                    type="button"
+                    className="btn"
+                    style={{ flex: "1 0 calc(33.33% - 8px)", fontSize: "13px", padding: "10px 8px" }}
+                    onClick={() => handleExtendFocus(mins)}
+                  >
+                    {mins}m
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editingTask && (
         <AddTaskDialog
