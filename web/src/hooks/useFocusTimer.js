@@ -28,6 +28,9 @@ export function useFocusTimer(tasks, config, uid) {
       timerIntervalRef.current = null;
     }
     deadlineRef.current = null;
+    // Clear the PiP-facing snapshot too — the effect below repopulates it with
+    // clean values once the reset state below commits.
+    if (window.__lociTimer) window.__lociTimer = null;
     const reset = buildResetFocusState(config);
     setIsTimerRunning(reset.isTimerRunning);
     setTimerSecondsLeft(reset.timerSecondsLeft);
