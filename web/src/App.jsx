@@ -725,7 +725,7 @@ export default function App() {
         hasActiveTask: !!focusTimer.activeTask,
       }) && (
         <ConfirmDialog
-          message={`⏱️ Focus block complete!\n\nYou've completed your deep focus block for:\n"${focusTimer.activeTask.title}"\n\nWould you like to mark this task as finished, or keep going?`}
+          message={`Focus block complete!\n\nYou've completed your deep focus block for:\n"${focusTimer.activeTask.title}"\n\nWould you like to mark this task as finished, or keep going?`}
           confirmLabel="Finish Task (+120 XP)"
           cancelLabel="Keep Going (+50 XP)"
           onConfirm={handleFocusSessionDone}
