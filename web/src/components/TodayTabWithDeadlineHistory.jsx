@@ -2,15 +2,15 @@ import { useCallback, useEffect } from "react";
 import TodayTab from "./TodayTab.jsx";
 import {
   buildDeadlineMoveRollover,
-  getLocalDateString,
   markDeadlineMoveDone,
   markDeadlineMoveOpen
 } from "../utils/deadlineCountdown";
+import { useTodayStr } from "../hooks/useTodayStr";
 
 export default function TodayTabWithDeadlineHistory(props) {
   const { payload, savePayload, saveSubPath, isSyncingFromCache } = props;
   const config = payload?.config || {};
-  const todayStr = getLocalDateString();
+  const todayStr = useTodayStr();
 
   useEffect(() => {
     // Don't run while RTDB hasn't responded yet — cache payload may be stale and
