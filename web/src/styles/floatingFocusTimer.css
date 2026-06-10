@@ -126,3 +126,32 @@
     font-size: 14px;
   }
 }
+
+/* Paused state (dimmed slightly) */
+.floating-focus-timer.is-paused {
+  opacity: 0.82;
+  border-color: rgba(237, 247, 242, 0.2);
+}
+.floating-focus-timer.is-paused .floating-focus-timer-time {
+  color: var(--text-secondary);
+}
+
+/* Color states for floating timer progress bar */
+.floating-focus-timer.timer-state-normal {
+  --timer-progress-color: var(--accent);
+}
+.floating-focus-timer.timer-state-near-end {
+  --timer-progress-color: #c99248;
+}
+.floating-focus-timer.timer-state-almost-done {
+  --timer-progress-color: #d46a5f;
+}
+.floating-focus-timer.timer-state-complete {
+  --timer-progress-color: #d46a5f;
+}
+
+.floating-focus-timer-progress {
+  background: var(--timer-progress-color) !important;
+  transition: width 1s linear, background 0.4s ease !important;
+}
+
