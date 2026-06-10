@@ -89,7 +89,7 @@ export function prepareBrainDumpForSave(updatedPayload = {}, currentPayload = {}
 
 // Returns true when a savePayload call would reduce the active (non-deleted) task
 // count by `threshold` or more relative to the currently-held payload. Completed
-// and parked tasks are counted as active — only `isDeleted: true` is excluded.
+// and parked tasks are counted as active - only `isDeleted: true` is excluded.
 // The guard is skipped when the current active count is below `threshold` itself
 // (e.g. fresh user, demo mode) so it never fires on an empty or near-empty state.
 export function isTaskCountDropSuspicious(nextTasks, currentTasks, threshold = 3) {
@@ -141,6 +141,23 @@ function mergeTasks(remoteTasks, localTasks) {
 }
 
 
+// Merges remote and local config objects using config.lastUpdated.
+// The config with the newer lastUpdated wins as a whole; remote wins on tie or
+// when neither/either side is missing lastUpdated (missing treated as 0), matching
+// mergeTasks's tie-breaking convention.
+// Returns { config, localConfigWon } where localConfigWon is true when the local
+// config won and the merged result must be written back to RTDB for convergence.
+function mergeConfig(remoteConfig, localConfig) {
+  const local = objectOrEmpty(localConfig);
+  const remoteTs = finiteNumber(remoteConfig?.lastUpdated) ?? 0;
+  const localTs = finiteNumber(local.lastUpdated) ?? 0;
+
+  if (localTs > remoteTs) {
+    return { config: local, localConfigWon: true };
+  }
+  return { config: remoteConfig, localConfigWon: false };
+}
+
 // If RTDB omits `brainDump`, field-level metadata tells us whether that omission
 // means "legacy/missing key, preserve newer local items" or "newer remote clear".
 // Returns { merged, hasLocalContribution } where hasLocalContribution signals that
@@ -166,10 +183,13 @@ export function mergeRemotePayloadWithMeta(remote, local) {
     }
   }
 
-  const { tasks, hasLocalContribution } = mergeTasks(normalized.tasks, local?.tasks);
+  const { tasks, hasLocalContribution: tasksContribution } = mergeTasks(normalized.tasks, local?.tasks);
   normalized.tasks = tasks;
 
-  return { merged: normalized, hasLocalContribution };
+  const { config, localConfigWon } = mergeConfig(normalized.config, local?.config);
+  normalized.config = config;
+
+  return { merged: normalized, hasLocalContribution: tasksContribution || localConfigWon };
 }
 
 export function mergeRemotePayload(remote, local) {

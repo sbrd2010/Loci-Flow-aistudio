@@ -247,7 +247,7 @@ describe("mergeRemotePayload", () => {
       tasks: [{ uuid: sharedUuid, title: "2-day-old version", lastUpdated: fakeNow - 172_800_000 }],
       config: { visitStreakCount: 1 },
       brainDump: [],
-      timestamp: fakeNow, // fake-fresh — set by premature savePayload
+      timestamp: fakeNow, // fake-fresh - set by premature savePayload
     };
     // RTDB has the real current version of the same task edited on another device
     const freshRtdb = {
@@ -334,6 +334,107 @@ describe("mergeRemotePayload", () => {
   });
 });
 
+describe("mergeRemotePayload - config merge (multi-device sync safety)", () => {
+  const base = { tasks: [], brainDump: [], timestamp: 1000 };
+
+  it("newer local config wins over older remote config", () => {
+    const remote = { ...base, config: { deadlineLabel: "Remote Sprint", lastUpdated: 100 } };
+    const local = { ...base, config: { deadlineLabel: "Local Sprint", lastUpdated: 200 } };
+    const result = mergeRemotePayload(remote, local);
+    expect(result.config).toEqual({ deadlineLabel: "Local Sprint", lastUpdated: 200 });
+  });
+
+  it("newer remote config wins over older local config", () => {
+    const remote = { ...base, config: { deadlineLabel: "Remote Sprint", lastUpdated: 200 } };
+    const local = { ...base, config: { deadlineLabel: "Local Sprint", lastUpdated: 100 } };
+    const result = mergeRemotePayload(remote, local);
+    expect(result.config).toEqual({ deadlineLabel: "Remote Sprint", lastUpdated: 200 });
+  });
+
+  it("equal config.lastUpdated prefers remote (tie-break, matches mergeTasks)", () => {
+    const remote = { ...base, config: { deadlineLabel: "Remote Sprint", lastUpdated: 100 } };
+    const local = { ...base, config: { deadlineLabel: "Local Sprint", lastUpdated: 100 } };
+    const result = mergeRemotePayload(remote, local);
+    expect(result.config.deadlineLabel).toBe("Remote Sprint");
+  });
+
+  it("remote config with lastUpdated wins over local config missing lastUpdated", () => {
+    const remote = { ...base, config: { deadlineLabel: "Remote Sprint", lastUpdated: 100 } };
+    const local = { ...base, config: { deadlineLabel: "Local Sprint" } };
+    const result = mergeRemotePayload(remote, local);
+    expect(result.config.deadlineLabel).toBe("Remote Sprint");
+  });
+
+  it("local config with lastUpdated wins over remote config missing lastUpdated", () => {
+    const remote = { ...base, config: { deadlineLabel: "Remote Sprint" } };
+    const local = { ...base, config: { deadlineLabel: "Local Sprint", lastUpdated: 100 } };
+    const result = mergeRemotePayload(remote, local);
+    expect(result.config.deadlineLabel).toBe("Local Sprint");
+  });
+
+  it("neither config has lastUpdated: remote wins (preserves legacy behavior)", () => {
+    const remote = { ...base, config: { deadlineLabel: "Remote Sprint" } };
+    const local = { ...base, config: { deadlineLabel: "Local Sprint" } };
+    const result = mergeRemotePayload(remote, local);
+    expect(result.config.deadlineLabel).toBe("Remote Sprint");
+  });
+
+  it("flags hasLocalContribution when local config wins, so it is written back to RTDB", () => {
+    const remote = { ...base, config: { deadlineLabel: "Remote Sprint", lastUpdated: 100 } };
+    const local = { ...base, config: { deadlineLabel: "Local Sprint", lastUpdated: 200 } };
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(remote, local);
+    expect(hasLocalContribution).toBe(true);
+  });
+
+  it("does not flag hasLocalContribution when remote config wins", () => {
+    const remote = { ...base, config: { deadlineLabel: "Remote Sprint", lastUpdated: 200 } };
+    const local = { ...base, config: { deadlineLabel: "Local Sprint", lastUpdated: 100 } };
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(remote, local);
+    expect(hasLocalContribution).toBe(false);
+  });
+
+  it("config merge does not interfere with task-level conflict resolution", () => {
+    const remote = {
+      tasks: [{ uuid: "t1", title: "Old remote task", lastUpdated: 100 }],
+      config: { deadlineLabel: "Remote Sprint", lastUpdated: 100 },
+      brainDump: [], timestamp: 1000,
+    };
+    const local = {
+      tasks: [{ uuid: "t1", title: "New local task", lastUpdated: 200 }],
+      config: { deadlineLabel: "Local Sprint", lastUpdated: 50 },
+      brainDump: [], timestamp: 1000,
+    };
+    const result = mergeRemotePayload(remote, local);
+    expect(result.tasks[0].title).toBe("New local task");
+    expect(result.config.deadlineLabel).toBe("Remote Sprint");
+  });
+
+  it("config merge does not interfere with brainDump metadata merge", () => {
+    const remote = {
+      tasks: [],
+      config: { deadlineLabel: "Remote Sprint", lastUpdated: 200 },
+      timestamp: 100,
+    };
+    const local = {
+      tasks: [],
+      config: { deadlineLabel: "Local Sprint", lastUpdated: 100 },
+      brainDump: [{ id: "bd_1", text: "critical note" }],
+      brainDumpUpdatedAt: 90,
+      timestamp: 90,
+    };
+    const result = mergeRemotePayload(remote, local);
+    expect(result.brainDump).toEqual([{ id: "bd_1", text: "critical note" }]);
+    expect(result.config.deadlineLabel).toBe("Remote Sprint");
+  });
+
+  it("both configs empty merge safely to {}", () => {
+    const remote = { ...base, config: {} };
+    const local = { ...base, config: {} };
+    const result = mergeRemotePayload(remote, local);
+    expect(result.config).toEqual({});
+  });
+});
+
 describe("mergeRemotePayloadWithMeta - hasLocalContribution flag (write-back detection)", () => {
   const base = { config: {}, brainDump: [], timestamp: 1000 };
   const task = (uuid, overrides = {}) => ({ uuid, title: uuid, isDeleted: false, ...overrides });
@@ -396,7 +497,7 @@ describe("mergeRemotePayloadWithMeta - hasLocalContribution flag (write-back det
   });
 
   it("newer deleted task wins and does not cause spurious write-back when remote wins", () => {
-    // Remote has the newer delete — remote wins, no write-back
+    // Remote has the newer delete - remote wins, no write-back
     const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(
       { ...base, tasks: [task("t1", { isDeleted: true, lastUpdated: 200 })] },
       { ...base, tasks: [task("t1", { isDeleted: false, lastUpdated: 100 })] }
@@ -406,7 +507,7 @@ describe("mergeRemotePayloadWithMeta - hasLocalContribution flag (write-back det
   });
 
   it("newer local delete wins and signals write-back so RTDB gets the deletion", () => {
-    // Local has the newer delete — local wins, write-back needed
+    // Local has the newer delete - local wins, write-back needed
     const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(
       { ...base, tasks: [task("t1", { isDeleted: false, lastUpdated: 100 })] },
       { ...base, tasks: [task("t1", { isDeleted: true, lastUpdated: 200 })] }
@@ -582,7 +683,7 @@ describe("isTaskCountDropSuspicious", () => {
       { uuid: "t4", isDeleted: false, isCompleted: true },
       { uuid: "t5", isDeleted: false, isCompleted: false },
     ];
-    // Drop from 5 active (completed but not deleted count) to 1 → suspicious
+    // Drop from 5 active (completed but not deleted count) to 1 -> suspicious
     expect(isTaskCountDropSuspicious([{ uuid: "t1", isDeleted: false }], current)).toBe(true);
   });
 
@@ -599,7 +700,7 @@ describe("isTaskCountDropSuspicious", () => {
 
   it("does not count deleted tasks in either direction", () => {
     // Current: 2 active + 10 deleted. Next: 2 active + 0 deleted.
-    // Drop of 0 active tasks → not suspicious.
+    // Drop of 0 active tasks -> not suspicious.
     const current = [...active(2), ...deleted(10)];
     const next = active(2);
     expect(isTaskCountDropSuspicious(next, current)).toBe(false);
