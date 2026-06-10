@@ -703,6 +703,7 @@ export default function App() {
         focusSessionActive: focusTimer.focusSessionActive,
         hasActiveTask: !!focusTimer.activeTask,
         isFocusMode: focusTimer.isFocusMode,
+        sessionCompletePending: focusTimer.sessionCompletePending,
       }) && (
         <FloatingFocusTimer
           task={focusTimer.activeTask}
@@ -712,6 +713,8 @@ export default function App() {
           onPlayPause={() => focusTimer.setIsTimerRunning(r => !r)}
           onReturnToFocus={handleReturnToFocus}
           onEndSession={handleEndFocusSession}
+          pipOpen={focusTimer.pipOpen}
+          onOpenPiP={focusTimer.handleOpenPiP}
         />
       )}
 
@@ -722,9 +725,9 @@ export default function App() {
         hasActiveTask: !!focusTimer.activeTask,
       }) && (
         <ConfirmDialog
-          message={`⏱️ Focus block complete!\n\nDid you fully finish:\n"${focusTimer.activeTask.title}"?`}
-          confirmLabel="Done! +120 XP"
-          cancelLabel="+50 XP, keep going"
+          message={`⏱️ Focus block complete!\n\nYou've completed your deep focus block for:\n"${focusTimer.activeTask.title}"\n\nWould you like to mark this task as finished, or keep going?`}
+          confirmLabel="Finish Task (+120 XP)"
+          cancelLabel="Keep Going (+50 XP)"
           onConfirm={handleFocusSessionDone}
           onCancel={handleFocusSessionKeepGoing}
         />
