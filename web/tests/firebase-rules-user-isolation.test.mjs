@@ -149,7 +149,7 @@ test("unauthenticated users cannot read or write protected sync paths", async ()
   );
 });
 
-test("bug reports are write-only, authenticated, email-bound, and create-only", async () => {
+test("bug reports: authenticated users can submit using their own uid, cannot impersonate, and cannot overwrite", async () => {
   const userA = await createAuthUser("bug-user-a");
   const userB = await createAuthUser("bug-user-b");
   const reportId = `rules-test-${randomUUID()}`;
@@ -157,14 +157,15 @@ test("bug reports are write-only, authenticated, email-bound, and create-only", 
     what: "Rules test bug report",
     steps: "Run Firebase emulator rule tests",
     device: "CI Firebase emulator",
-    userId: userA.email,
+    userId: userA.uid,
+    userEmail: userA.email,
     appVersion: "rules-test",
     submittedAt: Date.now()
   };
 
   await assertAllowed(
     await putJson(`bugReports/${reportId}`, report, userA.idToken),
-    "authenticated matching email should create bug report"
+    "authenticated user should create bug report with userId === own uid"
   );
   await assertDenied(
     await getJson(`bugReports/${reportId}`, userA.idToken),
@@ -175,12 +176,33 @@ test("bug reports are write-only, authenticated, email-bound, and create-only", 
     "bug reports must be create-only"
   );
   await assertDenied(
-    await putJson(`bugReports/rules-test-${randomUUID()}`, { ...report, userId: userA.email }, userB.idToken),
-    "authenticated user must not submit report for a different email"
+    await putJson(`bugReports/rules-test-${randomUUID()}`, { ...report, userId: userB.uid }, userA.idToken),
+    "authenticated user must not submit a bug report using a different user's uid"
   );
   await assertDenied(
     await putJson(`bugReports/rules-test-${randomUUID()}`, report),
     "unauthenticated user must not create bug report"
+  );
+});
+
+test("bug reports: missing or empty 'what' is rejected", async () => {
+  const userA = await createAuthUser("bug-user-c");
+
+  await assertDenied(
+    await putJson(`bugReports/rules-test-${randomUUID()}`, {
+      steps: "report missing the 'what' field",
+      userId: userA.uid,
+      submittedAt: Date.now()
+    }, userA.idToken),
+    "bug report missing 'what' must be rejected"
+  );
+  await assertDenied(
+    await putJson(`bugReports/rules-test-${randomUUID()}`, {
+      what: "",
+      userId: userA.uid,
+      submittedAt: Date.now()
+    }, userA.idToken),
+    "bug report with empty 'what' must be rejected"
   );
 });
 
