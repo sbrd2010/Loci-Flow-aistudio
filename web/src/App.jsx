@@ -16,7 +16,14 @@ import AddTaskDialog from "./components/AddTaskDialog";
 import OnboardingWizard from "./components/OnboardingWizard";
 import PrivacyPolicy from "./components/PrivacyPolicy";
 import DayMapPage from "./components/DayMapPage";
+import FloatingFocusTimer from "./components/FloatingFocusTimer";
+import ConfirmDialog from "./components/ConfirmDialog";
+import { useFocusTimer } from "./hooks/useFocusTimer";
+import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload } from "./utils/focusSession";
+import { celebrate } from "./utils/celebrations";
 import { safeUUID } from "./utils/uuid";
+
+const EXTEND_DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
 
 function toLocalDateStr(date) {
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
@@ -222,6 +229,51 @@ export default function App() {
     if (!payload || demoMode || isSyncingFromCache) return null;
     return computeUserProfile(payload);
   }, [payload, demoMode, isSyncingFromCache]);
+
+  // Focus timer state lives here (not in TodayTab) so it survives tab switches
+  // and can be surfaced via the floating timer across pages.
+  const focusTimer = useFocusTimer(payload?.tasks || [], payload?.config || {}, user?.uid || null);
+
+  // Auto-start the timer when arriving from Day Map's "Start Focus" action
+  useEffect(() => {
+    if (pendingFocusOpen && focusTimer.activeTask) {
+      focusTimer.setIsFocusMode(true);
+      focusTimer.setIsTimerRunning(true);
+      setPendingFocusOpen(false);
+    }
+  }, [pendingFocusOpen, focusTimer.activeTask?.uuid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleReturnToFocus = () => {
+    setActiveTab("today");
+    focusTimer.setIsFocusMode(true);
+  };
+
+  const handleEndFocusSession = () => {
+    focusTimer.setIsTimerRunning(false);
+    focusTimer.setIsFocusMode(false);
+    focusTimer.setFocusSessionActive(false);
+  };
+
+  // Global Focus completion prompt: "Done! +120 XP" — completes the task and
+  // ends the session, regardless of which tab the user is on.
+  const handleFocusSessionDone = () => {
+    const task = focusTimer.activeTask;
+    focusTimer.dismissSessionComplete();
+    if (!task) return;
+    celebrate();
+    savePayload(buildFocusCompletionPayload(payload, task, toLocalDateStr(new Date())));
+    focusTimer.setIsFocusMode(false);
+    focusTimer.setFocusSessionActive(false);
+  };
+
+  // Global Focus completion prompt: "+50 XP, keep going" — awards XP and opens
+  // the duration picker so the same task's timer can be restarted from any tab.
+  const handleFocusSessionKeepGoing = () => {
+    const config = payload?.config || {};
+    saveSubPath("config", { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() });
+    focusTimer.dismissSessionComplete();
+    focusTimer.setShowExtendPicker(true);
+  };
 
   const handleTabSelect = (tab) => {
     const dwellSec = Math.round((Date.now() - tabStartRef.current) / 1000);
@@ -489,8 +541,7 @@ export default function App() {
             onOpenAddTask={() => openAddTask("today")}
             onOpenDayMap={openDayMap}
             onOpenMindBox={() => handleTabSelect("mindbox")}
-            autoOpenFocus={pendingFocusOpen}
-            onAutoOpenFocusDone={() => setPendingFocusOpen(false)}
+            {...focusTimer}
           />
         )}
         {activeTab === "daymap" && (
@@ -643,6 +694,73 @@ export default function App() {
             )}
           </div>
         </>
+      )}
+
+      {/* Floating Focus timer — visible across pages while a session is active,
+          hidden on Day Map and on the dark Focus overlay itself */}
+      {shouldShowFloatingTimer({
+        activeTab,
+        focusSessionActive: focusTimer.focusSessionActive,
+        hasActiveTask: !!focusTimer.activeTask,
+        isFocusMode: focusTimer.isFocusMode,
+      }) && (
+        <FloatingFocusTimer
+          task={focusTimer.activeTask}
+          secondsLeft={focusTimer.timerSecondsLeft}
+          maxSeconds={focusTimer.timerMaxSeconds}
+          isRunning={focusTimer.isTimerRunning}
+          onPlayPause={() => focusTimer.setIsTimerRunning(r => !r)}
+          onReturnToFocus={handleReturnToFocus}
+          onEndSession={handleEndFocusSession}
+        />
+      )}
+
+      {/* Global Focus session-complete prompt — fires when the timer reaches
+          0:00 even if TodayTab is unmounted (user on another tab) */}
+      {shouldShowFocusCompletionPrompt({
+        sessionCompletePending: focusTimer.sessionCompletePending,
+        hasActiveTask: !!focusTimer.activeTask,
+      }) && (
+        <ConfirmDialog
+          message={`⏱️ Focus block complete!\n\nDid you fully finish:\n"${focusTimer.activeTask.title}"?`}
+          confirmLabel="Done! +120 XP"
+          cancelLabel="+50 XP, keep going"
+          onConfirm={handleFocusSessionDone}
+          onCancel={handleFocusSessionKeepGoing}
+        />
+      )}
+
+      {/* Keep Going: pick a fresh focus block for the same task — also global
+          so it works from any tab */}
+      {focusTimer.showExtendPicker && focusTimer.activeTask && (
+        <div
+          className="focus-now-backdrop"
+          onClick={() => focusTimer.extendTimer(Math.round(focusTimer.timerMaxSeconds / 60) || 15)}
+        >
+          <div className="focus-now-sheet" onClick={e => e.stopPropagation()}>
+            <div className="focus-now-sheet-header">
+              <span className="focus-now-sheet-title">Keep going on "{focusTimer.activeTask.title}"</span>
+            </div>
+            <div className="focus-now-sheet-body" style={{ padding: "4px 16px 16px" }}>
+              <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", margin: "0 0 12px" }}>
+                Pick your next focus block. The timer restarts on this same task.
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                {EXTEND_DURATION_OPTIONS.map((mins) => (
+                  <button
+                    key={mins}
+                    type="button"
+                    className="btn"
+                    style={{ flex: "1 0 calc(33.33% - 8px)", fontSize: "13px", padding: "10px 8px" }}
+                    onClick={() => focusTimer.extendTimer(mins)}
+                  >
+                    {mins}m
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Bottom Nav — hidden on Day Map (full-screen page) */}

@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import TaskRow from "./TaskRow";
-import ConfirmDialog from "./ConfirmDialog";
 import AddTaskDialog from "./AddTaskDialog";
 import FocusModePage from "./FocusModePage";
 import { safeUUID } from "../utils/uuid";
 import { buildToggleCompletedTasks } from "../utils/taskOps";
-import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotifications";
+import { shouldStopFocusOnComplete } from "../utils/focusSession";
 import { getAIKeys, callAI } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
@@ -75,10 +74,14 @@ function SortableTaskItem({ id, children }) {
   );
 }
 
-export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayMap, onOpenMindBox, autoOpenFocus = false, onAutoOpenFocusDone }) {
+export default function TodayTab({
+  payload, savePayload, saveSubPath, onOpenDayMap, onOpenMindBox,
+  activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft, setTimerSecondsLeft,
+  timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
+  focusSessionActive, setFocusSessionActive, sessionCompletePending,
+}) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
-  const [confirmDialog, setConfirmDialog] = useState(null);
   const [headerExpanded, setHeaderExpanded] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [showRescue, setShowRescue] = useState(false);
@@ -102,120 +105,6 @@ export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayM
     "Close all tabs that aren't this task right now.",
     "Commit to just 2 minutes. You can stop after that.",
   ];
-
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [timerSecondsLeft, setTimerSecondsLeft] = useState((config.pomodoroDurationMinutes || 25) * 60);
-  const [timerMaxSeconds, setTimerMaxSeconds] = useState((config.pomodoroDurationMinutes || 25) * 60);
-  const [isFocusMode, setIsFocusMode] = useState(false);
-  const timerIntervalRef = useRef(null);
-  // Absolute deadline for the running timer — lets us snap to correct time on tab-show
-  const deadlineRef = useRef(null);
-
-  const activeTask = tasks.find((t) => t.isNowFocus && !t.isDeleted && !t.isCompleted);
-
-  useEffect(() => {
-    if (activeTask) {
-      const rawMins = Number(activeTask.timeEstimateMinutes);
-      const taskSecs = (rawMins > 0 ? rawMins : 25) * 60;
-      setTimerMaxSeconds(taskSecs);
-      if (!isTimerRunning) setTimerSecondsLeft(taskSecs);
-    } else {
-      const rawMins = Number(config.pomodoroDurationMinutes);
-      const defaultSecs = (rawMins > 0 ? rawMins : 25) * 60;
-      setTimerMaxSeconds(defaultSecs);
-      if (!isTimerRunning) setTimerSecondsLeft(defaultSecs);
-    }
-  }, [activeTask?.uuid, activeTask?.timeEstimateMinutes, config.pomodoroDurationMinutes]);
-
-  useEffect(() => {
-    if (isTimerRunning) {
-      // Anchor to wall-clock time so background tabs / GC pauses don't cause drift
-      const targetEndTime = Date.now() + timerSecondsLeft * 1000;
-      deadlineRef.current = targetEndTime;
-      timerIntervalRef.current = setInterval(() => {
-        const remaining = Math.ceil((targetEndTime - Date.now()) / 1000);
-        setTimerSecondsLeft(remaining <= 0 ? 0 : remaining);
-      }, 1000);
-      // Snap to correct remaining time the moment the tab becomes visible again —
-      // background timers are throttled so the display may be stale after switching back.
-      const handleVisible = () => {
-        if (document.visibilityState === "visible") {
-          const remaining = Math.ceil((targetEndTime - Date.now()) / 1000);
-          setTimerSecondsLeft(remaining <= 0 ? 0 : remaining);
-        }
-      };
-      document.addEventListener("visibilitychange", handleVisible);
-      return () => {
-        clearInterval(timerIntervalRef.current);
-        document.removeEventListener("visibilitychange", handleVisible);
-        deadlineRef.current = null;
-      };
-    } else {
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-      deadlineRef.current = null;
-    }
-    return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
-  }, [isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Stop timer automatically if the focused task is deleted or completed mid-session
-  useEffect(() => {
-    if (isTimerRunning && !activeTask) setIsTimerRunning(false);
-  }, [activeTask, isTimerRunning]);
-
-  // Auto-exit focus mode when activeTask is removed externally
-  useEffect(() => {
-    if (!activeTask) setIsFocusMode(false);
-  }, [activeTask]);
-
-  // Open focus mode immediately when arriving from Day Map Start Focus
-  useEffect(() => {
-    if (autoOpenFocus && activeTask) {
-      setIsFocusMode(true);
-      onAutoOpenFocusDone?.();
-    }
-  }, [autoOpenFocus, activeTask?.uuid]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (isTimerRunning && timerSecondsLeft === 0) {
-      setIsTimerRunning(false);
-      handlePomodoroCompletion();
-      notifyFocusComplete(activeTask?.title);
-    }
-  }, [timerSecondsLeft, isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Tab title: countdown while running, paused label in overlay, restore on exit
-  useEffect(() => {
-    const taskLabel = activeTask?.title || "Deep Focus";
-    const mins = Math.floor(timerSecondsLeft / 60);
-    const secs = String(timerSecondsLeft % 60).padStart(2, "0");
-    if (isTimerRunning && timerSecondsLeft > 0) {
-      document.title = `${mins}:${secs} · ${taskLabel}`;
-    } else if (isFocusMode && !isTimerRunning && timerSecondsLeft > 0) {
-      document.title = `Paused · ${mins}:${secs} · Loci`;
-    } else {
-      document.title = "Loci";
-    }
-  }, [timerSecondsLeft, isTimerRunning, isFocusMode, activeTask?.title]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Restore title on unmount (e.g. user navigates away while timer is running)
-  useEffect(() => () => { document.title = "Loci"; }, []);
-
-  // Expose timer state on window so the Document PiP mini-window can poll it
-  useEffect(() => {
-    window.__lociTimer = {
-      secondsLeft: timerSecondsLeft,
-      isRunning: isTimerRunning,
-      taskTitle: activeTask?.title || "Deep Focus",
-      onPlayPause: () => setIsTimerRunning(r => !r),
-      onReset: () => { setIsTimerRunning(false); setTimerSecondsLeft(timerMaxSeconds); },
-    };
-  }, [timerSecondsLeft, isTimerRunning, activeTask?.title, timerMaxSeconds]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => { window.__lociTimer = null; }, []);
-
-  // Request notification permission when focus overlay opens (already a user interaction)
-  useEffect(() => {
-    if (isFocusMode) requestNotifPermission();
-  }, [isFocusMode]);
 
   // Auto-exit Focus Now if the selected task is deleted externally
   useEffect(() => {
@@ -343,9 +232,10 @@ export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayM
     if (isCompleted && task.reminderAt) cancelReminder(task.uuid);
     // Synchronously stop timer/focus overlay when completing the active focused task,
     // so the UI clears in the same render cycle rather than waiting for effects.
-    if (isCompleted && task.isNowFocus) {
+    if (shouldStopFocusOnComplete(task, isCompleted)) {
       setIsTimerRunning(false);
       setIsFocusMode(false);
+      setFocusSessionActive(false);
     }
     const updatedTasks = buildToggleCompletedTasks(tasks, task.uuid, isCompleted, todayDateStr);
     if (isCompleted) {
@@ -408,34 +298,6 @@ export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayM
     setUndoTask(null);
   };
 
-  const handlePomodoroCompletion = () => {
-    if (activeTask) {
-      const todayDateStr = getTodayDateString();
-      const task = activeTask;
-      setConfirmDialog({
-        message: `⏱️ Focus block complete!\n\nDid you fully finish:\n"${task.title}"?`,
-        confirmLabel: "Done! +120 XP",
-        cancelLabel: "+50 XP, keep going",
-        onConfirm: () => {
-          celebrate();
-          savePayload({
-            ...payload,
-            tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isCompleted: true, isNowFocus: false, dateCompletedString: todayDateStr, lastUpdated: Date.now() } : t),
-            config: { ...config, totalXp: (Number(config.totalXp) || 0) + 120, lastUpdated: Date.now() },
-            contributions: incrementContribution([...contributions], todayDateStr)
-          });
-          setConfirmDialog(null);
-        },
-        onCancel: () => {
-          saveSubPath("config", { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() });
-          setConfirmDialog(null);
-        }
-      });
-    } else {
-      saveSubPath("config", { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() });
-    }
-  };
-
   const handleEnergyToggle = () => {
     const enabling = !config.isLowEnergyMode;
     if (enabling) setIsMVDMode(false);
@@ -453,7 +315,7 @@ export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayM
   // ── Daily Anchors auto-show ────────────────────────────────────────────────
   useEffect(() => {
     if (!anchors.length) return;
-    if (focusNowMode || editingTask || showFocusNowPicker || confirmDialog) return;
+    if (focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending) return;
     const slot = getCurrentAnchorSlot(new Date(), config.dayStartHour ?? 7, config.dayEndHour ?? 26);
     if (!slot) return;
     if (todayShownSlots.includes(slot)) return;
@@ -461,7 +323,7 @@ export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayM
     if (snoozeUntil && Date.now() < snoozeUntil) return;
     const timer = setTimeout(() => setShowAnchorSheet(true), 2500);
     return () => clearTimeout(timer);
-  }, [anchors.length, todayShownSlotsKey, focusNowMode, !!editingTask, showFocusNowPicker, !!confirmDialog, config.anchorsSnoozeUntil]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [anchors.length, todayShownSlotsKey, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, config.anchorsSnoozeUntil]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAnchorCheck = (id) => {
     const next = todayCheckedIds.includes(id)
@@ -1035,9 +897,9 @@ export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayM
                       onClick={() => {
                         if (!focusNowTask.isNowFocus) {
                           handlePinTask(focusNowTask);
-                        } else {
-                          setIsFocusMode(true);
                         }
+                        setIsFocusMode(true);
+                        setIsTimerRunning(true);
                       }}
                     >
                       ▶ Start Focus
@@ -1237,8 +1099,6 @@ export default function TodayTab({ payload, savePayload, saveSubPath, onOpenDayM
           </button>
         </div>
       )}
-
-      {confirmDialog && <ConfirmDialog {...confirmDialog} />}
 
       {editingTask && (
         <AddTaskDialog
