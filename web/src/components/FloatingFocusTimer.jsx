@@ -1,18 +1,33 @@
 import React from "react";
+import { getTimerState } from "../utils/focusSession";
 import "../styles/floatingFocusTimer.css";
 
 // Persistent mini Focus timer shown across pages while a session is active.
 // Desktop: a bottom mini-bar with title, remaining time and a "Return to Focus" label.
 // Mobile: a compact sticky pill (time + title) that returns to Focus when tapped.
-export default function FloatingFocusTimer({ task, secondsLeft, maxSeconds, isRunning, onPlayPause, onReturnToFocus, onEndSession }) {
+export default function FloatingFocusTimer({
+  task,
+  secondsLeft,
+  maxSeconds,
+  isRunning,
+  onPlayPause,
+  onReturnToFocus,
+  onEndSession,
+  pipOpen,
+  onOpenPiP,
+}) {
   if (!task) return null;
 
   const mins = Math.floor(secondsLeft / 60);
   const secs = String(secondsLeft % 60).padStart(2, "0");
   const progressPct = maxSeconds > 0 ? Math.min(100, Math.max(0, (secondsLeft / maxSeconds) * 100)) : 0;
 
+  const timerState = getTimerState(secondsLeft, maxSeconds);
+
+  const isPiPSupported = "documentPictureInPicture" in window;
+
   return (
-    <div className="floating-focus-timer" role="status" aria-label="Active focus session">
+    <div className={`floating-focus-timer${!isRunning ? " is-paused" : ""} timer-state-${timerState}`} role="status" aria-label="Active focus session">
       <div className="floating-focus-timer-progress" style={{ width: `${progressPct}%` }} />
       <button
         type="button"
@@ -25,6 +40,17 @@ export default function FloatingFocusTimer({ task, secondsLeft, maxSeconds, isRu
         <span className="floating-focus-timer-cta">Return to Focus</span>
       </button>
       <div className="floating-focus-timer-controls">
+        {isPiPSupported && !pipOpen && (
+          <button
+            type="button"
+            className="floating-focus-timer-btn"
+            onClick={onOpenPiP}
+            title="Pop out a floating mini-timer"
+            aria-label="Pop out timer"
+          >
+            ⧉
+          </button>
+        )}
         <button
           type="button"
           className="floating-focus-timer-btn"
