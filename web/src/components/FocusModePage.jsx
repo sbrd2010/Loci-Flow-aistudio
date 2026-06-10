@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { getTimerState } from "../utils/focusSession";
 import "../styles/focusMode.css";
 
 const DURATION_OPTIONS = [15, 20, 25, 30, 45, 60, 90];
@@ -52,55 +53,7 @@ const hiddenControlTextStyle = {
 
 const PIP_SUPPORTED = "documentPictureInPicture" in window;
 
-function buildPiPContent(pipWin) {
-  const style = pipWin.document.createElement("style");
-  style.textContent = [
-    "* { box-sizing: border-box; margin: 0; padding: 0; }",
-    "body { background: #05090b; display: flex; flex-direction: column;",
-    "  align-items: center; justify-content: center; height: 100vh;",
-    "  font-family: system-ui, sans-serif; user-select: none; }",
-    "#pt { font-family: 'Space Mono','Courier New',monospace; font-size: 40px;",
-    "  font-weight: 700; color: #f7fbf8; letter-spacing: -0.02em;",
-    "  font-variant-numeric: tabular-nums; transition: color 0.3s; }",
-    "#pt.paused { color: rgba(247,251,248,0.35); }",
-    "#pl { font-size: 10px; color: rgba(196,223,210,0.65); margin-top: 5px;",
-    "  max-width: 186px; overflow: hidden; text-overflow: ellipsis;",
-    "  white-space: nowrap; text-align: center; }",
-    "#pip-btns { display: flex; gap: 10px; margin-top: 12px; }",
-    "#pip-play, #pip-reset { background: rgba(255,255,255,0.10);",
-    "  border: 1px solid rgba(255,255,255,0.18); color: #f7fbf8;",
-    "  border-radius: 8px; font-size: 18px; width: 44px; height: 36px;",
-    "  display: flex; align-items: center; justify-content: center;",
-    "  cursor: pointer; line-height: 1; }",
-    "#pip-play:active, #pip-reset:active { opacity: 0.6; }",
-  ].join(" ");
-  pipWin.document.head.appendChild(style);
 
-  const timeEl = pipWin.document.createElement("div");
-  timeEl.id = "pt";
-  pipWin.document.body.appendChild(timeEl);
-
-  const labelEl = pipWin.document.createElement("div");
-  labelEl.id = "pl";
-  pipWin.document.body.appendChild(labelEl);
-
-  const btnsEl = pipWin.document.createElement("div");
-  btnsEl.id = "pip-btns";
-
-  const playBtn = pipWin.document.createElement("button");
-  playBtn.id = "pip-play";
-  playBtn.textContent = "▶";
-  playBtn.addEventListener("click", () => window.__lociTimer?.onPlayPause?.());
-
-  const resetBtn = pipWin.document.createElement("button");
-  resetBtn.id = "pip-reset";
-  resetBtn.textContent = "↺";
-  resetBtn.addEventListener("click", () => window.__lociTimer?.onReset?.());
-
-  btnsEl.appendChild(playBtn);
-  btnsEl.appendChild(resetBtn);
-  pipWin.document.body.appendChild(btnsEl);
-}
 
 export default function FocusModePage({
   task,
@@ -113,6 +66,8 @@ export default function FocusModePage({
   onExit,
   onChangeDuration,
   onAddBrainDump,
+  pipOpen,
+  onOpenPiP,
 }) {
   const autoExitRef = useRef(null);
   const isComplete = secondsLeft === 0;
@@ -120,51 +75,6 @@ export default function FocusModePage({
   const [dumpText, setDumpText] = useState("");
   const [dumpSaved, setDumpSaved] = useState(false);
   const dumpInputRef = useRef(null);
-
-  const [pipOpen, setPipOpen] = useState(false);
-  const pipIntervalRef = useRef(null);
-  const pipWinRef = useRef(null);
-
-  const handleOpenPiP = async () => {
-    if (!PIP_SUPPORTED || pipOpen) return;
-    try {
-      const pipWin = await window.documentPictureInPicture.requestWindow({ width: 200, height: 165 });
-      pipWinRef.current = pipWin;
-      buildPiPContent(pipWin);
-      setPipOpen(true);
-
-      // Poll timer state from parent window every 500ms; parent writes window.__lociTimer
-      const tick = () => {
-        const state = window.__lociTimer;
-        const timeEl = pipWin.document.getElementById("pt");
-        if (!state || !timeEl) return;
-        const mins = Math.floor(state.secondsLeft / 60);
-        const s = String(state.secondsLeft % 60).padStart(2, "0");
-        timeEl.textContent = `${mins}:${s}`;
-        timeEl.className = state.isRunning ? "" : "paused";
-        const labelEl = pipWin.document.getElementById("pl");
-        if (labelEl) labelEl.textContent = state.taskTitle || "Deep Focus";
-        const playBtn = pipWin.document.getElementById("pip-play");
-        if (playBtn) playBtn.textContent = state.isRunning ? "⏸" : "▶";
-      };
-      pipIntervalRef.current = setInterval(tick, 500);
-      tick();
-
-      pipWin.addEventListener("pagehide", () => {
-        clearInterval(pipIntervalRef.current);
-        setPipOpen(false);
-        pipWinRef.current = null;
-      });
-    } catch {
-      // User dismissed or browser blocked — fail silently
-    }
-  };
-
-  // Clean up PiP on focus overlay exit
-  useEffect(() => () => {
-    clearInterval(pipIntervalRef.current);
-    try { pipWinRef.current?.close(); } catch {}
-  }, []);
 
   useEffect(() => {
     if (isComplete) {
@@ -189,12 +99,12 @@ export default function FocusModePage({
   const circ = 2 * Math.PI * R;
   const ratio = maxSeconds > 0 ? secondsLeft / maxSeconds : 0;
   const strokeDashoffset = circ * (1 - ratio);
-  const pct = ratio * 100;
 
-  let ringStroke = "#7ab59b";
-  if (isComplete) ringStroke = "#a5d6a7";
-  else if (pct <= 20) ringStroke = "#d46a5f";
-  else if (pct <= 50) ringStroke = "#c99248";
+  // Visual state color mappings
+  const timerState = getTimerState(secondsLeft, maxSeconds);
+  let ringStroke = "#7ab59b"; // normal
+  if (timerState === "almost-done" || timerState === "complete") ringStroke = "#d46a5f"; // almost-done/complete
+  else if (timerState === "near-end") ringStroke = "#c99248"; // near-end
 
   const mins = Math.floor(secondsLeft / 60);
   const secs = String(secondsLeft % 60).padStart(2, "0");
@@ -202,7 +112,7 @@ export default function FocusModePage({
   const currentDurMins = Math.round(maxSeconds / 60);
 
   return (
-    <div className={`focus-mode-overlay${isRunning ? " is-running" : ""}${isComplete ? " is-complete" : ""}`}>
+    <div className={`focus-mode-overlay${isRunning ? " is-running" : ""}${isComplete ? " is-complete" : ""} timer-state-${timerState}`}>
       <button
         type="button"
         className="focus-mode-exit-btn"
@@ -216,7 +126,7 @@ export default function FocusModePage({
         <button
           type="button"
           className="focus-mode-pip-btn"
-          onClick={handleOpenPiP}
+          onClick={onOpenPiP}
           title="Pop out a floating mini-timer"
           aria-label="Pop out timer"
         >

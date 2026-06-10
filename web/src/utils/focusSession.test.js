@@ -2,11 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   shouldShowFloatingTimer, buildExtendedTimerState, shouldStopFocusOnComplete,
   shouldTriggerSessionComplete, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload,
-  buildResetFocusState,
+  buildResetFocusState, getTimerState,
 } from "./focusSession";
 
 describe("shouldShowFloatingTimer", () => {
-  const base = { activeTab: "roadmap", focusSessionActive: true, hasActiveTask: true, isFocusMode: false };
+  const base = { activeTab: "roadmap", focusSessionActive: true, hasActiveTask: true, isFocusMode: false, sessionCompletePending: false };
 
   it("shows the floating timer on a non-Today tab while a session is active", () => {
     expect(shouldShowFloatingTimer(base)).toBe(true);
@@ -31,6 +31,32 @@ describe("shouldShowFloatingTimer", () => {
 
   it("hides the floating timer when there is no active task", () => {
     expect(shouldShowFloatingTimer({ ...base, hasActiveTask: false })).toBe(false);
+  });
+
+  it("hides the floating timer when a focus session completion prompt is pending", () => {
+    expect(shouldShowFloatingTimer({ ...base, sessionCompletePending: true })).toBe(false);
+  });
+});
+
+describe("getTimerState", () => {
+  it("returns normal when remaining time is more than 30%", () => {
+    expect(getTimerState(100, 100)).toBe("normal");
+    expect(getTimerState(31, 100)).toBe("normal");
+  });
+
+  it("returns near-end when remaining time is between 15% and 30% inclusive", () => {
+    expect(getTimerState(30, 100)).toBe("near-end");
+    expect(getTimerState(16, 100)).toBe("near-end");
+  });
+
+  it("returns almost-done when remaining time is between 1% and 15% inclusive", () => {
+    expect(getTimerState(15, 100)).toBe("almost-done");
+    expect(getTimerState(1, 100)).toBe("almost-done");
+  });
+
+  it("returns complete when remaining time is 0", () => {
+    expect(getTimerState(0, 100)).toBe("complete");
+    expect(getTimerState(-1, 100)).toBe("complete");
   });
 });
 

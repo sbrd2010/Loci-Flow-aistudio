@@ -13,11 +13,141 @@ export function useFocusTimer(tasks, config, uid) {
   const [focusSessionActive, setFocusSessionActive] = useState(false);
   const [sessionCompletePending, setSessionCompletePending] = useState(false);
   const [showExtendPicker, setShowExtendPicker] = useState(false);
+  
+  // Document Picture-in-Picture (PiP) / Pop-out timer states and refs
+  const [pipOpen, setPipOpen] = useState(false);
+  const pipWinRef = useRef(null);
+  const timerMaxSecondsRef = useRef(timerMaxSeconds);
+  useEffect(() => {
+    timerMaxSecondsRef.current = timerMaxSeconds;
+  }, [timerMaxSeconds]);
+
   const timerIntervalRef = useRef(null);
   // Absolute deadline for the running timer — lets us snap to correct time on tab-show
   const deadlineRef = useRef(null);
 
   const activeTask = tasks.find((t) => t.isNowFocus && !t.isDeleted && !t.isCompleted) || null;
+
+  const closePiP = () => {
+    try {
+      if (pipWinRef.current) {
+        pipWinRef.current.close();
+        pipWinRef.current = null;
+      }
+    } catch (_) {}
+    setPipOpen(false);
+  };
+
+  const updatePiPUI = (pipWin, seconds, running, title) => {
+    if (!pipWin) return;
+    const doc = pipWin.document;
+    const timeEl = doc.getElementById("pt");
+    if (timeEl) {
+      const mins = Math.floor(seconds / 60);
+      const secs = String(seconds % 60).padStart(2, "0");
+      timeEl.textContent = `${mins}:${secs}`;
+      timeEl.className = running ? "" : "paused";
+    }
+    const labelEl = doc.getElementById("pl");
+    if (labelEl) {
+      labelEl.textContent = title;
+    }
+    const playBtn = doc.getElementById("pip-play");
+    if (playBtn) {
+      playBtn.textContent = running ? "⏸" : "▶";
+    }
+  };
+
+  const handleOpenPiP = async () => {
+    if (!("documentPictureInPicture" in window)) return;
+    // Prevent duplicate pop-out windows: if one exists, focus it and return
+    if (pipWinRef.current && pipOpen) {
+      try {
+        pipWinRef.current.focus();
+      } catch (_) {}
+      return;
+    }
+    try {
+      const pipWin = await window.documentPictureInPicture.requestWindow({ width: 200, height: 165 });
+      pipWinRef.current = pipWin;
+      setPipOpen(true);
+
+      // Build PiP HTML content
+      const style = pipWin.document.createElement("style");
+      style.textContent = [
+        "* { box-sizing: border-box; margin: 0; padding: 0; }",
+        "body { background: #05090b; display: flex; flex-direction: column;",
+        "  align-items: center; justify-content: center; height: 100vh;",
+        "  font-family: system-ui, sans-serif; user-select: none; }",
+        "#pt { font-family: 'Space Mono','Courier New',monospace; font-size: 40px;",
+        "  font-weight: 700; color: #edf7f2; letter-spacing: -0.02em;",
+        "  font-variant-numeric: tabular-nums; transition: color 0.3s; }",
+        "#pt.paused { color: rgba(237,247,242,0.35); }",
+        "#pl { font-size: 10px; color: rgba(196,223,210,0.65); margin-top: 5px;",
+        "  max-width: 186px; overflow: hidden; text-overflow: ellipsis;",
+        "  white-space: nowrap; text-align: center; }",
+        "#pip-btns { display: flex; gap: 10px; margin-top: 12px; }",
+        "#pip-play, #pip-reset { background: rgba(255,255,255,0.10);",
+        "  border: 1px solid rgba(255,255,255,0.18); color: #edf7f2;",
+        "  border-radius: 8px; font-size: 18px; width: 44px; height: 36px;",
+        "  display: flex; align-items: center; justify-content: center;",
+        "  cursor: pointer; line-height: 1; }",
+        "#pip-play:active, #pip-reset:active { opacity: 0.6; }",
+      ].join(" ");
+      pipWin.document.head.appendChild(style);
+
+      const timeEl = pipWin.document.createElement("div");
+      timeEl.id = "pt";
+      pipWin.document.body.appendChild(timeEl);
+
+      const labelEl = pipWin.document.createElement("div");
+      labelEl.id = "pl";
+      pipWin.document.body.appendChild(labelEl);
+
+      const btnsEl = pipWin.document.createElement("div");
+      btnsEl.id = "pip-btns";
+
+      const playBtn = pipWin.document.createElement("button");
+      playBtn.id = "pip-play";
+      playBtn.textContent = "▶";
+      playBtn.addEventListener("click", () => setIsTimerRunning(r => !r));
+
+      const resetBtn = pipWin.document.createElement("button");
+      resetBtn.id = "pip-reset";
+      resetBtn.textContent = "↺";
+      resetBtn.addEventListener("click", () => {
+        setIsTimerRunning(false);
+        setTimerSecondsLeft(timerMaxSecondsRef.current);
+      });
+
+      btnsEl.appendChild(playBtn);
+      btnsEl.appendChild(resetBtn);
+      pipWin.document.body.appendChild(btnsEl);
+
+      pipWin.addEventListener("pagehide", () => {
+        pipWinRef.current = null;
+        setPipOpen(false);
+      });
+
+      updatePiPUI(pipWin, timerSecondsLeft, isTimerRunning, activeTask?.title || "Deep Focus");
+    } catch (e) {
+      console.error("Failed to open PiP:", e);
+    }
+  };
+
+  // Sync timer state changes to PiP window in real-time
+  useEffect(() => {
+    if (pipWinRef.current && pipOpen) {
+      updatePiPUI(pipWinRef.current, timerSecondsLeft, isTimerRunning, activeTask?.title || "Deep Focus");
+    }
+  }, [timerSecondsLeft, isTimerRunning, activeTask?.title, pipOpen]);
+
+  // PiP safety close rules: close when session ends or no active task exists
+  useEffect(() => {
+    if (!focusSessionActive || !activeTask) {
+      closePiP();
+    }
+  }, [focusSessionActive, activeTask]);
 
   // Reset all Focus session state when the authenticated account changes
   // (login, logout, or switching accounts on the same browser) — prevents one
@@ -28,9 +158,9 @@ export function useFocusTimer(tasks, config, uid) {
       timerIntervalRef.current = null;
     }
     deadlineRef.current = null;
-    // Clear the PiP-facing snapshot too — the effect below repopulates it with
-    // clean values once the reset state below commits.
-    if (window.__lociTimer) window.__lociTimer = null;
+    
+    closePiP(); // Close pop-out on account switch
+    
     const reset = buildResetFocusState(config);
     setIsTimerRunning(reset.isTimerRunning);
     setTimerSecondsLeft(reset.timerSecondsLeft);
@@ -132,19 +262,12 @@ export function useFocusTimer(tasks, config, uid) {
   }, [timerSecondsLeft, isTimerRunning, isFocusMode, activeTask?.title]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Restore title on unmount (e.g. user signs out while timer is running)
-  useEffect(() => () => { document.title = "Loci"; }, []);
+  useEffect(() => () => {
+    document.title = "Loci";
+    closePiP();
+  }, []);
 
-  // Expose timer state on window so the Document PiP mini-window can poll it
-  useEffect(() => {
-    window.__lociTimer = {
-      secondsLeft: timerSecondsLeft,
-      isRunning: isTimerRunning,
-      taskTitle: activeTask?.title || "Deep Focus",
-      onPlayPause: () => setIsTimerRunning(r => !r),
-      onReset: () => { setIsTimerRunning(false); setTimerSecondsLeft(timerMaxSeconds); },
-    };
-  }, [timerSecondsLeft, isTimerRunning, activeTask?.title, timerMaxSeconds]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => { window.__lociTimer = null; }, []);
+
 
   // Request notification permission when focus overlay opens (already a user interaction)
   useEffect(() => {
@@ -175,5 +298,7 @@ export function useFocusTimer(tasks, config, uid) {
     sessionCompletePending, dismissSessionComplete,
     showExtendPicker, setShowExtendPicker,
     extendTimer,
+    pipOpen,
+    handleOpenPiP,
   };
 }

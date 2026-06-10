@@ -546,3 +546,47 @@
     height: 56px;
   }
 }
+
+/* ================================================================
+   Timer state visual states and transitions
+   ================================================================ */
+.focus-mode-overlay.timer-state-normal {
+  --timer-state-color: #7ab59b;
+  --timer-state-bg: rgba(122, 181, 155, 0.08);
+  --timer-state-border: rgba(122, 181, 155, 0.24);
+}
+.focus-mode-overlay.timer-state-near-end {
+  --timer-state-color: #c99248;
+  --timer-state-bg: rgba(201, 146, 72, 0.08);
+  --timer-state-border: rgba(201, 146, 72, 0.24);
+}
+.focus-mode-overlay.timer-state-almost-done {
+  --timer-state-color: #d46a5f;
+  --timer-state-bg: rgba(212, 106, 95, 0.08);
+  --timer-state-border: rgba(212, 106, 95, 0.24);
+}
+.focus-mode-overlay.timer-state-complete {
+  --timer-state-color: #d46a5f;
+  --timer-state-bg: rgba(212, 106, 95, 0.12);
+  --timer-state-border: rgba(212, 106, 95, 0.38);
+}
+
+.focus-mode-state-pill {
+  color: var(--timer-state-color, rgba(196, 223, 210, 0.82)) !important;
+  background: var(--timer-state-bg, rgba(122, 181, 155, 0.08)) !important;
+  border-color: var(--timer-state-border, rgba(122, 181, 155, 0.24)) !important;
+  transition: color 0.4s ease, background 0.4s ease, border-color 0.4s ease;
+}
+
+.focus-mode-time-digits {
+  transition: text-shadow 0.6s ease;
+}
+
+.focus-mode-overlay.is-running .focus-mode-time-digits {
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.1), 0 0 16px var(--timer-state-color);
+}
+
+.focus-mode-overlay.timer-state-complete .focus-mode-time-digits {
+  text-shadow: 0 0 20px var(--timer-state-color);
+}
+

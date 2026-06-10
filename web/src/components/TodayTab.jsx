@@ -79,6 +79,7 @@ export default function TodayTab({
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft, setTimerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
+  pipOpen, handleOpenPiP,
 }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
@@ -1084,6 +1085,8 @@ export default function TodayTab({
           onExit={() => setIsFocusMode(false)}
           onChangeDuration={handleChangeFocusDuration}
           onAddBrainDump={handleFocusBrainDump}
+          pipOpen={pipOpen}
+          onOpenPiP={handleOpenPiP}
         />
       )}
 
