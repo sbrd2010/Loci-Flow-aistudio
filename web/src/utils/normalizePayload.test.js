@@ -247,7 +247,7 @@ describe("mergeRemotePayload", () => {
       tasks: [{ uuid: sharedUuid, title: "2-day-old version", lastUpdated: fakeNow - 172_800_000 }],
       config: { visitStreakCount: 1 },
       brainDump: [],
-      timestamp: fakeNow, // fake-fresh — set by premature savePayload
+      timestamp: fakeNow, // fake-fresh - set by premature savePayload
     };
     // RTDB has the real current version of the same task edited on another device
     const freshRtdb = {
@@ -497,7 +497,7 @@ describe("mergeRemotePayloadWithMeta - hasLocalContribution flag (write-back det
   });
 
   it("newer deleted task wins and does not cause spurious write-back when remote wins", () => {
-    // Remote has the newer delete — remote wins, no write-back
+    // Remote has the newer delete - remote wins, no write-back
     const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(
       { ...base, tasks: [task("t1", { isDeleted: true, lastUpdated: 200 })] },
       { ...base, tasks: [task("t1", { isDeleted: false, lastUpdated: 100 })] }
@@ -507,7 +507,7 @@ describe("mergeRemotePayloadWithMeta - hasLocalContribution flag (write-back det
   });
 
   it("newer local delete wins and signals write-back so RTDB gets the deletion", () => {
-    // Local has the newer delete — local wins, write-back needed
+    // Local has the newer delete - local wins, write-back needed
     const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(
       { ...base, tasks: [task("t1", { isDeleted: false, lastUpdated: 100 })] },
       { ...base, tasks: [task("t1", { isDeleted: true, lastUpdated: 200 })] }
@@ -683,7 +683,7 @@ describe("isTaskCountDropSuspicious", () => {
       { uuid: "t4", isDeleted: false, isCompleted: true },
       { uuid: "t5", isDeleted: false, isCompleted: false },
     ];
-    // Drop from 5 active (completed but not deleted count) to 1 → suspicious
+    // Drop from 5 active (completed but not deleted count) to 1 -> suspicious
     expect(isTaskCountDropSuspicious([{ uuid: "t1", isDeleted: false }], current)).toBe(true);
   });
 
@@ -700,7 +700,7 @@ describe("isTaskCountDropSuspicious", () => {
 
   it("does not count deleted tasks in either direction", () => {
     // Current: 2 active + 10 deleted. Next: 2 active + 0 deleted.
-    // Drop of 0 active tasks → not suspicious.
+    // Drop of 0 active tasks -> not suspicious.
     const current = [...active(2), ...deleted(10)];
     const next = active(2);
     expect(isTaskCountDropSuspicious(next, current)).toBe(false);

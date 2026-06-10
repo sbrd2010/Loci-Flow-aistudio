@@ -89,7 +89,7 @@ export function prepareBrainDumpForSave(updatedPayload = {}, currentPayload = {}
 
 // Returns true when a savePayload call would reduce the active (non-deleted) task
 // count by `threshold` or more relative to the currently-held payload. Completed
-// and parked tasks are counted as active — only `isDeleted: true` is excluded.
+// and parked tasks are counted as active - only `isDeleted: true` is excluded.
 // The guard is skipped when the current active count is below `threshold` itself
 // (e.g. fresh user, demo mode) so it never fires on an empty or near-empty state.
 export function isTaskCountDropSuspicious(nextTasks, currentTasks, threshold = 3) {
