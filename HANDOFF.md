@@ -1,8 +1,17 @@
 # Handoff — Loci-Flow-aistudio (Focus Timer work, PR #204 & #205)
 
-`main` is currently at `aa8a32f` (PR #205 `0c59627` merged on top of `587285a` PR #204, and PR #206 `aa8a32f` merged on top of that — see note below).
+> ## ⚠️ Point-in-time snapshot — read before using (any AI agent: Claude Code, Codex, Gemini, DeepSeek, etc.)
+>
+> This document is a **historical snapshot** of the codebase as of **`main @ aa8a32f`** (PR #204, #205, and #206 merged — #206 landed *while this doc was being written*, see below). It is **not a live status page** and will **not** update itself as later PRs merge.
+>
+> **If you're reading this in a later session:**
+> 1. **Run `git log --oneline -20 origin/main`** (and check the open/merged PR list on GitHub) to see everything that has landed since `aa8a32f`. The original plan went up to #215 — by the time you read this, several more PRs may already be done.
+> 2. **§1, §5, §6** (completed PRs / remaining backlog / recommended next step) reflect the plan *as of this snapshot only*. Treat every "remaining" item as **unverified** — it may already be done, in progress, or renumbered.
+> 3. **§2-4** (sync, Focus timer, AI rewrite/organize, backup/export architecture, decisions, risks) describe how those systems worked *at this snapshot*. Likely still accurate, but re-check the actual source for any file you're about to touch — especially if a later PR modified it.
 
-> **Note — concurrent session activity:** while this handoff was being written, a *separate* Claude Code session merged **PR #206** ("fix: refresh todayStr on midnight rollover for long-lived tabs"). This is the fix for the item the original planning list below calls **"#207 logical-day / midnight `todayStr` staleness"** — it's now **done**. See §5 for details. PR numbering for the remaining items will likely be offset by +1 from what's listed below.
+`main` was at `aa8a32f` at the time of writing (PR #205 `0c59627` merged on top of `587285a` PR #204, and PR #206 `aa8a32f` merged on top of that).
+
+> **Context — concurrent session activity:** while this handoff was being written, a *separate* session merged **PR #206** ("fix: refresh todayStr on midnight rollover for long-lived tabs") — the fix for the item the original planning list below calls **"#207 logical-day / midnight `todayStr` staleness"**. See §5 for details.
 
 ---
 
