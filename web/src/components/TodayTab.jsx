@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import TaskRow from "./TaskRow";
-import ConfirmDialog from "./ConfirmDialog";
 import AddTaskDialog from "./AddTaskDialog";
 import FocusModePage from "./FocusModePage";
 import { safeUUID } from "../utils/uuid";
 import { buildToggleCompletedTasks } from "../utils/taskOps";
-import { notifyFocusComplete } from "../utils/focusNotifications";
 import { shouldStopFocusOnComplete } from "../utils/focusSession";
 import { getAIKeys, callAI } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
@@ -24,8 +22,6 @@ import {
   useSortable, arrayMove
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-
-const EXTEND_DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
 
 function getWorkWindowEnd(dayStartHour, dayEndHour) {
   const now = new Date();
@@ -82,11 +78,10 @@ export default function TodayTab({
   payload, savePayload, saveSubPath, onOpenDayMap, onOpenMindBox,
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft, setTimerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
-  focusSessionActive, setFocusSessionActive, extendTimer,
+  focusSessionActive, setFocusSessionActive, sessionCompletePending,
 }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
-  const [confirmDialog, setConfirmDialog] = useState(null);
   const [headerExpanded, setHeaderExpanded] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [showRescue, setShowRescue] = useState(false);
@@ -97,7 +92,6 @@ export default function TodayTab({
   const [focusNowTaskId, setFocusNowTaskId] = useState(null);
   const [showFocusNowPicker, setShowFocusNowPicker] = useState(false);
   const [showAnchorSheet, setShowAnchorSheet] = useState(false);
-  const [showExtendPicker, setShowExtendPicker] = useState(false);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -111,14 +105,6 @@ export default function TodayTab({
     "Close all tabs that aren't this task right now.",
     "Commit to just 2 minutes. You can stop after that.",
   ];
-
-  useEffect(() => {
-    if (isTimerRunning && timerSecondsLeft === 0) {
-      setIsTimerRunning(false);
-      handlePomodoroCompletion();
-      notifyFocusComplete(activeTask?.title);
-    }
-  }, [timerSecondsLeft, isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-exit Focus Now if the selected task is deleted externally
   useEffect(() => {
@@ -312,41 +298,6 @@ export default function TodayTab({
     setUndoTask(null);
   };
 
-  const handlePomodoroCompletion = () => {
-    if (activeTask) {
-      const todayDateStr = getTodayDateString();
-      const task = activeTask;
-      setConfirmDialog({
-        message: `⏱️ Focus block complete!\n\nDid you fully finish:\n"${task.title}"?`,
-        confirmLabel: "Done! +120 XP",
-        cancelLabel: "+50 XP, keep going",
-        onConfirm: () => {
-          celebrate();
-          savePayload({
-            ...payload,
-            tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isCompleted: true, isNowFocus: false, dateCompletedString: todayDateStr, lastUpdated: Date.now() } : t),
-            config: { ...config, totalXp: (Number(config.totalXp) || 0) + 120, lastUpdated: Date.now() },
-            contributions: incrementContribution([...contributions], todayDateStr)
-          });
-          setConfirmDialog(null);
-        },
-        onCancel: () => {
-          saveSubPath("config", { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() });
-          setConfirmDialog(null);
-          setShowExtendPicker(true);
-        }
-      });
-    } else {
-      saveSubPath("config", { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() });
-    }
-  };
-
-  // "Keep going" — restart the timer on the same task with a fresh duration
-  const handleExtendFocus = (minutes) => {
-    extendTimer(minutes);
-    setShowExtendPicker(false);
-  };
-
   const handleEnergyToggle = () => {
     const enabling = !config.isLowEnergyMode;
     if (enabling) setIsMVDMode(false);
@@ -364,7 +315,7 @@ export default function TodayTab({
   // ── Daily Anchors auto-show ────────────────────────────────────────────────
   useEffect(() => {
     if (!anchors.length) return;
-    if (focusNowMode || editingTask || showFocusNowPicker || confirmDialog) return;
+    if (focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending) return;
     const slot = getCurrentAnchorSlot(new Date(), config.dayStartHour ?? 7, config.dayEndHour ?? 26);
     if (!slot) return;
     if (todayShownSlots.includes(slot)) return;
@@ -372,7 +323,7 @@ export default function TodayTab({
     if (snoozeUntil && Date.now() < snoozeUntil) return;
     const timer = setTimeout(() => setShowAnchorSheet(true), 2500);
     return () => clearTimeout(timer);
-  }, [anchors.length, todayShownSlotsKey, focusNowMode, !!editingTask, showFocusNowPicker, !!confirmDialog, config.anchorsSnoozeUntil]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [anchors.length, todayShownSlotsKey, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, config.anchorsSnoozeUntil]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAnchorCheck = (id) => {
     const next = todayCheckedIds.includes(id)
@@ -1146,40 +1097,6 @@ export default function TodayTab({
             style={{ background: "var(--accent)", color: "var(--btn-text, #fff)", border: "none", borderRadius: "12px", padding: "5px 14px", fontSize: "12px", fontWeight: "700", cursor: "pointer", flexShrink: 0 }}>
             Undo
           </button>
-        </div>
-      )}
-
-      {confirmDialog && <ConfirmDialog {...confirmDialog} />}
-
-      {/* ── Keep Going: pick a fresh focus block for the same task ── */}
-      {showExtendPicker && activeTask && (
-        <div
-          className="focus-now-backdrop"
-          onClick={() => handleExtendFocus(Math.round(timerMaxSeconds / 60) || 15)}
-        >
-          <div className="focus-now-sheet" onClick={e => e.stopPropagation()}>
-            <div className="focus-now-sheet-header">
-              <span className="focus-now-sheet-title">Keep going on "{activeTask.title}"</span>
-            </div>
-            <div className="focus-now-sheet-body" style={{ padding: "4px 16px 16px" }}>
-              <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", margin: "0 0 12px" }}>
-                Pick your next focus block. The timer restarts on this same task.
-              </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                {EXTEND_DURATION_OPTIONS.map((mins) => (
-                  <button
-                    key={mins}
-                    type="button"
-                    className="btn"
-                    style={{ flex: "1 0 calc(33.33% - 8px)", fontSize: "13px", padding: "10px 8px" }}
-                    onClick={() => handleExtendFocus(mins)}
-                  >
-                    {mins}m
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
       )}
 

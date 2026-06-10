@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { requestNotifPermission } from "../utils/focusNotifications";
-import { buildExtendedTimerState } from "../utils/focusSession";
+import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotifications";
+import { buildExtendedTimerState, shouldTriggerSessionComplete } from "../utils/focusSession";
 
 // Lifts the Focus timer state to the App level so it survives tab switches
 // (TodayTab unmounts when the user navigates to another tab) and can be
@@ -11,6 +11,8 @@ export function useFocusTimer(tasks, config) {
   const [timerMaxSeconds, setTimerMaxSeconds] = useState((config.pomodoroDurationMinutes || 25) * 60);
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [focusSessionActive, setFocusSessionActive] = useState(false);
+  const [sessionCompletePending, setSessionCompletePending] = useState(false);
+  const [showExtendPicker, setShowExtendPicker] = useState(false);
   const timerIntervalRef = useRef(null);
   // Absolute deadline for the running timer — lets us snap to correct time on tab-show
   const deadlineRef = useRef(null);
@@ -61,6 +63,17 @@ export function useFocusTimer(tasks, config) {
     return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
   }, [isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Detect the timer reaching 0:00 while running and surface the global
+  // "session complete" prompt — lives here (App level, always mounted) so it
+  // fires even while the user is on Roadmap/MindBox/Coach/Settings.
+  useEffect(() => {
+    if (shouldTriggerSessionComplete({ isTimerRunning, timerSecondsLeft })) {
+      setIsTimerRunning(false);
+      setSessionCompletePending(true);
+      notifyFocusComplete(activeTask?.title);
+    }
+  }, [timerSecondsLeft, isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Stop timer automatically if the focused task is deleted or completed mid-session
   useEffect(() => {
     if (isTimerRunning && !activeTask) setIsTimerRunning(false);
@@ -71,6 +84,8 @@ export function useFocusTimer(tasks, config) {
     if (!activeTask) {
       setIsFocusMode(false);
       setFocusSessionActive(false);
+      setSessionCompletePending(false);
+      setShowExtendPicker(false);
     }
   }, [activeTask]);
 
@@ -114,12 +129,18 @@ export function useFocusTimer(tasks, config) {
     if (isFocusMode) requestNotifPermission();
   }, [isFocusMode]);
 
+  // Dismiss the global "session complete" prompt without restarting the timer
+  // (used by the "Done! +120 XP" path, which ends the session instead).
+  const dismissSessionComplete = () => setSessionCompletePending(false);
+
   // Restart the timer for the same task with a fresh duration ("Keep going" extension)
   const extendTimer = (minutes) => {
     const next = buildExtendedTimerState(minutes);
     setTimerMaxSeconds(next.timerMaxSeconds);
     setTimerSecondsLeft(next.timerSecondsLeft);
     setIsTimerRunning(next.isTimerRunning);
+    setSessionCompletePending(false);
+    setShowExtendPicker(false);
   };
 
   return {
@@ -129,6 +150,8 @@ export function useFocusTimer(tasks, config) {
     timerMaxSeconds, setTimerMaxSeconds,
     isFocusMode, setIsFocusMode,
     focusSessionActive, setFocusSessionActive,
+    sessionCompletePending, dismissSessionComplete,
+    showExtendPicker, setShowExtendPicker,
     extendTimer,
   };
 }

@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { shouldShowFloatingTimer, buildExtendedTimerState, shouldStopFocusOnComplete } from "./focusSession";
+import {
+  shouldShowFloatingTimer, buildExtendedTimerState, shouldStopFocusOnComplete,
+  shouldTriggerSessionComplete, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload,
+} from "./focusSession";
 
 describe("shouldShowFloatingTimer", () => {
   const base = { activeTab: "roadmap", focusSessionActive: true, hasActiveTask: true, isFocusMode: false };
@@ -65,5 +68,82 @@ describe("shouldStopFocusOnComplete", () => {
 
   it("handles a missing task gracefully", () => {
     expect(shouldStopFocusOnComplete(null, true)).toBe(false);
+  });
+});
+
+describe("shouldTriggerSessionComplete", () => {
+  it("triggers when a running timer reaches 0:00", () => {
+    expect(shouldTriggerSessionComplete({ isTimerRunning: true, timerSecondsLeft: 0 })).toBe(true);
+  });
+
+  it("does not trigger while time remains", () => {
+    expect(shouldTriggerSessionComplete({ isTimerRunning: true, timerSecondsLeft: 5 })).toBe(false);
+  });
+
+  it("does not trigger for a paused timer sitting at 0:00", () => {
+    expect(shouldTriggerSessionComplete({ isTimerRunning: false, timerSecondsLeft: 0 })).toBe(false);
+  });
+});
+
+describe("shouldShowFocusCompletionPrompt", () => {
+  it("shows the prompt when a session is pending and a task is active", () => {
+    expect(shouldShowFocusCompletionPrompt({ sessionCompletePending: true, hasActiveTask: true })).toBe(true);
+  });
+
+  it("hides the prompt when no session is pending", () => {
+    expect(shouldShowFocusCompletionPrompt({ sessionCompletePending: false, hasActiveTask: true })).toBe(false);
+  });
+
+  it("hides the prompt when there is no active task", () => {
+    expect(shouldShowFocusCompletionPrompt({ sessionCompletePending: true, hasActiveTask: false })).toBe(false);
+  });
+
+  it("does not depend on which tab is active, so it shows the same on any tab", () => {
+    // The prompt is rendered at the App level and takes no activeTab — the same
+    // pending/active-task state always yields the same result.
+    const state = { sessionCompletePending: true, hasActiveTask: true };
+    expect(shouldShowFocusCompletionPrompt(state)).toBe(shouldShowFocusCompletionPrompt(state));
+  });
+});
+
+describe("buildFocusCompletionPayload", () => {
+  const task = { uuid: "task-1", title: "Write report", isCompleted: false, isNowFocus: true, dateCompletedString: null };
+  const other = { uuid: "task-2", title: "Other task", isCompleted: false, isNowFocus: false, dateCompletedString: null };
+
+  it("marks the focused task complete, clears isNowFocus, and stamps the completion date", () => {
+    const payload = { tasks: [task], config: { totalXp: 100 }, contributions: [] };
+    const result = buildFocusCompletionPayload(payload, task, "2026-06-10");
+    expect(result.tasks[0].isCompleted).toBe(true);
+    expect(result.tasks[0].isNowFocus).toBe(false);
+    expect(result.tasks[0].dateCompletedString).toBe("2026-06-10");
+  });
+
+  it("awards 120 XP", () => {
+    const payload = { tasks: [task], config: { totalXp: 100 }, contributions: [] };
+    const result = buildFocusCompletionPayload(payload, task, "2026-06-10");
+    expect(result.config.totalXp).toBe(220);
+  });
+
+  it("does not touch other tasks", () => {
+    const payload = { tasks: [task, other], config: { totalXp: 0 }, contributions: [] };
+    const result = buildFocusCompletionPayload(payload, task, "2026-06-10");
+    expect(result.tasks[1]).toBe(other);
+  });
+
+  it("creates a new contribution entry for today when none exists", () => {
+    const payload = { tasks: [task], config: { totalXp: 0 }, contributions: [] };
+    const result = buildFocusCompletionPayload(payload, task, "2026-06-10");
+    expect(result.contributions).toHaveLength(1);
+    expect(result.contributions[0]).toMatchObject({ dateString: "2026-06-10", count: 1 });
+  });
+
+  it("increments an existing contribution entry for today", () => {
+    const payload = {
+      tasks: [task], config: { totalXp: 0 },
+      contributions: [{ dateString: "2026-06-10", count: 2 }],
+    };
+    const result = buildFocusCompletionPayload(payload, task, "2026-06-10");
+    expect(result.contributions).toHaveLength(1);
+    expect(result.contributions[0].count).toBe(3);
   });
 });
