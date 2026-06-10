@@ -147,7 +147,7 @@ export function useFocusTimer(tasks, config, uid) {
     if (!focusSessionActive || !activeTask) {
       closePiP();
     }
-  }, [focusSessionActive, activeTask]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [focusSessionActive, activeTask]);
 
   // Reset all Focus session state when the authenticated account changes
   // (login, logout, or switching accounts on the same browser) — prevents one
@@ -265,7 +265,9 @@ export function useFocusTimer(tasks, config, uid) {
   useEffect(() => () => {
     document.title = "Loci";
     closePiP();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
+
+
 
   // Request notification permission when focus overlay opens (already a user interaction)
   useEffect(() => {
