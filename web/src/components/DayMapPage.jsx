@@ -15,6 +15,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { shouldReflowPastRoute } from "../utils/dayMapRoute";
+import { useTodayStr } from "../hooks/useTodayStr";
 import "../styles/dayMap.css";
 import "../styles/dayMapPlanning.css";
 import "../styles/dayMapTimeline.css";
@@ -24,10 +25,6 @@ const DURATION_OPTIONS = [15, 25, 45, 60, 90, 120, 180, 240, 360];
 const PRIORITY_RANK = { P1: 1, P2: 2, P3: 3, P4: 4 };
 const PRIORITY_LINE_COLORS = { P1: '#f43f5e', P2: '#f59e0b', P3: '#14b8a6', P4: 'rgba(255,255,255,0.20)' };
 const PERIOD_LABELS = { morning: "Morning", afternoon: "Afternoon", evening: "Evening", night: "Night" };
-
-function toLocalDateStr(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
 
 function getTaskId(task) { return String(task.uuid || task.id); }
 function normalizePriority(p) { return String(p || "P3").toUpperCase(); }
@@ -325,7 +322,7 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [stripOpen, setStripOpen] = useState(true);
 
-  const todayStr = toLocalDateStr(new Date());
+  const todayStr = useTodayStr();
   const tasks = payload?.tasks || [];
   const config = payload?.config || {};
 

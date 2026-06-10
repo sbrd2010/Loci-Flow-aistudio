@@ -19,6 +19,7 @@ import DayMapPage from "./components/DayMapPage";
 import FloatingFocusTimer from "./components/FloatingFocusTimer";
 import ConfirmDialog from "./components/ConfirmDialog";
 import { useFocusTimer } from "./hooks/useFocusTimer";
+import { useTodayStr } from "./hooks/useTodayStr";
 import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload } from "./utils/focusSession";
 import { celebrate } from "./utils/celebrations";
 import { safeUUID } from "./utils/uuid";
@@ -182,6 +183,8 @@ export default function App() {
     if (payload?.tasks) scheduleAllReminders(payload.tasks);
   }, [payload?.tasks]);
 
+  const todayStr = useTodayStr();
+
   // Auto-increment visit streak on first open each day (real users only).
   // Guard: skip while isSyncingFromCache — payload is from stale localStorage at that point.
   // Without this guard, a second device opening the app would overwrite RTDB with the
@@ -190,14 +193,13 @@ export default function App() {
   useEffect(() => {
     if (!payload?.config || !user || demoMode || isSyncingFromCache) return;
     const cfg = payload.config;
-    const todayStr = toLocalDateStr(new Date());
     if (cfg.lastVisitDate === todayStr) return;
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = toLocalDateStr(yesterday);
     const newStreak = cfg.lastVisitDate === yesterdayStr ? (cfg.visitStreakCount || 0) + 1 : 1;
     saveSubPath("config", { ...cfg, visitStreakCount: newStreak, lastVisitDate: todayStr, lastUpdated: Date.now() });
-  }, [payload?.config?.lastVisitDate, user?.uid, isSyncingFromCache]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [payload?.config?.lastVisitDate, user?.uid, isSyncingFromCache, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Firebase auth state listener
   useEffect(() => {
