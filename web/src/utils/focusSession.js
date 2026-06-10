@@ -1,13 +1,27 @@
 import { buildToggleCompletedTasks } from "./taskOps";
 
 // Decide whether the floating Focus timer should render on the current screen.
-// Hidden on Day Map, when no session is active, and on the dark Focus overlay itself
-// (where the full timer is already shown).
-export function shouldShowFloatingTimer({ activeTab, focusSessionActive, hasActiveTask, isFocusMode }) {
+// Hidden on Day Map, when completion is pending, when no session is active,
+// and on the dark Focus overlay itself (where the full timer is already shown).
+export function shouldShowFloatingTimer({ activeTab, focusSessionActive, hasActiveTask, isFocusMode, sessionCompletePending }) {
   if (activeTab === "daymap") return false;
+  if (sessionCompletePending) return false;
   if (!focusSessionActive || !hasActiveTask) return false;
   if (activeTab === "today" && isFocusMode) return false;
   return true;
+}
+
+// Calculate the active timer state based on remaining percentage:
+// - complete: 0 seconds left
+// - almost-done: 1% to 15% remaining
+// - near-end: 15% to 30% remaining
+// - normal: > 30% remaining
+export function getTimerState(secondsLeft, maxSeconds) {
+  if (secondsLeft <= 0) return "complete";
+  const pct = maxSeconds > 0 ? (secondsLeft / maxSeconds) * 100 : 0;
+  if (pct <= 15) return "almost-done";
+  if (pct <= 30) return "near-end";
+  return "normal";
 }
 
 // Build the timer state for restarting the timer on the same task ("Keep going").
