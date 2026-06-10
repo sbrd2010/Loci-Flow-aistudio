@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotifications";
-import { buildExtendedTimerState, shouldTriggerSessionComplete } from "../utils/focusSession";
+import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete } from "../utils/focusSession";
 
 // Lifts the Focus timer state to the App level so it survives tab switches
 // (TodayTab unmounts when the user navigates to another tab) and can be
 // surfaced via a floating timer across pages.
-export function useFocusTimer(tasks, config) {
+export function useFocusTimer(tasks, config, uid) {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerSecondsLeft, setTimerSecondsLeft] = useState((config.pomodoroDurationMinutes || 25) * 60);
   const [timerMaxSeconds, setTimerMaxSeconds] = useState((config.pomodoroDurationMinutes || 25) * 60);
@@ -18,6 +18,25 @@ export function useFocusTimer(tasks, config) {
   const deadlineRef = useRef(null);
 
   const activeTask = tasks.find((t) => t.isNowFocus && !t.isDeleted && !t.isCompleted) || null;
+
+  // Reset all Focus session state when the authenticated account changes
+  // (login, logout, or switching accounts on the same browser) — prevents one
+  // user's timer, focus mode, or completion prompt from leaking into the next.
+  useEffect(() => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+    deadlineRef.current = null;
+    const reset = buildResetFocusState(config);
+    setIsTimerRunning(reset.isTimerRunning);
+    setTimerSecondsLeft(reset.timerSecondsLeft);
+    setTimerMaxSeconds(reset.timerMaxSeconds);
+    setIsFocusMode(reset.isFocusMode);
+    setFocusSessionActive(reset.focusSessionActive);
+    setSessionCompletePending(reset.sessionCompletePending);
+    setShowExtendPicker(reset.showExtendPicker);
+  }, [uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (activeTask) {

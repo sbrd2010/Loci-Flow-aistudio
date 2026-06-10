@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   shouldShowFloatingTimer, buildExtendedTimerState, shouldStopFocusOnComplete,
   shouldTriggerSessionComplete, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload,
+  buildResetFocusState,
 } from "./focusSession";
 
 describe("shouldShowFloatingTimer", () => {
@@ -145,5 +146,34 @@ describe("buildFocusCompletionPayload", () => {
     const result = buildFocusCompletionPayload(payload, task, "2026-06-10");
     expect(result.contributions).toHaveLength(1);
     expect(result.contributions[0].count).toBe(3);
+  });
+});
+
+describe("buildResetFocusState", () => {
+  it("clears all session/timer-running flags for a clean account switch", () => {
+    const result = buildResetFocusState({ pomodoroDurationMinutes: 25 });
+    expect(result).toMatchObject({
+      isTimerRunning: false,
+      isFocusMode: false,
+      focusSessionActive: false,
+      sessionCompletePending: false,
+      showExtendPicker: false,
+    });
+  });
+
+  it("resets the countdown to the new account's configured pomodoro duration", () => {
+    expect(buildResetFocusState({ pomodoroDurationMinutes: 50 })).toMatchObject({
+      timerSecondsLeft: 3000, timerMaxSeconds: 3000,
+    });
+  });
+
+  it("falls back to 25 minutes when no pomodoro duration is configured yet", () => {
+    expect(buildResetFocusState({})).toMatchObject({ timerSecondsLeft: 1500, timerMaxSeconds: 1500 });
+    expect(buildResetFocusState()).toMatchObject({ timerSecondsLeft: 1500, timerMaxSeconds: 1500 });
+  });
+
+  it("falls back to 25 minutes for an invalid (zero or negative) configured duration", () => {
+    expect(buildResetFocusState({ pomodoroDurationMinutes: 0 })).toMatchObject({ timerSecondsLeft: 1500 });
+    expect(buildResetFocusState({ pomodoroDurationMinutes: -10 })).toMatchObject({ timerSecondsLeft: 1500 });
   });
 });

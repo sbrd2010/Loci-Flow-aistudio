@@ -232,7 +232,7 @@ export default function App() {
 
   // Focus timer state lives here (not in TodayTab) so it survives tab switches
   // and can be surfaced via the floating timer across pages.
-  const focusTimer = useFocusTimer(payload?.tasks || [], payload?.config || {});
+  const focusTimer = useFocusTimer(payload?.tasks || [], payload?.config || {}, user?.uid || null);
 
   // Auto-start the timer when arriving from Day Map's "Start Focus" action
   useEffect(() => {

@@ -16,6 +16,23 @@ export function buildExtendedTimerState(minutes) {
   return { timerMaxSeconds: secs, timerSecondsLeft: secs, isTimerRunning: true };
 }
 
+// Build a clean-slate Focus state for when the authenticated account changes
+// (login, logout, or switching accounts on the same browser) — guarantees one
+// account's timer/session/completion-prompt state can never leak into another's.
+export function buildResetFocusState(config = {}) {
+  const rawMins = Number(config.pomodoroDurationMinutes);
+  const secs = (rawMins > 0 ? rawMins : 25) * 60;
+  return {
+    isTimerRunning: false,
+    timerSecondsLeft: secs,
+    timerMaxSeconds: secs,
+    isFocusMode: false,
+    focusSessionActive: false,
+    sessionCompletePending: false,
+    showExtendPicker: false,
+  };
+}
+
 // Whether completing/uncompleting a task should also stop an active Focus session.
 export function shouldStopFocusOnComplete(task, isCompleting) {
   return !!(isCompleting && task?.isNowFocus);
