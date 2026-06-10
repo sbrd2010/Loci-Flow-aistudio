@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { celebrate } from "../utils/celebrations";
@@ -138,6 +138,8 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   // "week" by default; "inbox" when brain dump pill is selected on mobile
   const [expandedCol, setExpandedCol] = useState("week");
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [undoTask, setUndoTask] = useState(null);
+  const undoTimeoutRef = useRef(null);
   const [longDumpWarning, setLongDumpWarning] = useState(null); // {id, horizon}
   const [aiBreakdownSuggestion, setAiBreakdownSuggestion] = useState(null); // {id, title, concreteStep}
   const [aiBreakdownLoading, setAiBreakdownLoading] = useState(null); // item.id
@@ -267,15 +269,25 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
 
   const handleDelete = (task) => {
     setConfirmDialog({
-      message: `Delete "${task.title}"?\n\nThis cannot be undone.`,
+      message: `Delete "${task.title}"?\n\nYou can undo this for a few seconds after deleting.`,
       confirmLabel: "Delete", cancelLabel: "Cancel", danger: true,
       onConfirm: () => {
         savePayload({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t) });
+        if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+        setUndoTask(task);
+        undoTimeoutRef.current = setTimeout(() => setUndoTask(null), 5000);
         setSelectedTask(null);
         setConfirmDialog(null);
       },
       onCancel: () => setConfirmDialog(null)
     });
+  };
+
+  const handleUndoDelete = () => {
+    if (!undoTask) return;
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    savePayload({ ...payload, tasks: tasks.map((t) => t.uuid === undoTask.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t) });
+    setUndoTask(null);
   };
 
   const handleClearAllBrainDump = () => {
@@ -585,6 +597,19 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
       )}
 
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
+
+      {/* ── Undo Delete Toast */}
+      {undoTask && (
+        <div style={{ position: "fixed", bottom: "calc(76px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "20px", padding: "10px 16px", display: "flex", alignItems: "center", gap: "12px", boxShadow: "0 4px 20px rgba(0,0,0,0.35)", zIndex: 200, fontSize: "12.5px", whiteSpace: "nowrap", maxWidth: "90vw" }}>
+          <span style={{ color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis" }}>
+            "{undoTask.title.length > 28 ? undoTask.title.substring(0, 28) + "…" : undoTask.title}" deleted
+          </span>
+          <button onClick={handleUndoDelete}
+            style={{ background: "var(--accent)", color: "var(--btn-text, #fff)", border: "none", borderRadius: "12px", padding: "5px 14px", fontSize: "12px", fontWeight: "700", cursor: "pointer", flexShrink: 0 }}>
+            Undo
+          </button>
+        </div>
+      )}
     </div>
   );
 }
