@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { celebrate } from "../utils/celebrations";
@@ -144,6 +144,12 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   const [aiBreakdownSuggestion, setAiBreakdownSuggestion] = useState(null); // {id, title, concreteStep}
   const [aiBreakdownLoading, setAiBreakdownLoading] = useState(null); // item.id
   const [editingDumpItem, setEditingDumpItem] = useState(null); // {id, text}
+
+  useEffect(() => {
+    return () => {
+      if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    };
+  }, []);
 
   const isVisibleRoadmapTask = (t) => !t.isDeleted && !t.isCompleted && !t.isParked;
 
@@ -598,11 +604,11 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
 
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
 
-      {/* ── Undo Delete Toast */}
+      {/* Undo Delete Toast */}
       {undoTask && (
         <div style={{ position: "fixed", bottom: "calc(76px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "20px", padding: "10px 16px", display: "flex", alignItems: "center", gap: "12px", boxShadow: "0 4px 20px rgba(0,0,0,0.35)", zIndex: 200, fontSize: "12.5px", whiteSpace: "nowrap", maxWidth: "90vw" }}>
           <span style={{ color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis" }}>
-            "{undoTask.title.length > 28 ? undoTask.title.substring(0, 28) + "…" : undoTask.title}" deleted
+            "{undoTask.title.length > 28 ? undoTask.title.substring(0, 28) + "..." : undoTask.title}" deleted
           </span>
           <button onClick={handleUndoDelete}
             style={{ background: "var(--accent)", color: "var(--btn-text, #fff)", border: "none", borderRadius: "12px", padding: "5px 14px", fontSize: "12px", fontWeight: "700", cursor: "pointer", flexShrink: 0 }}>
