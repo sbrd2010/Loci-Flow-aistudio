@@ -1331,7 +1331,9 @@ export default function TodayTab({
                 </div>
               )}
               <div className="morning-ritual-actions">
-                <button className="morning-ritual-btn-primary" onClick={handleSaveCommitment} disabled={!canSave}>Save commitment</button>
+                <button className="morning-ritual-btn-primary" onClick={handleSaveCommitment} disabled={!canSave}>
+                  {prompt.mode === "empty" ? "Got it" : "Save commitment"}
+                </button>
                 <div className="morning-ritual-actions-row">
                   <button className="morning-ritual-btn-ghost" onClick={handleCommitmentLater}>Later</button>
                   <button className="morning-ritual-btn-ghost" onClick={handleCommitmentSkip}>Skip today</button>
@@ -1370,7 +1372,9 @@ export default function TodayTab({
                   <button className="morning-ritual-btn-ghost" onClick={() => setMiddayNarrowPicker(false)}>Back</button>
                 ) : (
                   <>
-                    <button className="morning-ritual-btn-primary" onClick={handleMiddayKeepGoing}>Keep going</button>
+                    <button className="morning-ritual-btn-primary" onClick={handleMiddayKeepGoing}>
+                      {summary.total === 0 ? "Got it" : "Keep going"}
+                    </button>
                     {remainingCommitted.length > 1 && (
                       <div className="morning-ritual-actions-row">
                         <button className="morning-ritual-btn-ghost" onClick={() => setMiddayNarrowPicker(true)}>Narrow to one</button>
