@@ -34,6 +34,14 @@ export function applyAiRewriteToTask(originalTask, aiSuggestion) {
 export const AI_ORGANIZE_VALID_HORIZONS = new Set(["today","week","month","quarter","halfyear","office"]);
 const AI_ORGANIZE_VALID_PRIORITIES = new Set(["P1","P2","P3","P4"]);
 
+// Coerces an AI-generated value into a string safe for Firebase RTDB validation:
+// tasks/$idx/title (1-300 chars) and tasks/$idx/concreteStep (<=300 chars when
+// present) must be strings. A non-string value (e.g. AI returns an array) would
+// otherwise fail RTDB's atomic payload validation and block the whole sync write.
+export function sanitizeTaskField(value, maxLength) {
+  return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
+}
+
 // Validates and normalizes raw AI Organize suggestions against the current brain
 // dump items. Each returned suggestion gets a `sourceId` that is either a valid
 // brain-dump item ID (AI correctly referenced it) or null (AI omitted/garbled it).
@@ -53,7 +61,8 @@ export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
     )
     .map((t) => ({
       ...t,
-      title: t.title.trim(),
+      title: t.title.trim().slice(0, 300),
+      concreteStep: sanitizeTaskField(t.concreteStep, 300),
       // sourceId is only trusted when it maps to a real brain-dump item
       sourceId: validIds.has(t.sourceId) ? t.sourceId : null,
     }))
