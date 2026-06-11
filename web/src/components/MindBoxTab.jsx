@@ -116,11 +116,11 @@ function SortableDumpItem({ item, onDelete, formatRelTime }) {
   );
 }
 
-export default function MindBoxTab({ payload, savePayload, saveSubPath, userProfile }) {
+export default function MindBoxTab({ payload, savePayload, saveSubPath, userProfile, initialPanel }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   // ── State ──────────────────────────────────────────────────────────────────
-  const [toolPanel, setToolPanel] = useState(null);
+  const [toolPanel, setToolPanel] = useState(initialPanel || null);
   const [editedAnchors, setEditedAnchors] = useState(config.dailyAnchors || []);
   const [newAnchorText, setNewAnchorText] = useState("");
   const [editingAnchorId, setEditingAnchorId] = useState(null);
