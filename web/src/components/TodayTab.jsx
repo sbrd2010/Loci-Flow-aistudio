@@ -322,7 +322,7 @@ export default function TodayTab({
 
   // ── Daily Coach Check-ins auto-show (Today's Commitment / Progress Check / Day Close) ──
   useEffect(() => {
-    if (focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin) return;
+    if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin) return;
     const now = new Date();
     const morningRitualPending = shouldShowMorningRitual(now, windows, config, todayShownSlots);
     let slot = null;
@@ -340,7 +340,7 @@ export default function TodayTab({
     const timer = setTimeout(() => setShowDailyCheckin(true), 2500);
     return () => clearTimeout(timer);
   }, [
-    anchorTodayStr, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, isAddTaskDialogOpen,
+    anchorTodayStr, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, isAddTaskDialogOpen,
     showAnchorSheet, showDailyCheckin, todayShownSlotsKey, config.anchorsSnoozeUntil,
     config.dailyCommitmentDate, config.dailyCommitmentSkippedDate, config.dailyCommitmentSnoozeUntil, config.dailyCommitmentTaskIds,
     config.dailyMiddayCheckDate, config.dailyMiddayCheckSnoozeUntil, config.dailyReflectionDate,
