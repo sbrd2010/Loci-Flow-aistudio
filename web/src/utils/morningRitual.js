@@ -1,9 +1,9 @@
-// Morning Ritual popup: a once-per-Loci-day, gentle nudge shown around the
-// start of the user's first focus window, surfacing Daily Anchors as a quick
-// check-in. Built on the flexible focus windows / Daily Anchors primitives
-// from focusWindows.js and dailyAnchors.js.
+// Morning Ritual popup: a once-per-Loci-day, gentle nudge shown any time after
+// the start of the user's first focus window, surfacing Daily Anchors as a
+// quick check-in. Built on the flexible focus windows / Daily Anchors
+// primitives from focusWindows.js and dailyAnchors.js.
 
-import { getCurrentFocusSlot } from "./focusWindows";
+import { getLociNowMinutes } from "./focusWindows";
 
 // Rotating short copy for the centered Morning Ritual popup. Deterministic
 // per calendar day, like getAnchorVariant in dailyAnchors.js.
@@ -22,15 +22,16 @@ export function getMorningRitualVariant(now = new Date()) {
   return MORNING_RITUAL_VARIANTS[dayOfYear % MORNING_RITUAL_VARIANTS.length];
 }
 
-// True only during the "morning" focus slot: at/after the first focus window
-// opens today, until a third of today's total scheduled focus time has elapsed.
+// True from the moment the first focus window opens today onward, with no
+// upper bound — covers both "right at the start" and "first opened later
+// that day" (e.g. at noon for a 09:00 start).
 export function isMorningRitualSlot(now, windows) {
-  return getCurrentFocusSlot(now, windows) === "morning";
+  return getLociNowMinutes(now, windows) >= windows[0].startMin;
 }
 
-// Whether the Morning Ritual popup should be shown right now: it's the
-// morning slot, it hasn't been dismissed (Done) yet today, and it isn't
-// snoozed (Later). Independent of whether any anchors are configured.
+// Whether the Morning Ritual popup should be shown right now: the first focus
+// window has opened today, it hasn't been dismissed (Done) yet today, and it
+// isn't snoozed (Later). Independent of whether any anchors are configured.
 export function shouldShowMorningRitual(now, windows, config, todayShownSlots) {
   if (!isMorningRitualSlot(now, windows)) return false;
   if (todayShownSlots.includes("morning")) return false;

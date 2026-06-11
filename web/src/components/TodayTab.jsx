@@ -288,16 +288,17 @@ export default function TodayTab({
   // ── Daily Anchors / Morning Ritual auto-show ───────────────────────────────
   useEffect(() => {
     if (focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending) return;
-    const slot = getCurrentAnchorSlot(new Date(), windows);
-    if (!slot) return;
-    if (slot === "morning") {
-      if (!shouldShowMorningRitual(new Date(), windows, config, todayShownSlots)) return;
+    let slot = null;
+    if (shouldShowMorningRitual(new Date(), windows, config, todayShownSlots)) {
+      slot = "morning";
     } else {
-      if (!anchors.length) return;
-      if (todayShownSlots.includes(slot)) return;
-      const snoozeUntil = config.anchorsSnoozeUntil;
-      if (snoozeUntil && Date.now() < snoozeUntil) return;
+      const anchorSlot = getCurrentAnchorSlot(new Date(), windows);
+      if (anchorSlot && anchorSlot !== "morning" && anchors.length && !todayShownSlots.includes(anchorSlot)) {
+        const snoozeUntil = config.anchorsSnoozeUntil;
+        if (!snoozeUntil || Date.now() >= snoozeUntil) slot = anchorSlot;
+      }
     }
+    if (!slot) return;
     setAnchorSheetSlot(slot);
     const timer = setTimeout(() => setShowAnchorSheet(true), 2500);
     return () => clearTimeout(timer);

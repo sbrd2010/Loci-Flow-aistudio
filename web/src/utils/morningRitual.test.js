@@ -25,7 +25,7 @@ describe("getMorningRitualVariant", () => {
 });
 
 describe("isMorningRitualSlot / shouldShowMorningRitual with a 09:00-17:00 focus window", () => {
-  // Total focus = 8h, thirds = 2h40m, so "morning" = 09:00-11:40.
+  // Eligible from 09:00 onward, with no upper bound, until shown or snoozed.
   const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] });
 
   // 1. popup appears after first focus window start
@@ -44,9 +44,9 @@ describe("isMorningRitualSlot / shouldShowMorningRitual with a 09:00-17:00 focus
     expect(shouldShowMorningRitual(dt(10, 30), windows, {}, [])).toBe(true);
   });
 
-  it("is no longer eligible once the morning slot has passed", () => {
-    expect(isMorningRitualSlot(dt(12), windows)).toBe(false);
-    expect(shouldShowMorningRitual(dt(12), windows, {}, [])).toBe(false);
+  it("is still eligible later in the day (e.g. opening at noon after a 09:00 start)", () => {
+    expect(isMorningRitualSlot(dt(12), windows)).toBe(true);
+    expect(shouldShowMorningRitual(dt(12), windows, {}, [])).toBe(true);
   });
 
   // 3. Done hides it for the day
@@ -68,13 +68,12 @@ describe("isMorningRitualSlot / shouldShowMorningRitual with a 09:00-17:00 focus
 });
 
 describe("isMorningRitualSlot follows flexible focus windows, not a hardcoded hour", () => {
-  it("uses an overnight window's start time (16:00) as the morning slot start", () => {
-    // Total focus = 11h, thirds = 3h40m, so "morning" = 16:00-19:40.
+  it("uses an overnight window's start time (16:00) as the eligibility start, with no upper bound", () => {
     const windows = getFocusWindows({ focusWindows: [{ start: "16:00", end: "03:00" }] });
     expect(isMorningRitualSlot(dt(15, 59), windows)).toBe(false);
     expect(isMorningRitualSlot(dt(16, 0), windows)).toBe(true);
     expect(isMorningRitualSlot(dt(19, 30), windows)).toBe(true);
-    expect(isMorningRitualSlot(dt(20, 0), windows)).toBe(false);
+    expect(isMorningRitualSlot(dt(20, 0), windows)).toBe(true);
   });
 
   it("falls back to dayStartHour/dayEndHour (7am-2am) when no focusWindows are configured", () => {
