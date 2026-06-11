@@ -204,9 +204,9 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
         category,
         timeEstimateMinutes: Number(estimateMinutes),
         reminderAt,
-        subSteps: subSteps.length > 0 ? subSteps : (editTask.subSteps || undefined),
         lastUpdated: Date.now()
       };
+      if (subSteps.length > 0) updatedTask.subSteps = subSteps;
       if (reminderAt && reminderAt !== editTask.reminderAt) scheduleReminder(updatedTask);
       if (!reminderAt && editTask.reminderAt) cancelReminder(editTask.uuid);
       savePayload({ ...payload, tasks: (payload.tasks || []).map(t => t.uuid === editTask.uuid ? updatedTask : t) });

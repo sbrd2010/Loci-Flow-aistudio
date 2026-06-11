@@ -48,6 +48,18 @@ describe("sanitizeTaskForRules", () => {
     expect(task.title).toBe("Recovered invalid task");
     expect(task.isDeleted).toBe(true);
   });
+
+  it("strips undefined-valued keys that would crash Firebase's set()", () => {
+    const task = sanitizeTaskForRules({
+      id: 1,
+      userId: "user-a",
+      uuid: "task-1",
+      title: "Edited task",
+      subSteps: undefined,
+    }, 0, "user-a", 1000);
+
+    expect(task).not.toHaveProperty("subSteps");
+  });
 });
 
 describe("sanitizeTasksForRules", () => {

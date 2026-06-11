@@ -72,6 +72,12 @@ export function sanitizeTaskForRules(task, index = 0, fallbackUserId = "", now =
     repaired.concreteStep = sanitizeString(task.concreteStep, 300, "Do first tiny step");
   }
 
+  // Firebase's set() throws synchronously on any `undefined`-valued key
+  // anywhere in the payload, deterministically failing every retry.
+  for (const key of Object.keys(repaired)) {
+    if (repaired[key] === undefined) delete repaired[key];
+  }
+
   return repaired;
 }
 
