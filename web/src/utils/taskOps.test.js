@@ -284,7 +284,7 @@ describe("normalizeAiOrganizeSuggestions", () => {
   });
 });
 
-// ── sanitizeTaskField ──────────────────────────────────────────────────────────
+// -- sanitizeTaskField -----------------------------------------------------------
 
 describe("sanitizeTaskField", () => {
   it("trims a valid string within the limit", () => {

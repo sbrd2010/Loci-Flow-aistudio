@@ -201,7 +201,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
     const titleText = overrideText !== undefined ? overrideText : item.text;
     const freshTask = {
       id: Date.now(), userId, uuid: safeUUID(),
-      title: titleText.slice(0, 300),
+      title: sanitizeTaskField(titleText, 300) || "Untitled task",
       concreteStep: "Do first tiny step",
       horizonLevel: horizon, priority: "P3", category: "Personal",
       timeEstimateMinutes: 25, deadlineTimestamp: null,
