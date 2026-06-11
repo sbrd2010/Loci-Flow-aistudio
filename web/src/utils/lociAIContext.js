@@ -1,3 +1,6 @@
+import { getValidCommittedTaskIds, REFLECTION_MOODS } from "./dailyCoachCheckins";
+import { isDailyDone } from "./deadlineCountdown";
+
 const HORIZON_ORDER = ["today", "week", "month", "quarter", "halfyear", "office"];
 
 const HORIZON_LABELS = {
@@ -49,6 +52,87 @@ export function buildLociAnchorsContext(anchors = [], checkedIds = []) {
   if (!anchors || anchors.length === 0) return "";
   const lines = anchors.map(a => `  [${checkedIds.includes(a.id) ? "✓" : " "}] ${a.text}`);
   return "DAILY ANCHORS:\n" + lines.join("\n");
+}
+
+const REFLECTION_NOTE_MAX_LENGTH = 140;
+
+// Strips markdown/newlines and caps length for AI context (separate from the
+// 280-char storage cap in buildReflectionSave).
+function sanitizeReflectionNoteForContext(note) {
+  if (typeof note !== "string") return "";
+  const cleaned = note.replace(/[\r\n]+/g, " ").replace(/[`*_#]/g, "").trim();
+  if (!cleaned) return "";
+  return cleaned.length > REFLECTION_NOTE_MAX_LENGTH
+    ? `${cleaned.slice(0, REFLECTION_NOTE_MAX_LENGTH).trim()}...`
+    : cleaned;
+}
+
+function quoteTitles(titlesList) {
+  return titlesList.map(title => `'${title}'`).join(", ");
+}
+
+// Short, current-day-only summary of today's Daily Check-in state (Today's
+// Commitment, Progress Check, Day Close) for the AI Coach. Returns "" when
+// there is nothing to report for today. Reuses getValidCommittedTaskIds from
+// dailyCoachCheckins.js so missing/deleted/moved task IDs are handled the
+// same way as the check-in cards themselves.
+export function buildLociCheckinContext(config = {}, tasks = [], todayStr) {
+  const lines = [];
+
+  let committedTasks = [];
+  if (config.dailyCommitmentDate === todayStr) {
+    const validIds = getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds);
+    committedTasks = validIds.map(id => tasks.find(t => t.uuid === id)).filter(Boolean);
+  }
+
+  if (committedTasks.length > 0) {
+    const doneTasks = committedTasks.filter(t => t.isCompleted && !t.isDeleted);
+    const remainingTasks = committedTasks.filter(t => !(t.isCompleted && !t.isDeleted));
+    const total = committedTasks.length;
+    lines.push(`- Commitment: ${total} task${total === 1 ? "" : "s"} selected; ${doneTasks.length} complete, ${remainingTasks.length} remaining.`);
+
+    if (remainingTasks.length > 0) {
+      lines.push(`- Remaining committed tasks: ${quoteTitles(remainingTasks.map(t => t.title))}.`);
+    }
+    if (doneTasks.length > 0) {
+      lines.push(`- Completed committed tasks: ${quoteTitles(doneTasks.map(t => t.title))}.`);
+    }
+    if (config.dailyMiddayCheckDate === todayStr) {
+      lines.push("- Progress check: done at midday today.");
+    }
+
+    const narrowedTask = committedTasks.find(t => t.uuid === config.dailyCommitmentNarrowedTaskId);
+    if (narrowedTask) {
+      lines.push(`- Narrowed focus: '${narrowedTask.title}'.`);
+    }
+  }
+
+  if (config.dailyReflectionDate === todayStr) {
+    const moodEntry = REFLECTION_MOODS.find(m => m.key === config.dailyReflectionMood);
+    if (moodEntry) {
+      lines.push(`- Reflection: ${moodEntry.label}.`);
+    }
+
+    const note = sanitizeReflectionNoteForContext(config.dailyReflectionNote);
+    if (note) {
+      lines.push(`- Tomorrow note: '${note}'.`);
+    }
+
+    if (config.deadlineLabel || config.deadlineAction) {
+      const label = (config.deadlineLabel || "Key deadline").trim();
+      const action = (config.deadlineAction || "today's move").trim();
+      const done = isDailyDone(config.deadlineDailyDoneDate, todayStr);
+      lines.push(`- Key deadline '${label}' (${action}): ${done ? "done today" : "not done yet"}.`);
+    }
+  }
+
+  if (lines.length === 0) return "";
+
+  return [
+    "Daily check-in context for today:",
+    ...lines,
+    "Use this only for supportive coaching. Do not imply judgment."
+  ].join("\n");
 }
 
 export function buildLociCoreInstruction({ firstName = "friend" } = {}) {
