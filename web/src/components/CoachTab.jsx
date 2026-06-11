@@ -4,6 +4,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
 import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, isActiveLociTask } from "../utils/lociAIContext";
 import { getTodayCheckedIds, getLociDayStr } from "../utils/dailyAnchors";
+import { getFocusWindows } from "../utils/focusWindows";
 
 export default function CoachTab({ payload, savePayload, saveSubPath, userProfile }) {
   const { tasks = [], config = {} } = payload;
@@ -69,7 +70,7 @@ export default function CoachTab({ payload, savePayload, saveSubPath, userProfil
     const taskContext = buildLociTaskContext(tasks);
     const anchorContext = buildLociAnchorsContext(
       config.dailyAnchors || [],
-      getTodayCheckedIds(config, getLociDayStr(new Date(), config.dayStartHour ?? 7, config.dayEndHour ?? 26))
+      getTodayCheckedIds(config, getLociDayStr(new Date(), getFocusWindows(config)))
     );
     const lociCoreInstruction = buildLociCoreInstruction({ firstName });
 
@@ -186,7 +187,7 @@ SESSION: ${timeOfDay}, ${config.visitStreakCount || 0}-day streak, ${todayActive
     const p1Ratio = p1Count / backlog.length;
     const briefingAnchorContext = buildLociAnchorsContext(
       config.dailyAnchors || [],
-      getTodayCheckedIds(config, getLociDayStr(new Date(), config.dayStartHour ?? 7, config.dayEndHour ?? 26))
+      getTodayCheckedIds(config, getLociDayStr(new Date(), getFocusWindows(config)))
     );
     const prompt = `You are ${config.mentorName || "Loci AI Coach"}, an expert productivity mentor inside Loci Focus — an app built to help people close the gap between intention and action.
 
