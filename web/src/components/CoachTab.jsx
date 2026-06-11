@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { callAI, getAIKeys } from "../utils/aiCall";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
-import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, isActiveLociTask } from "../utils/lociAIContext";
+import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, isActiveLociTask } from "../utils/lociAIContext";
 import { getTodayCheckedIds, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
 
@@ -68,10 +68,12 @@ export default function CoachTab({ payload, savePayload, saveSubPath, userProfil
     const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
     const todayActive = tasks.filter(t => t.horizonLevel === "today" && isActiveLociTask(t));
     const taskContext = buildLociTaskContext(tasks);
+    const todayStr = getLociDayStr(new Date(), getFocusWindows(config));
     const anchorContext = buildLociAnchorsContext(
       config.dailyAnchors || [],
-      getTodayCheckedIds(config, getLociDayStr(new Date(), getFocusWindows(config)))
+      getTodayCheckedIds(config, todayStr)
     );
+    const checkinContext = buildLociCheckinContext(config, tasks, todayStr);
     const lociCoreInstruction = buildLociCoreInstruction({ firstName });
 
     const userMessageCount = withUser.filter(m => m.isUser).length;
@@ -93,7 +95,7 @@ ${firstName} could be a student, graduate researcher, early-career professional,
 
 THEIR FULL TASK LIST (you can see ALL of this — reference specific task names in your replies):
 ${taskContext}
-${anchorContext ? `\n${anchorContext}\n` : ""}
+${anchorContext ? `\n${anchorContext}\n` : ""}${checkinContext ? `\n${checkinContext}\n` : ""}
 LOCI'S PHILOSOPHY — you embody this:
 Loci is built to bias people toward DOING, not just planning. Your role is to reduce friction and close the gap between intention and action.
 - Planning Paradox: If ${firstName} is reorganizing or adding tasks but not starting any, gently redirect — "You've got a solid plan. What's the ONE thing to actually start right now?"
