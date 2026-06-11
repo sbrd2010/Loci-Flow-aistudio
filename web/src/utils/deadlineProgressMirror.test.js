@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDeadlineProgressMirror } from "./deadlineProgressMirror";
+import { buildDeadlineProgressMirror, countTodayCompletedTasks } from "./deadlineProgressMirror";
 
 describe("deadlineProgressMirror", () => {
   it("returns a neutral empty mirror when no key deadline exists", () => {
@@ -172,5 +172,23 @@ describe("deadlineProgressMirror", () => {
     expect(mirror.todayStatus).toBe("open");
     expect(mirror.days.filter(d => d.isToday)[0].status).toBe("open");
     expect(mirror.days.filter(d => !d.isToday).every(d => d.status === "untracked")).toBe(true);
+  });
+});
+
+describe("countTodayCompletedTasks", () => {
+  it("counts only non-deleted tasks completed today", () => {
+    const tasks = [
+      { isCompleted: true, isDeleted: false, dateCompletedString: "2026-06-11" },
+      { isCompleted: true, isDeleted: false, dateCompletedString: "2026-06-10" },
+      { isCompleted: true, isDeleted: true, dateCompletedString: "2026-06-11" },
+      { isCompleted: false, isDeleted: false, dateCompletedString: "2026-06-11" }
+    ];
+
+    expect(countTodayCompletedTasks(tasks, "2026-06-11")).toBe(1);
+  });
+
+  it("returns 0 when there are no tasks", () => {
+    expect(countTodayCompletedTasks(undefined, "2026-06-11")).toBe(0);
+    expect(countTodayCompletedTasks([], "2026-06-11")).toBe(0);
   });
 });

@@ -41,6 +41,10 @@ function countDoneRun(days, todayStr) {
   return run;
 }
 
+export function countTodayCompletedTasks(tasks, todayStr) {
+  return (tasks || []).filter(t => !t.isDeleted && t.isCompleted && t.dateCompletedString === todayStr).length;
+}
+
 export function buildDeadlineProgressMirror(config = {}, today = new Date(), dayCount = 7) {
   const windows = getFocusWindows(config);
   const todayStr = getLociDayStr(today, windows);

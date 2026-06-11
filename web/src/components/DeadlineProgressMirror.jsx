@@ -1,4 +1,4 @@
-import { buildDeadlineProgressMirror } from "../utils/deadlineProgressMirror";
+import { buildDeadlineProgressMirror, countTodayCompletedTasks } from "../utils/deadlineProgressMirror";
 
 const STATUS_STYLES = {
   done: { bg: "rgba(22, 163, 74, 0.18)", border: "#16A34A", color: "#15803D", mark: "✓" },
@@ -36,7 +36,7 @@ export default function DeadlineProgressMirror({ payload }) {
   if (!mirror.hasDeadline) return null;
 
   const tone = TONE_STYLES[mirror.tone] || TONE_STYLES.neutral;
-  const todayTasksCount = (payload?.tasks || []).filter(t => t.isCompleted && !t.isDeleted).length;
+  const todayTasksCount = countTodayCompletedTasks(payload?.tasks, mirror.todayStr);
 
   return (
     <section
