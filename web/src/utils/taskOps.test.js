@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildToggleCompletedTasks, applyAiRewriteToTask, normalizeAiOrganizeSuggestions, buildClearedBrainDump } from "./taskOps";
+import { buildToggleCompletedTasks, applyAiRewriteToTask, normalizeAiOrganizeSuggestions, buildClearedBrainDump, sanitizeTaskField } from "./taskOps";
 
 const T = (overrides = {}) => ({
   uuid: "task-1",
@@ -242,6 +242,65 @@ describe("normalizeAiOrganizeSuggestions", () => {
     const raw = [{ sourceId: "d1", title: "  Trimmed  ", horizonLevel: "week", priority: "P2" }];
     const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
     expect(result[0].title).toBe("Trimmed");
+  });
+
+  it("missing concreteStep normalizes to an empty string", () => {
+    const raw = [{ sourceId: "d1", title: "Buy groceries", horizonLevel: "week", priority: "P3" }];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].concreteStep).toBe("");
+  });
+
+  it("trims a valid string concreteStep", () => {
+    const raw = [{ sourceId: "d1", title: "Buy groceries", horizonLevel: "week", priority: "P3", concreteStep: "  Go to store  " }];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].concreteStep).toBe("Go to store");
+  });
+
+  it("sanitizes a non-string concreteStep (e.g. AI returns an array of steps) to an empty string", () => {
+    const raw = [{ sourceId: "d1", title: "Buy groceries", horizonLevel: "week", priority: "P3", concreteStep: ["Go to store", "Buy milk"] }];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result).toHaveLength(1);
+    expect(result[0].concreteStep).toBe("");
+  });
+
+  it("caps an oversized title and concreteStep at 300 chars", () => {
+    const raw = [{ sourceId: "d1", title: "T".repeat(400), horizonLevel: "week", priority: "P3", concreteStep: "S".repeat(400) }];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].title).toHaveLength(300);
+    expect(result[0].concreteStep).toHaveLength(300);
+  });
+
+  it("sanitizes a malformed concreteStep regardless of which horizon the item is assigned to", () => {
+    const raw = [
+      { sourceId: "d1", title: "Today task", horizonLevel: "today", priority: "P1", concreteStep: ["bad", "array"] },
+      { sourceId: "d2", title: "Month task", horizonLevel: "month", priority: "P3", concreteStep: "Valid step" },
+      { sourceId: "d3", title: "Half-year task", horizonLevel: "halfyear", priority: "P2", concreteStep: 123 },
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result).toHaveLength(3);
+    expect(result.find((t) => t.horizonLevel === "today").concreteStep).toBe("");
+    expect(result.find((t) => t.horizonLevel === "month").concreteStep).toBe("Valid step");
+    expect(result.find((t) => t.horizonLevel === "halfyear").concreteStep).toBe("");
+  });
+});
+
+// ── sanitizeTaskField ──────────────────────────────────────────────────────────
+
+describe("sanitizeTaskField", () => {
+  it("trims a valid string within the limit", () => {
+    expect(sanitizeTaskField("  Open laptop  ", 300)).toBe("Open laptop");
+  });
+
+  it("truncates strings longer than maxLength", () => {
+    expect(sanitizeTaskField("a".repeat(400), 300)).toHaveLength(300);
+  });
+
+  it("returns an empty string for non-string values", () => {
+    expect(sanitizeTaskField(["step 1", "step 2"], 300)).toBe("");
+    expect(sanitizeTaskField({ text: "step" }, 300)).toBe("");
+    expect(sanitizeTaskField(42, 300)).toBe("");
+    expect(sanitizeTaskField(null, 300)).toBe("");
+    expect(sanitizeTaskField(undefined, 300)).toBe("");
   });
 });
 

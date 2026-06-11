@@ -3,6 +3,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { celebrate } from "../utils/celebrations";
 import { getAIKeys, callAI } from "../utils/aiCall";
+import { sanitizeTaskField } from "../utils/taskOps";
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor,
   useSensor, useSensors, DragOverlay
@@ -200,7 +201,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
     const titleText = overrideText !== undefined ? overrideText : item.text;
     const freshTask = {
       id: Date.now(), userId, uuid: safeUUID(),
-      title: titleText,
+      title: titleText.slice(0, 300),
       concreteStep: "Do first tiny step",
       horizonLevel: horizon, priority: "P3", category: "Personal",
       timeEstimateMinutes: 25, deadlineTimestamp: null,
@@ -246,7 +247,11 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
       } catch {
         parsed = { title: textToBreakdown.substring(0, 60), concreteStep: "Do first tiny step" };
       }
-      setAiBreakdownSuggestion({ id: item.id, title: parsed.title || textToBreakdown.substring(0, 60), concreteStep: parsed.concreteStep || "Do first tiny step" });
+      setAiBreakdownSuggestion({
+        id: item.id,
+        title: sanitizeTaskField(parsed.title, 300) || textToBreakdown.substring(0, 60),
+        concreteStep: sanitizeTaskField(parsed.concreteStep, 300) || "Do first tiny step"
+      });
     } catch {
       setAiBreakdownSuggestion({ id: item.id, title: null, concreteStep: null });
     }
