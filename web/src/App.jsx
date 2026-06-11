@@ -34,6 +34,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("today");
+  const [mindBoxInitialPanel, setMindBoxInitialPanel] = useState(null);
   const [showAddTask, setShowAddTask] = useState(false);
   const [preselectedHorizon, setPreselectedHorizon] = useState("today");
   const [editingTask, setEditingTask] = useState(null);
@@ -282,7 +283,15 @@ export default function App() {
     track("tab_switch", { tab, from: activeTab, dwell_sec: dwellSec });
     tabStartRef.current = Date.now();
     setFabExpanded(false);
+    if (tab === "mindbox") setMindBoxInitialPanel(null);
     setActiveTab(tab);
+  };
+
+  // Switch to Mind Box, optionally deep-linking straight to a sub-panel
+  // (e.g. "anchors" from the Morning Ritual popup's Manage button).
+  const openMindBox = (panel) => {
+    handleTabSelect("mindbox");
+    if (panel) setMindBoxInitialPanel(panel);
   };
 
   const goToday = () => { setFabExpanded(false); setActiveTab("today"); };
@@ -542,7 +551,7 @@ export default function App() {
             isSyncingFromCache={isSyncingFromCache}
             onOpenAddTask={() => openAddTask("today")}
             onOpenDayMap={openDayMap}
-            onOpenMindBox={() => handleTabSelect("mindbox")}
+            onOpenMindBox={openMindBox}
             {...focusTimer}
           />
         )}
@@ -564,7 +573,7 @@ export default function App() {
             onEditTask={(task) => { setEditingTask(task); setShowAddTask(true); }}
           />
         )}
-        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} userProfile={userProfile} />}
+        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} userProfile={userProfile} initialPanel={mindBoxInitialPanel} />}
         {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} userProfile={userProfile} />}
         {activeTab === "settings" && (
           <SettingsTab

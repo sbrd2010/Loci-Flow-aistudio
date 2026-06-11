@@ -13,6 +13,7 @@ import { getCurrentFocusQuote } from "../utils/focusQuotes";
 import { formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
 import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows, getWindowState, getRemainingFocusMinutes, getNextWindowStart, getOverallSpan, getFocusProgress } from "../utils/focusWindows";
+import { getMorningRitualVariant, shouldShowMorningRitual } from "../utils/morningRitual";
 import "../styles/focusNow.css";
 import {
   DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor,
@@ -62,6 +63,7 @@ export default function TodayTab({
   const [focusNowTaskId, setFocusNowTaskId] = useState(null);
   const [showFocusNowPicker, setShowFocusNowPicker] = useState(false);
   const [showAnchorSheet, setShowAnchorSheet] = useState(false);
+  const [anchorSheetSlot, setAnchorSheetSlot] = useState(null);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -283,15 +285,20 @@ export default function TodayTab({
     setIsMVDMode(enabling);
   };
 
-  // ── Daily Anchors auto-show ────────────────────────────────────────────────
+  // ── Daily Anchors / Morning Ritual auto-show ───────────────────────────────
   useEffect(() => {
-    if (!anchors.length) return;
     if (focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending) return;
     const slot = getCurrentAnchorSlot(new Date(), windows);
     if (!slot) return;
-    if (todayShownSlots.includes(slot)) return;
-    const snoozeUntil = config.anchorsSnoozeUntil;
-    if (snoozeUntil && Date.now() < snoozeUntil) return;
+    if (slot === "morning") {
+      if (!shouldShowMorningRitual(new Date(), windows, config, todayShownSlots)) return;
+    } else {
+      if (!anchors.length) return;
+      if (todayShownSlots.includes(slot)) return;
+      const snoozeUntil = config.anchorsSnoozeUntil;
+      if (snoozeUntil && Date.now() < snoozeUntil) return;
+    }
+    setAnchorSheetSlot(slot);
     const timer = setTimeout(() => setShowAnchorSheet(true), 2500);
     return () => clearTimeout(timer);
   }, [anchors.length, todayShownSlotsKey, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, config.anchorsSnoozeUntil]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -306,13 +313,14 @@ export default function TodayTab({
   };
 
   const handleAnchorSheetDone = () => {
-    const slot = getCurrentAnchorSlot(new Date(), windows);
+    const slot = anchorSheetSlot ?? getCurrentAnchorSlot(new Date(), windows);
     const nextSlots = slot && !todayShownSlots.includes(slot) ? [...todayShownSlots, slot] : todayShownSlots;
     saveSubPath("config", { ...config,
       anchorsShownSlots: nextSlots, anchorsSlotsDate: anchorTodayStr,
       anchorsSnoozeUntil: null, lastUpdated: Date.now()
     });
     setShowAnchorSheet(false);
+    setAnchorSheetSlot(null);
   };
 
   const handleAnchorLater = () => {
@@ -320,6 +328,7 @@ export default function TodayTab({
       anchorsSnoozeUntil: Date.now() + 90 * 60 * 1000, lastUpdated: Date.now()
     });
     setShowAnchorSheet(false);
+    setAnchorSheetSlot(null);
   };
 
   const handleAnchorSkipToday = () => {
@@ -328,6 +337,7 @@ export default function TodayTab({
       anchorsSnoozeUntil: null, lastUpdated: Date.now()
     });
     setShowAnchorSheet(false);
+    setAnchorSheetSlot(null);
   };
 
   const handleStartEdit = (task) => setEditingTask(task);
@@ -749,7 +759,7 @@ export default function TodayTab({
               {anchors.length > 0 && (
                 <button
                   className="stuck-btn"
-                  onClick={() => setShowAnchorSheet(true)}
+                  onClick={() => { setAnchorSheetSlot(null); setShowAnchorSheet(true); }}
                   title="Daily Anchors"
                   style={{
                     background: anchorsCheckedCount === anchors.length ? "rgba(165,214,167,0.15)" : "var(--bg-secondary)",
@@ -1088,8 +1098,51 @@ export default function TodayTab({
         />
       )}
 
+      {/* ── Morning Ritual popup (centered, once per Loci day) ───── */}
+      {showAnchorSheet && anchorSheetSlot === "morning" && (() => {
+        const variant = getMorningRitualVariant(new Date());
+        return (
+          <div className="focus-now-backdrop focus-now-backdrop--center" onClick={handleAnchorSheetDone}>
+            <div className="morning-ritual-card" onClick={e => e.stopPropagation()}>
+              <div className="morning-ritual-header">
+                <div className="morning-ritual-title">{variant.title}</div>
+                <div className="morning-ritual-line">{variant.line}</div>
+              </div>
+              {anchors.length > 0 ? (
+                <>
+                  <div className="anchor-chips morning-ritual-chips">
+                    {anchors.map(a => {
+                      const checked = todayCheckedIds.includes(a.id);
+                      return (
+                        <button
+                          key={a.id}
+                          className={`anchor-chip${checked ? " anchor-chip--checked" : ""}`}
+                          onClick={() => handleAnchorCheck(a.id)}
+                        >
+                          {checked ? "✓ " : ""}{a.text}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="morning-ritual-nudge">Pick one anchor. Then start one task.</div>
+                </>
+              ) : (
+                <div className="morning-ritual-nudge">No anchors yet &#8212; pick one task and begin.</div>
+              )}
+              <div className="morning-ritual-actions">
+                <button className="morning-ritual-btn-primary" onClick={handleAnchorSheetDone}>Done</button>
+                <div className="morning-ritual-actions-row">
+                  <button className="morning-ritual-btn-ghost" onClick={handleAnchorLater}>Later</button>
+                  <button className="morning-ritual-btn-ghost" onClick={() => { setShowAnchorSheet(false); setAnchorSheetSlot(null); onOpenMindBox?.("anchors"); }}>Manage</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Daily Anchors check-in sheet ────────────────────────── */}
-      {showAnchorSheet && anchors.length > 0 && (() => {
+      {showAnchorSheet && anchorSheetSlot !== "morning" && anchors.length > 0 && (() => {
         const variant = getAnchorVariant(new Date());
         return (
           <div className="focus-now-backdrop" onClick={handleAnchorSheetDone}>
@@ -1120,7 +1173,7 @@ export default function TodayTab({
                 <button className="anchor-btn-primary" onClick={handleAnchorSheetDone}>All good</button>
                 <button className="anchor-btn-ghost" onClick={handleAnchorLater}>Later</button>
                 <button className="anchor-btn-ghost" onClick={handleAnchorSkipToday}>Skip today</button>
-                <button className="anchor-btn-ghost" onClick={() => { setShowAnchorSheet(false); onOpenMindBox?.(); }}>Manage</button>
+                <button className="anchor-btn-ghost" onClick={() => { setShowAnchorSheet(false); onOpenMindBox?.("anchors"); }}>Manage</button>
               </div>
             </div>
           </div>
