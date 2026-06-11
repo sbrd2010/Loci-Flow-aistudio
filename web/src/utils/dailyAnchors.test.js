@@ -6,66 +6,71 @@ import {
   getTodayCheckedIds,
   getTodayShownSlots,
 } from "./dailyAnchors";
+import { getFocusWindows } from "./focusWindows";
 
 const dt = (y, mo, d, h, mi = 0) => new Date(y, mo - 1, d, h, mi);
 
 describe("getLociDayStr", () => {
+  const windows = getFocusWindows({ dayStartHour: 7, dayEndHour: 26 });
+  const standardWindows = getFocusWindows({ dayStartHour: 7, dayEndHour: 22 });
+
   it("returns today for 10am inside window", () => {
-    expect(getLociDayStr(dt(2024, 6, 15, 10), 7, 26)).toBe("2024-06-15");
+    expect(getLociDayStr(dt(2024, 6, 15, 10), windows)).toBe("2024-06-15");
   });
 
   it("returns yesterday for 1am with dayEndHour=26 (still in prev Loci day)", () => {
-    expect(getLociDayStr(dt(2024, 6, 16, 1), 7, 26)).toBe("2024-06-15");
+    expect(getLociDayStr(dt(2024, 6, 16, 1), windows)).toBe("2024-06-15");
   });
 
   it("returns calendar day for 4am when wrapHour=2 (gap between days)", () => {
     // 4am is past wrapHour=2 but before dayStartHour=7, so it's the gap → calendar today
-    expect(getLociDayStr(dt(2024, 6, 15, 4), 7, 26)).toBe("2024-06-15");
+    expect(getLociDayStr(dt(2024, 6, 15, 4), windows)).toBe("2024-06-15");
   });
 
   it("uses calendar date for standard window (dayEndHour < 24)", () => {
-    expect(getLociDayStr(dt(2024, 6, 15, 22), 7, 22)).toBe("2024-06-15");
+    expect(getLociDayStr(dt(2024, 6, 15, 22), standardWindows)).toBe("2024-06-15");
   });
 
   it("handles midnight exactly as previous day for dayEndHour=26", () => {
     // 0:00 → hour 0 < wrapHour 2 → previous day
-    expect(getLociDayStr(dt(2024, 6, 16, 0), 7, 26)).toBe("2024-06-15");
+    expect(getLociDayStr(dt(2024, 6, 16, 0), windows)).toBe("2024-06-15");
   });
 });
 
 describe("getCurrentAnchorSlot", () => {
-  const s = 7, e = 26; // window 7am-2am, thirds ≈6.33h each
+  const windows = getFocusWindows({ dayStartHour: 7, dayEndHour: 26 }); // 7am-2am, thirds ≈6.33h each
+  const standardWindows = getFocusWindows({ dayStartHour: 7, dayEndHour: 22 });
 
   it("returns morning for 9am", () => {
-    expect(getCurrentAnchorSlot(dt(2024, 6, 15, 9), s, e)).toBe("morning");
+    expect(getCurrentAnchorSlot(dt(2024, 6, 15, 9), windows)).toBe("morning");
   });
 
   it("returns afternoon for 2pm", () => {
-    expect(getCurrentAnchorSlot(dt(2024, 6, 15, 14), s, e)).toBe("afternoon");
+    expect(getCurrentAnchorSlot(dt(2024, 6, 15, 14), windows)).toBe("afternoon");
   });
 
   it("returns evening for 9pm", () => {
-    expect(getCurrentAnchorSlot(dt(2024, 6, 15, 21), s, e)).toBe("evening");
+    expect(getCurrentAnchorSlot(dt(2024, 6, 15, 21), windows)).toBe("evening");
   });
 
   it("returns evening for 1am (Loci hour 25)", () => {
-    expect(getCurrentAnchorSlot(dt(2024, 6, 16, 1), s, e)).toBe("evening");
+    expect(getCurrentAnchorSlot(dt(2024, 6, 16, 1), windows)).toBe("evening");
   });
 
   it("returns null before window starts (5am)", () => {
-    expect(getCurrentAnchorSlot(dt(2024, 6, 15, 5), s, e)).toBeNull();
+    expect(getCurrentAnchorSlot(dt(2024, 6, 15, 5), windows)).toBeNull();
   });
 
   it("returns null at wrapHour exactly (2am = dayEndHour boundary)", () => {
-    expect(getCurrentAnchorSlot(dt(2024, 6, 16, 2), s, e)).toBeNull();
+    expect(getCurrentAnchorSlot(dt(2024, 6, 16, 2), windows)).toBeNull();
   });
 
   it("returns null outside standard (non-overnight) window", () => {
-    expect(getCurrentAnchorSlot(dt(2024, 6, 15, 23), 7, 22)).toBeNull();
+    expect(getCurrentAnchorSlot(dt(2024, 6, 15, 23), standardWindows)).toBeNull();
   });
 
   it("returns morning for 7am exactly (window start)", () => {
-    expect(getCurrentAnchorSlot(dt(2024, 6, 15, 7), s, e)).toBe("morning");
+    expect(getCurrentAnchorSlot(dt(2024, 6, 15, 7), windows)).toBe("morning");
   });
 });
 

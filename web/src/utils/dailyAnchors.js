@@ -1,3 +1,5 @@
+import { getLociNowMinutes, getCurrentFocusSlot } from "./focusWindows";
+
 const ANCHOR_COPIES = [
   { title: "One small check-in", intro: "Before the day runs away." },
   { title: "Quick reset", intro: "A moment for what matters." },
@@ -11,40 +13,21 @@ const ANCHOR_COPIES = [
 const ANCHOR_ACCENTS = ["var(--accent)", "#d97706", "var(--accent-secondary)"];
 
 // Returns the Loci-day date string.
-// For overnight windows (dayEndHour >= 24), hours before wrapHour (e.g., 1am with dayEndHour=26)
-// belong to the PREVIOUS Loci day, not the calendar day.
-export function getLociDayStr(now = new Date(), dayStartHour = 7, dayEndHour = 26) {
-  let date = new Date(now);
-  if (dayEndHour >= 24) {
-    const wrapHour = dayEndHour - 24;
-    if (now.getHours() < wrapHour) {
-      date = new Date(now);
-      date.setDate(date.getDate() - 1);
-    }
-  }
+// For overnight focus windows, hours in the early-morning tail of a window
+// (e.g., 1am when a window runs 16:00-03:00) belong to the PREVIOUS Loci day,
+// not the calendar day.
+export function getLociDayStr(now = new Date(), windows) {
+  const lociNow = getLociNowMinutes(now, windows);
+  const date = new Date(now);
+  if (lociNow >= 1440) date.setDate(date.getDate() - 1);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-// Maps wall-clock hour to the Loci "logical hour" so after-midnight hours
-// in an overnight window compare correctly against dayStartHour/dayEndHour.
-function getLociHour(now, dayEndHour = 26) {
-  const h = now.getHours() + now.getMinutes() / 60;
-  if (dayEndHour >= 24) {
-    const wrapHour = dayEndHour - 24;
-    if (h < wrapHour) return h + 24; // e.g. 1:30am → 25.5
-  }
-  return h;
-}
-
-// Returns "morning" | "afternoon" | "evening" | null based on Loci work window.
-// Window is divided into thirds. Outside the window returns null.
-export function getCurrentAnchorSlot(now = new Date(), dayStartHour = 7, dayEndHour = 26) {
-  const lh = getLociHour(now, dayEndHour);
-  if (lh < dayStartHour || lh >= dayEndHour) return null;
-  const third = (dayEndHour - dayStartHour) / 3;
-  if (lh < dayStartHour + third) return "morning";
-  if (lh < dayStartHour + 2 * third) return "afternoon";
-  return "evening";
+// Returns "morning" | "afternoon" | "evening" | null based on the active focus
+// windows, dividing total focus time (across all windows) into thirds.
+// Outside all windows returns null.
+export function getCurrentAnchorSlot(now = new Date(), windows) {
+  return getCurrentFocusSlot(now, windows);
 }
 
 // Deterministic per calendar day: same day = same copy + accent, rotates tomorrow.

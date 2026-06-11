@@ -26,6 +26,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   const [editedChallenge, setEditedChallenge] = useState(() => normalizeChallengeKey(config.challengeType));
   const [editedDayStart, setEditedDayStart] = useState(config.dayStartHour ?? 7);
   const [editedDayEnd, setEditedDayEnd] = useState(config.dayEndHour ?? 26);
+  const [editedFocusWindows, setEditedFocusWindows] = useState(config.focusWindows || []);
   const [editedHeaderStyle, setEditedHeaderStyle] = useState(
     config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full")
   );
@@ -44,6 +45,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
     setEditedChallenge(normalizeChallengeKey(config.challengeType));
     setEditedDayStart(config.dayStartHour ?? 7);
     setEditedDayEnd(config.dayEndHour ?? 26);
+    setEditedFocusWindows(config.focusWindows || []);
     setEditedHeaderStyle(config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full"));
     setEditedToolsStyle(config.toolsStyle || "inline");
     setEditedDeadlineLabel(config.deadlineLabel || "");
@@ -52,9 +54,22 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
     setEditedDeadlineAction(config.deadlineAction || "");
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
       config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType,
-      config.dayStartHour, config.dayEndHour, config.headerStyle, config.toolsStyle,
+      config.dayStartHour, config.dayEndHour, config.focusWindows, config.headerStyle, config.toolsStyle,
       config.deadlineLabel, config.deadlineDate,
       config.deadlineStartDate, config.deadlineAction]);
+
+  // ── Focus window editing helpers ─────────────────────────────────────────
+  const handleAddFocusWindow = () => {
+    setEditedFocusWindows([...editedFocusWindows, { start: "09:00", end: "17:00" }]);
+  };
+
+  const handleRemoveFocusWindow = (idx) => {
+    setEditedFocusWindows(editedFocusWindows.filter((_, i) => i !== idx));
+  };
+
+  const handleFocusWindowChange = (idx, field, value) => {
+    setEditedFocusWindows(editedFocusWindows.map((w, i) => i === idx ? { ...w, [field]: value } : w));
+  };
 
   const challengeOptions = [
     {
@@ -151,6 +166,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
       eveningGuardWindowActive: editedEveningGuard,
       dayStartHour: editedDayStart,
       dayEndHour: editedDayEnd,
+      focusWindows: editedFocusWindows.filter(w => w.start && w.end && w.start !== w.end),
       headerStyle: editedHeaderStyle,
       toolsStyle: editedToolsStyle,
       roadmapStyle: "compact",
@@ -330,26 +346,83 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div className="form-group">
-              <label className="form-label" htmlFor="settings-day-start">Day Starts</label>
-              <select id="settings-day-start" className="text-input" value={editedDayStart}
-                onChange={e => setEditedDayStart(Number(e.target.value))}>
-                {[5, 6, 7, 8, 9, 10].map(h => (
-                  <option key={h} value={h}>{h < 12 ? `${h}:00 AM` : "12:00 PM"}</option>
-                ))}
-              </select>
+          {editedFocusWindows.length === 0 && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="settings-day-start">Day Starts</label>
+                <select id="settings-day-start" className="text-input" value={editedDayStart}
+                  onChange={e => setEditedDayStart(Number(e.target.value))}>
+                  {[5, 6, 7, 8, 9, 10].map(h => (
+                    <option key={h} value={h}>{h < 12 ? `${h}:00 AM` : "12:00 PM"}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="settings-day-end">Day Ends</label>
+                <select id="settings-day-end" className="text-input" value={editedDayEnd}
+                  onChange={e => setEditedDayEnd(Number(e.target.value))}>
+                  {[17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27].map(h => {
+                    const labels = { 17: "5 PM", 18: "6 PM", 19: "7 PM", 20: "8 PM", 21: "9 PM", 22: "10 PM", 23: "11 PM", 24: "12 AM", 25: "1 AM", 26: "2 AM", 27: "3 AM" };
+                    return <option key={h} value={h}>{labels[h]}</option>;
+                  })}
+                </select>
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="settings-day-end">Day Ends</label>
-              <select id="settings-day-end" className="text-input" value={editedDayEnd}
-                onChange={e => setEditedDayEnd(Number(e.target.value))}>
-                {[17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27].map(h => {
-                  const labels = { 17: "5 PM", 18: "6 PM", 19: "7 PM", 20: "8 PM", 21: "9 PM", 22: "10 PM", 23: "11 PM", 24: "12 AM", 25: "1 AM", 26: "2 AM", 27: "3 AM" };
-                  return <option key={h} value={h}>{labels[h]}</option>;
-                })}
-              </select>
-            </div>
+          )}
+
+          <div className="form-group">
+            <label className="form-label">Focus Windows</label>
+            <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px", marginBottom: "8px" }}>
+              {editedFocusWindows.length === 0
+                ? "Optional — add one or more time ranges to replace the single Day Starts/Ends range above. If the end time is earlier than the start time, the window crosses midnight."
+                : "These windows replace Day Starts/Ends above. If an end time is earlier than its start time, that window crosses midnight."}
+            </p>
+            {editedFocusWindows.map((w, idx) => (
+              <div key={idx} style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
+                <input
+                  type="time"
+                  className="text-input"
+                  value={w.start || ""}
+                  onChange={e => handleFocusWindowChange(idx, "start", e.target.value)}
+                  aria-label={`Focus window ${idx + 1} start time`}
+                  style={{ flex: 1, minWidth: 0 }}
+                />
+                <span style={{ fontSize: "12px", color: "var(--text-muted)", flexShrink: 0 }}>to</span>
+                <input
+                  type="time"
+                  className="text-input"
+                  value={w.end || ""}
+                  onChange={e => handleFocusWindowChange(idx, "end", e.target.value)}
+                  aria-label={`Focus window ${idx + 1} end time`}
+                  style={{ flex: 1, minWidth: 0 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveFocusWindow(idx)}
+                  aria-label={`Remove focus window ${idx + 1}`}
+                  style={{
+                    flexShrink: 0, width: "32px", height: "32px", padding: 0,
+                    borderRadius: "8px", border: "1.5px solid var(--border)",
+                    background: "var(--bg-secondary)", color: "var(--text-muted)",
+                    fontSize: "14px", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center"
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={handleAddFocusWindow}
+              style={{
+                width: "100%", padding: "10px", borderRadius: "var(--radius-sm)",
+                border: "1.5px dashed var(--border)", background: "none",
+                color: "var(--accent)", fontSize: "12.5px", fontWeight: "700", cursor: "pointer"
+              }}
+            >
+              + Add focus window
+            </button>
           </div>
 
           <div className="form-group">

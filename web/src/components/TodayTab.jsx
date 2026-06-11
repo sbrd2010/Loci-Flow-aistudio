@@ -12,6 +12,7 @@ import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/
 import { getCurrentFocusQuote } from "../utils/focusQuotes";
 import { formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
 import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
+import { getFocusWindows, getWindowState, getRemainingFocusMinutes, getNextWindowStart, getOverallSpan, getFocusProgress } from "../utils/focusWindows";
 import "../styles/focusNow.css";
 import {
   DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor,
@@ -22,39 +23,6 @@ import {
   useSortable, arrayMove
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-
-function getWorkWindowEnd(dayStartHour, dayEndHour) {
-  const now = new Date();
-  const nowH = now.getHours() + now.getMinutes() / 60;
-  const end = new Date(now);
-  if (dayEndHour >= 24) {
-    const wrapH = dayEndHour - 24;
-    if (nowH >= dayStartHour) {
-      end.setDate(now.getDate() + 1);
-      end.setHours(wrapH, 0, 0, 0);
-    } else if (nowH < wrapH) {
-      end.setHours(wrapH, 0, 0, 0);
-    } else {
-      return null;
-    }
-  } else {
-    if (nowH < dayStartHour || nowH >= dayEndHour) return null;
-    end.setHours(dayEndHour, 0, 0, 0);
-  }
-  return end;
-}
-
-// "before" = window hasn't started yet today, "during" = inside window, "after" = window closed
-function getWorkWindowState(dayStartHour, dayEndHour) {
-  const nowH = new Date().getHours() + new Date().getMinutes() / 60;
-  if (dayEndHour >= 24) {
-    const wrapH = dayEndHour - 24;
-    if (nowH >= dayStartHour || nowH < wrapH) return "during";
-    return "before";
-  }
-  if (nowH >= dayStartHour && nowH < dayEndHour) return "during";
-  return nowH < dayStartHour ? "before" : "after";
-}
 
 function SortableTaskItem({ id, children }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -82,6 +50,7 @@ export default function TodayTab({
   pipOpen, handleOpenPiP,
 }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
+  const windows = getFocusWindows(config);
 
   const [headerExpanded, setHeaderExpanded] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -120,13 +89,14 @@ export default function TodayTab({
   const [todayCountdown, setTodayCountdown] = useState(null);
   useEffect(() => {
     const tick = () => {
-      const end = getWorkWindowEnd(config.dayStartHour ?? 7, config.dayEndHour ?? 26);
-      setTodayCountdown(end ? formatTodayCountdown(end - Date.now()) : null);
+      const now = new Date();
+      const isDuring = getWindowState(now, windows) === "during";
+      setTodayCountdown(isDuring ? formatTodayCountdown(getRemainingFocusMinutes(now, windows) * 60000) : null);
     };
     tick();
     const id = setInterval(tick, 60000);
     return () => clearInterval(id);
-  }, [config.dayStartHour, config.dayEndHour]);
+  }, [config.dayStartHour, config.dayEndHour, config.focusWindows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const _tsd = new Date();
   const todayStr = `${_tsd.getFullYear()}-${String(_tsd.getMonth() + 1).padStart(2, "0")}-${String(_tsd.getDate()).padStart(2, "0")}`;
@@ -134,7 +104,7 @@ export default function TodayTab({
 
   // ── Daily Anchors derived state ────────────────────────────────────────────
   const anchors = config.dailyAnchors || [];
-  const anchorTodayStr = getLociDayStr(new Date(), config.dayStartHour ?? 7, config.dayEndHour ?? 26);
+  const anchorTodayStr = getLociDayStr(new Date(), windows);
   const todayCheckedIds = getTodayCheckedIds(config, anchorTodayStr);
   const todayShownSlots = getTodayShownSlots(config, anchorTodayStr);
   const anchorsCheckedCount = anchors.filter(a => todayCheckedIds.includes(a.id)).length;
@@ -151,13 +121,14 @@ export default function TodayTab({
   useEffect(() => {
     const tick = () => {
       if (!config.deadlineDate) { setTodayDeadlineRemaining(null); return; }
-      const end = getWorkWindowEnd(config.dayStartHour ?? 7, config.dayEndHour ?? 26);
-      setTodayDeadlineRemaining(end ? Math.max(0, end - Date.now()) : null);
+      const now = new Date();
+      const isDuring = getWindowState(now, windows) === "during";
+      setTodayDeadlineRemaining(isDuring ? getRemainingFocusMinutes(now, windows) * 60000 : null);
     };
     tick();
     const id = setInterval(tick, 60000);
     return () => clearInterval(id);
-  }, [config.deadlineDate, config.dayStartHour, config.dayEndHour]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [config.deadlineDate, config.dayStartHour, config.dayEndHour, config.focusWindows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const todayLiveDisplay = todayDeadlineRemaining === null ? null
     : todayDeadlineRemaining === 0 ? "0h 00m"
@@ -167,11 +138,14 @@ export default function TodayTab({
   const [currentTimeStr, setCurrentTimeStr] = useState("");
   const [currentDateStr, setCurrentDateStr] = useState("");
 
-  const formatHourLabel = (h) => {
-    const h24 = h % 24;
-    const isAM = h24 < 12 || h24 === 0;
-    const displayH = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
-    return `${displayH}${isAM ? "am" : "pm"}`;
+  const formatHourLabel = (hourFloat) => {
+    const totalMin = Math.round((((hourFloat % 24) + 24) % 24) * 60);
+    const hWhole = Math.floor(totalMin / 60);
+    const mins = totalMin % 60;
+    const isAM = hWhole < 12;
+    const displayH = hWhole % 12 === 0 ? 12 : hWhole % 12;
+    const minStr = mins === 0 ? "" : `:${String(mins).padStart(2, "0")}`;
+    return `${displayH}${minStr}${isAM ? "am" : "pm"}`;
   };
 
   const updateTimeline = () => {
@@ -183,18 +157,14 @@ export default function TodayTab({
     const amPmStr = hour >= 12 ? "PM" : "AM";
     setCurrentTimeStr(`${displayHour}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")} ${amPmStr}`);
     setCurrentDateStr(now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }));
-    const startHour = config.dayStartHour ?? 7;
-    const endHour = config.dayEndHour ?? 26;
-    const currentHourFloat = hour + minute / 60;
-    const adjustedHour = hour < startHour ? currentHourFloat + 24 : currentHourFloat;
-    setTimelineProgress(Math.max(0, Math.min(1, (adjustedHour - startHour) / (endHour - startHour))));
+    setTimelineProgress(getFocusProgress(now, windows));
   };
 
   useEffect(() => {
     updateTimeline();
     const interval = setInterval(updateTimeline, 1000);
     return () => clearInterval(interval);
-  }, [config.dayStartHour, config.dayEndHour]);
+  }, [config.dayStartHour, config.dayEndHour, config.focusWindows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const container = document.querySelector('.screen-content');
@@ -317,7 +287,7 @@ export default function TodayTab({
   useEffect(() => {
     if (!anchors.length) return;
     if (focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending) return;
-    const slot = getCurrentAnchorSlot(new Date(), config.dayStartHour ?? 7, config.dayEndHour ?? 26);
+    const slot = getCurrentAnchorSlot(new Date(), windows);
     if (!slot) return;
     if (todayShownSlots.includes(slot)) return;
     const snoozeUntil = config.anchorsSnoozeUntil;
@@ -336,7 +306,7 @@ export default function TodayTab({
   };
 
   const handleAnchorSheetDone = () => {
-    const slot = getCurrentAnchorSlot(new Date(), config.dayStartHour ?? 7, config.dayEndHour ?? 26);
+    const slot = getCurrentAnchorSlot(new Date(), windows);
     const nextSlots = slot && !todayShownSlots.includes(slot) ? [...todayShownSlots, slot] : todayShownSlots;
     saveSubPath("config", { ...config,
       anchorsShownSlots: nextSlots, anchorsSlotsDate: anchorTodayStr,
@@ -613,9 +583,13 @@ export default function TodayTab({
           : isWarning  ? "⏳"
           : "🎯";
 
-        const windowState = getWorkWindowState(config.dayStartHour ?? 7, config.dayEndHour ?? 26);
-        const startLabel = formatHourLabel(config.dayStartHour ?? 7);
-        const endLabel = formatHourLabel(config.dayEndHour ?? 26);
+        const now = new Date();
+        const windowState = getWindowState(now, windows);
+        const span = getOverallSpan(windows);
+        const startLabel = formatHourLabel(span.startMin / 60);
+        const endLabel = formatHourLabel(span.endMin / 60);
+        const nextWindow = windowState === "before" ? getNextWindowStart(now, windows) : null;
+        const nextOpenLabel = nextWindow ? formatHourLabel(nextWindow.startMin / 60) : startLabel;
 
         // ── Compact card ──────────────────────────────────────────────────────────
         return (
@@ -703,7 +677,7 @@ export default function TodayTab({
                     <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>{startLabel}</span>
                     {windowState === "before" && (
                       <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>
-                        opens {startLabel}
+                        opens {nextOpenLabel}
                       </span>
                     )}
                     {windowState === "during" && todayLiveDisplay && (
