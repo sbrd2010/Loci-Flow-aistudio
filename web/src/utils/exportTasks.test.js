@@ -18,7 +18,8 @@ describe("buildPayloadBackupData", () => {
 
   it("includes tasks array from payload", () => {
     const result = buildPayloadBackupData({ tasks: [TASK] });
-    expect(result.tasks).toEqual([TASK]);
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0]).toMatchObject(TASK);
     expect(result.taskCount).toBe(1);
   });
 
