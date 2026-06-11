@@ -36,6 +36,7 @@ export default function DeadlineProgressMirror({ payload }) {
   if (!mirror.hasDeadline) return null;
 
   const tone = TONE_STYLES[mirror.tone] || TONE_STYLES.neutral;
+  const todayTasksCount = (payload?.tasks || []).filter(t => t.isCompleted && !t.isDeleted).length;
 
   return (
     <section
@@ -94,10 +95,10 @@ export default function DeadlineProgressMirror({ payload }) {
                   fontFamily: "var(--font-mono)"
                 }}
               >
-                {day.status === "open" ? "" : status.mark}
+                {day.status === "open" ? (day.isToday && todayTasksCount > 0 ? todayTasksCount : "") : status.mark}
               </div>
-              <span style={{ fontSize: "9px", fontWeight: day.isToday ? "900" : "700", color: day.isToday ? tone.color : "var(--text-muted)", textTransform: "uppercase" }}>
-                {day.label}
+              <span style={{ fontSize: "9px", fontWeight: day.isToday ? "900" : "700", color: day.isToday ? tone.color : "var(--text-muted)", textTransform: "uppercase", whiteSpace: "nowrap" }}>
+                {day.isToday ? `${day.label} · ${day.dateLabel}` : day.label}
               </span>
             </div>
           );
