@@ -89,6 +89,21 @@ export function getRemainingFocusMinutes(now, windows) {
   return analyzeWindows(now, windows).remainingMin;
 }
 
+// Total scheduled focus minutes across all windows today (gaps excluded).
+function getTotalFocusMinutes(windows) {
+  return windows.reduce((sum, w) => sum + ((w.overnight ? w.endMin + 1440 : w.endMin) - w.startMin), 0);
+}
+
+// Fraction (0-1) of today's total scheduled focus time that has elapsed.
+// Time spent in a gap between windows does not advance this: progress holds
+// steady through the gap and resumes once the next window opens.
+export function getFocusProgress(now, windows) {
+  const totalMin = getTotalFocusMinutes(windows);
+  if (totalMin <= 0) return 0;
+  const { remainingMin } = analyzeWindows(now, windows);
+  return Math.max(0, Math.min(1, (totalMin - remainingMin) / totalMin));
+}
+
 // The next window to open today (for "opens at HH:MM"), or null if none remain.
 export function getNextWindowStart(now, windows) {
   return analyzeWindows(now, windows).nextWindow;

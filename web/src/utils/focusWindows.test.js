@@ -8,6 +8,7 @@ import {
   getNextWindowStart,
   getOverallSpan,
   getCurrentFocusSlot,
+  getFocusProgress,
 } from "./focusWindows";
 
 const dt = (h, mi = 0) => new Date(2024, 5, 15, h, mi);
@@ -216,6 +217,51 @@ describe("getOverallSpan", () => {
       ],
     });
     expect(getOverallSpan(windows)).toEqual({ startMin: 660, endMin: 1620 });
+  });
+});
+
+describe("getFocusProgress", () => {
+  it("is 0 before a single window opens and 1 after it closes", () => {
+    const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] });
+    expect(getFocusProgress(dt(8), windows)).toBe(0);
+    expect(getFocusProgress(dt(18), windows)).toBe(1);
+  });
+
+  it("tracks elapsed/total scheduled minutes during a single window", () => {
+    const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] });
+    expect(getFocusProgress(dt(12), windows)).toBeCloseTo(180 / 480); // 3h elapsed of 8h total
+  });
+
+  it("holds steady through a gap between split windows (excludes gap time)", () => {
+    const windows = getFocusWindows({
+      focusWindows: [
+        { start: "11:00", end: "15:00" },
+        { start: "16:00", end: "20:00" },
+      ],
+    });
+    // total scheduled = 4h + 4h = 8h; window1 fully elapsed = 4h -> 0.5
+    const atGapStart = getFocusProgress(dt(15, 1), windows);
+    const atGapEnd = getFocusProgress(dt(15, 59), windows);
+    expect(atGapStart).toBeCloseTo(0.5);
+    expect(atGapEnd).toBeCloseTo(0.5);
+    expect(atGapStart).toBe(atGapEnd);
+  });
+
+  it("resumes after the gap once the next window opens", () => {
+    const windows = getFocusWindows({
+      focusWindows: [
+        { start: "11:00", end: "15:00" },
+        { start: "16:00", end: "20:00" },
+      ],
+    });
+    expect(getFocusProgress(dt(18), windows)).toBeCloseTo((240 + 120) / 480); // 6h elapsed of 8h total
+  });
+
+  it("handles the overnight tail (legacy 7am-2am window)", () => {
+    const windows = getFocusWindows({ dayStartHour: 7, dayEndHour: 26 });
+    expect(getFocusProgress(dt(10), windows)).toBeCloseTo(180 / 1140); // 3h of 19h
+    expect(getFocusProgress(dt(1), windows)).toBeCloseTo(1080 / 1140); // 18h of 19h
+    expect(getFocusProgress(dt(3), windows)).toBe(0); // gap before tomorrow's window opens
   });
 });
 

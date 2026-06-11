@@ -12,7 +12,7 @@ import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/
 import { getCurrentFocusQuote } from "../utils/focusQuotes";
 import { formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
 import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
-import { getFocusWindows, getWindowState, getRemainingFocusMinutes, getNextWindowStart, getOverallSpan, getLociNowMinutes } from "../utils/focusWindows";
+import { getFocusWindows, getWindowState, getRemainingFocusMinutes, getNextWindowStart, getOverallSpan, getFocusProgress } from "../utils/focusWindows";
 import "../styles/focusNow.css";
 import {
   DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor,
@@ -157,9 +157,7 @@ export default function TodayTab({
     const amPmStr = hour >= 12 ? "PM" : "AM";
     setCurrentTimeStr(`${displayHour}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")} ${amPmStr}`);
     setCurrentDateStr(now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }));
-    const span = getOverallSpan(windows);
-    const lociNow = getLociNowMinutes(now, windows);
-    setTimelineProgress(Math.max(0, Math.min(1, (lociNow - span.startMin) / (span.endMin - span.startMin))));
+    setTimelineProgress(getFocusProgress(now, windows));
   };
 
   useEffect(() => {
