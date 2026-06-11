@@ -552,6 +552,8 @@ export default function App() {
             onOpenAddTask={() => openAddTask("today")}
             onOpenDayMap={openDayMap}
             onOpenMindBox={openMindBox}
+            onOpenCoach={() => setActiveTab("coach")}
+            isAddTaskDialogOpen={showAddTask}
             {...focusTimer}
           />
         )}
