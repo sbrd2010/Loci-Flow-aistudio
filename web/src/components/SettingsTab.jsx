@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 import PrivacyPolicy from "./PrivacyPolicy";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import { ref, push } from "firebase/database";
 import { exportPayloadAsJson, exportTasksAsCsv } from "../utils/exportTasks";
 
@@ -95,6 +95,11 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   const handleBugSubmit = async (e) => {
     e.preventDefault();
     if (!bugWhat.trim()) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      setBugError("Couldn't submit - check your connection and try again.");
+      return;
+    }
     setBugSubmitting(true);
     setBugError("");
     try {
@@ -102,7 +107,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
         what: bugWhat.trim(),
         steps: bugSteps.trim(),
         device: bugDevice.trim(),
-        userId: config.userId || "unknown",
+        userId: uid,
+        userEmail: auth.currentUser?.email || null,
         appVersion: import.meta.env.VITE_APP_VERSION || "dev",
         submittedAt: Date.now()
       });
@@ -110,7 +116,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
       setBugWhat(""); setBugSteps(""); setBugDevice("");
       setTimeout(() => { setBugSuccess(false); setShowBugForm(false); }, 2500);
     } catch (_) {
-      setBugError("Couldn't submit — check your connection and try again.");
+      setBugError("Couldn't submit - check your connection and try again.");
     } finally {
       setBugSubmitting(false);
     }

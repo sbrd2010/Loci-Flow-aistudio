@@ -17,7 +17,7 @@ test("reliability: RTDB sync data remains scoped to the signed-in uid", () => {
   expect(rules.$other[".write"]).toBe(false);
 });
 
-test("reliability: bug reports are write-only and tied to the signed-in email", () => {
+test("reliability: bug reports are write-only and tied to the signed-in uid", () => {
   const rules = loadDatabaseRules();
   const bugReportRules = rules.bugReports;
   const createRule = bugReportRules.$reportId[".write"];
@@ -25,5 +25,5 @@ test("reliability: bug reports are write-only and tied to the signed-in email", 
   expect(bugReportRules[".read"]).toBe(false);
   expect(createRule).toContain("auth != null");
   expect(createRule).toContain("!data.exists()");
-  expect(createRule).toContain("auth.token.email === newData.child('userId').val()");
+  expect(createRule).toContain("auth.uid === newData.child('userId').val()");
 });
