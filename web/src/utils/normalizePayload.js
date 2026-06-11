@@ -21,6 +21,64 @@ function hasOwn(obj, key) {
   return Object.prototype.hasOwnProperty.call(obj, key);
 }
 
+function sanitizeString(value, maxLength, fallback = "") {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim().slice(0, maxLength);
+  return trimmed || fallback;
+}
+
+function fallbackTask(index, fallbackUserId, now) {
+  return {
+    id: now + index,
+    userId: fallbackUserId,
+    uuid: `repaired-invalid-${now}-${index}`,
+    title: "Recovered invalid task",
+    concreteStep: "Review or delete this recovered item",
+    horizonLevel: "week",
+    priority: "P3",
+    category: "Personal",
+    timeEstimateMinutes: 25,
+    deadlineTimestamp: null,
+    reminderAt: null,
+    isCompleted: false,
+    isParked: false,
+    isNowFocus: false,
+    orderIndex: index,
+    dateCompletedString: null,
+    isDeleted: true,
+    lastUpdated: now,
+  };
+}
+
+// Repairs task objects so the next full-payload RTDB set() satisfies the current
+// database.rules.json task schema. This is intentionally applied to existing
+// local/cache payloads too, not only newly-created tasks, because one malformed
+// old task can make every later full save fail atomically.
+export function sanitizeTaskForRules(task, index = 0, fallbackUserId = "", now = Date.now()) {
+  if (!task || typeof task !== "object" || Array.isArray(task)) {
+    return fallbackTask(index, fallbackUserId, now);
+  }
+
+  const repaired = {
+    ...task,
+    id: task.id ?? (now + index),
+    userId: sanitizeString(task.userId, 200, fallbackUserId),
+    title: sanitizeString(task.title, 300, "Untitled task"),
+  };
+
+  if (!repaired.uuid) repaired.uuid = `repaired-${now}-${index}`;
+
+  if (hasOwn(task, "concreteStep")) {
+    repaired.concreteStep = sanitizeString(task.concreteStep, 300, "Do first tiny step");
+  }
+
+  return repaired;
+}
+
+export function sanitizeTasksForRules(tasks, fallbackUserId = "", now = Date.now()) {
+  return arrayOrEmpty(tasks).map((task, index) => sanitizeTaskForRules(task, index, fallbackUserId, now));
+}
+
 function brainDumpsEqual(a, b) {
   try {
     return JSON.stringify(arrayOrEmpty(a)) === JSON.stringify(arrayOrEmpty(b));
@@ -48,10 +106,12 @@ export function normalizePayload(raw) {
     return { tasks: [], config: {}, contributions: [], brainDump: [], brainDumpUpdatedAt: 0 };
   }
   const brainDump = arrayOrEmpty(raw.brainDump);
+  const config = objectOrEmpty(raw.config);
+  const fallbackUserId = sanitizeString(raw.userId, 200, sanitizeString(config.userId, 200, ""));
   return {
     ...raw,
-    tasks: arrayOrEmpty(raw.tasks),
-    config: objectOrEmpty(raw.config),
+    tasks: sanitizeTasksForRules(raw.tasks, fallbackUserId),
+    config,
     contributions: arrayOrEmpty(raw.contributions),
     brainDump,
     brainDumpUpdatedAt: inferBrainDumpUpdatedAt(raw, brainDump),
@@ -109,15 +169,17 @@ export function isTaskCountDropSuspicious(nextTasks, currentTasks, threshold = 3
 // Callers use hasLocalContribution to know whether to write the merged result back
 // to RTDB for cross-device convergence.
 function mergeTasks(remoteTasks, localTasks) {
+  const sanitizedRemoteTasks = sanitizeTasksForRules(remoteTasks);
+  const sanitizedLocalTasks = sanitizeTasksForRules(localTasks);
   const localByUuid = new Map(
-    arrayOrEmpty(localTasks)
+    sanitizedLocalTasks
       .filter(t => t.uuid)
       .map(t => [t.uuid, t])
   );
 
   let hasLocalContribution = false;
 
-  const merged = arrayOrEmpty(remoteTasks).map(remoteTask => {
+  const merged = sanitizedRemoteTasks.map(remoteTask => {
     if (!remoteTask.uuid) return remoteTask;
     const localTask = localByUuid.get(remoteTask.uuid);
     if (!localTask) return remoteTask;
@@ -130,8 +192,8 @@ function mergeTasks(remoteTasks, localTasks) {
     return remoteTask;
   });
 
-  const remoteUuids = new Set(arrayOrEmpty(remoteTasks).map(t => t.uuid).filter(Boolean));
-  const localOnlyTasks = arrayOrEmpty(localTasks).filter(
+  const remoteUuids = new Set(sanitizedRemoteTasks.map(t => t.uuid).filter(Boolean));
+  const localOnlyTasks = sanitizedLocalTasks.filter(
     t => t.uuid && !remoteUuids.has(t.uuid) && !t.isDeleted
   );
 
@@ -139,7 +201,6 @@ function mergeTasks(remoteTasks, localTasks) {
 
   return { tasks: [...merged, ...localOnlyTasks], hasLocalContribution };
 }
-
 
 // Merges remote and local config objects using config.lastUpdated.
 // The config with the newer lastUpdated wins as a whole; remote wins on tie or
