@@ -166,7 +166,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
       eveningGuardWindowActive: editedEveningGuard,
       dayStartHour: editedDayStart,
       dayEndHour: editedDayEnd,
-      focusWindows: editedFocusWindows.filter(w => w.start && w.end),
+      focusWindows: editedFocusWindows.filter(w => w.start && w.end && w.start !== w.end),
       headerStyle: editedHeaderStyle,
       toolsStyle: editedToolsStyle,
       roadmapStyle: "compact",

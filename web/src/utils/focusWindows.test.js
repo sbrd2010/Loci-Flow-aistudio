@@ -59,6 +59,13 @@ describe("getFocusWindows", () => {
     ]);
   });
 
+  it("falls back when focusWindows is not an array (string, object, or null)", () => {
+    const expected = [{ startMin: 540, endMin: 1020, overnight: false }];
+    expect(getFocusWindows({ focusWindows: "garbage", dayStartHour: 9, dayEndHour: 17 })).toEqual(expected);
+    expect(getFocusWindows({ focusWindows: {}, dayStartHour: 9, dayEndHour: 17 })).toEqual(expected);
+    expect(getFocusWindows({ focusWindows: null, dayStartHour: 9, dayEndHour: 17 })).toEqual(expected);
+  });
+
   it("falls back when every entry in focusWindows is invalid", () => {
     expect(
       getFocusWindows({ focusWindows: [{ start: "bad", end: "data" }], dayStartHour: 9, dayEndHour: 17 })
