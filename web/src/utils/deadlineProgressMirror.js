@@ -1,4 +1,5 @@
 import { getLocalDateString } from "./deadlineCountdown";
+import { getLociDayStr, getFocusWindows } from "./focusWindows";
 
 function hasDeadline(config = {}) {
   return !!(config.deadlineLabel || config.deadlineDate || config.deadlineAction);
@@ -26,19 +27,27 @@ function statusForDate(config, history, dateStr, todayStr) {
   return "untracked";
 }
 
-function countDoneRun(days) {
+function countDoneRun(days, todayStr) {
+  const todayIndex = days.findIndex(d => d.dateStr === todayStr);
+  if (todayIndex === -1) return 0;
+
   let run = 0;
-  for (let i = days.length - 1; i >= 0; i -= 1) {
+  for (let i = todayIndex; i >= 0; i -= 1) {
     const day = days[i];
-    if (day.status === "open" && i === days.length - 1) continue;
+    if (day.status === "open" && i === todayIndex) continue;
     if (day.status !== "done") break;
     run += 1;
   }
   return run;
 }
 
+export function countTodayCompletedTasks(tasks, todayStr) {
+  return (tasks || []).filter(t => !t.isDeleted && t.isCompleted && t.dateCompletedString === todayStr).length;
+}
+
 export function buildDeadlineProgressMirror(config = {}, today = new Date(), dayCount = 7) {
-  const todayStr = getLocalDateString(today);
+  const windows = getFocusWindows(config);
+  const todayStr = getLociDayStr(today, windows);
   const deadlineExists = hasDeadline(config);
 
   if (!deadlineExists) {
@@ -56,13 +65,28 @@ export function buildDeadlineProgressMirror(config = {}, today = new Date(), day
   }
 
   const history = cloneHistory(config.deadlineMoveHistory);
+
+  // Parse todayStr local representation
+  const [year, month, day] = todayStr.split("-").map(Number);
+  const lociDate = new Date(year, month - 1, day);
+
+  const dayIndex = lociDate.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  const daysToMonday = dayIndex === 0 ? 6 : dayIndex - 1;
+
   const days = [];
-  for (let i = dayCount - 1; i >= 0; i -= 1) {
-    const date = addDays(today, -i);
-    const dateStr = getLocalDateString(date);
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(lociDate);
+    d.setDate(d.getDate() - daysToMonday + i);
+    const dateStr = getLocalDateString(d);
+
+    const dateLabel = `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+
     days.push({
       dateStr,
-      label: weekdayLabel(date),
+      label: weekdayLabel(d),
+      dateLabel,
       isToday: dateStr === todayStr,
       status: statusForDate(config, history, dateStr, todayStr)
     });
@@ -70,8 +94,8 @@ export function buildDeadlineProgressMirror(config = {}, today = new Date(), day
 
   const doneCount = days.filter(day => day.status === "done").length;
   const missedCount = days.filter(day => day.status === "missed").length;
-  const todayStatus = days[days.length - 1]?.status || "open";
-  const doneRun = countDoneRun(days);
+  const todayStatus = days.find(day => day.isToday)?.status || "open";
+  const doneRun = countDoneRun(days, todayStr);
   const action = (config.deadlineAction || "one real move").trim();
   const label = (config.deadlineLabel || "Key deadline").trim();
 

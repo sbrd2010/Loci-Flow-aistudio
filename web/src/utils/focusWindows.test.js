@@ -9,6 +9,7 @@ import {
   getOverallSpan,
   getCurrentFocusSlot,
   getFocusProgress,
+  getLociDayStr,
 } from "./focusWindows";
 
 const dt = (h, mi = 0) => new Date(2024, 5, 15, h, mi);
@@ -293,3 +294,26 @@ describe("getCurrentFocusSlot across split windows 11:00-15:00, 16:00-03:00", ()
     expect(getCurrentFocusSlot(dt(2), windows)).toBe("evening");
   });
 });
+
+describe("getLociDayStr", () => {
+  const windows = [{ startMin: 960, endMin: 180, overnight: true }]; // 4pm - 3am
+
+  it("returns normal local date string during the window before midnight", () => {
+    // 2026-06-11 (Thursday) at 23:00
+    const now = new Date(2026, 5, 11, 23, 0);
+    expect(getLociDayStr(now, windows)).toBe("2026-06-11");
+  });
+
+  it("returns previous calendar day during overnight tail after midnight", () => {
+    // 2026-06-12 (Friday) at 01:30 AM (belongs to Thursday Loci day)
+    const now = new Date(2026, 5, 12, 1, 30);
+    expect(getLociDayStr(now, windows)).toBe("2026-06-11");
+  });
+
+  it("returns normal local date string after the window end time", () => {
+    // 2026-06-12 (Friday) at 04:00 AM (after 03:00 AM tail)
+    const now = new Date(2026, 5, 12, 4, 0);
+    expect(getLociDayStr(now, windows)).toBe("2026-06-12");
+  });
+});
+

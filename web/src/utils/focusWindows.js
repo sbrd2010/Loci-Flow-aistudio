@@ -140,3 +140,12 @@ export function getCurrentFocusSlot(now, windows) {
   if (elapsed < 2 * third) return "afternoon";
   return "evening";
 }
+
+export function getLociDayStr(now, windows) {
+  const date = new Date(now);
+  if (getLociNowMinutes(now, windows) >= 1440) {
+    date.setDate(date.getDate() - 1);
+  }
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
