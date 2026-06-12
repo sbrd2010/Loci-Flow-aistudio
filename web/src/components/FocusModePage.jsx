@@ -102,7 +102,7 @@ export default function FocusModePage({
 
   // Visual state color mappings
   const timerState = getTimerState(secondsLeft, maxSeconds);
-  let ringStroke = "#7ab59b"; // normal
+  let ringStroke = "#57f1db"; // normal
   if (timerState === "almost-done" || timerState === "complete") ringStroke = "#d46a5f"; // almost-done/complete
   else if (timerState === "near-end") ringStroke = "#c99248"; // near-end
 

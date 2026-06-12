@@ -14,14 +14,14 @@ export function shouldShowFloatingTimer({ activeTab, focusSessionActive, hasActi
 
 // Calculate the active timer state based on remaining percentage:
 // - complete: 0 seconds left
-// - almost-done: 1% to 15% remaining
-// - near-end: 15% to 30% remaining
-// - normal: > 30% remaining
+// - almost-done: 1% to 25% remaining
+// - near-end: 25% to 50% remaining
+// - normal: > 50% remaining
 export function getTimerState(secondsLeft, maxSeconds) {
   if (secondsLeft <= 0) return "complete";
   const pct = maxSeconds > 0 ? (secondsLeft / maxSeconds) * 100 : 0;
-  if (pct <= 15) return "almost-done";
-  if (pct <= 30) return "near-end";
+  if (pct <= 25) return "almost-done";
+  if (pct <= 50) return "near-end";
   return "normal";
 }
 

@@ -39,18 +39,18 @@ describe("shouldShowFloatingTimer", () => {
 });
 
 describe("getTimerState", () => {
-  it("returns normal when remaining time is more than 30%", () => {
+  it("returns normal when remaining time is more than 50%", () => {
     expect(getTimerState(100, 100)).toBe("normal");
-    expect(getTimerState(31, 100)).toBe("normal");
+    expect(getTimerState(51, 100)).toBe("normal");
   });
 
-  it("returns near-end when remaining time is between 15% and 30% inclusive", () => {
-    expect(getTimerState(30, 100)).toBe("near-end");
-    expect(getTimerState(16, 100)).toBe("near-end");
+  it("returns near-end when remaining time is between 25% and 50% inclusive", () => {
+    expect(getTimerState(50, 100)).toBe("near-end");
+    expect(getTimerState(26, 100)).toBe("near-end");
   });
 
-  it("returns almost-done when remaining time is between 1% and 15% inclusive", () => {
-    expect(getTimerState(15, 100)).toBe("almost-done");
+  it("returns almost-done when remaining time is between 1% and 25% inclusive", () => {
+    expect(getTimerState(25, 100)).toBe("almost-done");
     expect(getTimerState(1, 100)).toBe("almost-done");
   });
 
