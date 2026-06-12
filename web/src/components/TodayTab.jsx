@@ -318,7 +318,7 @@ export default function TodayTab({
 
   // ── Daily Anchors / Morning Ritual auto-show ───────────────────────────────
   useEffect(() => {
-    if (focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending) return;
+    if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || showRescue) return;
     let slot = null;
     if (shouldShowMorningRitual(new Date(), config)) {
       slot = "morning";
@@ -334,7 +334,8 @@ export default function TodayTab({
     const timer = setTimeout(() => setShowAnchorSheet(true), 2500);
     return () => clearTimeout(timer);
   }, [
-    anchors.length, todayShownSlotsKey, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, config.anchorsSnoozeUntil,
+    anchors.length, todayShownSlotsKey, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending,
+    isAddTaskDialogOpen, showAnchorSheet, showDailyCheckin, showRescue, config.anchorsSnoozeUntil,
     config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, visibilityTick,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
