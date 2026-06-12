@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { BINAURAL_TRACK_ID, createBinauralBeatNode, migrateTrackId } from "../utils/binauralBeat";
+import { trackUrl, getCategoryKeyForTrack, pickRandomVariation } from "../utils/soundLibrary";
 
 export function useFocusAudio(isRunning, config = {}, saveSubPath) {
   const [selectedTrack, setSelectedTrack] = useState(migrateTrackId(config.focusSoundTrack) || null);
@@ -44,7 +45,7 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
         }
       }
     } else if (selectedTrack && selectedTrack !== "none" && typeof Audio !== "undefined") {
-      const audio = new Audio(`/sounds/${selectedTrack}`);
+      const audio = new Audio(trackUrl(selectedTrack));
       audio.loop = true;
       audio.volume = volume;
       audioRef.current = audio;
@@ -109,6 +110,25 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
     }
   };
 
+  // Selecting one of the ambient categories (Rain, Lo-Fi, Jazz, Piano) picks
+  // a random variation from its 8 tracks (1 bundled + 7 CDN), or toggles the
+  // category off if it's already playing.
+  const selectCategory = (categoryKey) => {
+    if (getCategoryKeyForTrack(selectedTrack) === categoryKey) {
+      selectTrack("none");
+    } else {
+      selectTrack(pickRandomVariation(categoryKey));
+    }
+  };
+
+  // Swap the current track for a different random variation in the same
+  // category, without changing the active category.
+  const reshuffleTrack = () => {
+    const categoryKey = getCategoryKeyForTrack(selectedTrack);
+    if (!categoryKey) return;
+    selectTrack(pickRandomVariation(categoryKey, selectedTrack));
+  };
+
   const changeVolume = (newVolume) => {
     const clampedVolume = Math.max(0, Math.min(1, newVolume));
     setVolume(clampedVolume);
@@ -127,6 +147,8 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
     selectedTrack,
     volume,
     selectTrack,
+    selectCategory,
+    reshuffleTrack,
     changeVolume
   };
 }

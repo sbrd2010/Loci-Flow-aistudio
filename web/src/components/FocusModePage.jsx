@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { getTimerState } from "../utils/focusSession";
 import { BINAURAL_TRACK_ID } from "../utils/binauralBeat";
+import { SOUND_CATEGORIES, getCategoryKeyForTrack, getTrackTitle } from "../utils/soundLibrary";
 import "../styles/focusMode.css";
 
 const DURATION_OPTIONS = [15, 20, 25, 30, 45, 60, 90];
@@ -72,10 +73,16 @@ export default function FocusModePage({
   selectedTrack,
   volume,
   selectTrack,
+  selectCategory,
+  reshuffleTrack,
   changeVolume,
 }) {
   const autoExitRef = useRef(null);
   const isComplete = secondsLeft === 0;
+
+  // Which Sounds drawer tile is currently active: an ambient category key
+  // (e.g. "rain"), the binaural track id, or "none".
+  const activeSoundKey = selectedTrack ? (getCategoryKeyForTrack(selectedTrack) || selectedTrack) : "none";
 
   const [dumpText, setDumpText] = useState("");
   const [dumpSaved, setDumpSaved] = useState(false);
@@ -313,28 +320,44 @@ export default function FocusModePage({
           <div className="focus-sounds-tiles">
             {[
               { id: "none", title: "None", icon: "🚫", desc: "Silent focus" },
-              { id: "after-school-rain.mp3", title: "Relaxing Rain", icon: "🌧️", desc: "Nature ambience" },
-              { id: "2-am-debug-loop.mp3", title: "Lo-Fi Beats", icon: "🎧", desc: "Downtempo beats" },
-              { id: "midnight-amber-room.mp3", title: "Jazz Lounge", icon: "🎷", desc: "Smooth jazz" },
-              { id: "dust-on-the-morning-keys.mp3", title: "Classical Piano", icon: "🎹", desc: "Gentle piano" },
+              { id: "rain", title: SOUND_CATEGORIES.rain.title, icon: SOUND_CATEGORIES.rain.icon, desc: "Nature ambience" },
+              { id: "lofi", title: SOUND_CATEGORIES.lofi.title, icon: SOUND_CATEGORIES.lofi.icon, desc: "Downtempo beats" },
+              { id: "jazz", title: SOUND_CATEGORIES.jazz.title, icon: SOUND_CATEGORIES.jazz.icon, desc: "Smooth jazz" },
+              { id: "piano", title: SOUND_CATEGORIES.piano.title, icon: SOUND_CATEGORIES.piano.icon, desc: "Gentle piano" },
               { id: BINAURAL_TRACK_ID, title: "Binaural 40Hz", icon: "🧠", desc: "Focus tone (use headphones)" }
             ].map(track => {
-              const isActive = (track.id === "none" && !selectedTrack) || (selectedTrack === track.id);
+              const isActive = activeSoundKey === track.id;
+              const isAmbientCategory = Boolean(SOUND_CATEGORIES[track.id]);
               return (
-                <button
-                  key={track.id}
-                  type="button"
-                  className={`sound-tile${isActive ? " active" : ""}`}
-                  onClick={() => selectTrack(track.id)}
-                  aria-pressed={isActive}
-                  tabIndex={showSoundsDrawer ? 0 : -1}
-                >
-                  <span className="sound-tile-icon">{track.icon}</span>
-                  <div className="sound-tile-info">
-                    <div className="sound-tile-title">{track.title}</div>
-                    <div className="sound-tile-desc">{track.desc}</div>
-                  </div>
-                </button>
+                <div key={track.id} className="sound-tile-row">
+                  <button
+                    type="button"
+                    className={`sound-tile${isActive ? " active" : ""}`}
+                    onClick={() => isAmbientCategory ? selectCategory(track.id) : selectTrack(track.id)}
+                    aria-pressed={isActive}
+                    tabIndex={showSoundsDrawer ? 0 : -1}
+                  >
+                    <span className="sound-tile-icon">{track.icon}</span>
+                    <div className="sound-tile-info">
+                      <div className="sound-tile-title">{track.title}</div>
+                      <div className="sound-tile-desc">
+                        {isActive && isAmbientCategory ? getTrackTitle(selectedTrack) : track.desc}
+                      </div>
+                    </div>
+                  </button>
+                  {isActive && isAmbientCategory && (
+                    <button
+                      type="button"
+                      className="sound-tile-shuffle"
+                      onClick={() => reshuffleTrack()}
+                      aria-label="Play a different variation"
+                      title="Play a different variation"
+                      tabIndex={showSoundsDrawer ? 0 : -1}
+                    >
+                      🔀
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
