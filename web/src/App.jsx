@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { auth, track, setAnalyticsUser } from "./firebase";
 import { computeUserProfile } from "./utils/userProfile";
-import { scheduleAllReminders } from "./utils/reminders";
+import { scheduleAllReminders, scheduleCoachCheckin } from "./utils/reminders";
 import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { useSync, CONN } from "./useSync";
@@ -183,6 +183,11 @@ export default function App() {
   useEffect(() => {
     if (payload?.tasks) scheduleAllReminders(payload.tasks);
   }, [payload?.tasks]);
+
+  // Re-arm a pending Coach Check-In notification (see CoachTab) on load/refresh
+  useEffect(() => {
+    if (payload?.config?.coachCheckin) scheduleCoachCheckin(payload.config.coachCheckin);
+  }, [payload?.config?.coachCheckin]);
 
   const todayStr = useTodayStr();
 
