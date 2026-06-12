@@ -183,11 +183,11 @@
   fill: none;
   stroke-linecap: round;
   transition: stroke-dashoffset 1s linear, stroke 0.45s ease;
-  filter: drop-shadow(0 0 7px rgba(122, 181, 155, 0.22));
+  filter: drop-shadow(0 0 7px rgba(87, 241, 219, 0.22));
 }
 
 .focus-mode-overlay.is-running .focus-mode-ring-progress {
-  filter: drop-shadow(0 0 9px rgba(122, 181, 155, 0.28));
+  filter: drop-shadow(0 0 9px rgba(87, 241, 219, 0.28));
 }
 
 .focus-mode-time-overlay {
@@ -551,9 +551,9 @@
    Timer state visual states and transitions
    ================================================================ */
 .focus-mode-overlay.timer-state-normal {
-  --timer-state-color: #7ab59b;
-  --timer-state-bg: rgba(122, 181, 155, 0.08);
-  --timer-state-border: rgba(122, 181, 155, 0.24);
+  --timer-state-color: #57f1db;
+  --timer-state-bg: rgba(87, 241, 219, 0.08);
+  --timer-state-border: rgba(87, 241, 219, 0.24);
 }
 .focus-mode-overlay.timer-state-near-end {
   --timer-state-color: #c99248;
