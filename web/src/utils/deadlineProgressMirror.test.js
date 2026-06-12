@@ -157,6 +157,26 @@ describe("deadlineProgressMirror", () => {
     expect(mirror.days[3].isToday).toBe(true);
   });
 
+
+  it("matches completions saved with the Loci-day key during an overnight tail", () => {
+    const config = {
+      deadlineLabel: "Visa deadline",
+      deadlineAction: "apply to one role",
+      deadlineDailyDoneDate: "2026-06-11",
+      focusWindows: [{ start: "22:00", end: "04:00" }]
+    };
+
+    const mirror = buildDeadlineProgressMirror(config, new Date(2026, 5, 12, 1, 0));
+
+    expect(mirror.todayStr).toBe("2026-06-11");
+    expect(mirror.todayStatus).toBe("done");
+    expect(mirror.days.find(day => day.isToday).status).toBe("done");
+    expect(countTodayCompletedTasks([
+      { isCompleted: true, isDeleted: false, dateCompletedString: "2026-06-11" },
+      { isCompleted: true, isDeleted: false, dateCompletedString: "2026-06-12" }
+    ], mirror.todayStr)).toBe(1);
+  });
+
   it("handles empty/missing history gracefully when deadline is configured", () => {
     const config = {
       deadlineLabel: "Visa deadline",

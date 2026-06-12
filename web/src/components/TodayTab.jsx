@@ -100,15 +100,13 @@ export default function TodayTab({
     return () => clearInterval(id);
   }, [config.dayStartHour, config.dayEndHour, config.focusWindows]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const _tsd = new Date();
-  const todayStr = `${_tsd.getFullYear()}-${String(_tsd.getMonth() + 1).padStart(2, "0")}-${String(_tsd.getDate()).padStart(2, "0")}`;
+  const todayStr = getLociDayStr(new Date(), windows);
   const isDoneToday = isDailyDone(config.deadlineDailyDoneDate, todayStr);
 
   // ── Daily Anchors derived state ────────────────────────────────────────────
   const anchors = config.dailyAnchors || [];
-  const anchorTodayStr = getLociDayStr(new Date(), windows);
-  const todayCheckedIds = getTodayCheckedIds(config, anchorTodayStr);
-  const todayShownSlots = getTodayShownSlots(config, anchorTodayStr);
+  const todayCheckedIds = getTodayCheckedIds(config, todayStr);
+  const todayShownSlots = getTodayShownSlots(config, todayStr);
   const anchorsCheckedCount = anchors.filter(a => todayCheckedIds.includes(a.id)).length;
   const todayShownSlotsKey = todayShownSlots.join(",");
   const handleDeadlineDoneToday = () => {
@@ -182,10 +180,7 @@ export default function TodayTab({
   const [undoTask, setUndoTask] = useState(null);
   const undoTimeoutRef = useRef(null);
 
-  const getTodayDateString = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
+  const getTodayDateString = () => getLociDayStr(new Date(), windows);
 
   const incrementContribution = (newContributions, dateStr) => {
     const index = newContributions.findIndex((c) => c.dateString === dateStr);
