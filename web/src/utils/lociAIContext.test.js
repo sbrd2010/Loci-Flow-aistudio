@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLociCoreInstruction, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociDeadlineContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
+import { buildLociCoreInstruction, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
 import { getFocusWindows } from "./focusWindows";
 
 describe("lociAIContext", () => {
@@ -281,5 +281,86 @@ describe("buildLociDeadlineContext", () => {
     const context = buildLociDeadlineContext(config, new Date(2026, 5, 12, 9));
 
     expect(context).not.toContain("secret-groq");
+  });
+});
+
+describe("buildLociDayMapContext", () => {
+  const TODAY = "2026-06-12";
+
+  it("returns an empty string when nothing is scheduled today", () => {
+    expect(buildLociDayMapContext([], TODAY)).toBe("");
+    expect(buildLociDayMapContext([
+      { title: "Unscheduled", horizonLevel: "today" },
+      { title: "Scheduled yesterday", dayMapDate: "2026-06-11", dayMapOrder: 0, dayMapStartMinutes: 480 },
+    ], TODAY)).toBe("");
+  });
+
+  it("lists scheduled tasks in route order with start times", () => {
+    const context = buildLociDayMapContext([
+      { title: "Write report", dayMapDate: TODAY, dayMapOrder: 1, dayMapStartMinutes: 540 },
+      { title: "Reply to messages", dayMapDate: TODAY, dayMapOrder: 0, dayMapStartMinutes: 480 },
+    ], TODAY);
+
+    expect(context).toContain("TODAY'S DAY MAP (planned route, in order):");
+    const lines = context.split("\n");
+    expect(lines[1]).toContain("08:00");
+    expect(lines[1]).toContain("Reply to messages");
+    expect(lines[2]).toContain("09:00");
+    expect(lines[2]).toContain("Write report");
+  });
+
+  it("marks completed tasks and excludes deleted/parked tasks", () => {
+    const context = buildLociDayMapContext([
+      { title: "Done already", dayMapDate: TODAY, dayMapOrder: 0, dayMapStartMinutes: 480, isCompleted: true },
+      { title: "Removed task", dayMapDate: TODAY, dayMapOrder: 1, dayMapStartMinutes: 540, isDeleted: true },
+      { title: "Parked task", dayMapDate: TODAY, dayMapOrder: 2, dayMapStartMinutes: 600, isParked: true },
+    ], TODAY);
+
+    expect(context).toContain("[DONE] Done already");
+    expect(context).not.toContain("Removed task");
+    expect(context).not.toContain("Parked task");
+  });
+});
+
+describe("buildLociBrainDumpContext", () => {
+  it("returns an empty string when the brain dump is empty", () => {
+    expect(buildLociBrainDumpContext([])).toBe("");
+    expect(buildLociBrainDumpContext()).toBe("");
+  });
+
+  it("reports the unprocessed item count with correct pluralization", () => {
+    expect(buildLociBrainDumpContext([{ id: "1", text: "idea" }])).toContain("1 unprocessed thought waiting");
+    expect(buildLociBrainDumpContext([{ id: "1" }, { id: "2" }])).toContain("2 unprocessed thoughts waiting");
+  });
+});
+
+describe("buildLociVelocityContext", () => {
+  const TODAY = new Date(2026, 5, 12, 9); // 2026-06-12
+
+  it("returns an empty string when there is no contribution history", () => {
+    expect(buildLociVelocityContext([], TODAY)).toBe("");
+  });
+
+  it("sums completions over the last 3 and 7 days, including today", () => {
+    const contributions = [
+      { dateString: "2026-06-12", count: 2 }, // today
+      { dateString: "2026-06-11", count: 1 },
+      { dateString: "2026-06-10", count: 3 },
+      { dateString: "2026-06-09", count: 1 }, // outside last-3 window
+      { dateString: "2026-06-05", count: 4 }, // outside last-7 window
+    ];
+    const context = buildLociVelocityContext(contributions, TODAY);
+
+    expect(context).toContain("COMPLETION VELOCITY:");
+    expect(context).toContain("Last 3 days: 6 tasks completed");
+    expect(context).toContain("Last 7 days: 7 tasks completed");
+  });
+
+  it("reports a stall as zero completions rather than hiding it", () => {
+    const contributions = [{ dateString: "2026-05-01", count: 5 }];
+    const context = buildLociVelocityContext(contributions, TODAY);
+
+    expect(context).toContain("Last 3 days: 0 tasks completed");
+    expect(context).toContain("Last 7 days: 0 tasks completed");
   });
 });
