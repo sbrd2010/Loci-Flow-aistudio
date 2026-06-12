@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { BINAURAL_TRACK_ID, createBinauralBeatNode } from "../utils/binauralBeat";
 
 export function useFocusAudio(isRunning, config = {}, saveSubPath) {
   const [selectedTrack, setSelectedTrack] = useState(config.focusSoundTrack || null);
@@ -24,14 +25,25 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
 
   // Handle track changing
   useEffect(() => {
-    // 1. Pause and dereference the previous Audio instance immediately
+    // 1. Pause and fully release the previous audio instance immediately
     if (audioRef.current) {
       audioRef.current.pause();
+      audioRef.current.dispose?.();
       audioRef.current = null;
     }
 
-    // 2. If a valid track is selected, create new Audio instance
-    if (selectedTrack && selectedTrack !== "none" && typeof Audio !== "undefined") {
+    // 2. If a valid track is selected, create the new audio instance
+    if (selectedTrack === BINAURAL_TRACK_ID) {
+      const node = createBinauralBeatNode(volume);
+      if (node) {
+        audioRef.current = node;
+        if (isRunning) {
+          node.play().catch(err => {
+            console.warn("Binaural beat play failed or blocked by browser:", err);
+          });
+        }
+      }
+    } else if (selectedTrack && selectedTrack !== "none" && typeof Audio !== "undefined") {
       const audio = new Audio(`/sounds/${selectedTrack}`);
       audio.loop = true;
       audio.volume = volume;
@@ -72,6 +84,7 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
+        audioRef.current.dispose?.();
         audioRef.current = null;
       }
     };

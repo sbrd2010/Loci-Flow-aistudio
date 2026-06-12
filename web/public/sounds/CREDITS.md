@@ -37,7 +37,5 @@ All background audio loops utilized in Loci Focus are sourced from the **Open Lo
 - **License**: CC0 1.0 Universal (Public Domain)
 
 ### 5. Binaural 40Hz
-- **Filename**: binaural-40hz.wav
-- **Title**: Binaural 40Hz
-- **Source**: Self-synthesized (not from Open Lo-Fi) — a 200Hz tone in the left channel and a 240Hz tone in the right channel, producing a 40Hz binaural beat. 2-second seamless loop, generated programmatically with Python's standard `wave` module.
+- **Source**: Self-synthesized (not from Open Lo-Fi) — generated live in the browser via the Web Audio API: a 200Hz sine tone in the left channel and a 240Hz sine tone in the right channel, producing a 40Hz binaural beat (see [binauralBeat.js](../../src/utils/binauralBeat.js)). No audio file — the tone is continuous and never loops or repeats, for sessions of any length.
 - **License**: Public Domain / CC0 (original work, no third-party content)
