@@ -5,6 +5,7 @@ import { profileToCoachContext } from "../utils/userProfile";
 import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, isActiveLociTask } from "../utils/lociAIContext";
 import { getTodayCheckedIds, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
+import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin, cancelCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, buildCheckinResumeMessage } from "../utils/coachCheckin";
 
@@ -175,14 +176,15 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
 
       if (minutes != null) {
         const checkin = buildCoachCheckin(minutes, pickCheckinNote(todayActive));
-        saveSubPath("config", { ...config, coachCheckin: checkin, lastUpdated: Date.now() });
+        saveSubPath("config", { ...configRef.current, coachCheckin: checkin, lastUpdated: Date.now() });
         scheduleCoachCheckin(checkin);
+        requestNotifPermission();
       }
 
-      saveSubPath("chatHistory", [...withUser, { text: cleanText || "Got it.", isUser: false }]);
+      saveSubPath("chatHistory", [...chatHistoryRef.current, { text: cleanText || "Got it.", isUser: false }]);
     } catch (err) {
       const hint = err.message === "429" ? "Rate limit — wait 30 sec and retry." : err.message === "503" ? "AI server busy — try again." : err.message === "no_key" ? "Add an AI key in Settings." : `AI error ${err.message}`;
-      saveSubPath("chatHistory", [...withUser, { text: hint, isUser: false }]);
+      saveSubPath("chatHistory", [...chatHistoryRef.current, { text: hint, isUser: false }]);
     } finally {
       setChatLoading(false);
     }

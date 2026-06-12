@@ -60,8 +60,9 @@ export function cancelReminder(uuid) {
 export function scheduleAllReminders(tasks = []) {
   const activeUuids = new Set(tasks.filter(t => t.uuid).map(t => t.uuid));
   // Cancel any scheduled reminders for tasks no longer in the active list
+  // (skip the coach check-in, which shares this map but isn't a task)
   for (const [uuid] of scheduled) {
-    if (!activeUuids.has(uuid)) cancelReminder(uuid);
+    if (uuid !== COACH_CHECKIN_KEY && !activeUuids.has(uuid)) cancelReminder(uuid);
   }
   tasks.forEach(t => scheduleReminder(t));
 }
