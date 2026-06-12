@@ -1,3 +1,5 @@
+import { getFocusWindows, getLociDayStr } from "./focusWindows";
+
 function getLocalDateString(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -42,9 +44,10 @@ export function buildExecutionCoachSignal(payload = {}, date = new Date()) {
   const tasks = payload.tasks || [];
   const config = payload.config || {};
   const todayStr = getLocalDateString(date);
+  const lociTodayStr = getLociDayStr(date, getFocusWindows(config));
   const todayTasks = tasks.filter(task => task.horizonLevel === "today" && !task.isDeleted && !task.isParked);
   const activeToday = todayTasks.filter(isActiveTask).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
-  const completedToday = tasks.filter(task => !task.isDeleted && task.isCompleted && task.dateCompletedString === todayStr);
+  const completedToday = tasks.filter(task => !task.isDeleted && task.isCompleted && task.dateCompletedString === lociTodayStr);
   const nowFocus = activeToday.find(task => task.isNowFocus) || null;
   const dayMapNext = activeToday
     .filter(task => task.dayMapDate === todayStr && task.dayMapOrder != null)
@@ -53,7 +56,7 @@ export function buildExecutionCoachSignal(payload = {}, date = new Date()) {
   const p1Count = activeToday.filter(task => task.priority === "P1").length;
 
   const hasDeadline = !!(config.deadlineLabel || config.deadlineDate || config.deadlineAction);
-  const deadlineDoneToday = config.deadlineDailyDoneDate === todayStr;
+  const deadlineDoneToday = config.deadlineDailyDoneDate === lociTodayStr;
   const deadlineMissStreak = getDeadlineMissStreak(config, date);
   const deadlineAction = (config.deadlineAction || "make one visible move").trim();
 

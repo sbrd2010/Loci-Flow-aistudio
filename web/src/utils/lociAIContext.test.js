@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildLociCoreInstruction, buildLociCheckinContext, buildLociTaskContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
+import { getFocusWindows } from "./focusWindows";
 
 describe("lociAIContext", () => {
   it("treats parked tasks as inactive for AI mirrors", () => {
@@ -27,6 +28,19 @@ describe("lociAIContext", () => {
     expect(context).toContain("Plan interview prep");
     expect(context).not.toContain("Parked old task");
     expect(context).not.toContain("Done task");
+  });
+
+  it("counts completedToday using the Loci day (not calendar day) during an overnight focus window", () => {
+    const windows = getFocusWindows({ focusWindows: [{ start: "22:00", end: "04:00" }] });
+    // 2026-06-12 at 1:00 AM is still inside the 22:00-04:00 window that started
+    // the previous calendar day, so the Loci day is 2026-06-11.
+    const date = new Date(2026, 5, 12, 1, 0);
+    const context = buildLociTaskContext([
+      { title: "Plan trip", horizonLevel: "week", priority: "P2", isCompleted: true, dateCompletedString: "2026-06-11" },
+      { title: "Other task", horizonLevel: "today", priority: "P3" },
+    ], date, windows);
+
+    expect(context).toContain("COMPLETED TODAY: 1 task");
   });
 
   it("keeps the central coach instruction execution-focused and data-safe", () => {

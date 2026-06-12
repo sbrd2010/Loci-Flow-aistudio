@@ -67,7 +67,7 @@ export default function CoachTab({ payload, savePayload, saveSubPath, userProfil
     const hour = now.getHours();
     const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
     const todayActive = tasks.filter(t => t.horizonLevel === "today" && isActiveLociTask(t));
-    const taskContext = buildLociTaskContext(tasks);
+    const taskContext = buildLociTaskContext(tasks, new Date(), getFocusWindows(config));
     const todayStr = getLociDayStr(new Date(), getFocusWindows(config));
     const anchorContext = buildLociAnchorsContext(
       config.dailyAnchors || [],

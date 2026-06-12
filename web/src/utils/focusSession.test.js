@@ -139,10 +139,23 @@ describe("buildFocusCompletionPayload", () => {
 
   it("marks the focused task complete, clears isNowFocus, and stamps the completion date", () => {
     const payload = { tasks: [task], config: { totalXp: 100 }, contributions: [] };
-    const result = buildFocusCompletionPayload(payload, task, "2026-06-10");
+    const result = buildFocusCompletionPayload(payload, task, "2026-06-10", new Date(2026, 5, 10, 12));
     expect(result.tasks[0].isCompleted).toBe(true);
     expect(result.tasks[0].isNowFocus).toBe(false);
     expect(result.tasks[0].dateCompletedString).toBe("2026-06-10");
+  });
+
+  it("stamps dateCompletedString with the Loci day, decoupled from the calendar-day contribution, during an overnight focus window", () => {
+    const payload = {
+      tasks: [task],
+      config: { totalXp: 0, focusWindows: [{ start: "22:00", end: "04:00" }] },
+      contributions: [],
+    };
+    // 2026-06-11 at 1:00 AM: still inside the 22:00-04:00 window that started
+    // the previous calendar day, so the Loci day is 2026-06-10.
+    const result = buildFocusCompletionPayload(payload, task, "2026-06-11", new Date(2026, 5, 11, 1, 0));
+    expect(result.tasks[0].dateCompletedString).toBe("2026-06-10");
+    expect(result.contributions[0].dateString).toBe("2026-06-11");
   });
 
   it("awards 120 XP", () => {

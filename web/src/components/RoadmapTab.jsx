@@ -4,6 +4,7 @@ import { safeUUID } from "../utils/uuid";
 import { celebrate } from "../utils/celebrations";
 import { getAIKeys, callAI } from "../utils/aiCall";
 import { sanitizeTaskField } from "../utils/taskOps";
+import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor,
   useSensor, useSensors, DragOverlay
@@ -185,10 +186,11 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   const handleMarkDone = (task) => {
     celebrate();
     const todayDateStr = getTodayDateString();
+    const lociTodayStr = getLociDayStr(new Date(), getFocusWindows(config));
     savePayload({
       ...payload,
       tasks: tasks.map((t) =>
-        t.uuid === task.uuid ? { ...t, isCompleted: true, isNowFocus: false, dateCompletedString: todayDateStr, lastUpdated: Date.now() } : t
+        t.uuid === task.uuid ? { ...t, isCompleted: true, isNowFocus: false, dateCompletedString: lociTodayStr, lastUpdated: Date.now() } : t
       ),
       config: { ...config, totalXp: (Number(config.totalXp) || 0) + 100, lastUpdated: Date.now() },
       contributions: incrementContribution([...contributions], todayDateStr)

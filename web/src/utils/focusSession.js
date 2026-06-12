@@ -1,4 +1,5 @@
 import { buildToggleCompletedTasks } from "./taskOps";
+import { getFocusWindows, getLociDayStr } from "./focusWindows";
 
 // Decide whether the floating Focus timer should render on the current screen.
 // Hidden on Day Map, when completion is pending, when no session is active,
@@ -68,8 +69,9 @@ export function shouldShowFocusCompletionPrompt({ sessionCompletePending, hasAct
 // Build the updated payload for completing the focused task from the global
 // Focus completion prompt's "Done! +120 XP" choice — mirrors the XP and
 // contribution rules of the existing in-Today completion flow.
-export function buildFocusCompletionPayload(payload, task, todayDateStr) {
+export function buildFocusCompletionPayload(payload, task, todayDateStr, date = new Date()) {
   const { tasks = [], config = {}, contributions = [] } = payload;
+  const lociTodayStr = getLociDayStr(date, getFocusWindows(config));
   const nextContributions = [...contributions];
   const idx = nextContributions.findIndex((c) => c.dateString === todayDateStr);
   const uid = payload.userId || config.userId || "";
@@ -80,7 +82,7 @@ export function buildFocusCompletionPayload(payload, task, todayDateStr) {
   }
   return {
     ...payload,
-    tasks: buildToggleCompletedTasks(tasks, task.uuid, true, todayDateStr),
+    tasks: buildToggleCompletedTasks(tasks, task.uuid, true, lociTodayStr),
     config: { ...config, totalXp: (Number(config.totalXp) || 0) + 120, lastUpdated: Date.now() },
     contributions: nextContributions,
   };
