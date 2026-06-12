@@ -12,7 +12,7 @@ import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/
 import { getCurrentFocusQuote } from "../utils/focusQuotes";
 import { formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
 import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
-import { getFocusWindows, getWindowState, getRemainingFocusMinutes, getNextWindowStart, getOverallSpan, getFocusProgress } from "../utils/focusWindows";
+import { getFocusWindows, getWindowState, getRemainingFocusMinutes, getNextWindowStart, getOverallSpan, getFocusProgress, hasConfiguredFocusWindow } from "../utils/focusWindows";
 import { getMorningRitualVariant, shouldShowMorningRitual, buildMorningRitualDoneConfig, buildMorningRitualSnoozeConfig } from "../utils/morningRitual";
 import {
   shouldShowMorningCommitment, buildMorningCommitmentPrompt, canSaveMorningCommitment,
@@ -861,6 +861,64 @@ export default function TodayTab({
                 </div>
               </>
             )}
+          </div>
+        );
+      })()}
+
+      {/* ── Focus Window strip (shown when no Key Deadline is configured, and the
+           user has set up a focus window) */}
+      {!config.deadlineDate && hasConfiguredFocusWindow(config) && (() => {
+        const now = new Date();
+        const windowState = getWindowState(now, windows);
+        const span = getOverallSpan(windows);
+        const startLabel = formatHourLabel(span.startMin / 60);
+        const endLabel = formatHourLabel(span.endMin / 60);
+        const nextWindow = windowState === "before" ? getNextWindowStart(now, windows) : null;
+        const nextOpenLabel = nextWindow ? formatHourLabel(nextWindow.startMin / 60) : startLabel;
+
+        return (
+          <div className="today-deadline-card" data-testid="focus-window-card" style={{
+            background: "var(--accent-light)",
+            border: "1px solid var(--accent)",
+            borderRadius: "var(--radius-sm)",
+            padding: "7px 10px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "5px",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+              <span style={{ fontSize: "14px", lineHeight: 1 }}>🎯</span>
+              <span style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--accent)" }}>
+                FOCUS WINDOW
+              </span>
+            </div>
+            <div style={{ marginTop: "1px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
+                <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>{startLabel}</span>
+                {windowState === "before" && (
+                  <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>
+                    opens {nextOpenLabel}
+                  </span>
+                )}
+                {windowState === "during" && todayCountdown && (
+                  <span className="dc-countdown" style={{ fontSize: "10px", color: "#D97706", fontWeight: "800" }}>
+                    {todayCountdown} left today
+                  </span>
+                )}
+                {windowState === "after" && (
+                  <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>closed</span>
+                )}
+                <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>{endLabel}</span>
+              </div>
+              <div className="dc-bar-track" style={{ position: "relative", height: "6px", background: "var(--bg-secondary)", borderRadius: "999px", overflow: "visible" }}>
+                {windowState === "during" && (
+                  <div className="dc-bar-fill" style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "linear-gradient(90deg, #374151 0%, #1d70a0 55%, #d97706 100%)", borderRadius: "999px", transition: "width 1s linear" }} />
+                )}
+                {windowState === "after" && (
+                  <div style={{ height: "100%", width: "100%", background: "var(--bg-tertiary, var(--bg-secondary))", borderRadius: "999px", opacity: 0.5 }} />
+                )}
+              </div>
+            </div>
           </div>
         );
       })()}

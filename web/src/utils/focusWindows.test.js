@@ -10,6 +10,7 @@ import {
   getCurrentFocusSlot,
   getFocusProgress,
   getLociDayStr,
+  hasConfiguredFocusWindow,
 } from "./focusWindows";
 
 const dt = (h, mi = 0) => new Date(2024, 5, 15, h, mi);
@@ -314,6 +315,28 @@ describe("getLociDayStr", () => {
     // 2026-06-12 (Friday) at 04:00 AM (after 03:00 AM tail)
     const now = new Date(2026, 5, 12, 4, 0);
     expect(getLociDayStr(now, windows)).toBe("2026-06-12");
+  });
+});
+
+describe("hasConfiguredFocusWindow", () => {
+  it("returns false for a brand-new config with no focus settings", () => {
+    expect(hasConfiguredFocusWindow({})).toBe(false);
+  });
+
+  it("returns true when focusWindows has at least one entry", () => {
+    expect(hasConfiguredFocusWindow({ focusWindows: [{ start: "09:00", end: "17:00" }] })).toBe(true);
+  });
+
+  it("returns false when focusWindows is an empty array and no legacy fields are set", () => {
+    expect(hasConfiguredFocusWindow({ focusWindows: [] })).toBe(false);
+  });
+
+  it("returns true for a legacy dayStartHour/dayEndHour config with no focusWindows", () => {
+    expect(hasConfiguredFocusWindow({ dayStartHour: 7, dayEndHour: 26 })).toBe(true);
+  });
+
+  it("treats dayStartHour: 0 as configured, not missing", () => {
+    expect(hasConfiguredFocusWindow({ dayStartHour: 0 })).toBe(true);
   });
 });
 
