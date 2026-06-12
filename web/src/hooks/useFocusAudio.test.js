@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { useFocusAudio } from "./useFocusAudio";
 import { BINAURAL_TRACK_ID } from "../utils/binauralBeat";
 
@@ -441,6 +441,81 @@ describe("useFocusAudio", () => {
 
     expect(ctx.oscillators[0].stopCalled).toBe(true);
     expect(ctx.state).toBe("closed");
+  });
+
+  describe("sound variation categories (rain/lofi/jazz/piano)", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("selectCategory picks a variation from the category and saves it", () => {
+      vi.spyOn(Math, "random").mockReturnValue(0);
+
+      const saveSubPath = vi.fn();
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, {}, saveSubPath]
+      );
+
+      result.current.selectCategory("rain");
+
+      expect(result.current.selectedTrack).toBe("after-school-rain.mp3");
+      expect(saveSubPath).toHaveBeenCalledWith("config", expect.objectContaining({
+        focusSoundTrack: "after-school-rain.mp3"
+      }));
+    });
+
+    it("selectCategory toggles the category off if it is already active", () => {
+      vi.spyOn(Math, "random").mockReturnValue(0);
+
+      const config = { focusSoundTrack: "after-school-rain.mp3" };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, config, null]
+      );
+
+      result.current.selectCategory("rain");
+      expect(result.current.selectedTrack).toBeNull();
+    });
+
+    it("creates an Audio element pointing at the jsDelivr CDN for a CDN variation track", () => {
+      const config = { focusSoundTrack: "sounds/rain/amber-sidewalks.mp3" };
+      renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, config, null]
+      );
+
+      expect(MockAudio.instances.length).toBe(1);
+      expect(MockAudio.instances[0].src).toBe(
+        "https://cdn.jsdelivr.net/gh/sbrd2010/Loci-flow-sounds@main/sounds/rain/amber-sidewalks.mp3"
+      );
+    });
+
+    it("reshuffleTrack switches to a different variation in the same category", () => {
+      vi.spyOn(Math, "random").mockReturnValue(0);
+
+      const config = { focusSoundTrack: "after-school-rain.mp3" };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, config, null]
+      );
+
+      result.current.reshuffleTrack();
+
+      expect(result.current.selectedTrack).not.toBe("after-school-rain.mp3");
+      expect(result.current.selectedTrack.startsWith("sounds/rain/")).toBe(true);
+    });
+
+    it("reshuffleTrack does nothing when no ambient category is selected", () => {
+      const config = { focusSoundTrack: BINAURAL_TRACK_ID };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [true, config, null]
+      );
+
+      result.current.reshuffleTrack();
+      expect(result.current.selectedTrack).toBe(BINAURAL_TRACK_ID);
+    });
   });
 
   it("migrates a config saved with the old binaural-40hz.wav track id to the synthesized track", () => {
