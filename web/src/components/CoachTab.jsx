@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { callAI, getAIKeys } from "../utils/aiCall";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
-import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociFocusSessionContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, isActiveLociTask } from "../utils/lociAIContext";
+import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociFocusSessionContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, getLocalDateString, isActiveLociTask } from "../utils/lociAIContext";
 import { getTodayCheckedIds, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
 import { requestNotifPermission } from "../utils/focusNotifications";
@@ -102,7 +102,7 @@ export default function CoachTab({ payload, savePayload, saveSubPath, userProfil
     const checkinContext = buildLociCheckinContext(config, tasks, todayStr);
     const focusSessionContext = buildLociFocusSessionContext(focusTimer);
     const deadlineContext = buildLociDeadlineContext(config, now);
-    const dayMapContext = buildLociDayMapContext(tasks, todayStr);
+    const dayMapContext = buildLociDayMapContext(tasks, getLocalDateString(now));
     const brainDumpContext = buildLociBrainDumpContext(brainDump);
     const velocityContext = buildLociVelocityContext(contributions, now);
     const lociCoreInstruction = buildLociCoreInstruction({ firstName });

@@ -297,8 +297,8 @@ describe("buildLociDayMapContext", () => {
 
   it("lists scheduled tasks in route order with start times", () => {
     const context = buildLociDayMapContext([
-      { title: "Write report", dayMapDate: TODAY, dayMapOrder: 1, dayMapStartMinutes: 540 },
-      { title: "Reply to messages", dayMapDate: TODAY, dayMapOrder: 0, dayMapStartMinutes: 480 },
+      { title: "Write report", horizonLevel: "today", dayMapDate: TODAY, dayMapOrder: 1, dayMapStartMinutes: 540 },
+      { title: "Reply to messages", horizonLevel: "today", dayMapDate: TODAY, dayMapOrder: 0, dayMapStartMinutes: 480 },
     ], TODAY);
 
     expect(context).toContain("TODAY'S DAY MAP (planned route, in order):");
@@ -311,14 +311,22 @@ describe("buildLociDayMapContext", () => {
 
   it("marks completed tasks and excludes deleted/parked tasks", () => {
     const context = buildLociDayMapContext([
-      { title: "Done already", dayMapDate: TODAY, dayMapOrder: 0, dayMapStartMinutes: 480, isCompleted: true },
-      { title: "Removed task", dayMapDate: TODAY, dayMapOrder: 1, dayMapStartMinutes: 540, isDeleted: true },
-      { title: "Parked task", dayMapDate: TODAY, dayMapOrder: 2, dayMapStartMinutes: 600, isParked: true },
+      { title: "Done already", horizonLevel: "today", dayMapDate: TODAY, dayMapOrder: 0, dayMapStartMinutes: 480, isCompleted: true },
+      { title: "Removed task", horizonLevel: "today", dayMapDate: TODAY, dayMapOrder: 1, dayMapStartMinutes: 540, isDeleted: true },
+      { title: "Parked task", horizonLevel: "today", dayMapDate: TODAY, dayMapOrder: 2, dayMapStartMinutes: 600, isParked: true },
     ], TODAY);
 
     expect(context).toContain("[DONE] Done already");
     expect(context).not.toContain("Removed task");
     expect(context).not.toContain("Parked task");
+  });
+
+  it("excludes tasks moved off the Today horizon even if Day Map fields are stale", () => {
+    const context = buildLociDayMapContext([
+      { title: "Moved to Week", horizonLevel: "week", dayMapDate: TODAY, dayMapOrder: 0, dayMapStartMinutes: 480 },
+    ], TODAY);
+
+    expect(context).toBe("");
   });
 });
 

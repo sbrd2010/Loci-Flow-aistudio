@@ -181,7 +181,7 @@ export function buildLociDeadlineContext(config = {}, today = new Date()) {
 // DayMapPage so the coach sees the same route the user laid out.
 export function buildLociDayMapContext(tasks = [], todayStr) {
   const scheduled = (tasks || [])
-    .filter(t => !t.isDeleted && !t.isParked && t.dayMapDate === todayStr && (t.dayMapOrder != null || !!t.dayMapPeriod))
+    .filter(t => t.horizonLevel === "today" && !t.isDeleted && !t.isParked && t.dayMapDate === todayStr && (t.dayMapOrder != null || !!t.dayMapPeriod))
     .sort((a, b) => {
       const oa = a.dayMapOrder ?? Infinity;
       const ob = b.dayMapOrder ?? Infinity;
