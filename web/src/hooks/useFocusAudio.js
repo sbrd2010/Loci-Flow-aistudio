@@ -6,6 +6,11 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
   const [selectedTrack, setSelectedTrack] = useState(migrateTrackId(config.focusSoundTrack) || null);
   const [volume, setVolume] = useState(config.focusSoundVolume !== undefined ? config.focusSoundVolume : 0.5);
 
+  // Tracks whether the active track's audio is still buffering. CDN variations
+  // can take a few seconds to start playing on a cold cache, so the UI surfaces
+  // this instead of leaving the user unsure whether anything is happening.
+  const [trackLoadState, setTrackLoadState] = useState("idle");
+
   const audioRef = useRef(null);
 
   // Sync state if config changes externally (e.g. from sync/reload, or a
@@ -38,6 +43,7 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
       const node = createBinauralBeatNode(volume);
       if (node) {
         audioRef.current = node;
+        setTrackLoadState("ready");
         if (isRunning) {
           node.play().catch(err => {
             console.warn("Binaural beat play failed or blocked by browser:", err);
@@ -48,7 +54,16 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
       const audio = new Audio(trackUrl(selectedTrack));
       audio.loop = true;
       audio.volume = volume;
+      audio.preload = "auto";
       audioRef.current = audio;
+
+      setTrackLoadState("loading");
+      audio.addEventListener("canplay", () => {
+        if (audioRef.current === audio) setTrackLoadState("ready");
+      });
+      audio.addEventListener("error", () => {
+        if (audioRef.current === audio) setTrackLoadState("error");
+      });
 
       // Play if timer is already running
       if (isRunning) {
@@ -56,6 +71,8 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
           console.warn("Audio play failed or blocked by browser:", err);
         });
       }
+    } else {
+      setTrackLoadState("idle");
     }
   }, [selectedTrack]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -146,6 +163,7 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
   return {
     selectedTrack,
     volume,
+    trackLoadState,
     selectTrack,
     selectCategory,
     reshuffleTrack,

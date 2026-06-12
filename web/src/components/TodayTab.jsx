@@ -57,7 +57,7 @@ export default function TodayTab({
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
   pipOpen, handleOpenPiP, isAddTaskDialogOpen,
-  selectedTrack, volume, selectTrack, selectCategory, reshuffleTrack, changeVolume,
+  selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
 }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
   const windows = getFocusWindows(config);
@@ -1281,6 +1281,7 @@ export default function TodayTab({
           onOpenPiP={handleOpenPiP}
           selectedTrack={selectedTrack}
           volume={volume}
+          trackLoadState={trackLoadState}
           selectTrack={selectTrack}
           selectCategory={selectCategory}
           reshuffleTrack={reshuffleTrack}

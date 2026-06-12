@@ -8,8 +8,22 @@ class MockAudio {
     this.src = src;
     this.loop = false;
     this.volume = 1.0;
+    this.preload = "";
     this.paused = true;
+    this._listeners = {};
     MockAudio.instances.push(this);
+  }
+
+  addEventListener(event, handler) {
+    (this._listeners[event] ||= []).push(handler);
+  }
+
+  removeEventListener(event, handler) {
+    this._listeners[event] = (this._listeners[event] || []).filter(h => h !== handler);
+  }
+
+  dispatchEvent(eventName) {
+    (this._listeners[eventName] || []).forEach(handler => handler());
   }
 
   play() {
@@ -515,6 +529,74 @@ describe("useFocusAudio", () => {
 
       result.current.reshuffleTrack();
       expect(result.current.selectedTrack).toBe(BINAURAL_TRACK_ID);
+    });
+  });
+
+  describe("trackLoadState", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("is 'idle' when no track is selected", () => {
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, {}, null]
+      );
+
+      expect(result.current.trackLoadState).toBe("idle");
+    });
+
+    it("is 'ready' immediately for the binaural beat (no buffering needed)", () => {
+      const config = { focusSoundTrack: BINAURAL_TRACK_ID };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [true, config, null]
+      );
+
+      expect(result.current.trackLoadState).toBe("ready");
+    });
+
+    it("sets preload='auto' and starts as 'loading' for an ambient track, then 'ready' once it can play", () => {
+      const config = { focusSoundTrack: "sounds/rain/amber-sidewalks.mp3" };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [true, config, null]
+      );
+
+      const audio = MockAudio.instances[0];
+      expect(audio.preload).toBe("auto");
+      expect(result.current.trackLoadState).toBe("loading");
+
+      audio.dispatchEvent("canplay");
+      expect(result.current.trackLoadState).toBe("ready");
+    });
+
+    it("sets trackLoadState to 'error' if the audio element fails to load", () => {
+      const config = { focusSoundTrack: "sounds/rain/amber-sidewalks.mp3" };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [true, config, null]
+      );
+
+      const audio = MockAudio.instances[0];
+      audio.dispatchEvent("error");
+      expect(result.current.trackLoadState).toBe("error");
+    });
+
+    it("goes back to 'loading' when reshuffling to a new variation", () => {
+      vi.spyOn(Math, "random").mockReturnValue(0.99);
+
+      const config = { focusSoundTrack: "after-school-rain.mp3" };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [true, config, null]
+      );
+
+      MockAudio.instances[0].dispatchEvent("canplay");
+      expect(result.current.trackLoadState).toBe("ready");
+
+      result.current.reshuffleTrack();
+      expect(result.current.trackLoadState).toBe("loading");
     });
   });
 

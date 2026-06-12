@@ -72,6 +72,7 @@ export default function FocusModePage({
   onOpenPiP,
   selectedTrack,
   volume,
+  trackLoadState,
   selectTrack,
   selectCategory,
   reshuffleTrack,
@@ -341,7 +342,11 @@ export default function FocusModePage({
                     <div className="sound-tile-info">
                       <div className="sound-tile-title">{track.title}</div>
                       <div className="sound-tile-desc">
-                        {isActive && isAmbientCategory ? getTrackTitle(selectedTrack) : track.desc}
+                        {isActive && isAmbientCategory
+                          ? (trackLoadState === "loading" ? "Loading…"
+                            : trackLoadState === "error" ? "Couldn't load — try 🔀"
+                            : getTrackTitle(selectedTrack))
+                          : track.desc}
                       </div>
                     </div>
                   </button>
