@@ -4,6 +4,7 @@ import PrivacyPolicy from "./PrivacyPolicy";
 import { db, auth } from "../firebase";
 import { ref, push } from "firebase/database";
 import { exportPayloadAsJson, exportTasksAsCsv } from "../utils/exportTasks";
+import { parseTimeToMinutes } from "../utils/focusWindows";
 
 export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyncedAt, onSignOut }) {
   const { config = {} } = payload;
@@ -27,6 +28,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   const [editedDayStart, setEditedDayStart] = useState(config.dayStartHour ?? 7);
   const [editedDayEnd, setEditedDayEnd] = useState(config.dayEndHour ?? 26);
   const [editedFocusWindows, setEditedFocusWindows] = useState(config.focusWindows || []);
+  const [editedMorningRitualStart, setEditedMorningRitualStart] = useState(config.morningRitualWindowStart || "05:00");
+  const [editedMorningRitualEnd, setEditedMorningRitualEnd] = useState(config.morningRitualWindowEnd || "11:00");
   const [editedHeaderStyle, setEditedHeaderStyle] = useState(
     config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full")
   );
@@ -46,6 +49,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
     setEditedDayStart(config.dayStartHour ?? 7);
     setEditedDayEnd(config.dayEndHour ?? 26);
     setEditedFocusWindows(config.focusWindows || []);
+    setEditedMorningRitualStart(config.morningRitualWindowStart || "05:00");
+    setEditedMorningRitualEnd(config.morningRitualWindowEnd || "11:00");
     setEditedHeaderStyle(config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full"));
     setEditedToolsStyle(config.toolsStyle || "inline");
     setEditedDeadlineLabel(config.deadlineLabel || "");
@@ -54,7 +59,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
     setEditedDeadlineAction(config.deadlineAction || "");
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
       config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType,
-      config.dayStartHour, config.dayEndHour, config.focusWindows, config.headerStyle, config.toolsStyle,
+      config.dayStartHour, config.dayEndHour, config.focusWindows,
+      config.morningRitualWindowStart, config.morningRitualWindowEnd, config.headerStyle, config.toolsStyle,
       config.deadlineLabel, config.deadlineDate,
       config.deadlineStartDate, config.deadlineAction]);
 
@@ -156,6 +162,9 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   const [savedProfile, setSavedProfile] = useState(false);
   const handleSaveSettings = (e) => {
     e.preventDefault();
+    const morningRitualStart = parseTimeToMinutes(editedMorningRitualStart);
+    const morningRitualEnd = parseTimeToMinutes(editedMorningRitualEnd);
+    const morningRitualValid = morningRitualStart !== null && morningRitualEnd !== null && morningRitualStart < morningRitualEnd;
     saveSubPath("config", {
       ...config,
       userName: editedName.trim(),
@@ -167,6 +176,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
       dayStartHour: editedDayStart,
       dayEndHour: editedDayEnd,
       focusWindows: editedFocusWindows.filter(w => w.start && w.end && w.start !== w.end),
+      morningRitualWindowStart: morningRitualValid ? editedMorningRitualStart : "05:00",
+      morningRitualWindowEnd: morningRitualValid ? editedMorningRitualEnd : "11:00",
       headerStyle: editedHeaderStyle,
       toolsStyle: editedToolsStyle,
       roadmapStyle: "compact",
@@ -423,6 +434,32 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
             >
               + Add focus window
             </button>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Morning Ritual Window</label>
+            <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px", marginBottom: "8px" }}>
+              When today's Morning Ritual motivational nudge can appear on your first app open of the day. Independent of your Focus Windows. Defaults to 5:00 AM-11:00 AM.
+            </p>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <input
+                type="time"
+                className="text-input"
+                value={editedMorningRitualStart}
+                onChange={e => setEditedMorningRitualStart(e.target.value)}
+                aria-label="Morning Ritual window start time"
+                style={{ flex: 1, minWidth: 0 }}
+              />
+              <span style={{ fontSize: "12px", color: "var(--text-muted)", flexShrink: 0 }}>to</span>
+              <input
+                type="time"
+                className="text-input"
+                value={editedMorningRitualEnd}
+                onChange={e => setEditedMorningRitualEnd(e.target.value)}
+                aria-label="Morning Ritual window end time"
+                style={{ flex: 1, minWidth: 0 }}
+              />
+            </div>
           </div>
 
           <div className="form-group">

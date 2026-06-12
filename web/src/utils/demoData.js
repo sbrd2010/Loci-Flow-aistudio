@@ -105,9 +105,11 @@ export function createDemoPayload() {
       ],
       anchorsCheckedIds: [],
       anchorsCheckedDate: null,
-      anchorsShownSlots: ["morning", "afternoon", "evening"],
+      anchorsShownSlots: ["afternoon", "evening"],
       anchorsSlotsDate: todayStr,
       anchorsSnoozeUntil: null,
+      morningRitualShownDate: todayStr,
+      morningRitualSnoozeUntil: null,
     },
 
     contributions: [
