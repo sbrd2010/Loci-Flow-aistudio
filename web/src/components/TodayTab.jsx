@@ -116,13 +116,12 @@ export default function TodayTab({
     return () => clearInterval(id);
   }, [config.dayStartHour, config.dayEndHour, config.focusWindows]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const _tsd = new Date();
-  const todayStr = `${_tsd.getFullYear()}-${String(_tsd.getMonth() + 1).padStart(2, "0")}-${String(_tsd.getDate()).padStart(2, "0")}`;
+  const todayStr = getLociDayStr(new Date(), windows);
   const isDoneToday = isDailyDone(config.deadlineDailyDoneDate, todayStr);
 
   // ── Daily Anchors derived state ────────────────────────────────────────────
   const anchors = config.dailyAnchors || [];
-  const anchorTodayStr = getLociDayStr(new Date(), windows);
+  const anchorTodayStr = todayStr;
   const todayCheckedIds = getTodayCheckedIds(config, anchorTodayStr);
   const todayShownSlots = getTodayShownSlots(config, anchorTodayStr);
   const anchorsCheckedCount = anchors.filter(a => todayCheckedIds.includes(a.id)).length;
@@ -226,7 +225,7 @@ export default function TodayTab({
       setIsFocusMode(false);
       setFocusSessionActive(false);
     }
-    const updatedTasks = buildToggleCompletedTasks(tasks, task.uuid, isCompleted, todayDateStr);
+    const updatedTasks = buildToggleCompletedTasks(tasks, task.uuid, isCompleted, todayStr);
     if (isCompleted) {
       celebrate();
       track("task_completed", { horizon: task.horizonLevel });

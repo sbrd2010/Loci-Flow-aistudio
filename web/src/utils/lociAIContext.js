@@ -1,5 +1,6 @@
 import { getValidCommittedTaskIds, REFLECTION_MOODS } from "./dailyCoachCheckins";
 import { isDailyDone } from "./deadlineCountdown";
+import { getFocusWindows, getLociDayStr } from "./focusWindows";
 
 const HORIZON_ORDER = ["today", "week", "month", "quarter", "halfyear", "office"];
 
@@ -20,7 +21,7 @@ export function getLocalDateString(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-export function buildLociTaskContext(allTasks = [], date = new Date()) {
+export function buildLociTaskContext(allTasks = [], date = new Date(), windows = getFocusWindows({})) {
   const active = allTasks.filter(isActiveLociTask);
   const lines = [];
   let total = 0;
@@ -39,7 +40,7 @@ export function buildLociTaskContext(allTasks = [], date = new Date()) {
     if (horizonTasks.length > 8) lines.push(`  ... +${horizonTasks.length - 8} more`);
   }
 
-  const todayStr = getLocalDateString(date);
+  const todayStr = getLociDayStr(date, windows);
   const completedToday = allTasks.filter(task => !task.isDeleted && task.isCompleted && task.dateCompletedString === todayStr).length;
   if (completedToday > 0) {
     lines.push(`\nCOMPLETED TODAY: ${completedToday} task${completedToday > 1 ? "s" : ""}`);

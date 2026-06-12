@@ -109,4 +109,34 @@ describe("buildExecutionCoachSignal", () => {
     expect(signal.level).toBe("mirror");
     expect(signal.reason).toBe("too_many_today_none_done");
   });
+
+  it("counts a task completed on the current Loci day toward completedToday during an overnight focus window", () => {
+    // 2026-06-12 at 1:00 AM with focusWindows 22:00-04:00 -> Loci day is 2026-06-11.
+    const date = new Date(2026, 5, 12, 1, 0);
+    const activeTasks = Array.from({ length: 8 }, (_, index) => task({ title: `Task ${index + 1}`, orderIndex: index }));
+    const completedTask = task({ title: "Done earlier", uuid: "done-1", isCompleted: true, dateCompletedString: "2026-06-11" });
+    const signal = buildExecutionCoachSignal({
+      config: { focusWindows: [{ start: "22:00", end: "04:00" }] },
+      tasks: [...activeTasks, completedTask]
+    }, date);
+
+    expect(signal.reason).not.toBe("too_many_today_none_done");
+  });
+
+  it("treats deadlineDailyDoneDate as done for the current Loci day (not calendar day) during an overnight focus window", () => {
+    // 2026-06-12 at 1:00 AM with focusWindows 22:00-04:00 -> Loci day is 2026-06-11.
+    const date = new Date(2026, 5, 12, 1, 0);
+    const signal = buildExecutionCoachSignal({
+      config: {
+        focusWindows: [{ start: "22:00", end: "04:00" }],
+        deadlineLabel: "Visa deadline",
+        deadlineAction: "Send one email",
+        deadlineDailyDoneDate: "2026-06-11",
+      },
+      tasks: [task({ title: "Write CV", uuid: "t1" })]
+    }, date);
+
+    expect(signal.reason).not.toBe("deadline_move_open_today");
+    expect(signal.reason).toBe("next_task_available");
+  });
 });
