@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { getMorningRitualVariant, isMorningRitualSlot, shouldShowMorningRitual } from "./morningRitual";
+import { getMorningRitualVariant, isMorningRitualSlot, isMorningRitualWindow, shouldShowMorningRitual, buildMorningRitualDoneConfig, buildMorningRitualSnoozeConfig } from "./morningRitual";
 import { getFocusWindows } from "./focusWindows";
 
 const dt = (h, mi = 0) => new Date(2024, 5, 15, h, mi);
+const dtNextDay = (h, mi = 0) => new Date(2024, 5, 16, h, mi);
 
 describe("getMorningRitualVariant", () => {
   it("returns a non-empty title and line", () => {
@@ -24,46 +25,20 @@ describe("getMorningRitualVariant", () => {
   });
 });
 
-describe("isMorningRitualSlot / shouldShowMorningRitual with a 09:00-17:00 focus window", () => {
-  // Eligible from 09:00 onward, with no upper bound, until shown or snoozed.
+describe("isMorningRitualSlot with a 09:00-17:00 focus window", () => {
+  // Used by the Daily Coach check-ins, which remain Focus-Window based.
   const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] });
 
-  // 1. popup appears after first focus window start
   it("is eligible right at the first focus window start", () => {
     expect(isMorningRitualSlot(dt(9, 0), windows)).toBe(true);
-    expect(shouldShowMorningRitual(dt(9, 0), windows, {}, [])).toBe(true);
   });
 
   it("is not eligible before the focus window opens", () => {
     expect(isMorningRitualSlot(dt(8, 59), windows)).toBe(false);
-    expect(shouldShowMorningRitual(dt(8, 59), windows, {}, [])).toBe(false);
-  });
-
-  // 2. popup appears on first app open after start time
-  it("is still eligible if the app is first opened later within the morning slot", () => {
-    expect(shouldShowMorningRitual(dt(10, 30), windows, {}, [])).toBe(true);
   });
 
   it("is still eligible later in the day (e.g. opening at noon after a 09:00 start)", () => {
     expect(isMorningRitualSlot(dt(12), windows)).toBe(true);
-    expect(shouldShowMorningRitual(dt(12), windows, {}, [])).toBe(true);
-  });
-
-  // 3. Done hides it for the day
-  it("Done (recording 'morning' as shown) hides it for the rest of the day", () => {
-    expect(shouldShowMorningRitual(dt(9, 30), windows, {}, ["morning"])).toBe(false);
-  });
-
-  // 4. Later snoozes it
-  it("Later (snoozeUntil in the future) hides it until the snooze passes", () => {
-    const config = { anchorsSnoozeUntil: dt(11, 0).getTime() };
-    expect(shouldShowMorningRitual(dt(10, 30), windows, config, [])).toBe(false);
-    expect(shouldShowMorningRitual(dt(11, 0), windows, config, [])).toBe(true);
-  });
-
-  // 5. no anchors configured does not crash: trigger logic never looks at anchors
-  it("eligibility does not depend on whether any anchors are configured", () => {
-    expect(shouldShowMorningRitual(dt(9, 30), windows, {}, [])).toBe(true);
   });
 });
 
@@ -80,5 +55,100 @@ describe("isMorningRitualSlot follows flexible focus windows, not a hardcoded ho
     const windows = getFocusWindows({});
     expect(isMorningRitualSlot(dt(6, 59), windows)).toBe(false);
     expect(isMorningRitualSlot(dt(7, 0), windows)).toBe(true);
+  });
+});
+
+describe("isMorningRitualWindow", () => {
+  it("defaults to 05:00-11:00", () => {
+    expect(isMorningRitualWindow(dt(4, 59), {})).toBe(false);
+    expect(isMorningRitualWindow(dt(5, 0), {})).toBe(true);
+    expect(isMorningRitualWindow(dt(10, 59), {})).toBe(true);
+    expect(isMorningRitualWindow(dt(11, 0), {})).toBe(false);
+  });
+
+  it("respects a custom configured window", () => {
+    const config = { morningRitualWindowStart: "06:00", morningRitualWindowEnd: "09:00" };
+    expect(isMorningRitualWindow(dt(5, 30), config)).toBe(false);
+    expect(isMorningRitualWindow(dt(6, 0), config)).toBe(true);
+    expect(isMorningRitualWindow(dt(8, 59), config)).toBe(true);
+    expect(isMorningRitualWindow(dt(9, 0), config)).toBe(false);
+  });
+
+  it("falls back to defaults when start and end are equal", () => {
+    const config = { morningRitualWindowStart: "08:00", morningRitualWindowEnd: "08:00" };
+    expect(isMorningRitualWindow(dt(5, 30), config)).toBe(true);
+  });
+
+  it("falls back to defaults when the range is inverted (start after end)", () => {
+    const config = { morningRitualWindowStart: "12:00", morningRitualWindowEnd: "06:00" };
+    expect(isMorningRitualWindow(dt(5, 30), config)).toBe(true);
+  });
+
+  it("falls back to defaults when fields are missing or malformed", () => {
+    expect(isMorningRitualWindow(dt(7, 30), {})).toBe(true);
+    expect(isMorningRitualWindow(dt(7, 30), { morningRitualWindowStart: "not-a-time", morningRitualWindowEnd: "11:00" })).toBe(true);
+  });
+});
+
+describe("shouldShowMorningRitual", () => {
+  it("is eligible inside the default 05:00-11:00 window", () => {
+    expect(shouldShowMorningRitual(dt(7, 30), {})).toBe(true);
+  });
+
+  it("is not eligible outside the default window, with no fallback for a missed morning", () => {
+    expect(shouldShowMorningRitual(dt(4, 59), {})).toBe(false);
+    expect(shouldShowMorningRitual(dt(11, 0), {})).toBe(false);
+    expect(shouldShowMorningRitual(dt(15, 0), {})).toBe(false);
+  });
+
+  it("is independent of Focus Windows", () => {
+    const config = { focusWindows: [{ start: "09:00", end: "17:00" }] };
+    expect(shouldShowMorningRitual(dt(7, 30), config)).toBe(true);
+  });
+
+  it("Done (morningRitualShownDate matching today) hides it for the rest of the local day", () => {
+    expect(shouldShowMorningRitual(dt(9, 0), { morningRitualShownDate: "2024-06-15" })).toBe(false);
+  });
+
+  it("a stale shown date from a previous day does not hide it", () => {
+    expect(shouldShowMorningRitual(dt(9, 0), { morningRitualShownDate: "2024-06-14" })).toBe(true);
+  });
+
+  it("Later (snoozeUntil in the future) hides it until the snooze passes", () => {
+    const config = { morningRitualSnoozeUntil: dt(8, 0).getTime() };
+    expect(shouldShowMorningRitual(dt(7, 0), config)).toBe(false);
+    expect(shouldShowMorningRitual(dt(8, 0), config)).toBe(true);
+  });
+
+  it("a snooze that expires after the window closes stays hidden (window check wins)", () => {
+    const config = { morningRitualSnoozeUntil: dt(12, 0).getTime() };
+    expect(shouldShowMorningRitual(dt(11, 0), config)).toBe(false);
+  });
+
+  it("honors a custom configured window end-to-end", () => {
+    const config = { morningRitualWindowStart: "06:00", morningRitualWindowEnd: "09:00" };
+    expect(shouldShowMorningRitual(dt(5, 30), config)).toBe(false);
+    expect(shouldShowMorningRitual(dt(7, 0), config)).toBe(true);
+  });
+});
+
+describe("buildMorningRitualDoneConfig / buildMorningRitualSnoozeConfig", () => {
+  it("buildMorningRitualDoneConfig records today's local date and clears any snooze", () => {
+    expect(buildMorningRitualDoneConfig(dt(7, 30))).toEqual({
+      morningRitualShownDate: "2024-06-15",
+      morningRitualSnoozeUntil: null,
+    });
+  });
+
+  it("buildMorningRitualSnoozeConfig snoozes for 90 minutes", () => {
+    expect(buildMorningRitualSnoozeConfig(dt(7, 30))).toEqual({
+      morningRitualSnoozeUntil: dt(7, 30).getTime() + 90 * 60 * 1000,
+    });
+  });
+
+  it("Done hides the ritual for the rest of the local day but not the next day", () => {
+    const doneConfig = buildMorningRitualDoneConfig(dt(7, 30));
+    expect(shouldShowMorningRitual(dt(9, 0), doneConfig)).toBe(false);
+    expect(shouldShowMorningRitual(dtNextDay(7, 0), doneConfig)).toBe(true);
   });
 });

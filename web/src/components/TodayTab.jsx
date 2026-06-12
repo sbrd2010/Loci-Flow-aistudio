@@ -13,7 +13,7 @@ import { getCurrentFocusQuote } from "../utils/focusQuotes";
 import { formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
 import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows, getWindowState, getRemainingFocusMinutes, getNextWindowStart, getOverallSpan, getFocusProgress } from "../utils/focusWindows";
-import { getMorningRitualVariant, shouldShowMorningRitual } from "../utils/morningRitual";
+import { getMorningRitualVariant, shouldShowMorningRitual, buildMorningRitualDoneConfig, buildMorningRitualSnoozeConfig } from "../utils/morningRitual";
 import {
   shouldShowMorningCommitment, buildMorningCommitmentPrompt, canSaveMorningCommitment,
   buildMorningCommitmentSave, buildMorningCommitmentSkip, buildMorningCommitmentSnooze,
@@ -301,11 +301,26 @@ export default function TodayTab({
     setIsMVDMode(enabling);
   };
 
+  // Re-check auto-show eligibility when the app/tab regains visibility or
+  // focus, so a Morning Ritual window that opened while the app was
+  // backgrounded (e.g. a PWA left open overnight) is picked up without a
+  // full reload.
+  const [visibilityTick, setVisibilityTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setVisibilityTick(t => t + 1);
+    document.addEventListener("visibilitychange", bump);
+    window.addEventListener("focus", bump);
+    return () => {
+      document.removeEventListener("visibilitychange", bump);
+      window.removeEventListener("focus", bump);
+    };
+  }, []);
+
   // ── Daily Anchors / Morning Ritual auto-show ───────────────────────────────
   useEffect(() => {
-    if (focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending) return;
+    if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || showRescue) return;
     let slot = null;
-    if (shouldShowMorningRitual(new Date(), windows, config, todayShownSlots)) {
+    if (shouldShowMorningRitual(new Date(), config)) {
       slot = "morning";
     } else {
       const anchorSlot = getCurrentAnchorSlot(new Date(), windows);
@@ -318,13 +333,17 @@ export default function TodayTab({
     setAnchorSheetSlot(slot);
     const timer = setTimeout(() => setShowAnchorSheet(true), 2500);
     return () => clearTimeout(timer);
-  }, [anchors.length, todayShownSlotsKey, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, config.anchorsSnoozeUntil]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [
+    anchors.length, todayShownSlotsKey, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending,
+    isAddTaskDialogOpen, showAnchorSheet, showDailyCheckin, showRescue, config.anchorsSnoozeUntil,
+    config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, visibilityTick,
+  ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Daily Coach Check-ins auto-show (Today's Commitment / Progress Check / Day Close) ──
   useEffect(() => {
     if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin) return;
     const now = new Date();
-    const morningRitualPending = shouldShowMorningRitual(now, windows, config, todayShownSlots);
+    const morningRitualPending = shouldShowMorningRitual(now, config);
     let slot = null;
     if (shouldShowMorningCommitment(now, windows, config, anchorTodayStr, morningRitualPending)) {
       slot = "morning";
@@ -341,7 +360,8 @@ export default function TodayTab({
     return () => clearTimeout(timer);
   }, [
     anchorTodayStr, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, isAddTaskDialogOpen,
-    showAnchorSheet, showDailyCheckin, todayShownSlotsKey, config.anchorsSnoozeUntil,
+    showAnchorSheet, showDailyCheckin, config.anchorsSnoozeUntil,
+    config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, visibilityTick,
     config.dailyCommitmentDate, config.dailyCommitmentSkippedDate, config.dailyCommitmentSnoozeUntil, config.dailyCommitmentTaskIds,
     config.dailyMiddayCheckDate, config.dailyMiddayCheckSnoozeUntil, config.dailyReflectionDate,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -356,27 +376,35 @@ export default function TodayTab({
   };
 
   const handleAnchorSheetDone = () => {
-    const slot = anchorSheetSlot ?? getCurrentAnchorSlot(new Date(), windows);
-    const nextSlots = slot && !todayShownSlots.includes(slot) ? [...todayShownSlots, slot] : todayShownSlots;
-    saveSubPath("config", { ...config,
-      anchorsShownSlots: nextSlots, anchorsSlotsDate: anchorTodayStr,
-      anchorsSnoozeUntil: null, lastUpdated: Date.now()
-    });
+    if (anchorSheetSlot === "morning") {
+      saveSubPath("config", { ...config, ...buildMorningRitualDoneConfig(), lastUpdated: Date.now() });
+    } else {
+      const slot = anchorSheetSlot ?? getCurrentAnchorSlot(new Date(), windows);
+      const nextSlots = slot && !todayShownSlots.includes(slot) ? [...todayShownSlots, slot] : todayShownSlots;
+      saveSubPath("config", { ...config,
+        anchorsShownSlots: nextSlots, anchorsSlotsDate: anchorTodayStr,
+        anchorsSnoozeUntil: null, lastUpdated: Date.now()
+      });
+    }
     setShowAnchorSheet(false);
     setAnchorSheetSlot(null);
   };
 
   const handleAnchorLater = () => {
-    saveSubPath("config", { ...config,
-      anchorsSnoozeUntil: Date.now() + 90 * 60 * 1000, lastUpdated: Date.now()
-    });
+    if (anchorSheetSlot === "morning") {
+      saveSubPath("config", { ...config, ...buildMorningRitualSnoozeConfig(), lastUpdated: Date.now() });
+    } else {
+      saveSubPath("config", { ...config,
+        anchorsSnoozeUntil: Date.now() + 90 * 60 * 1000, lastUpdated: Date.now()
+      });
+    }
     setShowAnchorSheet(false);
     setAnchorSheetSlot(null);
   };
 
   const handleAnchorSkipToday = () => {
     saveSubPath("config", { ...config,
-      anchorsShownSlots: ["morning", "afternoon", "evening"], anchorsSlotsDate: anchorTodayStr,
+      anchorsShownSlots: ["afternoon", "evening"], anchorsSlotsDate: anchorTodayStr,
       anchorsSnoozeUntil: null, lastUpdated: Date.now()
     });
     setShowAnchorSheet(false);

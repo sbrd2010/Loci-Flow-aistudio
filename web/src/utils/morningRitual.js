@@ -1,9 +1,19 @@
-// Morning Ritual popup: a once-per-Loci-day, gentle nudge shown any time after
-// the start of the user's first focus window, surfacing Daily Anchors as a
-// quick check-in. Built on the flexible focus windows / Daily Anchors
-// primitives from focusWindows.js and dailyAnchors.js.
+// Morning Ritual popup: a once-per-day, gentle "good morning" nudge shown on
+// the first app open within a fixed wall-clock window (default 05:00-11:00,
+// configurable in Settings), surfacing Daily Anchors as a quick check-in.
+// Independent of Focus Windows and Daily Anchors slot/snooze state — see
+// isMorningRitualSlot below for the Focus-Window-based check still used by
+// the Daily Coach check-ins.
 
-import { getLociNowMinutes } from "./focusWindows";
+import { getLociNowMinutes, parseTimeToMinutes } from "./focusWindows";
+
+const DEFAULT_MORNING_RITUAL_WINDOW_START = "05:00";
+const DEFAULT_MORNING_RITUAL_WINDOW_END = "11:00";
+const MORNING_RITUAL_SNOOZE_MS = 90 * 60 * 1000; // matches Daily Anchors "Later"
+
+function getLocalDateStr(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 
 // Rotating short copy for the centered Morning Ritual popup. Deterministic
 // per calendar day, like getAnchorVariant in dailyAnchors.js.
@@ -24,18 +34,46 @@ export function getMorningRitualVariant(now = new Date()) {
 
 // True from the moment the first focus window opens today onward, with no
 // upper bound — covers both "right at the start" and "first opened later
-// that day" (e.g. at noon for a 09:00 start).
+// that day" (e.g. at noon for a 09:00 start). Used by the Daily Coach
+// check-ins (Today's Commitment / Progress Check / Day Close), which remain
+// tied to Focus Windows.
 export function isMorningRitualSlot(now, windows) {
   return getLociNowMinutes(now, windows) >= windows[0].startMin;
 }
 
-// Whether the Morning Ritual popup should be shown right now: the first focus
-// window has opened today, it hasn't been dismissed (Done) yet today, and it
-// isn't snoozed (Later). Independent of whether any anchors are configured.
-export function shouldShowMorningRitual(now, windows, config, todayShownSlots) {
-  if (!isMorningRitualSlot(now, windows)) return false;
-  if (todayShownSlots.includes("morning")) return false;
-  const snoozeUntil = config?.anchorsSnoozeUntil;
+// True during a fixed wall-clock window (default 05:00-11:00), independent of
+// Focus Windows. Falls back to the defaults if config.morningRitualWindowStart/
+// End are missing, malformed, equal, or inverted (start >= end). No overnight
+// (start >= end) windows are supported.
+export function isMorningRitualWindow(now, config = {}) {
+  let startMin = parseTimeToMinutes(config?.morningRitualWindowStart);
+  let endMin = parseTimeToMinutes(config?.morningRitualWindowEnd);
+  if (startMin === null || endMin === null || startMin >= endMin) {
+    startMin = parseTimeToMinutes(DEFAULT_MORNING_RITUAL_WINDOW_START);
+    endMin = parseTimeToMinutes(DEFAULT_MORNING_RITUAL_WINDOW_END);
+  }
+  const nowMin = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+  return nowMin >= startMin && nowMin < endMin;
+}
+
+// Whether the Morning Ritual popup should be shown right now: inside the
+// configured wall-clock window, not already shown today (local calendar
+// date), and not snoozed (Later). Independent of Focus Windows and Daily
+// Anchors slot/snooze state.
+export function shouldShowMorningRitual(now, config = {}) {
+  if (!isMorningRitualWindow(now, config)) return false;
+  if (config?.morningRitualShownDate === getLocalDateStr(now)) return false;
+  const snoozeUntil = config?.morningRitualSnoozeUntil;
   if (snoozeUntil && now.getTime() < snoozeUntil) return false;
   return true;
+}
+
+// Config patch for "Done": marks today (local date) as shown and clears any snooze.
+export function buildMorningRitualDoneConfig(now = new Date()) {
+  return { morningRitualShownDate: getLocalDateStr(now), morningRitualSnoozeUntil: null };
+}
+
+// Config patch for "Later": snoozes the popup for 90 minutes.
+export function buildMorningRitualSnoozeConfig(now = new Date()) {
+  return { morningRitualSnoozeUntil: now.getTime() + MORNING_RITUAL_SNOOZE_MS };
 }
