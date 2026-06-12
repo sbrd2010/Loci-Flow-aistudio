@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLociCoreInstruction, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
+import { buildLociCoreInstruction, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
 import { getFocusWindows } from "./focusWindows";
 
 describe("lociAIContext", () => {
@@ -229,6 +229,134 @@ describe("buildLociFocusSessionContext", () => {
 
     expect(context).toContain("LIVE FOCUS SESSION (paused)");
     expect(context).toContain("0 min elapsed, 25 min remaining");
+  });
+});
+
+describe("buildLociNowFocusContext", () => {
+  it("returns an empty string when there is no Now Focus task", () => {
+    expect(buildLociNowFocusContext([])).toBe("");
+    expect(buildLociNowFocusContext([{ title: "Other task", isNowFocus: false }])).toBe("");
+  });
+
+  it("returns an empty string when the Now Focus task has no subtasks", () => {
+    expect(buildLociNowFocusContext([{ title: "Write report", isNowFocus: true }])).toBe("");
+    expect(buildLociNowFocusContext([{ title: "Write report", isNowFocus: true, subSteps: [] }])).toBe("");
+  });
+
+  it("ignores a Now Focus flag on an inactive (completed/parked) task", () => {
+    const context = buildLociNowFocusContext([
+      { title: "Done task", isNowFocus: true, isCompleted: true, subSteps: [{ id: "1", text: "Step", done: false }] },
+      { title: "Parked task", isNowFocus: true, isParked: true, subSteps: [{ id: "1", text: "Step", done: false }] },
+    ]);
+    expect(context).toBe("");
+  });
+
+  it("lists subtask completion state with a done/total count", () => {
+    const context = buildLociNowFocusContext([
+      {
+        title: "Write report", isNowFocus: true,
+        subSteps: [
+          { id: "1", text: "Open the doc", done: true },
+          { id: "2", text: "Write the intro", done: false },
+        ]
+      }
+    ]);
+
+    expect(context).toContain('NOW FOCUS SUBTASKS for "Write report" (1/2 done):');
+    expect(context).toContain("[x] Open the doc");
+    expect(context).toContain("[ ] Write the intro");
+  });
+});
+
+describe("buildLociRemindersContext", () => {
+  const TODAY = new Date(2026, 5, 12, 10, 0); // 2026-06-12 10:00am
+
+  it("returns an empty string when nothing is due today", () => {
+    expect(buildLociRemindersContext([], TODAY)).toBe("");
+    expect(buildLociRemindersContext([
+      { title: "Tomorrow's reminder", reminderAt: new Date(2026, 5, 13, 9, 0).getTime() }
+    ], TODAY)).toBe("");
+  });
+
+  it("excludes reminders on inactive tasks", () => {
+    const reminderAt = new Date(2026, 5, 12, 14, 0).getTime();
+    expect(buildLociRemindersContext([
+      { title: "Done task", isCompleted: true, reminderAt },
+      { title: "Deleted task", isDeleted: true, reminderAt },
+      { title: "Parked task", isParked: true, reminderAt },
+    ], TODAY)).toBe("");
+  });
+
+  it("lists today's reminders sorted by time, flagging overdue ones", () => {
+    const context = buildLociRemindersContext([
+      { title: "Afternoon call", reminderAt: new Date(2026, 5, 12, 14, 0).getTime() },
+      { title: "Morning meds", reminderAt: new Date(2026, 5, 12, 9, 0).getTime() },
+    ], TODAY);
+
+    expect(context).toContain("REMINDERS DUE TODAY:");
+    const lines = context.split("\n");
+    expect(lines[1]).toContain("09:00");
+    expect(lines[1]).toContain("Morning meds");
+    expect(lines[1]).toContain("(overdue)");
+    expect(lines[2]).toContain("14:00");
+    expect(lines[2]).toContain("Afternoon call");
+    expect(lines[2]).not.toContain("(overdue)");
+  });
+
+  it("includes still-incomplete overdue reminders from prior days, flagged as overdue", () => {
+    const context = buildLociRemindersContext([
+      { title: "Missed yesterday", reminderAt: new Date(2026, 5, 11, 9, 0).getTime() },
+    ], TODAY);
+
+    expect(context).toContain("REMINDERS DUE TODAY:");
+    expect(context).toContain("Missed yesterday");
+    expect(context).toContain("(overdue)");
+  });
+
+  it("excludes a completed task's overdue reminder from a prior day", () => {
+    expect(buildLociRemindersContext([
+      { title: "Done yesterday", isCompleted: true, reminderAt: new Date(2026, 5, 11, 9, 0).getTime() },
+    ], TODAY)).toBe("");
+  });
+});
+
+describe("buildLociLowEnergyContext", () => {
+  it("returns an empty string when Low Energy Mode is off", () => {
+    expect(buildLociLowEnergyContext({})).toBe("");
+    expect(buildLociLowEnergyContext({ isLowEnergyMode: false })).toBe("");
+  });
+
+  it("flags Low Energy Mode when on", () => {
+    expect(buildLociLowEnergyContext({ isLowEnergyMode: true })).toContain("LOW ENERGY MODE: ON");
+  });
+});
+
+describe("buildLociRecentlyParkedContext", () => {
+  const NOW = new Date(2026, 5, 12, 12, 0); // 2026-06-12 noon
+
+  it("returns an empty string when nothing was parked recently", () => {
+    expect(buildLociRecentlyParkedContext([], NOW)).toBe("");
+    expect(buildLociRecentlyParkedContext([
+      { title: "Old park", isParked: true, lastUpdated: NOW.getTime() - 25 * 60 * 60 * 1000 }
+    ], NOW)).toBe("");
+  });
+
+  it("excludes deleted/completed tasks even if recently updated and parked", () => {
+    expect(buildLociRecentlyParkedContext([
+      { title: "Deleted", isParked: true, isDeleted: true, lastUpdated: NOW.getTime() },
+      { title: "Completed", isParked: true, isCompleted: true, lastUpdated: NOW.getTime() },
+    ], NOW)).toBe("");
+  });
+
+  it("lists tasks parked within the last 24 hours", () => {
+    const context = buildLociRecentlyParkedContext([
+      { title: "Bad day task", isParked: true, lastUpdated: NOW.getTime() - 60 * 60 * 1000 },
+      { title: "Active task", isParked: false, lastUpdated: NOW.getTime() },
+    ], NOW);
+
+    expect(context).toContain("RECENTLY PARKED (last 24h):");
+    expect(context).toContain("'Bad day task'");
+    expect(context).not.toContain("Active task");
   });
 });
 
