@@ -264,7 +264,8 @@ export default function App() {
     focusTimer.dismissSessionComplete();
     if (!task) return;
     celebrate();
-    savePayload(buildFocusCompletionPayload(payload, task, toLocalDateStr(new Date())));
+    const now = new Date();
+    savePayload(buildFocusCompletionPayload(payload, task, toLocalDateStr(now), now));
     focusTimer.setIsFocusMode(false);
     focusTimer.setFocusSessionActive(false);
   };
