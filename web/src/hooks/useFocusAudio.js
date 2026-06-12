@@ -87,6 +87,7 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
       saveSubPath("config", {
         ...config,
         focusSoundTrack: nextTrack,
+        focusSoundVolume: volume,
         lastUpdated: Date.now()
       });
     }
@@ -99,6 +100,7 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
     if (saveSubPath) {
       saveSubPath("config", {
         ...config,
+        focusSoundTrack: selectedTrack,
         focusSoundVolume: clampedVolume,
         lastUpdated: Date.now()
       });

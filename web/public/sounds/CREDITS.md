@@ -35,3 +35,9 @@ All background audio loops utilized in Loci Focus are sourced from the **Open Lo
 - **Title**: Dust on the Morning Keys
 - **Category**: Chillhop & Cozy Beats (`chillhop`)
 - **License**: CC0 1.0 Universal (Public Domain)
+
+### 5. Binaural 40Hz
+- **Filename**: binaural-40hz.wav
+- **Title**: Binaural 40Hz
+- **Source**: Self-synthesized (not from Open Lo-Fi) — a 200Hz tone in the left channel and a 240Hz tone in the right channel, producing a 40Hz binaural beat. 2-second seamless loop, generated programmatically with Python's standard `wave` module.
+- **License**: Public Domain / CC0 (original work, no third-party content)

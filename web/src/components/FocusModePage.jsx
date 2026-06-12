@@ -298,7 +298,7 @@ export default function FocusModePage({
       )}
 
       {/* ── Focus Sounds Drawer */}
-      <div className={`focus-sounds-drawer${showSoundsDrawer ? " open" : ""}`}>
+      <div className={`focus-sounds-drawer${showSoundsDrawer ? " open" : ""}`} aria-hidden={!showSoundsDrawer}>
         <div className="focus-sounds-header">
           <h3>Focus Sounds</h3>
           <button
@@ -306,6 +306,7 @@ export default function FocusModePage({
             className="focus-sounds-close-btn"
             onClick={() => setShowSoundsDrawer(false)}
             aria-label="Close sounds menu"
+            tabIndex={showSoundsDrawer ? 0 : -1}
           >
             ✕
           </button>
@@ -318,7 +319,8 @@ export default function FocusModePage({
               { id: "after-school-rain.mp3", title: "Relaxing Rain", icon: "🌧️", desc: "Nature ambience" },
               { id: "2-am-debug-loop.mp3", title: "Lo-Fi Beats", icon: "🎧", desc: "Downtempo beats" },
               { id: "midnight-amber-room.mp3", title: "Jazz Lounge", icon: "🎷", desc: "Smooth jazz" },
-              { id: "dust-on-the-morning-keys.mp3", title: "Classical Piano", icon: "🎹", desc: "Gentle piano" }
+              { id: "dust-on-the-morning-keys.mp3", title: "Classical Piano", icon: "🎹", desc: "Gentle piano" },
+              { id: "binaural-40hz.wav", title: "Binaural 40Hz", icon: "🧠", desc: "Focus tone (use headphones)" }
             ].map(track => {
               const isActive = (track.id === "none" && !selectedTrack) || (selectedTrack === track.id);
               return (
@@ -328,6 +330,7 @@ export default function FocusModePage({
                   className={`sound-tile${isActive ? " active" : ""}`}
                   onClick={() => selectTrack(track.id)}
                   aria-pressed={isActive}
+                  tabIndex={showSoundsDrawer ? 0 : -1}
                 >
                   <span className="sound-tile-icon">{track.icon}</span>
                   <div className="sound-tile-info">
@@ -353,6 +356,7 @@ export default function FocusModePage({
               onChange={e => changeVolume(parseFloat(e.target.value))}
               className="focus-sounds-volume-slider"
               aria-label="Adjust volume"
+              tabIndex={showSoundsDrawer ? 0 : -1}
             />
           </div>
         </div>
