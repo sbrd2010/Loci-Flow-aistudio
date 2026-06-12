@@ -5,6 +5,8 @@ import { profileToCoachContext } from "../utils/userProfile";
 import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, isActiveLociTask } from "../utils/lociAIContext";
 import { getTodayCheckedIds, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
+import { scheduleCoachCheckin, cancelCoachCheckin } from "../utils/reminders";
+import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, buildCheckinResumeMessage } from "../utils/coachCheckin";
 
 export default function CoachTab({ payload, savePayload, saveSubPath, userProfile }) {
   const { tasks = [], config = {} } = payload;
@@ -47,6 +49,28 @@ export default function CoachTab({ payload, savePayload, saveSubPath, userProfil
     prevHistoryLenRef.current = chatHistory.length;
   }, [chatHistory, chatLoading]);
 
+  // Resume a "Coach Check-In" the user asked for earlier — on mount (came
+  // back to this tab) and every minute while it stays open (sitting here
+  // when the time arrives).
+  const chatHistoryRef = useRef(chatHistory);
+  chatHistoryRef.current = chatHistory;
+  const configRef = useRef(config);
+  configRef.current = config;
+
+  useEffect(() => {
+    const checkDue = () => {
+      const checkin = configRef.current.coachCheckin;
+      if (!isCheckinDue(checkin)) return;
+      const resumeMsg = buildCheckinResumeMessage(firstName, checkin.note);
+      saveSubPath("chatHistory", [...chatHistoryRef.current, { text: resumeMsg, isUser: false }]);
+      saveSubPath("config", { ...configRef.current, coachCheckin: null, lastUpdated: Date.now() });
+      cancelCoachCheckin();
+    };
+    checkDue();
+    const interval = setInterval(checkDue, 60000);
+    return () => clearInterval(interval);
+  }, [config.coachCheckin?.fireAt, firstName]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSendChat = async (e) => {
     e.preventDefault();
     if (!chatInput.trim() || !hasAnyKey || chatLoading) return;
@@ -66,6 +90,7 @@ export default function CoachTab({ payload, savePayload, saveSubPath, userProfil
     const now = new Date();
     const hour = now.getHours();
     const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+    const nowLabel = now.toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
     const todayActive = tasks.filter(t => t.horizonLevel === "today" && isActiveLociTask(t));
     const taskContext = buildLociTaskContext(tasks, new Date(), getFocusWindows(config));
     const todayStr = getLociDayStr(new Date(), getFocusWindows(config));
@@ -134,15 +159,27 @@ GUARD RAILS:
 - Genuine distress or crisis: "I hear you. Please reach out to someone you trust or a professional if this feels urgent. What's the one smallest thing that might help right now?"
 - Stay within: productivity, tasks, focus, execution support, time management, motivation, gentle life-management support.
 
+COACH ACTIONS:
+- If ${firstName} asks you to check in, follow up, or remind them again later in this chat, end your reply with [[CHECKIN_IN:N]] on its own line, where N is a whole number of minutes from now (1-180). This tag is invisible to ${firstName} — never mention it or explain it.
+- Only use this tag when explicitly asked for a later check-in. Do not offer it proactively, and never use it for any other purpose.
+
 LANGUAGE: Never use the word "ADHD". Use instead: focus challenge, overwhelm, execution support, momentum, time awareness, micro-step, reset, low-energy mode.
 ${profileToCoachContext(userProfile) ? `\n${profileToCoachContext(userProfile)}\n` : ""}
-SESSION: ${timeOfDay}, ${config.visitStreakCount || 0}-day streak, ${todayActive.length} active tasks today.`;
+SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak, ${todayActive.length} active tasks today.`;
 
     const messages = withUser.map(m => ({ role: m.isUser ? "user" : "assistant", content: m.text }));
 
     try {
       const reply = await callAI({ groqKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens: 300 });
-      saveSubPath("chatHistory", [...withUser, { text: reply.trim(), isUser: false }]);
+      const { cleanText, minutes } = parseCheckinTag(reply.trim());
+
+      if (minutes != null) {
+        const checkin = buildCoachCheckin(minutes, pickCheckinNote(todayActive));
+        saveSubPath("config", { ...config, coachCheckin: checkin, lastUpdated: Date.now() });
+        scheduleCoachCheckin(checkin);
+      }
+
+      saveSubPath("chatHistory", [...withUser, { text: cleanText || "Got it.", isUser: false }]);
     } catch (err) {
       const hint = err.message === "429" ? "Rate limit — wait 30 sec and retry." : err.message === "503" ? "AI server busy — try again." : err.message === "no_key" ? "Add an AI key in Settings." : `AI error ${err.message}`;
       saveSubPath("chatHistory", [...withUser, { text: hint, isUser: false }]);
