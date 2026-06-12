@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { getTimerState } from "../utils/focusSession";
+import { BINAURAL_TRACK_ID } from "../utils/binauralBeat";
 import "../styles/focusMode.css";
 
 const DURATION_OPTIONS = [15, 20, 25, 30, 45, 60, 90];
@@ -316,7 +317,7 @@ export default function FocusModePage({
               { id: "2-am-debug-loop.mp3", title: "Lo-Fi Beats", icon: "🎧", desc: "Downtempo beats" },
               { id: "midnight-amber-room.mp3", title: "Jazz Lounge", icon: "🎷", desc: "Smooth jazz" },
               { id: "dust-on-the-morning-keys.mp3", title: "Classical Piano", icon: "🎹", desc: "Gentle piano" },
-              { id: "binaural-40hz.wav", title: "Binaural 40Hz", icon: "🧠", desc: "Focus tone (use headphones)" }
+              { id: BINAURAL_TRACK_ID, title: "Binaural 40Hz", icon: "🧠", desc: "Focus tone (use headphones)" }
             ].map(track => {
               const isActive = (track.id === "none" && !selectedTrack) || (selectedTrack === track.id);
               return (

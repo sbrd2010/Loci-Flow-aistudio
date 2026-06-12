@@ -1,5 +1,6 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { useFocusAudio } from "./useFocusAudio";
+import { BINAURAL_TRACK_ID } from "../utils/binauralBeat";
 
 // Mock global Audio
 class MockAudio {
@@ -23,6 +24,52 @@ class MockAudio {
 MockAudio.instances = [];
 
 globalThis.Audio = MockAudio;
+
+// Mock global AudioContext (binaural beat)
+class MockOscillator {
+  constructor() {
+    this.frequency = { value: 0 };
+    this.type = "";
+    this.stopCalled = false;
+  }
+  connect() {}
+  start() {}
+  stop() { this.stopCalled = true; }
+}
+
+class MockGainNode {
+  constructor() {
+    this.gain = { value: 1 };
+  }
+  connect() {}
+}
+
+class MockChannelMerger {
+  connect() {}
+}
+
+class MockAudioContext {
+  constructor() {
+    // Some browsers create a new AudioContext already running when
+    // constructed inside a user-gesture handler (e.g. a click).
+    this.state = "running";
+    this.oscillators = [];
+    MockAudioContext.instances.push(this);
+  }
+  createOscillator() {
+    const osc = new MockOscillator();
+    this.oscillators.push(osc);
+    return osc;
+  }
+  createGain() { return new MockGainNode(); }
+  createChannelMerger() { return new MockChannelMerger(); }
+  resume() { this.state = "running"; return Promise.resolve(); }
+  suspend() { this.state = "suspended"; return Promise.resolve(); }
+  close() { this.state = "closed"; return Promise.resolve(); }
+}
+MockAudioContext.instances = [];
+
+globalThis.AudioContext = MockAudioContext;
 
 // Simple custom React hooks runner for testing in pure Node environment
 let stateIndex = 0;
@@ -148,6 +195,7 @@ describe("useFocusAudio", () => {
 
     // Reset Mock Audio instances
     MockAudio.instances = [];
+    MockAudioContext.instances = [];
   });
 
   it("initializes with default values when config is empty", () => {
@@ -328,5 +376,82 @@ describe("useFocusAudio", () => {
 
     expect(result.current.selectedTrack).toBeNull();
     expect(result.current.volume).toBe(0.5);
+  });
+
+  it("creates a binaural beat node (not an Audio element) for the binaural track", () => {
+    const config = { focusSoundTrack: BINAURAL_TRACK_ID, focusSoundVolume: 0.6 };
+    renderHook(
+      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      [true, config, null]
+    );
+
+    expect(MockAudio.instances.length).toBe(0);
+    expect(MockAudioContext.instances.length).toBe(1);
+
+    const ctx = MockAudioContext.instances[0];
+    expect(ctx.oscillators[0].frequency.value).toBe(200);
+    expect(ctx.oscillators[1].frequency.value).toBe(240);
+    expect(ctx.state).toBe("running"); // isRunning true on init
+  });
+
+  it("resumes/suspends the binaural beat when timer running state changes", () => {
+    const config = { focusSoundTrack: BINAURAL_TRACK_ID };
+    const { rerender } = renderHook(
+      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      [false, config, null]
+    );
+
+    const ctx = MockAudioContext.instances[0];
+    expect(ctx.state).toBe("suspended");
+
+    rerender([true, config, null]);
+    expect(ctx.state).toBe("running");
+
+    rerender([false, config, null]);
+    expect(ctx.state).toBe("suspended");
+  });
+
+  it("disposes the binaural context when switching to a different track", () => {
+    const config = { focusSoundTrack: BINAURAL_TRACK_ID };
+    const { result } = renderHook(
+      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      [true, config, null]
+    );
+
+    const ctx = MockAudioContext.instances[0];
+
+    result.current.selectTrack("after-school-rain.mp3");
+
+    expect(ctx.oscillators[0].stopCalled).toBe(true);
+    expect(ctx.oscillators[1].stopCalled).toBe(true);
+    expect(ctx.state).toBe("closed");
+    expect(MockAudio.instances.length).toBe(1);
+  });
+
+  it("disposes the binaural context on unmount", () => {
+    const config = { focusSoundTrack: BINAURAL_TRACK_ID };
+    const { unmount } = renderHook(
+      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      [true, config, null]
+    );
+
+    const ctx = MockAudioContext.instances[0];
+
+    unmount();
+
+    expect(ctx.oscillators[0].stopCalled).toBe(true);
+    expect(ctx.state).toBe("closed");
+  });
+
+  it("migrates a config saved with the old binaural-40hz.wav track id to the synthesized track", () => {
+    const config = { focusSoundTrack: "binaural-40hz.wav" };
+    const { result } = renderHook(
+      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      [false, config, null]
+    );
+
+    expect(result.current.selectedTrack).toBe(BINAURAL_TRACK_ID);
+    expect(MockAudio.instances.length).toBe(0);
+    expect(MockAudioContext.instances.length).toBe(1);
   });
 });
