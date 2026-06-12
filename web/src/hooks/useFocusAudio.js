@@ -6,16 +6,19 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
 
   const audioRef = useRef(null);
 
-  // Sync state if config changes externally (e.g. from sync/reload)
+  // Sync state if config changes externally (e.g. from sync/reload, or a
+  // different account/config with no saved sound prefs).
   useEffect(() => {
-    if (config.focusSoundTrack !== undefined && config.focusSoundTrack !== selectedTrack) {
-      setSelectedTrack(config.focusSoundTrack);
+    const next = config.focusSoundTrack !== undefined ? config.focusSoundTrack : null;
+    if (next !== selectedTrack) {
+      setSelectedTrack(next);
     }
   }, [config.focusSoundTrack]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (config.focusSoundVolume !== undefined && config.focusSoundVolume !== volume) {
-      setVolume(config.focusSoundVolume);
+    const next = config.focusSoundVolume !== undefined ? config.focusSoundVolume : 0.5;
+    if (next !== volume) {
+      setVolume(next);
     }
   }, [config.focusSoundVolume]); // eslint-disable-line react-hooks/exhaustive-deps
 

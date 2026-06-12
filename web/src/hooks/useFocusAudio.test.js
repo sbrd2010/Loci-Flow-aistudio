@@ -276,4 +276,57 @@ describe("useFocusAudio", () => {
     unmount();
     expect(audio.paused).toBe(true);
   });
+
+  it("preserves the new volume when a track is selected immediately after a volume change", () => {
+    const config = { focusSoundTrack: "after-school-rain.mp3", focusSoundVolume: 0.5 };
+    const saveSubPath = vi.fn();
+    const { result } = renderHook(
+      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      [false, config, saveSubPath]
+    );
+
+    result.current.changeVolume(0.8);
+    // Parent config prop has not re-rendered yet with the new volume.
+    result.current.selectTrack("midnight-amber-room.mp3");
+
+    expect(saveSubPath).toHaveBeenLastCalledWith("config", expect.objectContaining({
+      focusSoundTrack: "midnight-amber-room.mp3",
+      focusSoundVolume: 0.8
+    }));
+  });
+
+  it("preserves the new track when volume is changed immediately after selecting a track", () => {
+    const config = { focusSoundTrack: "after-school-rain.mp3", focusSoundVolume: 0.5 };
+    const saveSubPath = vi.fn();
+    const { result } = renderHook(
+      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      [false, config, saveSubPath]
+    );
+
+    result.current.selectTrack("midnight-amber-room.mp3");
+    // Parent config prop has not re-rendered yet with the new track.
+    result.current.changeVolume(0.8);
+
+    expect(saveSubPath).toHaveBeenLastCalledWith("config", expect.objectContaining({
+      focusSoundTrack: "midnight-amber-room.mp3",
+      focusSoundVolume: 0.8
+    }));
+  });
+
+  it("resets track and volume to defaults when config no longer has sound fields", () => {
+    const config = { focusSoundTrack: "after-school-rain.mp3", focusSoundVolume: 0.8 };
+    const { result, rerender } = renderHook(
+      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      [false, config, null]
+    );
+
+    expect(result.current.selectedTrack).toBe("after-school-rain.mp3");
+    expect(result.current.volume).toBe(0.8);
+
+    // New account/config with no saved sound prefs
+    rerender([false, {}, null]);
+
+    expect(result.current.selectedTrack).toBeNull();
+    expect(result.current.volume).toBe(0.5);
+  });
 });

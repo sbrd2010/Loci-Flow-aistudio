@@ -13,25 +13,25 @@ All background audio loops utilized in Loci Focus are sourced from the **Open Lo
 ## Track List & Attributions
 
 ### 1. Relaxing Rain
-- **Filename**: [after-school-rain.mp3](file:///C:/Users/Rohan.Das/.gemini/antigravity/scratch/Loci-Flow-aistudio/web/public/sounds/after-school-rain.mp3)
+- **Filename**: [after-school-rain.mp3](./after-school-rain.mp3)
 - **Title**: After School Rain
 - **Category**: Seasons, Rain & Weather (`seasonal-weather`)
 - **License**: CC0 1.0 Universal (Public Domain)
 
 ### 2. Lo-Fi Beats
-- **Filename**: [2-am-debug-loop.mp3](file:///C:/Users/Rohan.Das/.gemini/antigravity/scratch/Loci-Flow-aistudio/web/public/sounds/2-am-debug-loop.mp3)
+- **Filename**: [2-am-debug-loop.mp3](./2-am-debug-loop.mp3)
 - **Title**: 2 AM Debug Loop
 - **Category**: Focus, Rituals & Daily Routines (`activities`)
 - **License**: CC0 1.0 Universal (Public Domain)
 
 ### 3. Jazz Lounge
-- **Filename**: [midnight-amber-room.mp3](file:///C:/Users/Rohan.Das/.gemini/antigravity/scratch/Loci-Flow-aistudio/web/public/sounds/midnight-amber-room.mp3)
+- **Filename**: [midnight-amber-room.mp3](./midnight-amber-room.mp3)
 - **Title**: Midnight Amber Room
 - **Category**: Jazz Lounge & Bookstore Grooves (`jazzhop`)
 - **License**: CC0 1.0 Universal (Public Domain)
 
 ### 4. Classical Piano
-- **Filename**: [dust-on-the-morning-keys.mp3](file:///C:/Users/Rohan.Das/.gemini/antigravity/scratch/Loci-Flow-aistudio/web/public/sounds/dust-on-the-morning-keys.mp3)
+- **Filename**: [dust-on-the-morning-keys.mp3](./dust-on-the-morning-keys.mp3)
 - **Title**: Dust on the Morning Keys
 - **Category**: Chillhop & Cozy Beats (`chillhop`)
 - **License**: CC0 1.0 Universal (Public Domain)
