@@ -582,7 +582,7 @@ export default function App() {
           />
         )}
         {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} userProfile={userProfile} initialPanel={mindBoxInitialPanel} />}
-        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} userProfile={userProfile} />}
+        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} userProfile={userProfile} focusTimer={focusTimer} />}
         {activeTab === "settings" && (
           <SettingsTab
             payload={payload}

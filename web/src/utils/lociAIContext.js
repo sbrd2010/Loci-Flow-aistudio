@@ -1,5 +1,5 @@
 import { getValidCommittedTaskIds, REFLECTION_MOODS } from "./dailyCoachCheckins";
-import { isDailyDone } from "./deadlineCountdown";
+import { buildDeadlineProgressMirror } from "./deadlineProgressMirror";
 import { getFocusWindows, getLociDayStr } from "./focusWindows";
 
 const HORIZON_ORDER = ["today", "week", "month", "quarter", "halfyear", "office"];
@@ -118,13 +118,6 @@ export function buildLociCheckinContext(config = {}, tasks = [], todayStr) {
     if (note) {
       lines.push(`- Tomorrow note: '${note}'.`);
     }
-
-    if (config.deadlineLabel || config.deadlineAction) {
-      const label = (config.deadlineLabel || "Key deadline").trim();
-      const action = (config.deadlineAction || "today's move").trim();
-      const done = isDailyDone(config.deadlineDailyDoneDate, todayStr);
-      lines.push(`- Key deadline '${label}' (${action}): ${done ? "done today" : "not done yet"}.`);
-    }
   }
 
   if (lines.length === 0) return "";
@@ -134,6 +127,54 @@ export function buildLociCheckinContext(config = {}, tasks = [], todayStr) {
     ...lines,
     "Use this only for supportive coaching. Do not imply judgment."
   ].join("\n");
+}
+
+// Snapshot of the live Focus/Pomodoro session so the coach knows the user has
+// already started a task instead of asking what to work on next.
+export function buildLociFocusSessionContext(focusTimer = {}) {
+  const { activeTask, focusSessionActive, isTimerRunning, timerSecondsLeft, timerMaxSeconds } = focusTimer;
+  if (!focusSessionActive || !activeTask) return "";
+
+  const elapsedSec = Math.max(0, (timerMaxSeconds || 0) - (timerSecondsLeft || 0));
+  const elapsedMin = Math.round(elapsedSec / 60);
+  const remainingMin = Math.round((timerSecondsLeft || 0) / 60);
+
+  return [
+    `LIVE FOCUS SESSION (${isTimerRunning ? "running" : "paused"}):`,
+    `- Working on "${activeTask.title}" — ${elapsedMin} min elapsed, ${remainingMin} min remaining.`,
+    "- They have already started this task. Don't ask what to start next; reference this session."
+  ].join("\n");
+}
+
+// Always-on Key Deadline summary for the AI Coach (previously only surfaced
+// during the end-of-day Reflection check-in).
+export function buildLociDeadlineContext(config = {}, today = new Date()) {
+  if (!config.deadlineLabel && !config.deadlineDate && !config.deadlineAction) return "";
+
+  const label = (config.deadlineLabel || "Key deadline").trim();
+  const action = (config.deadlineAction || "one real move").trim();
+  const lines = [`KEY DEADLINE: "${label}"`];
+
+  if (config.deadlineDate) {
+    const start = new Date(today);
+    start.setHours(0, 0, 0, 0);
+    const target = new Date(`${config.deadlineDate}T00:00:00`);
+    const days = Math.round((target - start) / 86400000);
+    if (days > 0) lines.push(`- ${days} day${days === 1 ? "" : "s"} remaining.`);
+    else if (days === 0) lines.push("- Due today.");
+    else lines.push("- Deadline date has passed.");
+  }
+
+  const mirror = buildDeadlineProgressMirror(config, today);
+  lines.push(`- Today's move ("${action}"): ${mirror.todayStatus === "done" ? "done" : "not done yet"}.`);
+  if (mirror.missedCount > 0) {
+    lines.push(`- ${mirror.missedCount} missed move${mirror.missedCount === 1 ? "" : "s"} in the last 7 days.`);
+  }
+  if (mirror.doneRun > 1) {
+    lines.push(`- Current streak: ${mirror.doneRun} day${mirror.doneRun === 1 ? "" : "s"} done in a row.`);
+  }
+
+  return lines.join("\n");
 }
 
 export function buildLociCoreInstruction({ firstName = "friend" } = {}) {
