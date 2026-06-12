@@ -1,6 +1,6 @@
 import { getValidCommittedTaskIds, REFLECTION_MOODS } from "./dailyCoachCheckins";
 import { buildDeadlineProgressMirror } from "./deadlineProgressMirror";
-import { getFocusWindows, getLociDayStr } from "./focusWindows";
+import { formatMinutesToTime, getFocusWindows, getLociDayStr } from "./focusWindows";
 
 const HORIZON_ORDER = ["today", "week", "month", "quarter", "halfyear", "office"];
 
@@ -175,6 +175,64 @@ export function buildLociDeadlineContext(config = {}, today = new Date()) {
   }
 
   return lines.join("\n");
+}
+
+// Today's planned Day Map route, in order — mirrors the filter/sort used by
+// DayMapPage so the coach sees the same route the user laid out.
+export function buildLociDayMapContext(tasks = [], todayStr) {
+  const scheduled = (tasks || [])
+    .filter(t => t.horizonLevel === "today" && !t.isDeleted && !t.isParked && t.dayMapDate === todayStr && (t.dayMapOrder != null || !!t.dayMapPeriod))
+    .sort((a, b) => {
+      const oa = a.dayMapOrder ?? Infinity;
+      const ob = b.dayMapOrder ?? Infinity;
+      if (oa !== ob) return oa - ob;
+      return (a.dayMapStartMinutes ?? 0) - (b.dayMapStartMinutes ?? 0);
+    });
+
+  if (scheduled.length === 0) return "";
+
+  const lines = scheduled.map(t => {
+    const time = t.dayMapStartMinutes != null ? `${formatMinutesToTime(t.dayMapStartMinutes)} — ` : "";
+    const status = t.isCompleted ? "[DONE] " : "";
+    return `  ${time}${status}${t.title}`;
+  });
+
+  return ["TODAY'S DAY MAP (planned route, in order):", ...lines].join("\n");
+}
+
+// Brain Dump backlog size — always-on so the coach knows raw thoughts are
+// waiting to be organized, even before the behavioural profile kicks in.
+export function buildLociBrainDumpContext(brainDump = []) {
+  const count = (brainDump || []).length;
+  if (count === 0) return "";
+  return `BRAIN DUMP: ${count} unprocessed thought${count === 1 ? "" : "s"} waiting to be organized into tasks.`;
+}
+
+// Recent completion velocity (last 3 and 7 days) from the contributions
+// heatmap — distinct from the lifetime avgCompletionsPerActiveDay in the
+// behavioural profile, this surfaces short-term momentum or a recent stall.
+export function buildLociVelocityContext(contributions = [], today = new Date()) {
+  if (!contributions || contributions.length === 0) return "";
+
+  const byDate = new Map(contributions.map(c => [c.dateString, Number(c.count) || 0]));
+  const sumLastNDays = (n) => {
+    let total = 0;
+    for (let i = 0; i < n; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      total += byDate.get(getLocalDateString(d)) || 0;
+    }
+    return total;
+  };
+
+  const last3 = sumLastNDays(3);
+  const last7 = sumLastNDays(7);
+
+  return [
+    "COMPLETION VELOCITY:",
+    `- Last 3 days: ${last3} task${last3 === 1 ? "" : "s"} completed.`,
+    `- Last 7 days: ${last7} task${last7 === 1 ? "" : "s"} completed.`
+  ].join("\n");
 }
 
 export function buildLociCoreInstruction({ firstName = "friend" } = {}) {
