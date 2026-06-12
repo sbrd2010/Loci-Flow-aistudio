@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import { getTimerState } from "../utils/focusSession";
-import { useFocusAudio } from "../hooks/useFocusAudio";
 import "../styles/focusMode.css";
 
 const DURATION_OPTIONS = [15, 20, 25, 30, 45, 60, 90];
@@ -69,8 +68,10 @@ export default function FocusModePage({
   onAddBrainDump,
   pipOpen,
   onOpenPiP,
-  config = {},
-  saveSubPath,
+  selectedTrack,
+  volume,
+  selectTrack,
+  changeVolume,
 }) {
   const autoExitRef = useRef(null);
   const isComplete = secondsLeft === 0;
@@ -80,11 +81,6 @@ export default function FocusModePage({
   const dumpInputRef = useRef(null);
 
   const [showSoundsDrawer, setShowSoundsDrawer] = useState(false);
-  const { selectedTrack, volume, selectTrack, changeVolume } = useFocusAudio(
-    isRunning,
-    config,
-    saveSubPath
-  );
 
   useEffect(() => {
     if (isComplete) {
