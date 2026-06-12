@@ -22,6 +22,17 @@ export function formatMinutesToTime(totalMin) {
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 }
 
+// Whether the user has actually configured a focus/work window — either via
+// the multi-window UI (config.focusWindows) or a legacy dayStartHour/dayEndHour
+// from before that UI existed. False for a brand-new account, so callers can
+// avoid showing a made-up default schedule to someone who's never touched
+// this setting.
+export function hasConfiguredFocusWindow(config = {}) {
+  const cfg = config || {};
+  if (Array.isArray(cfg.focusWindows) && cfg.focusWindows.length > 0) return true;
+  return Number.isFinite(cfg.dayStartHour) || Number.isFinite(cfg.dayEndHour);
+}
+
 // Returns normalized, start-sorted [{startMin, endMin, overnight}], always non-empty.
 // Uses config.focusWindows if it has at least one valid {start, end} entry,
 // otherwise falls back to dayStartHour/dayEndHour (defaults 7/26).

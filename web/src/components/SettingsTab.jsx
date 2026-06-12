@@ -25,8 +25,6 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   const [editedNagInterval, setEditedNagInterval] = useState(config.reminderNagIntervalMinutes || 15);
   const [editedEveningGuard, setEditedEveningGuard] = useState(!!config.eveningGuardWindowActive);
   const [editedChallenge, setEditedChallenge] = useState(() => normalizeChallengeKey(config.challengeType));
-  const [editedDayStart, setEditedDayStart] = useState(config.dayStartHour ?? 7);
-  const [editedDayEnd, setEditedDayEnd] = useState(config.dayEndHour ?? 26);
   const [editedFocusWindows, setEditedFocusWindows] = useState(config.focusWindows || []);
   const [editedMorningRitualStart, setEditedMorningRitualStart] = useState(config.morningRitualWindowStart || "05:00");
   const [editedMorningRitualEnd, setEditedMorningRitualEnd] = useState(config.morningRitualWindowEnd || "11:00");
@@ -46,8 +44,6 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
     setEditedNagInterval(config.reminderNagIntervalMinutes || 15);
     setEditedEveningGuard(!!config.eveningGuardWindowActive);
     setEditedChallenge(normalizeChallengeKey(config.challengeType));
-    setEditedDayStart(config.dayStartHour ?? 7);
-    setEditedDayEnd(config.dayEndHour ?? 26);
     setEditedFocusWindows(config.focusWindows || []);
     setEditedMorningRitualStart(config.morningRitualWindowStart || "05:00");
     setEditedMorningRitualEnd(config.morningRitualWindowEnd || "11:00");
@@ -59,7 +55,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
     setEditedDeadlineAction(config.deadlineAction || "");
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
       config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType,
-      config.dayStartHour, config.dayEndHour, config.focusWindows,
+      config.focusWindows,
       config.morningRitualWindowStart, config.morningRitualWindowEnd, config.headerStyle, config.toolsStyle,
       config.deadlineLabel, config.deadlineDate,
       config.deadlineStartDate, config.deadlineAction]);
@@ -173,8 +169,6 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
       pomodoroDurationMinutes: Math.min(120, Math.max(1, parseInt(editedPomodoro) || 25)),
       reminderNagIntervalMinutes: Math.min(60, Math.max(1, parseInt(editedNagInterval) || 15)),
       eveningGuardWindowActive: editedEveningGuard,
-      dayStartHour: editedDayStart,
-      dayEndHour: editedDayEnd,
       focusWindows: editedFocusWindows.filter(w => w.start && w.end && w.start !== w.end),
       morningRitualWindowStart: morningRitualValid ? editedMorningRitualStart : "05:00",
       morningRitualWindowEnd: morningRitualValid ? editedMorningRitualEnd : "11:00",
@@ -189,7 +183,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
       lastUpdated: Date.now()
     });
     setSavedProfile(true);
-    setTimeout(() => setSavedProfile(false), 2000);
+    setTimeout(() => { setSavedProfile(false); setProfileOpen(false); }, 2000);
   };
 
   // ── Groq API key ──────────────────────────────────────────────────────────
@@ -357,36 +351,10 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
             </div>
           </div>
 
-          {editedFocusWindows.length === 0 && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-              <div className="form-group">
-                <label className="form-label" htmlFor="settings-day-start">Day Starts</label>
-                <select id="settings-day-start" className="text-input" value={editedDayStart}
-                  onChange={e => setEditedDayStart(Number(e.target.value))}>
-                  {[5, 6, 7, 8, 9, 10].map(h => (
-                    <option key={h} value={h}>{h < 12 ? `${h}:00 AM` : "12:00 PM"}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="settings-day-end">Day Ends</label>
-                <select id="settings-day-end" className="text-input" value={editedDayEnd}
-                  onChange={e => setEditedDayEnd(Number(e.target.value))}>
-                  {[17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27].map(h => {
-                    const labels = { 17: "5 PM", 18: "6 PM", 19: "7 PM", 20: "8 PM", 21: "9 PM", 22: "10 PM", 23: "11 PM", 24: "12 AM", 25: "1 AM", 26: "2 AM", 27: "3 AM" };
-                    return <option key={h} value={h}>{labels[h]}</option>;
-                  })}
-                </select>
-              </div>
-            </div>
-          )}
-
           <div className="form-group">
             <label className="form-label">Focus Windows</label>
             <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px", marginBottom: "8px" }}>
-              {editedFocusWindows.length === 0
-                ? "Optional — add one or more time ranges to replace the single Day Starts/Ends range above. If the end time is earlier than the start time, the window crosses midnight."
-                : "These windows replace Day Starts/Ends above. If an end time is earlier than its start time, that window crosses midnight."}
+              Add one or more time ranges for when you want to focus. If an end time is earlier than its start time, that window crosses midnight. Defaults to 7:00 AM-2:00 AM if none are set.
             </p>
             {editedFocusWindows.map((w, idx) => (
               <div key={idx} style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
