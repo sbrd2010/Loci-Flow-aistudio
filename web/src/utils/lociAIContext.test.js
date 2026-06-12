@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLociCoreInstruction, buildLociCheckinContext, buildLociTaskContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
+import { buildLociCoreInstruction, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociDeadlineContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
 import { getFocusWindows } from "./focusWindows";
 
 describe("lociAIContext", () => {
@@ -193,5 +193,93 @@ describe("buildLociCheckinContext", () => {
     expect(context).toContain("Better than yesterday");
     expect(context).not.toContain("secret-groq");
     expect(context).not.toContain("secret-gemini");
+  });
+});
+
+describe("buildLociFocusSessionContext", () => {
+  it("returns an empty string when no focus session is active", () => {
+    expect(buildLociFocusSessionContext({})).toBe("");
+    expect(buildLociFocusSessionContext({ focusSessionActive: true, activeTask: null })).toBe("");
+    expect(buildLociFocusSessionContext({ focusSessionActive: false, activeTask: { title: "Write report" } })).toBe("");
+  });
+
+  it("describes a running focus session with elapsed and remaining minutes", () => {
+    const context = buildLociFocusSessionContext({
+      activeTask: { title: "Write report" },
+      focusSessionActive: true,
+      isTimerRunning: true,
+      timerMaxSeconds: 1500, // 25 min
+      timerSecondsLeft: 900, // 15 min left -> 10 min elapsed
+    });
+
+    expect(context).toContain("LIVE FOCUS SESSION (running)");
+    expect(context).toContain('Working on "Write report"');
+    expect(context).toContain("10 min elapsed, 15 min remaining");
+    expect(context).toContain("already started this task");
+  });
+
+  it("describes a paused focus session", () => {
+    const context = buildLociFocusSessionContext({
+      activeTask: { title: "Write report" },
+      focusSessionActive: true,
+      isTimerRunning: false,
+      timerMaxSeconds: 1500,
+      timerSecondsLeft: 1500,
+    });
+
+    expect(context).toContain("LIVE FOCUS SESSION (paused)");
+    expect(context).toContain("0 min elapsed, 25 min remaining");
+  });
+});
+
+describe("buildLociDeadlineContext", () => {
+  it("returns an empty string when no deadline is configured", () => {
+    expect(buildLociDeadlineContext({})).toBe("");
+  });
+
+  it("reports days remaining, today's move status, and a missed-move streak", () => {
+    const config = {
+      deadlineLabel: "Visa deadline",
+      deadlineAction: "Send one email",
+      deadlineDate: "2026-06-20",
+      deadlineMoveHistory: {
+        "2026-06-09": "missed",
+        "2026-06-10": "done",
+        "2026-06-11": "done",
+      },
+    };
+    const context = buildLociDeadlineContext(config, new Date(2026, 5, 12, 9));
+
+    expect(context).toContain('KEY DEADLINE: "Visa deadline"');
+    expect(context).toContain("8 days remaining");
+    expect(context).toContain('Today\'s move ("Send one email"): not done yet');
+    expect(context).toContain("1 missed move in the last 7 days");
+    expect(context).toContain("Current streak: 2 days done in a row");
+  });
+
+  it("reports 'due today' and a done move", () => {
+    const config = {
+      deadlineLabel: "Visa deadline",
+      deadlineDate: "2026-06-12",
+      deadlineDailyDoneDate: "2026-06-12",
+    };
+    const context = buildLociDeadlineContext(config, new Date(2026, 5, 12, 9));
+
+    expect(context).toContain("Due today");
+    expect(context).toContain('Today\'s move ("one real move"): done');
+  });
+
+  it("reports a passed deadline date", () => {
+    const config = { deadlineLabel: "Visa deadline", deadlineDate: "2026-06-01" };
+    const context = buildLociDeadlineContext(config, new Date(2026, 5, 12, 9));
+
+    expect(context).toContain("Deadline date has passed");
+  });
+
+  it("never leaks key-like config", () => {
+    const config = { groqKey: "secret-groq", deadlineLabel: "Visa deadline", deadlineAction: "Send one email" };
+    const context = buildLociDeadlineContext(config, new Date(2026, 5, 12, 9));
+
+    expect(context).not.toContain("secret-groq");
   });
 });
