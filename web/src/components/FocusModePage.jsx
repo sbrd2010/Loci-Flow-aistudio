@@ -68,6 +68,10 @@ export default function FocusModePage({
   onAddBrainDump,
   pipOpen,
   onOpenPiP,
+  selectedTrack,
+  volume,
+  selectTrack,
+  changeVolume,
 }) {
   const autoExitRef = useRef(null);
   const isComplete = secondsLeft === 0;
@@ -75,6 +79,8 @@ export default function FocusModePage({
   const [dumpText, setDumpText] = useState("");
   const [dumpSaved, setDumpSaved] = useState(false);
   const dumpInputRef = useRef(null);
+
+  const [showSoundsDrawer, setShowSoundsDrawer] = useState(false);
 
   useEffect(() => {
     if (isComplete) {
@@ -122,17 +128,31 @@ export default function FocusModePage({
         Exit
       </button>
 
-      {PIP_SUPPORTED && !pipOpen && !isComplete && (
-        <button
-          type="button"
-          className="focus-mode-pip-btn"
-          onClick={onOpenPiP}
-          title="Pop out a floating mini-timer"
-          aria-label="Pop out timer"
-        >
-          Pop out
-        </button>
-      )}
+      <div className="focus-mode-top-right-actions">
+        {!isComplete && (
+          <button
+            type="button"
+            className={`focus-mode-sounds-btn${showSoundsDrawer ? " active" : ""}`}
+            onClick={() => setShowSoundsDrawer(prev => !prev)}
+            title="Ambient focus sounds"
+            aria-label="Open sounds menu"
+          >
+            Sounds
+          </button>
+        )}
+
+        {PIP_SUPPORTED && !pipOpen && !isComplete && (
+          <button
+            type="button"
+            className="focus-mode-pip-btn"
+            onClick={onOpenPiP}
+            title="Pop out a floating mini-timer"
+            aria-label="Pop out timer"
+          >
+            Pop out
+          </button>
+        )}
+      </div>
 
       <main className="focus-mode-body" aria-label="Deep focus session">
         <div className="focus-mode-session-meta">
@@ -267,6 +287,76 @@ export default function FocusModePage({
           </div>
         )}
       </main>
+
+      {/* ── Focus Sounds Backdrop */}
+      {showSoundsDrawer && (
+        <div className="focus-sounds-backdrop" onClick={() => setShowSoundsDrawer(false)} />
+      )}
+
+      {/* ── Focus Sounds Drawer */}
+      <div className={`focus-sounds-drawer${showSoundsDrawer ? " open" : ""}`} aria-hidden={!showSoundsDrawer}>
+        <div className="focus-sounds-header">
+          <h3>Focus Sounds</h3>
+          <button
+            type="button"
+            className="focus-sounds-close-btn"
+            onClick={() => setShowSoundsDrawer(false)}
+            aria-label="Close sounds menu"
+            tabIndex={showSoundsDrawer ? 0 : -1}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="focus-sounds-content">
+          <div className="focus-sounds-tiles">
+            {[
+              { id: "none", title: "None", icon: "🚫", desc: "Silent focus" },
+              { id: "after-school-rain.mp3", title: "Relaxing Rain", icon: "🌧️", desc: "Nature ambience" },
+              { id: "2-am-debug-loop.mp3", title: "Lo-Fi Beats", icon: "🎧", desc: "Downtempo beats" },
+              { id: "midnight-amber-room.mp3", title: "Jazz Lounge", icon: "🎷", desc: "Smooth jazz" },
+              { id: "dust-on-the-morning-keys.mp3", title: "Classical Piano", icon: "🎹", desc: "Gentle piano" },
+              { id: "binaural-40hz.wav", title: "Binaural 40Hz", icon: "🧠", desc: "Focus tone (use headphones)" }
+            ].map(track => {
+              const isActive = (track.id === "none" && !selectedTrack) || (selectedTrack === track.id);
+              return (
+                <button
+                  key={track.id}
+                  type="button"
+                  className={`sound-tile${isActive ? " active" : ""}`}
+                  onClick={() => selectTrack(track.id)}
+                  aria-pressed={isActive}
+                  tabIndex={showSoundsDrawer ? 0 : -1}
+                >
+                  <span className="sound-tile-icon">{track.icon}</span>
+                  <div className="sound-tile-info">
+                    <div className="sound-tile-title">{track.title}</div>
+                    <div className="sound-tile-desc">{track.desc}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="focus-sounds-volume-section">
+            <div className="volume-label-row">
+              <span>Volume</span>
+              <span>{Math.round(volume * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={volume}
+              onChange={e => changeVolume(parseFloat(e.target.value))}
+              className="focus-sounds-volume-slider"
+              aria-label="Adjust volume"
+              tabIndex={showSoundsDrawer ? 0 : -1}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

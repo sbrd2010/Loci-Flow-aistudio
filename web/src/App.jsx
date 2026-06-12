@@ -5,6 +5,7 @@ import { scheduleAllReminders, scheduleCoachCheckin } from "./utils/reminders";
 import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { useSync, CONN } from "./useSync";
+import { useFocusAudio } from "./hooks/useFocusAudio";
 import Header from "./components/Header";
 import BottomNav from "./components/BottomNav";
 import TodayTab from "./components/TodayTab";
@@ -241,6 +242,10 @@ export default function App() {
   // Focus timer state lives here (not in TodayTab) so it survives tab switches
   // and can be surfaced via the floating timer across pages.
   const focusTimer = useFocusTimer(payload?.tasks || [], payload?.config || {}, user?.uid || null);
+
+  // Focus Sounds audio also lives here so ambient sound keeps playing across
+  // tab switches and after exiting the Deep Focus overlay.
+  const focusAudio = useFocusAudio(focusTimer.isTimerRunning, payload?.config || {}, saveSubPath);
 
   // Auto-start the timer when arriving from Day Map's "Start Focus" action
   useEffect(() => {
@@ -561,6 +566,7 @@ export default function App() {
             onOpenCoach={() => setActiveTab("coach")}
             isAddTaskDialogOpen={showAddTask}
             {...focusTimer}
+            {...focusAudio}
           />
         )}
         {activeTab === "daymap" && (

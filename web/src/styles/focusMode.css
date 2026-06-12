@@ -590,3 +590,290 @@
   text-shadow: 0 0 20px var(--timer-state-color);
 }
 
+/* ================================================================
+   Focus Sounds Custom Components & Drawer
+   ================================================================ */
+
+.focus-mode-top-right-actions {
+  position: absolute;
+  top: calc(18px + env(safe-area-inset-top, 0px));
+  right: calc(18px + env(safe-area-inset-right, 0px));
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Ensure child action buttons fit cleanly */
+.focus-mode-top-right-actions .focus-mode-pip-btn {
+  position: static;
+  margin: 0;
+}
+
+.focus-mode-sounds-btn {
+  min-height: 38px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(237, 247, 242, 0.12);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(237, 247, 242, 0.68);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: color 0.18s, border-color 0.18s, background 0.18s, transform 0.12s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.focus-mode-sounds-btn::before {
+  content: "🎧";
+  font-size: 13px;
+}
+
+.focus-mode-sounds-btn:hover,
+.focus-mode-sounds-btn:focus-visible {
+  color: #edf7f2;
+  border-color: rgba(122, 181, 155, 0.42);
+  background: rgba(122, 181, 155, 0.1);
+  outline: none;
+}
+
+.focus-mode-sounds-btn:active {
+  transform: scale(0.97);
+}
+
+.focus-mode-sounds-btn.active {
+  color: #d9f3e5;
+  border-color: rgba(122, 181, 155, 0.55);
+  background: rgba(122, 181, 155, 0.18);
+}
+
+/* ── Focus Sounds Backdrop ── */
+.focus-sounds-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  animation: fm-fade-in 0.25s ease-out;
+}
+
+@keyframes fm-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ── Focus Sounds Drawer ── */
+.focus-sounds-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(100vw, 340px);
+  z-index: 1001;
+  background: rgba(10, 21, 18, 0.96);
+  backdrop-filter: blur(18px);
+  border-left: 1px solid rgba(237, 247, 242, 0.08);
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.6);
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 24px calc(24px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.focus-sounds-drawer.open {
+  transform: translateX(0);
+}
+
+.focus-sounds-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.focus-sounds-header h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 900;
+  color: #edf7f2;
+}
+
+.focus-sounds-close-btn {
+  background: transparent;
+  border: none;
+  color: rgba(237, 247, 242, 0.5);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s;
+}
+
+.focus-sounds-close-btn:hover {
+  color: #edf7f2;
+}
+
+.focus-sounds-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  overflow-y: auto;
+}
+
+.focus-sounds-tiles {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sound-tile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(237, 247, 242, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(237, 247, 242, 0.75);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sound-tile:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(237, 247, 242, 0.18);
+  color: #edf7f2;
+}
+
+.sound-tile.active {
+  background: rgba(122, 181, 155, 0.12);
+  border-color: rgba(122, 181, 155, 0.42);
+  color: #d9f3e5;
+  box-shadow: 0 4px 12px rgba(122, 181, 155, 0.05);
+}
+
+.sound-tile-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.sound-tile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sound-tile-title {
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 800;
+}
+
+.sound-tile-desc {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: rgba(237, 247, 242, 0.4);
+}
+
+.sound-tile.active .sound-tile-desc {
+  color: rgba(196, 223, 210, 0.6);
+}
+
+.focus-sounds-volume-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid rgba(237, 247, 242, 0.08);
+  padding-top: 20px;
+}
+
+.volume-label-row {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 800;
+  color: rgba(237, 247, 242, 0.7);
+}
+
+.focus-sounds-volume-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(237, 247, 242, 0.12);
+  outline: none;
+  cursor: pointer;
+}
+
+.focus-sounds-volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #7ab59b;
+  border: 1px solid rgba(10, 21, 18, 0.5);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  transition: transform 0.1s, background 0.15s;
+}
+
+.focus-sounds-volume-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  background: #a5d6a7;
+}
+
+.focus-sounds-volume-slider::-webkit-slider-thumb:active {
+  transform: scale(0.95);
+}
+
+.focus-sounds-volume-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #7ab59b;
+  border: 1px solid rgba(10, 21, 18, 0.5);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  transition: transform 0.1s, background 0.15s;
+  cursor: pointer;
+}
+
+.focus-sounds-volume-slider::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  background: #a5d6a7;
+}
+
+/* ── Mobile Responsive adjustments ── */
+@media (max-width: 640px) {
+  .focus-mode-top-right-actions {
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    right: calc(12px + env(safe-area-inset-right, 0px));
+    gap: 6px;
+  }
+
+  .focus-mode-sounds-btn {
+    min-height: 34px;
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+
+  .focus-sounds-drawer {
+    width: 100vw;
+    border-left: none;
+    border-top: 1px solid rgba(237, 247, 242, 0.08);
+  }
+}
+
