@@ -302,6 +302,22 @@ describe("buildLociRemindersContext", () => {
     expect(lines[2]).toContain("Afternoon call");
     expect(lines[2]).not.toContain("(overdue)");
   });
+
+  it("includes still-incomplete overdue reminders from prior days, flagged as overdue", () => {
+    const context = buildLociRemindersContext([
+      { title: "Missed yesterday", reminderAt: new Date(2026, 5, 11, 9, 0).getTime() },
+    ], TODAY);
+
+    expect(context).toContain("REMINDERS DUE TODAY:");
+    expect(context).toContain("Missed yesterday");
+    expect(context).toContain("(overdue)");
+  });
+
+  it("excludes a completed task's overdue reminder from a prior day", () => {
+    expect(buildLociRemindersContext([
+      { title: "Done yesterday", isCompleted: true, reminderAt: new Date(2026, 5, 11, 9, 0).getTime() },
+    ], TODAY)).toBe("");
+  });
 });
 
 describe("buildLociLowEnergyContext", () => {

@@ -250,8 +250,10 @@ export function buildLociVelocityContext(contributions = [], today = new Date())
 // Reminders due today (or already overdue) — surfaces time-sensitive tasks
 // the coach might otherwise miss while focused on Now Focus / Day Map context.
 export function buildLociRemindersContext(tasks = [], date = new Date()) {
+  const now = date.getTime();
   const due = (tasks || []).filter(t =>
-    isActiveLociTask(t) && t.reminderAt && new Date(t.reminderAt).toDateString() === date.toDateString()
+    isActiveLociTask(t) && t.reminderAt &&
+    (t.reminderAt < now || new Date(t.reminderAt).toDateString() === date.toDateString())
   );
   if (due.length === 0) return "";
 
@@ -260,7 +262,7 @@ export function buildLociRemindersContext(tasks = [], date = new Date()) {
     .map(t => {
       const d = new Date(t.reminderAt);
       const time = formatMinutesToTime(d.getHours() * 60 + d.getMinutes());
-      const overdue = t.reminderAt < date.getTime() ? " (overdue)" : "";
+      const overdue = t.reminderAt < now ? " (overdue)" : "";
       return `  - ${time}${overdue}: ${t.title}`;
     });
 
@@ -278,6 +280,7 @@ const RECENT_PARK_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 // Tasks parked in roughly the last 24 hours — lets the coach acknowledge a
 // recent Bad Day Reset or manual park without re-surfacing it as a current task.
+// Relies on lastUpdated being stamped whenever isParked flips to true.
 export function buildLociRecentlyParkedContext(tasks = [], date = new Date()) {
   const cutoff = date.getTime() - RECENT_PARK_WINDOW_MS;
   const recentlyParked = (tasks || []).filter(t =>

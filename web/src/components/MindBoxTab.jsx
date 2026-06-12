@@ -259,7 +259,7 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
       message: "Park all active tasks for today?\n\nThis is a restart without shame — everything moves to parked. You can restore tasks from the AI Coach tab whenever you're ready.",
       confirmLabel: "Yes, restart", cancelLabel: "Not now",
       onConfirm: () => {
-        savePayload({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, isNowFocus: false } : t) });
+        savePayload({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, isNowFocus: false, lastUpdated: Date.now() } : t) });
         setConfirmDialog(null);
       },
       onCancel: () => setConfirmDialog(null)
