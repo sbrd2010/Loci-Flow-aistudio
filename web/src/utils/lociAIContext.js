@@ -129,6 +129,18 @@ export function buildLociCheckinContext(config = {}, tasks = [], todayStr) {
   ].join("\n");
 }
 
+// Subtasks of the Now Focus task — lets the coach reference the concrete
+// steps the user already broke this task into, without re-deriving them.
+export function buildLociNowFocusContext(tasks = []) {
+  const nowFocus = (tasks || []).find(t => isActiveLociTask(t) && t.isNowFocus);
+  if (!nowFocus || !Array.isArray(nowFocus.subSteps) || nowFocus.subSteps.length === 0) return "";
+
+  const done = nowFocus.subSteps.filter(s => s.done).length;
+  const lines = nowFocus.subSteps.map(s => `  [${s.done ? "x" : " "}] ${s.text}`);
+
+  return [`NOW FOCUS SUBTASKS for "${nowFocus.title}" (${done}/${nowFocus.subSteps.length} done):`, ...lines].join("\n");
+}
+
 // Snapshot of the live Focus/Pomodoro session so the coach knows the user has
 // already started a task instead of asking what to work on next.
 export function buildLociFocusSessionContext(focusTimer = {}) {
@@ -233,6 +245,47 @@ export function buildLociVelocityContext(contributions = [], today = new Date())
     `- Last 3 days: ${last3} task${last3 === 1 ? "" : "s"} completed.`,
     `- Last 7 days: ${last7} task${last7 === 1 ? "" : "s"} completed.`
   ].join("\n");
+}
+
+// Reminders due today (or already overdue) — surfaces time-sensitive tasks
+// the coach might otherwise miss while focused on Now Focus / Day Map context.
+export function buildLociRemindersContext(tasks = [], date = new Date()) {
+  const due = (tasks || []).filter(t =>
+    isActiveLociTask(t) && t.reminderAt && new Date(t.reminderAt).toDateString() === date.toDateString()
+  );
+  if (due.length === 0) return "";
+
+  const lines = due
+    .sort((a, b) => a.reminderAt - b.reminderAt)
+    .map(t => {
+      const d = new Date(t.reminderAt);
+      const time = formatMinutesToTime(d.getHours() * 60 + d.getMinutes());
+      const overdue = t.reminderAt < date.getTime() ? " (overdue)" : "";
+      return `  - ${time}${overdue}: ${t.title}`;
+    });
+
+  return ["REMINDERS DUE TODAY:", ...lines].join("\n");
+}
+
+// Low Energy Mode flag — tells the coach the user has self-identified as
+// low-capacity right now, so suggestions should stay small and low-pressure.
+export function buildLociLowEnergyContext(config = {}) {
+  if (!config.isLowEnergyMode) return "";
+  return "LOW ENERGY MODE: ON — keep suggestions small, simple, and low-pressure right now.";
+}
+
+const RECENT_PARK_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+// Tasks parked in roughly the last 24 hours — lets the coach acknowledge a
+// recent Bad Day Reset or manual park without re-surfacing it as a current task.
+export function buildLociRecentlyParkedContext(tasks = [], date = new Date()) {
+  const cutoff = date.getTime() - RECENT_PARK_WINDOW_MS;
+  const recentlyParked = (tasks || []).filter(t =>
+    t.isParked && !t.isDeleted && !t.isCompleted && t.lastUpdated && t.lastUpdated >= cutoff
+  );
+  if (recentlyParked.length === 0) return "";
+
+  return `RECENTLY PARKED (last 24h): ${quoteTitles(recentlyParked.map(t => t.title))}.`;
 }
 
 export function buildLociCoreInstruction({ firstName = "friend" } = {}) {

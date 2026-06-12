@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { callAI, getAIKeys } from "../utils/aiCall";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
-import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociFocusSessionContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, getLocalDateString, isActiveLociTask } from "../utils/lociAIContext";
+import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, getLocalDateString, isActiveLociTask } from "../utils/lociAIContext";
 import { getTodayCheckedIds, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
 import { requestNotifPermission } from "../utils/focusNotifications";
@@ -101,10 +101,14 @@ export default function CoachTab({ payload, savePayload, saveSubPath, userProfil
     );
     const checkinContext = buildLociCheckinContext(config, tasks, todayStr);
     const focusSessionContext = buildLociFocusSessionContext(focusTimer);
+    const nowFocusContext = buildLociNowFocusContext(tasks);
     const deadlineContext = buildLociDeadlineContext(config, now);
     const dayMapContext = buildLociDayMapContext(tasks, getLocalDateString(now));
     const brainDumpContext = buildLociBrainDumpContext(brainDump);
     const velocityContext = buildLociVelocityContext(contributions, now);
+    const remindersContext = buildLociRemindersContext(tasks, now);
+    const lowEnergyContext = buildLociLowEnergyContext(config);
+    const recentlyParkedContext = buildLociRecentlyParkedContext(tasks, now);
     const lociCoreInstruction = buildLociCoreInstruction({ firstName });
 
     const userMessageCount = withUser.filter(m => m.isUser).length;
@@ -126,7 +130,7 @@ ${firstName} could be a student, graduate researcher, early-career professional,
 
 THEIR FULL TASK LIST (you can see ALL of this — reference specific task names in your replies):
 ${taskContext}
-${focusSessionContext ? `\n${focusSessionContext}\n` : ""}${dayMapContext ? `\n${dayMapContext}\n` : ""}${anchorContext ? `\n${anchorContext}\n` : ""}${checkinContext ? `\n${checkinContext}\n` : ""}${deadlineContext ? `\n${deadlineContext}\n` : ""}${brainDumpContext ? `\n${brainDumpContext}\n` : ""}${velocityContext ? `\n${velocityContext}\n` : ""}
+${focusSessionContext ? `\n${focusSessionContext}\n` : ""}${nowFocusContext ? `\n${nowFocusContext}\n` : ""}${dayMapContext ? `\n${dayMapContext}\n` : ""}${remindersContext ? `\n${remindersContext}\n` : ""}${anchorContext ? `\n${anchorContext}\n` : ""}${checkinContext ? `\n${checkinContext}\n` : ""}${deadlineContext ? `\n${deadlineContext}\n` : ""}${brainDumpContext ? `\n${brainDumpContext}\n` : ""}${velocityContext ? `\n${velocityContext}\n` : ""}${lowEnergyContext ? `\n${lowEnergyContext}\n` : ""}${recentlyParkedContext ? `\n${recentlyParkedContext}\n` : ""}
 LOCI'S PHILOSOPHY — you embody this:
 Loci is built to bias people toward DOING, not just planning. Your role is to reduce friction and close the gap between intention and action.
 - Planning Paradox: If ${firstName} is reorganizing or adding tasks but not starting any, gently redirect — "You've got a solid plan. What's the ONE thing to actually start right now?"
