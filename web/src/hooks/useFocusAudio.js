@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { BINAURAL_TRACK_ID, createBinauralBeatNode } from "../utils/binauralBeat";
+import { BINAURAL_TRACK_ID, createBinauralBeatNode, migrateTrackId } from "../utils/binauralBeat";
 
 export function useFocusAudio(isRunning, config = {}, saveSubPath) {
-  const [selectedTrack, setSelectedTrack] = useState(config.focusSoundTrack || null);
+  const [selectedTrack, setSelectedTrack] = useState(migrateTrackId(config.focusSoundTrack) || null);
   const [volume, setVolume] = useState(config.focusSoundVolume !== undefined ? config.focusSoundVolume : 0.5);
 
   const audioRef = useRef(null);
@@ -10,7 +10,7 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
   // Sync state if config changes externally (e.g. from sync/reload, or a
   // different account/config with no saved sound prefs).
   useEffect(() => {
-    const next = config.focusSoundTrack !== undefined ? config.focusSoundTrack : null;
+    const next = config.focusSoundTrack !== undefined ? migrateTrackId(config.focusSoundTrack) : null;
     if (next !== selectedTrack) {
       setSelectedTrack(next);
     }

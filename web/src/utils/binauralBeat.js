@@ -5,6 +5,14 @@
 
 export const BINAURAL_TRACK_ID = "binaural-40hz";
 
+// Pre-redesign saved track id (the now-deleted WAV file). Migrate it so
+// users who had Binaural selected before this change keep their selection.
+const LEGACY_BINAURAL_TRACK_ID = "binaural-40hz.wav";
+
+export function migrateTrackId(trackId) {
+  return trackId === LEGACY_BINAURAL_TRACK_ID ? BINAURAL_TRACK_ID : trackId;
+}
+
 const LEFT_HZ = 200;
 const BEAT_HZ = 40;
 const RIGHT_HZ = LEFT_HZ + BEAT_HZ;
@@ -38,6 +46,10 @@ export function createBinauralBeatNode(initialVolume = 0.5) {
 
   left.start();
   right.start();
+  // Browsers may create a new AudioContext already running (e.g. inside a
+  // user-gesture handler). Suspend immediately so a freshly selected track
+  // stays silent until the hook explicitly calls play() for a running timer.
+  ctx.suspend();
 
   return {
     paused: true,

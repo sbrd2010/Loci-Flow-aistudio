@@ -50,7 +50,9 @@ class MockChannelMerger {
 
 class MockAudioContext {
   constructor() {
-    this.state = "suspended";
+    // Some browsers create a new AudioContext already running when
+    // constructed inside a user-gesture handler (e.g. a click).
+    this.state = "running";
     this.oscillators = [];
     MockAudioContext.instances.push(this);
   }
@@ -439,5 +441,17 @@ describe("useFocusAudio", () => {
 
     expect(ctx.oscillators[0].stopCalled).toBe(true);
     expect(ctx.state).toBe("closed");
+  });
+
+  it("migrates a config saved with the old binaural-40hz.wav track id to the synthesized track", () => {
+    const config = { focusSoundTrack: "binaural-40hz.wav" };
+    const { result } = renderHook(
+      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      [false, config, null]
+    );
+
+    expect(result.current.selectedTrack).toBe(BINAURAL_TRACK_ID);
+    expect(MockAudio.instances.length).toBe(0);
+    expect(MockAudioContext.instances.length).toBe(1);
   });
 });

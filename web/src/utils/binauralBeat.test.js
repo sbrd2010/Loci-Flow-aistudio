@@ -26,7 +26,9 @@ class MockChannelMerger {
 
 class MockAudioContext {
   constructor() {
-    this.state = "suspended";
+    // Some browsers create a new AudioContext already running when
+    // constructed inside a user-gesture handler (e.g. a click).
+    this.state = "running";
     this.oscillators = [];
     MockAudioContext.instances.push(this);
   }
@@ -71,6 +73,14 @@ describe("createBinauralBeatNode", () => {
     expect(ctx.oscillators[1].frequency.value).toBe(240);
     expect(ctx.oscillators[0].startCalled).toBe(true);
     expect(ctx.oscillators[1].startCalled).toBe(true);
+    expect(node.paused).toBe(true);
+  });
+
+  it("starts suspended even if the AudioContext begins in a running state", () => {
+    const node = createBinauralBeatNode(0.5);
+    const ctx = MockAudioContext.instances[0];
+
+    expect(ctx.state).toBe("suspended");
     expect(node.paused).toBe(true);
   });
 
