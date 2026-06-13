@@ -11,6 +11,8 @@ import { scheduleCoachCheckin, cancelCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, buildCheckinResumeMessage } from "../utils/coachCheckin";
 import { parseCoachActionTags, applyCoachActions } from "../utils/coachActions";
 import { isPendingCoachNudgeStale, shouldDeliverPendingCoachNudge } from "../utils/coachNudge";
+import { buildPersonaInstruction } from "../utils/coachPersona";
+import { addPinnedFact, addRecentObservation, buildLociMemoryContext, parseMemoryTags } from "../utils/coachMemory";
 
 export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, userProfile, focusTimer = {}, isSyncingFromCache = false }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
@@ -108,9 +110,13 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
 
     (async () => {
       try {
+        const memoryContext = buildLociMemoryContext(config.coachMemory);
         const systemInstruction = `${buildLociCoreInstruction({ firstName })}
 
-You are ${config.mentorName || "Loci AI Coach"}, ${firstName}'s productivity mentor inside Loci Focus. You are reaching out FIRST — ${firstName} hasn't said anything yet this conversation. Something you noticed about their day: "${nudge.title} — ${nudge.body}". Open the conversation with this observation in your own warm, direct voice and a concrete next step. Max 2 short sentences. Don't mention that this is automated or that you "noticed" via data — just speak as their coach.`;
+You are ${config.mentorName || "Loci AI Coach"}, ${firstName}'s productivity mentor inside Loci Focus. You are reaching out FIRST — ${firstName} hasn't said anything yet this conversation. Something you noticed about their day: "${nudge.title} — ${nudge.body}". Open the conversation with this observation and a concrete next step. Max 2 short sentences. Don't mention that this is automated or that you "noticed" via data — just speak as their coach.
+
+${buildPersonaInstruction(config, firstName)}
+${memoryContext ? `\n${memoryContext}\n` : ""}`;
 
         const reply = await callAI({
           groqKey, geminiKey,
@@ -163,6 +169,8 @@ You are ${config.mentorName || "Loci AI Coach"}, ${firstName}'s productivity men
     const lowEnergyContext = buildLociLowEnergyContext(config);
     const recentlyParkedContext = buildLociRecentlyParkedContext(tasks, now);
     const lociCoreInstruction = buildLociCoreInstruction({ firstName });
+    const memoryContext = buildLociMemoryContext(config.coachMemory);
+    const personaInstruction = buildPersonaInstruction(config, firstName);
 
     const userMessageCount = withUser.filter(m => m.isUser).length;
     const isEarlyConversation = userMessageCount <= 1;
@@ -172,7 +180,7 @@ You are ${config.mentorName || "Loci AI Coach"}, ${firstName}'s productivity men
 You are ${config.mentorName || "Loci AI Coach"}, an expert productivity mentor and motivating friend inside Loci Focus — an app that helps people cut through overwhelm and actually start working.
 
 YOUR CLIENT: ${config.userName || "a user"} — call them "${firstName}". Core challenge: "${challengeLabel}".
-
+${memoryContext ? `\n${memoryContext}\n` : ""}
 WHO THEY MIGHT BE:
 ${firstName} could be a student, graduate researcher, early-career professional, founder, creative, office worker, retiree, or anyone looking to be more productive. Adapt your tone based on cues:
 - Student / younger user: energetic, encouraging, relatable examples, celebrate every small win with enthusiasm.
@@ -199,12 +207,7 @@ YOUR EXPERTISE COVERS:
 - Recovery: backlog shame, bad days, restarting without guilt, "minimum viable day"
 - Context-aware guidance: you see their real tasks — be specific, not generic
 
-YOUR PERSONALITY:
-- You are a mentor AND a motivating friend. Warm, real, never preachy or lecturing.
-- You never criticize, shame, or make the user feel judged. When something isn't working, explore with curiosity — "What made it hard?" not "Why didn't you do it?"
-- Honest but kind — you lead with support before challenge. Not a yes-person, but your default is encouragement.
-- You celebrate small wins genuinely. A completed task is a real victory. Momentum beats perfection.
-- If ${firstName} seems in a difficult emotional place: acknowledge it, don't rush past it.
+${personaInstruction}
 
 ${isEarlyConversation
   ? `CONTEXT FIRST: This is the start of the conversation. Ask ONE good question to understand ${firstName}'s current situation before giving recommendations. "What's happening for you today?" or "What's on your mind right now?" is better than jumping straight to task advice. Understand first, guide second.`
@@ -233,6 +236,11 @@ COACH ACTIONS:
 - Only use SET_NOW_FOCUS, COMPLETE_TASK, ADD_TASK, PARK_TASK, or START_FOCUS when ${firstName} explicitly asks for that action, and (except for ADD_TASK) only for a task that actually appears in their task list above. Never use them proactively or to guess at what they mean.
 - All of these tags are stripped automatically and never shown to ${firstName}. Unlike CHECKIN_IN, these action tags must always be paired with a visible sentence describing the action you took.
 
+MEMORY — building a picture of ${firstName} over time:
+- If ${firstName} shares something durable worth remembering in every future conversation (a goal, a deadline's real context, a recurring pattern, an important personal fact), end your reply with [[REMEMBER: <one short factual sentence>]] on its own line. Use sparingly — only for things that should shape how you coach them long-term.
+- If something notable happened in this conversation worth recalling for the next few conversations but isn't permanent (how today went, a one-off struggle or win), end your reply with [[NOTE: <one short sentence>]] on its own line.
+- REMEMBER and NOTE tags are invisible and stripped automatically, like CHECKIN_IN — never mention them or explain them to ${firstName}.
+
 LANGUAGE: Never use the word "ADHD". Use instead: focus challenge, overwhelm, execution support, momentum, time awareness, micro-step, reset, low-energy mode.
 ${profileToCoachContext(userProfile) ? `\n${profileToCoachContext(userProfile)}\n` : ""}
 SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak, ${todayActive.length} active tasks today.`;
@@ -242,7 +250,8 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
     try {
       const reply = await callAI({ groqKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens: 300 });
       const { cleanText: afterCheckin, minutes } = parseCheckinTag(reply.trim());
-      const { cleanText, actions } = parseCoachActionTags(afterCheckin);
+      const { cleanText: afterActions, actions } = parseCoachActionTags(afterCheckin);
+      const { cleanText, pinnedFacts, observations } = parseMemoryTags(afterActions);
 
       let configPatch = null;
       if (minutes != null) {
@@ -250,6 +259,13 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         configPatch = { ...configPatch, coachCheckin: checkin };
         scheduleCoachCheckin(checkin);
         requestNotifPermission();
+      }
+
+      if (pinnedFacts.length > 0 || observations.length > 0) {
+        let memory = configRef.current.coachMemory || {};
+        pinnedFacts.forEach(fact => { memory = addPinnedFact(memory, fact); });
+        observations.forEach(note => { memory = addRecentObservation(memory, note, todayStr); });
+        configPatch = { ...configPatch, coachMemory: memory };
       }
 
       let replyText = cleanText;
