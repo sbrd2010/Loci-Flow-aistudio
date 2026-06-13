@@ -219,6 +219,18 @@ describe("matchesUserIntent", () => {
   it("still matches ADD_TASK on 'don't forget' phrasing", () => {
     expect(matchesUserIntent("ADD_TASK", "Don't forget to call mom")).toBe(true);
   });
+
+  it("does not match ADD_TASK on a plain 'I need to' statement with no add/remind request", () => {
+    expect(matchesUserIntent("ADD_TASK", "I need to call the dentist at some point")).toBe(false);
+  });
+
+  it("does not match COMPLETE_TASK on a generic 'done for today' statement", () => {
+    expect(matchesUserIntent("COMPLETE_TASK", "I'm done for today")).toBe(false);
+  });
+
+  it("does not match COMPLETE_TASK on a question about past completions", () => {
+    expect(matchesUserIntent("COMPLETE_TASK", "What have I done today?")).toBe(false);
+  });
 });
 
 describe("applyCoachActions", () => {

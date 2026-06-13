@@ -224,9 +224,12 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         if (Object.keys(patch).length > 0) saveSubPaths(patch);
 
         const startFocus = results.find(r => r.type === "START_FOCUS" && r.matched);
-        if (startFocus && typeof focusTimer.extendTimer === "function" && !focusTimer.isTimerRunning) {
-          const mins = Number(startFocus.task.timeEstimateMinutes) > 0 ? Number(startFocus.task.timeEstimateMinutes) : 25;
-          focusTimer.extendTimer(mins);
+        if (startFocus && typeof focusTimer.extendTimer === "function") {
+          const isSwitchingTask = focusTimer.activeTask?.uuid !== startFocus.task.uuid;
+          if (!focusTimer.isTimerRunning || isSwitchingTask) {
+            const mins = Number(startFocus.task.timeEstimateMinutes) > 0 ? Number(startFocus.task.timeEstimateMinutes) : 25;
+            focusTimer.extendTimer(mins);
+          }
         }
 
         const blocked = results.filter(r => r.blocked);

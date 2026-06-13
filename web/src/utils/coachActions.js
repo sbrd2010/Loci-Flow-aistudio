@@ -45,7 +45,7 @@ const INTENT_PATTERNS = {
   COMPLETE_TASK: /\b(done|finish(ed|ing)?|complet(e|ed|ing)|wrapped? up|knocked out)\b/i,
   SET_NOW_FOCUS: /\b(focus on|switch.*focus|prioriti[sz]e|now focus)\b/i,
   START_FOCUS: /\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\b/i,
-  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|i (also )?need to|don'?t forget)\b/i,
+  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don'?t forget)\b/i,
   PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|skip)\b/i,
 };
 
@@ -53,10 +53,16 @@ const INTENT_PATTERNS = {
 // before an intent match, so e.g. "not done" doesn't register as COMPLETE_TASK.
 const NEGATION_RE = /\b(not|never|cannot|no longer)\b|n't/i;
 
+// Catches "done"/"finished" used generically ("I'm done for today") or as
+// part of a question about past completions ("what have I done today?"),
+// neither of which names a specific task to complete.
+const NON_SPECIFIC_COMPLETION_RE = /\b(done|finished?)\s+for\s+(today|now|the day)\b|\b(what|anything)\b.*\b(done|finish(ed)?)\b/i;
+
 export function matchesUserIntent(actionType, lastUserMessage = "") {
   const pattern = INTENT_PATTERNS[actionType];
   if (!pattern) return false;
   const message = String(lastUserMessage || "");
+  if (actionType === "COMPLETE_TASK" && NON_SPECIFIC_COMPLETION_RE.test(message)) return false;
   const match = pattern.exec(message);
   if (!match) return false;
   const preceding = message.slice(Math.max(0, match.index - 20), match.index);
