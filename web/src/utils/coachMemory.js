@@ -23,6 +23,9 @@ export const MAX_PINNED_FACTS = 15;
 export const MAX_RECENT_OBSERVATIONS = 30;
 const RECENT_OBSERVATIONS_IN_PROMPT = 10;
 const MEMORY_ENTRY_MAX_LENGTH = 200;
+// A [[FORGET: ...]] shorter than this is too vague to safely substring-match —
+// e.g. "User" or "job" would otherwise match (and delete) most stored entries.
+const MIN_FORGET_TEXT_LENGTH = 8;
 
 // Defense-in-depth: even though the system prompt tells the model never to
 // store secrets, reject anything that looks like one before it's saved. Allows
@@ -94,7 +97,7 @@ function normalizeMemoryText(text) {
 
 export function forgetFromMemory(coachMemory = {}, text) {
   const target = normalizeMemoryText(text);
-  if (!target) return coachMemory;
+  if (target.length < MIN_FORGET_TEXT_LENGTH) return coachMemory;
   const matches = entry => {
     const normalized = normalizeMemoryText(entry.text);
     return normalized.includes(target) || target.includes(normalized);

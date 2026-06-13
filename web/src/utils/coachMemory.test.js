@@ -166,6 +166,13 @@ describe("forgetFromMemory", () => {
     memory = forgetFromMemory(memory, "   ");
     expect(memory.pinnedFacts).toHaveLength(1);
   });
+
+  it("ignores forget text too short/generic to safely match, instead of deleting every entry that starts with it", () => {
+    let memory = addPinnedFact({}, "User wants a job in the Netherlands.");
+    memory = addPinnedFact(memory, "User likes mornings for deep work.");
+    memory = forgetFromMemory(memory, "User");
+    expect(memory.pinnedFacts).toHaveLength(2);
+  });
 });
 
 describe("clearAllMemory", () => {
