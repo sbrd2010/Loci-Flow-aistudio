@@ -9,6 +9,10 @@
 //    conversations. AI-written via [[NOTE: ...]] tags, FIFO-capped,
 //    user-deletable in Settings.
 //
+// The AI can also retract either kind via [[FORGET: ...]] (see
+// forgetFromMemory) — e.g. when the user asks it to forget something, or a
+// new fact supersedes an outdated one.
+//
 // Both caps are generous (storage is cheap) — they bound the prompt and keep
 // the Settings list scannable, not to ration memory.
 //
@@ -81,19 +85,44 @@ export function clearAllMemory(coachMemory = {}) {
   return { ...coachMemory, pinnedFacts: [], recentObservations: [] };
 }
 
+// AI-driven removal via [[FORGET: ...]]. Matches by normalized text so the
+// model can retract a fact/note by copying it (verbatim or a close
+// paraphrase) from the memory shown in its own prompt.
+function normalizeMemoryText(text) {
+  return String(text || "").toLowerCase().replace(/[\s\x00-\x1f\x7f]+/g, " ").trim().replace(/[.,!?;:]+$/, "");
+}
+
+export function forgetFromMemory(coachMemory = {}, text) {
+  const target = normalizeMemoryText(text);
+  if (!target) return coachMemory;
+  const matches = entry => {
+    const normalized = normalizeMemoryText(entry.text);
+    return normalized.includes(target) || target.includes(normalized);
+  };
+  return {
+    ...coachMemory,
+    pinnedFacts: (coachMemory.pinnedFacts || []).filter(f => !matches(f)),
+    recentObservations: (coachMemory.recentObservations || []).filter(o => !matches(o)),
+  };
+}
+
 // [[REMEMBER: ...]] -> durable Pinned Fact. [[NOTE: ...]] -> Recent Observation.
-// Both are stripped from the visible reply, mirroring coachActions.js's tags.
-const MEMORY_TAG_RE = /\s*\[\[(REMEMBER|NOTE):\s*((?:[^\]]|\](?!\]))+?)\s*\]\]/gi;
+// [[FORGET: ...]] -> removes a matching Pinned Fact or Recent Observation.
+// All are stripped from the visible reply, mirroring coachActions.js's tags.
+const MEMORY_TAG_RE = /\s*\[\[(REMEMBER|NOTE|FORGET):\s*((?:[^\]]|\](?!\]))+?)\s*\]\]/gi;
 
 export function parseMemoryTags(text = "") {
   const pinnedFacts = [];
   const observations = [];
+  const forgets = [];
   const cleanText = text.replace(MEMORY_TAG_RE, (_match, type, content) => {
-    if (type.toUpperCase() === "REMEMBER") pinnedFacts.push(content.trim());
-    else observations.push(content.trim());
+    const tag = type.toUpperCase();
+    if (tag === "REMEMBER") pinnedFacts.push(content.trim());
+    else if (tag === "NOTE") observations.push(content.trim());
+    else forgets.push(content.trim());
     return "";
   }).trim();
-  return { cleanText, pinnedFacts, observations };
+  return { cleanText, pinnedFacts, observations, forgets };
 }
 
 // Prepended to the memory block in the system prompt — memory is persistent,

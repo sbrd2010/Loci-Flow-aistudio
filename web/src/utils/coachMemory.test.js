@@ -6,6 +6,7 @@ import {
   removePinnedFact,
   addRecentObservation,
   removeRecentObservation,
+  forgetFromMemory,
   clearAllMemory,
   isMemoryEnabled,
   parseMemoryTags,
@@ -134,6 +135,39 @@ describe("addRecentObservation / removeRecentObservation", () => {
   });
 });
 
+describe("forgetFromMemory", () => {
+  it("removes a pinned fact that exactly matches the given text", () => {
+    let memory = addPinnedFact({}, "User wants a job in the Netherlands.");
+    memory = addPinnedFact(memory, "User likes mornings for deep work.");
+    memory = forgetFromMemory(memory, "User wants a job in the Netherlands.");
+    expect(memory.pinnedFacts.map(f => f.text)).toEqual(["User likes mornings for deep work."]);
+  });
+
+  it("removes a recent observation matching a close paraphrase", () => {
+    let memory = addRecentObservation({}, "Felt good about today.", "2026-06-13");
+    memory = forgetFromMemory(memory, "felt good about today");
+    expect(memory.recentObservations).toEqual([]);
+  });
+
+  it("matches when the forget text is more verbose than the stored entry", () => {
+    let memory = addPinnedFact({}, "Likes mornings.");
+    memory = forgetFromMemory(memory, "User likes mornings, noted earlier.");
+    expect(memory.pinnedFacts).toEqual([]);
+  });
+
+  it("leaves memory unchanged when nothing matches", () => {
+    let memory = addPinnedFact({}, "fact A");
+    memory = forgetFromMemory(memory, "something unrelated entirely");
+    expect(memory.pinnedFacts).toHaveLength(1);
+  });
+
+  it("is a no-op for empty or whitespace-only input", () => {
+    let memory = addPinnedFact({}, "fact A");
+    memory = forgetFromMemory(memory, "   ");
+    expect(memory.pinnedFacts).toHaveLength(1);
+  });
+});
+
 describe("clearAllMemory", () => {
   it("clears both pinned facts and recent observations", () => {
     let memory = addPinnedFact({}, "fact A");
@@ -181,6 +215,23 @@ describe("parseMemoryTags", () => {
     expect(cleanText).toBe("Noted.");
     expect(pinnedFacts).toEqual(["Likes mornings for deep work."]);
     expect(observations).toEqual(["Felt good about today."]);
+  });
+
+  it("extracts a FORGET tag and strips it", () => {
+    const { cleanText, forgets } = parseMemoryTags(
+      "Got it, I'll forget that.\n[[FORGET: User wants a job in the Netherlands.]]"
+    );
+    expect(cleanText).toBe("Got it, I'll forget that.");
+    expect(forgets).toEqual(["User wants a job in the Netherlands."]);
+  });
+
+  it("handles REMEMBER and FORGET together for superseding a fact", () => {
+    const { pinnedFacts, observations, forgets } = parseMemoryTags(
+      "Updated!\n[[FORGET: User wants a job in the Netherlands.]]\n[[REMEMBER: User is relocating to Germany for a new job.]]"
+    );
+    expect(forgets).toEqual(["User wants a job in the Netherlands."]);
+    expect(pinnedFacts).toEqual(["User is relocating to Germany for a new job."]);
+    expect(observations).toEqual([]);
   });
 
   it("returns empty arrays and the original text when no tags are present", () => {

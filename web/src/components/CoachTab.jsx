@@ -12,7 +12,7 @@ import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, buil
 import { parseCoachActionTags, applyCoachActions } from "../utils/coachActions";
 import { isPendingCoachNudgeStale, shouldDeliverPendingCoachNudge } from "../utils/coachNudge";
 import { buildPersonaInstruction } from "../utils/coachPersona";
-import { addPinnedFact, addRecentObservation, buildLociMemoryContext, isMemoryEnabled, parseMemoryTags } from "../utils/coachMemory";
+import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFromMemory, isMemoryEnabled, parseMemoryTags } from "../utils/coachMemory";
 
 export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
@@ -266,7 +266,9 @@ MEMORY — building a picture of ${firstName} over time:
 - Use neutral, respectful, non-shaming language. Store short coaching-relevant summaries, not raw quotes or long paragraphs. If you're unsure whether something belongs in memory, don't store it.
 - If ${firstName} shares something durable worth remembering in every future conversation (a goal, a real deadline, a recurring pattern, a coaching preference), end your reply with [[REMEMBER: <one short neutral sentence>]] on its own line. Use sparingly.
 - If something notable happened this conversation worth recalling for the next few sessions but isn't permanent (how today went, a one-off struggle or win), end your reply with [[NOTE: <one short sentence>]] on its own line.
-- REMEMBER and NOTE tags are invisible and stripped automatically, like CHECKIN_IN — never mention or explain them to ${firstName}.
+- If ${firstName} asks you to forget, delete, or stop remembering something, or if something in "WHAT YOU KNOW ABOUT THEM" / "RECENT NOTES" above is now outdated or contradicted by what they just told you, end your reply with [[FORGET: <copy the exact text of that fact/note from memory above>]] on its own line — and if it's outdated rather than just wrong, also add a [[REMEMBER: <corrected fact>]] for the update.
+- REMEMBER, NOTE, and FORGET tags are invisible and stripped automatically, like CHECKIN_IN — never mention or explain them to ${firstName}.
+- If ${firstName} asks what you know or remember about them, answer honestly and specifically using "WHAT YOU KNOW ABOUT THEM" and "RECENT NOTES" above — list it out plainly rather than being vague, and say clearly if there's nothing stored yet.
 - Memory is for coaching adaptation only — never medical, legal, or financial advice.
 ` : ""}
 LANGUAGE: Never use the word "ADHD". Use instead: focus challenge, overwhelm, execution support, momentum, time awareness, micro-step, reset, low-energy mode.
@@ -281,7 +283,7 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
       // tag-like sequence (e.g. "[[REMEMBER: ...describing [[ADD_TASK:X]]...]]"),
       // the whole memory tag — including the nested text — is stripped before
       // the checkin/action parsers can see it as a tag of their own.
-      const { cleanText: afterMemory, pinnedFacts, observations } = parseMemoryTags(reply.trim());
+      const { cleanText: afterMemory, pinnedFacts, observations, forgets } = parseMemoryTags(reply.trim());
       const { cleanText: afterCheckin, minutes } = parseCheckinTag(afterMemory);
       const { cleanText, actions } = parseCoachActionTags(afterCheckin);
 
@@ -293,8 +295,9 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         requestNotifPermission();
       }
 
-      if (isMountedRef.current && isMemoryEnabled(configRef.current) && !cloudSyncUnconfirmed && (pinnedFacts.length > 0 || observations.length > 0)) {
+      if (isMountedRef.current && isMemoryEnabled(configRef.current) && !cloudSyncUnconfirmed && (pinnedFacts.length > 0 || observations.length > 0 || forgets.length > 0)) {
         let memory = configRef.current.coachMemory || {};
+        forgets.forEach(text => { memory = forgetFromMemory(memory, text); });
         pinnedFacts.forEach(fact => { memory = addPinnedFact(memory, fact); });
         observations.forEach(note => { memory = addRecentObservation(memory, note, todayStr); });
         configPatch = { ...configPatch, coachMemory: memory };
