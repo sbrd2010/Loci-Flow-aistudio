@@ -80,23 +80,31 @@ export function matchesUserIntent(actionType, lastUserMessage = "", title = "") 
   if (!pattern) return false;
   const message = String(lastUserMessage || "");
   if (actionType === "COMPLETE_TASK" && NON_SPECIFIC_COMPLETION_RE.test(message)) return false;
-  const match = pattern.exec(message);
-  if (!match) return false;
-  // Look back to the start of the current clause (the last sentence-ending
-  // punctuation, or the start of the message) rather than a fixed character
-  // window — catches negations like "Don't ... mark it complete" regardless
-  // of how many words sit between "don't" and the matched action word.
-  const clauseStart = Math.max(
-    message.lastIndexOf(".", match.index - 1),
-    message.lastIndexOf(",", match.index - 1),
-    message.lastIndexOf("!", match.index - 1),
-    message.lastIndexOf("?", match.index - 1),
-    message.lastIndexOf("\n", match.index - 1)
-  ) + 1;
-  const preceding = message.slice(clauseStart, match.index);
-  if (NEGATION_RE.test(preceding)) return false;
   if (TITLE_CHECK_TYPES.has(actionType) && !titleMentionedInMessage(title, message)) return false;
-  return true;
+
+  // Scan every match of the intent pattern, not just the first — an earlier
+  // match can sit in a negated clause while a later one in the same message
+  // is a genuine, unnegated request (e.g. "I'm not done with X, but I
+  // finished Y").
+  const globalPattern = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : pattern.flags + "g");
+  let match;
+  while ((match = globalPattern.exec(message)) !== null) {
+    // Look back to the start of the current clause (the last sentence-ending
+    // punctuation, or the start of the message) rather than a fixed character
+    // window — catches negations like "Don't ... mark it complete" regardless
+    // of how many words sit between "don't" and the matched action word.
+    const clauseStart = Math.max(
+      message.lastIndexOf(".", match.index - 1),
+      message.lastIndexOf(",", match.index - 1),
+      message.lastIndexOf("!", match.index - 1),
+      message.lastIndexOf("?", match.index - 1),
+      message.lastIndexOf("\n", match.index - 1)
+    ) + 1;
+    const preceding = message.slice(clauseStart, match.index);
+    if (NEGATION_RE.test(preceding)) continue;
+    return true;
+  }
+  return false;
 }
 
 // Exact-title-only match against active tasks — used to detect "obvious"

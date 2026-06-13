@@ -580,6 +580,7 @@ export function useSync(uid, email) {
       update(ref(db), updates).catch(err => {
         if (n > 0) return new Promise(r => setTimeout(r, 500 * Math.pow(2, 3 - n))).then(() => attempt(n - 1));
         console.error(`Sub-path write failed (${subPath}):`, err);
+        setSyncWarning("write-failed");
       });
     attempt(3);
   };
@@ -604,6 +605,7 @@ export function useSync(uid, email) {
       update(ref(db), updates).catch(err => {
         if (n > 0) return new Promise(r => setTimeout(r, 500 * Math.pow(2, 3 - n))).then(() => attempt(n - 1));
         console.error(`Sub-paths write failed (${Object.keys(patch).join(", ")}):`, err);
+        setSyncWarning("write-failed");
       });
     attempt(3);
   };

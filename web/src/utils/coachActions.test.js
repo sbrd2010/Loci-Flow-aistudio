@@ -259,6 +259,10 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("ADD_TASK", "Add a task to call the dentist", "Call the dentist")).toBe(true);
     expect(matchesUserIntent("ADD_TASK", "Add a task to call the dentist", "Buy groceries")).toBe(false);
   });
+
+  it("scans past an earlier negated match to find a later, unnegated completion request", () => {
+    expect(matchesUserIntent("COMPLETE_TASK", "I'm not done with Write report, but I finished Email client", "Email client")).toBe(true);
+  });
 });
 
 describe("applyCoachActions", () => {
@@ -403,6 +407,23 @@ describe("applyCoachActions", () => {
     ], { ...dateOpts, lastUserMessage: "I finished the report, now focus on Email client." });
     expect(next.tasks.find(t => t.uuid === "1").isCompleted).toBe(true);
     expect(next.tasks.find(t => t.uuid === "2").isNowFocus).toBe(true);
+  });
+
+  it("completes the task named in a later, unnegated clause even when an earlier clause negates a different task", () => {
+    const payload = {
+      tasks: [
+        { uuid: "1", title: "Write report", isCompleted: false, isDeleted: false, isParked: false },
+        { uuid: "2", title: "Email client", isCompleted: false, isDeleted: false, isParked: false },
+      ],
+      config: {},
+      contributions: [],
+    };
+    const { payload: next, results } = applyCoachActions(payload, [
+      { type: "COMPLETE_TASK", title: "Email client" },
+    ], { ...dateOpts, lastUserMessage: "I'm not done with Write report, but I finished Email client." });
+    expect(next.tasks.find(t => t.uuid === "2").isCompleted).toBe(true);
+    expect(next.tasks.find(t => t.uuid === "1").isCompleted).toBe(false);
+    expect(results[0].matched).toBe(true);
   });
 
   it("blocks an action and leaves the payload untouched when the user's message doesn't request it", () => {
