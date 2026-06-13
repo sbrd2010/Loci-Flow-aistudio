@@ -618,6 +618,14 @@ export function useSync(uid, email) {
   // in the meantime — only the patched keys are touched.
   const saveConfigPatch = (patch) => {
     if (!dbRefPath) return;
+    // Mirrors savePayload's guard: if RTDB hasn't delivered its first snapshot
+    // yet, this bumps payloadRef.current.timestamp on top of (possibly stale)
+    // cached data. Without this flag, the first RTDB snapshot could then look
+    // "older" than the cache, causing onValue to push the whole stale cached
+    // payload back over newer data from another device.
+    if (!hasReceivedFirstRtdbRef.current) {
+      localWriteBeforeFirstRtdbRef.current = true;
+    }
     if (payloadRef.current) {
       const next = {
         ...payloadRef.current,

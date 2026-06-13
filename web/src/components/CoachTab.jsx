@@ -14,10 +14,16 @@ import { isPendingCoachNudgeStale, shouldDeliverPendingCoachNudge } from "../uti
 import { buildPersonaInstruction } from "../utils/coachPersona";
 import { addPinnedFact, addRecentObservation, buildLociMemoryContext, isMemoryEnabled, parseMemoryTags } from "../utils/coachMemory";
 
-export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false }) {
+export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
   const { groqKey, geminiKey } = getAIKeys();
   const hasAnyKey = !!(groqKey || geminiKey);
+
+  // True until RTDB has actually delivered a snapshot for this session — true
+  // while rendering from cache, but ALSO once the 15s offline warning fires
+  // (useSync clears isSyncingFromCache then even with no RTDB response yet, so
+  // config.coachMemory may still be stale localStorage data at that point).
+  const cloudSyncUnconfirmed = isSyncingFromCache || syncWarning === "offline";
 
   const [confirmDialog, setConfirmDialog] = useState(null);
 
@@ -120,7 +126,7 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
 
     (async () => {
       try {
-        const memoryContext = (isMemoryEnabled(config) && !isSyncingFromCache) ? buildLociMemoryContext(config.coachMemory) : "";
+        const memoryContext = (isMemoryEnabled(config) && !cloudSyncUnconfirmed) ? buildLociMemoryContext(config.coachMemory) : "";
         const systemInstruction = `${buildLociCoreInstruction({ firstName })}
 
 You are ${config.mentorName || "Loci AI Coach"}, ${firstName}'s productivity mentor inside Loci Focus. You are reaching out FIRST — ${firstName} hasn't said anything yet this conversation. Something you noticed about their day: "${nudge.title} — ${nudge.body}". Open the conversation with this observation and a concrete next step. Max 2 short sentences. Don't mention that this is automated or that you "noticed" via data — just speak as their coach.
@@ -180,10 +186,10 @@ ${memoryContext ? `\n${memoryContext}\n` : ""}`;
     const recentlyParkedContext = buildLociRecentlyParkedContext(tasks, now);
     const lociCoreInstruction = buildLociCoreInstruction({ firstName });
     const memoryEnabled = isMemoryEnabled(config);
-    // Don't send memory facts/notes to the AI while still syncing from cache —
+    // Don't send memory facts/notes to the AI until cloud sync is confirmed —
     // config.coachMemory may be stale localStorage data that's already been
     // cleared or disabled on another device.
-    const memoryContext = (memoryEnabled && !isSyncingFromCache) ? buildLociMemoryContext(config.coachMemory) : "";
+    const memoryContext = (memoryEnabled && !cloudSyncUnconfirmed) ? buildLociMemoryContext(config.coachMemory) : "";
     const personaInstruction = buildPersonaInstruction(config, firstName);
 
     const userMessageCount = withUser.filter(m => m.isUser).length;
@@ -287,7 +293,7 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         requestNotifPermission();
       }
 
-      if (isMountedRef.current && isMemoryEnabled(configRef.current) && !isSyncingFromCache && (pinnedFacts.length > 0 || observations.length > 0)) {
+      if (isMountedRef.current && isMemoryEnabled(configRef.current) && !cloudSyncUnconfirmed && (pinnedFacts.length > 0 || observations.length > 0)) {
         let memory = configRef.current.coachMemory || {};
         pinnedFacts.forEach(fact => { memory = addPinnedFact(memory, fact); });
         observations.forEach(note => { memory = addRecentObservation(memory, note, todayStr); });

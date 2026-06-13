@@ -52,6 +52,20 @@ describe("addPinnedFact / removePinnedFact", () => {
     expect(addPinnedFact({}, "User's bank account number is 123456789").pinnedFacts).toEqual([]);
   });
 
+  it("rejects secrets described with context between the label and value", () => {
+    expect(addPinnedFact({}, "User's API key for production is sk-proj-abcdefghijklmnop").pinnedFacts).toEqual([]);
+    expect(addPinnedFact({}, "User's password for Gmail is hunter2").pinnedFacts).toEqual([]);
+  });
+
+  it("rejects entries that state a clinical diagnosis", () => {
+    expect(addPinnedFact({}, "User has ADHD").pinnedFacts).toEqual([]);
+    expect(addPinnedFact({}, "User is autistic and needs predictable routines.").pinnedFacts).toEqual([]);
+  });
+
+  it("still accepts neutral behavior-pattern language about focus challenges", () => {
+    expect(addPinnedFact({}, "User struggles with task initiation and benefits from extra structure.").pinnedFacts).toHaveLength(1);
+  });
+
   it("rejects entries containing an exact financial amount", () => {
     expect(addPinnedFact({}, "User is $12,000 behind on rent.").pinnedFacts).toEqual([]);
     expect(addRecentObservation({}, "User mentioned owing 5000 dollars on a loan.", "2026-06-13").recentObservations).toEqual([]);
