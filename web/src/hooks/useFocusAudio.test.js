@@ -571,8 +571,8 @@ describe("useFocusAudio", () => {
       expect(result.current.trackLoadState).toBe("ready");
     });
 
-    it("sets trackLoadState to 'error' if the audio element fails to load", () => {
-      const config = { focusSoundTrack: "sounds/rain/amber-sidewalks.mp3" };
+    it("sets trackLoadState to 'error' if the bundled local track fails to load", () => {
+      const config = { focusSoundTrack: "after-school-rain.mp3" };
       const { result } = renderHook(
         (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
         [true, config, null]
@@ -581,6 +581,24 @@ describe("useFocusAudio", () => {
       const audio = MockAudio.instances[0];
       audio.dispatchEvent("error");
       expect(result.current.trackLoadState).toBe("error");
+    });
+
+    it("falls back to the category's bundled local track when a CDN variation fails to load", () => {
+      const config = { focusSoundTrack: "sounds/rain/amber-sidewalks.mp3" };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [true, config, null]
+      );
+
+      const cdnAudio = MockAudio.instances[0];
+      cdnAudio.dispatchEvent("error");
+
+      expect(result.current.selectedTrack).toBe("after-school-rain.mp3");
+      expect(result.current.trackLoadState).not.toBe("error");
+      expect(MockAudio.instances.length).toBe(2);
+      expect(MockAudio.instances[1].src).toBe("/sounds/after-school-rain.mp3");
+      expect(cdnAudio.paused).toBe(true);
+      expect(MockAudio.instances[1].paused).toBe(false);
     });
 
     it("goes back to 'loading' when reshuffling to a new variation", () => {

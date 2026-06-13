@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { BINAURAL_TRACK_ID, createBinauralBeatNode, migrateTrackId } from "../utils/binauralBeat";
-import { trackUrl, getCategoryKeyForTrack, pickRandomVariation } from "../utils/soundLibrary";
+import { SOUND_CATEGORIES, trackUrl, getCategoryKeyForTrack, pickRandomVariation } from "../utils/soundLibrary";
 
 export function useFocusAudio(isRunning, config = {}, saveSubPath) {
   const [selectedTrack, setSelectedTrack] = useState(migrateTrackId(config.focusSoundTrack) || null);
@@ -62,7 +62,17 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
         if (audioRef.current === audio) setTrackLoadState("ready");
       });
       audio.addEventListener("error", () => {
-        if (audioRef.current === audio) setTrackLoadState("error");
+        if (audioRef.current !== audio) return;
+        // CDN variations can fail to load (network issue, cold CDN cache, etc.) —
+        // fall back to the category's bundled local track, which is always
+        // available, rather than leaving the user with silence.
+        const categoryKey = getCategoryKeyForTrack(selectedTrack);
+        const bundled = categoryKey && SOUND_CATEGORIES[categoryKey].variations.find(v => !v.file.includes("/"));
+        if (bundled && bundled.file !== selectedTrack) {
+          setSelectedTrack(bundled.file);
+        } else {
+          setTrackLoadState("error");
+        }
       });
 
       // Play if timer is already running
