@@ -22,7 +22,7 @@ const MEMORY_ENTRY_MAX_LENGTH = 200;
 
 // Defense-in-depth: even though the system prompt tells the model never to
 // store secrets, reject anything that looks like one before it's saved.
-const SECRET_PATTERN = /\b(passwords?|passwd|pwd|api[_\s-]?keys?|secret\s*keys?|access\s*tokens?|auth\s*tokens?|private\s*keys?|recovery\s*codes?|seed\s*phrases?|2fa\s*codes?|otps?|one[- ]time\s*(?:codes?|passwords?))\b\s*(?:is|was|are|were|[:=])\s*\S{3,}|\b(sk-[A-Za-z0-9]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{20,})\b/i;
+const SECRET_PATTERN = /\b(passwords?|passwd|pwd|api[_\s-]?keys?|secret\s*keys?|access\s*tokens?|auth\s*tokens?|private\s*keys?|recovery\s*codes?|seed\s*phrases?|2fa\s*codes?|otps?|one[- ]time\s*(?:codes?|passwords?))\b\s*(?:is|was|are|were|[:=])\s*\S{3,}|\b(sk-[A-Za-z0-9]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|gsk_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{20,})\b/i;
 
 function appendCapped(list = [], text, max, extra = {}) {
   // Collapse newlines/control chars so a memory entry can't break out of its

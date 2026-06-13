@@ -44,6 +44,10 @@ describe("addPinnedFact / removePinnedFact", () => {
     expect(addPinnedFact({}, "API key: sk-abcdefghijklmnopqrstuvwx").pinnedFacts).toEqual([]);
   });
 
+  it("rejects Groq keys even without an 'api key' prefix", () => {
+    expect(addPinnedFact({}, "User uses Groq key gsk_abcdefghijklmnopqrstuvwx").pinnedFacts).toEqual([]);
+  });
+
   it("dedupes by normalized exact text instead of storing duplicates", () => {
     let memory = addPinnedFact({}, "User wants a job in the Netherlands.");
     memory = addPinnedFact(memory, "USER WANTS A JOB IN THE NETHERLANDS.");

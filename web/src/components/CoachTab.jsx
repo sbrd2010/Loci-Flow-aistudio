@@ -270,7 +270,7 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         requestNotifPermission();
       }
 
-      if (memoryEnabled && !isSyncingFromCache && (pinnedFacts.length > 0 || observations.length > 0)) {
+      if (isMemoryEnabled(configRef.current) && !isSyncingFromCache && (pinnedFacts.length > 0 || observations.length > 0)) {
         let memory = configRef.current.coachMemory || {};
         pinnedFacts.forEach(fact => { memory = addPinnedFact(memory, fact); });
         observations.forEach(note => { memory = addRecentObservation(memory, note, todayStr); });
