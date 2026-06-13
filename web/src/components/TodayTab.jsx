@@ -1346,6 +1346,12 @@ export default function TodayTab({
               )}
               <div className="morning-ritual-actions">
                 <button className="morning-ritual-btn-primary" onClick={handleAnchorSheetDone}>Done</button>
+                <button className="morning-ritual-btn-secondary" onClick={() => {
+                  saveSubPath("config", { ...config, ...buildMorningRitualDoneConfig(), lastUpdated: Date.now() });
+                  setShowAnchorSheet(false);
+                  setAnchorSheetSlot(null);
+                  onOpenMindBox?.("ritual");
+                }}>Start Morning Ritual &#8594;</button>
                 <div className="morning-ritual-actions-row">
                   <button className="morning-ritual-btn-ghost" onClick={handleAnchorLater}>Later</button>
                   <button className="morning-ritual-btn-ghost" onClick={() => { setShowAnchorSheet(false); setAnchorSheetSlot(null); onOpenMindBox?.("anchors"); }}>Manage</button>

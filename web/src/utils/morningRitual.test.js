@@ -130,6 +130,14 @@ describe("shouldShowMorningRitual", () => {
     expect(shouldShowMorningRitual(dt(5, 30), config)).toBe(false);
     expect(shouldShowMorningRitual(dt(7, 0), config)).toBe(true);
   });
+
+  it("is disabled entirely when morningRitualEnabled is false, regardless of window", () => {
+    expect(shouldShowMorningRitual(dt(7, 30), { morningRitualEnabled: false })).toBe(false);
+  });
+
+  it("defaults to enabled when morningRitualEnabled is unset", () => {
+    expect(shouldShowMorningRitual(dt(7, 30), {})).toBe(true);
+  });
 });
 
 describe("buildMorningRitualDoneConfig / buildMorningRitualSnoozeConfig", () => {

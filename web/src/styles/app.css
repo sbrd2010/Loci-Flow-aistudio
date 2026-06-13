@@ -3404,6 +3404,19 @@ html[data-theme="option-e-slate"] {
 }
 .morning-ritual-btn-primary:active { opacity: 0.85; }
 .morning-ritual-btn-primary:disabled { opacity: 0.4; cursor: default; }
+.morning-ritual-btn-secondary {
+  width: 100%;
+  min-height: 42px;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid var(--accent);
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+.morning-ritual-btn-secondary:active { opacity: 0.7; }
 .morning-ritual-btn-ghost {
   flex: 1;
   min-height: 42px;

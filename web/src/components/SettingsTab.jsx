@@ -28,6 +28,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   const [editedFocusWindows, setEditedFocusWindows] = useState(config.focusWindows || []);
   const [editedMorningRitualStart, setEditedMorningRitualStart] = useState(config.morningRitualWindowStart || "05:00");
   const [editedMorningRitualEnd, setEditedMorningRitualEnd] = useState(config.morningRitualWindowEnd || "11:00");
+  const [editedMorningRitualEnabled, setEditedMorningRitualEnabled] = useState(config.morningRitualEnabled !== false);
   const [editedHeaderStyle, setEditedHeaderStyle] = useState(
     config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full")
   );
@@ -47,6 +48,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
     setEditedFocusWindows(config.focusWindows || []);
     setEditedMorningRitualStart(config.morningRitualWindowStart || "05:00");
     setEditedMorningRitualEnd(config.morningRitualWindowEnd || "11:00");
+    setEditedMorningRitualEnabled(config.morningRitualEnabled !== false);
     setEditedHeaderStyle(config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full"));
     setEditedToolsStyle(config.toolsStyle || "inline");
     setEditedDeadlineLabel(config.deadlineLabel || "");
@@ -56,7 +58,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
       config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType,
       config.focusWindows,
-      config.morningRitualWindowStart, config.morningRitualWindowEnd, config.headerStyle, config.toolsStyle,
+      config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualEnabled, config.headerStyle, config.toolsStyle,
       config.deadlineLabel, config.deadlineDate,
       config.deadlineStartDate, config.deadlineAction]);
 
@@ -172,6 +174,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
       focusWindows: editedFocusWindows.filter(w => w.start && w.end && w.start !== w.end),
       morningRitualWindowStart: morningRitualValid ? editedMorningRitualStart : "05:00",
       morningRitualWindowEnd: morningRitualValid ? editedMorningRitualEnd : "11:00",
+      morningRitualEnabled: editedMorningRitualEnabled,
       headerStyle: editedHeaderStyle,
       toolsStyle: editedToolsStyle,
       roadmapStyle: "compact",
@@ -402,6 +405,22 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
             >
               + Add focus window
             </button>
+          </div>
+
+          <div
+            className="toggle-row"
+            onClick={() => setEditedMorningRitualEnabled(!editedMorningRitualEnabled)}
+            style={{ cursor: "pointer" }}
+          >
+            <div>
+              <span style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--text-primary)" }}>
+                🌅 Morning Ritual popup
+              </span>
+              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                A daily motivational nudge (with a rotating quote and a link to your Mind Box morning ritual) on your first app open of the day.
+              </p>
+            </div>
+            <input type="checkbox" className="pill-toggle" checked={editedMorningRitualEnabled} onChange={() => setEditedMorningRitualEnabled(v => !v)} />
           </div>
 
           <div className="form-group">
