@@ -14,6 +14,7 @@ import { formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
 import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows, getWindowState, getRemainingFocusMinutes, getNextWindowStart, getOverallSpan, getFocusProgress, hasConfiguredFocusWindow } from "../utils/focusWindows";
 import { getMorningRitualVariant, shouldShowMorningRitual, buildMorningRitualDoneConfig, buildMorningRitualSnoozeConfig } from "../utils/morningRitual";
+import { getCoachNudge, buildCoachNudgeShownConfig, buildPendingCoachNudge } from "../utils/coachNudge";
 import {
   shouldShowMorningCommitment, buildMorningCommitmentPrompt, canSaveMorningCommitment,
   buildMorningCommitmentSave, buildMorningCommitmentSkip, buildMorningCommitmentSnooze,
@@ -490,6 +491,27 @@ export default function TodayTab({
     onOpenCoach?.();
   };
 
+  // ── Proactive Coach Nudge (the coach speaks first) ───────────────────────
+  const coachNudge = (
+    isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending ||
+    isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || showRescue
+  ) ? null : getCoachNudge(payload, new Date());
+
+  useEffect(() => {
+    if (coachNudge) track("coach_nudge_shown", { reason: coachNudge.reason, level: coachNudge.level });
+  }, [coachNudge?.reason]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCoachNudgeDismiss = () => {
+    track("coach_nudge_dismissed", { reason: coachNudge.reason });
+    saveSubPath("config", { ...config, ...buildCoachNudgeShownConfig(), lastUpdated: Date.now() });
+  };
+
+  const handleCoachNudgeTalk = () => {
+    track("coach_nudge_engaged", { reason: coachNudge.reason });
+    saveSubPath("config", { ...config, ...buildCoachNudgeShownConfig(), pendingCoachNudge: buildPendingCoachNudge(coachNudge), lastUpdated: Date.now() });
+    onOpenCoach?.();
+  };
+
   const handleStartEdit = (task) => setEditingTask(task);
 
   const handleBreakdown = async (task) => {
@@ -922,6 +944,46 @@ export default function TodayTab({
           </div>
         );
       })()}
+
+      {/* ── Proactive Coach Nudge ─────────────────────────────────────────── */}
+      {coachNudge && (
+        <div
+          data-testid="coach-nudge-card"
+          style={{
+            background: "var(--accent-light)",
+            border: "1px solid var(--accent)",
+            borderRadius: "var(--radius-sm)",
+            padding: "10px 12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "6px",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: "12.5px", fontWeight: "800", color: "var(--text-primary)" }}>
+                🤖 {coachNudge.title}
+              </div>
+              <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--text-secondary)", lineHeight: "1.45" }}>
+                {coachNudge.body}
+              </p>
+            </div>
+            <button
+              onClick={handleCoachNudgeDismiss}
+              aria-label="Dismiss"
+              style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: "14px", cursor: "pointer", padding: "2px", flexShrink: 0, lineHeight: 1 }}
+            >
+              ✕
+            </button>
+          </div>
+          <button
+            onClick={handleCoachNudgeTalk}
+            style={{ alignSelf: "flex-start", background: "none", border: "none", color: "var(--accent)", fontSize: "11.5px", fontWeight: "800", cursor: "pointer", padding: 0 }}
+          >
+            Talk to {config.mentorName || "your coach"} →
+          </button>
+        </div>
+      )}
 
       {/* ── Today's Focus — tasks dominate the screen */}
       <section className="tasks-section" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>

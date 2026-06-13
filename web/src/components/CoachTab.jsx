@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { track } from "../firebase";
 import { callAI, getAIKeys } from "../utils/aiCall";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
@@ -76,6 +77,43 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
     const interval = setInterval(checkDue, 60000);
     return () => clearInterval(interval);
   }, [config.coachCheckin?.fireAt, firstName]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Deliver a Proactive Coach Nudge (see utils/coachNudge.js) handed off from
+  // the Today tab — voiced by the AI when a key is available, falling back to
+  // the signal's own canned text otherwise. Runs once on mount.
+  useEffect(() => {
+    const nudge = configRef.current.pendingCoachNudge;
+    if (!nudge) return;
+    saveSubPath("config", { ...configRef.current, pendingCoachNudge: null, lastUpdated: Date.now() });
+
+    const deliver = (text, voiced) => {
+      saveSubPath("chatHistory", [...chatHistoryRef.current, { text, isUser: false }]);
+      track("coach_nudge_delivered", { reason: nudge.reason, voiced });
+    };
+
+    if (!hasAnyKey) {
+      deliver(nudge.body, false);
+      return;
+    }
+
+    (async () => {
+      try {
+        const systemInstruction = `${buildLociCoreInstruction({ firstName })}
+
+You are ${config.mentorName || "Loci AI Coach"}, ${firstName}'s productivity mentor inside Loci Focus. You are reaching out FIRST — ${firstName} hasn't said anything yet this conversation. Something you noticed about their day: "${nudge.title} — ${nudge.body}". Open the conversation with this observation in your own warm, direct voice and a concrete next step. Max 2 short sentences. Don't mention that this is automated or that you "noticed" via data — just speak as their coach.`;
+
+        const reply = await callAI({
+          groqKey, geminiKey,
+          systemPrompt: systemInstruction,
+          messages: [{ role: "user", content: "(Start the conversation.)" }],
+          maxTokens: 120
+        });
+        deliver(reply.trim(), true);
+      } catch (_) {
+        deliver(nudge.body, false);
+      }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSendChat = async (e) => {
     e.preventDefault();
