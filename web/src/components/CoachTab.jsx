@@ -10,7 +10,7 @@ import { scheduleCoachCheckin, cancelCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, buildCheckinResumeMessage } from "../utils/coachCheckin";
 import { parseCoachActionTags, applyCoachActions } from "../utils/coachActions";
 
-export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, userProfile, focusTimer = {} }) {
+export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, userProfile, focusTimer = {}, isSyncingFromCache = false }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
   const { groqKey, geminiKey } = getAIKeys();
   const hasAnyKey = !!(groqKey || geminiKey);
@@ -205,18 +205,20 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
       }
 
       let replyText = cleanText;
-      if (actions.length > 0) {
+      if (actions.length > 0 && isSyncingFromCache) {
+        replyText = `${replyText}\n\n(Hold on — still syncing your latest data. Mind asking that again in a moment?)`.trim();
+      } else if (actions.length > 0) {
         const { payload: updatedPayload, results } = applyCoachActions(
           { ...payload, tasks: tasksRef.current, config: configRef.current, contributions: contributionsRef.current },
           actions,
-          { lociDateStr: todayStr, localDateStr: getLocalDateString(now), lastUserMessage: userText }
+          { lociDateStr: todayStr, localDateStr: getLocalDateString(now), lastUserMessage: userText, now: now.getTime() }
         );
 
         const patch = {};
         if (updatedPayload.tasks !== tasksRef.current) patch.tasks = updatedPayload.tasks;
         if (updatedPayload.contributions !== contributionsRef.current) patch.contributions = updatedPayload.contributions;
         if (updatedPayload.config.totalXp !== configRef.current.totalXp || configPatch) {
-          patch.config = { ...configRef.current, ...configPatch, totalXp: updatedPayload.config.totalXp, lastUpdated: Date.now() };
+          patch.config = { ...configRef.current, ...configPatch, totalXp: Number(updatedPayload.config.totalXp) || 0, lastUpdated: Date.now() };
           configPatch = null;
         }
         if (Object.keys(patch).length > 0) saveSubPaths(patch);
@@ -229,12 +231,16 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
 
         const blocked = results.filter(r => r.blocked);
         const notFound = results.filter(r => !r.matched && !r.blocked && r.type !== "ADD_TASK");
-        const addSkipped = results.filter(r => !r.matched && !r.blocked && r.type === "ADD_TASK");
+        const addSkipped = results.filter(r => !r.matched && !r.blocked && r.type === "ADD_TASK" && !r.eveningGuardBlocked);
+        const eveningGuardBlocked = results.filter(r => r.eveningGuardBlocked);
         if (notFound.length > 0) {
           replyText = `${replyText}\n\n(I couldn't find ${notFound.map(r => `"${r.title}"`).join(" or ")} in your task list — could you double-check the name?)`.trim();
         }
         if (addSkipped.length > 0) {
           replyText = `${replyText}\n\n(Looks like that's already on your list, so I didn't add a duplicate.)`.trim();
+        }
+        if (eveningGuardBlocked.length > 0) {
+          replyText = `${replyText}\n\n(Evening Guard is active, so I didn't add that — it'll be here tomorrow.)`.trim();
         }
         if (blocked.length > 0) {
           replyText = `${replyText}\n\n(I'll only do that when you explicitly ask — just say the word and I will.)`.trim();

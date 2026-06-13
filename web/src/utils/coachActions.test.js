@@ -67,6 +67,13 @@ describe("parseCoachActionTags", () => {
       actions: [{ type: "START_FOCUS", title: "Write report" }],
     });
   });
+
+  it("allows a single bracket character within a tag title", () => {
+    expect(parseCoachActionTags("Added it!\n[[ADD_TASK:Review [Q2] metrics]]")).toEqual({
+      cleanText: "Added it!",
+      actions: [{ type: "ADD_TASK", title: "Review [Q2] metrics" }],
+    });
+  });
 });
 
 describe("tag-stripping integration", () => {
@@ -199,6 +206,18 @@ describe("matchesUserIntent", () => {
   it("returns false for an empty or missing message", () => {
     expect(matchesUserIntent("COMPLETE_TASK", "")).toBe(false);
     expect(matchesUserIntent("COMPLETE_TASK")).toBe(false);
+  });
+
+  it("does not match COMPLETE_TASK on negated completion language", () => {
+    expect(matchesUserIntent("COMPLETE_TASK", "I'm not done with the report")).toBe(false);
+  });
+
+  it("does not match PARK_TASK on negated park language", () => {
+    expect(matchesUserIntent("PARK_TASK", "Don't park the report")).toBe(false);
+  });
+
+  it("still matches ADD_TASK on 'don't forget' phrasing", () => {
+    expect(matchesUserIntent("ADD_TASK", "Don't forget to call mom")).toBe(true);
   });
 });
 
@@ -410,6 +429,22 @@ describe("applyCoachActions", () => {
     const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: longTitle }], { ...dateOpts, lastUserMessage: "Add a task for this." });
     expect(next.tasks).toHaveLength(1);
     expect(next.tasks[0].title).toBe("x".repeat(300));
+    expect(results[0].matched).toBe(true);
+  });
+
+  it("ADD_TASK is blocked by Evening Guard at or after 8 PM", () => {
+    const payload = { tasks: [], config: { eveningGuardWindowActive: true }, contributions: [] };
+    const now = new Date(2026, 5, 13, 20, 30).getTime(); // 8:30 PM
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: "Call the dentist" }], { ...dateOpts, lastUserMessage: "Add a task to call the dentist.", now });
+    expect(next).toBe(payload);
+    expect(results).toEqual([{ type: "ADD_TASK", title: "Call the dentist", matched: false, eveningGuardBlocked: true }]);
+  });
+
+  it("ADD_TASK proceeds when Evening Guard is active but it's before 8 PM", () => {
+    const payload = { tasks: [], config: { eveningGuardWindowActive: true }, contributions: [] };
+    const now = new Date(2026, 5, 13, 19, 30).getTime(); // 7:30 PM
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: "Call the dentist" }], { ...dateOpts, lastUserMessage: "Add a task to call the dentist.", now });
+    expect(next.tasks).toHaveLength(1);
     expect(results[0].matched).toBe(true);
   });
 

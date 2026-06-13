@@ -18,7 +18,7 @@ import { buildToggleCompletedTasks } from "./taskOps";
 import { isActiveLociTask } from "./lociAIContext";
 import { safeUUID } from "./uuid";
 
-const ACTION_TAG_RE = /\s*\[\[(SET_NOW_FOCUS|COMPLETE_TASK|ADD_TASK|PARK_TASK|START_FOCUS):\s*([^\]]+?)\s*\]\]/gi;
+const ACTION_TAG_RE = /\s*\[\[(SET_NOW_FOCUS|COMPLETE_TASK|ADD_TASK|PARK_TASK|START_FOCUS):\s*((?:[^\]]|\](?!\]))+?)\s*\]\]/gi;
 
 // Strips all recognized coach action tags from an AI reply. Returns
 // { cleanText, actions } where actions is an ordered list of
@@ -49,9 +49,18 @@ const INTENT_PATTERNS = {
   PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|skip)\b/i,
 };
 
+// Catches negated phrasing ("I'm not done", "don't park it") immediately
+// before an intent match, so e.g. "not done" doesn't register as COMPLETE_TASK.
+const NEGATION_RE = /\b(not|never|cannot|no longer)\b|n't/i;
+
 export function matchesUserIntent(actionType, lastUserMessage = "") {
   const pattern = INTENT_PATTERNS[actionType];
-  return !!pattern && pattern.test(String(lastUserMessage || ""));
+  if (!pattern) return false;
+  const message = String(lastUserMessage || "");
+  const match = pattern.exec(message);
+  if (!match) return false;
+  const preceding = message.slice(Math.max(0, match.index - 20), match.index);
+  return !NEGATION_RE.test(preceding);
 }
 
 // Exact-title-only match against active tasks — used to detect "obvious"
@@ -153,7 +162,7 @@ function buildCompleteTaskPayload(payload, task, lociDateStr, localDateStr) {
 // each step so e.g. "complete X, then focus on Y" composes correctly.
 // Returns { payload, results } where results mirrors `actions` with a
 // `matched` flag (and the matched `task`, where applicable) for each entry.
-export function applyCoachActions(payload, actions, { lociDateStr, localDateStr, lastUserMessage = "" } = {}) {
+export function applyCoachActions(payload, actions, { lociDateStr, localDateStr, lastUserMessage = "", now = Date.now() } = {}) {
   let nextPayload = payload;
   const results = [];
 
@@ -169,7 +178,12 @@ export function applyCoachActions(payload, actions, { lociDateStr, localDateStr,
         results.push({ ...action, matched: false });
         continue;
       }
-      nextPayload = buildAddTaskPayload(nextPayload, title);
+      // Mirrors AddTaskDialog's Evening Guard block: no new tasks at/after 8 PM.
+      if (nextPayload.config?.eveningGuardWindowActive && new Date(now).getHours() >= 20) {
+        results.push({ ...action, matched: false, eveningGuardBlocked: true });
+        continue;
+      }
+      nextPayload = buildAddTaskPayload(nextPayload, title, now);
       results.push({ ...action, matched: true });
       continue;
     }
