@@ -29,6 +29,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   const [editedMorningRitualStart, setEditedMorningRitualStart] = useState(config.morningRitualWindowStart || "05:00");
   const [editedMorningRitualEnd, setEditedMorningRitualEnd] = useState(config.morningRitualWindowEnd || "11:00");
   const [editedMorningRitualEnabled, setEditedMorningRitualEnabled] = useState(config.morningRitualEnabled !== false);
+  const [editedCoachNudgesEnabled, setEditedCoachNudgesEnabled] = useState(config.coachNudgesEnabled !== false);
   const [editedHeaderStyle, setEditedHeaderStyle] = useState(
     config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full")
   );
@@ -49,6 +50,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
     setEditedMorningRitualStart(config.morningRitualWindowStart || "05:00");
     setEditedMorningRitualEnd(config.morningRitualWindowEnd || "11:00");
     setEditedMorningRitualEnabled(config.morningRitualEnabled !== false);
+    setEditedCoachNudgesEnabled(config.coachNudgesEnabled !== false);
     setEditedHeaderStyle(config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full"));
     setEditedToolsStyle(config.toolsStyle || "inline");
     setEditedDeadlineLabel(config.deadlineLabel || "");
@@ -58,7 +60,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
       config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType,
       config.focusWindows,
-      config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualEnabled, config.headerStyle, config.toolsStyle,
+      config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualEnabled, config.coachNudgesEnabled, config.headerStyle, config.toolsStyle,
       config.deadlineLabel, config.deadlineDate,
       config.deadlineStartDate, config.deadlineAction]);
 
@@ -175,6 +177,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
       morningRitualWindowStart: morningRitualValid ? editedMorningRitualStart : "05:00",
       morningRitualWindowEnd: morningRitualValid ? editedMorningRitualEnd : "11:00",
       morningRitualEnabled: editedMorningRitualEnabled,
+      coachNudgesEnabled: editedCoachNudgesEnabled,
       headerStyle: editedHeaderStyle,
       toolsStyle: editedToolsStyle,
       roadmapStyle: "compact",
@@ -421,6 +424,22 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
               </p>
             </div>
             <input type="checkbox" className="pill-toggle" checked={editedMorningRitualEnabled} readOnly />
+          </div>
+
+          <div
+            className="toggle-row"
+            onClick={() => setEditedCoachNudgesEnabled(!editedCoachNudgesEnabled)}
+            style={{ cursor: "pointer" }}
+          >
+            <div>
+              <span style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--text-primary)" }}>
+                🤖 Proactive coach nudges
+              </span>
+              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                Let your coach speak up first — a once-a-day banner on Today when it notices something worth flagging (a missed deadline move, a pinned focus task, an overloaded day). Skipped during Low Energy Mode and Evening Guard.
+              </p>
+            </div>
+            <input type="checkbox" className="pill-toggle" checked={editedCoachNudgesEnabled} readOnly />
           </div>
 
           <div className="form-group">
