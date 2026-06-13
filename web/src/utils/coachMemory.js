@@ -18,7 +18,9 @@ const RECENT_OBSERVATIONS_IN_PROMPT = 10;
 const MEMORY_ENTRY_MAX_LENGTH = 200;
 
 function appendCapped(list = [], text, max, extra = {}) {
-  const trimmed = String(text || "").trim().slice(0, MEMORY_ENTRY_MAX_LENGTH);
+  // Collapse newlines/control chars so a memory entry can't break out of its
+  // bullet line and inject extra "lines" into the system prompt.
+  const trimmed = String(text || "").replace(/[\s\x00-\x1f\x7f]+/g, " ").trim().slice(0, MEMORY_ENTRY_MAX_LENGTH);
   if (!trimmed) return list;
   const next = [...list, { text: trimmed, ...extra }];
   while (next.length > max) next.shift();
