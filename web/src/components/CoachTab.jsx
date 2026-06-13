@@ -254,14 +254,22 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
           notes.push(`I'll only do that when you explicitly ask — just say the word and I will.`);
         }
 
-        if (results.every(r => !r.matched)) {
-          // Nothing was actually applied — the model's narration above may describe
-          // an action that didn't happen, so replace it entirely rather than append.
-          replyText = notes.join(" ");
-        } else {
-          for (const note of notes) {
-            replyText = `${replyText}\n\n(${note})`.trim();
-          }
+        if (!results.every(r => r.matched)) {
+          // At least one action failed — the model's narration above may describe
+          // a failed action as if it succeeded (or vice versa), so replace it
+          // entirely with deterministic per-action summaries rather than append.
+          const successLines = results.filter(r => r.matched).map(r => {
+            const title = r.task ? r.task.title : r.title;
+            switch (r.type) {
+              case "SET_NOW_FOCUS": return `Switched your focus to "${title}".`;
+              case "START_FOCUS": return `Started a focus session on "${title}".`;
+              case "COMPLETE_TASK": return `Marked "${title}" complete — +100 XP!`;
+              case "ADD_TASK": return `Added "${title}" to your Today list.`;
+              case "PARK_TASK": return `Parked "${title}" for later.`;
+              default: return null;
+            }
+          }).filter(Boolean);
+          replyText = [...successLines, ...notes].join(" ");
         }
       }
 
