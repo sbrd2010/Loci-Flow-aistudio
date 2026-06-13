@@ -89,6 +89,11 @@ export function findTaskByTitle(tasks = [], rawTitle = "") {
   if (exact.length === 1) return exact[0];
   if (exact.length > 1) return null;
 
+  // Below this length, substring matching is too loose to be meaningful (e.g. a
+  // tag title of "it" would substring-match almost any task) — require an exact
+  // title match for short fragments instead.
+  if (target.length < 4) return null;
+
   const partial = active.filter(t => {
     const norm = normalizeTitle(t.title);
     return norm.includes(target) || target.includes(norm);

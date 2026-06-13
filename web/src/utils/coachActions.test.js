@@ -111,6 +111,15 @@ describe("findTaskByTitle", () => {
     expect(findTaskByTitle(tasks, "Walk the dog")).toBeNull();
   });
 
+  it("does not substring-match a tiny pronoun-like title (e.g. 'it')", () => {
+    expect(findTaskByTitle(tasks, "it")).toBeNull();
+  });
+
+  it("still matches an exact short title even though it's below the fuzzy-match length", () => {
+    const short = [{ uuid: "1", title: "Gym", isCompleted: false, isDeleted: false, isParked: false }];
+    expect(findTaskByTitle(short, "gym")).toBe(short[0]);
+  });
+
   it("returns null for an empty title", () => {
     expect(findTaskByTitle(tasks, "")).toBeNull();
   });
@@ -279,6 +288,17 @@ describe("applyCoachActions", () => {
     };
     const { payload: next } = applyCoachActions(payload, [{ type: "COMPLETE_TASK", title: "Write report" }], { ...dateOpts, lastUserMessage: "Done with the report!" });
     expect(next.contributions).toEqual([expect.objectContaining({ dateString: "2026-06-13", count: 3 })]);
+  });
+
+  it("COMPLETE_TASK with a pronoun-like title ('it') does not complete an unrelated task", () => {
+    const payload = {
+      tasks: [{ uuid: "1", title: "Write report", isCompleted: false, isDeleted: false, isParked: false }],
+      config: { totalXp: 100 },
+      contributions: [],
+    };
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "COMPLETE_TASK", title: "it" }], { ...dateOpts, lastUserMessage: "I finished it." });
+    expect(next).toBe(payload);
+    expect(results).toEqual([{ type: "COMPLETE_TASK", title: "it", matched: false }]);
   });
 
   it("returns matched: false and leaves the payload untouched when no task matches", () => {

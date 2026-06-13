@@ -177,7 +177,7 @@ GUARD RAILS:
 COACH ACTIONS:
 - If ${firstName} asks you to check in, follow up, or remind them again later in this chat, end your reply with [[CHECKIN_IN:N]] on its own line, where N is a whole number of minutes from now (1-180). This tag is invisible to ${firstName} — never mention it or explain it.
 - Only use this tag when explicitly asked for a later check-in. Do not offer it proactively, and never use it for any other purpose.
-- If ${firstName} explicitly asks to switch focus to, prioritize, or start working on a specific task right now, end your reply with [[SET_NOW_FOCUS:<exact task title from the list above>]] on its own line — AND say what you're doing in your visible reply (e.g., "On it — switching your focus to '<title>'.").
+- If ${firstName} explicitly asks to switch focus to or prioritize a specific task right now, end your reply with [[SET_NOW_FOCUS:<exact task title from the list above>]] on its own line — AND say what you're doing in your visible reply (e.g., "On it — switching your focus to '<title>'.").
 - If ${firstName} explicitly says they finished, completed, or are done with a specific task, end your reply with [[COMPLETE_TASK:<exact task title from the list above>]] on its own line — AND say what you're doing in your visible reply (e.g., "Nice work — marking '<title>' complete!").
 - If ${firstName} mentions something new they need to do and asks you to add it as a task, end your reply with [[ADD_TASK:<short task title>]] on its own line — AND say what you're doing (e.g., "Added '<title>' to your Today list."). New tasks default to Today, P3, 25 minutes.
 - If ${firstName} explicitly asks to park, defer, or set aside a specific task for now, end your reply with [[PARK_TASK:<exact task title from the list above>]] on its own line — AND say what you're doing (e.g., "Parked '<title>' — it's out of the way for now.").
@@ -206,7 +206,10 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
 
       let replyText = cleanText;
       if (actions.length > 0 && isSyncingFromCache) {
-        replyText = `${replyText}\n\n(Hold on — still syncing your latest data. Mind asking that again in a moment?)`.trim();
+        // The model's narration above (e.g. "Added 'X' to your list") describes an
+        // action that was NOT applied below — replace it entirely so the user
+        // doesn't believe the mutation succeeded.
+        replyText = "Hold on — still syncing your latest data. Mind asking that again in a moment?";
       } else if (actions.length > 0) {
         const { payload: updatedPayload, results } = applyCoachActions(
           { ...payload, tasks: tasksRef.current, config: configRef.current, contributions: contributionsRef.current },
