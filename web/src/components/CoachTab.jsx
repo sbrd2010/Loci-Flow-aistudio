@@ -89,7 +89,7 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
       if (!isCheckinDue(checkin)) return;
       const resumeMsg = buildCheckinResumeMessage(firstName, checkin.note);
       saveSubPath("chatHistory", [...chatHistoryRef.current, { text: resumeMsg, isUser: false }]);
-      saveSubPath("config", { ...configRef.current, coachCheckin: null, lastUpdated: Date.now() });
+      saveConfigPatch({ coachCheckin: null });
       cancelCoachCheckin();
     };
     checkDue();
@@ -111,7 +111,7 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
     const nudge = configRef.current.pendingCoachNudge;
     if (!shouldDeliverPendingCoachNudge(nudge, deliveredNudgeRef.current)) return;
     deliveredNudgeRef.current = nudge;
-    saveSubPath("config", { ...configRef.current, pendingCoachNudge: null, lastUpdated: Date.now() });
+    saveConfigPatch({ pendingCoachNudge: null });
     if (isPendingCoachNudgeStale(nudge, payload)) return;
 
     const deliver = (text, voiced) => {
