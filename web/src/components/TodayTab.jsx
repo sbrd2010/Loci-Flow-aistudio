@@ -336,7 +336,7 @@ export default function TodayTab({
   }, [
     anchors.length, todayShownSlotsKey, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending,
     isAddTaskDialogOpen, showAnchorSheet, showDailyCheckin, showRescue, config.anchorsSnoozeUntil,
-    config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, visibilityTick,
+    config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, config.morningRitualEnabled, visibilityTick,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Daily Coach Check-ins auto-show (Today's Commitment / Progress Check / Day Close) ──
@@ -361,7 +361,7 @@ export default function TodayTab({
   }, [
     anchorTodayStr, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, isAddTaskDialogOpen,
     showAnchorSheet, showDailyCheckin, config.anchorsSnoozeUntil,
-    config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, visibilityTick,
+    config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, config.morningRitualEnabled, visibilityTick,
     config.dailyCommitmentDate, config.dailyCommitmentSkippedDate, config.dailyCommitmentSnoozeUntil, config.dailyCommitmentTaskIds,
     config.dailyMiddayCheckDate, config.dailyMiddayCheckSnoozeUntil, config.dailyReflectionDate,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1346,6 +1346,12 @@ export default function TodayTab({
               )}
               <div className="morning-ritual-actions">
                 <button className="morning-ritual-btn-primary" onClick={handleAnchorSheetDone}>Done</button>
+                <button className="morning-ritual-btn-secondary" onClick={() => {
+                  saveSubPath("config", { ...config, ...buildMorningRitualDoneConfig(), lastUpdated: Date.now() });
+                  setShowAnchorSheet(false);
+                  setAnchorSheetSlot(null);
+                  onOpenMindBox?.("ritual");
+                }}>Start Morning Ritual &#8594;</button>
                 <div className="morning-ritual-actions-row">
                   <button className="morning-ritual-btn-ghost" onClick={handleAnchorLater}>Later</button>
                   <button className="morning-ritual-btn-ghost" onClick={() => { setShowAnchorSheet(false); setAnchorSheetSlot(null); onOpenMindBox?.("anchors"); }}>Manage</button>

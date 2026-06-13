@@ -16,14 +16,41 @@ function getLocalDateStr(date) {
 }
 
 // Rotating short copy for the centered Morning Ritual popup. Deterministic
-// per calendar day, like getAnchorVariant in dailyAnchors.js.
+// per calendar day, like getAnchorVariant in dailyAnchors.js. The vibe:
+// today is the only guaranteed day, yesterday doesn't define you, and you
+// are capable of winning it — including pushing back on self-doubt and
+// outside negativity.
 const MORNING_RITUAL_VARIANTS = [
-  { title: "Start the day gently", line: "One small step is still a step." },
-  { title: "Morning reset", line: "A clear start makes the rest easier." },
-  { title: "Begin again", line: "Today is a fresh page." },
-  { title: "Ease in", line: "Small and steady wins the day." },
-  { title: "Set the tone", line: "A calm start shapes a calm day." },
-  { title: "First things first", line: "One step now is enough." },
+  { title: "Today is yours", line: "Yesterday is gone, tomorrow isn't promised. Today is real — make it count." },
+  { title: "A clean page", line: "However yesterday went, today starts new. You've got this." },
+  { title: "Believe in yourself", line: "You're capable of more than you know. Today, prove it to yourself." },
+  { title: "Only today is guaranteed", line: "So show up for it fully, one step at a time." },
+  { title: "You will win today", line: "Not someday — today. Decide it now, and go." },
+  { title: "Fresh start", line: "Every sunrise is a second chance. This one is yours." },
+  { title: "Today counts", line: "No matter what happened before, this day is untouched. Begin well." },
+  { title: "You're capable", line: "Of focus. Of finishing. Of a good day. Start now." },
+  { title: "This is your day", line: "Show up for yourself, and the day will show up for you." },
+  { title: "Trust today", line: "It doesn't know about yesterday. Meet it with a clear mind." },
+  { title: "A new chapter", line: "Every morning rewrites the story. Make today a good page." },
+  { title: "Today is enough", line: "You don't need to fix everything — just begin one thing well." },
+  { title: "You've got this", line: "Whatever's ahead, you're more ready than you feel." },
+  { title: "Make it beautiful", line: "A good day starts with a good first hour. Start it now." },
+  { title: "Be here, today", line: "Not yesterday's weight, not tomorrow's worry — just today." },
+  { title: "Start strong", line: "One calm, focused step now sets the tone for everything after." },
+  { title: "Today is real", line: "Yesterday's a memory, tomorrow's a guess. This day is in your hands." },
+  { title: "Today, you win", line: "Small wins count. Pick one, and get moving." },
+  { title: "A quiet confidence", line: "You don't need to feel ready. You just need to begin." },
+  { title: "One good day", line: "Fully live this one day — that's more than enough." },
+  { title: "Your potential isn't a debate", line: "What others think of you has nothing to do with what you're capable of." },
+  { title: "You earned it", line: "That win wasn't luck. You showed up and did the work — own it." },
+  { title: "Not a fraud", line: "Self-doubt after success doesn't mean it wasn't real. It was." },
+  { title: "Don't borrow their doubt", line: "Other people's negativity is their story — not your truth." },
+  { title: "Setbacks aren't verdicts", line: "Trying to grow means risking disappointment. That's growth, not failure." },
+  { title: "Protect your belief", line: "The world doesn't get to decide your worth. Only you do." },
+  { title: "Quiet the noise", line: "Criticism is loud. Your potential is quieter — and it's still there." },
+  { title: "You belong here", line: "Whatever you've achieved, you earned the right to be here." },
+  { title: "Rise above it", line: "Let others doubt. You already know what you're capable of." },
+  { title: "Stay yours", line: "However the world treats you today, it doesn't get to write your story." },
 ];
 
 export function getMorningRitualVariant(now = new Date()) {
@@ -56,11 +83,12 @@ export function isMorningRitualWindow(now, config = {}) {
   return nowMin >= startMin && nowMin < endMin;
 }
 
-// Whether the Morning Ritual popup should be shown right now: inside the
-// configured wall-clock window, not already shown today (local calendar
-// date), and not snoozed (Later). Independent of Focus Windows and Daily
-// Anchors slot/snooze state.
+// Whether the Morning Ritual popup should be shown right now: enabled in
+// Settings (default on), inside the configured wall-clock window, not
+// already shown today (local calendar date), and not snoozed (Later).
+// Independent of Focus Windows and Daily Anchors slot/snooze state.
 export function shouldShowMorningRitual(now, config = {}) {
+  if (config?.morningRitualEnabled === false) return false;
   if (!isMorningRitualWindow(now, config)) return false;
   if (config?.morningRitualShownDate === getLocalDateStr(now)) return false;
   const snoozeUntil = config?.morningRitualSnoozeUntil;
