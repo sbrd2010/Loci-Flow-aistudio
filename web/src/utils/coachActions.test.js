@@ -439,6 +439,13 @@ describe("applyCoachActions", () => {
     expect(results).toEqual([{ type: "ADD_TASK", title: "Buy groceries", matched: false, blocked: true }]);
   });
 
+  it("blocks ADD_TASK with a short (3-letter) title that doesn't match the task the user described", () => {
+    const payload = { tasks: [], config: {}, contributions: [] };
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: "Gym" }], { ...dateOpts, lastUserMessage: "Add Tax to my list." });
+    expect(next).toBe(payload);
+    expect(results).toEqual([{ type: "ADD_TASK", title: "Gym", matched: false, blocked: true }]);
+  });
+
   it("COMPLETE_TASK on an already-completed task is a no-op (idempotent)", () => {
     const payload = {
       tasks: [

@@ -64,12 +64,12 @@ const NON_SPECIFIC_COMPLETION_RE = /\b(done|finished?)\s+for\s+(today|now|the da
 // a different new task than the one the user just described).
 const TITLE_CHECK_TYPES = new Set(["SET_NOW_FOCUS", "START_FOCUS", "COMPLETE_TASK", "PARK_TASK", "ADD_TASK"]);
 
-// Checks that at least one "significant" word (length >= 4) from the tag's
+// Checks that at least one "significant" word (length >= 3) from the tag's
 // title appears in the user's message. Titles with no significant words
 // (e.g. "it") are passed through — findTaskByTitle's own length guard
 // handles those.
 function titleMentionedInMessage(title, message) {
-  const words = normalizeTitle(title).split(" ").filter(w => w.length >= 4);
+  const words = normalizeTitle(title).split(" ").filter(w => w.length >= 3);
   if (words.length === 0) return true;
   const normMessage = normalizeTitle(message);
   return words.some(w => normMessage.includes(w));
