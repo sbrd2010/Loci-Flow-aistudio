@@ -8,6 +8,7 @@ import { getFocusWindows } from "../utils/focusWindows";
 import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin, cancelCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, buildCheckinResumeMessage } from "../utils/coachCheckin";
+import { parseCoachActionTags, applyCoachActions } from "../utils/coachActions";
 
 export default function CoachTab({ payload, savePayload, saveSubPath, userProfile, focusTimer = {} }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
@@ -172,6 +173,10 @@ GUARD RAILS:
 COACH ACTIONS:
 - If ${firstName} asks you to check in, follow up, or remind them again later in this chat, end your reply with [[CHECKIN_IN:N]] on its own line, where N is a whole number of minutes from now (1-180). This tag is invisible to ${firstName} — never mention it or explain it.
 - Only use this tag when explicitly asked for a later check-in. Do not offer it proactively, and never use it for any other purpose.
+- If ${firstName} explicitly asks to switch focus to, prioritize, or start working on a specific task right now, end your reply with [[SET_NOW_FOCUS:<exact task title from the list above>]] on its own line — AND say what you're doing in your visible reply (e.g., "On it — switching your focus to '<title>'.").
+- If ${firstName} explicitly says they finished, completed, or are done with a specific task, end your reply with [[COMPLETE_TASK:<exact task title from the list above>]] on its own line — AND say what you're doing in your visible reply (e.g., "Nice work — marking '<title>' complete!").
+- Only use SET_NOW_FOCUS or COMPLETE_TASK when ${firstName} explicitly asks for that action, and only for a task that actually appears in their task list above. Never use them proactively or to guess at what they mean.
+- All of these tags are stripped automatically and never shown to ${firstName}. Unlike CHECKIN_IN, a SET_NOW_FOCUS or COMPLETE_TASK tag must always be paired with a visible sentence describing the action you took.
 
 LANGUAGE: Never use the word "ADHD". Use instead: focus challenge, overwhelm, execution support, momentum, time awareness, micro-step, reset, low-energy mode.
 ${profileToCoachContext(userProfile) ? `\n${profileToCoachContext(userProfile)}\n` : ""}
@@ -181,16 +186,40 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
 
     try {
       const reply = await callAI({ groqKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens: 300 });
-      const { cleanText, minutes } = parseCheckinTag(reply.trim());
+      const { cleanText: afterCheckin, minutes } = parseCheckinTag(reply.trim());
+      const { cleanText, actions } = parseCoachActionTags(afterCheckin);
 
+      let configPatch = null;
       if (minutes != null) {
         const checkin = buildCoachCheckin(minutes, pickCheckinNote(todayActive));
-        saveSubPath("config", { ...configRef.current, coachCheckin: checkin, lastUpdated: Date.now() });
+        configPatch = { ...configPatch, coachCheckin: checkin };
         scheduleCoachCheckin(checkin);
         requestNotifPermission();
       }
 
-      saveSubPath("chatHistory", [...chatHistoryRef.current, { text: cleanText || "Got it.", isUser: false }]);
+      let replyText = cleanText;
+      if (actions.length > 0) {
+        const { payload: updatedPayload, results } = applyCoachActions(
+          { ...payload, tasks, config, contributions },
+          actions,
+          { lociDateStr: todayStr, localDateStr: getLocalDateString(now) }
+        );
+        if (updatedPayload.tasks !== tasks) saveSubPath("tasks", updatedPayload.tasks);
+        if (updatedPayload.contributions !== contributions) saveSubPath("contributions", updatedPayload.contributions);
+        if (updatedPayload.config.totalXp !== config.totalXp) {
+          configPatch = { ...configPatch, totalXp: updatedPayload.config.totalXp };
+        }
+        const unmatched = results.filter(r => !r.matched);
+        if (unmatched.length > 0) {
+          replyText = `${replyText}\n\n(I couldn't find ${unmatched.map(r => `"${r.title}"`).join(" or ")} in your task list — could you double-check the name?)`.trim();
+        }
+      }
+
+      if (configPatch) {
+        saveSubPath("config", { ...configRef.current, ...configPatch, lastUpdated: Date.now() });
+      }
+
+      saveSubPath("chatHistory", [...chatHistoryRef.current, { text: replyText || "Got it.", isUser: false }]);
     } catch (err) {
       const hint = err.message === "429" ? "Rate limit — wait 30 sec and retry." : err.message === "503" ? "AI server busy — try again." : err.message === "no_key" ? "Add an AI key in Settings." : `AI error ${err.message}`;
       saveSubPath("chatHistory", [...chatHistoryRef.current, { text: hint, isUser: false }]);
