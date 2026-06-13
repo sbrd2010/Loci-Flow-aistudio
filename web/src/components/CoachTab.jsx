@@ -175,8 +175,11 @@ COACH ACTIONS:
 - Only use this tag when explicitly asked for a later check-in. Do not offer it proactively, and never use it for any other purpose.
 - If ${firstName} explicitly asks to switch focus to, prioritize, or start working on a specific task right now, end your reply with [[SET_NOW_FOCUS:<exact task title from the list above>]] on its own line — AND say what you're doing in your visible reply (e.g., "On it — switching your focus to '<title>'.").
 - If ${firstName} explicitly says they finished, completed, or are done with a specific task, end your reply with [[COMPLETE_TASK:<exact task title from the list above>]] on its own line — AND say what you're doing in your visible reply (e.g., "Nice work — marking '<title>' complete!").
-- Only use SET_NOW_FOCUS or COMPLETE_TASK when ${firstName} explicitly asks for that action, and only for a task that actually appears in their task list above. Never use them proactively or to guess at what they mean.
-- All of these tags are stripped automatically and never shown to ${firstName}. Unlike CHECKIN_IN, a SET_NOW_FOCUS or COMPLETE_TASK tag must always be paired with a visible sentence describing the action you took.
+- If ${firstName} mentions something new they need to do and asks you to add it as a task, end your reply with [[ADD_TASK:<short task title>]] on its own line — AND say what you're doing (e.g., "Added '<title>' to your Today list."). New tasks default to Today, P3, 25 minutes.
+- If ${firstName} explicitly asks to park, defer, or set aside a specific task for now, end your reply with [[PARK_TASK:<exact task title from the list above>]] on its own line — AND say what you're doing (e.g., "Parked '<title>' — it's out of the way for now.").
+- If ${firstName} explicitly asks you to start a focus session, start the timer, or start working on a specific task right now, end your reply with [[START_FOCUS:<exact task title from the list above>]] on its own line — AND say what you're doing (e.g., "Starting a focus session on '<title>' now — go!").
+- Only use SET_NOW_FOCUS, COMPLETE_TASK, ADD_TASK, PARK_TASK, or START_FOCUS when ${firstName} explicitly asks for that action, and (except for ADD_TASK) only for a task that actually appears in their task list above. Never use them proactively or to guess at what they mean.
+- All of these tags are stripped automatically and never shown to ${firstName}. Unlike CHECKIN_IN, these action tags must always be paired with a visible sentence describing the action you took.
 
 LANGUAGE: Never use the word "ADHD". Use instead: focus challenge, overwhelm, execution support, momentum, time awareness, micro-step, reset, low-energy mode.
 ${profileToCoachContext(userProfile) ? `\n${profileToCoachContext(userProfile)}\n` : ""}
@@ -208,6 +211,11 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         if (updatedPayload.contributions !== contributions) saveSubPath("contributions", updatedPayload.contributions);
         if (updatedPayload.config.totalXp !== config.totalXp) {
           configPatch = { ...configPatch, totalXp: updatedPayload.config.totalXp };
+        }
+        const startFocus = results.find(r => r.type === "START_FOCUS" && r.matched);
+        if (startFocus && typeof focusTimer.extendTimer === "function") {
+          const mins = Number(startFocus.task.timeEstimateMinutes) > 0 ? Number(startFocus.task.timeEstimateMinutes) : 25;
+          focusTimer.extendTimer(mins);
         }
         const unmatched = results.filter(r => !r.matched);
         if (unmatched.length > 0) {

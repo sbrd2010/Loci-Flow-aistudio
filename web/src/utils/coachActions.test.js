@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, applyCoachActions } from "./coachActions";
+import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, buildParkTaskTasks, applyCoachActions } from "./coachActions";
 
 describe("parseCoachActionTags", () => {
   it("returns no actions and the original text when no tag is present", () => {
@@ -41,6 +41,27 @@ describe("parseCoachActionTags", () => {
         { type: "COMPLETE_TASK", title: "Email client" },
         { type: "SET_NOW_FOCUS", title: "Write report" },
       ],
+    });
+  });
+
+  it("extracts an ADD_TASK tag", () => {
+    expect(parseCoachActionTags("Added it!\n[[ADD_TASK:Call the dentist]]")).toEqual({
+      cleanText: "Added it!",
+      actions: [{ type: "ADD_TASK", title: "Call the dentist" }],
+    });
+  });
+
+  it("extracts a PARK_TASK tag", () => {
+    expect(parseCoachActionTags("Parked it.\n[[PARK_TASK:Write report]]")).toEqual({
+      cleanText: "Parked it.",
+      actions: [{ type: "PARK_TASK", title: "Write report" }],
+    });
+  });
+
+  it("extracts a START_FOCUS tag", () => {
+    expect(parseCoachActionTags("Starting now!\n[[START_FOCUS:Write report]]")).toEqual({
+      cleanText: "Starting now!",
+      actions: [{ type: "START_FOCUS", title: "Write report" }],
     });
   });
 });
@@ -106,6 +127,16 @@ describe("buildSetNowFocusTasks", () => {
   });
 });
 
+describe("buildParkTaskTasks", () => {
+  it("parks the target task and unpins it, leaving others untouched", () => {
+    const target = { uuid: "1", title: "A", isParked: false, isNowFocus: true };
+    const other = { uuid: "2", title: "B", isParked: false, isNowFocus: false };
+    const result = buildParkTaskTasks([target, other], "1", 1000);
+    expect(result[0]).toEqual({ uuid: "1", title: "A", isParked: true, isNowFocus: false, lastUpdated: 1000 });
+    expect(result[1]).toBe(other);
+  });
+});
+
 describe("applyCoachActions", () => {
   const dateOpts = { lociDateStr: "2026-06-13", localDateStr: "2026-06-13" };
 
@@ -163,6 +194,63 @@ describe("applyCoachActions", () => {
     const { payload: next, results } = applyCoachActions(payload, [{ type: "COMPLETE_TASK", title: "Walk the dog" }], dateOpts);
     expect(next).toBe(payload);
     expect(results).toEqual([{ type: "COMPLETE_TASK", title: "Walk the dog", matched: false }]);
+  });
+
+  it("ADD_TASK appends a new Today task with sensible defaults", () => {
+    const payload = {
+      userId: "user-1",
+      tasks: [
+        { uuid: "1", title: "Existing", horizonLevel: "today", isCompleted: false, isDeleted: false, isParked: false },
+      ],
+      config: {},
+      contributions: [],
+    };
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: "Call the dentist" }], dateOpts);
+    expect(next.tasks).toHaveLength(2);
+    const added = next.tasks[1];
+    expect(added).toMatchObject({
+      title: "Call the dentist",
+      horizonLevel: "today",
+      priority: "P3",
+      timeEstimateMinutes: 25,
+      isCompleted: false,
+      isParked: false,
+      isNowFocus: false,
+      orderIndex: 1,
+      userId: "user-1",
+    });
+    expect(added.uuid).toBeTruthy();
+    expect(results).toEqual([{ type: "ADD_TASK", title: "Call the dentist", matched: true }]);
+  });
+
+  it("PARK_TASK parks the matched task and unpins it", () => {
+    const payload = {
+      tasks: [
+        { uuid: "1", title: "Write report", isNowFocus: true, isParked: false, isCompleted: false, isDeleted: false },
+      ],
+      config: {},
+      contributions: [],
+    };
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "PARK_TASK", title: "Write report" }], dateOpts);
+    expect(next.tasks[0].isParked).toBe(true);
+    expect(next.tasks[0].isNowFocus).toBe(false);
+    expect(results[0].matched).toBe(true);
+  });
+
+  it("START_FOCUS pins the matched task as Now Focus", () => {
+    const payload = {
+      tasks: [
+        { uuid: "1", title: "Write report", isNowFocus: false, isCompleted: false, isDeleted: false, isParked: false },
+        { uuid: "2", title: "Email client", isNowFocus: true, isCompleted: false, isDeleted: false, isParked: false },
+      ],
+      config: {},
+      contributions: [],
+    };
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "START_FOCUS", title: "Write report" }], dateOpts);
+    expect(next.tasks.find(t => t.uuid === "1").isNowFocus).toBe(true);
+    expect(next.tasks.find(t => t.uuid === "2").isNowFocus).toBe(false);
+    expect(results[0].matched).toBe(true);
+    expect(results[0].task.uuid).toBe("1");
   });
 
   it("applies multiple actions in order: completing the Now Focus task, then pinning the next one", () => {
