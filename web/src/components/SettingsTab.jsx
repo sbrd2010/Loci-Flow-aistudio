@@ -420,7 +420,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
                 A daily motivational nudge (with a rotating quote and a link to your Mind Box morning ritual) on your first app open of the day.
               </p>
             </div>
-            <input type="checkbox" className="pill-toggle" checked={editedMorningRitualEnabled} onChange={() => setEditedMorningRitualEnabled(v => !v)} />
+            <input type="checkbox" className="pill-toggle" checked={editedMorningRitualEnabled} readOnly />
           </div>
 
           <div className="form-group">
