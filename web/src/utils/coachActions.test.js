@@ -203,6 +203,11 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("ADD_TASK", "What's on my list?")).toBe(false);
   });
 
+  it("matches ADD_TASK on 'add X to my list' / 'put X on my list' phrasing", () => {
+    expect(matchesUserIntent("ADD_TASK", "add Call dentist to my Today list")).toBe(true);
+    expect(matchesUserIntent("ADD_TASK", "put Call dentist on my list")).toBe(true);
+  });
+
   it("matches PARK_TASK on park/defer language", () => {
     expect(matchesUserIntent("PARK_TASK", "Park the report for now")).toBe(true);
     expect(matchesUserIntent("PARK_TASK", "Tell me about the report")).toBe(false);
@@ -239,6 +244,15 @@ describe("matchesUserIntent", () => {
 
   it("does not match COMPLETE_TASK on a question about past completions", () => {
     expect(matchesUserIntent("COMPLETE_TASK", "What have I done today?")).toBe(false);
+  });
+
+  it("requires the tag's title to be mentioned in the message for task-targeted actions", () => {
+    expect(matchesUserIntent("SET_NOW_FOCUS", "Focus on the report now", "Write report")).toBe(true);
+    expect(matchesUserIntent("SET_NOW_FOCUS", "Focus on the report now", "Email client")).toBe(false);
+  });
+
+  it("does not require a title match for ADD_TASK", () => {
+    expect(matchesUserIntent("ADD_TASK", "Add a task to call the dentist", "Something else entirely")).toBe(true);
   });
 });
 
@@ -399,6 +413,20 @@ describe("applyCoachActions", () => {
     expect(results).toEqual([{ type: "SET_NOW_FOCUS", title: "Write report", matched: false, blocked: true }]);
   });
 
+  it("blocks an action whose tag title doesn't match the task the user named", () => {
+    const payload = {
+      tasks: [
+        { uuid: "1", title: "Write report", isNowFocus: false, isCompleted: false, isDeleted: false, isParked: false },
+        { uuid: "2", title: "Email client", isNowFocus: false, isCompleted: false, isDeleted: false, isParked: false },
+      ],
+      config: {},
+      contributions: [],
+    };
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "SET_NOW_FOCUS", title: "Email client" }], { ...dateOpts, lastUserMessage: "Let's focus on Write report now." });
+    expect(next).toBe(payload);
+    expect(results).toEqual([{ type: "SET_NOW_FOCUS", title: "Email client", matched: false, blocked: true }]);
+  });
+
   it("COMPLETE_TASK on an already-completed task is a no-op (idempotent)", () => {
     const payload = {
       tasks: [
@@ -423,7 +451,7 @@ describe("applyCoachActions", () => {
       contributions: [],
     };
     for (const title of ["Write report", "Email client", "Plan trip"]) {
-      const { payload: next, results } = applyCoachActions(payload, [{ type: "START_FOCUS", title }], { ...dateOpts, lastUserMessage: "Let's start a focus session." });
+      const { payload: next, results } = applyCoachActions(payload, [{ type: "START_FOCUS", title }], { ...dateOpts, lastUserMessage: `Let's start a focus session on ${title}.` });
       expect(next).toBe(payload);
       expect(results).toEqual([{ type: "START_FOCUS", title, matched: false }]);
     }

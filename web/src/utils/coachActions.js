@@ -45,7 +45,7 @@ const INTENT_PATTERNS = {
   COMPLETE_TASK: /\b(done|finish(ed|ing)?|complet(e|ed|ing)|wrapped? up|knocked out)\b/i,
   SET_NOW_FOCUS: /\b(focus on|switch.*focus|prioriti[sz]e|now focus)\b/i,
   START_FOCUS: /\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\b/i,
-  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don'?t forget)\b/i,
+  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don'?t forget|add .+ to (my |the )?(today'?s? )?(list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s? )?(list|tasks?)\b)/i,
   PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|skip)\b/i,
 };
 
@@ -58,7 +58,25 @@ const NEGATION_RE = /\b(not|never|cannot|no longer)\b|n't/i;
 // neither of which names a specific task to complete.
 const NON_SPECIFIC_COMPLETION_RE = /\b(done|finished?)\s+for\s+(today|now|the day)\b|\b(what|anything)\b.*\b(done|finish(ed)?)\b/i;
 
-export function matchesUserIntent(actionType, lastUserMessage = "") {
+// Action types whose tag title must be corroborated by the user's own
+// message (via titleMentionedInMessage) — guards against the AI emitting a
+// tag for a different task than the one the user just named. ADD_TASK is
+// excluded: a new task's title may reference earlier conversation context,
+// not just the last message.
+const TITLE_CHECK_TYPES = new Set(["SET_NOW_FOCUS", "START_FOCUS", "COMPLETE_TASK", "PARK_TASK"]);
+
+// Checks that at least one "significant" word (length >= 4) from the tag's
+// title appears in the user's message. Titles with no significant words
+// (e.g. "it") are passed through — findTaskByTitle's own length guard
+// handles those.
+function titleMentionedInMessage(title, message) {
+  const words = normalizeTitle(title).split(" ").filter(w => w.length >= 4);
+  if (words.length === 0) return true;
+  const normMessage = normalizeTitle(message);
+  return words.some(w => normMessage.includes(w));
+}
+
+export function matchesUserIntent(actionType, lastUserMessage = "", title = "") {
   const pattern = INTENT_PATTERNS[actionType];
   if (!pattern) return false;
   const message = String(lastUserMessage || "");
@@ -66,7 +84,9 @@ export function matchesUserIntent(actionType, lastUserMessage = "") {
   const match = pattern.exec(message);
   if (!match) return false;
   const preceding = message.slice(Math.max(0, match.index - 20), match.index);
-  return !NEGATION_RE.test(preceding);
+  if (NEGATION_RE.test(preceding)) return false;
+  if (TITLE_CHECK_TYPES.has(actionType) && !titleMentionedInMessage(title, message)) return false;
+  return true;
 }
 
 // Exact-title-only match against active tasks — used to detect "obvious"
@@ -178,7 +198,7 @@ export function applyCoachActions(payload, actions, { lociDateStr, localDateStr,
   const results = [];
 
   for (const action of actions) {
-    if (!matchesUserIntent(action.type, lastUserMessage)) {
+    if (!matchesUserIntent(action.type, lastUserMessage, action.title)) {
       results.push({ ...action, matched: false, blocked: true });
       continue;
     }

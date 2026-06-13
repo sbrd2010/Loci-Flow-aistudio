@@ -239,17 +239,23 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         const notFound = results.filter(r => !r.matched && !r.blocked && r.type !== "ADD_TASK");
         const addSkipped = results.filter(r => !r.matched && !r.blocked && r.type === "ADD_TASK" && !r.eveningGuardBlocked);
         const eveningGuardBlocked = results.filter(r => r.eveningGuardBlocked);
-        if (notFound.length > 0) {
-          replyText = `${replyText}\n\n(I couldn't find ${notFound.map(r => `"${r.title}"`).join(" or ")} in your task list — could you double-check the name?)`.trim();
-        }
-        if (addSkipped.length > 0) {
-          replyText = `${replyText}\n\n(Looks like that's already on your list, so I didn't add a duplicate.)`.trim();
-        }
-        if (eveningGuardBlocked.length > 0) {
-          replyText = `${replyText}\n\n(Evening Guard is active, so I didn't add that — it'll be here tomorrow.)`.trim();
-        }
-        if (blocked.length > 0) {
-          replyText = `${replyText}\n\n(I'll only do that when you explicitly ask — just say the word and I will.)`.trim();
+        if (blocked.length === results.length) {
+          // Every tagged action was blocked — the model's narration above describes
+          // actions that were NOT applied, so replace it entirely rather than append.
+          replyText = "I'll only make task changes when you explicitly ask — so nothing changed there. What would you like to do?";
+        } else {
+          if (notFound.length > 0) {
+            replyText = `${replyText}\n\n(I couldn't find ${notFound.map(r => `"${r.title}"`).join(" or ")} in your task list — could you double-check the name?)`.trim();
+          }
+          if (addSkipped.length > 0) {
+            replyText = `${replyText}\n\n(Looks like that's already on your list, so I didn't add a duplicate.)`.trim();
+          }
+          if (eveningGuardBlocked.length > 0) {
+            replyText = `${replyText}\n\n(Evening Guard is active, so I didn't add that — feel free to add it again tomorrow.)`.trim();
+          }
+          if (blocked.length > 0) {
+            replyText = `${replyText}\n\n(I'll only do that when you explicitly ask — just say the word and I will.)`.trim();
+          }
         }
       }
 
