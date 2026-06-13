@@ -8,6 +8,11 @@
 // [[ADD_TASK:<title>]]      - create a new Today task (P3, 25min default)
 // [[PARK_TASK:<title>]]     - park a task (mirrors Bad Day Reset's per-task patch)
 // [[START_FOCUS:<title>]]   - pin a task as Now Focus so a focus session can start
+//
+// The system prompt tells the AI these tags are "explicit-request-only", but
+// that's advisory — applyCoachActions() additionally requires (via
+// matchesUserIntent) that the user's own last message contains language
+// clearly requesting that kind of action before any tag is allowed to mutate.
 
 import { buildToggleCompletedTasks } from "./taskOps";
 import { isActiveLociTask } from "./lociAIContext";
@@ -29,6 +34,32 @@ export function parseCoachActionTags(text = "") {
 
 function normalizeTitle(str = "") {
   return String(str).toLowerCase().trim().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ");
+}
+
+// Deterministic, code-enforced gating: a coach action tag may only mutate
+// state if the user's own last message contains language that clearly
+// requests that kind of action. Keeps the AI's "explicit-request-only" rule
+// from being the only line of defense against acting on a hallucinated or
+// misread request.
+const INTENT_PATTERNS = {
+  COMPLETE_TASK: /\b(done|finish(ed|ing)?|complet(e|ed|ing)|wrapped? up|knocked out)\b/i,
+  SET_NOW_FOCUS: /\b(focus on|switch.*focus|prioriti[sz]e|now focus)\b/i,
+  START_FOCUS: /\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\b/i,
+  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|i (also )?need to|don'?t forget)\b/i,
+  PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|skip)\b/i,
+};
+
+export function matchesUserIntent(actionType, lastUserMessage = "") {
+  const pattern = INTENT_PATTERNS[actionType];
+  return !!pattern && pattern.test(String(lastUserMessage || ""));
+}
+
+// Exact-title-only match against active tasks — used to detect "obvious"
+// ADD_TASK duplicates without the substring fuzziness of findTaskByTitle.
+function findExactActiveTask(tasks, rawTitle) {
+  const target = normalizeTitle(rawTitle);
+  if (!target) return null;
+  return (tasks || []).find(t => isActiveLociTask(t) && normalizeTitle(t.title) === target) || null;
 }
 
 // Fuzzy-matches a tag's title against the user's active tasks: an exact match
@@ -122,13 +153,23 @@ function buildCompleteTaskPayload(payload, task, lociDateStr, localDateStr) {
 // each step so e.g. "complete X, then focus on Y" composes correctly.
 // Returns { payload, results } where results mirrors `actions` with a
 // `matched` flag (and the matched `task`, where applicable) for each entry.
-export function applyCoachActions(payload, actions, { lociDateStr, localDateStr } = {}) {
+export function applyCoachActions(payload, actions, { lociDateStr, localDateStr, lastUserMessage = "" } = {}) {
   let nextPayload = payload;
   const results = [];
 
   for (const action of actions) {
+    if (!matchesUserIntent(action.type, lastUserMessage)) {
+      results.push({ ...action, matched: false, blocked: true });
+      continue;
+    }
+
     if (action.type === "ADD_TASK") {
-      nextPayload = buildAddTaskPayload(nextPayload, action.title);
+      const title = String(action.title || "").trim().slice(0, 300);
+      if (!title || findExactActiveTask(nextPayload.tasks, title)) {
+        results.push({ ...action, matched: false });
+        continue;
+      }
+      nextPayload = buildAddTaskPayload(nextPayload, title);
       results.push({ ...action, matched: true });
       continue;
     }

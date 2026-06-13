@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, buildParkTaskTasks, applyCoachActions } from "./coachActions";
+import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, buildParkTaskTasks, applyCoachActions, matchesUserIntent } from "./coachActions";
+import { parseCheckinTag } from "./coachCheckin";
+import { getFocusWindows, getLociDayStr } from "./focusWindows";
+import { getLocalDateString } from "./lociAIContext";
 
 describe("parseCoachActionTags", () => {
   it("returns no actions and the original text when no tag is present", () => {
@@ -63,6 +66,17 @@ describe("parseCoachActionTags", () => {
       cleanText: "Starting now!",
       actions: [{ type: "START_FOCUS", title: "Write report" }],
     });
+  });
+});
+
+describe("tag-stripping integration", () => {
+  it("strips both a CHECKIN_IN tag and a coach action tag from the reply", () => {
+    const reply = "Nice work! I'll check on you soon.\n[[CHECKIN_IN:15]]\n[[COMPLETE_TASK:Write report]]";
+    const { cleanText: afterCheckin, minutes } = parseCheckinTag(reply);
+    const { cleanText, actions } = parseCoachActionTags(afterCheckin);
+    expect(minutes).toBe(15);
+    expect(cleanText).toBe("Nice work! I'll check on you soon.");
+    expect(actions).toEqual([{ type: "COMPLETE_TASK", title: "Write report" }]);
   });
 });
 
@@ -152,6 +166,42 @@ describe("buildParkTaskTasks", () => {
   });
 });
 
+describe("matchesUserIntent", () => {
+  it("matches COMPLETE_TASK on completion language", () => {
+    expect(matchesUserIntent("COMPLETE_TASK", "I just finished the report")).toBe(true);
+    expect(matchesUserIntent("COMPLETE_TASK", "Tell me about the report")).toBe(false);
+  });
+
+  it("matches SET_NOW_FOCUS on focus/prioritize language", () => {
+    expect(matchesUserIntent("SET_NOW_FOCUS", "Focus on the report now")).toBe(true);
+    expect(matchesUserIntent("SET_NOW_FOCUS", "What should I do next?")).toBe(false);
+  });
+
+  it("matches START_FOCUS on start+session language", () => {
+    expect(matchesUserIntent("START_FOCUS", "Let's start a focus session")).toBe(true);
+    expect(matchesUserIntent("START_FOCUS", "Focus on the report")).toBe(false);
+  });
+
+  it("matches ADD_TASK on add/remind/need language", () => {
+    expect(matchesUserIntent("ADD_TASK", "Add a task to call the dentist")).toBe(true);
+    expect(matchesUserIntent("ADD_TASK", "What's on my list?")).toBe(false);
+  });
+
+  it("matches PARK_TASK on park/defer language", () => {
+    expect(matchesUserIntent("PARK_TASK", "Park the report for now")).toBe(true);
+    expect(matchesUserIntent("PARK_TASK", "Tell me about the report")).toBe(false);
+  });
+
+  it("returns false for an unknown action type", () => {
+    expect(matchesUserIntent("NOT_A_REAL_ACTION", "I just finished the report")).toBe(false);
+  });
+
+  it("returns false for an empty or missing message", () => {
+    expect(matchesUserIntent("COMPLETE_TASK", "")).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK")).toBe(false);
+  });
+});
+
 describe("applyCoachActions", () => {
   const dateOpts = { lociDateStr: "2026-06-13", localDateStr: "2026-06-13" };
 
@@ -164,7 +214,7 @@ describe("applyCoachActions", () => {
       config: {},
       contributions: [],
     };
-    const { payload: next, results } = applyCoachActions(payload, [{ type: "SET_NOW_FOCUS", title: "Email client" }], dateOpts);
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "SET_NOW_FOCUS", title: "Email client" }], { ...dateOpts, lastUserMessage: "Let's focus on Email client now." });
     expect(next.tasks.find(t => t.uuid === "2").isNowFocus).toBe(true);
     expect(next.tasks.find(t => t.uuid === "1").isNowFocus).toBe(false);
     expect(results).toEqual([{ type: "SET_NOW_FOCUS", title: "Email client", matched: true, task: payload.tasks[1] }]);
@@ -179,7 +229,7 @@ describe("applyCoachActions", () => {
       config: { totalXp: 100 },
       contributions: [],
     };
-    const { payload: next, results } = applyCoachActions(payload, [{ type: "COMPLETE_TASK", title: "Write report" }], dateOpts);
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "COMPLETE_TASK", title: "Write report" }], { ...dateOpts, lastUserMessage: "I just finished writing the report." });
     expect(next.tasks[0].isCompleted).toBe(true);
     expect(next.tasks[0].isNowFocus).toBe(false);
     expect(next.tasks[0].dateCompletedString).toBe("2026-06-13");
@@ -196,7 +246,7 @@ describe("applyCoachActions", () => {
       config: {},
       contributions: [{ dateString: "2026-06-13", count: 2 }],
     };
-    const { payload: next } = applyCoachActions(payload, [{ type: "COMPLETE_TASK", title: "Write report" }], dateOpts);
+    const { payload: next } = applyCoachActions(payload, [{ type: "COMPLETE_TASK", title: "Write report" }], { ...dateOpts, lastUserMessage: "Done with the report!" });
     expect(next.contributions).toEqual([expect.objectContaining({ dateString: "2026-06-13", count: 3 })]);
   });
 
@@ -206,7 +256,7 @@ describe("applyCoachActions", () => {
       config: {},
       contributions: [],
     };
-    const { payload: next, results } = applyCoachActions(payload, [{ type: "COMPLETE_TASK", title: "Walk the dog" }], dateOpts);
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "COMPLETE_TASK", title: "Walk the dog" }], { ...dateOpts, lastUserMessage: "Just finished walking the dog." });
     expect(next).toBe(payload);
     expect(results).toEqual([{ type: "COMPLETE_TASK", title: "Walk the dog", matched: false }]);
   });
@@ -220,7 +270,7 @@ describe("applyCoachActions", () => {
       config: {},
       contributions: [],
     };
-    const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: "Call the dentist" }], dateOpts);
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: "Call the dentist" }], { ...dateOpts, lastUserMessage: "Add a task to call the dentist." });
     expect(next.tasks).toHaveLength(2);
     const added = next.tasks[1];
     expect(added).toMatchObject({
@@ -246,7 +296,7 @@ describe("applyCoachActions", () => {
       config: {},
       contributions: [],
     };
-    const { payload: next, results } = applyCoachActions(payload, [{ type: "PARK_TASK", title: "Write report" }], dateOpts);
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "PARK_TASK", title: "Write report" }], { ...dateOpts, lastUserMessage: "Let's park the report for now." });
     expect(next.tasks[0].isParked).toBe(true);
     expect(next.tasks[0].isNowFocus).toBe(false);
     expect(results[0].matched).toBe(true);
@@ -261,7 +311,7 @@ describe("applyCoachActions", () => {
       config: {},
       contributions: [],
     };
-    const { payload: next, results } = applyCoachActions(payload, [{ type: "START_FOCUS", title: "Write report" }], dateOpts);
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "START_FOCUS", title: "Write report" }], { ...dateOpts, lastUserMessage: "Let's start a focus session on the report." });
     expect(next.tasks.find(t => t.uuid === "1").isNowFocus).toBe(true);
     expect(next.tasks.find(t => t.uuid === "2").isNowFocus).toBe(false);
     expect(results[0].matched).toBe(true);
@@ -280,8 +330,97 @@ describe("applyCoachActions", () => {
     const { payload: next } = applyCoachActions(payload, [
       { type: "COMPLETE_TASK", title: "Write report" },
       { type: "SET_NOW_FOCUS", title: "Email client" },
-    ], dateOpts);
+    ], { ...dateOpts, lastUserMessage: "I finished the report, now focus on Email client." });
     expect(next.tasks.find(t => t.uuid === "1").isCompleted).toBe(true);
     expect(next.tasks.find(t => t.uuid === "2").isNowFocus).toBe(true);
+  });
+
+  it("blocks an action and leaves the payload untouched when the user's message doesn't request it", () => {
+    const payload = {
+      tasks: [
+        { uuid: "1", title: "Write report", isNowFocus: false, isCompleted: false, isDeleted: false, isParked: false },
+      ],
+      config: {},
+      contributions: [],
+    };
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "SET_NOW_FOCUS", title: "Write report" }], { ...dateOpts, lastUserMessage: "How's it going?" });
+    expect(next).toBe(payload);
+    expect(results).toEqual([{ type: "SET_NOW_FOCUS", title: "Write report", matched: false, blocked: true }]);
+  });
+
+  it("COMPLETE_TASK on an already-completed task is a no-op (idempotent)", () => {
+    const payload = {
+      tasks: [
+        { uuid: "1", title: "Write report", isCompleted: true, isDeleted: false, isParked: false, dateCompletedString: "2026-06-12" },
+      ],
+      config: { totalXp: 100 },
+      contributions: [],
+    };
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "COMPLETE_TASK", title: "Write report" }], { ...dateOpts, lastUserMessage: "I'm done with the report" });
+    expect(next).toBe(payload);
+    expect(results).toEqual([{ type: "COMPLETE_TASK", title: "Write report", matched: false }]);
+  });
+
+  it("START_FOCUS does not match a completed, deleted, or parked task", () => {
+    const payload = {
+      tasks: [
+        { uuid: "1", title: "Write report", isNowFocus: false, isCompleted: true, isDeleted: false, isParked: false },
+        { uuid: "2", title: "Email client", isNowFocus: false, isCompleted: false, isDeleted: true, isParked: false },
+        { uuid: "3", title: "Plan trip", isNowFocus: false, isCompleted: false, isDeleted: false, isParked: true },
+      ],
+      config: {},
+      contributions: [],
+    };
+    for (const title of ["Write report", "Email client", "Plan trip"]) {
+      const { payload: next, results } = applyCoachActions(payload, [{ type: "START_FOCUS", title }], { ...dateOpts, lastUserMessage: "Let's start a focus session." });
+      expect(next).toBe(payload);
+      expect(results).toEqual([{ type: "START_FOCUS", title, matched: false }]);
+    }
+  });
+
+  it("uses the Loci day for dateCompletedString and the local calendar day for contributions across midnight", () => {
+    const windows = getFocusWindows({ focusWindows: [{ start: "22:00", end: "04:00" }] });
+    const now = new Date(2026, 5, 14, 1, 0); // June 14, 1:00 AM — still the June 13 Loci day
+    const lociDateStr = getLociDayStr(now, windows);
+    const localDateStr = getLocalDateString(now);
+    expect(lociDateStr).toBe("2026-06-13");
+    expect(localDateStr).toBe("2026-06-14");
+
+    const payload = {
+      userId: "user-1",
+      tasks: [{ uuid: "1", title: "Write report", isCompleted: false, isDeleted: false, isParked: false }],
+      config: {},
+      contributions: [],
+    };
+    const { payload: next } = applyCoachActions(payload, [{ type: "COMPLETE_TASK", title: "Write report" }], { lociDateStr, localDateStr, lastUserMessage: "I'm done with the report" });
+    expect(next.tasks[0].dateCompletedString).toBe("2026-06-13");
+    expect(next.contributions).toEqual([expect.objectContaining({ dateString: "2026-06-14" })]);
+  });
+
+  it("ADD_TASK rejects an empty or whitespace-only title", () => {
+    const payload = { tasks: [], config: {}, contributions: [] };
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: "   " }], { ...dateOpts, lastUserMessage: "Add a task for this." });
+    expect(next).toBe(payload);
+    expect(results).toEqual([{ type: "ADD_TASK", title: "   ", matched: false }]);
+  });
+
+  it("ADD_TASK truncates an overlong title to 300 characters", () => {
+    const longTitle = "x".repeat(400);
+    const payload = { tasks: [], config: {}, contributions: [] };
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: longTitle }], { ...dateOpts, lastUserMessage: "Add a task for this." });
+    expect(next.tasks).toHaveLength(1);
+    expect(next.tasks[0].title).toBe("x".repeat(300));
+    expect(results[0].matched).toBe(true);
+  });
+
+  it("ADD_TASK skips an obvious duplicate of an existing active task", () => {
+    const payload = {
+      tasks: [{ uuid: "1", title: "Call the dentist", horizonLevel: "today", isCompleted: false, isDeleted: false, isParked: false }],
+      config: {},
+      contributions: [],
+    };
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: "call the dentist" }], { ...dateOpts, lastUserMessage: "Add a task for this." });
+    expect(next).toBe(payload);
+    expect(results).toEqual([{ type: "ADD_TASK", title: "call the dentist", matched: false }]);
   });
 });

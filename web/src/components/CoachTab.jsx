@@ -209,7 +209,7 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         const { payload: updatedPayload, results } = applyCoachActions(
           { ...payload, tasks: tasksRef.current, config: configRef.current, contributions: contributionsRef.current },
           actions,
-          { lociDateStr: todayStr, localDateStr: getLocalDateString(now) }
+          { lociDateStr: todayStr, localDateStr: getLocalDateString(now), lastUserMessage: userText }
         );
 
         const patch = {};
@@ -222,13 +222,22 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         if (Object.keys(patch).length > 0) saveSubPaths(patch);
 
         const startFocus = results.find(r => r.type === "START_FOCUS" && r.matched);
-        if (startFocus && typeof focusTimer.extendTimer === "function") {
+        if (startFocus && typeof focusTimer.extendTimer === "function" && !focusTimer.isTimerRunning) {
           const mins = Number(startFocus.task.timeEstimateMinutes) > 0 ? Number(startFocus.task.timeEstimateMinutes) : 25;
           focusTimer.extendTimer(mins);
         }
-        const unmatched = results.filter(r => !r.matched);
-        if (unmatched.length > 0) {
-          replyText = `${replyText}\n\n(I couldn't find ${unmatched.map(r => `"${r.title}"`).join(" or ")} in your task list — could you double-check the name?)`.trim();
+
+        const blocked = results.filter(r => r.blocked);
+        const notFound = results.filter(r => !r.matched && !r.blocked && r.type !== "ADD_TASK");
+        const addSkipped = results.filter(r => !r.matched && !r.blocked && r.type === "ADD_TASK");
+        if (notFound.length > 0) {
+          replyText = `${replyText}\n\n(I couldn't find ${notFound.map(r => `"${r.title}"`).join(" or ")} in your task list — could you double-check the name?)`.trim();
+        }
+        if (addSkipped.length > 0) {
+          replyText = `${replyText}\n\n(Looks like that's already on your list, so I didn't add a duplicate.)`.trim();
+        }
+        if (blocked.length > 0) {
+          replyText = `${replyText}\n\n(I'll only do that when you explicitly ask — just say the word and I will.)`.trim();
         }
       }
 
