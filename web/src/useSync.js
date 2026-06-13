@@ -584,6 +584,30 @@ export function useSync(uid, email) {
     attempt(3);
   };
 
+  // Like saveSubPath, but writes several top-level paths in a single atomic
+  // RTDB update() — use when multiple paths must change together (e.g. a task
+  // completion that also bumps XP and today's contribution count).
+  const saveSubPaths = (patch) => {
+    if (!dbRefPath) return;
+    if (payloadRef.current) {
+      const next = { ...payloadRef.current, ...patch, timestamp: Date.now() };
+      payloadRef.current = next;
+      payloadUidRef.current = uid;
+      setPayload(next);
+      if (uid) writeCache(uid, next);
+    }
+    const updates = { [`${dbRefPath}/timestamp`]: Date.now() };
+    for (const [subPath, value] of Object.entries(patch)) {
+      updates[`${dbRefPath}/${subPath}`] = value;
+    }
+    const attempt = (n) =>
+      update(ref(db), updates).catch(err => {
+        if (n > 0) return new Promise(r => setTimeout(r, 500 * Math.pow(2, 3 - n))).then(() => attempt(n - 1));
+        console.error(`Sub-paths write failed (${Object.keys(patch).join(", ")}):`, err);
+      });
+    attempt(3);
+  };
+
   // Write any pending debounced payload immediately (call before navigating away).
   const flushNow = () => {
     if (timeoutRef.current && dbRefPath && payloadRef.current) {
@@ -605,5 +629,5 @@ export function useSync(uid, email) {
   // return null so App-level effects cannot read or write the previous user's data.
   const effectivePayload = gatePayloadToUid(payload, payloadUidRef.current, uid);
   const effectiveLoading = loading || (!!uid && payloadUidRef.current !== uid);
-  return { payload: effectivePayload, loading: effectiveLoading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning, savePayload, saveSubPath, flushNow, clearCache };
+  return { payload: effectivePayload, loading: effectiveLoading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning, savePayload, saveSubPath, saveSubPaths, flushNow, clearCache };
 }

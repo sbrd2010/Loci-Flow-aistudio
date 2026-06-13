@@ -8,8 +8,9 @@ import { getFocusWindows } from "../utils/focusWindows";
 import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin, cancelCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, buildCheckinResumeMessage } from "../utils/coachCheckin";
+import { parseCoachActionTags, applyCoachActions } from "../utils/coachActions";
 
-export default function CoachTab({ payload, savePayload, saveSubPath, userProfile, focusTimer = {} }) {
+export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, userProfile, focusTimer = {} }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
   const { groqKey, geminiKey } = getAIKeys();
   const hasAnyKey = !!(groqKey || geminiKey);
@@ -57,6 +58,10 @@ export default function CoachTab({ payload, savePayload, saveSubPath, userProfil
   chatHistoryRef.current = chatHistory;
   const configRef = useRef(config);
   configRef.current = config;
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
+  const contributionsRef = useRef(contributions);
+  contributionsRef.current = contributions;
 
   useEffect(() => {
     const checkDue = () => {
@@ -172,6 +177,13 @@ GUARD RAILS:
 COACH ACTIONS:
 - If ${firstName} asks you to check in, follow up, or remind them again later in this chat, end your reply with [[CHECKIN_IN:N]] on its own line, where N is a whole number of minutes from now (1-180). This tag is invisible to ${firstName} — never mention it or explain it.
 - Only use this tag when explicitly asked for a later check-in. Do not offer it proactively, and never use it for any other purpose.
+- If ${firstName} explicitly asks to switch focus to, prioritize, or start working on a specific task right now, end your reply with [[SET_NOW_FOCUS:<exact task title from the list above>]] on its own line — AND say what you're doing in your visible reply (e.g., "On it — switching your focus to '<title>'.").
+- If ${firstName} explicitly says they finished, completed, or are done with a specific task, end your reply with [[COMPLETE_TASK:<exact task title from the list above>]] on its own line — AND say what you're doing in your visible reply (e.g., "Nice work — marking '<title>' complete!").
+- If ${firstName} mentions something new they need to do and asks you to add it as a task, end your reply with [[ADD_TASK:<short task title>]] on its own line — AND say what you're doing (e.g., "Added '<title>' to your Today list."). New tasks default to Today, P3, 25 minutes.
+- If ${firstName} explicitly asks to park, defer, or set aside a specific task for now, end your reply with [[PARK_TASK:<exact task title from the list above>]] on its own line — AND say what you're doing (e.g., "Parked '<title>' — it's out of the way for now.").
+- If ${firstName} explicitly asks you to start a focus session, start the timer, or start working on a specific task right now, end your reply with [[START_FOCUS:<exact task title from the list above>]] on its own line — AND say what you're doing (e.g., "Starting a focus session on '<title>' now — go!").
+- Only use SET_NOW_FOCUS, COMPLETE_TASK, ADD_TASK, PARK_TASK, or START_FOCUS when ${firstName} explicitly asks for that action, and (except for ADD_TASK) only for a task that actually appears in their task list above. Never use them proactively or to guess at what they mean.
+- All of these tags are stripped automatically and never shown to ${firstName}. Unlike CHECKIN_IN, these action tags must always be paired with a visible sentence describing the action you took.
 
 LANGUAGE: Never use the word "ADHD". Use instead: focus challenge, overwhelm, execution support, momentum, time awareness, micro-step, reset, low-energy mode.
 ${profileToCoachContext(userProfile) ? `\n${profileToCoachContext(userProfile)}\n` : ""}
@@ -181,16 +193,59 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
 
     try {
       const reply = await callAI({ groqKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens: 300 });
-      const { cleanText, minutes } = parseCheckinTag(reply.trim());
+      const { cleanText: afterCheckin, minutes } = parseCheckinTag(reply.trim());
+      const { cleanText, actions } = parseCoachActionTags(afterCheckin);
 
+      let configPatch = null;
       if (minutes != null) {
         const checkin = buildCoachCheckin(minutes, pickCheckinNote(todayActive));
-        saveSubPath("config", { ...configRef.current, coachCheckin: checkin, lastUpdated: Date.now() });
+        configPatch = { ...configPatch, coachCheckin: checkin };
         scheduleCoachCheckin(checkin);
         requestNotifPermission();
       }
 
-      saveSubPath("chatHistory", [...chatHistoryRef.current, { text: cleanText || "Got it.", isUser: false }]);
+      let replyText = cleanText;
+      if (actions.length > 0) {
+        const { payload: updatedPayload, results } = applyCoachActions(
+          { ...payload, tasks: tasksRef.current, config: configRef.current, contributions: contributionsRef.current },
+          actions,
+          { lociDateStr: todayStr, localDateStr: getLocalDateString(now), lastUserMessage: userText }
+        );
+
+        const patch = {};
+        if (updatedPayload.tasks !== tasksRef.current) patch.tasks = updatedPayload.tasks;
+        if (updatedPayload.contributions !== contributionsRef.current) patch.contributions = updatedPayload.contributions;
+        if (updatedPayload.config.totalXp !== configRef.current.totalXp || configPatch) {
+          patch.config = { ...configRef.current, ...configPatch, totalXp: updatedPayload.config.totalXp, lastUpdated: Date.now() };
+          configPatch = null;
+        }
+        if (Object.keys(patch).length > 0) saveSubPaths(patch);
+
+        const startFocus = results.find(r => r.type === "START_FOCUS" && r.matched);
+        if (startFocus && typeof focusTimer.extendTimer === "function" && !focusTimer.isTimerRunning) {
+          const mins = Number(startFocus.task.timeEstimateMinutes) > 0 ? Number(startFocus.task.timeEstimateMinutes) : 25;
+          focusTimer.extendTimer(mins);
+        }
+
+        const blocked = results.filter(r => r.blocked);
+        const notFound = results.filter(r => !r.matched && !r.blocked && r.type !== "ADD_TASK");
+        const addSkipped = results.filter(r => !r.matched && !r.blocked && r.type === "ADD_TASK");
+        if (notFound.length > 0) {
+          replyText = `${replyText}\n\n(I couldn't find ${notFound.map(r => `"${r.title}"`).join(" or ")} in your task list — could you double-check the name?)`.trim();
+        }
+        if (addSkipped.length > 0) {
+          replyText = `${replyText}\n\n(Looks like that's already on your list, so I didn't add a duplicate.)`.trim();
+        }
+        if (blocked.length > 0) {
+          replyText = `${replyText}\n\n(I'll only do that when you explicitly ask — just say the word and I will.)`.trim();
+        }
+      }
+
+      if (configPatch) {
+        saveSubPath("config", { ...configRef.current, ...configPatch, lastUpdated: Date.now() });
+      }
+
+      saveSubPath("chatHistory", [...chatHistoryRef.current, { text: replyText || "Got it.", isUser: false }]);
     } catch (err) {
       const hint = err.message === "429" ? "Rate limit — wait 30 sec and retry." : err.message === "503" ? "AI server busy — try again." : err.message === "no_key" ? "Add an AI key in Settings." : `AI error ${err.message}`;
       saveSubPath("chatHistory", [...chatHistoryRef.current, { text: hint, isUser: false }]);
