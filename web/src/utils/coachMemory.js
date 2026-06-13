@@ -24,11 +24,16 @@ const MEMORY_ENTRY_MAX_LENGTH = 200;
 // store secrets, reject anything that looks like one before it's saved.
 const SECRET_PATTERN = /\b(passwords?|passwd|pwd|api[_\s-]?keys?|secret\s*keys?|access\s*tokens?|auth\s*tokens?|private\s*keys?|recovery\s*codes?|seed\s*phrases?|2fa\s*codes?|otps?|one[- ]time\s*(?:codes?|passwords?))\b\s*(?:is|was|are|were|[:=])\s*\S{3,}|\b(sk-[A-Za-z0-9]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|gsk_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{20,})\b/i;
 
+// Defense-in-depth: the system prompt says to store financial pressure as
+// broad context, never exact figures (e.g. "$12,000" or "5000 dollars") —
+// reject entries that contain a currency-amount pattern before saving.
+const FINANCIAL_AMOUNT_PATTERN = /[$€£¥₹]\s?\d[\d,.]*|\b\d[\d,.]*\s?(?:dollars?|usd|eur|euros?|gbp|pounds?|rupees?|inr|cents?)\b/i;
+
 function appendCapped(list = [], text, max, extra = {}) {
   // Collapse newlines/control chars so a memory entry can't break out of its
   // bullet line and inject extra "lines" into the system prompt.
   const trimmed = String(text || "").replace(/[\s\x00-\x1f\x7f]+/g, " ").trim().slice(0, MEMORY_ENTRY_MAX_LENGTH);
-  if (!trimmed || SECRET_PATTERN.test(trimmed)) return list;
+  if (!trimmed || SECRET_PATTERN.test(trimmed) || FINANCIAL_AMOUNT_PATTERN.test(trimmed)) return list;
 
   // Dedupe by normalized exact text — re-stating the same fact refreshes its
   // position (and updatedAt) instead of piling up near-identical entries.

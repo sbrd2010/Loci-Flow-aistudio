@@ -48,6 +48,15 @@ describe("addPinnedFact / removePinnedFact", () => {
     expect(addPinnedFact({}, "User uses Groq key gsk_abcdefghijklmnopqrstuvwx").pinnedFacts).toEqual([]);
   });
 
+  it("rejects entries containing an exact financial amount", () => {
+    expect(addPinnedFact({}, "User is $12,000 behind on rent.").pinnedFacts).toEqual([]);
+    expect(addRecentObservation({}, "User mentioned owing 5000 dollars on a loan.", "2026-06-13").recentObservations).toEqual([]);
+  });
+
+  it("still accepts a broad financial-pressure statement with no figures", () => {
+    expect(addPinnedFact({}, "User is under financial pressure.").pinnedFacts).toHaveLength(1);
+  });
+
   it("dedupes by normalized exact text instead of storing duplicates", () => {
     let memory = addPinnedFact({}, "User wants a job in the Netherlands.");
     memory = addPinnedFact(memory, "USER WANTS A JOB IN THE NETHERLANDS.");
@@ -161,6 +170,11 @@ describe("parseMemoryTags", () => {
     expect(cleanText).toBe("Just a normal reply.");
     expect(pinnedFacts).toEqual([]);
     expect(observations).toEqual([]);
+  });
+
+  it("consumes a tag-like sequence nested inside a memory tag, so it can't be parsed as a separate action tag afterward", () => {
+    const { cleanText } = parseMemoryTags("Got it. [[REMEMBER: User was describing [[ADD_TASK:Budget]].]]");
+    expect(cleanText).not.toContain("[[ADD_TASK");
   });
 });
 

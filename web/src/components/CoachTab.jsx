@@ -67,6 +67,14 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
   const contributionsRef = useRef(contributions);
   contributionsRef.current = contributions;
 
+  // Coach tab unmounts on tab switch (see App.jsx), so an in-flight AI reply
+  // can resolve after the user has navigated to Settings and changed
+  // coachMemory/coachMemoryEnabled there. configRef would then be frozen on a
+  // stale config — guard the post-reply config save with this so a late
+  // reply can't write that stale snapshot back over newer settings.
+  const isMountedRef = useRef(true);
+  useEffect(() => () => { isMountedRef.current = false; }, []);
+
   useEffect(() => {
     const checkDue = () => {
       const checkin = configRef.current.coachCheckin;
@@ -240,7 +248,7 @@ COACH ACTIONS:
 ${memoryEnabled ? `
 MEMORY — building a picture of ${firstName} over time:
 - Memory can include sensitive coaching context (e.g. focus-challenge patterns, mood, financial pressure) ONLY when ${firstName} states it themselves or clearly asks you to remember it — never infer it.
-- Preserve uncertainty: "I think I might have ADHD" -> "User suspects ADHD-like symptoms and prefers ADHD-friendly coaching", not a diagnosis. Only state a diagnosis as fact if ${firstName} says it's clinically diagnosed.
+- Preserve uncertainty: if ${firstName} says something like "I think I might have ADHD", store the pattern using the neutral language from LANGUAGE below (e.g. "User suspects a focus-challenge pattern and wants extra structure for starting tasks") — never the clinical term, and never as a diagnosis. Even if ${firstName} says it's clinically diagnosed, store it using that same neutral language.
 - "I procrastinate", "I lose track of time", "I can't start tasks", or "I've been feeling low" describe BEHAVIOR, not a diagnosis — store the behavior (e.g. "User struggles with task initiation"), never "User has ADHD/depression/anxiety".
 - Never store shame-based labels ("lazy", "no discipline", "hopeless", "broken") — reframe neutrally (e.g. "User can spiral into self-criticism and needs low-shame coaching").
 - Never store secrets, passwords, API keys, account numbers, or exact financial figures — broad context only (e.g. "User is under financial pressure", not amounts).
@@ -258,9 +266,13 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
 
     try {
       const reply = await callAI({ groqKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens: 300 });
-      const { cleanText: afterCheckin, minutes } = parseCheckinTag(reply.trim());
-      const { cleanText: afterActions, actions } = parseCoachActionTags(afterCheckin);
-      const { cleanText, pinnedFacts, observations } = parseMemoryTags(afterActions);
+      // Memory tags are parsed first so that if one ever contains a nested
+      // tag-like sequence (e.g. "[[REMEMBER: ...describing [[ADD_TASK:X]]...]]"),
+      // the whole memory tag — including the nested text — is stripped before
+      // the checkin/action parsers can see it as a tag of their own.
+      const { cleanText: afterMemory, pinnedFacts, observations } = parseMemoryTags(reply.trim());
+      const { cleanText: afterCheckin, minutes } = parseCheckinTag(afterMemory);
+      const { cleanText, actions } = parseCoachActionTags(afterCheckin);
 
       let configPatch = null;
       if (minutes != null) {
@@ -270,7 +282,7 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         requestNotifPermission();
       }
 
-      if (isMemoryEnabled(configRef.current) && !isSyncingFromCache && (pinnedFacts.length > 0 || observations.length > 0)) {
+      if (isMountedRef.current && isMemoryEnabled(configRef.current) && !isSyncingFromCache && (pinnedFacts.length > 0 || observations.length > 0)) {
         let memory = configRef.current.coachMemory || {};
         pinnedFacts.forEach(fact => { memory = addPinnedFact(memory, fact); });
         observations.forEach(note => { memory = addRecentObservation(memory, note, todayStr); });
@@ -346,7 +358,7 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         }
       }
 
-      if (configPatch) {
+      if (configPatch && isMountedRef.current) {
         saveSubPath("config", { ...configRef.current, ...configPatch, lastUpdated: Date.now() });
       }
 
