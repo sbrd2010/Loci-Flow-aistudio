@@ -14,7 +14,7 @@ import { isPendingCoachNudgeStale, shouldDeliverPendingCoachNudge } from "../uti
 import { buildPersonaInstruction } from "../utils/coachPersona";
 import { addPinnedFact, addRecentObservation, buildLociMemoryContext, isMemoryEnabled, parseMemoryTags } from "../utils/coachMemory";
 
-export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, userProfile, focusTimer = {}, isSyncingFromCache = false }) {
+export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
   const { groqKey, geminiKey } = getAIKeys();
   const hasAnyKey = !!(groqKey || geminiKey);
@@ -120,7 +120,7 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
 
     (async () => {
       try {
-        const memoryContext = isMemoryEnabled(config) ? buildLociMemoryContext(config.coachMemory) : "";
+        const memoryContext = (isMemoryEnabled(config) && !isSyncingFromCache) ? buildLociMemoryContext(config.coachMemory) : "";
         const systemInstruction = `${buildLociCoreInstruction({ firstName })}
 
 You are ${config.mentorName || "Loci AI Coach"}, ${firstName}'s productivity mentor inside Loci Focus. You are reaching out FIRST — ${firstName} hasn't said anything yet this conversation. Something you noticed about their day: "${nudge.title} — ${nudge.body}". Open the conversation with this observation and a concrete next step. Max 2 short sentences. Don't mention that this is automated or that you "noticed" via data — just speak as their coach.
@@ -180,7 +180,10 @@ ${memoryContext ? `\n${memoryContext}\n` : ""}`;
     const recentlyParkedContext = buildLociRecentlyParkedContext(tasks, now);
     const lociCoreInstruction = buildLociCoreInstruction({ firstName });
     const memoryEnabled = isMemoryEnabled(config);
-    const memoryContext = memoryEnabled ? buildLociMemoryContext(config.coachMemory) : "";
+    // Don't send memory facts/notes to the AI while still syncing from cache —
+    // config.coachMemory may be stale localStorage data that's already been
+    // cleared or disabled on another device.
+    const memoryContext = (memoryEnabled && !isSyncingFromCache) ? buildLociMemoryContext(config.coachMemory) : "";
     const personaInstruction = buildPersonaInstruction(config, firstName);
 
     const userMessageCount = withUser.filter(m => m.isUser).length;
@@ -361,7 +364,11 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
       }
 
       if (configPatch) {
-        saveSubPath("config", { ...configRef.current, ...configPatch, lastUpdated: Date.now() });
+        // saveConfigPatch merges onto the latest known config and writes only
+        // these keys — safe even if this tab unmounted and configRef.current
+        // is now stale (e.g. the user changed Coach Memory settings elsewhere
+        // while this reply was in flight).
+        saveConfigPatch(configPatch);
       }
 
       saveSubPath("chatHistory", [...chatHistoryRef.current, { text: replyText || "Got it.", isUser: false }]);

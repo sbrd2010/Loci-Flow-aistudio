@@ -84,6 +84,10 @@ export default function App() {
     setDemoPayload(prev => prev ? { ...prev, ...patch, timestamp: Date.now() } : prev);
   };
 
+  const saveDemoConfigPatch = (patch) => {
+    setDemoPayload(prev => prev ? { ...prev, config: { ...prev.config, ...patch, lastUpdated: Date.now() }, timestamp: Date.now() } : prev);
+  };
+
   // ── Service worker ─────────────────────────────────────────────────────────
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -174,13 +178,14 @@ export default function App() {
   };
 
   // Load the sync payload from RTDB (skipped in demo mode — uid is null)
-  const { payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning: rtdbSyncWarning, savePayload: rtdbSave, saveSubPath: rtdbSaveSub, saveSubPaths: rtdbSaveSubs, flushNow: rtdbFlushNow, clearCache: rtdbClearCache } =
+  const { payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning: rtdbSyncWarning, savePayload: rtdbSave, saveSubPath: rtdbSaveSub, saveSubPaths: rtdbSaveSubs, saveConfigPatch: rtdbSaveConfigPatch, flushNow: rtdbFlushNow, clearCache: rtdbClearCache } =
     useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
   const payload = demoMode ? demoPayload : rtdbPayload;
   const savePayload = demoMode ? saveDemoPayload : rtdbSave;
   const saveSubPath = demoMode ? saveDemoSubPath : rtdbSaveSub;
   const saveSubPaths = demoMode ? saveDemoSubPaths : rtdbSaveSubs;
+  const saveConfigPatch = demoMode ? saveDemoConfigPatch : rtdbSaveConfigPatch;
   const flushNow = demoMode ? () => {} : (rtdbFlushNow || (() => {}));
   const clearCache = demoMode ? () => {} : (rtdbClearCache || (() => {}));
   const syncWarning = demoMode ? null : rtdbSyncWarning;
@@ -593,7 +598,7 @@ export default function App() {
           />
         )}
         {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} userProfile={userProfile} initialPanel={mindBoxInitialPanel} />}
-        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} />}
+        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} />}
         {activeTab === "settings" && (
           <SettingsTab
             payload={payload}

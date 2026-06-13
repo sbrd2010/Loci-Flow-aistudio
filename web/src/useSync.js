@@ -610,6 +610,38 @@ export function useSync(uid, email) {
     attempt(3);
   };
 
+  // Like saveSubPath("config", ...), but merges `patch` into the LATEST known
+  // config (payloadRef.current.config) rather than a caller-held snapshot, and
+  // writes only those keys to RTDB as nested config/<key> paths. This means a
+  // caller holding a stale config (e.g. a component that unmounted while an
+  // async reply was in flight) can't clobber config fields changed elsewhere
+  // in the meantime — only the patched keys are touched.
+  const saveConfigPatch = (patch) => {
+    if (!dbRefPath) return;
+    if (payloadRef.current) {
+      const next = {
+        ...payloadRef.current,
+        config: { ...payloadRef.current.config, ...patch, lastUpdated: Date.now() },
+        timestamp: Date.now(),
+      };
+      payloadRef.current = next;
+      payloadUidRef.current = uid;
+      setPayload(next);
+      if (uid) writeCache(uid, next);
+    }
+    const updates = { [`${dbRefPath}/timestamp`]: Date.now(), [`${dbRefPath}/config/lastUpdated`]: Date.now() };
+    for (const [key, value] of Object.entries(patch)) {
+      updates[`${dbRefPath}/config/${key}`] = value;
+    }
+    const attempt = (n) =>
+      update(ref(db), updates).catch(err => {
+        if (n > 0) return new Promise(r => setTimeout(r, 500 * Math.pow(2, 3 - n))).then(() => attempt(n - 1));
+        console.error(`Config-patch write failed (${Object.keys(patch).join(", ")}):`, err);
+        setSyncWarning("write-failed");
+      });
+    attempt(3);
+  };
+
   // Write any pending debounced payload immediately (call before navigating away).
   const flushNow = () => {
     if (timeoutRef.current && dbRefPath && payloadRef.current) {
@@ -631,5 +663,5 @@ export function useSync(uid, email) {
   // return null so App-level effects cannot read or write the previous user's data.
   const effectivePayload = gatePayloadToUid(payload, payloadUidRef.current, uid);
   const effectiveLoading = loading || (!!uid && payloadUidRef.current !== uid);
-  return { payload: effectivePayload, loading: effectiveLoading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning, savePayload, saveSubPath, saveSubPaths, flushNow, clearCache };
+  return { payload: effectivePayload, loading: effectiveLoading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, flushNow, clearCache };
 }
