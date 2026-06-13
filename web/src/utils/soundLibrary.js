@@ -10,7 +10,7 @@ const CDN_BASE = "https://cdn.jsdelivr.net/gh/sbrd2010/Loci-flow-sounds@main";
 
 export const SOUND_CATEGORIES = {
   rain: {
-    title: "Relaxing Rain",
+    title: "Rainy Day Lo-Fi",
     icon: "🌧️",
     variations: [
       { file: "after-school-rain.mp3", title: "After School Rain" },
@@ -52,8 +52,8 @@ export const SOUND_CATEGORIES = {
     ]
   },
   piano: {
-    title: "Classical Piano",
-    icon: "🎹",
+    title: "Cozy Chillhop",
+    icon: "🌇",
     variations: [
       { file: "dust-on-the-morning-keys.mp3", title: "Dust on the Morning Keys" },
       { file: "sounds/piano/dusk-between-stoops.mp3", title: "Dusk Between Stoops" },
