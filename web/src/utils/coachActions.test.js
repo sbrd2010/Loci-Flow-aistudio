@@ -226,6 +226,10 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("COMPLETE_TASK", "I'm not done with the report")).toBe(false);
   });
 
+  it("does not match COMPLETE_TASK when negation is several words before the completion word", () => {
+    expect(matchesUserIntent("COMPLETE_TASK", "Don't mark Write report complete", "Write report")).toBe(false);
+  });
+
   it("does not match PARK_TASK on negated park language", () => {
     expect(matchesUserIntent("PARK_TASK", "Don't park the report")).toBe(false);
   });

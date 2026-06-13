@@ -239,22 +239,28 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         const notFound = results.filter(r => !r.matched && !r.blocked && r.type !== "ADD_TASK");
         const addSkipped = results.filter(r => !r.matched && !r.blocked && r.type === "ADD_TASK" && !r.eveningGuardBlocked);
         const eveningGuardBlocked = results.filter(r => r.eveningGuardBlocked);
-        if (blocked.length === results.length) {
-          // Every tagged action was blocked — the model's narration above describes
-          // actions that were NOT applied, so replace it entirely rather than append.
-          replyText = "I'll only make task changes when you explicitly ask — so nothing changed there. What would you like to do?";
+
+        const notes = [];
+        if (notFound.length > 0) {
+          notes.push(`I couldn't find ${notFound.map(r => `"${r.title}"`).join(" or ")} in your task list — could you double-check the name?`);
+        }
+        if (addSkipped.length > 0) {
+          notes.push(`Looks like that's already on your list, so I didn't add a duplicate.`);
+        }
+        if (eveningGuardBlocked.length > 0) {
+          notes.push(`Evening Guard is active, so I didn't add that — feel free to add it again tomorrow.`);
+        }
+        if (blocked.length > 0) {
+          notes.push(`I'll only do that when you explicitly ask — just say the word and I will.`);
+        }
+
+        if (results.every(r => !r.matched)) {
+          // Nothing was actually applied — the model's narration above may describe
+          // an action that didn't happen, so replace it entirely rather than append.
+          replyText = notes.join(" ");
         } else {
-          if (notFound.length > 0) {
-            replyText = `${replyText}\n\n(I couldn't find ${notFound.map(r => `"${r.title}"`).join(" or ")} in your task list — could you double-check the name?)`.trim();
-          }
-          if (addSkipped.length > 0) {
-            replyText = `${replyText}\n\n(Looks like that's already on your list, so I didn't add a duplicate.)`.trim();
-          }
-          if (eveningGuardBlocked.length > 0) {
-            replyText = `${replyText}\n\n(Evening Guard is active, so I didn't add that — feel free to add it again tomorrow.)`.trim();
-          }
-          if (blocked.length > 0) {
-            replyText = `${replyText}\n\n(I'll only do that when you explicitly ask — just say the word and I will.)`.trim();
+          for (const note of notes) {
+            replyText = `${replyText}\n\n(${note})`.trim();
           }
         }
       }

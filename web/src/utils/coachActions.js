@@ -82,7 +82,18 @@ export function matchesUserIntent(actionType, lastUserMessage = "", title = "") 
   if (actionType === "COMPLETE_TASK" && NON_SPECIFIC_COMPLETION_RE.test(message)) return false;
   const match = pattern.exec(message);
   if (!match) return false;
-  const preceding = message.slice(Math.max(0, match.index - 20), match.index);
+  // Look back to the start of the current clause (the last sentence-ending
+  // punctuation, or the start of the message) rather than a fixed character
+  // window — catches negations like "Don't ... mark it complete" regardless
+  // of how many words sit between "don't" and the matched action word.
+  const clauseStart = Math.max(
+    message.lastIndexOf(".", match.index - 1),
+    message.lastIndexOf(",", match.index - 1),
+    message.lastIndexOf("!", match.index - 1),
+    message.lastIndexOf("?", match.index - 1),
+    message.lastIndexOf("\n", match.index - 1)
+  ) + 1;
+  const preceding = message.slice(clauseStart, match.index);
   if (NEGATION_RE.test(preceding)) return false;
   if (TITLE_CHECK_TYPES.has(actionType) && !titleMentionedInMessage(title, message)) return false;
   return true;
