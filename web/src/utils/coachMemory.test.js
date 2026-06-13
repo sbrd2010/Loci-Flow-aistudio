@@ -48,6 +48,10 @@ describe("addPinnedFact / removePinnedFact", () => {
     expect(addPinnedFact({}, "User uses Groq key gsk_abcdefghijklmnopqrstuvwx").pinnedFacts).toEqual([]);
   });
 
+  it("rejects entries that state an account number", () => {
+    expect(addPinnedFact({}, "User's bank account number is 123456789").pinnedFacts).toEqual([]);
+  });
+
   it("rejects entries containing an exact financial amount", () => {
     expect(addPinnedFact({}, "User is $12,000 behind on rent.").pinnedFacts).toEqual([]);
     expect(addRecentObservation({}, "User mentioned owing 5000 dollars on a loan.", "2026-06-13").recentObservations).toEqual([]);

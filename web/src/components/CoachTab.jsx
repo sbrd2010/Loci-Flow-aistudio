@@ -70,8 +70,10 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
   // Coach tab unmounts on tab switch (see App.jsx), so an in-flight AI reply
   // can resolve after the user has navigated to Settings and changed
   // coachMemory/coachMemoryEnabled there. configRef would then be frozen on a
-  // stale config — guard the post-reply config save with this so a late
-  // reply can't write that stale snapshot back over newer settings.
+  // stale config — guard writing NEW memory entries with this so a late
+  // reply doesn't add memory based on a stale opt-out/config snapshot. (The
+  // final config save below stays unconditional so other patches, like a
+  // coach check-in, are never lost.)
   const isMountedRef = useRef(true);
   useEffect(() => () => { isMountedRef.current = false; }, []);
 
@@ -358,7 +360,7 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         }
       }
 
-      if (configPatch && isMountedRef.current) {
+      if (configPatch) {
         saveSubPath("config", { ...configRef.current, ...configPatch, lastUpdated: Date.now() });
       }
 
