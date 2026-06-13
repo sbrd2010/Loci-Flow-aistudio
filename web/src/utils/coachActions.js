@@ -28,7 +28,7 @@ export function parseCoachActionTags(text = "") {
 }
 
 function normalizeTitle(str = "") {
-  return String(str).toLowerCase().trim().replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
+  return String(str).toLowerCase().trim().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ");
 }
 
 // Fuzzy-matches a tag's title against the user's active tasks: an exact match
@@ -39,8 +39,9 @@ export function findTaskByTitle(tasks = [], rawTitle = "") {
   if (!target) return null;
   const active = (tasks || []).filter(isActiveLociTask);
 
-  const exact = active.find(t => normalizeTitle(t.title) === target);
-  if (exact) return exact;
+  const exact = active.filter(t => normalizeTitle(t.title) === target);
+  if (exact.length === 1) return exact[0];
+  if (exact.length > 1) return null;
 
   const partial = active.filter(t => {
     const norm = normalizeTitle(t.title);

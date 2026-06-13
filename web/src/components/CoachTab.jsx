@@ -10,7 +10,7 @@ import { scheduleCoachCheckin, cancelCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, buildCheckinResumeMessage } from "../utils/coachCheckin";
 import { parseCoachActionTags, applyCoachActions } from "../utils/coachActions";
 
-export default function CoachTab({ payload, savePayload, saveSubPath, userProfile, focusTimer = {} }) {
+export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, userProfile, focusTimer = {} }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
   const { groqKey, geminiKey } = getAIKeys();
   const hasAnyKey = !!(groqKey || geminiKey);
@@ -58,6 +58,10 @@ export default function CoachTab({ payload, savePayload, saveSubPath, userProfil
   chatHistoryRef.current = chatHistory;
   const configRef = useRef(config);
   configRef.current = config;
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
+  const contributionsRef = useRef(contributions);
+  contributionsRef.current = contributions;
 
   useEffect(() => {
     const checkDue = () => {
@@ -203,15 +207,20 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
       let replyText = cleanText;
       if (actions.length > 0) {
         const { payload: updatedPayload, results } = applyCoachActions(
-          { ...payload, tasks, config, contributions },
+          { ...payload, tasks: tasksRef.current, config: configRef.current, contributions: contributionsRef.current },
           actions,
           { lociDateStr: todayStr, localDateStr: getLocalDateString(now) }
         );
-        if (updatedPayload.tasks !== tasks) saveSubPath("tasks", updatedPayload.tasks);
-        if (updatedPayload.contributions !== contributions) saveSubPath("contributions", updatedPayload.contributions);
-        if (updatedPayload.config.totalXp !== config.totalXp) {
-          configPatch = { ...configPatch, totalXp: updatedPayload.config.totalXp };
+
+        const patch = {};
+        if (updatedPayload.tasks !== tasksRef.current) patch.tasks = updatedPayload.tasks;
+        if (updatedPayload.contributions !== contributionsRef.current) patch.contributions = updatedPayload.contributions;
+        if (updatedPayload.config.totalXp !== configRef.current.totalXp || configPatch) {
+          patch.config = { ...configRef.current, ...configPatch, totalXp: updatedPayload.config.totalXp, lastUpdated: Date.now() };
+          configPatch = null;
         }
+        if (Object.keys(patch).length > 0) saveSubPaths(patch);
+
         const startFocus = results.find(r => r.type === "START_FOCUS" && r.matched);
         if (startFocus && typeof focusTimer.extendTimer === "function") {
           const mins = Number(startFocus.task.timeEstimateMinutes) > 0 ? Number(startFocus.task.timeEstimateMinutes) : 25;

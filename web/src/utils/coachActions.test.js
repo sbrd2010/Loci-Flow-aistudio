@@ -105,6 +105,21 @@ describe("findTaskByTitle", () => {
     ];
     expect(findTaskByTitle(ambiguous, "Email")).toBeNull();
   });
+
+  it("returns null when multiple active tasks have the same exact title", () => {
+    const duplicates = [
+      { uuid: "1", title: "Write report", isCompleted: false, isDeleted: false, isParked: false },
+      { uuid: "2", title: "Write report", isCompleted: false, isDeleted: false, isParked: false },
+    ];
+    expect(findTaskByTitle(duplicates, "Write report")).toBeNull();
+  });
+
+  it("matches non-Latin task titles exactly", () => {
+    const tasksCJK = [
+      { uuid: "1", title: "書類を提出する", isCompleted: false, isDeleted: false, isParked: false },
+    ];
+    expect(findTaskByTitle(tasksCJK, "書類を提出する")).toBe(tasksCJK[0]);
+  });
 });
 
 describe("buildSetNowFocusTasks", () => {
