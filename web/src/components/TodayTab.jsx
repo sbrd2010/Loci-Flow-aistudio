@@ -14,7 +14,7 @@ import { formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
 import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows, getWindowState, getRemainingFocusMinutes, getNextWindowStart, getOverallSpan, getFocusProgress, hasConfiguredFocusWindow } from "../utils/focusWindows";
 import { getMorningRitualVariant, shouldShowMorningRitual, buildMorningRitualDoneConfig, buildMorningRitualSnoozeConfig } from "../utils/morningRitual";
-import { getCoachNudge, buildCoachNudgeShownConfig, buildPendingCoachNudge } from "../utils/coachNudge";
+import { getCoachNudge, buildCoachNudgeClearedConfig, buildPendingCoachNudge } from "../utils/coachNudge";
 import {
   shouldShowMorningCommitment, buildMorningCommitmentPrompt, canSaveMorningCommitment,
   buildMorningCommitmentSave, buildMorningCommitmentSkip, buildMorningCommitmentSnooze,
@@ -59,6 +59,7 @@ export default function TodayTab({
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
   pipOpen, handleOpenPiP, isAddTaskDialogOpen,
   selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
+  isSyncingFromCache = false,
 }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
   const windows = getFocusWindows(config);
@@ -493,7 +494,7 @@ export default function TodayTab({
 
   // ── Proactive Coach Nudge (the coach speaks first) ───────────────────────
   const coachNudge = (
-    isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending ||
+    isSyncingFromCache || isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending ||
     isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || showRescue
   ) ? null : getCoachNudge(payload, new Date());
 
@@ -503,12 +504,12 @@ export default function TodayTab({
 
   const handleCoachNudgeDismiss = () => {
     track("coach_nudge_dismissed", { reason: coachNudge.reason });
-    saveSubPath("config", { ...config, ...buildCoachNudgeShownConfig(), lastUpdated: Date.now() });
+    saveSubPath("config", { ...config, ...buildCoachNudgeClearedConfig(payload, new Date()), lastUpdated: Date.now() });
   };
 
   const handleCoachNudgeTalk = () => {
     track("coach_nudge_engaged", { reason: coachNudge.reason });
-    saveSubPath("config", { ...config, ...buildCoachNudgeShownConfig(), pendingCoachNudge: buildPendingCoachNudge(coachNudge), lastUpdated: Date.now() });
+    saveSubPath("config", { ...config, ...buildCoachNudgeClearedConfig(payload, new Date()), pendingCoachNudge: buildPendingCoachNudge(coachNudge, payload, new Date()), lastUpdated: Date.now() });
     onOpenCoach?.();
   };
 

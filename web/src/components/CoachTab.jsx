@@ -10,6 +10,7 @@ import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin, cancelCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, buildCheckinResumeMessage } from "../utils/coachCheckin";
 import { parseCoachActionTags, applyCoachActions } from "../utils/coachActions";
+import { isPendingCoachNudgeStale, shouldDeliverPendingCoachNudge } from "../utils/coachNudge";
 
 export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, userProfile, focusTimer = {}, isSyncingFromCache = false }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
@@ -81,10 +82,19 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
   // Deliver a Proactive Coach Nudge (see utils/coachNudge.js) handed off from
   // the Today tab — voiced by the AI when a key is available, falling back to
   // the signal's own canned text otherwise. Runs once on mount.
+  const deliveredNudgeRef = useRef(null);
   useEffect(() => {
+    // Defer to the Coach Check-In resume effect above if it's also acting on
+    // this mount — both write a fresh `config`/`chatHistory` snapshot from
+    // the same pre-effect refs, so running both here would let one clobber
+    // the other. The nudge stays pending and is picked up on a later mount.
+    if (isCheckinDue(configRef.current.coachCheckin)) return;
+
     const nudge = configRef.current.pendingCoachNudge;
-    if (!nudge) return;
+    if (!shouldDeliverPendingCoachNudge(nudge, deliveredNudgeRef.current)) return;
+    deliveredNudgeRef.current = nudge;
     saveSubPath("config", { ...configRef.current, pendingCoachNudge: null, lastUpdated: Date.now() });
+    if (isPendingCoachNudgeStale(nudge, payload)) return;
 
     const deliver = (text, voiced) => {
       saveSubPath("chatHistory", [...chatHistoryRef.current, { text, isUser: false }]);
