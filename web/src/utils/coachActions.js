@@ -60,10 +60,9 @@ const NON_SPECIFIC_COMPLETION_RE = /\b(done|finished?)\s+for\s+(today|now|the da
 
 // Action types whose tag title must be corroborated by the user's own
 // message (via titleMentionedInMessage) — guards against the AI emitting a
-// tag for a different task than the one the user just named. ADD_TASK is
-// excluded: a new task's title may reference earlier conversation context,
-// not just the last message.
-const TITLE_CHECK_TYPES = new Set(["SET_NOW_FOCUS", "START_FOCUS", "COMPLETE_TASK", "PARK_TASK"]);
+// tag for a different task than the one the user just named (for ADD_TASK,
+// a different new task than the one the user just described).
+const TITLE_CHECK_TYPES = new Set(["SET_NOW_FOCUS", "START_FOCUS", "COMPLETE_TASK", "PARK_TASK", "ADD_TASK"]);
 
 // Checks that at least one "significant" word (length >= 4) from the tag's
 // title appears in the user's message. Titles with no significant words

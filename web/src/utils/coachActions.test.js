@@ -251,8 +251,9 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("SET_NOW_FOCUS", "Focus on the report now", "Email client")).toBe(false);
   });
 
-  it("does not require a title match for ADD_TASK", () => {
-    expect(matchesUserIntent("ADD_TASK", "Add a task to call the dentist", "Something else entirely")).toBe(true);
+  it("requires the tag's title to be corroborated for ADD_TASK too", () => {
+    expect(matchesUserIntent("ADD_TASK", "Add a task to call the dentist", "Call the dentist")).toBe(true);
+    expect(matchesUserIntent("ADD_TASK", "Add a task to call the dentist", "Buy groceries")).toBe(false);
   });
 });
 
@@ -427,6 +428,13 @@ describe("applyCoachActions", () => {
     expect(results).toEqual([{ type: "SET_NOW_FOCUS", title: "Email client", matched: false, blocked: true }]);
   });
 
+  it("blocks ADD_TASK when the tag's title doesn't match the task the user described", () => {
+    const payload = { tasks: [], config: {}, contributions: [] };
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: "Buy groceries" }], { ...dateOpts, lastUserMessage: "Add Call dentist to my list." });
+    expect(next).toBe(payload);
+    expect(results).toEqual([{ type: "ADD_TASK", title: "Buy groceries", matched: false, blocked: true }]);
+  });
+
   it("COMPLETE_TASK on an already-completed task is a no-op (idempotent)", () => {
     const payload = {
       tasks: [
@@ -486,7 +494,7 @@ describe("applyCoachActions", () => {
   it("ADD_TASK truncates an overlong title to 300 characters", () => {
     const longTitle = "x".repeat(400);
     const payload = { tasks: [], config: {}, contributions: [] };
-    const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: longTitle }], { ...dateOpts, lastUserMessage: "Add a task for this." });
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: longTitle }], { ...dateOpts, lastUserMessage: `Add a task for ${longTitle}.` });
     expect(next.tasks).toHaveLength(1);
     expect(next.tasks[0].title).toBe("x".repeat(300));
     expect(results[0].matched).toBe(true);
@@ -514,7 +522,7 @@ describe("applyCoachActions", () => {
       config: {},
       contributions: [],
     };
-    const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: "call the dentist" }], { ...dateOpts, lastUserMessage: "Add a task for this." });
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: "call the dentist" }], { ...dateOpts, lastUserMessage: "Add a task to call the dentist." });
     expect(next).toBe(payload);
     expect(results).toEqual([{ type: "ADD_TASK", title: "call the dentist", matched: false }]);
   });
