@@ -560,6 +560,33 @@ describe("applyCoachActions", () => {
   });
 });
 
+describe("full pipeline: stale action tag in a generic follow-up reply", () => {
+  const dateOpts = { lociDateStr: "2026-06-13", localDateStr: "2026-06-13" };
+  const payload = {
+    tasks: [{ uuid: "1", title: "Draft Q3 report", horizonLevel: "week", isNowFocus: false, isCompleted: false, isDeleted: false, isParked: false }],
+    config: {},
+    contributions: [],
+  };
+
+  it("a tag attached to an analysis/suggestion reply is dropped and the suggestion is shown as-is", () => {
+    const raw = `"Draft Q3 report" has the nearest deadline — I'd suggest switching your focus there. [[SET_NOW_FOCUS:Draft Q3 report]]`;
+    const { cleanText, actions } = parseCoachActionTags(raw);
+    const lastUserMessage = "Check all my tasks and suggest.";
+    const { payload: next, results } = applyCoachActions(payload, actions, { ...dateOpts, lastUserMessage });
+    expect(next).toBe(payload);
+    expect(buildActionReplyText(cleanText, results, lastUserMessage)).toBe(cleanText);
+  });
+
+  it("a stale tag re-attached to a generic 'No.' reply is dropped, leaving the payload and reply untouched", () => {
+    const raw = `No problem — I'll leave things as they are. [[SET_NOW_FOCUS:Draft Q3 report]]`;
+    const { cleanText, actions } = parseCoachActionTags(raw);
+    const lastUserMessage = "No.";
+    const { payload: next, results } = applyCoachActions(payload, actions, { ...dateOpts, lastUserMessage });
+    expect(next).toBe(payload);
+    expect(buildActionReplyText(cleanText, results, lastUserMessage)).toBe(cleanText);
+  });
+});
+
 describe("buildActionReplyText", () => {
   it("returns cleanText unchanged when there are no actions", () => {
     expect(buildActionReplyText("Just chatting.", [], "How's it going?")).toBe("Just chatting.");
