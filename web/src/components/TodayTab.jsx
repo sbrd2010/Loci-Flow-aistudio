@@ -364,12 +364,21 @@ export default function TodayTab({
     } else if (dueSlots.reflection) {
       slot = "reflection";
     }
-    if (pendingCheckinSlot) setPendingCheckinSlot(null);
-    if (!slot) return;
+    if (!slot) {
+      // Consumed (or no longer due) — don't let it keep overriding priority order.
+      if (pendingCheckinSlot) setPendingCheckinSlot(null);
+      return;
+    }
     setDailyCheckinSlot(slot);
     if (slot === "morning") setCommitmentSelection([]);
     if (slot === "reflection") { setReflectionMood(null); setReflectionNote(""); }
-    const timer = setTimeout(() => setShowDailyCheckin(true), 2500);
+    // Clear pendingCheckinSlot only once the modal actually opens — clearing it now
+    // would change a dependency of this effect, canceling this timer (via cleanup)
+    // and re-running with the override gone before it ever fires.
+    const timer = setTimeout(() => {
+      setShowDailyCheckin(true);
+      if (pendingCheckinSlot) setPendingCheckinSlot(null);
+    }, 2500);
     return () => clearTimeout(timer);
   }, [
     anchorTodayStr, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, isAddTaskDialogOpen,
