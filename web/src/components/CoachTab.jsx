@@ -326,15 +326,15 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         const patch = {};
         if (updatedPayload.tasks !== tasksRef.current) patch.tasks = updatedPayload.tasks;
         if (updatedPayload.contributions !== contributionsRef.current) patch.contributions = updatedPayload.contributions;
-        if (Object.keys(patch).length > 0) saveSubPaths(patch);
 
-        // Fold any XP change into configPatch so it goes out via saveConfigPatch
-        // below, alongside any coachCheckin/coachMemory changes — not via the
-        // saveSubPaths full-config overwrite above, which would use a possibly
-        // stale configRef.current and clobber concurrent config changes.
+        // Keep the XP bump atomic with the task/contribution write that earns
+        // it — a separate saveConfigPatch call afterward could fail or be
+        // interrupted (e.g. page closed) after this write succeeds, leaving
+        // the task marked complete with the promised XP lost on reload.
         if (updatedPayload.config.totalXp !== configRef.current.totalXp) {
-          configPatch = { ...configPatch, totalXp: Number(updatedPayload.config.totalXp) || 0 };
+          patch.config = { ...configRef.current, totalXp: Number(updatedPayload.config.totalXp) || 0, lastUpdated: Date.now() };
         }
+        if (Object.keys(patch).length > 0) saveSubPaths(patch);
 
         const startFocus = results.find(r => r.type === "START_FOCUS" && r.matched);
         if (startFocus && typeof focusTimer.extendTimer === "function") {
