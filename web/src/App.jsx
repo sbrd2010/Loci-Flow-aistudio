@@ -309,13 +309,13 @@ export default function App() {
   // Suppressed during an active focus session (mirrors TodayTab's auto-show guard)
   // so a backgrounded Deep Focus session isn't interrupted by these notifications.
   useEffect(() => {
-    if (!payload?.config) return;
+    if (!payload?.config || isSyncingFromCache) return;
     if (focusTimer.isFocusMode || focusTimer.sessionCompletePending) return;
     const check = () => checkDailyCheckinNotifications(payload.config, getFocusWindows(payload.config));
     check();
     const id = setInterval(check, 5 * 60 * 1000);
     return () => clearInterval(id);
-  }, [payload?.config, focusTimer.isFocusMode, focusTimer.sessionCompletePending]);
+  }, [payload?.config, isSyncingFromCache, focusTimer.isFocusMode, focusTimer.sessionCompletePending]);
 
   // Auto-start the timer when arriving from Day Map's "Start Focus" action
   useEffect(() => {

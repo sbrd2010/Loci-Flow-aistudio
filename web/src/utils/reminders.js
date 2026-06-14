@@ -9,16 +9,23 @@ const COACH_CHECKIN_KEY = "__coach_checkin__";
 
 // Shows a notification via the service worker (preferred — works while the
 // tab is backgrounded) or falls back to the Notification constructor.
+// Returns true if a notification was (likely) shown, false if both paths failed.
 async function showNotificationSafe(title, opts) {
   try {
     if ("serviceWorker" in navigator) {
       const reg = await navigator.serviceWorker.ready;
-      reg.showNotification(title, opts);
+      await reg.showNotification(title, opts);
     } else {
       new Notification(title, opts);
     }
+    return true;
   } catch (_) {
-    try { new Notification(title, opts); } catch (_) {}
+    try {
+      new Notification(title, opts);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 }
 
@@ -136,7 +143,7 @@ function loadNotifiedDailyCheckins(todayStr) {
 // Fires a push notification for each daily check-in card that's due while
 // the app is backgrounded/closed, so check-ins reach the user even if they
 // never open the tab. Safe to call repeatedly (e.g. on a polling interval).
-export function checkDailyCheckinNotifications(config, windows) {
+export async function checkDailyCheckinNotifications(config, windows) {
   if (typeof document !== "undefined" && document.visibilityState === "visible") return;
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
 
@@ -147,10 +154,12 @@ export function checkDailyCheckinNotifications(config, windows) {
   for (const slot of getDueDailyCheckins(config, windows, now)) {
     const key = `${slot}-${todayStr}`;
     if (notified.includes(key)) continue;
-    notified.push(key);
-    changed = true;
     const { title, body } = DAILY_CHECKIN_NOTIFICATIONS[slot];
-    showNotificationSafe(title, { body, icon: "/icon-192.png", tag: `loci-daily-checkin-${slot}`, renotify: true, data: { type: "daily-checkin", slot } });
+    const shown = await showNotificationSafe(title, { body, icon: "/icon-192.png", tag: `loci-daily-checkin-${slot}`, renotify: true, data: { type: "daily-checkin", slot } });
+    if (shown) {
+      notified.push(key);
+      changed = true;
+    }
   }
   if (changed) localStorage.setItem(NOTIFIED_DAILY_CHECKINS_KEY, JSON.stringify(notified));
 }
