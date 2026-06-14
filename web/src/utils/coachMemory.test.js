@@ -67,6 +67,16 @@ describe("addPinnedFact / removePinnedFact", () => {
     expect(addPinnedFact({}, "User struggles with task initiation and benefits from extra structure.").pinnedFacts).toHaveLength(1);
   });
 
+  it("rejects entries that claim a depression or anxiety diagnosis", () => {
+    expect(addPinnedFact({}, "User has anxiety").pinnedFacts).toEqual([]);
+    expect(addPinnedFact({}, "User has been diagnosed with depression.").pinnedFacts).toEqual([]);
+  });
+
+  it("still accepts neutral language describing anxious or low feelings", () => {
+    expect(addPinnedFact({}, "User feels anxious before deadlines and benefits from breaking tasks into smaller steps.").pinnedFacts).toHaveLength(1);
+    expect(addPinnedFact({}, "User mentioned feeling low and unmotivated this week.").pinnedFacts).toHaveLength(1);
+  });
+
   it("rejects entries containing an exact financial amount", () => {
     expect(addPinnedFact({}, "User is $12,000 behind on rent.").pinnedFacts).toEqual([]);
     expect(addRecentObservation({}, "User mentioned owing 5000 dollars on a loan.", "2026-06-13").recentObservations).toEqual([]);

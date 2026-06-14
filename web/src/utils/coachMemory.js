@@ -41,9 +41,12 @@ const FINANCIAL_AMOUNT_PATTERN = /[$€£¥₹]\s?\d[\d,.]*|\b\d[\d,.]*\s?(?:dol
 
 // Defense-in-depth: the system prompt's MEMORY rules say to store diagnoses as
 // neutral behavior patterns, never clinical labels (e.g. never "User has
-// ADHD"), and LANGUAGE bans the word "ADHD" outright — reject entries that
-// name a clinical diagnosis before they can be saved and re-injected later.
-const MEDICAL_LABEL_PATTERN = /\b(adhd|autis(?:m|tic)|asperger'?s?|bipolar|ocd|ptsd|schizophreni[ac])\b/i;
+// ADHD/depression/anxiety"), and LANGUAGE bans the word "ADHD" outright —
+// reject entries that name a clinical diagnosis before they can be saved and
+// re-injected later. Depression/anxiety are only blocked when framed as a
+// diagnosis claim (e.g. "has anxiety", "diagnosed with depression") — plain
+// behavior-pattern language ("feels anxious", "feeling low") stays allowed.
+const MEDICAL_LABEL_PATTERN = /\b(adhd|autis(?:m|tic)|asperger'?s?|bipolar|ocd|ptsd|schizophreni[ac])\b|\b(?:has|have|suffers?\s+from|diagnosed\s+with)\s+(?:an?\s+)?(?:clinical\s+|severe\s+|chronic\s+)?(?:depression|anxiety)\b/i;
 
 function appendCapped(list = [], text, max, extra = {}) {
   // Collapse newlines/control chars so a memory entry can't break out of its
