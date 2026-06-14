@@ -120,9 +120,18 @@ const DAILY_CHECKIN_NOTIFICATIONS = {
   reflection: { title: "🌙 Day Close", body: "Wrap up your day — open Loci to reflect." },
 };
 
-// In-memory dedup so a due check-in only notifies once per Loci day
-// (cleared on page refresh, re-evaluated on load like `scheduled`).
-const notifiedDailyCheckins = new Set();
+const NOTIFIED_DAILY_CHECKINS_KEY = "loci_notified_daily_checkins";
+
+// localStorage-backed dedup so a due check-in only notifies once per Loci day,
+// even across refreshes, backgrounded/discarded tabs, or multiple open tabs.
+// Pruned to today's entries on every read.
+function loadNotifiedDailyCheckins(todayStr) {
+  let stored = [];
+  try {
+    stored = JSON.parse(localStorage.getItem(NOTIFIED_DAILY_CHECKINS_KEY) || "[]");
+  } catch (_) {}
+  return Array.isArray(stored) ? stored.filter(key => key.endsWith(`-${todayStr}`)) : [];
+}
 
 // Fires a push notification for each daily check-in card that's due while
 // the app is backgrounded/closed, so check-ins reach the user even if they
@@ -133,13 +142,17 @@ export function checkDailyCheckinNotifications(config, windows) {
 
   const now = new Date();
   const todayStr = getLociDayStr(now, windows);
+  const notified = loadNotifiedDailyCheckins(todayStr);
+  let changed = false;
   for (const slot of getDueDailyCheckins(config, windows, now)) {
     const key = `${slot}-${todayStr}`;
-    if (notifiedDailyCheckins.has(key)) continue;
-    notifiedDailyCheckins.add(key);
+    if (notified.includes(key)) continue;
+    notified.push(key);
+    changed = true;
     const { title, body } = DAILY_CHECKIN_NOTIFICATIONS[slot];
-    showNotificationSafe(title, { body, icon: "/icon-192.png", tag: `loci-daily-checkin-${slot}`, renotify: true, data: { type: "daily-checkin" } });
+    showNotificationSafe(title, { body, icon: "/icon-192.png", tag: `loci-daily-checkin-${slot}`, renotify: true, data: { type: "daily-checkin", slot } });
   }
+  if (changed) localStorage.setItem(NOTIFIED_DAILY_CHECKINS_KEY, JSON.stringify(notified));
 }
 
 export function formatReminderLabel(ts) {

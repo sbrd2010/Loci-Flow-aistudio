@@ -36,6 +36,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("today");
+  const [pendingCheckinSlot, setPendingCheckinSlot] = useState(null);
   const [mindBoxInitialPanel, setMindBoxInitialPanel] = useState(null);
   const [showAddTask, setShowAddTask] = useState(false);
   const [preselectedHorizon, setPreselectedHorizon] = useState("today");
@@ -101,12 +102,25 @@ export default function App() {
   }, []);
 
   // Deep-link to the Coach tab when opened via a "🤖 Coach check-in" notification
-  // (clients.openWindow("/?tab=coach") in sw.js when no app window was open)
+  // (clients.openWindow("/?tab=coach") in sw.js when no app window was open), or to
+  // a specific Daily Coach Check-in slot via "?checkin=<slot>" (daily-checkin).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    let changed = false;
     if (params.get("tab") === "coach") {
       setActiveTab("coach");
       params.delete("tab");
+      changed = true;
+    }
+    const checkinSlot = params.get("checkin");
+    if (checkinSlot) {
+      setActiveTab("today");
+      setPendingCheckinSlot(checkinSlot);
+      params.delete("checkin");
+      params.delete("tab");
+      changed = true;
+    }
+    if (changed) {
       const rest = params.toString();
       window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
     }
@@ -119,7 +133,10 @@ export default function App() {
     const onMessage = (event) => {
       if (event.data?.type !== "loci-notification-click") return;
       if (event.data.notificationType === "coach-checkin") setActiveTab("coach");
-      else if (event.data.notificationType === "daily-checkin") setActiveTab("today");
+      else if (event.data.notificationType === "daily-checkin") {
+        setActiveTab("today");
+        if (event.data.slot) setPendingCheckinSlot(event.data.slot);
+      }
     };
     navigator.serviceWorker.addEventListener("message", onMessage);
     return () => navigator.serviceWorker.removeEventListener("message", onMessage);
@@ -230,16 +247,6 @@ export default function App() {
     if (payload?.config?.coachCheckin) scheduleCoachCheckin(payload.config.coachCheckin);
   }, [payload?.config?.coachCheckin]);
 
-  // Poll for due daily check-ins (Morning Commitment / Midday / Reflection) and
-  // fire a push notification if the app is backgrounded/closed when one comes due.
-  useEffect(() => {
-    if (!payload?.config) return;
-    const check = () => checkDailyCheckinNotifications(payload.config, getFocusWindows(payload.config));
-    check();
-    const id = setInterval(check, 5 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [payload?.config]);
-
   const todayStr = useTodayStr();
 
   // Auto-increment visit streak on first open each day (real users only).
@@ -296,6 +303,19 @@ export default function App() {
   // Focus Sounds audio also lives here so ambient sound keeps playing across
   // tab switches and after exiting the Deep Focus overlay.
   const focusAudio = useFocusAudio(focusTimer.isTimerRunning, payload?.config || {}, saveSubPath);
+
+  // Poll for due daily check-ins (Morning Commitment / Midday / Reflection) and
+  // fire a push notification if the app is backgrounded/closed when one comes due.
+  // Suppressed during an active focus session (mirrors TodayTab's auto-show guard)
+  // so a backgrounded Deep Focus session isn't interrupted by these notifications.
+  useEffect(() => {
+    if (!payload?.config) return;
+    if (focusTimer.isFocusMode || focusTimer.sessionCompletePending) return;
+    const check = () => checkDailyCheckinNotifications(payload.config, getFocusWindows(payload.config));
+    check();
+    const id = setInterval(check, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [payload?.config, focusTimer.isFocusMode, focusTimer.sessionCompletePending]);
 
   // Auto-start the timer when arriving from Day Map's "Start Focus" action
   useEffect(() => {
@@ -615,6 +635,8 @@ export default function App() {
             onOpenMindBox={openMindBox}
             onOpenCoach={() => setActiveTab("coach")}
             isAddTaskDialogOpen={showAddTask}
+            pendingCheckinSlot={pendingCheckinSlot}
+            setPendingCheckinSlot={setPendingCheckinSlot}
             {...focusTimer}
             {...focusAudio}
           />
