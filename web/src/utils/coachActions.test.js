@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, buildParkTaskTasks, applyCoachActions, matchesUserIntent } from "./coachActions";
+import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, buildParkTaskTasks, applyCoachActions, matchesUserIntent, buildActionReplyText } from "./coachActions";
 import { parseCheckinTag } from "./coachCheckin";
 import { getFocusWindows, getLociDayStr } from "./focusWindows";
 import { getLocalDateString } from "./lociAIContext";
@@ -557,5 +557,101 @@ describe("applyCoachActions", () => {
     const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: "call the dentist" }], { ...dateOpts, lastUserMessage: "Add a task to call the dentist." });
     expect(next).toBe(payload);
     expect(results).toEqual([{ type: "ADD_TASK", title: "call the dentist", matched: false }]);
+  });
+});
+
+describe("full pipeline: stale action tag in a generic follow-up reply", () => {
+  const dateOpts = { lociDateStr: "2026-06-13", localDateStr: "2026-06-13" };
+  const payload = {
+    tasks: [{ uuid: "1", title: "Draft Q3 report", horizonLevel: "week", isNowFocus: false, isCompleted: false, isDeleted: false, isParked: false }],
+    config: {},
+    contributions: [],
+  };
+
+  it("a tag attached to an analysis/suggestion reply is dropped and the suggestion is shown as-is", () => {
+    const raw = `"Draft Q3 report" has the nearest deadline — I'd suggest switching your focus there. [[SET_NOW_FOCUS:Draft Q3 report]]`;
+    const { cleanText, actions } = parseCoachActionTags(raw);
+    const lastUserMessage = "Check all my tasks and suggest.";
+    const { payload: next, results } = applyCoachActions(payload, actions, { ...dateOpts, lastUserMessage });
+    expect(next).toBe(payload);
+    expect(buildActionReplyText(cleanText, results, lastUserMessage)).toBe(cleanText);
+  });
+
+  it("a stale tag re-attached to a generic 'No.' reply is dropped, leaving the payload and reply untouched", () => {
+    const raw = `No problem — I'll leave things as they are. [[SET_NOW_FOCUS:Draft Q3 report]]`;
+    const { cleanText, actions } = parseCoachActionTags(raw);
+    const lastUserMessage = "No.";
+    const { payload: next, results } = applyCoachActions(payload, actions, { ...dateOpts, lastUserMessage });
+    expect(next).toBe(payload);
+    expect(buildActionReplyText(cleanText, results, lastUserMessage)).toBe(cleanText);
+  });
+});
+
+describe("buildActionReplyText", () => {
+  it("returns cleanText unchanged when there are no actions", () => {
+    expect(buildActionReplyText("Just chatting.", [], "How's it going?")).toBe("Just chatting.");
+  });
+
+  it("returns cleanText unchanged when every action matched", () => {
+    const results = [{ type: "COMPLETE_TASK", title: "Write report", matched: true, task: { title: "Write report" } }];
+    expect(buildActionReplyText("Nice work!", results, "I finished the report")).toBe("Nice work!");
+  });
+
+  it("shows cleanText only when a blocked action is stale — the message doesn't ask for that kind of action at all", () => {
+    const results = [{ type: "ADD_TASK", title: "Write report", matched: false, blocked: true }];
+    expect(buildActionReplyText("Sounds good, let's chat about your day.", results, "How's it going?")).toBe("Sounds good, let's chat about your day.");
+  });
+
+  it("returns empty cleanText unchanged when a blocked action is stale and the model wrote nothing else", () => {
+    const results = [{ type: "ADD_TASK", title: "Write report", matched: false, blocked: true }];
+    expect(buildActionReplyText("", results, "How's it going?")).toBe("");
+  });
+
+  it("appends a COMPLETE_TASK clarification when the message is action-like but the tag's title didn't match", () => {
+    const results = [{ type: "COMPLETE_TASK", title: "Email client", matched: false, blocked: true }];
+    expect(buildActionReplyText("Nice work!", results, "I finished the report")).toBe(`Nice work! Which task should I mark complete?`);
+  });
+
+  it("uses the SET_NOW_FOCUS/START_FOCUS clarification when the user asks to focus but the tag's title doesn't match", () => {
+    const results = [{ type: "SET_NOW_FOCUS", title: "Write report", matched: false, blocked: true }];
+    expect(buildActionReplyText("", results, "Let's focus on something now")).toBe(`Which task should I focus on? Say: "Start focus on [task name]."`);
+  });
+
+  it("uses the ADD_TASK clarification when the user asks to add a task but the tag's title doesn't match", () => {
+    const results = [{ type: "ADD_TASK", title: "Buy groceries", matched: false, blocked: true }];
+    expect(buildActionReplyText("", results, "Add a task to call the dentist")).toBe("What exact task should I add?");
+  });
+
+  it("uses the PARK_TASK clarification when the user asks to park something but the tag's title doesn't match", () => {
+    const results = [{ type: "PARK_TASK", title: "Write report", matched: false, blocked: true }];
+    expect(buildActionReplyText("Sure thing.", results, "Let's park that for now")).toBe(`Sure thing. Which task should I park?`);
+  });
+
+  it("dedupes identical clarification notes from multiple blocked actions of related types", () => {
+    const results = [
+      { type: "SET_NOW_FOCUS", title: "Write report", matched: false, blocked: true },
+      { type: "START_FOCUS", title: "Write report", matched: false, blocked: true },
+    ];
+    expect(buildActionReplyText("", results, "Let's focus on something and start working now")).toBe(`Which task should I focus on? Say: "Start focus on [task name]."`);
+  });
+
+  it("reports a not-found task alongside narration for an action that did succeed", () => {
+    const results = [
+      { type: "COMPLETE_TASK", title: "Write report", matched: true, task: { title: "Write report" } },
+      { type: "PARK_TASK", title: "Walk the dog", matched: false },
+    ];
+    expect(buildActionReplyText("Some narration the model wrote.", results, "I finished the report, and park walk the dog")).toBe(
+      `Marked "Write report" complete — +100 XP! I couldn't find "Walk the dog" in your task list — could you double-check the name?`
+    );
+  });
+
+  it("notes a skipped duplicate ADD_TASK and a blocked Evening Guard ADD_TASK", () => {
+    const results = [
+      { type: "ADD_TASK", title: "Call the dentist", matched: false },
+      { type: "ADD_TASK", title: "Buy groceries", matched: false, eveningGuardBlocked: true },
+    ];
+    expect(buildActionReplyText("", results, "Add Call the dentist and Buy groceries to my list.")).toBe(
+      `Looks like that's already on your list, so I didn't add a duplicate. Evening Guard is active, so I didn't add that — feel free to add it again tomorrow.`
+    );
   });
 });

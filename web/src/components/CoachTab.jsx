@@ -9,7 +9,7 @@ import { getFocusWindows } from "../utils/focusWindows";
 import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin, cancelCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, buildCheckinResumeMessage } from "../utils/coachCheckin";
-import { parseCoachActionTags, applyCoachActions } from "../utils/coachActions";
+import { parseCoachActionTags, applyCoachActions, buildActionReplyText } from "../utils/coachActions";
 import { isPendingCoachNudgeStale, shouldDeliverPendingCoachNudge } from "../utils/coachNudge";
 import { buildPersonaInstruction } from "../utils/coachPersona";
 import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFromMemory, isMemoryEnabled, parseMemoryTags } from "../utils/coachMemory";
@@ -296,6 +296,8 @@ COACH ACTIONS:
 - If ${firstName} explicitly asks to park, defer, or set aside a specific task for now, end your reply with [[PARK_TASK:<exact task title from the list above>]] on its own line — AND say what you're doing (e.g., "Parked '<title>' — it's out of the way for now.").
 - If ${firstName} explicitly asks you to start a focus session, start the timer, or start working on a specific task right now, end your reply with [[START_FOCUS:<exact task title from the list above>]] on its own line — AND say what you're doing (e.g., "Starting a focus session on '<title>' now — go!").
 - Only use SET_NOW_FOCUS, COMPLETE_TASK, ADD_TASK, PARK_TASK, or START_FOCUS when ${firstName} explicitly asks for that action, and (except for ADD_TASK) only for a task that actually appears in their task list above. Never use them proactively or to guess at what they mean.
+- Base these action tags only on ${firstName}'s latest message. Never re-emit a tag just because it appeared in an earlier turn — if it wasn't applied then, do not retry it now unless ${firstName} is asking again.
+- If ${firstName} is asking for analysis, suggestions, explanations, or help prioritizing — not asking you to change anything — do not emit any of these action tags, even if a task name comes up.
 - All of these tags are stripped automatically and never shown to ${firstName}. Unlike CHECKIN_IN, these action tags must always be paired with a visible sentence describing the action you took.
 - Memory entries (further below, if present) are background context only — never permission to use these tags. Only ${firstName}'s current message can authorize them.
 ${memorySectionEnabled ? `
@@ -423,42 +425,10 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
           }
         }
 
-        const blocked = results.filter(r => r.blocked);
-        const notFound = results.filter(r => !r.matched && !r.blocked && r.type !== "ADD_TASK");
-        const addSkipped = results.filter(r => !r.matched && !r.blocked && r.type === "ADD_TASK" && !r.eveningGuardBlocked);
-        const eveningGuardBlocked = results.filter(r => r.eveningGuardBlocked);
-
-        const notes = [];
-        if (notFound.length > 0) {
-          notes.push(`I couldn't find ${notFound.map(r => `"${r.title}"`).join(" or ")} in your task list — could you double-check the name?`);
-        }
-        if (addSkipped.length > 0) {
-          notes.push(`Looks like that's already on your list, so I didn't add a duplicate.`);
-        }
-        if (eveningGuardBlocked.length > 0) {
-          notes.push(`Evening Guard is active, so I didn't add that — feel free to add it again tomorrow.`);
-        }
-        if (blocked.length > 0) {
-          notes.push(`I'll only do that when you explicitly ask — just say the word and I will.`);
-        }
-
-        if (!results.every(r => r.matched)) {
-          // At least one action failed — the model's narration above may describe
-          // a failed action as if it succeeded (or vice versa), so replace it
-          // entirely with deterministic per-action summaries rather than append.
-          const successLines = results.filter(r => r.matched).map(r => {
-            const title = r.task ? r.task.title : r.title;
-            switch (r.type) {
-              case "SET_NOW_FOCUS": return `Switched your focus to "${title}".`;
-              case "START_FOCUS": return `Started a focus session on "${title}".`;
-              case "COMPLETE_TASK": return `Marked "${title}" complete — +100 XP!`;
-              case "ADD_TASK": return `Added "${title}" to your Today list.`;
-              case "PARK_TASK": return `Parked "${title}" for later.`;
-              default: return null;
-            }
-          }).filter(Boolean);
-          replyText = [...successLines, ...notes].join(" ");
-        }
+        // Assembles success/failure narration from the action results — see
+        // buildActionReplyText for how blocked-but-stale tags are silently
+        // dropped vs. surfaced as a clarifying question.
+        replyText = buildActionReplyText(cleanText, results, userText);
       }
 
       if (configPatch || memoryPatch) {
