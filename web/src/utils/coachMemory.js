@@ -32,12 +32,20 @@ const MIN_FORGET_TEXT_LENGTH = 8;
 // up to a few words of context between the label and the value (e.g. "API key
 // for production is sk-...", "password for Gmail is hunter2") so a secret
 // can't slip through just by being described rather than stated bluntly.
-const SECRET_PATTERN = /\b(passwords?|passwd|pwd|api[_\s-]?keys?|secret\s*keys?|access\s*tokens?|auth\s*tokens?|private\s*keys?|recovery\s*codes?|seed\s*phrases?|2fa\s*codes?|otps?|one[- ]time\s*(?:codes?|passwords?)|account\s*numbers?|routing\s*numbers?|card\s*numbers?|iban|sort\s*codes?)\b(?:\s+\w+){0,5}?\s*(?:is|was|are|were|[:=])\s*\S{3,}|\b(sk-[A-Za-z0-9]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|gsk_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{20,})\b/i;
+const SECRET_PATTERN = /\b(passwords?|passwd|pwd|api[_\s-]?keys?|secret\s*keys?|access\s*tokens?|auth\s*tokens?|private\s*keys?|recovery\s*codes?|seed\s*phrases?|2fa\s*codes?|otps?|one[- ]time\s*(?:codes?|passwords?)|account\s*numbers?|routing\s*numbers?|card\s*numbers?|iban|sort\s*codes?|ssns?|social\s*security\s*(?:numbers?)?)\b(?:\s+\w+){0,5}?\s*(?:is|was|are|were|[:=])\s*\S{3,}|\b(sk-[A-Za-z0-9]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|gsk_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{20,})\b/i;
 
 // Defense-in-depth: the system prompt says to store financial pressure as
 // broad context, never exact figures (e.g. "$12,000" or "5000 dollars") —
 // reject entries that contain a currency-amount pattern before saving.
 const FINANCIAL_AMOUNT_PATTERN = /[$€£¥₹]\s?\d[\d,.]*|\b\d[\d,.]*\s?(?:dollars?|usd|eur|euros?|gbp|pounds?|rupees?|inr|cents?)\b/i;
+
+// Defense-in-depth: also reject "k"/"m" shorthand amounts paired with
+// explicit debt wording (e.g. "owes 12k", "12k in credit card debt") that the
+// currency-symbol/word pattern above would miss. Deliberately scoped to
+// "owe(s/d)" and debt/loan/rent/mortgage/arrears nouns rather than generic
+// "behind"/"overdue" — this app's everyday language ("3 overdue tasks",
+// "feeling behind") would otherwise be rejected as a financial amount.
+const FINANCIAL_SHORTHAND_PATTERN = /\bowe[sd]?\b\s*(?:\w+\s+){0,3}?\d[\d,.]*\s?[km]\b|\b\d[\d,.]*\s?[km]\b\s*(?:\w+\s+){0,3}?(?:debts?|loans?|rent|mortgage|arrears)\b/i;
 
 // Defense-in-depth: the system prompt's MEMORY rules say to store diagnoses as
 // neutral behavior patterns, never clinical labels (e.g. never "User has
@@ -61,7 +69,7 @@ function appendCapped(list = [], text, max, extra = {}) {
   // MEMORY_TAG_RE's non-greedy match stops at the first "]]" (see
   // parseMemoryTags below) — don't let that fragment get persisted and
   // re-injected into every future prompt.
-  if (!trimmed || trimmed.includes("[[") || SECRET_PATTERN.test(trimmed) || FINANCIAL_AMOUNT_PATTERN.test(trimmed) || MEDICAL_LABEL_PATTERN.test(trimmed)) return list;
+  if (!trimmed || trimmed.includes("[[") || SECRET_PATTERN.test(trimmed) || FINANCIAL_AMOUNT_PATTERN.test(trimmed) || FINANCIAL_SHORTHAND_PATTERN.test(trimmed) || MEDICAL_LABEL_PATTERN.test(trimmed)) return list;
 
   // Dedupe by normalized exact text — re-stating the same fact refreshes its
   // position (and updatedAt) instead of piling up near-identical entries.

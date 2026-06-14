@@ -53,6 +53,11 @@ describe("addPinnedFact / removePinnedFact", () => {
     expect(addPinnedFact({}, "User's bank account number is 123456789").pinnedFacts).toEqual([]);
   });
 
+  it("rejects entries that state a social security number", () => {
+    expect(addPinnedFact({}, "User's SSN is 123-45-6789").pinnedFacts).toEqual([]);
+    expect(addPinnedFact({}, "User's social security number is 123-45-6789").pinnedFacts).toEqual([]);
+  });
+
   it("rejects secrets described with context between the label and value", () => {
     expect(addPinnedFact({}, "User's API key for production is sk-proj-abcdefghijklmnop").pinnedFacts).toEqual([]);
     expect(addPinnedFact({}, "User's password for Gmail is hunter2").pinnedFacts).toEqual([]);
@@ -90,6 +95,16 @@ describe("addPinnedFact / removePinnedFact", () => {
 
   it("still accepts a broad financial-pressure statement with no figures", () => {
     expect(addPinnedFact({}, "User is under financial pressure.").pinnedFacts).toHaveLength(1);
+  });
+
+  it("rejects shorthand financial figures paired with debt wording", () => {
+    expect(addPinnedFact({}, "User owes 12k in credit card debt.").pinnedFacts).toEqual([]);
+    expect(addRecentObservation({}, "User mentioned a 5k loan from a friend.", "2026-06-13").recentObservations).toEqual([]);
+  });
+
+  it("still accepts non-financial 'k' shorthand and everyday 'behind/overdue' task language", () => {
+    expect(addPinnedFact({}, "User completed a 5k charity run this morning.").pinnedFacts).toHaveLength(1);
+    expect(addPinnedFact({}, "User often has several overdue tasks by Friday and feels behind on 3 projects.").pinnedFacts).toHaveLength(1);
   });
 
   it("rejects entries containing a dangling '[[' tag fragment (e.g. from a nested-tag REMEMBER)", () => {
