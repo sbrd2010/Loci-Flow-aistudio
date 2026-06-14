@@ -42,56 +42,95 @@ export function sanitizeTaskField(value, maxLength) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
+// Caps for normalizeAiOrganizeSuggestions — a long/mixed brain-dump entry can
+// legitimately split into several tasks, each with several preserved details.
+const MAX_SUGGESTIONS = 25;
+const MAX_SUGGESTIONS_PER_SOURCE = 8;
+const MAX_SUBSTEPS = 7;
+const MAX_SUBSTEP_LENGTH = 240;
+
 // Validates and normalizes raw AI Organize suggestions against the current brain
 // dump items. Each returned suggestion gets a `sourceId` that is either a valid
 // brain-dump item ID (AI correctly referenced it) or null (AI omitted/garbled it).
 // Suggestions with invalid horizon or priority are discarded rather than silently
-// creating bad tasks. `subSteps` (key points from long brain-dump entries that
-// would be lost in the short title/concreteStep) are normalized the same way as
-// applyAiRewriteToTask's subSteps, defaulting to [] when absent or malformed.
+// creating bad tasks. Multiple suggestions may share the same sourceId — a single
+// entry can split into several tasks (capped per-source and overall). `subSteps`
+// (key details from long entries that would be lost in the short
+// title/concreteStep) are normalized the same way as applyAiRewriteToTask's
+// subSteps, defaulting to [] when absent or malformed.
 export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
   if (!Array.isArray(rawSuggestions)) return [];
   const validIds = new Set((brainDumpItems || []).map((d) => d.id).filter(Boolean));
   const now = Date.now();
-  return rawSuggestions
-    .filter(
-      (t) =>
-        t &&
-        typeof t.title === "string" &&
-        t.title.trim() &&
-        AI_ORGANIZE_VALID_HORIZONS.has(t.horizonLevel) &&
-        AI_ORGANIZE_VALID_PRIORITIES.has(t.priority)
-    )
-    .map((t, i) => {
-      const rawSubSteps = t.subSteps;
-      const subSteps = Array.isArray(rawSubSteps)
-        ? rawSubSteps
-            .filter((s) => s && typeof s.text === "string" && s.text.trim())
-            .slice(0, 5)
-            .map((s, j) => ({ id: s.id || `ai-ss-${i}-${j}-${now}`, text: s.text.trim(), done: false }))
-        : [];
-      return {
-        ...t,
-        title: t.title.trim().slice(0, 1000),
-        concreteStep: sanitizeTaskField(t.concreteStep, 300),
-        // sourceId is only trusted when it maps to a real brain-dump item
-        sourceId: validIds.has(t.sourceId) ? t.sourceId : null,
-        subSteps,
-      };
-    })
-    .slice(0, 10);
+  const sourceCounts = new Map();
+  const result = [];
+
+  for (const t of rawSuggestions) {
+    if (
+      !t ||
+      typeof t.title !== "string" ||
+      !t.title.trim() ||
+      !AI_ORGANIZE_VALID_HORIZONS.has(t.horizonLevel) ||
+      !AI_ORGANIZE_VALID_PRIORITIES.has(t.priority)
+    ) continue;
+
+    // sourceId is only trusted when it maps to a real brain-dump item
+    const sourceId = validIds.has(t.sourceId) ? t.sourceId : null;
+    if (sourceId) {
+      const count = sourceCounts.get(sourceId) || 0;
+      if (count >= MAX_SUGGESTIONS_PER_SOURCE) continue;
+      sourceCounts.set(sourceId, count + 1);
+    }
+
+    const rawSubSteps = t.subSteps;
+    const subSteps = Array.isArray(rawSubSteps)
+      ? rawSubSteps
+          .filter((s) => s && typeof s.text === "string" && s.text.trim())
+          .slice(0, MAX_SUBSTEPS)
+          .map((s, j) => ({ id: s.id || `ai-ss-${result.length}-${j}-${now}`, text: s.text.trim().slice(0, MAX_SUBSTEP_LENGTH), done: false }))
+      : [];
+
+    result.push({
+      ...t,
+      title: t.title.trim().slice(0, 1000),
+      concreteStep: sanitizeTaskField(t.concreteStep, 300),
+      sourceId,
+      subSteps,
+      splitReason: sanitizeTaskField(t.splitReason, 80),
+    });
+
+    if (result.length >= MAX_SUGGESTIONS) break;
+  }
+
+  return result;
 }
 
-// Removes brain-dump items whose ID was explicitly claimed by an accepted AI
-// suggestion via sourceId. Items without a matching sourceId are never touched,
-// preventing title-mismatch false-positives from the old text-compare approach.
-export function buildClearedBrainDump(brainDump, acceptedSuggestions) {
-  const processedIds = new Set(
-    (acceptedSuggestions || [])
-      .map((t) => t.sourceId)
-      .filter(Boolean)
-  );
-  return (brainDump || []).filter((d) => !processedIds.has(d.id));
+// Removes brain-dump items whose ID was explicitly claimed by accepted AI
+// suggestions via sourceId — but only once EVERY suggestion generated for that
+// source has been accepted. A long entry can split into several suggestions
+// sharing one sourceId; accepting only some of them keeps the original entry so
+// the unaccepted parts aren't silently lost. `allSuggestions` defaults to
+// `acceptedSuggestions` for callers that only ever produce one suggestion per source.
+export function buildClearedBrainDump(brainDump, acceptedSuggestions, allSuggestions) {
+  const accepted = acceptedSuggestions || [];
+  const all = allSuggestions || accepted;
+
+  const totalBySource = new Map();
+  for (const t of all) {
+    if (!t.sourceId) continue;
+    totalBySource.set(t.sourceId, (totalBySource.get(t.sourceId) || 0) + 1);
+  }
+  const acceptedBySource = new Map();
+  for (const t of accepted) {
+    if (!t.sourceId) continue;
+    acceptedBySource.set(t.sourceId, (acceptedBySource.get(t.sourceId) || 0) + 1);
+  }
+
+  const clearedIds = new Set();
+  for (const [sourceId, total] of totalBySource) {
+    if ((acceptedBySource.get(sourceId) || 0) === total) clearedIds.add(sourceId);
+  }
+  return (brainDump || []).filter((d) => !clearedIds.has(d.id));
 }
 
 // Pure helper for the task-completion toggle — extracted for unit-testability.

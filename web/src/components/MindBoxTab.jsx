@@ -295,14 +295,37 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
       ? `\nUser context: completion rate ${Math.round(profile.completionRate * 100)}%, dominant horizon "${profile.dominantHorizon}", avg estimate ${profile.avgEstimateMinutes}min. Weight horizon suggestions toward their patterns.`
       : "";
     // Include each item's stable ID so AI can return sourceId for safe brain-dump clearing
-    const prompt = `Here are raw thoughts from a brain dump:\n${brainDumpItems.map((item, i) => `${i + 1}. [id:${item.id}] ${item.text}`).join("\n")}\n\nOrganize each thought into a structured task. For each one determine:\n- sourceId: the id value from the [id:...] tag in the original list\n- title: specific, outcome-oriented (max 60 chars)\n- horizonLevel: "today" (urgent/deadline today), "week" (most items, default), "month", "quarter", "halfyear" (6 months / long-term), or "office" (work or professional tasks)\n- priority: "P1" (urgent), "P2" (important), "P3" (normal), "P4" (quick <15 min)\n- concreteStep: the single easiest first action to start it (max 60 chars)\n- subSteps: if the thought is long or detailed, extract 2-5 key points, details, or sub-tasks that would otherwise be lost in the short title/concreteStep. Use [] for short, simple thoughts where the title already captures everything.${profileNote}\n\nRules: default to "week" unless clearly urgent or work-related. Never use the word "ADHD".\n\nReturn ONLY a JSON array, no markdown:\n[{"sourceId":"<id from list>","title":"...","horizonLevel":"week","priority":"P3","concreteStep":"...","subSteps":[{"text":"key point 1"},{"text":"key point 2"}]}]`;
+    const prompt = `Here are raw thoughts from a brain dump:
+${brainDumpItems.map((item, i) => `${i + 1}. [id:${item.id}] ${item.text}`).join("\n")}
+
+Turn these into clear, actionable tasks. Each numbered thought can become:
+- ONE simple task — for a single small action
+- ONE task with subSteps — for a single action that has several parts or details worth keeping
+- MULTIPLE separate tasks sharing the same sourceId — when a thought mixes several distinct, unrelated actions. Split them instead of mashing everything into one vague task
+- ONE practical next-step task — when a thought is vague venting or emotional overwhelm with no clear action. Turn it into a single small, low-shame, concrete next step rather than trying to solve everything at once
+
+Preserve every concrete detail from the original text — names, dates, deadlines, amounts, links, places, people, constraints, and decision criteria — especially for job search, admin, finance, and travel items. Don't drop them; put whatever doesn't fit in the title/concreteStep into subSteps.
+
+For each task, determine:
+- sourceId: the id from the [id:...] tag of the thought it came from. If a thought splits into multiple tasks, every one of them shares that same sourceId
+- title: specific and outcome-oriented (max 60 chars). Keep the concrete subject (company, person, item, place) from the text — never a vague title like "Organize everything" or "Handle tasks"
+- horizonLevel: "today" (urgent/deadline today), "week" (most items, default), "month", "quarter", "halfyear" (6 months / long-term), or "office" (work or professional tasks)
+- priority: "P1" (urgent), "P2" (important), "P3" (normal), "P4" (quick <15 min)
+- concreteStep: the single easiest physical/digital first action to start it (max 60 chars), e.g. "Open LinkedIn and message the recruiter", not "Look into it"
+- subSteps: for a complex or long thought, 2-7 key details or sub-tasks that would otherwise be lost (deadlines, amounts, links, names, decisions). Use [] for short, simple thoughts where the title and concreteStep already capture everything
+- splitReason: only when this task is one of several from the same thought — a short phrase (max 40 chars) naming what makes it distinct, e.g. "Recruiter follow-up". Omit otherwise${profileNote}
+
+Rules: default to "week" unless clearly urgent or work-related. Never use the word "ADHD".
+
+Return ONLY a JSON array, no markdown:
+[{"sourceId":"<id from list>","title":"...","horizonLevel":"week","priority":"P3","concreteStep":"...","subSteps":[{"text":"key point 1"}],"splitReason":""}]`;
 
     try {
       const raw = await callAI({
         groqKey, geminiKey,
         systemPrompt: "You are a productivity coach. Respond ONLY with a valid JSON array, no markdown.",
         messages: [{ role: "user", content: prompt }],
-        maxTokens: 1800
+        maxTokens: 4000
       });
       const cleaned = raw.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
       const parsed = JSON.parse(cleaned);
@@ -372,7 +395,9 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
         ...(t.subSteps && t.subSteps.length > 0 && { subSteps: t.subSteps }),
       };
     });
-    const clearedDump = buildClearedBrainDump(payload.brainDump || [], toAdd);
+    // Pass all suggestions (not just accepted) so a split entry's source is only
+    // cleared once every suggestion generated from it has been accepted.
+    const clearedDump = buildClearedBrainDump(payload.brainDump || [], toAdd, organizeResults);
     savePayload({ ...payload, tasks: [...(payload.tasks || []), ...newTasks], brainDump: clearedDump });
     setToolPanel(null);
     setOrganizeResults([]);
@@ -540,6 +565,9 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
             const horizonOptions = ["today","week","month","quarter","halfyear","office"];
             const horizonLabel = { today: "Today", week: "This Week", month: "Month", quarter: "Quarter", halfyear: "6 Months", office: "Work" };
             const priorityOptions = ["P1","P2","P3","P4"];
+            // Suggestions sharing a sourceId came from splitting one brain-dump entry
+            const sourceCounts = {};
+            organizeResults.forEach(t => { if (t.sourceId) sourceCounts[t.sourceId] = (sourceCounts[t.sourceId] || 0) + 1; });
             return (
               <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
@@ -583,6 +611,12 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
                             style={{ background: isExpanded ? "var(--accent-ring)" : "none", border: "none", cursor: "pointer", fontSize: "14px", color: isExpanded ? "var(--accent)" : "var(--text-muted)", padding: "2px 4px", borderRadius: "5px", lineHeight: 1, flexShrink: 0 }}>✎</button>
                           <span style={{ fontSize: "16px", color: isSelected ? "var(--accent)" : "var(--border)", flexShrink: 0 }}>{isSelected ? "✓" : "○"}</span>
                         </div>
+                        {/* Split-from-same-entry indicator */}
+                        {t.sourceId && sourceCounts[t.sourceId] > 1 && (
+                          <p style={{ fontSize: "11px", color: "var(--accent)", fontWeight: "600", margin: "0 12px 10px", lineHeight: "1.4" }}>
+                            🔗 Split from same brain dump{t.splitReason ? ` · ${t.splitReason}` : ""}
+                          </p>
+                        )}
                         {/* Concrete step (if any) */}
                         {t.concreteStep && !isExpanded && (
                           <p style={{ fontSize: "11.5px", color: "var(--text-muted)", margin: "0 12px 10px", lineHeight: "1.4" }}>⚡ {t.concreteStep}</p>
