@@ -72,6 +72,12 @@ describe("addPinnedFact / removePinnedFact", () => {
     expect(addPinnedFact({}, "User has been diagnosed with depression.").pinnedFacts).toEqual([]);
   });
 
+  it("rejects qualified anxiety/depression diagnoses (e.g. social, generalized, major)", () => {
+    expect(addPinnedFact({}, "User has social anxiety").pinnedFacts).toEqual([]);
+    expect(addPinnedFact({}, "User was diagnosed with generalized anxiety.").pinnedFacts).toEqual([]);
+    expect(addPinnedFact({}, "User has major depression.").pinnedFacts).toEqual([]);
+  });
+
   it("still accepts neutral language describing anxious or low feelings", () => {
     expect(addPinnedFact({}, "User feels anxious before deadlines and benefits from breaking tasks into smaller steps.").pinnedFacts).toHaveLength(1);
     expect(addPinnedFact({}, "User mentioned feeling low and unmotivated this week.").pinnedFacts).toHaveLength(1);
