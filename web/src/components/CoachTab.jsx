@@ -81,7 +81,14 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
   // final config save below stays unconditional so other patches, like a
   // coach check-in, are never lost.)
   const isMountedRef = useRef(true);
-  useEffect(() => () => { isMountedRef.current = false; }, []);
+  useEffect(() => {
+    // Reset on setup, not just cleanup — under StrictMode's dev-only
+    // mount/cleanup/remount cycle, the cleanup below runs once before this
+    // effect re-fires, which would otherwise leave isMountedRef permanently
+    // false even though the component is still mounted.
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     const checkDue = () => {
