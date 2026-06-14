@@ -8,7 +8,7 @@ import { parseTimeToMinutes } from "../utils/focusWindows";
 import { COACH_PERSONAS, normalizeCoachPersona } from "../utils/coachPersona";
 import { clearAllMemory, isMemoryEnabled, removePinnedFact, removeRecentObservation } from "../utils/coachMemory";
 
-export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyncedAt, onSignOut }) {
+export default function SettingsTab({ payload, savePayload, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut }) {
   const { config = {} } = payload;
   const pinnedFacts = config.coachMemory?.pinnedFacts || [];
   const recentObservations = config.coachMemory?.recentObservations || [];
@@ -610,7 +610,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
 
             <div
               className="toggle-row"
-              onClick={() => saveSubPath("config", { ...config, coachMemoryEnabled: !coachMemoryEnabled, lastUpdated: Date.now() })}
+              onClick={() => saveConfigPatch((latestConfig) => ({ coachMemoryEnabled: !isMemoryEnabled(latestConfig) }))}
               style={{ cursor: "pointer" }}
             >
               <div>
@@ -636,7 +636,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
                     {pinnedFacts.map((f, idx) => (
                       <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", padding: "8px 0", borderBottom: idx < pinnedFacts.length - 1 ? "1px solid var(--border)" : "none" }}>
                         <span style={{ fontSize: "12.5px", color: "var(--text-primary)" }}>{f.text}</span>
-                        <button type="button" onClick={() => saveSubPath("config", { ...config, coachMemory: removePinnedFact(config.coachMemory, idx), lastUpdated: Date.now() })}
+                        <button type="button" onClick={() => saveConfigPatch((latestConfig) => ({ coachMemory: removePinnedFact(latestConfig.coachMemory, idx) }))}
                           aria-label="Remove pinned fact"
                           style={{ flexShrink: 0, width: "28px", height: "28px", padding: 0, borderRadius: "8px", border: "1.5px solid var(--border)", background: "var(--bg-secondary)", color: "var(--text-muted)", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                           ✕
@@ -655,7 +655,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
                           {o.text}
                           {o.lociDayStr && <span style={{ color: "var(--text-muted)" }}> — {o.lociDayStr}</span>}
                         </span>
-                        <button type="button" onClick={() => saveSubPath("config", { ...config, coachMemory: removeRecentObservation(config.coachMemory, idx), lastUpdated: Date.now() })}
+                        <button type="button" onClick={() => saveConfigPatch((latestConfig) => ({ coachMemory: removeRecentObservation(latestConfig.coachMemory, idx) }))}
                           aria-label="Remove recent note"
                           style={{ flexShrink: 0, width: "28px", height: "28px", padding: 0, borderRadius: "8px", border: "1.5px solid var(--border)", background: "var(--bg-secondary)", color: "var(--text-muted)", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                           ✕
@@ -672,7 +672,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
                   onClick={() => setConfirmDialog({
                     message: "Clear all coach memory?\n\nThis removes every pinned fact and recent note. Cannot be undone.",
                     confirmLabel: "Clear memory", cancelLabel: "Cancel",
-                    onConfirm: () => { saveSubPath("config", { ...config, coachMemory: clearAllMemory(config.coachMemory), lastUpdated: Date.now() }); setConfirmDialog(null); },
+                    onConfirm: () => { saveConfigPatch((latestConfig) => ({ coachMemory: clearAllMemory(latestConfig.coachMemory) })); setConfirmDialog(null); },
                     onCancel: () => setConfirmDialog(null)
                   })}
                 >

@@ -86,6 +86,10 @@ describe("addPinnedFact / removePinnedFact", () => {
     expect(addPinnedFact({}, "User is under financial pressure.").pinnedFacts).toHaveLength(1);
   });
 
+  it("rejects entries containing a dangling '[[' tag fragment (e.g. from a nested-tag REMEMBER)", () => {
+    expect(addPinnedFact({}, "User was describing [[ADD_TASK:Budget").pinnedFacts).toEqual([]);
+  });
+
   it("dedupes by normalized exact text instead of storing duplicates", () => {
     let memory = addPinnedFact({}, "User wants a job in the Netherlands.");
     memory = addPinnedFact(memory, "USER WANTS A JOB IN THE NETHERLANDS.");
@@ -182,6 +186,13 @@ describe("forgetFromMemory", () => {
     memory = addPinnedFact(memory, "User likes mornings for deep work.");
     memory = forgetFromMemory(memory, "User");
     expect(memory.pinnedFacts).toHaveLength(2);
+  });
+
+  it("does not delete a short stored entry as collateral of an unrelated, longer FORGET that happens to contain it", () => {
+    let memory = addPinnedFact({}, "Is");
+    memory = addPinnedFact(memory, "User wants a job in the Netherlands.");
+    memory = forgetFromMemory(memory, "User is relocating to Germany for a new job.");
+    expect(memory.pinnedFacts.map(f => f.text)).toEqual(["Is", "User wants a job in the Netherlands."]);
   });
 });
 

@@ -52,7 +52,13 @@ function appendCapped(list = [], text, max, extra = {}) {
   // Collapse newlines/control chars so a memory entry can't break out of its
   // bullet line and inject extra "lines" into the system prompt.
   const trimmed = String(text || "").replace(/[\s\x00-\x1f\x7f]+/g, " ").trim().slice(0, MEMORY_ENTRY_MAX_LENGTH);
-  if (!trimmed || SECRET_PATTERN.test(trimmed) || FINANCIAL_AMOUNT_PATTERN.test(trimmed) || MEDICAL_LABEL_PATTERN.test(trimmed)) return list;
+  // Reject content containing "[[" — legitimate facts/notes don't naturally
+  // contain this sequence, but a REMEMBER/NOTE tag whose own content has a
+  // nested [[...]] tag can leave a dangling "[[OTHERTAG:..." fragment after
+  // MEMORY_TAG_RE's non-greedy match stops at the first "]]" (see
+  // parseMemoryTags below) — don't let that fragment get persisted and
+  // re-injected into every future prompt.
+  if (!trimmed || trimmed.includes("[[") || SECRET_PATTERN.test(trimmed) || FINANCIAL_AMOUNT_PATTERN.test(trimmed) || MEDICAL_LABEL_PATTERN.test(trimmed)) return list;
 
   // Dedupe by normalized exact text — re-stating the same fact refreshes its
   // position (and updatedAt) instead of piling up near-identical entries.
@@ -103,6 +109,11 @@ export function forgetFromMemory(coachMemory = {}, text) {
   if (target.length < MIN_FORGET_TEXT_LENGTH) return coachMemory;
   const matches = entry => {
     const normalized = normalizeMemoryText(entry.text);
+    // Apply the same minimum-length guard to the stored entry as to the
+    // FORGET target — otherwise a short stored entry (e.g. "Is") would match
+    // `target.includes(normalized)` against any unrelated longer FORGET text
+    // that happens to contain it as a substring, deleting it as collateral.
+    if (normalized.length < MIN_FORGET_TEXT_LENGTH) return false;
     return normalized.includes(target) || target.includes(normalized);
   };
   return {

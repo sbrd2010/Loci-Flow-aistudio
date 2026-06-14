@@ -81,11 +81,7 @@ export default function App() {
   };
 
   const saveDemoSubPaths = (patch) => {
-    setDemoPayload(prev => {
-      if (!prev) return prev;
-      const resolvedPatch = typeof patch === "function" ? patch(prev) : patch;
-      return { ...prev, ...resolvedPatch, timestamp: Date.now() };
-    });
+    setDemoPayload(prev => prev ? { ...prev, ...patch, timestamp: Date.now() } : prev);
   };
 
   const saveDemoConfigPatch = (patch) => {
@@ -612,6 +608,7 @@ export default function App() {
             payload={payload}
             savePayload={savePayload}
             saveSubPath={saveSubPath}
+            saveConfigPatch={saveConfigPatch}
             lastSyncedAt={lastSyncedAt}
             onSignOut={demoMode ? exitDemo : handleSwitchUser}
           />
