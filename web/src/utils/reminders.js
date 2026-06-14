@@ -179,19 +179,22 @@ export async function checkDailyCheckinNotifications(config, windows) {
   const now = new Date();
   const todayStr = getLociDayStr(now, windows);
   const userId = config?.userId || "anon";
-  const notified = loadNotifiedDailyCheckins(todayStr);
-  let changed = false;
   for (const slot of getDueDailyCheckins(config, windows, now)) {
     const key = `${slot}-${userId}-${todayStr}`;
+    const notified = loadNotifiedDailyCheckins(todayStr);
     if (notified.includes(key)) continue;
+    // Reserve the key (synchronously, before awaiting) so a concurrent poll from
+    // another background tab sees it claimed and skips this slot — otherwise both
+    // tabs would read the same un-reserved `notified` list and both notify.
+    localStorage.setItem(NOTIFIED_DAILY_CHECKINS_KEY, JSON.stringify([...notified, key]));
     const { title, body } = DAILY_CHECKIN_NOTIFICATIONS[slot];
     const shown = await showNotificationSafe(title, { body, icon: "/icon-192.png", tag: `loci-daily-checkin-${slot}`, renotify: true, data: { type: "daily-checkin", slot } });
-    if (shown) {
-      notified.push(key);
-      changed = true;
+    if (!shown) {
+      // Release the reservation so a later poll (this tab or another) retries this slot.
+      const current = loadNotifiedDailyCheckins(todayStr);
+      localStorage.setItem(NOTIFIED_DAILY_CHECKINS_KEY, JSON.stringify(current.filter(k => k !== key)));
     }
   }
-  if (changed) localStorage.setItem(NOTIFIED_DAILY_CHECKINS_KEY, JSON.stringify(notified));
 }
 
 export function formatReminderLabel(ts) {
