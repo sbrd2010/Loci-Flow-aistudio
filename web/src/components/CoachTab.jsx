@@ -122,7 +122,10 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
 
   // Deliver a Proactive Coach Nudge (see utils/coachNudge.js) handed off from
   // the Today tab — voiced by the AI when a key is available, falling back to
-  // the signal's own canned text otherwise. Runs once on mount.
+  // the signal's own canned text otherwise. Runs on mount, and again once
+  // cloudSyncUnconfirmed flips to false (see the deferral below) so a nudge
+  // deferred during the cache-sync window is delivered as soon as sync
+  // confirms, instead of waiting for the next Coach remount.
   const deliveredNudgeRef = useRef(null);
   useEffect(() => {
     // Defer to the Coach Check-In resume effect above if it's also acting on
@@ -136,9 +139,9 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
     // Defer until cloud sync is confirmed — saveConfigPatch() before the
     // first RTDB snapshot stamps a still-cached config as "newest" (see
     // saveConfigPatch in useSync.js), which could overwrite newer config
-    // synced from another device. This effect runs once per mount, so (like
-    // the isCheckinDue deferral above) the nudge stays pending and is picked
-    // up on a later mount once sync confirms.
+    // synced from another device. cloudSyncUnconfirmed is in this effect's
+    // deps, so once sync confirms this re-runs and delivers the still-pending
+    // nudge — it isn't dropped until the next mount.
     if (cloudSyncUnconfirmedRef.current) return;
     deliveredNudgeRef.current = nudge;
     saveConfigPatch({ pendingCoachNudge: null });
@@ -179,7 +182,7 @@ ${memoryContext ? `\n${memoryContext}\n` : ""}`;
         deliver(nudge.body, false);
       }
     })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cloudSyncUnconfirmed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSendChat = async (e) => {
     e.preventDefault();
