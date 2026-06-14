@@ -334,14 +334,16 @@ export default function App() {
   // Suppressed during an active focus session (mirrors TodayTab's auto-show guard)
   // so a backgrounded Deep Focus session isn't interrupted by these notifications.
   useEffect(() => {
-    if (!payload?.config || isSyncingFromCache) return;
+    // syncWarning === "offline" means RTDB hasn't confirmed within 15s and we're
+    // still on stale cached config (mirrors CoachTab's cloudSyncUnconfirmed check).
+    if (!payload?.config || isSyncingFromCache || syncWarning === "offline") return;
     if (!demoMode && payload.config.isOnboardingCompleted === false) return;
     if (focusTimer.isFocusMode || focusTimer.sessionCompletePending) return;
     const check = () => checkDailyCheckinNotifications(payload.config, getFocusWindows(payload.config));
     check();
     const id = setInterval(check, 5 * 60 * 1000);
     return () => clearInterval(id);
-  }, [payload?.config, isSyncingFromCache, demoMode, focusTimer.isFocusMode, focusTimer.sessionCompletePending]);
+  }, [payload?.config, isSyncingFromCache, syncWarning, demoMode, focusTimer.isFocusMode, focusTimer.sessionCompletePending]);
 
   // Auto-start the timer when arriving from Day Map's "Start Focus" action
   useEffect(() => {
