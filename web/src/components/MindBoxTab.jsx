@@ -304,7 +304,7 @@ Turn these into clear, actionable tasks. Each numbered thought can become:
 - MULTIPLE separate tasks sharing the same sourceId — when a thought mixes several distinct, unrelated actions. Split them instead of mashing everything into one vague task
 - ONE practical next-step task — when a thought is vague venting or emotional overwhelm with no clear action. Turn it into a single small, low-shame, concrete next step rather than trying to solve everything at once
 
-Preserve every concrete detail from the original text — names, dates, deadlines, amounts, links, places, people, constraints, and decision criteria — especially for job search, admin, finance, and travel items. Don't drop them; put whatever doesn't fit in the title/concreteStep into subSteps.
+Preserve every concrete detail from the original text — names, dates, deadlines, amounts, links, places, people, constraints, and decision criteria — especially for job search, admin, finance, and travel items. Don't drop them; put whatever doesn't fit in the title/concreteStep into subSteps. Don't invent details that aren't in the original text.
 
 For each task, determine:
 - sourceId: the id from the [id:...] tag of the thought it came from. If a thought splits into multiple tasks, every one of them shares that same sourceId
