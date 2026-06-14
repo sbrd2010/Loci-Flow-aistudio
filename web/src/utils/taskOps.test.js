@@ -263,10 +263,10 @@ describe("normalizeAiOrganizeSuggestions", () => {
     expect(result[0].concreteStep).toBe("");
   });
 
-  it("caps an oversized title and concreteStep at 300 chars", () => {
-    const raw = [{ sourceId: "d1", title: "T".repeat(400), horizonLevel: "week", priority: "P3", concreteStep: "S".repeat(400) }];
+  it("caps an oversized title at 1000 chars and concreteStep at 300 chars", () => {
+    const raw = [{ sourceId: "d1", title: "T".repeat(1100), horizonLevel: "week", priority: "P3", concreteStep: "S".repeat(400) }];
     const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
-    expect(result[0].title).toHaveLength(300);
+    expect(result[0].title).toHaveLength(1000);
     expect(result[0].concreteStep).toHaveLength(300);
   });
 
