@@ -7,6 +7,18 @@ import { getLociDayStr } from "./focusWindows";
 const scheduled = new Map();
 const COACH_CHECKIN_KEY = "__coach_checkin__";
 
+// Fallback (non-service-worker) notifications don't go through sw.js's
+// notificationclick handler, so they'd otherwise have no deep-link behavior.
+// Replicate it via a window event that App.jsx listens for alongside the SW message.
+function attachFallbackClickHandler(notif, data) {
+  if (!data) return;
+  notif.onclick = () => {
+    window.focus();
+    notif.close();
+    window.dispatchEvent(new CustomEvent("loci-notification-click", { detail: data }));
+  };
+}
+
 // Shows a notification via the service worker (preferred — works while the
 // tab is backgrounded) or falls back to the Notification constructor.
 // Returns true if a notification was (likely) shown, false if both paths failed.
@@ -16,12 +28,12 @@ async function showNotificationSafe(title, opts) {
       const reg = await navigator.serviceWorker.ready;
       await reg.showNotification(title, opts);
     } else {
-      new Notification(title, opts);
+      attachFallbackClickHandler(new Notification(title, opts), opts.data);
     }
     return true;
   } catch (_) {
     try {
-      new Notification(title, opts);
+      attachFallbackClickHandler(new Notification(title, opts), opts.data);
       return true;
     } catch (_) {
       return false;
@@ -131,6 +143,8 @@ const NOTIFIED_DAILY_CHECKINS_KEY = "loci_notified_daily_checkins";
 
 // localStorage-backed dedup so a due check-in only notifies once per Loci day,
 // even across refreshes, backgrounded/discarded tabs, or multiple open tabs.
+// Keys are scoped per user (`${slot}-${userId}-${todayStr}`) so a shared browser
+// or a sign-out/sign-in user switch doesn't suppress another account's check-ins.
 // Pruned to today's entries on every read.
 function loadNotifiedDailyCheckins(todayStr) {
   let stored = [];
@@ -140,19 +154,35 @@ function loadNotifiedDailyCheckins(todayStr) {
   return Array.isArray(stored) ? stored.filter(key => key.endsWith(`-${todayStr}`)) : [];
 }
 
+// Other Loci tabs heartbeat this key (every ~10s) while visible, so a hidden tab
+// can tell a foregrounded tab is already showing the user this check-in.
+export const VISIBLE_HEARTBEAT_KEY = "loci_tab_visible_at";
+const VISIBLE_HEARTBEAT_STALE_MS = 15_000;
+
+function isAnotherTabVisible() {
+  try {
+    const last = Number(localStorage.getItem(VISIBLE_HEARTBEAT_KEY) || 0);
+    return (Date.now() - last) < VISIBLE_HEARTBEAT_STALE_MS;
+  } catch (_) {
+    return false;
+  }
+}
+
 // Fires a push notification for each daily check-in card that's due while
 // the app is backgrounded/closed, so check-ins reach the user even if they
 // never open the tab. Safe to call repeatedly (e.g. on a polling interval).
 export async function checkDailyCheckinNotifications(config, windows) {
   if (typeof document !== "undefined" && document.visibilityState === "visible") return;
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  if (isAnotherTabVisible()) return;
 
   const now = new Date();
   const todayStr = getLociDayStr(now, windows);
+  const userId = config?.userId || "anon";
   const notified = loadNotifiedDailyCheckins(todayStr);
   let changed = false;
   for (const slot of getDueDailyCheckins(config, windows, now)) {
-    const key = `${slot}-${todayStr}`;
+    const key = `${slot}-${userId}-${todayStr}`;
     if (notified.includes(key)) continue;
     const { title, body } = DAILY_CHECKIN_NOTIFICATIONS[slot];
     const shown = await showNotificationSafe(title, { body, icon: "/icon-192.png", tag: `loci-daily-checkin-${slot}`, renotify: true, data: { type: "daily-checkin", slot } });

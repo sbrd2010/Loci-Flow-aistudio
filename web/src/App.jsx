@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { auth, track, setAnalyticsUser } from "./firebase";
 import { computeUserProfile } from "./utils/userProfile";
-import { scheduleAllReminders, scheduleCoachCheckin, checkDailyCheckinNotifications } from "./utils/reminders";
+import { scheduleAllReminders, scheduleCoachCheckin, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY } from "./utils/reminders";
 import { getFocusWindows } from "./utils/focusWindows";
 import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
@@ -127,19 +127,44 @@ export default function App() {
   }, []);
 
   // Same deep-link when the notification is tapped while an app window is already
-  // open — sw.js posts a message to it instead of opening a new window.
+  // open — sw.js posts a message to it instead of opening a new window. Fallback
+  // (non-SW) notifications dispatch an equivalent window event (see reminders.js).
   useEffect(() => {
-    if (!("serviceWorker" in navigator)) return;
-    const onMessage = (event) => {
-      if (event.data?.type !== "loci-notification-click") return;
-      if (event.data.notificationType === "coach-checkin") setActiveTab("coach");
-      else if (event.data.notificationType === "daily-checkin") {
+    const routeNotificationClick = (notificationType, slot) => {
+      if (notificationType === "coach-checkin") setActiveTab("coach");
+      else if (notificationType === "daily-checkin") {
         setActiveTab("today");
-        if (event.data.slot) setPendingCheckinSlot(event.data.slot);
+        if (slot) setPendingCheckinSlot(slot);
       }
     };
-    navigator.serviceWorker.addEventListener("message", onMessage);
-    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+    const onMessage = (event) => {
+      if (event.data?.type !== "loci-notification-click") return;
+      routeNotificationClick(event.data.notificationType, event.data.slot);
+    };
+    const onFallbackClick = (event) => {
+      routeNotificationClick(event.detail?.type, event.detail?.slot);
+    };
+    if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", onMessage);
+    window.addEventListener("loci-notification-click", onFallbackClick);
+    return () => {
+      if ("serviceWorker" in navigator) navigator.serviceWorker.removeEventListener("message", onMessage);
+      window.removeEventListener("loci-notification-click", onFallbackClick);
+    };
+  }, []);
+
+  // Heartbeat so a backgrounded Loci tab can tell another Loci tab is visible
+  // right now, and skip sending a redundant daily check-in notification (reminders.js).
+  useEffect(() => {
+    const markVisible = () => {
+      if (document.visibilityState === "visible") localStorage.setItem(VISIBLE_HEARTBEAT_KEY, String(Date.now()));
+    };
+    markVisible();
+    document.addEventListener("visibilitychange", markVisible);
+    const id = setInterval(markVisible, 10_000);
+    return () => {
+      document.removeEventListener("visibilitychange", markVisible);
+      clearInterval(id);
+    };
   }, []);
 
   useEffect(() => {
@@ -310,12 +335,13 @@ export default function App() {
   // so a backgrounded Deep Focus session isn't interrupted by these notifications.
   useEffect(() => {
     if (!payload?.config || isSyncingFromCache) return;
+    if (!demoMode && payload.config.isOnboardingCompleted === false) return;
     if (focusTimer.isFocusMode || focusTimer.sessionCompletePending) return;
     const check = () => checkDailyCheckinNotifications(payload.config, getFocusWindows(payload.config));
     check();
     const id = setInterval(check, 5 * 60 * 1000);
     return () => clearInterval(id);
-  }, [payload?.config, isSyncingFromCache, focusTimer.isFocusMode, focusTimer.sessionCompletePending]);
+  }, [payload?.config, isSyncingFromCache, demoMode, focusTimer.isFocusMode, focusTimer.sessionCompletePending]);
 
   // Auto-start the timer when arriving from Day Map's "Start Focus" action
   useEffect(() => {
