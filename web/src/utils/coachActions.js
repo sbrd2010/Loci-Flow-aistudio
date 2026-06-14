@@ -75,12 +75,17 @@ function titleMentionedInMessage(title, message) {
   return words.some(w => normMessage.includes(w));
 }
 
-export function matchesUserIntent(actionType, lastUserMessage = "", title = "") {
+// Loosely tests whether the user's message itself uses language associated
+// with this action type — the same intent-pattern/negation scan as
+// matchesUserIntent, minus the title-check. Used to tell a genuinely
+// stale/unrelated blocked action tag (the message doesn't ask for this kind
+// of action at all) apart from an ambiguous one (it does, but the tag's
+// title didn't match a task) — see buildActionReplyText.
+export function messageSeemsActionLike(actionType, message = "") {
   const pattern = INTENT_PATTERNS[actionType];
   if (!pattern) return false;
-  const message = String(lastUserMessage || "");
-  if (actionType === "COMPLETE_TASK" && NON_SPECIFIC_COMPLETION_RE.test(message)) return false;
-  if (TITLE_CHECK_TYPES.has(actionType) && !titleMentionedInMessage(title, message)) return false;
+  const msg = String(message || "");
+  if (actionType === "COMPLETE_TASK" && NON_SPECIFIC_COMPLETION_RE.test(msg)) return false;
 
   // Scan every match of the intent pattern, not just the first — an earlier
   // match can sit in a negated clause while a later one in the same message
@@ -88,23 +93,29 @@ export function matchesUserIntent(actionType, lastUserMessage = "", title = "") 
   // finished Y").
   const globalPattern = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : pattern.flags + "g");
   let match;
-  while ((match = globalPattern.exec(message)) !== null) {
+  while ((match = globalPattern.exec(msg)) !== null) {
     // Look back to the start of the current clause (the last sentence-ending
     // punctuation, or the start of the message) rather than a fixed character
     // window — catches negations like "Don't ... mark it complete" regardless
     // of how many words sit between "don't" and the matched action word.
     const clauseStart = Math.max(
-      message.lastIndexOf(".", match.index - 1),
-      message.lastIndexOf(",", match.index - 1),
-      message.lastIndexOf("!", match.index - 1),
-      message.lastIndexOf("?", match.index - 1),
-      message.lastIndexOf("\n", match.index - 1)
+      msg.lastIndexOf(".", match.index - 1),
+      msg.lastIndexOf(",", match.index - 1),
+      msg.lastIndexOf("!", match.index - 1),
+      msg.lastIndexOf("?", match.index - 1),
+      msg.lastIndexOf("\n", match.index - 1)
     ) + 1;
-    const preceding = message.slice(clauseStart, match.index);
+    const preceding = msg.slice(clauseStart, match.index);
     if (NEGATION_RE.test(preceding)) continue;
     return true;
   }
   return false;
+}
+
+export function matchesUserIntent(actionType, lastUserMessage = "", title = "") {
+  if (!INTENT_PATTERNS[actionType]) return false;
+  if (TITLE_CHECK_TYPES.has(actionType) && !titleMentionedInMessage(title, String(lastUserMessage || ""))) return false;
+  return messageSeemsActionLike(actionType, lastUserMessage);
 }
 
 // Exact-title-only match against active tasks — used to detect "obvious"
@@ -253,4 +264,70 @@ export function applyCoachActions(payload, actions, { lociDateStr, localDateStr,
   }
 
   return { payload: nextPayload, results };
+}
+
+// Per-action-type follow-up question used by buildActionReplyText when a
+// blocked tag's title didn't resolve to a task but the user's message itself
+// reads as a request for that kind of action (an "ambiguous" blocked action —
+// see messageSeemsActionLike).
+const CLARIFICATION_NOTES = {
+  SET_NOW_FOCUS: `Which task should I focus on? Say: "Start focus on [task name]."`,
+  START_FOCUS: `Which task should I focus on? Say: "Start focus on [task name]."`,
+  ADD_TASK: "What exact task should I add?",
+  COMPLETE_TASK: "Which task should I mark complete?",
+  PARK_TASK: "Which task should I park?",
+};
+
+// Assembles the AI Coach's visible reply from its own text plus the outcome
+// of any action tags. If every tag matched (or there were none), the model's
+// own text is used as-is. Otherwise:
+//  - "blocked" tags (matchesUserIntent failed) only contribute a note when
+//    the user's message reads as a request for that action type at all
+//    (messageSeemsActionLike) — a stale tag the model carried forward from an
+//    earlier turn, with no corresponding ask in this message, is silently
+//    dropped rather than triggering a generic "I'll only do that..." note.
+//  - failed-but-not-blocked tags (task not found, duplicate ADD_TASK, Evening
+//    Guard) always contribute a note, since these reflect a real outcome the
+//    user should know about.
+export function buildActionReplyText(cleanText, results = [], lastUserMessage = "") {
+  if (results.every(r => r.matched)) return cleanText;
+
+  const successLines = results.filter(r => r.matched).map(r => {
+    const title = r.task ? r.task.title : r.title;
+    switch (r.type) {
+      case "SET_NOW_FOCUS": return `Switched your focus to "${title}".`;
+      case "START_FOCUS": return `Started a focus session on "${title}".`;
+      case "COMPLETE_TASK": return `Marked "${title}" complete — +100 XP!`;
+      case "ADD_TASK": return `Added "${title}" to your Today list.`;
+      case "PARK_TASK": return `Parked "${title}" for later.`;
+      default: return null;
+    }
+  }).filter(Boolean);
+
+  const notFound = results.filter(r => !r.matched && !r.blocked && r.type !== "ADD_TASK");
+  const addSkipped = results.filter(r => !r.matched && !r.blocked && r.type === "ADD_TASK" && !r.eveningGuardBlocked);
+  const eveningGuardBlocked = results.filter(r => r.eveningGuardBlocked);
+  const blocked = results.filter(r => r.blocked);
+
+  const notes = [];
+  if (notFound.length > 0) {
+    notes.push(`I couldn't find ${notFound.map(r => `"${r.title}"`).join(" or ")} in your task list — could you double-check the name?`);
+  }
+  if (addSkipped.length > 0) {
+    notes.push(`Looks like that's already on your list, so I didn't add a duplicate.`);
+  }
+  if (eveningGuardBlocked.length > 0) {
+    notes.push(`Evening Guard is active, so I didn't add that — feel free to add it again tomorrow.`);
+  }
+  const clarifications = new Set();
+  for (const r of blocked) {
+    if (CLARIFICATION_NOTES[r.type] && messageSeemsActionLike(r.type, lastUserMessage)) {
+      clarifications.add(CLARIFICATION_NOTES[r.type]);
+    }
+  }
+  notes.push(...clarifications);
+
+  if (successLines.length === 0 && notes.length === 0) return cleanText;
+  if (successLines.length === 0 && cleanText) return `${cleanText} ${notes.join(" ")}`;
+  return [...successLines, ...notes].join(" ");
 }
