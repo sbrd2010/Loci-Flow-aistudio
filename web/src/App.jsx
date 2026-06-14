@@ -117,9 +117,9 @@ export default function App() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
     const onMessage = (event) => {
-      if (event.data?.type === "loci-notification-click" && event.data.notificationType === "coach-checkin") {
-        setActiveTab("coach");
-      }
+      if (event.data?.type !== "loci-notification-click") return;
+      if (event.data.notificationType === "coach-checkin") setActiveTab("coach");
+      else if (event.data.notificationType === "daily-checkin") setActiveTab("today");
     };
     navigator.serviceWorker.addEventListener("message", onMessage);
     return () => navigator.serviceWorker.removeEventListener("message", onMessage);
