@@ -295,14 +295,14 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
       ? `\nUser context: completion rate ${Math.round(profile.completionRate * 100)}%, dominant horizon "${profile.dominantHorizon}", avg estimate ${profile.avgEstimateMinutes}min. Weight horizon suggestions toward their patterns.`
       : "";
     // Include each item's stable ID so AI can return sourceId for safe brain-dump clearing
-    const prompt = `Here are raw thoughts from a brain dump:\n${brainDumpItems.map((item, i) => `${i + 1}. [id:${item.id}] ${item.text}`).join("\n")}\n\nOrganize each thought into a structured task. For each one determine:\n- sourceId: the id value from the [id:...] tag in the original list\n- title: specific, outcome-oriented (max 60 chars)\n- horizonLevel: "today" (urgent/deadline today), "week" (most items, default), "month", "quarter", "halfyear" (6 months / long-term), or "office" (work or professional tasks)\n- priority: "P1" (urgent), "P2" (important), "P3" (normal), "P4" (quick <15 min)\n- concreteStep: the single easiest first action to start it (max 60 chars)${profileNote}\n\nRules: default to "week" unless clearly urgent or work-related. Never use the word "ADHD".\n\nReturn ONLY a JSON array, no markdown:\n[{"sourceId":"<id from list>","title":"...","horizonLevel":"week","priority":"P3","concreteStep":"..."}]`;
+    const prompt = `Here are raw thoughts from a brain dump:\n${brainDumpItems.map((item, i) => `${i + 1}. [id:${item.id}] ${item.text}`).join("\n")}\n\nOrganize each thought into a structured task. For each one determine:\n- sourceId: the id value from the [id:...] tag in the original list\n- title: specific, outcome-oriented (max 60 chars)\n- horizonLevel: "today" (urgent/deadline today), "week" (most items, default), "month", "quarter", "halfyear" (6 months / long-term), or "office" (work or professional tasks)\n- priority: "P1" (urgent), "P2" (important), "P3" (normal), "P4" (quick <15 min)\n- concreteStep: the single easiest first action to start it (max 60 chars)\n- subSteps: if the thought is long or detailed, extract 2-5 key points, details, or sub-tasks that would otherwise be lost in the short title/concreteStep. Use [] for short, simple thoughts where the title already captures everything.${profileNote}\n\nRules: default to "week" unless clearly urgent or work-related. Never use the word "ADHD".\n\nReturn ONLY a JSON array, no markdown:\n[{"sourceId":"<id from list>","title":"...","horizonLevel":"week","priority":"P3","concreteStep":"...","subSteps":[{"text":"key point 1"},{"text":"key point 2"}]}]`;
 
     try {
       const raw = await callAI({
         groqKey, geminiKey,
         systemPrompt: "You are a productivity coach. Respond ONLY with a valid JSON array, no markdown.",
         messages: [{ role: "user", content: prompt }],
-        maxTokens: 900
+        maxTokens: 1800
       });
       const cleaned = raw.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
       const parsed = JSON.parse(cleaned);
@@ -368,7 +368,8 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
         orderIndex,
         dateCompletedString: null,
         isDeleted: false,
-        lastUpdated: Date.now()
+        lastUpdated: Date.now(),
+        ...(t.subSteps && t.subSteps.length > 0 && { subSteps: t.subSteps }),
       };
     });
     const clearedDump = buildClearedBrainDump(payload.brainDump || [], toAdd);
@@ -586,6 +587,10 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
                         {t.concreteStep && !isExpanded && (
                           <p style={{ fontSize: "11.5px", color: "var(--text-muted)", margin: "0 12px 10px", lineHeight: "1.4" }}>⚡ {t.concreteStep}</p>
                         )}
+                        {/* Preserved key points indicator */}
+                        {t.subSteps && t.subSteps.length > 0 && !isExpanded && (
+                          <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: "0 12px 10px", lineHeight: "1.4" }}>📋 {t.subSteps.length} detail{t.subSteps.length !== 1 ? "s" : ""} preserved</p>
+                        )}
                         {/* Inline edit panel */}
                         {isExpanded && (
                           <div style={{ borderTop: "1px solid var(--border)", padding: "12px", display: "flex", flexDirection: "column", gap: "10px", background: "var(--bg-secondary)" }}>
@@ -622,6 +627,19 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
                                 </button>
                               ))}
                             </div>
+                            {t.subSteps && t.subSteps.length > 0 && (
+                              <div onClick={e => e.stopPropagation()}>
+                                <label style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: "4px" }}>Key points ({t.subSteps.length})</label>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                                  {t.subSteps.map((s, si) => (
+                                    <div key={s.id || si} style={{ fontSize: "12px", color: "var(--text-secondary)", display: "flex", gap: "6px", padding: "2px 0" }}>
+                                      <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>·</span>
+                                      <span>{s.text}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

@@ -282,6 +282,40 @@ describe("normalizeAiOrganizeSuggestions", () => {
     expect(result.find((t) => t.horizonLevel === "month").concreteStep).toBe("Valid step");
     expect(result.find((t) => t.horizonLevel === "halfyear").concreteStep).toBe("");
   });
+
+  it("missing subSteps normalizes to an empty array", () => {
+    const raw = [{ sourceId: "d1", title: "Buy groceries", horizonLevel: "week", priority: "P3" }];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].subSteps).toEqual([]);
+  });
+
+  it("normalizes valid subSteps into {id, text, done} with trimmed text", () => {
+    const raw = [{
+      sourceId: "d1", title: "Plan trip", horizonLevel: "week", priority: "P2",
+      subSteps: [{ text: "  Book flights  " }, { text: "Reserve hotel" }],
+    }];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].subSteps).toHaveLength(2);
+    expect(result[0].subSteps[0]).toMatchObject({ text: "Book flights", done: false });
+    expect(result[0].subSteps[0].id).toBeTruthy();
+    expect(result[0].subSteps[1].text).toBe("Reserve hotel");
+  });
+
+  it("drops blank or non-string subStep entries and caps at 5", () => {
+    const raw = [{
+      sourceId: "d1", title: "Big project", horizonLevel: "week", priority: "P2",
+      subSteps: [{ text: "1" }, { text: "2" }, { text: "3" }, { text: "4" }, { text: "5" }, { text: "6" }, { text: "  " }, { text: 123 }, null],
+    }];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].subSteps).toHaveLength(5);
+    expect(result[0].subSteps.map((s) => s.text)).toEqual(["1", "2", "3", "4", "5"]);
+  });
+
+  it("non-array subSteps normalizes to an empty array", () => {
+    const raw = [{ sourceId: "d1", title: "Buy groceries", horizonLevel: "week", priority: "P3", subSteps: "not an array" }];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].subSteps).toEqual([]);
+  });
 });
 
 // -- sanitizeTaskField -----------------------------------------------------------

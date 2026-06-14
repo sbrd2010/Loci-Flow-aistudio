@@ -46,10 +46,13 @@ export function sanitizeTaskField(value, maxLength) {
 // dump items. Each returned suggestion gets a `sourceId` that is either a valid
 // brain-dump item ID (AI correctly referenced it) or null (AI omitted/garbled it).
 // Suggestions with invalid horizon or priority are discarded rather than silently
-// creating bad tasks.
+// creating bad tasks. `subSteps` (key points from long brain-dump entries that
+// would be lost in the short title/concreteStep) are normalized the same way as
+// applyAiRewriteToTask's subSteps, defaulting to [] when absent or malformed.
 export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
   if (!Array.isArray(rawSuggestions)) return [];
   const validIds = new Set((brainDumpItems || []).map((d) => d.id).filter(Boolean));
+  const now = Date.now();
   return rawSuggestions
     .filter(
       (t) =>
@@ -59,13 +62,23 @@ export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
         AI_ORGANIZE_VALID_HORIZONS.has(t.horizonLevel) &&
         AI_ORGANIZE_VALID_PRIORITIES.has(t.priority)
     )
-    .map((t) => ({
-      ...t,
-      title: t.title.trim().slice(0, 1000),
-      concreteStep: sanitizeTaskField(t.concreteStep, 300),
-      // sourceId is only trusted when it maps to a real brain-dump item
-      sourceId: validIds.has(t.sourceId) ? t.sourceId : null,
-    }))
+    .map((t, i) => {
+      const rawSubSteps = t.subSteps;
+      const subSteps = Array.isArray(rawSubSteps)
+        ? rawSubSteps
+            .filter((s) => s && typeof s.text === "string" && s.text.trim())
+            .slice(0, 5)
+            .map((s, j) => ({ id: s.id || `ai-ss-${i}-${j}-${now}`, text: s.text.trim(), done: false }))
+        : [];
+      return {
+        ...t,
+        title: t.title.trim().slice(0, 1000),
+        concreteStep: sanitizeTaskField(t.concreteStep, 300),
+        // sourceId is only trusted when it maps to a real brain-dump item
+        sourceId: validIds.has(t.sourceId) ? t.sourceId : null,
+        subSteps,
+      };
+    })
     .slice(0, 10);
 }
 
