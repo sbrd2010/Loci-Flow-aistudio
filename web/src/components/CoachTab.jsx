@@ -625,7 +625,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
             <textarea className="text-input" rows={3} value={chatInput}
               onChange={e => setChatInput(e.target.value)}
               onKeyDown={e => {
-                if (e.key === "Enter" && !e.shiftKey) {
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault();
                   e.currentTarget.form?.requestSubmit();
                 }

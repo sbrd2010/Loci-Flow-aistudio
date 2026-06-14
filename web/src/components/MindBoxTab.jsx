@@ -388,7 +388,7 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
   };
 
   const handleBrainDumpKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       e.currentTarget.form?.requestSubmit();
     }

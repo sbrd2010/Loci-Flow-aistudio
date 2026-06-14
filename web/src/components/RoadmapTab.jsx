@@ -203,7 +203,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
     const titleText = overrideText !== undefined ? overrideText : item.text;
     const freshTask = {
       id: Date.now(), userId, uuid: safeUUID(),
-      title: sanitizeTaskField(titleText, 300) || "Untitled task",
+      title: sanitizeTaskField(titleText, 1000) || "Untitled task",
       concreteStep: "Do first tiny step",
       horizonLevel: horizon, priority: "P3", category: "Personal",
       timeEstimateMinutes: 25, deadlineTimestamp: null,
@@ -251,7 +251,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
       }
       setAiBreakdownSuggestion({
         id: item.id,
-        title: sanitizeTaskField(parsed.title, 300) || textToBreakdown.substring(0, 60),
+        title: sanitizeTaskField(parsed.title, 1000) || textToBreakdown.substring(0, 60),
         concreteStep: sanitizeTaskField(parsed.concreteStep, 300) || "Do first tiny step"
       });
     } catch {
