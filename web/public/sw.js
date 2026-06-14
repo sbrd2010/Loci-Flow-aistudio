@@ -1,14 +1,16 @@
 // Loci Focus service worker — handles notification clicks
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const isCoachCheckin = event.notification.data?.type === "coach-checkin";
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       for (const client of list) {
         if (client.url.includes(self.location.origin) && "focus" in client) {
+          if (isCoachCheckin) client.postMessage({ type: "loci-notification-click", notificationType: "coach-checkin" });
           return client.focus();
         }
       }
-      return clients.openWindow("/");
+      return clients.openWindow(isCoachCheckin ? "/?tab=coach" : "/");
     })
   );
 });

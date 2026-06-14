@@ -1,8 +1,26 @@
 import { buildCheckinNotificationBody } from "./coachCheckin";
+import { shouldShowMorningCommitment, shouldShowMiddayCheck, shouldShowReflection } from "./dailyCoachCheckins";
+import { shouldShowMorningRitual } from "./morningRitual";
+import { getLociDayStr } from "./focusWindows";
 
 // In-memory map of task UUID → timeout ID (cleared on page refresh, re-scheduled on load)
 const scheduled = new Map();
 const COACH_CHECKIN_KEY = "__coach_checkin__";
+
+// Shows a notification via the service worker (preferred — works while the
+// tab is backgrounded) or falls back to the Notification constructor.
+async function showNotificationSafe(title, opts) {
+  try {
+    if ("serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      reg.showNotification(title, opts);
+    } else {
+      new Notification(title, opts);
+    }
+  } catch (_) {
+    try { new Notification(title, opts); } catch (_) {}
+  }
+}
 
 // JS setTimeout silently wraps around for delays > 2^31 ms (~24.8 days) and fires immediately.
 // Chain a re-schedule callback at this boundary so distant reminders work correctly.
@@ -33,20 +51,11 @@ export function scheduleReminder(task) {
     return;
   }
 
-  const id = setTimeout(async () => {
+  const id = setTimeout(() => {
     scheduled.delete(task.uuid);
     const body = task.title;
     const opts = { body, icon: "/icon-192.png", tag: `task-${task.uuid}`, renotify: true, data: { uuid: task.uuid } };
-    try {
-      if ("serviceWorker" in navigator) {
-        const reg = await navigator.serviceWorker.ready;
-        reg.showNotification("🎯 Task reminder", opts);
-      } else {
-        new Notification("🎯 Task reminder", opts);
-      }
-    } catch (_) {
-      try { new Notification("🎯 Task reminder", opts); } catch (_) {}
-    }
+    showNotificationSafe("🎯 Task reminder", opts);
   }, delay);
 
   scheduled.set(task.uuid, id);
@@ -78,19 +87,10 @@ export function scheduleCoachCheckin(checkin) {
   const delay = checkin.fireAt - Date.now();
   if (delay <= 0 || delay > MAX_TIMEOUT_MS) return; // already due, or out of the 1-180min range — CoachTab resumes on next open
 
-  const id = setTimeout(async () => {
+  const id = setTimeout(() => {
     scheduled.delete(COACH_CHECKIN_KEY);
     const opts = { body: buildCheckinNotificationBody(checkin.note), icon: "/icon-192.png", tag: "loci-coach-checkin", renotify: true, data: { type: "coach-checkin" } };
-    try {
-      if ("serviceWorker" in navigator) {
-        const reg = await navigator.serviceWorker.ready;
-        reg.showNotification("🤖 Coach check-in", opts);
-      } else {
-        new Notification("🤖 Coach check-in", opts);
-      }
-    } catch (_) {
-      try { new Notification("🤖 Coach check-in", opts); } catch (_) {}
-    }
+    showNotificationSafe("🤖 Coach check-in", opts);
   }, delay);
 
   scheduled.set(COACH_CHECKIN_KEY, id);
@@ -99,6 +99,47 @@ export function scheduleCoachCheckin(checkin) {
 export function cancelCoachCheckin() {
   const id = scheduled.get(COACH_CHECKIN_KEY);
   if (id != null) { clearTimeout(id); scheduled.delete(COACH_CHECKIN_KEY); }
+}
+
+// Pure check for which of the three daily check-in cards (Today tab) are due
+// right now. Mirrors the eligibility rules each card already uses so the
+// push notification fires exactly when the card would appear.
+export function getDueDailyCheckins(config, windows, now = new Date()) {
+  const todayStr = getLociDayStr(now, windows);
+  const morningRitualPending = shouldShowMorningRitual(now, config);
+  const due = [];
+  if (shouldShowMorningCommitment(now, windows, config, todayStr, morningRitualPending)) due.push("morning");
+  if (shouldShowMiddayCheck(now, windows, config, todayStr)) due.push("midday");
+  if (shouldShowReflection(now, windows, config, todayStr)) due.push("reflection");
+  return due;
+}
+
+const DAILY_CHECKIN_NOTIFICATIONS = {
+  morning: { title: "🌅 Today's Commitment", body: "What matters most today? Open Loci to set your focus." },
+  midday: { title: "📊 Progress Check", body: "How's it going? Open Loci to check your progress." },
+  reflection: { title: "🌙 Day Close", body: "Wrap up your day — open Loci to reflect." },
+};
+
+// In-memory dedup so a due check-in only notifies once per Loci day
+// (cleared on page refresh, re-evaluated on load like `scheduled`).
+const notifiedDailyCheckins = new Set();
+
+// Fires a push notification for each daily check-in card that's due while
+// the app is backgrounded/closed, so check-ins reach the user even if they
+// never open the tab. Safe to call repeatedly (e.g. on a polling interval).
+export function checkDailyCheckinNotifications(config, windows) {
+  if (typeof document !== "undefined" && document.visibilityState === "visible") return;
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+
+  const now = new Date();
+  const todayStr = getLociDayStr(now, windows);
+  for (const slot of getDueDailyCheckins(config, windows, now)) {
+    const key = `${slot}-${todayStr}`;
+    if (notifiedDailyCheckins.has(key)) continue;
+    notifiedDailyCheckins.add(key);
+    const { title, body } = DAILY_CHECKIN_NOTIFICATIONS[slot];
+    showNotificationSafe(title, { body, icon: "/icon-192.png", tag: `loci-daily-checkin-${slot}`, renotify: true, data: { type: "daily-checkin" } });
+  }
 }
 
 export function formatReminderLabel(ts) {

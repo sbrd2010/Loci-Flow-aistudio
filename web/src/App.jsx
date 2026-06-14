@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { auth, track, setAnalyticsUser } from "./firebase";
 import { computeUserProfile } from "./utils/userProfile";
-import { scheduleAllReminders, scheduleCoachCheckin } from "./utils/reminders";
+import { scheduleAllReminders, scheduleCoachCheckin, checkDailyCheckinNotifications } from "./utils/reminders";
+import { getFocusWindows } from "./utils/focusWindows";
 import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { useSync, CONN } from "./useSync";
@@ -97,6 +98,31 @@ export default function App() {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
+  }, []);
+
+  // Deep-link to the Coach tab when opened via a "🤖 Coach check-in" notification
+  // (clients.openWindow("/?tab=coach") in sw.js when no app window was open)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tab") === "coach") {
+      setActiveTab("coach");
+      params.delete("tab");
+      const rest = params.toString();
+      window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
+    }
+  }, []);
+
+  // Same deep-link when the notification is tapped while an app window is already
+  // open — sw.js posts a message to it instead of opening a new window.
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const onMessage = (event) => {
+      if (event.data?.type === "loci-notification-click" && event.data.notificationType === "coach-checkin") {
+        setActiveTab("coach");
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
   }, []);
 
   useEffect(() => {
@@ -203,6 +229,16 @@ export default function App() {
   useEffect(() => {
     if (payload?.config?.coachCheckin) scheduleCoachCheckin(payload.config.coachCheckin);
   }, [payload?.config?.coachCheckin]);
+
+  // Poll for due daily check-ins (Morning Commitment / Midday / Reflection) and
+  // fire a push notification if the app is backgrounded/closed when one comes due.
+  useEffect(() => {
+    if (!payload?.config) return;
+    const check = () => checkDailyCheckinNotifications(payload.config, getFocusWindows(payload.config));
+    check();
+    const id = setInterval(check, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [payload?.config]);
 
   const todayStr = useTodayStr();
 
