@@ -72,6 +72,12 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
   tasksRef.current = tasks;
   const contributionsRef = useRef(contributions);
   contributionsRef.current = contributions;
+  // Live (non-stale) read of cloudSyncUnconfirmed for the mount-time effects
+  // below — their saveConfigPatch calls run inside a closure (the checkDue
+  // interval) or a one-time []-deps effect, neither of which re-captures
+  // cloudSyncUnconfirmed as it changes after mount.
+  const cloudSyncUnconfirmedRef = useRef(cloudSyncUnconfirmed);
+  cloudSyncUnconfirmedRef.current = cloudSyncUnconfirmed;
 
   // Coach tab unmounts on tab switch (see App.jsx), so an in-flight AI reply
   // can resolve after the user has navigated to Settings and changed
@@ -98,6 +104,12 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
     const checkDue = () => {
       const checkin = configRef.current.coachCheckin;
       if (!isCheckinDue(checkin)) return;
+      // Defer until cloud sync is confirmed — saveConfigPatch() before the
+      // first RTDB snapshot stamps a still-cached config as "newest" (see
+      // saveConfigPatch in useSync.js), which could overwrite newer config
+      // synced from another device. Retried every 60s via the interval below
+      // (and on remount), so this just delays delivery until sync confirms.
+      if (cloudSyncUnconfirmedRef.current) return;
       const resumeMsg = buildCheckinResumeMessage(firstName, checkin.note);
       saveSubPath("chatHistory", [...chatHistoryRef.current, { text: resumeMsg, isUser: false }]);
       saveConfigPatch({ coachCheckin: null });
@@ -121,6 +133,13 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
 
     const nudge = configRef.current.pendingCoachNudge;
     if (!shouldDeliverPendingCoachNudge(nudge, deliveredNudgeRef.current)) return;
+    // Defer until cloud sync is confirmed — saveConfigPatch() before the
+    // first RTDB snapshot stamps a still-cached config as "newest" (see
+    // saveConfigPatch in useSync.js), which could overwrite newer config
+    // synced from another device. This effect runs once per mount, so (like
+    // the isCheckinDue deferral above) the nudge stays pending and is picked
+    // up on a later mount once sync confirms.
+    if (cloudSyncUnconfirmedRef.current) return;
     deliveredNudgeRef.current = nudge;
     saveConfigPatch({ pendingCoachNudge: null });
     if (isPendingCoachNudgeStale(nudge, payload)) return;
@@ -347,10 +366,16 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         // it — a separate saveConfigPatch call afterward could fail or be
         // interrupted (e.g. page closed) after this write succeeds, leaving
         // the task marked complete with the promised XP lost on reload.
-        if (updatedPayload.config.totalXp !== configRef.current.totalXp) {
-          patch.config = { ...configRef.current, totalXp: Number(updatedPayload.config.totalXp) || 0, lastUpdated: Date.now() };
+        // Patches only totalXp onto the latest known config (via saveSubPaths'
+        // function form), not a whole config built from configRef.current —
+        // a stale ref here could otherwise overwrite Coach Memory or persona
+        // settings changed elsewhere while this reply was in flight.
+        const xpChanged = updatedPayload.config.totalXp !== configRef.current.totalXp;
+        if (Object.keys(patch).length > 0 || xpChanged) {
+          saveSubPaths(xpChanged
+            ? (latestPayload) => ({ ...patch, config: { ...latestPayload.config, totalXp: Number(updatedPayload.config.totalXp) || 0, lastUpdated: Date.now() } })
+            : patch);
         }
-        if (Object.keys(patch).length > 0) saveSubPaths(patch);
 
         const startFocus = results.find(r => r.type === "START_FOCUS" && r.matched);
         if (startFocus && typeof focusTimer.extendTimer === "function") {

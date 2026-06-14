@@ -588,23 +588,30 @@ export function useSync(uid, email) {
   // Like saveSubPath, but writes several top-level paths in a single atomic
   // RTDB update() — use when multiple paths must change together (e.g. a task
   // completion that also bumps XP and today's contribution count).
+  //
+  // `patch` may also be a function `(latestPayload) => patch` — for callers
+  // whose patch is itself derived from current payload (e.g. a config field
+  // bumped alongside the task/contribution write), so that derivation uses
+  // the latest known payload (payloadRef.current) rather than a stale
+  // caller-held snapshot.
   const saveSubPaths = (patch) => {
     if (!dbRefPath) return;
+    const resolvedPatch = typeof patch === "function" ? patch(payloadRef.current || {}) : patch;
     if (payloadRef.current) {
-      const next = { ...payloadRef.current, ...patch, timestamp: Date.now() };
+      const next = { ...payloadRef.current, ...resolvedPatch, timestamp: Date.now() };
       payloadRef.current = next;
       payloadUidRef.current = uid;
       setPayload(next);
       if (uid) writeCache(uid, next);
     }
     const updates = { [`${dbRefPath}/timestamp`]: Date.now() };
-    for (const [subPath, value] of Object.entries(patch)) {
+    for (const [subPath, value] of Object.entries(resolvedPatch)) {
       updates[`${dbRefPath}/${subPath}`] = value;
     }
     const attempt = (n) =>
       update(ref(db), updates).catch(err => {
         if (n > 0) return new Promise(r => setTimeout(r, 500 * Math.pow(2, 3 - n))).then(() => attempt(n - 1));
-        console.error(`Sub-paths write failed (${Object.keys(patch).join(", ")}):`, err);
+        console.error(`Sub-paths write failed (${Object.keys(resolvedPatch).join(", ")}):`, err);
         setSyncWarning("write-failed");
       });
     attempt(3);

@@ -81,7 +81,11 @@ export default function App() {
   };
 
   const saveDemoSubPaths = (patch) => {
-    setDemoPayload(prev => prev ? { ...prev, ...patch, timestamp: Date.now() } : prev);
+    setDemoPayload(prev => {
+      if (!prev) return prev;
+      const resolvedPatch = typeof patch === "function" ? patch(prev) : patch;
+      return { ...prev, ...resolvedPatch, timestamp: Date.now() };
+    });
   };
 
   const saveDemoConfigPatch = (patch) => {
