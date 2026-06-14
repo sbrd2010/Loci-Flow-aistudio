@@ -349,10 +349,16 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         // function form below), not this possibly-stale configRef.current.coachMemory
         // — so a Settings-tab edit made while this reply was in flight isn't
         // reverted by this whole-coachMemory write.
-        memoryPatch = (latestCoachMemory) => {
-          let memory = latestCoachMemory || {};
+        memoryPatch = (latestConfig) => {
+          let memory = latestConfig.coachMemory || {};
           if (willForget) forgets.forEach(text => { memory = forgetFromMemory(memory, text); });
-          if (willAddMemory) {
+          // Re-check Coach Memory's enabled flag against the latest config —
+          // willAddMemory may have been computed pre-unmount (paired with a
+          // willForget exemption), so the user could have turned memory off
+          // in Settings before this reply resolves. The forget above is still
+          // applied (it's a deletion the user already asked for), but a new
+          // addition shouldn't be written after an explicit opt-out.
+          if (willAddMemory && isMemoryEnabled(latestConfig)) {
             pinnedFacts.forEach(fact => { memory = addPinnedFact(memory, fact); });
             observations.forEach(note => { memory = addRecentObservation(memory, note, todayStr); });
           }
@@ -399,7 +405,7 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
           saveConfigPatch((latestConfig) => ({
             ...xpConfigPatch,
             totalXp: (Number(latestConfig.totalXp) || 0) + xpDelta,
-            ...(xpMemoryPatch ? { coachMemory: xpMemoryPatch(latestConfig.coachMemory) } : {}),
+            ...(xpMemoryPatch ? { coachMemory: xpMemoryPatch(latestConfig) } : {}),
           }));
           configPatch = null;
           memoryPatch = null;
@@ -459,7 +465,7 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         // while this reply was in flight). memoryPatch is itself resolved
         // against the latest config (see above).
         saveConfigPatch(memoryPatch
-          ? (latestConfig) => ({ ...configPatch, coachMemory: memoryPatch(latestConfig.coachMemory) })
+          ? (latestConfig) => ({ ...configPatch, coachMemory: memoryPatch(latestConfig) })
           : configPatch);
       }
 
