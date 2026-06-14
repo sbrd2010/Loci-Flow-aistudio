@@ -457,7 +457,17 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
               default: return null;
             }
           }).filter(Boolean);
-          replyText = [...successLines, ...notes].join(" ");
+          if (successLines.length === 0 && cleanText) {
+            // No action succeeded, but the model still wrote a real reply to
+            // what the user actually said this turn (e.g. a stale action tag
+            // carried over from earlier in the conversation gets correctly
+            // blocked by matchesUserIntent, even though cleanText answers the
+            // current message just fine) — append the note rather than
+            // discarding cleanText entirely.
+            replyText = `${cleanText} ${notes.join(" ")}`;
+          } else {
+            replyText = [...successLines, ...notes].join(" ");
+          }
         }
       }
 
