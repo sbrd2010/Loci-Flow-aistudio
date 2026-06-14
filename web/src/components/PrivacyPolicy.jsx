@@ -28,7 +28,7 @@ export default function PrivacyPolicy({ onClose }) {
           },
           {
             title: "AI features (Coach, breakdown)",
-            body: "When you use AI coaching or task breakdown, the text of your task or message is sent to Groq (groq.com) or Google Gemini for processing. These services have their own privacy policies. We do not store your AI conversations on our servers beyond what Firebase RTDB syncs for your account."
+            body: "When you use AI coaching or task breakdown, the text of your task or message — plus, if Coach Memory is enabled, any pinned facts and recent notes your coach has saved — is sent to Groq (groq.com) or Google Gemini for processing. These services have their own privacy policies. We do not store your AI conversations on our servers beyond what Firebase RTDB syncs for your account. You can review, delete, or turn off Coach Memory anytime in Settings."
           },
           {
             title: "Analytics",

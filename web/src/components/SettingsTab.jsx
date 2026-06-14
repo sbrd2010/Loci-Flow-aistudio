@@ -5,9 +5,14 @@ import { db, auth } from "../firebase";
 import { ref, push } from "firebase/database";
 import { exportPayloadAsJson, exportTasksAsCsv } from "../utils/exportTasks";
 import { parseTimeToMinutes } from "../utils/focusWindows";
+import { COACH_PERSONAS, normalizeCoachPersona } from "../utils/coachPersona";
+import { clearAllMemory, isMemoryEnabled, removePinnedFact, removeRecentObservation } from "../utils/coachMemory";
 
-export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyncedAt, onSignOut }) {
+export default function SettingsTab({ payload, savePayload, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut }) {
   const { config = {} } = payload;
+  const pinnedFacts = config.coachMemory?.pinnedFacts || [];
+  const recentObservations = config.coachMemory?.recentObservations || [];
+  const coachMemoryEnabled = isMemoryEnabled(config);
 
   // ── XP / Progress computed values ────────────────────────────────────────
   const contributions = payload.contributions || [];
@@ -30,6 +35,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   const [editedMorningRitualEnd, setEditedMorningRitualEnd] = useState(config.morningRitualWindowEnd || "11:00");
   const [editedMorningRitualEnabled, setEditedMorningRitualEnabled] = useState(config.morningRitualEnabled !== false);
   const [editedCoachNudgesEnabled, setEditedCoachNudgesEnabled] = useState(config.coachNudgesEnabled !== false);
+  const [editedCoachPersona, setEditedCoachPersona] = useState(() => normalizeCoachPersona(config.coachPersona));
+  const [editedCoachPersonaNote, setEditedCoachPersonaNote] = useState(config.coachPersonaNote || "");
   const [editedHeaderStyle, setEditedHeaderStyle] = useState(
     config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full")
   );
@@ -51,6 +58,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
     setEditedMorningRitualEnd(config.morningRitualWindowEnd || "11:00");
     setEditedMorningRitualEnabled(config.morningRitualEnabled !== false);
     setEditedCoachNudgesEnabled(config.coachNudgesEnabled !== false);
+    setEditedCoachPersona(normalizeCoachPersona(config.coachPersona));
+    setEditedCoachPersonaNote(config.coachPersonaNote || "");
     setEditedHeaderStyle(config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full"));
     setEditedToolsStyle(config.toolsStyle || "inline");
     setEditedDeadlineLabel(config.deadlineLabel || "");
@@ -62,7 +71,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
       config.focusWindows,
       config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualEnabled, config.coachNudgesEnabled, config.headerStyle, config.toolsStyle,
       config.deadlineLabel, config.deadlineDate,
-      config.deadlineStartDate, config.deadlineAction]);
+      config.deadlineStartDate, config.deadlineAction,
+      config.coachPersona, config.coachPersonaNote]);
 
   // ── Focus window editing helpers ─────────────────────────────────────────
   const handleAddFocusWindow = () => {
@@ -157,6 +167,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
   const [aiKeysOpen, setAiKeysOpen] = useState(false);
   const [challengeOpen, setChallengeOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const [exportError, setExportError] = useState("");
 
   const [savedProfile, setSavedProfile] = useState(false);
@@ -178,6 +189,8 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
       morningRitualWindowEnd: morningRitualValid ? editedMorningRitualEnd : "11:00",
       morningRitualEnabled: editedMorningRitualEnabled,
       coachNudgesEnabled: editedCoachNudgesEnabled,
+      coachPersona: editedCoachPersona,
+      coachPersonaNote: editedCoachPersonaNote.trim().slice(0, 300),
       headerStyle: editedHeaderStyle,
       toolsStyle: editedToolsStyle,
       roadmapStyle: "compact",
@@ -282,6 +295,30 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
             <input id="settings-mentor" className="text-input" type="text"
               value={editedMentor} onChange={e => setEditedMentor(e.target.value)}
               placeholder="Or type any name…" required />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Coach Tone</label>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "6px", flexWrap: "wrap" }}>
+              {COACH_PERSONAS.map(p => (
+                <button key={p.key} type="button" onClick={() => setEditedCoachPersona(p.key)}
+                  style={{
+                    padding: "5px 16px", borderRadius: "20px", fontSize: "12.5px", fontWeight: "700",
+                    cursor: "pointer", transition: "all 0.15s",
+                    background: editedCoachPersona === p.key ? "var(--accent)" : "var(--bg-secondary)",
+                    color: editedCoachPersona === p.key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
+                    border: editedCoachPersona === p.key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
+                  }}>{p.icon} {p.label}</button>
+              ))}
+            </div>
+            <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
+              {COACH_PERSONAS.find(p => p.key === editedCoachPersona)?.desc}
+            </p>
+            <input className="text-input" type="text"
+              value={editedCoachPersonaNote}
+              onChange={e => setEditedCoachPersonaNote(e.target.value)}
+              placeholder="Anything else your coach should know about how to talk to you? (optional)"
+              maxLength={300} />
           </div>
 
           <div className="form-group">
@@ -545,6 +582,106 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, lastSyn
             {savedProfile ? "✓ Saved!" : "Save Profile"}
           </button>
         </form>}
+      </section>
+
+      {/* ── Coach Memory ─────────────────────────────────────────────────── */}
+      <section className="card">
+        <button type="button" onClick={() => setMemoryOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: memoryOpen ? "16px" : 0 }}>
+          <div>
+            <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
+              🧠 Coach Memory
+            </h2>
+            {!memoryOpen && (
+              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                {coachMemoryEnabled
+                  ? `${pinnedFacts.length} pinned fact${pinnedFacts.length === 1 ? "" : "s"} · ${recentObservations.length} recent note${recentObservations.length === 1 ? "" : "s"}`
+                  : "Off"}
+              </div>
+            )}
+          </div>
+          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: memoryOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
+        </button>
+
+        {memoryOpen && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <p style={{ fontSize: "11.5px", color: "var(--text-secondary)" }}>
+              Your coach can pick up on durable facts and recent notes during chat so it doesn't start from scratch each time. Remove anything that's wrong or no longer relevant, or turn memory off entirely.
+            </p>
+
+            <div
+              className="toggle-row"
+              onClick={() => saveConfigPatch((latestConfig) => ({ coachMemoryEnabled: !isMemoryEnabled(latestConfig) }))}
+              style={{ cursor: "pointer" }}
+            >
+              <div>
+                <span style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--text-primary)" }}>
+                  Coach Memory
+                </span>
+                <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                  Let your coach save and recall facts and notes across conversations. Turning this off stops new memories from being saved and keeps existing ones out of the chat — they're still listed below until you delete or clear them.
+                </p>
+              </div>
+              <input type="checkbox" className="pill-toggle" checked={coachMemoryEnabled} readOnly />
+            </div>
+
+            {pinnedFacts.length === 0 && recentObservations.length === 0 ? (
+              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)" }}>
+                Nothing saved yet. As you chat, your coach may remember a durable fact (Pinned Fact) or a short-term note (Recent Note) here — you can review, delete, or clear them anytime.
+              </p>
+            ) : (
+              <>
+                {pinnedFacts.length > 0 && (
+                  <div className="form-group">
+                    <label className="form-label">Pinned facts</label>
+                    {pinnedFacts.map((f, idx) => (
+                      <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", padding: "8px 0", borderBottom: idx < pinnedFacts.length - 1 ? "1px solid var(--border)" : "none" }}>
+                        <span style={{ fontSize: "12.5px", color: "var(--text-primary)" }}>{f.text}</span>
+                        <button type="button" onClick={() => saveConfigPatch((latestConfig) => ({ coachMemory: removePinnedFact(latestConfig.coachMemory, idx) }))}
+                          aria-label="Remove pinned fact"
+                          style={{ flexShrink: 0, width: "28px", height: "28px", padding: 0, borderRadius: "8px", border: "1.5px solid var(--border)", background: "var(--bg-secondary)", color: "var(--text-muted)", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {recentObservations.length > 0 && (
+                  <div className="form-group">
+                    <label className="form-label">Recent notes</label>
+                    {recentObservations.map((o, idx) => (
+                      <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", padding: "8px 0", borderBottom: idx < recentObservations.length - 1 ? "1px solid var(--border)" : "none" }}>
+                        <span style={{ fontSize: "12.5px", color: "var(--text-primary)" }}>
+                          {o.text}
+                          {o.lociDayStr && <span style={{ color: "var(--text-muted)" }}> — {o.lociDayStr}</span>}
+                        </span>
+                        <button type="button" onClick={() => saveConfigPatch((latestConfig) => ({ coachMemory: removeRecentObservation(latestConfig.coachMemory, idx) }))}
+                          aria-label="Remove recent note"
+                          style={{ flexShrink: 0, width: "28px", height: "28px", padding: 0, borderRadius: "8px", border: "1.5px solid var(--border)", background: "var(--bg-secondary)", color: "var(--text-muted)", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ width: "100%", background: "rgba(239,68,68,0.08)", color: "var(--danger)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "12.5px" }}
+                  onClick={() => setConfirmDialog({
+                    message: "Clear all coach memory?\n\nThis removes every pinned fact and recent note. Cannot be undone.",
+                    confirmLabel: "Clear memory", cancelLabel: "Cancel",
+                    onConfirm: () => { saveConfigPatch((latestConfig) => ({ coachMemory: clearAllMemory(latestConfig.coachMemory) })); setConfirmDialog(null); },
+                    onCancel: () => setConfirmDialog(null)
+                  })}
+                >
+                  Clear all memory
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </section>
 
       {/* ── AI Keys ─────────────────────────────────────────────────────── */}

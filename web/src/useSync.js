@@ -587,7 +587,7 @@ export function useSync(uid, email) {
 
   // Like saveSubPath, but writes several top-level paths in a single atomic
   // RTDB update() — use when multiple paths must change together (e.g. a task
-  // completion that also bumps XP and today's contribution count).
+  // completion that also bumps today's contribution count).
   const saveSubPaths = (patch) => {
     if (!dbRefPath) return;
     if (payloadRef.current) {
@@ -605,6 +605,52 @@ export function useSync(uid, email) {
       update(ref(db), updates).catch(err => {
         if (n > 0) return new Promise(r => setTimeout(r, 500 * Math.pow(2, 3 - n))).then(() => attempt(n - 1));
         console.error(`Sub-paths write failed (${Object.keys(patch).join(", ")}):`, err);
+        setSyncWarning("write-failed");
+      });
+    attempt(3);
+  };
+
+  // Like saveSubPath("config", ...), but merges `patch` into the LATEST known
+  // config (payloadRef.current.config) rather than a caller-held snapshot, and
+  // writes only those keys to RTDB as nested config/<key> paths. This means a
+  // caller holding a stale config (e.g. a component that unmounted while an
+  // async reply was in flight) can't clobber config fields changed elsewhere
+  // in the meantime — only the patched keys are touched.
+  //
+  // `patch` may also be a function `(latestConfig) => patch` — for callers
+  // whose patch is itself derived from current config (e.g. appending to a
+  // list stored in config), so that derivation also uses the latest known
+  // config rather than a stale caller-held snapshot.
+  const saveConfigPatch = (patch) => {
+    if (!dbRefPath) return;
+    const resolvedPatch = typeof patch === "function" ? patch(payloadRef.current?.config || {}) : patch;
+    // Mirrors savePayload's guard: if RTDB hasn't delivered its first snapshot
+    // yet, this bumps payloadRef.current.timestamp on top of (possibly stale)
+    // cached data. Without this flag, the first RTDB snapshot could then look
+    // "older" than the cache, causing onValue to push the whole stale cached
+    // payload back over newer data from another device.
+    if (!hasReceivedFirstRtdbRef.current) {
+      localWriteBeforeFirstRtdbRef.current = true;
+    }
+    if (payloadRef.current) {
+      const next = {
+        ...payloadRef.current,
+        config: { ...payloadRef.current.config, ...resolvedPatch, lastUpdated: Date.now() },
+        timestamp: Date.now(),
+      };
+      payloadRef.current = next;
+      payloadUidRef.current = uid;
+      setPayload(next);
+      if (uid) writeCache(uid, next);
+    }
+    const updates = { [`${dbRefPath}/timestamp`]: Date.now(), [`${dbRefPath}/config/lastUpdated`]: Date.now() };
+    for (const [key, value] of Object.entries(resolvedPatch)) {
+      updates[`${dbRefPath}/config/${key}`] = value;
+    }
+    const attempt = (n) =>
+      update(ref(db), updates).catch(err => {
+        if (n > 0) return new Promise(r => setTimeout(r, 500 * Math.pow(2, 3 - n))).then(() => attempt(n - 1));
+        console.error(`Config-patch write failed (${Object.keys(resolvedPatch).join(", ")}):`, err);
         setSyncWarning("write-failed");
       });
     attempt(3);
@@ -631,5 +677,5 @@ export function useSync(uid, email) {
   // return null so App-level effects cannot read or write the previous user's data.
   const effectivePayload = gatePayloadToUid(payload, payloadUidRef.current, uid);
   const effectiveLoading = loading || (!!uid && payloadUidRef.current !== uid);
-  return { payload: effectivePayload, loading: effectiveLoading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning, savePayload, saveSubPath, saveSubPaths, flushNow, clearCache };
+  return { payload: effectivePayload, loading: effectiveLoading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, flushNow, clearCache };
 }
