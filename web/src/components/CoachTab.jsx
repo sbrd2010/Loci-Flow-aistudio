@@ -484,7 +484,6 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
   // -- Focus Briefing (AI task analysis across all horizons) -----------------
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [briefingResult, setBriefingResult] = useState("");
-  const [briefOpen, setBriefOpen] = useState(false);
 
   const handleFocusBriefing = async () => {
     if (!hasAnyKey) return;
@@ -625,15 +624,9 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
           </div>
         ) : (
           <form onSubmit={handleSendChat} className="chat-input-row" style={{ marginTop: "8px" }}>
-            <textarea className="text-input" rows={3} value={chatInput}
+            <input className="text-input" type="text" value={chatInput}
               onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  e.currentTarget.form?.requestSubmit();
-                }
-              }}
-              placeholder={`Ask ${config.mentorName || "your mentor"}… (Shift+Enter for a new line)`}
+              placeholder={`Ask ${config.mentorName || "your mentor"}…`}
               disabled={chatLoading}
               style={{ background: "var(--accent-ring)", border: "1.5px solid var(--accent-light)" }} />
             {chatLoading
@@ -646,23 +639,10 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
 
       {/* 2 -- Focus Briefing */}
       <section className="card">
-        <button type="button" onClick={() => setBriefOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: briefOpen ? "4px" : 0 }}>
-          <div>
-            <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
-              ⚡ AI Focus Brief
-            </h2>
-            {!briefOpen && (
-              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                Task snapshot & AI briefing
-              </div>
-            )}
-          </div>
-          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: briefOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
-        </button>
-
-        {briefOpen && (
-        <>
-        <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "12px", marginBottom: "14px", lineHeight: "1.5" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "4px", color: "var(--text-primary)" }}>
+          ⚡ AI Focus Brief
+        </h2>
+        <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "14px", lineHeight: "1.5" }}>
           Your AI scans every task across all horizons — flags overload, catches time blindness, and briefs you on exactly what to tackle now.
         </p>
 
@@ -758,8 +738,6 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
               </div>
             )}
           </div>
-        )}
-        </>
         )}
       </section>
 

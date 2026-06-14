@@ -12,7 +12,7 @@
           "$taskIdx": {
             ".validate": "newData.hasChildren(['id', 'title', 'userId'])",
             "title": {
-              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000"
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 300"
             },
             "concreteStep": {
               ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 300)"

@@ -775,11 +775,6 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
-textarea.text-input {
-  resize: vertical;
-  line-height: 1.5;
-}
-
 .btn {
   background: var(--accent);
   color: var(--btn-text, #fff);
@@ -1271,11 +1266,9 @@ textarea.text-input {
   font-size: 13px;
   font-family: var(--font-sans);
   font-weight: 500;
-  line-height: 1.5;
   outline: none;
   transition: var(--transition);
   width: 100%;
-  resize: vertical;
 }
 
 .braindump-input::placeholder {
@@ -1292,7 +1285,8 @@ textarea.text-input {
 .braindump-submit {
   position: absolute;
   right: 8px;
-  bottom: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   background: none;
   border: none;
   color: var(--accent);
@@ -2590,15 +2584,11 @@ html[data-theme="glassy"] .theme-dropdown {
 .chat-input-row {
   display: flex;
   gap: 8px;
-  align-items: flex-end;
+  align-items: center;
   margin-top: 8px;
 }
 .chat-input-row .text-input {
   flex: 1;
-}
-.chat-input-row button,
-.chat-input-row span {
-  margin-bottom: 1px;
 }
 
 /* Toggle row */

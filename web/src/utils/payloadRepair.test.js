@@ -22,11 +22,11 @@ describe("sanitizeTaskForRules", () => {
     const task = sanitizeTaskForRules({
       id: 1,
       userId: "user-a",
-      title: "T".repeat(1100),
+      title: "T".repeat(400),
       concreteStep: "S".repeat(400),
     }, 0, "user-a", 1000);
 
-    expect(task.title).toHaveLength(1000);
+    expect(task.title).toHaveLength(300);
     expect(task.concreteStep).toHaveLength(300);
   });
 

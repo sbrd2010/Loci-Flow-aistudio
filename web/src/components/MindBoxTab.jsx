@@ -387,13 +387,6 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
     setBrainDumpText("");
   };
 
-  const handleBrainDumpKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      e.currentTarget.form?.requestSubmit();
-    }
-  };
-
   const handleNextRescueStep = () => {
     if (rescueStepIndex < rescueSteps.length - 1) setRescueStepIndex(rescueStepIndex + 1);
     else { setShowRescue(false); setRescueStepIndex(0); }
@@ -487,11 +480,10 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
             <p style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "10px", fontWeight: "600" }}>Inbox full — delete some items or convert them to Roadmap tasks.</p>
           )}
           <form className="braindump-form" onSubmit={handleBrainDumpSubmit} style={{ marginBottom: "16px" }}>
-            <textarea className="braindump-input" rows={3}
-              placeholder="Add anything on your mind. (Shift+Enter for a new line)"
+            <input type="text" className="braindump-input"
+              placeholder="Add anything on your mind."
               value={brainDumpText}
               onChange={e => setBrainDumpText(e.target.value)}
-              onKeyDown={handleBrainDumpKeyDown}
               disabled={dumpCount >= 50} />
             <button type="submit" className="braindump-submit" disabled={dumpCount >= 50}>➔</button>
           </form>
@@ -868,11 +860,10 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
               )}
             </div>
             <form className="braindump-form" onSubmit={handleBrainDumpSubmit}>
-              <textarea className="braindump-input" rows={3}
-                placeholder="What's on your mind? (Shift+Enter for a new line)"
+              <input type="text" className="braindump-input"
+                placeholder="What's on your mind?"
                 value={brainDumpText}
                 onChange={e => setBrainDumpText(e.target.value)}
-                onKeyDown={handleBrainDumpKeyDown}
                 disabled={dumpCount >= 50} />
               <button type="submit" className="braindump-submit" disabled={dumpCount >= 50}>➔</button>
             </form>

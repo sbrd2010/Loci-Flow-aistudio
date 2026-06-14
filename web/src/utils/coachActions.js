@@ -161,7 +161,7 @@ export function buildParkTaskTasks(tasks, taskUuid, now = Date.now()) {
 // AddTaskDialog's defaults (P3, 25min, "Do first tiny step").
 function buildAddTaskPayload(payload, rawTitle, now = Date.now()) {
   const { tasks = [], config = {} } = payload;
-  const title = String(rawTitle).trim().slice(0, 1000);
+  const title = String(rawTitle).trim().slice(0, 300);
   if (!title) return payload;
   const orderIndex = tasks.filter(t => t.horizonLevel === "today" && !t.isDeleted).length;
   const newTask = {
@@ -222,7 +222,7 @@ export function applyCoachActions(payload, actions, { lociDateStr, localDateStr,
     }
 
     if (action.type === "ADD_TASK") {
-      const title = String(action.title || "").trim().slice(0, 1000);
+      const title = String(action.title || "").trim().slice(0, 300);
       if (!title || findExactActiveTask(nextPayload.tasks, title)) {
         results.push({ ...action, matched: false });
         continue;

@@ -63,7 +63,7 @@ export function sanitizeTaskForRules(task, index = 0, fallbackUserId = "", now =
     ...task,
     id: task.id ?? (now + index),
     userId: sanitizeString(task.userId, 200, fallbackUserId),
-    title: sanitizeString(task.title, 1000, "Untitled task"),
+    title: sanitizeString(task.title, 300, "Untitled task"),
   };
 
   if (!repaired.uuid) repaired.uuid = `repaired-${now}-${index}`;

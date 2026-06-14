@@ -267,12 +267,11 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
           {/* Title + Ask AI */}
           <div className="form-group">
             <label className="form-label">WHAT DO YOU WANT TO DO? (REQUIRED)</label>
-            <textarea
+            <input
+              type="text"
               className="text-input"
               data-testid="add-task-title"
               placeholder="e.g. Write cover letter draft"
-              rows={3}
-              maxLength={1000}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required

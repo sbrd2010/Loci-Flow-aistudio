@@ -523,12 +523,12 @@ describe("applyCoachActions", () => {
     expect(results).toEqual([{ type: "ADD_TASK", title: "   ", matched: false }]);
   });
 
-  it("ADD_TASK truncates an overlong title to 1000 characters", () => {
-    const longTitle = "x".repeat(1100);
+  it("ADD_TASK truncates an overlong title to 300 characters", () => {
+    const longTitle = "x".repeat(400);
     const payload = { tasks: [], config: {}, contributions: [] };
     const { payload: next, results } = applyCoachActions(payload, [{ type: "ADD_TASK", title: longTitle }], { ...dateOpts, lastUserMessage: `Add a task for ${longTitle}.` });
     expect(next.tasks).toHaveLength(1);
-    expect(next.tasks[0].title).toBe("x".repeat(1000));
+    expect(next.tasks[0].title).toBe("x".repeat(300));
     expect(results[0].matched).toBe(true);
   });
 
