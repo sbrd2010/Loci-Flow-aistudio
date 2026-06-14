@@ -77,9 +77,13 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
   // can resolve after the user has navigated to Settings and changed
   // coachMemory/coachMemoryEnabled there. configRef would then be frozen on a
   // stale config — guard writing NEW memory entries with this so a late
-  // reply doesn't add memory based on a stale opt-out/config snapshot. (The
-  // final config save below stays unconditional so other patches, like a
-  // coach check-in, are never lost.)
+  // reply doesn't add memory based on a stale opt-out/config snapshot. A
+  // [[FORGET: ...]] is exempt from this guard: the user explicitly asked to
+  // delete something, and applying it late (even against a slightly stale
+  // memory snapshot) is strictly better than silently dropping it and
+  // re-injecting the "forgotten" entry into every future prompt. (The final
+  // config save below stays unconditional so other patches, like a coach
+  // check-in, are never lost.)
   const isMountedRef = useRef(true);
   useEffect(() => {
     // Reset on setup, not just cleanup — under StrictMode's dev-only
@@ -302,11 +306,16 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         requestNotifPermission();
       }
 
-      if (isMountedRef.current && isMemoryEnabled(configRef.current) && !cloudSyncUnconfirmed && (pinnedFacts.length > 0 || observations.length > 0 || forgets.length > 0)) {
+      const memoryWriteAllowed = isMemoryEnabled(configRef.current) && !cloudSyncUnconfirmed;
+      const willForget = memoryWriteAllowed && forgets.length > 0;
+      const willAddMemory = isMountedRef.current && memoryWriteAllowed && (pinnedFacts.length > 0 || observations.length > 0);
+      if (willForget || willAddMemory) {
         let memory = configRef.current.coachMemory || {};
-        forgets.forEach(text => { memory = forgetFromMemory(memory, text); });
-        pinnedFacts.forEach(fact => { memory = addPinnedFact(memory, fact); });
-        observations.forEach(note => { memory = addRecentObservation(memory, note, todayStr); });
+        if (willForget) forgets.forEach(text => { memory = forgetFromMemory(memory, text); });
+        if (willAddMemory) {
+          pinnedFacts.forEach(fact => { memory = addPinnedFact(memory, fact); });
+          observations.forEach(note => { memory = addRecentObservation(memory, note, todayStr); });
+        }
         configPatch = { ...configPatch, coachMemory: memory };
       }
 
