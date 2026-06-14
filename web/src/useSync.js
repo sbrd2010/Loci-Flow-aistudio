@@ -616,8 +616,14 @@ export function useSync(uid, email) {
   // caller holding a stale config (e.g. a component that unmounted while an
   // async reply was in flight) can't clobber config fields changed elsewhere
   // in the meantime — only the patched keys are touched.
+  //
+  // `patch` may also be a function `(latestConfig) => patch` — for callers
+  // whose patch is itself derived from current config (e.g. appending to a
+  // list stored in config), so that derivation also uses the latest known
+  // config rather than a stale caller-held snapshot.
   const saveConfigPatch = (patch) => {
     if (!dbRefPath) return;
+    const resolvedPatch = typeof patch === "function" ? patch(payloadRef.current?.config || {}) : patch;
     // Mirrors savePayload's guard: if RTDB hasn't delivered its first snapshot
     // yet, this bumps payloadRef.current.timestamp on top of (possibly stale)
     // cached data. Without this flag, the first RTDB snapshot could then look
@@ -629,7 +635,7 @@ export function useSync(uid, email) {
     if (payloadRef.current) {
       const next = {
         ...payloadRef.current,
-        config: { ...payloadRef.current.config, ...patch, lastUpdated: Date.now() },
+        config: { ...payloadRef.current.config, ...resolvedPatch, lastUpdated: Date.now() },
         timestamp: Date.now(),
       };
       payloadRef.current = next;
@@ -638,13 +644,13 @@ export function useSync(uid, email) {
       if (uid) writeCache(uid, next);
     }
     const updates = { [`${dbRefPath}/timestamp`]: Date.now(), [`${dbRefPath}/config/lastUpdated`]: Date.now() };
-    for (const [key, value] of Object.entries(patch)) {
+    for (const [key, value] of Object.entries(resolvedPatch)) {
       updates[`${dbRefPath}/config/${key}`] = value;
     }
     const attempt = (n) =>
       update(ref(db), updates).catch(err => {
         if (n > 0) return new Promise(r => setTimeout(r, 500 * Math.pow(2, 3 - n))).then(() => attempt(n - 1));
-        console.error(`Config-patch write failed (${Object.keys(patch).join(", ")}):`, err);
+        console.error(`Config-patch write failed (${Object.keys(resolvedPatch).join(", ")}):`, err);
         setSyncWarning("write-failed");
       });
     attempt(3);

@@ -309,14 +309,21 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
       const memoryWriteAllowed = isMemoryEnabled(configRef.current) && !cloudSyncUnconfirmed;
       const willForget = memoryWriteAllowed && forgets.length > 0;
       const willAddMemory = isMountedRef.current && memoryWriteAllowed && (pinnedFacts.length > 0 || observations.length > 0);
+      let memoryPatch = null;
       if (willForget || willAddMemory) {
-        let memory = configRef.current.coachMemory || {};
-        if (willForget) forgets.forEach(text => { memory = forgetFromMemory(memory, text); });
-        if (willAddMemory) {
-          pinnedFacts.forEach(fact => { memory = addPinnedFact(memory, fact); });
-          observations.forEach(note => { memory = addRecentObservation(memory, note, todayStr); });
-        }
-        configPatch = { ...configPatch, coachMemory: memory };
+        // Computed against the latest config at save time (via saveConfigPatch's
+        // function form below), not this possibly-stale configRef.current.coachMemory
+        // — so a Settings-tab edit made while this reply was in flight isn't
+        // reverted by this whole-coachMemory write.
+        memoryPatch = (latestCoachMemory) => {
+          let memory = latestCoachMemory || {};
+          if (willForget) forgets.forEach(text => { memory = forgetFromMemory(memory, text); });
+          if (willAddMemory) {
+            pinnedFacts.forEach(fact => { memory = addPinnedFact(memory, fact); });
+            observations.forEach(note => { memory = addRecentObservation(memory, note, todayStr); });
+          }
+          return memory;
+        };
       }
 
       let replyText = cleanText;
@@ -392,12 +399,15 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
         }
       }
 
-      if (configPatch) {
+      if (configPatch || memoryPatch) {
         // saveConfigPatch merges onto the latest known config and writes only
         // these keys — safe even if this tab unmounted and configRef.current
         // is now stale (e.g. the user changed Coach Memory settings elsewhere
-        // while this reply was in flight).
-        saveConfigPatch(configPatch);
+        // while this reply was in flight). memoryPatch is itself resolved
+        // against the latest config (see above).
+        saveConfigPatch(memoryPatch
+          ? (latestConfig) => ({ ...configPatch, coachMemory: memoryPatch(latestConfig.coachMemory) })
+          : configPatch);
       }
 
       saveSubPath("chatHistory", [...chatHistoryRef.current, { text: replyText || "Got it.", isUser: false }]);

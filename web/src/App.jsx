@@ -85,7 +85,11 @@ export default function App() {
   };
 
   const saveDemoConfigPatch = (patch) => {
-    setDemoPayload(prev => prev ? { ...prev, config: { ...prev.config, ...patch, lastUpdated: Date.now() }, timestamp: Date.now() } : prev);
+    setDemoPayload(prev => {
+      if (!prev) return prev;
+      const resolvedPatch = typeof patch === "function" ? patch(prev.config || {}) : patch;
+      return { ...prev, config: { ...prev.config, ...resolvedPatch, lastUpdated: Date.now() }, timestamp: Date.now() };
+    });
   };
 
   // ── Service worker ─────────────────────────────────────────────────────────
