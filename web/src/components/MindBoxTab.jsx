@@ -3,7 +3,7 @@ import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI, extractJsonArray } from "../utils/aiCall";
-import { normalizeAiOrganizeSuggestions, buildClearedBrainDump } from "../utils/taskOps";
+import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTaskSubSteps, CATEGORY_ICONS } from "../utils/taskOps";
 import { submitOnEnter } from "../utils/formEvents";
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
 import {
@@ -147,6 +147,7 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
   const [organizeSelected, setOrganizeSelected] = useState(new Set());
   const [organizeError, setOrganizeError] = useState("");
   const [organizeExpandedIndex, setOrganizeExpandedIndex] = useState(null);
+  const [organizeInvalidCount, setOrganizeInvalidCount] = useState(0);
 
   // ── Ritual data ────────────────────────────────────────────────────────────
   const ritualSteps = [
@@ -292,6 +293,7 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
     setOrganizeResults([]);
     setOrganizeDroppedSourceIds(new Set());
     setOrganizeError("");
+    setOrganizeInvalidCount(0);
     setOrganizeSelected(new Set());
     setToolPanel("organize");
 
@@ -303,27 +305,34 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
     const prompt = `Here are raw thoughts from a brain dump:
 ${brainDumpItems.map((item, i) => `${i + 1}. [id:${item.id}] ${item.text}`).join("\n")}
 
-Turn these into clear, actionable tasks. Each numbered thought can become:
-- ONE simple task — for a single small action
-- ONE task with subSteps — for a single action that has several parts or details worth keeping
-- MULTIPLE separate tasks sharing the same sourceId — when a thought mixes several distinct, unrelated actions. Split them instead of mashing everything into one vague task
-- ONE practical next-step task — when a thought is vague venting or emotional overwhelm with no clear action. Turn it into a single small, low-shame, concrete next step rather than trying to solve everything at once
+Turn these into clear, atomic, actionable tasks. For each numbered thought, decide:
+- ONE task — a single small action with nothing else worth keeping
+- ONE task with subSteps and/or sourceSummary — a single action that carries extra details worth preserving
+- MULTIPLE tasks sharing the same sourceId — when a thought mixes several distinct, unrelated actions, OR is one big/messy item covering more ground than a single 10-45 min task. Split it into separate atomic tasks instead of one vague catch-all
+- ONE practical next-step task — only for pure venting/emotional overwhelm with no concrete action in it. Turn it into a single small, low-shame, concrete next step
 
-Preserve every concrete detail from the original text — names, dates, deadlines, amounts, links, places, people, constraints, and decision criteria — especially for job search, admin, finance, and travel items. Don't drop them; put whatever doesn't fit in the title/concreteStep into subSteps. Don't invent details that aren't in the original text.
+Hard rules:
+- Never merge unrelated thoughts into one task, and never write a vague catch-all title like "Handle admin" or "Sort things out"
+- Titles are action-style and specific (max 60 chars) — keep the concrete subject from the text: company, person, amount, place, deadline
+- Every task has a concreteStep: the single easiest physical/digital first action (max 60 chars), e.g. "Email Priya at Acme re: June 20 deadline", not "Follow up"
+- Preserve every concrete detail — names, dates, deadlines, companies, amounts, links, places, people, constraints, decision criteria. Never invent details that aren't in the original text. Anything that doesn't fit in the title/concreteStep goes in subSteps (2-7 short bullet points) and/or sourceSummary (1-2 sentences). Don't drop it
+- Prefer 10-45 minute tasks; if a thought is too big for one, split it rather than writing one vague multi-hour task
 
-For each task, determine:
-- sourceId: the id from the [id:...] tag of the thought it came from. If a thought splits into multiple tasks, every one of them shares that same sourceId
-- title: specific and outcome-oriented (max 60 chars). Keep the concrete subject (company, person, item, place) from the text — never a vague title like "Organize everything" or "Handle tasks"
-- horizonLevel: "today" (urgent/deadline today), "week" (most items, default), "month", "quarter", "halfyear" (6 months / long-term), or "office" (work or professional tasks)
-- priority: "P1" (urgent), "P2" (important), "P3" (normal), "P4" (quick <15 min)
-- concreteStep: the single easiest physical/digital first action to start it (max 60 chars), e.g. "Open LinkedIn and message the recruiter", not "Look into it"
-- subSteps: for a complex or long thought, 2-7 key details or sub-tasks that would otherwise be lost (deadlines, amounts, links, names, decisions). Use [] for short, simple thoughts where the title and concreteStep already capture everything
-- splitReason: only when this task is one of several from the same thought — a short phrase (max 40 chars) naming what makes it distinct, e.g. "Recruiter follow-up". Omit otherwise${profileNote}
+For each task, return:
+- sourceId: the id from the [id:...] tag of the thought it came from. Every task split from the same thought shares that sourceId
+- title, concreteStep: as above
+- subSteps: 2-7 {"text": "..."} items preserving details that don't fit above. [] if nothing else to preserve
+- sourceSummary: optional 1-2 sentence summary of context/details from the thought that don't fit elsewhere. "" if not needed
+- splitReason: only when this is one of several tasks from the same thought — a short phrase (max 40 chars), e.g. "Recruiter follow-up". Omit otherwise
+- horizonLevel: "today" (due/urgent today), "week" (default, most items), "month" or "quarter" (career/job-search pipeline, concrete future plans), "office" (current job/lab/company work), "halfyear" (vague long-term ideas with no real timeline)
+- priority: "P1" (urgent), "P2" (important), "P3" (normal), "P4" (quick, <15 min)
+- category: "Career" (job search, CV, applications, networking, career growth), "Work" (current job/lab/company tasks), "Health" (medicine, diet, walking, doctor, body/health admin), "Personal" (household, family, travel, errands, life admin)
+- timeEstimateMinutes: realistic estimate for concreteStep — one of 15, 25, 45, 60, 120, 240, 360; prefer 15-45${profileNote}
 
-Rules: default to "week" unless clearly urgent or work-related. Never use the word "ADHD".
+Rules: default horizonLevel to "week" unless clearly urgent or work-related. Never use the word "ADHD".
 
 Return ONLY a JSON array, no markdown:
-[{"sourceId":"<id from list>","title":"...","horizonLevel":"week","priority":"P3","concreteStep":"...","subSteps":[{"text":"key point 1"}],"splitReason":""}]`;
+[{"sourceId":"<id from list>","title":"...","horizonLevel":"week","priority":"P3","category":"Personal","timeEstimateMinutes":25,"concreteStep":"...","subSteps":[{"text":"key point 1"}],"sourceSummary":"","splitReason":""}]`;
 
     try {
       const raw = await callAI({
@@ -336,6 +345,7 @@ Return ONLY a JSON array, no markdown:
       const valid = normalizeAiOrganizeSuggestions(parsed, brainDumpItems);
       setOrganizeResults(valid);
       setOrganizeDroppedSourceIds(valid.droppedSourceIds || new Set());
+      setOrganizeInvalidCount(valid.invalidCount || 0);
       setOrganizeSelected(new Set(valid.map((_, i) => i)));
       if (valid.length === 0) {
         setOrganizeError("AI couldn't turn that into tasks — try again, or add tasks manually.");
@@ -388,8 +398,8 @@ Return ONLY a JSON array, no markdown:
         concreteStep: t.concreteStep || "Start with the first step",
         horizonLevel: hl,
         priority: t.priority,
-        category: "Personal",
-        timeEstimateMinutes: 25,
+        category: t.category,
+        timeEstimateMinutes: t.timeEstimateMinutes,
         deadlineTimestamp: null,
         reminderAt: null,
         isCompleted: false,
@@ -399,7 +409,10 @@ Return ONLY a JSON array, no markdown:
         dateCompletedString: null,
         isDeleted: false,
         lastUpdated: Date.now(),
-        ...(t.subSteps && t.subSteps.length > 0 && { subSteps: t.subSteps }),
+        ...(() => {
+          const subSteps = buildOrganizedTaskSubSteps(t.subSteps, t.sourceSummary);
+          return subSteps.length > 0 ? { subSteps } : {};
+        })(),
       };
     });
     // Pass all suggestions (not just accepted) so a split entry's source is only
@@ -409,6 +422,7 @@ Return ONLY a JSON array, no markdown:
     setToolPanel(null);
     setOrganizeResults([]);
     setOrganizeDroppedSourceIds(new Set());
+    setOrganizeInvalidCount(0);
     setOrganizeSelected(new Set());
   };
 
@@ -547,7 +561,7 @@ Return ONLY a JSON array, no markdown:
       {toolPanel === "organize" && (
         <>
           <div className="mindbox-subview-header">
-            <button className="mindbox-back-btn" onClick={() => { setToolPanel(null); setOrganizeResults([]); setOrganizeDroppedSourceIds(new Set()); setOrganizeError(""); }}>← Back</button>
+            <button className="mindbox-back-btn" onClick={() => { setToolPanel(null); setOrganizeResults([]); setOrganizeDroppedSourceIds(new Set()); setOrganizeError(""); setOrganizeInvalidCount(0); }}>← Back</button>
             <h2 className="mindbox-subview-title">Organize Dump</h2>
           </div>
           {organizeLoading && (
@@ -566,11 +580,18 @@ Return ONLY a JSON array, no markdown:
             const horizonOptions = ["today","week","month","quarter","halfyear","office"];
             const horizonLabel = { today: "Today", week: "This Week", month: "Month", quarter: "Quarter", halfyear: "6 Months", office: "Work" };
             const priorityOptions = ["P1","P2","P3","P4"];
+            const categoryOptions = Object.keys(CATEGORY_ICONS);
+            const timeEstimateOptions = [15, 25, 45, 60, 120, 240, 360];
             // Suggestions sharing a sourceId came from splitting one brain-dump entry
             const sourceCounts = {};
             organizeResults.forEach(t => { if (t.sourceId) sourceCounts[t.sourceId] = (sourceCounts[t.sourceId] || 0) + 1; });
             return (
               <>
+                {organizeInvalidCount > 0 && (
+                  <p style={{ fontSize: "11px", color: "var(--text-muted)", lineHeight: "1.4", margin: "0 0 8px" }}>
+                    ℹ️ {organizeInvalidCount} suggestion{organizeInvalidCount !== 1 ? "s" : ""} from the AI {organizeInvalidCount !== 1 ? "were" : "was"} incomplete and skipped.
+                  </p>
+                )}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                   <p style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: "1.5", margin: 0 }}>
                     Tap card to select · ✎ to edit · ↑↓ to reorder
@@ -601,6 +622,9 @@ Return ONLY a JSON array, no markdown:
                         >
                           <span className={`priority-badge ${t.priority.toLowerCase()}`}>{t.priority}</span>
                           <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", background: "var(--bg-secondary)", padding: "2px 6px", borderRadius: "4px", flexShrink: 0 }}>{horizonLabel[t.horizonLevel] || t.horizonLevel}</span>
+                          {CATEGORY_ICONS[t.category] && (
+                            <span style={{ fontSize: "13px", flexShrink: 0 }} title={t.category}>{CATEGORY_ICONS[t.category]}</span>
+                          )}
                           <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", flex: 1, lineHeight: "1.3", minWidth: 0 }}>{t.title}</span>
                           {/* Sort buttons */}
                           <button onClick={e => { e.stopPropagation(); moveOrganizeResult(i, "up"); }} disabled={i === 0}
@@ -618,9 +642,15 @@ Return ONLY a JSON array, no markdown:
                             🔗 Split from same brain dump{t.splitReason ? ` · ${t.splitReason}` : ""}
                           </p>
                         )}
-                        {/* Concrete step (if any) */}
-                        {t.concreteStep && !isExpanded && (
-                          <p style={{ fontSize: "11.5px", color: "var(--text-muted)", margin: "0 12px 10px", lineHeight: "1.4" }}>⚡ {t.concreteStep}</p>
+                        {/* Concrete step + time estimate */}
+                        {!isExpanded && (
+                          <p style={{ fontSize: "11.5px", color: "var(--text-muted)", margin: "0 12px 10px", lineHeight: "1.4" }}>
+                            {t.concreteStep && <>⚡ {t.concreteStep} · </>}⏱ {t.timeEstimateMinutes}m
+                          </p>
+                        )}
+                        {/* Preserved context from the original brain dump entry */}
+                        {t.sourceSummary && !isExpanded && (
+                          <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: "0 12px 10px", lineHeight: "1.4", fontStyle: "italic" }}>💬 {t.sourceSummary}</p>
                         )}
                         {/* Preserved key points indicator */}
                         {t.subSteps && t.subSteps.length > 0 && !isExpanded && (
@@ -659,6 +689,22 @@ Return ONLY a JSON array, no markdown:
                                 <button key={h} type="button" onClick={e => { e.stopPropagation(); updateOrganizeResult(i, "horizonLevel", h); }}
                                   style={{ padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "700", cursor: "pointer", border: t.horizonLevel === h ? "2px solid var(--accent)" : "1.5px solid var(--border)", background: t.horizonLevel === h ? "var(--accent)" : "var(--bg-card)", color: t.horizonLevel === h ? "#fff" : "var(--text-secondary)" }}>
                                   {horizonLabel[h]}
+                                </button>
+                              ))}
+                            </div>
+                            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                              {categoryOptions.map(c => (
+                                <button key={c} type="button" onClick={e => { e.stopPropagation(); updateOrganizeResult(i, "category", c); }}
+                                  style={{ padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "700", cursor: "pointer", border: t.category === c ? "2px solid var(--accent)" : "1.5px solid var(--border)", background: t.category === c ? "var(--accent)" : "var(--bg-card)", color: t.category === c ? "#fff" : "var(--text-secondary)" }}>
+                                  {CATEGORY_ICONS[c]} {c}
+                                </button>
+                              ))}
+                            </div>
+                            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                              {timeEstimateOptions.map(m => (
+                                <button key={m} type="button" onClick={e => { e.stopPropagation(); updateOrganizeResult(i, "timeEstimateMinutes", m); }}
+                                  style={{ padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "700", cursor: "pointer", border: t.timeEstimateMinutes === m ? "2px solid var(--accent)" : "1.5px solid var(--border)", background: t.timeEstimateMinutes === m ? "var(--accent)" : "var(--bg-card)", color: t.timeEstimateMinutes === m ? "#fff" : "var(--text-secondary)" }}>
+                                  ⏱ {m}m
                                 </button>
                               ))}
                             </div>
