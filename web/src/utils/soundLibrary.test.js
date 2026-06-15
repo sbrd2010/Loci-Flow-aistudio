@@ -21,10 +21,11 @@ describe("soundLibrary", () => {
     });
 
     it("returns the category key for a bundled local track", () => {
-      expect(getCategoryKeyForTrack("after-school-rain.mp3")).toBe("rain");
+      expect(getCategoryKeyForTrack("after-school-rain.mp3")).toBe("lofi");
       expect(getCategoryKeyForTrack("2-am-debug-loop.mp3")).toBe("lofi");
       expect(getCategoryKeyForTrack("midnight-amber-room.mp3")).toBe("jazz");
       expect(getCategoryKeyForTrack("dust-on-the-morning-keys.mp3")).toBe("piano");
+      expect(getCategoryKeyForTrack("rain-light")).toBe("rain");
     });
 
     it("returns the category key for a CDN variation", () => {
