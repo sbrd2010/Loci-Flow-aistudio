@@ -4,6 +4,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI } from "../utils/aiCall";
 import { normalizeAiOrganizeSuggestions, buildClearedBrainDump } from "../utils/taskOps";
+import { submitOnEnter } from "../utils/formEvents";
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor,
@@ -140,6 +141,9 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [organizeLoading, setOrganizeLoading] = useState(false);
   const [organizeResults, setOrganizeResults] = useState([]);
+  // Tracked separately from organizeResults — updateOrganizeResult/moveOrganizeResult
+  // replace that array via map()/spread, which would drop an expando property.
+  const [organizeDroppedSourceIds, setOrganizeDroppedSourceIds] = useState(new Set());
   const [organizeSelected, setOrganizeSelected] = useState(new Set());
   const [organizeError, setOrganizeError] = useState("");
   const [organizeExpandedIndex, setOrganizeExpandedIndex] = useState(null);
@@ -286,6 +290,7 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
     if (!brainDumpItems.length) return;
     setOrganizeLoading(true);
     setOrganizeResults([]);
+    setOrganizeDroppedSourceIds(new Set());
     setOrganizeError("");
     setOrganizeSelected(new Set());
     setToolPanel("organize");
@@ -295,20 +300,44 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
       ? `\nUser context: completion rate ${Math.round(profile.completionRate * 100)}%, dominant horizon "${profile.dominantHorizon}", avg estimate ${profile.avgEstimateMinutes}min. Weight horizon suggestions toward their patterns.`
       : "";
     // Include each item's stable ID so AI can return sourceId for safe brain-dump clearing
-    const prompt = `Here are raw thoughts from a brain dump:\n${brainDumpItems.map((item, i) => `${i + 1}. [id:${item.id}] ${item.text}`).join("\n")}\n\nOrganize each thought into a structured task. For each one determine:\n- sourceId: the id value from the [id:...] tag in the original list\n- title: specific, outcome-oriented (max 60 chars)\n- horizonLevel: "today" (urgent/deadline today), "week" (most items, default), "month", "quarter", "halfyear" (6 months / long-term), or "office" (work or professional tasks)\n- priority: "P1" (urgent), "P2" (important), "P3" (normal), "P4" (quick <15 min)\n- concreteStep: the single easiest first action to start it (max 60 chars)${profileNote}\n\nRules: default to "week" unless clearly urgent or work-related. Never use the word "ADHD".\n\nReturn ONLY a JSON array, no markdown:\n[{"sourceId":"<id from list>","title":"...","horizonLevel":"week","priority":"P3","concreteStep":"..."}]`;
+    const prompt = `Here are raw thoughts from a brain dump:
+${brainDumpItems.map((item, i) => `${i + 1}. [id:${item.id}] ${item.text}`).join("\n")}
+
+Turn these into clear, actionable tasks. Each numbered thought can become:
+- ONE simple task — for a single small action
+- ONE task with subSteps — for a single action that has several parts or details worth keeping
+- MULTIPLE separate tasks sharing the same sourceId — when a thought mixes several distinct, unrelated actions. Split them instead of mashing everything into one vague task
+- ONE practical next-step task — when a thought is vague venting or emotional overwhelm with no clear action. Turn it into a single small, low-shame, concrete next step rather than trying to solve everything at once
+
+Preserve every concrete detail from the original text — names, dates, deadlines, amounts, links, places, people, constraints, and decision criteria — especially for job search, admin, finance, and travel items. Don't drop them; put whatever doesn't fit in the title/concreteStep into subSteps. Don't invent details that aren't in the original text.
+
+For each task, determine:
+- sourceId: the id from the [id:...] tag of the thought it came from. If a thought splits into multiple tasks, every one of them shares that same sourceId
+- title: specific and outcome-oriented (max 60 chars). Keep the concrete subject (company, person, item, place) from the text — never a vague title like "Organize everything" or "Handle tasks"
+- horizonLevel: "today" (urgent/deadline today), "week" (most items, default), "month", "quarter", "halfyear" (6 months / long-term), or "office" (work or professional tasks)
+- priority: "P1" (urgent), "P2" (important), "P3" (normal), "P4" (quick <15 min)
+- concreteStep: the single easiest physical/digital first action to start it (max 60 chars), e.g. "Open LinkedIn and message the recruiter", not "Look into it"
+- subSteps: for a complex or long thought, 2-7 key details or sub-tasks that would otherwise be lost (deadlines, amounts, links, names, decisions). Use [] for short, simple thoughts where the title and concreteStep already capture everything
+- splitReason: only when this task is one of several from the same thought — a short phrase (max 40 chars) naming what makes it distinct, e.g. "Recruiter follow-up". Omit otherwise${profileNote}
+
+Rules: default to "week" unless clearly urgent or work-related. Never use the word "ADHD".
+
+Return ONLY a JSON array, no markdown:
+[{"sourceId":"<id from list>","title":"...","horizonLevel":"week","priority":"P3","concreteStep":"...","subSteps":[{"text":"key point 1"}],"splitReason":""}]`;
 
     try {
       const raw = await callAI({
         groqKey, geminiKey,
         systemPrompt: "You are a productivity coach. Respond ONLY with a valid JSON array, no markdown.",
         messages: [{ role: "user", content: prompt }],
-        maxTokens: 900
+        maxTokens: 4000
       });
       const cleaned = raw.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
       const parsed = JSON.parse(cleaned);
       if (!Array.isArray(parsed)) throw new Error("invalid");
       const valid = normalizeAiOrganizeSuggestions(parsed, brainDumpItems);
       setOrganizeResults(valid);
+      setOrganizeDroppedSourceIds(valid.droppedSourceIds || new Set());
       setOrganizeSelected(new Set(valid.map((_, i) => i)));
     } catch (_) {
       setOrganizeError("Couldn't organize — try again, or add tasks manually.");
@@ -368,13 +397,17 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
         orderIndex,
         dateCompletedString: null,
         isDeleted: false,
-        lastUpdated: Date.now()
+        lastUpdated: Date.now(),
+        ...(t.subSteps && t.subSteps.length > 0 && { subSteps: t.subSteps }),
       };
     });
-    const clearedDump = buildClearedBrainDump(payload.brainDump || [], toAdd);
+    // Pass all suggestions (not just accepted) so a split entry's source is only
+    // cleared once every suggestion generated from it has been accepted.
+    const clearedDump = buildClearedBrainDump(payload.brainDump || [], toAdd, organizeResults, organizeDroppedSourceIds);
     savePayload({ ...payload, tasks: [...(payload.tasks || []), ...newTasks], brainDump: clearedDump });
     setToolPanel(null);
     setOrganizeResults([]);
+    setOrganizeDroppedSourceIds(new Set());
     setOrganizeSelected(new Set());
   };
 
@@ -385,13 +418,6 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
     if (currentDump.length >= 50) return;
     savePayload({ ...payload, brainDump: [...currentDump, { id: safeUUID(), text: brainDumpText.trim(), createdAt: Date.now() }] });
     setBrainDumpText("");
-  };
-
-  const handleBrainDumpKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      e.currentTarget.form?.requestSubmit();
-    }
   };
 
   const handleNextRescueStep = () => {
@@ -491,7 +517,7 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
               placeholder="Add anything on your mind. (Shift+Enter for a new line)"
               value={brainDumpText}
               onChange={e => setBrainDumpText(e.target.value)}
-              onKeyDown={handleBrainDumpKeyDown}
+              onKeyDown={submitOnEnter}
               disabled={dumpCount >= 50} />
             <button type="submit" className="braindump-submit" disabled={dumpCount >= 50}>➔</button>
           </form>
@@ -520,7 +546,7 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
       {toolPanel === "organize" && (
         <>
           <div className="mindbox-subview-header">
-            <button className="mindbox-back-btn" onClick={() => { setToolPanel(null); setOrganizeResults([]); setOrganizeError(""); }}>← Back</button>
+            <button className="mindbox-back-btn" onClick={() => { setToolPanel(null); setOrganizeResults([]); setOrganizeDroppedSourceIds(new Set()); setOrganizeError(""); }}>← Back</button>
             <h2 className="mindbox-subview-title">Organize Dump</h2>
           </div>
           {organizeLoading && (
@@ -539,6 +565,9 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
             const horizonOptions = ["today","week","month","quarter","halfyear","office"];
             const horizonLabel = { today: "Today", week: "This Week", month: "Month", quarter: "Quarter", halfyear: "6 Months", office: "Work" };
             const priorityOptions = ["P1","P2","P3","P4"];
+            // Suggestions sharing a sourceId came from splitting one brain-dump entry
+            const sourceCounts = {};
+            organizeResults.forEach(t => { if (t.sourceId) sourceCounts[t.sourceId] = (sourceCounts[t.sourceId] || 0) + 1; });
             return (
               <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
@@ -582,9 +611,19 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
                             style={{ background: isExpanded ? "var(--accent-ring)" : "none", border: "none", cursor: "pointer", fontSize: "14px", color: isExpanded ? "var(--accent)" : "var(--text-muted)", padding: "2px 4px", borderRadius: "5px", lineHeight: 1, flexShrink: 0 }}>✎</button>
                           <span style={{ fontSize: "16px", color: isSelected ? "var(--accent)" : "var(--border)", flexShrink: 0 }}>{isSelected ? "✓" : "○"}</span>
                         </div>
+                        {/* Split-from-same-entry indicator */}
+                        {t.sourceId && sourceCounts[t.sourceId] > 1 && (
+                          <p style={{ fontSize: "11px", color: "var(--accent)", fontWeight: "600", margin: "0 12px 10px", lineHeight: "1.4" }}>
+                            🔗 Split from same brain dump{t.splitReason ? ` · ${t.splitReason}` : ""}
+                          </p>
+                        )}
                         {/* Concrete step (if any) */}
                         {t.concreteStep && !isExpanded && (
                           <p style={{ fontSize: "11.5px", color: "var(--text-muted)", margin: "0 12px 10px", lineHeight: "1.4" }}>⚡ {t.concreteStep}</p>
+                        )}
+                        {/* Preserved key points indicator */}
+                        {t.subSteps && t.subSteps.length > 0 && !isExpanded && (
+                          <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: "0 12px 10px", lineHeight: "1.4" }}>📋 {t.subSteps.length} detail{t.subSteps.length !== 1 ? "s" : ""} preserved</p>
                         )}
                         {/* Inline edit panel */}
                         {isExpanded && (
@@ -622,6 +661,19 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
                                 </button>
                               ))}
                             </div>
+                            {t.subSteps && t.subSteps.length > 0 && (
+                              <div onClick={e => e.stopPropagation()}>
+                                <label style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: "4px" }}>Key points ({t.subSteps.length})</label>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                                  {t.subSteps.map((s, si) => (
+                                    <div key={s.id || si} style={{ fontSize: "12px", color: "var(--text-secondary)", display: "flex", gap: "6px", padding: "2px 0" }}>
+                                      <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>·</span>
+                                      <span>{s.text}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -872,7 +924,7 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
                 placeholder="What's on your mind? (Shift+Enter for a new line)"
                 value={brainDumpText}
                 onChange={e => setBrainDumpText(e.target.value)}
-                onKeyDown={handleBrainDumpKeyDown}
+                onKeyDown={submitOnEnter}
                 disabled={dumpCount >= 50} />
               <button type="submit" className="braindump-submit" disabled={dumpCount >= 50}>➔</button>
             </form>

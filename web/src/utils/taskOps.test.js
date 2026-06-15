@@ -282,6 +282,141 @@ describe("normalizeAiOrganizeSuggestions", () => {
     expect(result.find((t) => t.horizonLevel === "month").concreteStep).toBe("Valid step");
     expect(result.find((t) => t.horizonLevel === "halfyear").concreteStep).toBe("");
   });
+
+  it("missing subSteps normalizes to an empty array", () => {
+    const raw = [{ sourceId: "d1", title: "Buy groceries", horizonLevel: "week", priority: "P3" }];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].subSteps).toEqual([]);
+  });
+
+  it("normalizes valid subSteps into {id, text, done} with trimmed text", () => {
+    const raw = [{
+      sourceId: "d1", title: "Plan trip", horizonLevel: "week", priority: "P2",
+      subSteps: [{ text: "  Book flights  " }, { text: "Reserve hotel" }],
+    }];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].subSteps).toHaveLength(2);
+    expect(result[0].subSteps[0]).toMatchObject({ text: "Book flights", done: false });
+    expect(result[0].subSteps[0].id).toBeTruthy();
+    expect(result[0].subSteps[1].text).toBe("Reserve hotel");
+  });
+
+  it("drops blank or non-string subStep entries and caps at 7", () => {
+    const raw = [{
+      sourceId: "d1", title: "Big project", horizonLevel: "week", priority: "P2",
+      subSteps: [
+        { text: "1" }, { text: "2" }, { text: "3" }, { text: "4" }, { text: "5" }, { text: "6" }, { text: "7" }, { text: "8" },
+        { text: "  " }, { text: 123 }, null,
+      ],
+    }];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].subSteps).toHaveLength(7);
+    expect(result[0].subSteps.map((s) => s.text)).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
+  });
+
+  it("caps subStep text at 240 chars", () => {
+    const raw = [{
+      sourceId: "d1", title: "Big project", horizonLevel: "week", priority: "P2",
+      subSteps: [{ text: "S".repeat(300) }],
+    }];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].subSteps[0].text).toHaveLength(240);
+  });
+
+  it("non-array subSteps normalizes to an empty array", () => {
+    const raw = [{ sourceId: "d1", title: "Buy groceries", horizonLevel: "week", priority: "P3", subSteps: "not an array" }];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].subSteps).toEqual([]);
+  });
+
+  it("allows multiple suggestions to share the same valid sourceId (splitting a long entry)", () => {
+    const raw = [
+      { sourceId: "d1", title: "Update CV for Netherlands applications", horizonLevel: "week", priority: "P1" },
+      { sourceId: "d1", title: "Apply to 3 Netherlands vacancies", horizonLevel: "week", priority: "P1" },
+      { sourceId: "d1", title: "Message the recruiter from last month", horizonLevel: "week", priority: "P2" },
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result).toHaveLength(3);
+    expect(result.every((t) => t.sourceId === "d1")).toBe(true);
+  });
+
+  it("caps suggestions sharing one sourceId at 8 and records it in droppedSourceIds", () => {
+    const raw = Array.from({ length: 12 }, (_, i) => ({
+      sourceId: "d1", title: `Task ${i}`, horizonLevel: "week", priority: "P3",
+    }));
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result).toHaveLength(8);
+    expect(result.droppedSourceIds.has("d1")).toBe(true);
+  });
+
+  it("caps total suggestions at 25 across sources", () => {
+    const raw = [];
+    for (let i = 0; i < 30; i++) {
+      const sourceId = i % 2 === 0 ? "d1" : "d2";
+      raw.push({ sourceId, title: `Task ${i}`, horizonLevel: "week", priority: "P3" });
+    }
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result.length).toBeLessThanOrEqual(25);
+  });
+
+  it("droppedSourceIds includes a source where a sibling suggestion was rejected for invalid horizon/priority", () => {
+    const raw = [
+      { sourceId: "d1", title: "Update CV", horizonLevel: "week", priority: "P1" },
+      { sourceId: "d1", title: "Bad split", horizonLevel: "someday", priority: "P1" }, // rejected: invalid horizon
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result).toHaveLength(1);
+    expect(result.droppedSourceIds.has("d1")).toBe(true);
+  });
+
+  it("droppedSourceIds covers every brain-dump item when a valid suggestion's sourceId can't be attributed (AI omitted/garbled a split's sourceId)", () => {
+    const raw = [
+      { sourceId: "d1", title: "Plan team offsite", horizonLevel: "week", priority: "P2" },
+      { sourceId: null, title: "Order catering", horizonLevel: "week", priority: "P2" }, // split lost its sourceId
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result).toHaveLength(2);
+    expect(result.droppedSourceIds).toEqual(new Set(["d1", "d2", "d3"]));
+  });
+
+  it("droppedSourceIds is empty when no caps drop any suggestion", () => {
+    const raw = [
+      { sourceId: "d1", title: "Buy groceries", horizonLevel: "today", priority: "P3" },
+      { sourceId: "d2", title: "Review PR", horizonLevel: "office", priority: "P2" },
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result.droppedSourceIds.size).toBe(0);
+  });
+
+  it("droppedSourceIds includes a source cut off by the overall 25-suggestion cap, even under its own per-source cap", () => {
+    const raw = [];
+    // 20 suggestions with an unrecognized sourceId — count toward the overall
+    // cap (result.length) but not toward any per-source cap.
+    for (let i = 0; i < 20; i++) {
+      raw.push({ sourceId: "unknown", title: `Filler ${i}`, horizonLevel: "week", priority: "P3" });
+    }
+    // 6 suggestions for d1 — under MAX_SUGGESTIONS_PER_SOURCE (8), but only 5
+    // fit before the overall cap (25) is hit.
+    for (let i = 0; i < 6; i++) {
+      raw.push({ sourceId: "d1", title: `D1 task ${i}`, horizonLevel: "week", priority: "P3" });
+    }
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result).toHaveLength(25);
+    expect(result.filter(t => t.sourceId === "d1")).toHaveLength(5);
+    expect(result.droppedSourceIds.has("d1")).toBe(true);
+  });
+
+  it("sanitizes splitReason to a trimmed string, defaulting to empty", () => {
+    const raw = [
+      { sourceId: "d1", title: "With reason", horizonLevel: "week", priority: "P3", splitReason: "  Recruiter follow-up  " },
+      { sourceId: "d2", title: "No reason", horizonLevel: "week", priority: "P3" },
+      { sourceId: "d3", title: "Bad reason", horizonLevel: "week", priority: "P3", splitReason: ["not", "a", "string"] },
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].splitReason).toBe("Recruiter follow-up");
+    expect(result[1].splitReason).toBe("");
+    expect(result[2].splitReason).toBe("");
+  });
 });
 
 // -- sanitizeTaskField -----------------------------------------------------------
@@ -327,5 +462,50 @@ describe("buildClearedBrainDump", () => {
   it("handles empty accepted suggestions gracefully", () => {
     const result = buildClearedBrainDump(DUMP_ITEMS, []);
     expect(result).toHaveLength(3);
+  });
+
+  it("keeps the source brain dump item when only some split suggestions are accepted", () => {
+    const allSuggestions = [
+      { sourceId: "d1", title: "Update CV", horizonLevel: "week", priority: "P1" },
+      { sourceId: "d1", title: "Apply to vacancies", horizonLevel: "week", priority: "P1" },
+      { sourceId: "d1", title: "Message recruiter", horizonLevel: "week", priority: "P2" },
+    ];
+    const accepted = [allSuggestions[0]];
+    const result = buildClearedBrainDump(DUMP_ITEMS, accepted, allSuggestions);
+    expect(result).toHaveLength(3);
+    expect(result.find((d) => d.id === "d1")).toBeDefined();
+  });
+
+  it("clears the source brain dump item when all split suggestions are accepted", () => {
+    const allSuggestions = [
+      { sourceId: "d1", title: "Update CV", horizonLevel: "week", priority: "P1" },
+      { sourceId: "d1", title: "Apply to vacancies", horizonLevel: "week", priority: "P1" },
+      { sourceId: "d1", title: "Message recruiter", horizonLevel: "week", priority: "P2" },
+    ];
+    const result = buildClearedBrainDump(DUMP_ITEMS, allSuggestions, allSuggestions);
+    expect(result).toHaveLength(2);
+    expect(result.find((d) => d.id === "d1")).toBeUndefined();
+  });
+
+  it("keeps the source brain dump item when a sibling split suggestion lost its sourceId, even though the linked suggestion was accepted", () => {
+    const raw = [
+      { sourceId: "d1", title: "Plan team offsite", horizonLevel: "week", priority: "P2" },
+      { sourceId: null, title: "Order catering", horizonLevel: "week", priority: "P2" },
+    ];
+    const all = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    const accepted = [all[0]]; // user accepts the linked suggestion, rejects the unlinked one
+    const result = buildClearedBrainDump(DUMP_ITEMS, accepted, all, all.droppedSourceIds);
+    expect(result.find((d) => d.id === "d1")).toBeDefined();
+  });
+
+  it("keeps the source brain dump item when droppedSourceIds marks it as truncated, even if every visible suggestion was accepted", () => {
+    const allSuggestions = [
+      { sourceId: "d1", title: "Update CV", horizonLevel: "week", priority: "P1" },
+      { sourceId: "d1", title: "Apply to vacancies", horizonLevel: "week", priority: "P1" },
+    ];
+    const droppedSourceIds = new Set(["d1"]);
+    const result = buildClearedBrainDump(DUMP_ITEMS, allSuggestions, allSuggestions, droppedSourceIds);
+    expect(result).toHaveLength(3);
+    expect(result.find((d) => d.id === "d1")).toBeDefined();
   });
 });

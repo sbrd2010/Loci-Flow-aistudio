@@ -25,6 +25,7 @@ import { useTodayStr } from "./hooks/useTodayStr";
 import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload } from "./utils/focusSession";
 import { celebrate } from "./utils/celebrations";
 import { safeUUID } from "./utils/uuid";
+import { submitOnEnter } from "./utils/formEvents";
 
 const EXTEND_DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
 
@@ -422,7 +423,6 @@ export default function App() {
   };
 
   const dumpCount = (payload?.brainDump || []).length;
-  const recentDump = [...(payload?.brainDump || [])].slice(-3).reverse();
 
   const handleQuickDump = (e) => {
     e.preventDefault();
@@ -793,31 +793,19 @@ export default function App() {
                 Inbox full — triage items in Mind Box first.
               </p>
             )}
-            <form onSubmit={handleQuickDump} style={{ display: "flex", gap: "8px", marginBottom: recentDump.length ? "14px" : 0 }}>
-              <input
+            <form onSubmit={handleQuickDump} className="braindump-form">
+              <textarea
                 autoFocus
-                type="text"
                 className="braindump-input"
-                placeholder="What's on your mind?"
+                rows={3}
+                placeholder="What's on your mind? (Shift+Enter for a new line)"
                 value={quickDumpText}
                 onChange={e => setQuickDumpText(e.target.value)}
+                onKeyDown={submitOnEnter}
                 disabled={dumpCount >= 50}
-                style={{ flex: 1 }}
               />
               <button type="submit" className="braindump-submit" disabled={dumpCount >= 50 || !quickDumpText.trim()}>➔</button>
             </form>
-            {recentDump.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Recently captured
-                </span>
-                {recentDump.map(item => (
-                  <p key={item.id} style={{ fontSize: "12px", color: "var(--text-secondary)", margin: 0, padding: "6px 10px", background: "var(--bg-secondary)", borderRadius: "8px", lineHeight: "1.45" }}>
-                    {item.text}
-                  </p>
-                ))}
-              </div>
-            )}
           </div>
         </>
       )}
