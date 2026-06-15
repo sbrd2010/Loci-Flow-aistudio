@@ -212,12 +212,28 @@ export function buildLociDayMapContext(tasks = [], todayStr) {
   return ["TODAY'S DAY MAP (planned route, in order):", ...lines].join("\n");
 }
 
-// Brain Dump backlog size — always-on so the coach knows raw thoughts are
-// waiting to be organized, even before the behavioural profile kicks in.
+const BRAIN_DUMP_ITEMS_IN_PROMPT = 5;
+const BRAIN_DUMP_ITEM_MAX_LENGTH = 100;
+
+// Brain Dump backlog — always-on so the coach knows raw thoughts are waiting
+// to be organized, even before the behavioural profile kicks in. Surfaces the
+// first few item texts (oldest first, matching the FIFO queue) so the coach
+// can reference specific thoughts, not just a count.
 export function buildLociBrainDumpContext(brainDump = []) {
-  const count = (brainDump || []).length;
+  const items = brainDump || [];
+  const count = items.length;
   if (count === 0) return "";
-  return `BRAIN DUMP: ${count} unprocessed thought${count === 1 ? "" : "s"} waiting to be organized into tasks.`;
+
+  const lines = [`BRAIN DUMP: ${count} unprocessed thought${count === 1 ? "" : "s"} waiting to be organized into tasks.`];
+  items.slice(0, BRAIN_DUMP_ITEMS_IN_PROMPT).forEach(item => {
+    const text = String(item.text || "").replace(/\s+/g, " ").trim();
+    if (!text) return;
+    const truncated = text.length > BRAIN_DUMP_ITEM_MAX_LENGTH ? `${text.slice(0, BRAIN_DUMP_ITEM_MAX_LENGTH).trim()}...` : text;
+    lines.push(`  - ${truncated}`);
+  });
+  if (count > BRAIN_DUMP_ITEMS_IN_PROMPT) lines.push(`  ... +${count - BRAIN_DUMP_ITEMS_IN_PROMPT} more`);
+
+  return lines.join("\n");
 }
 
 // Recent completion velocity (last 3 and 7 days) from the contributions

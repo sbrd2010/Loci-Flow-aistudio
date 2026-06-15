@@ -468,6 +468,38 @@ describe("buildLociBrainDumpContext", () => {
     expect(buildLociBrainDumpContext([{ id: "1", text: "idea" }])).toContain("1 unprocessed thought waiting");
     expect(buildLociBrainDumpContext([{ id: "1" }, { id: "2" }])).toContain("2 unprocessed thoughts waiting");
   });
+
+  it("includes the text of the first items", () => {
+    const context = buildLociBrainDumpContext([
+      { id: "1", text: "Buy groceries" },
+      { id: "2", text: "Finish slides" },
+    ]);
+    expect(context).toContain("Buy groceries");
+    expect(context).toContain("Finish slides");
+  });
+
+  it("caps the number of item texts shown and indicates overflow", () => {
+    const items = Array.from({ length: 7 }, (_, i) => ({ id: String(i), text: `Item ${i + 1}` }));
+    const context = buildLociBrainDumpContext(items);
+    expect(context).toContain("Item 1");
+    expect(context).toContain("Item 5");
+    expect(context).not.toContain("Item 6");
+    expect(context).not.toContain("Item 7");
+    expect(context).toContain("+2 more");
+  });
+
+  it("truncates long item text", () => {
+    const longText = "a".repeat(150);
+    const context = buildLociBrainDumpContext([{ id: "1", text: longText }]);
+    expect(context).toContain(`${"a".repeat(100)}...`);
+    expect(context).not.toContain("a".repeat(101));
+  });
+
+  it("collapses newlines and extra whitespace in item text", () => {
+    const context = buildLociBrainDumpContext([{ id: "1", text: "line1\nline2   line3" }]);
+    expect(context).toContain("line1 line2 line3");
+    expect(context).not.toMatch(/line1\nline2/);
+  });
 });
 
 describe("buildLociVelocityContext", () => {
