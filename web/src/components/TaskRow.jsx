@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { formatReminderLabel } from "../utils/reminders";
+import { CATEGORY_ICONS } from "../utils/taskOps";
 
 const GripIcon = () => (
   <svg width="10" height="15" viewBox="0 0 10 15" fill="currentColor">
@@ -105,8 +106,8 @@ const ROADMAP_HORIZONS = [
   { key: "office",   label: "Work" },
 ];
 
-export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, onToggleMVD, dragHandleListeners, dragHandleAttributes }) {
-  const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
+export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, onToggleMVD, dragHandleListeners, dragHandleAttributes }) {
+  const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD, category } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const [showRoadmapOptions, setShowRoadmapOptions] = useState(false);
   const menuRef = useRef(null);
@@ -176,13 +177,18 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
 
       {/* Task content */}
       <div className="task-middle">
+        {isMVD && !isCompleted && (
+          <span style={{ fontSize: "8px", fontWeight: "800", color: "var(--accent)", background: "var(--accent-ring, rgba(99,102,241,0.10))", padding: "1px 5px", borderRadius: "3px", letterSpacing: "0.04em", alignSelf: "flex-start" }}>★ MUST-DO</span>
+        )}
         <div className="task-row-top">
           <span className={`priority-badge ${(priority || "P4").toLowerCase()}`}>{priority || "P4"}</span>
+          {CATEGORY_ICONS[category] && (
+            <span className="task-category-icon" title={category} aria-label={category}>
+              {CATEGORY_ICONS[category]}
+            </span>
+          )}
           {isNowFocus && !isCompleted && (
             <span style={{ fontSize: "8px", fontWeight: "800", color: "var(--warning)", background: "rgba(245,158,11,0.12)", padding: "1px 5px", borderRadius: "3px", letterSpacing: "0.04em" }}>FOCUS</span>
-          )}
-          {isMVD && !isCompleted && (
-            <span style={{ fontSize: "8px", fontWeight: "800", color: "var(--accent)", background: "var(--accent-ring, rgba(99,102,241,0.10))", padding: "1px 5px", borderRadius: "3px", letterSpacing: "0.04em" }}>★ MUST-DO</span>
           )}
           <span className="task-title-text" title={title}>{title}</span>
         </div>
@@ -243,6 +249,16 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         {isBreakingDown && (
           <span style={{ fontSize: "11px", color: "var(--accent)", fontStyle: "italic", marginTop: "6px", display: "block" }}>
             ✨ Breaking it down…
+          </span>
+        )}
+
+        {breakdownError && !isBreakingDown && (
+          <span style={{ fontSize: "11px", color: "var(--danger)", marginTop: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+            Couldn't break this down.
+            <button
+              onClick={e => { e.stopPropagation(); onBreakdown(task); }}
+              style={{ background: "none", border: "none", padding: 0, fontSize: "11px", fontWeight: "700", color: "var(--accent)", cursor: "pointer", textDecoration: "underline" }}
+            >Try again</button>
           </span>
         )}
       </div>

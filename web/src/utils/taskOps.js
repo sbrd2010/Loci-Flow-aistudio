@@ -36,6 +36,27 @@ export function applyAiRewriteToTask(originalTask, aiSuggestion) {
   };
 }
 
+// Small glanceable icon shown next to a task's priority badge (TaskRow,
+// Roadmap cards), keyed by the categories offered in AddTaskDialog. Tasks
+// with no category, or one outside this map, show no icon — never inferred.
+export const CATEGORY_ICONS = {
+  Career: "💼",
+  Work: "🏢",
+  Health: "❤️",
+  Personal: "🏠",
+};
+
+// Roadmap horizons always show higher-priority tasks first; within the same
+// priority, manual drag order (orderIndex) still applies.
+export const PRIORITY_RANK = { P1: 0, P2: 1, P3: 2, P4: 3 };
+
+export function byPriorityThenOrder(a, b) {
+  const pa = PRIORITY_RANK[a.priority] ?? PRIORITY_RANK.P4;
+  const pb = PRIORITY_RANK[b.priority] ?? PRIORITY_RANK.P4;
+  if (pa !== pb) return pa - pb;
+  return (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
+}
+
 // Valid horizons for the AI Organize flow (includes "office" for Work tasks).
 export const AI_ORGANIZE_VALID_HORIZONS = new Set(["today","week","month","quarter","halfyear","office"]);
 const AI_ORGANIZE_VALID_PRIORITIES = new Set(["P1","P2","P3","P4"]);

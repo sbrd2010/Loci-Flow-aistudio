@@ -3,7 +3,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { celebrate } from "../utils/celebrations";
 import { getAIKeys, callAI } from "../utils/aiCall";
-import { sanitizeTaskField } from "../utils/taskOps";
+import { sanitizeTaskField, CATEGORY_ICONS, byPriorityThenOrder } from "../utils/taskOps";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor,
@@ -49,6 +49,11 @@ function SortableRoadmapCard({ id, task, onTaskClick }) {
         <span className={`priority-badge ${task.priority?.toLowerCase() || "p3"}`} style={{ flexShrink: 0 }}>
           {task.priority || "P3"}
         </span>
+        {CATEGORY_ICONS[task.category] && (
+          <span className="task-category-icon" title={task.category} aria-label={task.category}>
+            {CATEGORY_ICONS[task.category]}
+          </span>
+        )}
         <span className="roadmap-task-title" style={{ flex: 1, minWidth: 0 }}>{task.title}</span>
       </div>
     </div>
@@ -424,7 +429,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   const renderTaskList = (colKey) => {
     const colTasks = tasks
       .filter(t => t.horizonLevel === colKey && isVisibleRoadmapTask(t))
-      .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+      .sort(byPriorityThenOrder);
     return (
       <SortableRoadmapList
         colKey={colKey}
@@ -468,6 +473,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)" }}>
             {expandedCol === "inbox" ? "📥 Brain Dump Inbox" : currentCol?.label || ""}
+            {expandedCol !== "inbox" && <span className="roadmap-sort-hint">Sorted by priority</span>}
           </span>
           {expandedCol !== "inbox" && (
             <button className="column-add-btn" onClick={() => onOpenAddTask(expandedCol)}
@@ -526,12 +532,12 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
         {columns.map((col) => {
           const colTasks = tasks
             .filter((t) => t.horizonLevel === col.key && isVisibleRoadmapTask(t))
-            .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+            .sort(byPriorityThenOrder);
           const isExpanded = expandedCol === col.key;
           return (
             <div key={col.key} className={`roadmap-column${isExpanded ? " expanded" : ""}`}>
               <div className="column-header" onClick={() => setExpandedCol(isExpanded ? "" : col.key)} style={{ cursor: "pointer", userSelect: "none" }}>
-                <span className="column-title">{col.label}</span>
+                <span className="column-title">{col.label}<span className="roadmap-sort-hint">Sorted by priority</span></span>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <span className="column-count">{colTasks.length}</span>
                   <button className="column-add-btn" onClick={(e) => { e.stopPropagation(); onOpenAddTask(col.key); }} title={`Add task directly to ${col.label}`}>+</button>

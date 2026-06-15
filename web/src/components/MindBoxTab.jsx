@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
-import { getAIKeys, callAI } from "../utils/aiCall";
+import { getAIKeys, callAI, extractJsonArray } from "../utils/aiCall";
 import { normalizeAiOrganizeSuggestions, buildClearedBrainDump } from "../utils/taskOps";
 import { submitOnEnter } from "../utils/formEvents";
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
@@ -332,13 +332,14 @@ Return ONLY a JSON array, no markdown:
         messages: [{ role: "user", content: prompt }],
         maxTokens: 4000
       });
-      const cleaned = raw.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
-      const parsed = JSON.parse(cleaned);
-      if (!Array.isArray(parsed)) throw new Error("invalid");
+      const parsed = extractJsonArray(raw);
       const valid = normalizeAiOrganizeSuggestions(parsed, brainDumpItems);
       setOrganizeResults(valid);
       setOrganizeDroppedSourceIds(valid.droppedSourceIds || new Set());
       setOrganizeSelected(new Set(valid.map((_, i) => i)));
+      if (valid.length === 0) {
+        setOrganizeError("AI couldn't turn that into tasks — try again, or add tasks manually.");
+      }
     } catch (_) {
       setOrganizeError("Couldn't organize — try again, or add tasks manually.");
     } finally {

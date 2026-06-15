@@ -6,6 +6,8 @@ import {
   isCheckinDue,
   buildCheckinResumeMessage,
   buildCheckinNotificationBody,
+  parseCheckinRequestFromMessage,
+  isDuplicateCheckinResume,
 } from "./coachCheckin";
 
 describe("parseCheckinTag", () => {
@@ -21,12 +23,12 @@ describe("parseCheckinTag", () => {
     expect(parseCheckinTag("OK.\n[[checkin_in:5]]")).toEqual({ cleanText: "OK.", minutes: 5 });
   });
 
-  it("clamps minutes below the minimum up to 1", () => {
-    expect(parseCheckinTag("OK. [[CHECKIN_IN:0]]")).toEqual({ cleanText: "OK.", minutes: 1 });
+  it("treats minutes below the minimum as no tag", () => {
+    expect(parseCheckinTag("OK. [[CHECKIN_IN:0]]")).toEqual({ cleanText: "OK.", minutes: null });
   });
 
-  it("clamps minutes above the maximum down to 180", () => {
-    expect(parseCheckinTag("OK. [[CHECKIN_IN:9999]]")).toEqual({ cleanText: "OK.", minutes: 180 });
+  it("treats minutes above the maximum as no tag", () => {
+    expect(parseCheckinTag("OK. [[CHECKIN_IN:9999]]")).toEqual({ cleanText: "OK.", minutes: null });
   });
 
   it("strips a tag in the middle of the text", () => {
@@ -101,5 +103,89 @@ describe("buildCheckinNotificationBody", () => {
 
   it("falls back to a generic question without a note", () => {
     expect(buildCheckinNotificationBody(null)).toBe("How are things going?");
+  });
+});
+
+describe("parseCheckinRequestFromMessage", () => {
+  it("parses 'check on me in 10 minutes'", () => {
+    expect(parseCheckinRequestFromMessage("Can you check on me in 10 minutes?")).toBe(10);
+  });
+
+  it("parses 'check back in 1 hour' as 60 minutes", () => {
+    expect(parseCheckinRequestFromMessage("Please check back in 1 hour")).toBe(60);
+  });
+
+  it("parses 'get back to me at 11am' relative to now", () => {
+    const now = new Date(2024, 0, 1, 10, 3).getTime(); // 10:03 AM
+    expect(parseCheckinRequestFromMessage("get back to me at 11am", now)).toBe(57);
+  });
+
+  it("parses 'ask me again at 15:30' (24-hour time) relative to now", () => {
+    const now = new Date(2024, 0, 1, 15, 0).getTime(); // 15:00
+    expect(parseCheckinRequestFromMessage("ask me again at 15:30", now)).toBe(30);
+  });
+
+  it("rejects an out-of-range duration", () => {
+    expect(parseCheckinRequestFromMessage("check on me in 5 hours")).toBeNull();
+  });
+
+  it("rejects a recurring request", () => {
+    expect(parseCheckinRequestFromMessage("check on me every hour")).toBeNull();
+  });
+
+  it("rejects a recurring request with a specific time", () => {
+    expect(parseCheckinRequestFromMessage("remind me every day at 9am")).toBeNull();
+  });
+
+  it("returns null when there is no check-in request", () => {
+    expect(parseCheckinRequestFromMessage("Thanks, that helps a lot!")).toBeNull();
+  });
+
+  it("returns null when intent is present but no time is specified", () => {
+    expect(parseCheckinRequestFromMessage("Can you check in with me later?")).toBeNull();
+  });
+
+  it("schedules a check-in from the user's message even when the AI reply has no tag", () => {
+    const aiReply = "Got it, I'll keep that in mind!";
+    const { minutes: tagMinutes } = parseCheckinTag(aiReply);
+    expect(tagMinutes).toBeNull();
+    const fallbackMinutes = parseCheckinRequestFromMessage("check on me in 15 minutes");
+    expect(tagMinutes ?? fallbackMinutes).toBe(15);
+  });
+
+  it("prefers a valid AI tag over the message fallback", () => {
+    const aiReply = "On it. [[CHECKIN_IN:20]]";
+    const { minutes: tagMinutes } = parseCheckinTag(aiReply);
+    const fallbackMinutes = parseCheckinRequestFromMessage("check on me in 15 minutes");
+    expect(tagMinutes ?? fallbackMinutes).toBe(20);
+  });
+
+  it("an out-of-range AI tag does not override a valid user request", () => {
+    const aiReply = "Sure thing! [[CHECKIN_IN:9999]]";
+    const { minutes: tagMinutes } = parseCheckinTag(aiReply);
+    expect(tagMinutes).toBeNull();
+    const fallbackMinutes = parseCheckinRequestFromMessage("check on me in 15 minutes");
+    expect(tagMinutes ?? fallbackMinutes).toBe(15);
+  });
+});
+
+describe("isDuplicateCheckinResume", () => {
+  const resumeText = 'Hey Rohan — checking in like I said I would. How did it go with "Write report"?';
+
+  it("is false for an empty history", () => {
+    expect(isDuplicateCheckinResume([], resumeText)).toBe(false);
+  });
+
+  it("is false when the last message is different text", () => {
+    expect(isDuplicateCheckinResume([{ text: "Something else", isUser: false }], resumeText)).toBe(false);
+  });
+
+  it("is false when the last message is from the user", () => {
+    expect(isDuplicateCheckinResume([{ text: resumeText, isUser: true }], resumeText)).toBe(false);
+  });
+
+  it("is true when the last message already is this exact resume message", () => {
+    const history = [{ text: "earlier", isUser: true }, { text: resumeText, isUser: false }];
+    expect(isDuplicateCheckinResume(history, resumeText)).toBe(true);
   });
 });

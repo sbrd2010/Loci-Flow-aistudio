@@ -4,7 +4,7 @@ vi.mock("../firebase", () => ({
   auth: { currentUser: null },
 }));
 
-import { callAI } from "./aiCall";
+import { callAI, extractJsonArray } from "./aiCall";
 
 function makeStorage() {
   const store = new Map();
@@ -124,5 +124,28 @@ describe("AI call resilience", () => {
     expect(reply).toContain("AI daily limit reached");
     expect(reply).toContain("120/120");
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("extractJsonArray", () => {
+  it("parses a clean JSON array", () => {
+    expect(extractJsonArray('["Open the doc", "Write one sentence"]')).toEqual(["Open the doc", "Write one sentence"]);
+  });
+
+  it("strips markdown code fences around a JSON array", () => {
+    expect(extractJsonArray('```json\n["Open the doc"]\n```')).toEqual(["Open the doc"]);
+  });
+
+  it("extracts a JSON array wrapped in stray text", () => {
+    const raw = 'Sure, here you go:\n["Open the doc", "Write one sentence"]\nHope that helps!';
+    expect(extractJsonArray(raw)).toEqual(["Open the doc", "Write one sentence"]);
+  });
+
+  it("throws when no JSON array is present", () => {
+    expect(() => extractJsonArray("Sorry, I can't help with that.")).toThrow();
+  });
+
+  it("throws when the parsed JSON is not an array", () => {
+    expect(() => extractJsonArray('{"steps": ["Open the doc"]}')).toThrow();
   });
 });

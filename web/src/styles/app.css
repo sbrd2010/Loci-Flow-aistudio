@@ -1441,6 +1441,12 @@ textarea.text-input {
 .priority-badge.p3 { background: var(--p3-bg); color: var(--p3-text); }
 .priority-badge.p4 { background: var(--p4-bg); color: var(--p4-text); }
 
+.task-category-icon {
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
 .task-step-text {
   font-size: 11px;
   color: var(--text-secondary);
@@ -1959,6 +1965,15 @@ textarea.text-input {
   font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.roadmap-sort-hint {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-left: 8px;
 }
 
 .column-count {

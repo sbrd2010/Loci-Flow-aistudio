@@ -5,7 +5,7 @@ import FocusModePage from "./FocusModePage";
 import { safeUUID } from "../utils/uuid";
 import { buildToggleCompletedTasks } from "../utils/taskOps";
 import { shouldStopFocusOnComplete } from "../utils/focusSession";
-import { getAIKeys, callAI } from "../utils/aiCall";
+import { getAIKeys, callAI, extractJsonArray } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
@@ -196,6 +196,7 @@ export default function TodayTab({
   }, []);
 
   const [breakdownLoadingUuid, setBreakdownLoadingUuid] = useState(null);
+  const [breakdownErrorUuid, setBreakdownErrorUuid] = useState(null);
 
   const [editingTask, setEditingTask] = useState(null);
   const [undoTask, setUndoTask] = useState(null);
@@ -537,6 +538,7 @@ export default function TodayTab({
 
   const handleBreakdown = async (task) => {
     setBreakdownLoadingUuid(task.uuid);
+    setBreakdownErrorUuid(null);
     const { groqKey, geminiKey } = getAIKeys();
     try {
       const raw = await callAI({
@@ -548,13 +550,13 @@ export default function TodayTab({
         }],
         maxTokens: 200
       });
-      const cleaned = raw.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
-      const steps = JSON.parse(cleaned);
-      if (!Array.isArray(steps) || steps.length === 0) throw new Error("bad response");
-      const subSteps = steps.slice(0, 5).map(text => ({ id: safeUUID(), text: String(text).trim(), done: false }));
+      const steps = extractJsonArray(raw);
+      const validSteps = steps.filter(s => typeof s === "string" && s.trim());
+      if (validSteps.length === 0) throw new Error("bad response");
+      const subSteps = validSteps.slice(0, 5).map(text => ({ id: safeUUID(), text: text.trim(), done: false }));
       savePayload({ ...payload, tasks: tasks.map(t => t.uuid === task.uuid ? { ...t, subSteps, lastUpdated: Date.now() } : t) });
     } catch (_) {
-      // silently fail — user can retry via menu
+      setBreakdownErrorUuid(task.uuid);
     } finally {
       setBreakdownLoadingUuid(null);
     }
@@ -1101,6 +1103,7 @@ export default function TodayTab({
                 onSubStepToggle={handleSubStepToggle}
                 onDeleteSubStep={handleDeleteSubStep}
                 isBreakingDown={breakdownLoadingUuid === pinnedFocusTask.uuid}
+                breakdownError={breakdownErrorUuid === pinnedFocusTask.uuid}
                 onToggleMVD={handleToggleMVD}
               />
               <button
@@ -1298,6 +1301,7 @@ export default function TodayTab({
                             onSubStepToggle={handleSubStepToggle}
                             onDeleteSubStep={handleDeleteSubStep}
                             isBreakingDown={breakdownLoadingUuid === task.uuid}
+                            breakdownError={breakdownErrorUuid === task.uuid}
                             onToggleMVD={handleToggleMVD}
                             dragHandleListeners={dragHandleListeners}
                             dragHandleAttributes={dragHandleAttributes}
