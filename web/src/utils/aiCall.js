@@ -116,3 +116,20 @@ export function hasAIKey() {
   const { groqKey, geminiKey } = getAIKeys();
   return !!(groqKey || geminiKey);
 }
+
+// Parses a JSON array out of an AI reply, tolerating markdown code fences and
+// stray text around the array (e.g. an "AI usage note" appended by callAI, or
+// a leading sentence). Throws if no JSON array can be found.
+export function extractJsonArray(raw) {
+  const cleaned = raw.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
+  let parsed;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    const match = cleaned.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error("invalid_json_array");
+    parsed = JSON.parse(match[0]);
+  }
+  if (!Array.isArray(parsed)) throw new Error("invalid_json_array");
+  return parsed;
+}

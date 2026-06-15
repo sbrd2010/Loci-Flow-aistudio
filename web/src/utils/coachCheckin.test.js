@@ -23,12 +23,12 @@ describe("parseCheckinTag", () => {
     expect(parseCheckinTag("OK.\n[[checkin_in:5]]")).toEqual({ cleanText: "OK.", minutes: 5 });
   });
 
-  it("clamps minutes below the minimum up to 1", () => {
-    expect(parseCheckinTag("OK. [[CHECKIN_IN:0]]")).toEqual({ cleanText: "OK.", minutes: 1 });
+  it("treats minutes below the minimum as no tag", () => {
+    expect(parseCheckinTag("OK. [[CHECKIN_IN:0]]")).toEqual({ cleanText: "OK.", minutes: null });
   });
 
-  it("clamps minutes above the maximum down to 180", () => {
-    expect(parseCheckinTag("OK. [[CHECKIN_IN:9999]]")).toEqual({ cleanText: "OK.", minutes: 180 });
+  it("treats minutes above the maximum as no tag", () => {
+    expect(parseCheckinTag("OK. [[CHECKIN_IN:9999]]")).toEqual({ cleanText: "OK.", minutes: null });
   });
 
   it("strips a tag in the middle of the text", () => {
@@ -158,6 +158,14 @@ describe("parseCheckinRequestFromMessage", () => {
     const { minutes: tagMinutes } = parseCheckinTag(aiReply);
     const fallbackMinutes = parseCheckinRequestFromMessage("check on me in 15 minutes");
     expect(tagMinutes ?? fallbackMinutes).toBe(20);
+  });
+
+  it("an out-of-range AI tag does not override a valid user request", () => {
+    const aiReply = "Sure thing! [[CHECKIN_IN:9999]]";
+    const { minutes: tagMinutes } = parseCheckinTag(aiReply);
+    expect(tagMinutes).toBeNull();
+    const fallbackMinutes = parseCheckinRequestFromMessage("check on me in 15 minutes");
+    expect(tagMinutes ?? fallbackMinutes).toBe(15);
   });
 });
 

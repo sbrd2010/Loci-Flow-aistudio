@@ -10,14 +10,16 @@ const CHECKIN_TAG_RE = /\s*\[\[CHECKIN_IN:\s*(\d+)\s*\]\]/i;
 const MIN_MINUTES = 1;
 const MAX_MINUTES = 180;
 
-// Strips a [[CHECKIN_IN:N]] tag from an AI reply, clamping N to a sane range.
-// Returns { cleanText, minutes } — minutes is null if no tag was found.
+// Strips a [[CHECKIN_IN:N]] tag from an AI reply. Returns { cleanText, minutes }
+// — minutes is null if no tag was found, or if N is outside the 1-180 valid
+// range (treated the same as no tag, so a valid request-message fallback can
+// be used instead of an out-of-range AI guess).
 export function parseCheckinTag(text = "") {
   const match = text.match(CHECKIN_TAG_RE);
   if (!match) return { cleanText: text, minutes: null };
   const raw = parseInt(match[1], 10);
-  const minutes = Math.min(MAX_MINUTES, Math.max(MIN_MINUTES, raw));
   const cleanText = (text.slice(0, match.index) + text.slice(match.index + match[0].length)).trim();
+  const minutes = raw >= MIN_MINUTES && raw <= MAX_MINUTES ? raw : null;
   return { cleanText, minutes };
 }
 
