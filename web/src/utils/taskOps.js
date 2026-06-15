@@ -75,6 +75,13 @@ const MAX_SUGGESTIONS = 25;
 const MAX_SUGGESTIONS_PER_SOURCE = 8;
 const MAX_SUBSTEPS = 7;
 const MAX_SUBSTEP_LENGTH = 240;
+const MAX_SOURCE_SUMMARY_LENGTH = 400;
+
+// Mirrors AddTaskDialog's category selector and its AI-rewrite estimateMinutes
+// options, so organize-flow tasks land on the same values as manually
+// created/edited tasks.
+const AI_ORGANIZE_VALID_CATEGORIES = new Set(["Career", "Work", "Health", "Personal"]);
+const AI_ORGANIZE_VALID_TIME_ESTIMATES = new Set([15, 25, 45, 60, 120, 240, 360]);
 
 function isValidAiSuggestion(t) {
   return !!t &&
@@ -82,6 +89,15 @@ function isValidAiSuggestion(t) {
     !!t.title.trim() &&
     AI_ORGANIZE_VALID_HORIZONS.has(t.horizonLevel) &&
     AI_ORGANIZE_VALID_PRIORITIES.has(t.priority);
+}
+
+function sanitizeCategory(value) {
+  return AI_ORGANIZE_VALID_CATEGORIES.has(value) ? value : "Personal";
+}
+
+function sanitizeTimeEstimate(value) {
+  const n = Number(value);
+  return AI_ORGANIZE_VALID_TIME_ESTIMATES.has(n) ? n : 25;
 }
 
 // Validates and normalizes raw AI Organize suggestions against the current brain
@@ -92,16 +108,24 @@ function isValidAiSuggestion(t) {
 // entry can split into several tasks (capped per-source and overall). `subSteps`
 // (key details from long entries that would be lost in the short
 // title/concreteStep) are normalized the same way as applyAiRewriteToTask's
-// subSteps, defaulting to [] when absent or malformed.
+// subSteps, defaulting to [] when absent or malformed. `category` and
+// `timeEstimateMinutes` are coerced to the values AddTaskDialog offers
+// (defaulting to "Personal"/25 when missing or unrecognized) rather than
+// rejecting the suggestion. `sourceSummary` (free-text context that doesn't fit
+// in title/concreteStep/subSteps) is sanitized the same as concreteStep.
 //
-// The returned array also carries a `droppedSourceIds` Set: sourceIds for which
-// the AI generated more suggestions than ended up in the result — either because
-// the per-source/overall caps below dropped an otherwise-valid suggestion, or
-// because a sibling suggestion sharing the sourceId was rejected for invalid
-// horizon/priority, or because some OTHER suggestion in this batch is valid but
-// couldn't be attributed to any brain-dump item (see hasUnattributedSuggestion
-// below). buildClearedBrainDump uses this so a source isn't treated as "fully
-// represented" when some of its suggestions never made it into the result.
+// The returned array also carries:
+// - `invalidCount`: how many entries in rawSuggestions were dropped outright for
+//   missing/invalid title, horizonLevel, or priority — lets the UI tell the user
+//   some of the AI's output was unusable without silently hiding it.
+// - `droppedSourceIds`: a Set of sourceIds for which the AI generated more
+//   suggestions than ended up in the result — either because the per-source/
+//   overall caps below dropped an otherwise-valid suggestion, or because a
+//   sibling suggestion sharing the sourceId was rejected for invalid
+//   horizon/priority, or because some OTHER suggestion in this batch is valid but
+//   couldn't be attributed to any brain-dump item (see hasUnattributedSuggestion
+//   below). buildClearedBrainDump uses this so a source isn't treated as "fully
+//   represented" when some of its suggestions never made it into the result.
 export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
   if (!Array.isArray(rawSuggestions)) return [];
   const validIds = new Set((brainDumpItems || []).map((d) => d.id).filter(Boolean));
@@ -115,11 +139,14 @@ export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
   // submitted brain-dump item — we can't tell which, so it blocks clearing of
   // every source in this batch rather than risk losing it (see droppedSourceIds).
   let hasUnattributedSuggestion = false;
+  let invalidCount = 0;
   for (const t of rawSuggestions) {
-    if (!t) continue;
+    if (!t) { invalidCount++; continue; }
+    const valid = isValidAiSuggestion(t);
+    if (!valid) invalidCount++;
     if (validIds.has(t.sourceId)) {
       rawCountBySource.set(t.sourceId, (rawCountBySource.get(t.sourceId) || 0) + 1);
-    } else if (isValidAiSuggestion(t)) {
+    } else if (valid) {
       hasUnattributedSuggestion = true;
     }
   }
@@ -144,6 +171,9 @@ export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
       ...t,
       title: t.title.trim().slice(0, 1000),
       concreteStep: sanitizeTaskField(t.concreteStep, 300),
+      category: sanitizeCategory(t.category),
+      timeEstimateMinutes: sanitizeTimeEstimate(t.timeEstimateMinutes),
+      sourceSummary: sanitizeTaskField(t.sourceSummary, MAX_SOURCE_SUMMARY_LENGTH),
       sourceId,
       subSteps,
       splitReason: sanitizeTaskField(t.splitReason, 80),
@@ -152,6 +182,7 @@ export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
     if (result.length >= MAX_SUGGESTIONS) break;
   }
 
+  result.invalidCount = invalidCount;
   result.droppedSourceIds = hasUnattributedSuggestion
     ? new Set(validIds)
     : new Set(

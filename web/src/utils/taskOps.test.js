@@ -417,6 +417,158 @@ describe("normalizeAiOrganizeSuggestions", () => {
     expect(result[1].splitReason).toBe("");
     expect(result[2].splitReason).toBe("");
   });
+
+  it("passes through valid categories (Career/Work/Health/Personal)", () => {
+    const raw = [
+      { sourceId: "d1", title: "Update CV", horizonLevel: "week", priority: "P1", category: "Career" },
+      { sourceId: "d2", title: "Review PR", horizonLevel: "office", priority: "P2", category: "Work" },
+      { sourceId: "d3", title: "Book dentist", horizonLevel: "week", priority: "P3", category: "Health" },
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result.map((t) => t.category)).toEqual(["Career", "Work", "Health"]);
+  });
+
+  it("defaults category to Personal when missing or not one of the four AddTaskDialog categories", () => {
+    const raw = [
+      { sourceId: "d1", title: "No category", horizonLevel: "week", priority: "P3" },
+      { sourceId: "d2", title: "Unknown category", horizonLevel: "week", priority: "P3", category: "Misc" },
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].category).toBe("Personal");
+    expect(result[1].category).toBe("Personal");
+  });
+
+  it("passes through a recognized timeEstimateMinutes and defaults an invalid/missing one to 25", () => {
+    const raw = [
+      { sourceId: "d1", title: "Quick win", horizonLevel: "week", priority: "P4", timeEstimateMinutes: 15 },
+      { sourceId: "d2", title: "No estimate", horizonLevel: "week", priority: "P3" },
+      { sourceId: "d3", title: "Odd estimate", horizonLevel: "week", priority: "P3", timeEstimateMinutes: 37 },
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].timeEstimateMinutes).toBe(15);
+    expect(result[1].timeEstimateMinutes).toBe(25);
+    expect(result[2].timeEstimateMinutes).toBe(25);
+  });
+
+  it("sanitizes sourceSummary: trims, caps at 400 chars, and defaults non-strings to empty", () => {
+    const raw = [
+      { sourceId: "d1", title: "With summary", horizonLevel: "week", priority: "P3", sourceSummary: "  Mentions a June 20 deadline and a $500 fee.  " },
+      { sourceId: "d2", title: "No summary", horizonLevel: "week", priority: "P3" },
+      { sourceId: "d3", title: "Long summary", horizonLevel: "week", priority: "P3", sourceSummary: "S".repeat(500) },
+      { sourceId: "d1", title: "Bad summary", horizonLevel: "week", priority: "P3", sourceSummary: ["not", "a", "string"] },
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result[0].sourceSummary).toBe("Mentions a June 20 deadline and a $500 fee.");
+    expect(result[1].sourceSummary).toBe("");
+    expect(result[2].sourceSummary).toHaveLength(400);
+    expect(result[3].sourceSummary).toBe("");
+  });
+
+  it("invalidCount tracks suggestions dropped for missing/blank title, bad horizon, or bad priority", () => {
+    const raw = [
+      { sourceId: "d1", title: "Valid", horizonLevel: "week", priority: "P3" },
+      { sourceId: "d2", title: "  ", horizonLevel: "week", priority: "P3" }, // blank title
+      { sourceId: "d3", title: "Bad horizon", horizonLevel: "someday", priority: "P3" },
+      { sourceId: "d1", title: "Bad priority", horizonLevel: "week", priority: "P9" },
+      null,
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result).toHaveLength(1);
+    expect(result.invalidCount).toBe(4);
+  });
+
+  it("returns an empty array (with invalidCount set) when every suggestion is invalid", () => {
+    const raw = [
+      { sourceId: "d1", title: "", horizonLevel: "week", priority: "P3" },
+      { sourceId: "d2", title: "Bad priority", horizonLevel: "week", priority: "P9" },
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result).toHaveLength(0);
+    expect(result.invalidCount).toBe(2);
+  });
+});
+
+// ── normalizeAiOrganizeSuggestions — realistic messy brain dump ───────────────
+
+describe("normalizeAiOrganizeSuggestions: realistic messy brain dump", () => {
+  const MESSY_DUMP_ITEMS = [
+    {
+      id: "m1",
+      text: "Need to follow up with Sarah at Acme Corp about the contract renewal by June 20, book a dentist appointment for next week, and call the Italian place to reserve a table for 6 for mom's birthday on June 25",
+    },
+    { id: "m2", text: "Lab report due Friday for Prof. Lee, also order new nitrile gloves from VWR before the lab runs out" },
+    { id: "m3", text: "feeling overwhelmed about the whole job search thing, haven't touched my CV in months" },
+  ];
+
+  it("splits one long mixed-topic entry into atomic tasks across categories, preserving names and deadlines", () => {
+    const raw = [
+      {
+        sourceId: "m1", title: "Email Sarah at Acme about contract renewal",
+        concreteStep: "Email Sarah re: contract renewal due June 20",
+        horizonLevel: "week", priority: "P2", category: "Work", timeEstimateMinutes: 15,
+        sourceSummary: "Contract renewal with Sarah at Acme Corp is due June 20.",
+        splitReason: "Acme contract follow-up",
+      },
+      {
+        sourceId: "m1", title: "Book dentist appointment",
+        concreteStep: "Call dentist to book next week's appointment",
+        horizonLevel: "week", priority: "P3", category: "Health", timeEstimateMinutes: 15,
+        splitReason: "Dentist booking",
+      },
+      {
+        sourceId: "m1", title: "Reserve table for mom's birthday (June 25)",
+        concreteStep: "Call the Italian place for a table for 6 on June 25",
+        horizonLevel: "week", priority: "P2", category: "Personal", timeEstimateMinutes: 15,
+        subSteps: [{ text: "Party of 6, June 25, mom's birthday" }],
+        splitReason: "Birthday dinner booking",
+      },
+      {
+        sourceId: "m2", title: "Finish lab report for Prof. Lee",
+        concreteStep: "Draft results section of lab report",
+        horizonLevel: "office", priority: "P1", category: "Work", timeEstimateMinutes: 45,
+        subSteps: [{ text: "Due Friday" }],
+        splitReason: "Lab report",
+      },
+      {
+        sourceId: "m2", title: "Order nitrile gloves from VWR",
+        concreteStep: "Reorder nitrile gloves on VWR before stock runs out",
+        horizonLevel: "office", priority: "P3", category: "Work", timeEstimateMinutes: 15,
+        splitReason: "Lab supplies",
+      },
+      {
+        sourceId: "m3", title: "Update CV with most recent role",
+        concreteStep: "Open CV and add most recent role and dates",
+        horizonLevel: "month", priority: "P3", category: "Career", timeEstimateMinutes: 25,
+      },
+    ];
+
+    const result = normalizeAiOrganizeSuggestions(raw, MESSY_DUMP_ITEMS);
+    expect(result).toHaveLength(6);
+    expect(result.invalidCount).toBe(0);
+
+    // m1 (one messy paragraph) splits into 3 atomic tasks across 3 categories
+    const m1Tasks = result.filter((t) => t.sourceId === "m1");
+    expect(m1Tasks).toHaveLength(3);
+    expect(new Set(m1Tasks.map((t) => t.category))).toEqual(new Set(["Work", "Health", "Personal"]));
+
+    // Names and deadlines from the original text survive normalization
+    const acmeTask = m1Tasks.find((t) => t.splitReason === "Acme contract follow-up");
+    expect(acmeTask.title).toContain("Sarah");
+    expect(acmeTask.concreteStep).toContain("June 20");
+    expect(acmeTask.sourceSummary).toContain("Acme Corp");
+
+    const birthdayTask = m1Tasks.find((t) => t.splitReason === "Birthday dinner booking");
+    expect(birthdayTask.subSteps[0].text).toContain("June 25");
+
+    // All four AddTaskDialog categories appear across the full batch
+    expect(new Set(result.map((t) => t.category))).toEqual(new Set(["Work", "Health", "Personal", "Career"]));
+
+    // Every task has a concrete first step and a recognized time estimate
+    result.forEach((t) => {
+      expect(t.concreteStep.length).toBeGreaterThan(0);
+      expect([15, 25, 45, 60, 120, 240, 360]).toContain(t.timeEstimateMinutes);
+    });
+  });
 });
 
 // -- sanitizeTaskField -----------------------------------------------------------
