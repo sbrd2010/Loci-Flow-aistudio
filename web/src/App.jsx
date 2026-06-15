@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { auth, track, setAnalyticsUser } from "./firebase";
 import { computeUserProfile } from "./utils/userProfile";
-import { scheduleAllReminders, scheduleCoachCheckin, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY } from "./utils/reminders";
+import { scheduleAllReminders, scheduleCoachCheckin, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
 import { getFocusWindows } from "./utils/focusWindows";
 import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
@@ -115,7 +115,7 @@ export default function App() {
     const checkinSlot = params.get("checkin");
     if (checkinSlot) {
       setActiveTab("today");
-      setPendingCheckinSlot(checkinSlot);
+      if (DAILY_CHECKIN_SLOTS.has(checkinSlot)) setPendingCheckinSlot(checkinSlot);
       params.delete("checkin");
       params.delete("tab");
       changed = true;
@@ -134,7 +134,7 @@ export default function App() {
       if (notificationType === "coach-checkin") setActiveTab("coach");
       else if (notificationType === "daily-checkin") {
         setActiveTab("today");
-        if (slot) setPendingCheckinSlot(slot);
+        if (DAILY_CHECKIN_SLOTS.has(slot)) setPendingCheckinSlot(slot);
       }
     };
     const onMessage = (event) => {

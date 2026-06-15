@@ -139,6 +139,11 @@ const DAILY_CHECKIN_NOTIFICATIONS = {
   reflection: { title: "🌙 Day Close", body: "Wrap up your day — open Loci to reflect." },
 };
 
+// The only valid Daily Coach Check-in slots — used to validate slot values that
+// arrive from outside the app (notification deep-link URL params, SW postMessage)
+// before they're trusted as object keys or state.
+export const DAILY_CHECKIN_SLOTS = new Set(Object.keys(DAILY_CHECKIN_NOTIFICATIONS));
+
 const NOTIFIED_DAILY_CHECKINS_KEY = "loci_notified_daily_checkins";
 
 // localStorage-backed dedup so a due check-in only notifies once per Loci day,
@@ -151,7 +156,7 @@ function loadNotifiedDailyCheckins(todayStr) {
   try {
     stored = JSON.parse(localStorage.getItem(NOTIFIED_DAILY_CHECKINS_KEY) || "[]");
   } catch (_) {}
-  return Array.isArray(stored) ? stored.filter(key => key.endsWith(`-${todayStr}`)) : [];
+  return Array.isArray(stored) ? stored.filter(key => typeof key === "string" && key.endsWith(`-${todayStr}`)) : [];
 }
 
 // Other Loci tabs heartbeat this key (every ~10s) while visible, so a hidden tab
