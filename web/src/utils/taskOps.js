@@ -1,3 +1,15 @@
+// Filters raw AI-provided subSteps down to {text: string} entries with non-blank
+// trimmed text, then maps to {id, text, done:false}. Returns null (rather than [])
+// when `rawSubSteps` isn't a non-empty array, so callers can tell "nothing to
+// normalize" apart from "normalized to zero subSteps" and fall back accordingly.
+function normalizeSubSteps(rawSubSteps, idPrefix, maxCount = Infinity, maxTextLength = Infinity) {
+  if (!Array.isArray(rawSubSteps) || rawSubSteps.length === 0) return null;
+  return rawSubSteps
+    .filter((s) => s && typeof s.text === "string" && s.text.trim())
+    .slice(0, maxCount)
+    .map((s, i) => ({ id: s.id || `${idPrefix}-${i}`, text: s.text.trim().slice(0, maxTextLength), done: false }));
+}
+
 // Merges an AI rewrite suggestion into an existing task, preserving ALL original
 // metadata. Only title, concreteStep, subSteps, and lastUpdated may change.
 // This is the canonical merge path for the AI rewrite/reword flow.
@@ -10,14 +22,8 @@ export function applyAiRewriteToTask(originalTask, aiSuggestion) {
     (typeof aiSuggestion?.microStep === "string" && aiSuggestion.microStep.trim()) ||
     originalTask.concreteStep ||
     "";
-  const rawSubSteps = aiSuggestion?.subSteps;
   const now = Date.now();
-  const subSteps =
-    Array.isArray(rawSubSteps) && rawSubSteps.length > 0
-      ? rawSubSteps
-          .filter((s) => s && typeof s.text === "string" && s.text.trim())
-          .map((s, i) => ({ id: s.id || `ai-ss-${i}-${now}`, text: s.text.trim(), done: false }))
-      : (originalTask.subSteps ?? []);
+  const subSteps = normalizeSubSteps(aiSuggestion?.subSteps, `ai-ss-${now}`) ?? (originalTask.subSteps ?? []);
   return {
     ...originalTask,   // preserves uuid, id, userId, horizonLevel, priority, category,
                        // orderIndex, isCompleted, isDeleted, isParked, isNowFocus, isMVD,
@@ -49,6 +55,14 @@ const MAX_SUGGESTIONS_PER_SOURCE = 8;
 const MAX_SUBSTEPS = 7;
 const MAX_SUBSTEP_LENGTH = 240;
 
+function isValidAiSuggestion(t) {
+  return !!t &&
+    typeof t.title === "string" &&
+    !!t.title.trim() &&
+    AI_ORGANIZE_VALID_HORIZONS.has(t.horizonLevel) &&
+    AI_ORGANIZE_VALID_PRIORITIES.has(t.priority);
+}
+
 // Validates and normalizes raw AI Organize suggestions against the current brain
 // dump items. Each returned suggestion gets a `sourceId` that is either a valid
 // brain-dump item ID (AI correctly referenced it) or null (AI omitted/garbled it).
@@ -58,21 +72,27 @@ const MAX_SUBSTEP_LENGTH = 240;
 // (key details from long entries that would be lost in the short
 // title/concreteStep) are normalized the same way as applyAiRewriteToTask's
 // subSteps, defaulting to [] when absent or malformed.
+//
+// The returned array also carries a `droppedSourceIds` Set: sourceIds for which
+// the per-source/overall caps below dropped at least one otherwise-valid
+// suggestion. buildClearedBrainDump uses this so a source isn't treated as
+// "fully represented" when some of its suggestions never made it into the result.
 export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
   if (!Array.isArray(rawSuggestions)) return [];
   const validIds = new Set((brainDumpItems || []).map((d) => d.id).filter(Boolean));
   const now = Date.now();
+
+  const rawCountBySource = new Map();
+  for (const t of rawSuggestions) {
+    if (!isValidAiSuggestion(t) || !validIds.has(t.sourceId)) continue;
+    rawCountBySource.set(t.sourceId, (rawCountBySource.get(t.sourceId) || 0) + 1);
+  }
+
   const sourceCounts = new Map();
   const result = [];
 
   for (const t of rawSuggestions) {
-    if (
-      !t ||
-      typeof t.title !== "string" ||
-      !t.title.trim() ||
-      !AI_ORGANIZE_VALID_HORIZONS.has(t.horizonLevel) ||
-      !AI_ORGANIZE_VALID_PRIORITIES.has(t.priority)
-    ) continue;
+    if (!isValidAiSuggestion(t)) continue;
 
     // sourceId is only trusted when it maps to a real brain-dump item
     const sourceId = validIds.has(t.sourceId) ? t.sourceId : null;
@@ -82,13 +102,7 @@ export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
       sourceCounts.set(sourceId, count + 1);
     }
 
-    const rawSubSteps = t.subSteps;
-    const subSteps = Array.isArray(rawSubSteps)
-      ? rawSubSteps
-          .filter((s) => s && typeof s.text === "string" && s.text.trim())
-          .slice(0, MAX_SUBSTEPS)
-          .map((s, j) => ({ id: s.id || `ai-ss-${result.length}-${j}-${now}`, text: s.text.trim().slice(0, MAX_SUBSTEP_LENGTH), done: false }))
-      : [];
+    const subSteps = normalizeSubSteps(t.subSteps, `ai-ss-${result.length}-${now}`, MAX_SUBSTEPS, MAX_SUBSTEP_LENGTH) ?? [];
 
     result.push({
       ...t,
@@ -102,6 +116,12 @@ export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
     if (result.length >= MAX_SUGGESTIONS) break;
   }
 
+  result.droppedSourceIds = new Set(
+    [...rawCountBySource]
+      .filter(([sourceId, rawCount]) => rawCount > (sourceCounts.get(sourceId) || 0))
+      .map(([sourceId]) => sourceId)
+  );
+
   return result;
 }
 
@@ -111,9 +131,13 @@ export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
 // sharing one sourceId; accepting only some of them keeps the original entry so
 // the unaccepted parts aren't silently lost. `allSuggestions` defaults to
 // `acceptedSuggestions` for callers that only ever produce one suggestion per source.
-export function buildClearedBrainDump(brainDump, acceptedSuggestions, allSuggestions) {
+// `droppedSourceIds` (normalizeAiOrganizeSuggestions's same-named property on its
+// result) lists sources that had MORE suggestions than made it into `allSuggestions`
+// — those sources are never cleared, since "all accepted" can't be known for them.
+export function buildClearedBrainDump(brainDump, acceptedSuggestions, allSuggestions, droppedSourceIds) {
   const accepted = acceptedSuggestions || [];
   const all = allSuggestions || accepted;
+  const dropped = droppedSourceIds || new Set();
 
   const totalBySource = new Map();
   for (const t of all) {
@@ -128,6 +152,7 @@ export function buildClearedBrainDump(brainDump, acceptedSuggestions, allSuggest
 
   const clearedIds = new Set();
   for (const [sourceId, total] of totalBySource) {
+    if (dropped.has(sourceId)) continue;
     if ((acceptedBySource.get(sourceId) || 0) === total) clearedIds.add(sourceId);
   }
   return (brainDump || []).filter((d) => !clearedIds.has(d.id));

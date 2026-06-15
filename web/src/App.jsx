@@ -24,6 +24,7 @@ import { useTodayStr } from "./hooks/useTodayStr";
 import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload } from "./utils/focusSession";
 import { celebrate } from "./utils/celebrations";
 import { safeUUID } from "./utils/uuid";
+import { submitOnEnter } from "./utils/formEvents";
 
 const EXTEND_DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
 
@@ -714,12 +715,7 @@ export default function App() {
                 placeholder="What's on your mind? (Shift+Enter for a new line)"
                 value={quickDumpText}
                 onChange={e => setQuickDumpText(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                    e.preventDefault();
-                    e.currentTarget.form?.requestSubmit();
-                  }
-                }}
+                onKeyDown={submitOnEnter}
                 disabled={dumpCount >= 50}
               />
               <button type="submit" className="braindump-submit" disabled={dumpCount >= 50 || !quickDumpText.trim()}>➔</button>

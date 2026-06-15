@@ -4,6 +4,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI } from "../utils/aiCall";
 import { normalizeAiOrganizeSuggestions, buildClearedBrainDump } from "../utils/taskOps";
+import { submitOnEnter } from "../utils/formEvents";
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor,
@@ -397,7 +398,7 @@ Return ONLY a JSON array, no markdown:
     });
     // Pass all suggestions (not just accepted) so a split entry's source is only
     // cleared once every suggestion generated from it has been accepted.
-    const clearedDump = buildClearedBrainDump(payload.brainDump || [], toAdd, organizeResults);
+    const clearedDump = buildClearedBrainDump(payload.brainDump || [], toAdd, organizeResults, organizeResults.droppedSourceIds);
     savePayload({ ...payload, tasks: [...(payload.tasks || []), ...newTasks], brainDump: clearedDump });
     setToolPanel(null);
     setOrganizeResults([]);
@@ -411,13 +412,6 @@ Return ONLY a JSON array, no markdown:
     if (currentDump.length >= 50) return;
     savePayload({ ...payload, brainDump: [...currentDump, { id: safeUUID(), text: brainDumpText.trim(), createdAt: Date.now() }] });
     setBrainDumpText("");
-  };
-
-  const handleBrainDumpKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      e.currentTarget.form?.requestSubmit();
-    }
   };
 
   const handleNextRescueStep = () => {
@@ -517,7 +511,7 @@ Return ONLY a JSON array, no markdown:
               placeholder="Add anything on your mind. (Shift+Enter for a new line)"
               value={brainDumpText}
               onChange={e => setBrainDumpText(e.target.value)}
-              onKeyDown={handleBrainDumpKeyDown}
+              onKeyDown={submitOnEnter}
               disabled={dumpCount >= 50} />
             <button type="submit" className="braindump-submit" disabled={dumpCount >= 50}>➔</button>
           </form>
@@ -924,7 +918,7 @@ Return ONLY a JSON array, no markdown:
                 placeholder="What's on your mind? (Shift+Enter for a new line)"
                 value={brainDumpText}
                 onChange={e => setBrainDumpText(e.target.value)}
-                onKeyDown={handleBrainDumpKeyDown}
+                onKeyDown={submitOnEnter}
                 disabled={dumpCount >= 50} />
               <button type="submit" className="braindump-submit" disabled={dumpCount >= 50}>➔</button>
             </form>

@@ -340,12 +340,13 @@ describe("normalizeAiOrganizeSuggestions", () => {
     expect(result.every((t) => t.sourceId === "d1")).toBe(true);
   });
 
-  it("caps suggestions sharing one sourceId at 8", () => {
+  it("caps suggestions sharing one sourceId at 8 and records it in droppedSourceIds", () => {
     const raw = Array.from({ length: 12 }, (_, i) => ({
       sourceId: "d1", title: `Task ${i}`, horizonLevel: "week", priority: "P3",
     }));
     const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
     expect(result).toHaveLength(8);
+    expect(result.droppedSourceIds.has("d1")).toBe(true);
   });
 
   it("caps total suggestions at 25 across sources", () => {
@@ -356,6 +357,33 @@ describe("normalizeAiOrganizeSuggestions", () => {
     }
     const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
     expect(result.length).toBeLessThanOrEqual(25);
+  });
+
+  it("droppedSourceIds is empty when no caps drop any suggestion", () => {
+    const raw = [
+      { sourceId: "d1", title: "Buy groceries", horizonLevel: "today", priority: "P3" },
+      { sourceId: "d2", title: "Review PR", horizonLevel: "office", priority: "P2" },
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result.droppedSourceIds.size).toBe(0);
+  });
+
+  it("droppedSourceIds includes a source cut off by the overall 25-suggestion cap, even under its own per-source cap", () => {
+    const raw = [];
+    // 20 suggestions with an unrecognized sourceId — count toward the overall
+    // cap (result.length) but not toward any per-source cap.
+    for (let i = 0; i < 20; i++) {
+      raw.push({ sourceId: "unknown", title: `Filler ${i}`, horizonLevel: "week", priority: "P3" });
+    }
+    // 6 suggestions for d1 — under MAX_SUGGESTIONS_PER_SOURCE (8), but only 5
+    // fit before the overall cap (25) is hit.
+    for (let i = 0; i < 6; i++) {
+      raw.push({ sourceId: "d1", title: `D1 task ${i}`, horizonLevel: "week", priority: "P3" });
+    }
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result).toHaveLength(25);
+    expect(result.filter(t => t.sourceId === "d1")).toHaveLength(5);
+    expect(result.droppedSourceIds.has("d1")).toBe(true);
   });
 
   it("sanitizes splitReason to a trimmed string, defaulting to empty", () => {
@@ -437,5 +465,16 @@ describe("buildClearedBrainDump", () => {
     const result = buildClearedBrainDump(DUMP_ITEMS, allSuggestions, allSuggestions);
     expect(result).toHaveLength(2);
     expect(result.find((d) => d.id === "d1")).toBeUndefined();
+  });
+
+  it("keeps the source brain dump item when droppedSourceIds marks it as truncated, even if every visible suggestion was accepted", () => {
+    const allSuggestions = [
+      { sourceId: "d1", title: "Update CV", horizonLevel: "week", priority: "P1" },
+      { sourceId: "d1", title: "Apply to vacancies", horizonLevel: "week", priority: "P1" },
+    ];
+    const droppedSourceIds = new Set(["d1"]);
+    const result = buildClearedBrainDump(DUMP_ITEMS, allSuggestions, allSuggestions, droppedSourceIds);
+    expect(result).toHaveLength(3);
+    expect(result.find((d) => d.id === "d1")).toBeDefined();
   });
 });
