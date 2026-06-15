@@ -10,17 +10,12 @@ const CDN_BASE = "https://cdn.jsdelivr.net/gh/sbrd2010/Loci-flow-sounds@main";
 
 export const SOUND_CATEGORIES = {
   rain: {
-    title: "Rainy Day Lo-Fi",
+    title: "Relaxing Rain",
     icon: "🌧️",
     variations: [
-      { file: "after-school-rain.mp3", title: "After School Rain" },
-      { file: "sounds/rain/amber-sidewalks.mp3", title: "Amber Sidewalks" },
-      { file: "sounds/rain/sidewalk-puddles.mp3", title: "Sidewalk Puddles" },
-      { file: "sounds/rain/blossoms-on-the-pavement.mp3", title: "Blossoms on the Pavement" },
-      { file: "sounds/rain/petals-after-rain.mp3", title: "Petals After Rain" },
-      { file: "sounds/rain/amber-windowpane.mp3", title: "Amber Windowpane" },
-      { file: "sounds/rain/storm-over-side-streets.mp3", title: "Storm Over Side Streets" },
-      { file: "sounds/rain/bloom-between-showers.mp3", title: "Bloom Between Showers" },
+      { file: "rain-light", title: "Light Rain" },
+      { file: "rain-steady", title: "Steady Rain" },
+      { file: "rain-heavy", title: "Heavy Rain" },
     ]
   },
   lofi: {
@@ -35,6 +30,14 @@ export const SOUND_CATEGORIES = {
       { file: "sounds/lofi/graphite-mornings.mp3", title: "Graphite Mornings" },
       { file: "sounds/lofi/margin-notes-at-dusk.mp3", title: "Margin Notes at Dusk" },
       { file: "sounds/lofi/morning-pages.mp3", title: "Morning Pages" },
+      { file: "after-school-rain.mp3", title: "After School Rain" },
+      { file: "sounds/rain/amber-sidewalks.mp3", title: "Amber Sidewalks" },
+      { file: "sounds/rain/sidewalk-puddles.mp3", title: "Sidewalk Puddles" },
+      { file: "sounds/rain/blossoms-on-the-pavement.mp3", title: "Blossoms on the Pavement" },
+      { file: "sounds/rain/petals-after-rain.mp3", title: "Petals After Rain" },
+      { file: "sounds/rain/amber-windowpane.mp3", title: "Amber Windowpane" },
+      { file: "sounds/rain/storm-over-side-streets.mp3", title: "Storm Over Side Streets" },
+      { file: "sounds/rain/bloom-between-showers.mp3", title: "Bloom Between Showers" },
     ]
   },
   jazz: {

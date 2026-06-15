@@ -39,7 +39,7 @@ MockAudio.instances = [];
 
 globalThis.Audio = MockAudio;
 
-// Mock global AudioContext (binaural beat)
+// Mock global AudioContext (binaural beat & rain ambience)
 class MockOscillator {
   constructor() {
     this.frequency = { value: 0 };
@@ -62,12 +62,46 @@ class MockChannelMerger {
   connect() {}
 }
 
+class MockAudioBuffer {
+  constructor(numberOfChannels, length, sampleRate) {
+    this.numberOfChannels = numberOfChannels;
+    this.length = length;
+    this.sampleRate = sampleRate;
+    this._data = Array.from({ length: numberOfChannels }, () => new Float32Array(length));
+  }
+  getChannelData(channel) {
+    return this._data[channel];
+  }
+}
+
+class MockAudioBufferSourceNode {
+  constructor() {
+    this.buffer = null;
+    this.loop = false;
+    this.stopCalled = false;
+  }
+  connect() {}
+  start() {}
+  stop() { this.stopCalled = true; }
+}
+
+class MockBiquadFilterNode {
+  constructor() {
+    this.type = "";
+    this.frequency = { value: 0 };
+  }
+  connect() {}
+}
+
 class MockAudioContext {
   constructor() {
     // Some browsers create a new AudioContext already running when
     // constructed inside a user-gesture handler (e.g. a click).
     this.state = "running";
     this.oscillators = [];
+    this.sources = [];
+    this.filters = [];
+    this.sampleRate = 44100;
     MockAudioContext.instances.push(this);
   }
   createOscillator() {
@@ -77,6 +111,19 @@ class MockAudioContext {
   }
   createGain() { return new MockGainNode(); }
   createChannelMerger() { return new MockChannelMerger(); }
+  createBuffer(channels, length, rate) {
+    return new MockAudioBuffer(channels, length, rate);
+  }
+  createBufferSource() {
+    const src = new MockAudioBufferSourceNode();
+    this.sources.push(src);
+    return src;
+  }
+  createBiquadFilter() {
+    const filter = new MockBiquadFilterNode();
+    this.filters.push(filter);
+    return filter;
+  }
   resume() { this.state = "running"; return Promise.resolve(); }
   suspend() { this.state = "suspended"; return Promise.resolve(); }
   close() { this.state = "closed"; return Promise.resolve(); }
@@ -473,16 +520,16 @@ describe("useFocusAudio", () => {
 
       result.current.selectCategory("rain");
 
-      expect(result.current.selectedTrack).toBe("after-school-rain.mp3");
+      expect(result.current.selectedTrack).toBe("rain-light");
       expect(saveSubPath).toHaveBeenCalledWith("config", expect.objectContaining({
-        focusSoundTrack: "after-school-rain.mp3"
+        focusSoundTrack: "rain-light"
       }));
     });
 
     it("selectCategory toggles the category off if it is already active", () => {
       vi.spyOn(Math, "random").mockReturnValue(0);
 
-      const config = { focusSoundTrack: "after-school-rain.mp3" };
+      const config = { focusSoundTrack: "rain-light" };
       const { result } = renderHook(
         (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
         [false, config, null]
@@ -493,7 +540,7 @@ describe("useFocusAudio", () => {
     });
 
     it("creates an Audio element pointing at the jsDelivr CDN for a CDN variation track", () => {
-      const config = { focusSoundTrack: "sounds/rain/amber-sidewalks.mp3" };
+      const config = { focusSoundTrack: "sounds/lofi/first-coffee-thoughts.mp3" };
       renderHook(
         (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
         [false, config, null]
@@ -501,14 +548,14 @@ describe("useFocusAudio", () => {
 
       expect(MockAudio.instances.length).toBe(1);
       expect(MockAudio.instances[0].src).toBe(
-        "https://cdn.jsdelivr.net/gh/sbrd2010/Loci-flow-sounds@main/sounds/rain/amber-sidewalks.mp3"
+        "https://cdn.jsdelivr.net/gh/sbrd2010/Loci-flow-sounds@main/sounds/lofi/first-coffee-thoughts.mp3"
       );
     });
 
     it("reshuffleTrack switches to a different variation in the same category", () => {
-      vi.spyOn(Math, "random").mockReturnValue(0);
+      vi.spyOn(Math, "random").mockReturnValue(0.99);
 
-      const config = { focusSoundTrack: "after-school-rain.mp3" };
+      const config = { focusSoundTrack: "rain-light" };
       const { result } = renderHook(
         (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
         [false, config, null]
@@ -516,8 +563,8 @@ describe("useFocusAudio", () => {
 
       result.current.reshuffleTrack();
 
-      expect(result.current.selectedTrack).not.toBe("after-school-rain.mp3");
-      expect(result.current.selectedTrack.startsWith("sounds/rain/")).toBe(true);
+      expect(result.current.selectedTrack).not.toBe("rain-light");
+      expect(result.current.selectedTrack.startsWith("rain-")).toBe(true);
     });
 
     it("reshuffleTrack does nothing when no ambient category is selected", () => {
@@ -557,7 +604,7 @@ describe("useFocusAudio", () => {
     });
 
     it("sets preload='auto' and starts as 'loading' for an ambient track, then 'ready' once it can play", () => {
-      const config = { focusSoundTrack: "sounds/rain/amber-sidewalks.mp3" };
+      const config = { focusSoundTrack: "sounds/lofi/first-coffee-thoughts.mp3" };
       const { result } = renderHook(
         (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
         [true, config, null]
@@ -572,7 +619,7 @@ describe("useFocusAudio", () => {
     });
 
     it("sets trackLoadState to 'error' if the bundled local track fails to load", () => {
-      const config = { focusSoundTrack: "after-school-rain.mp3" };
+      const config = { focusSoundTrack: "2-am-debug-loop.mp3" };
       const { result } = renderHook(
         (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
         [true, config, null]
@@ -584,7 +631,7 @@ describe("useFocusAudio", () => {
     });
 
     it("falls back to the category's bundled local track when a CDN variation fails to load", () => {
-      const config = { focusSoundTrack: "sounds/rain/amber-sidewalks.mp3" };
+      const config = { focusSoundTrack: "sounds/lofi/first-coffee-thoughts.mp3" };
       const { result } = renderHook(
         (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
         [true, config, null]
@@ -593,10 +640,10 @@ describe("useFocusAudio", () => {
       const cdnAudio = MockAudio.instances[0];
       cdnAudio.dispatchEvent("error");
 
-      expect(result.current.selectedTrack).toBe("after-school-rain.mp3");
+      expect(result.current.selectedTrack).toBe("2-am-debug-loop.mp3");
       expect(result.current.trackLoadState).not.toBe("error");
       expect(MockAudio.instances.length).toBe(2);
-      expect(MockAudio.instances[1].src).toBe("/sounds/after-school-rain.mp3");
+      expect(MockAudio.instances[1].src).toBe("/sounds/2-am-debug-loop.mp3");
       expect(cdnAudio.paused).toBe(true);
       expect(MockAudio.instances[1].paused).toBe(false);
     });
@@ -604,7 +651,7 @@ describe("useFocusAudio", () => {
     it("goes back to 'loading' when reshuffling to a new variation", () => {
       vi.spyOn(Math, "random").mockReturnValue(0.99);
 
-      const config = { focusSoundTrack: "after-school-rain.mp3" };
+      const config = { focusSoundTrack: "sounds/lofi/first-coffee-thoughts.mp3" };
       const { result } = renderHook(
         (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
         [true, config, null]
@@ -615,6 +662,76 @@ describe("useFocusAudio", () => {
 
       result.current.reshuffleTrack();
       expect(result.current.trackLoadState).toBe("loading");
+    });
+  });
+
+  describe("rainAmbience synthesis", () => {
+    it("creates a rain ambience node (not an Audio element) for the rain presets", () => {
+      const config = { focusSoundTrack: "rain-steady", focusSoundVolume: 0.8 };
+      renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [true, config, null]
+      );
+
+      expect(MockAudio.instances.length).toBe(0);
+      expect(MockAudioContext.instances.length).toBe(1);
+
+      const ctx = MockAudioContext.instances[0];
+      expect(ctx.sources.length).toBe(1);
+      expect(ctx.filters.length).toBe(1);
+      expect(ctx.filters[0].type).toBe("highpass");
+      expect(ctx.filters[0].frequency.value).toBe(1400); // steady rain cutoff
+      expect(ctx.state).toBe("running"); // isRunning true on init
+    });
+
+    it("resumes/suspends the rain ambience when timer running state changes", () => {
+      const config = { focusSoundTrack: "rain-light" };
+      const { rerender } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, config, null]
+      );
+
+      const ctx = MockAudioContext.instances[0];
+      expect(ctx.state).toBe("suspended");
+
+      rerender([true, config, null]);
+      expect(ctx.state).toBe("running");
+
+      rerender([false, config, null]);
+      expect(ctx.state).toBe("suspended");
+    });
+
+    it("disposes the rain context when switching to a different track", () => {
+      const config = { focusSoundTrack: "rain-steady" };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [true, config, null]
+      );
+
+      const ctx = MockAudioContext.instances[0];
+
+      result.current.selectTrack("2-am-debug-loop.mp3");
+
+      expect(ctx.sources[0].stopCalled).toBe(true);
+      expect(ctx.oscillators[0].stopCalled).toBe(true);
+      expect(ctx.state).toBe("closed");
+      expect(MockAudio.instances.length).toBe(1);
+    });
+
+    it("disposes the rain context on unmount", () => {
+      const config = { focusSoundTrack: "rain-heavy" };
+      const { unmount } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [true, config, null]
+      );
+
+      const ctx = MockAudioContext.instances[0];
+
+      unmount();
+
+      expect(ctx.sources[0].stopCalled).toBe(true);
+      expect(ctx.oscillators[0].stopCalled).toBe(true);
+      expect(ctx.state).toBe("closed");
     });
   });
 
