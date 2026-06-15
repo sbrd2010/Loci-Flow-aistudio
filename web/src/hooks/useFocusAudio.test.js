@@ -289,7 +289,7 @@ describe("useFocusAudio", () => {
   });
 
   it("plays automatically if initialized with track and isRunning is true", () => {
-    const config = { focusSoundTrack: "after-school-rain.mp3" };
+    const config = { focusSoundTrack: "gentle-midday-rain.mp3" };
     renderHook(
       (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
       [true, config, null]
@@ -320,16 +320,16 @@ describe("useFocusAudio", () => {
   });
 
   it("toggles track off if the same track is selected again", () => {
-    const config = { focusSoundTrack: "after-school-rain.mp3" };
+    const config = { focusSoundTrack: "gentle-midday-rain.mp3" };
     const { result } = renderHook(
       (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
       [false, config, null]
     );
 
-    expect(result.current.selectedTrack).toBe("after-school-rain.mp3");
+    expect(result.current.selectedTrack).toBe("gentle-midday-rain.mp3");
 
     // Click it again
-    result.current.selectTrack("after-school-rain.mp3");
+    result.current.selectTrack("gentle-midday-rain.mp3");
     expect(result.current.selectedTrack).toBeNull();
   });
 
@@ -339,7 +339,7 @@ describe("useFocusAudio", () => {
       [true, {}, null]
     );
 
-    result.current.selectTrack("after-school-rain.mp3");
+    result.current.selectTrack("gentle-midday-rain.mp3");
     expect(MockAudio.instances.length).toBe(1);
     const rainAudio = MockAudio.instances[0];
     expect(rainAudio.paused).toBe(false);
@@ -387,7 +387,7 @@ describe("useFocusAudio", () => {
   });
 
   it("preserves the new volume when a track is selected immediately after a volume change", () => {
-    const config = { focusSoundTrack: "after-school-rain.mp3", focusSoundVolume: 0.5 };
+    const config = { focusSoundTrack: "gentle-midday-rain.mp3", focusSoundVolume: 0.5 };
     const saveSubPath = vi.fn();
     const { result } = renderHook(
       (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
@@ -405,7 +405,7 @@ describe("useFocusAudio", () => {
   });
 
   it("preserves the new track when volume is changed immediately after selecting a track", () => {
-    const config = { focusSoundTrack: "after-school-rain.mp3", focusSoundVolume: 0.5 };
+    const config = { focusSoundTrack: "gentle-midday-rain.mp3", focusSoundVolume: 0.5 };
     const saveSubPath = vi.fn();
     const { result } = renderHook(
       (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
@@ -423,13 +423,13 @@ describe("useFocusAudio", () => {
   });
 
   it("resets track and volume to defaults when config no longer has sound fields", () => {
-    const config = { focusSoundTrack: "after-school-rain.mp3", focusSoundVolume: 0.8 };
+    const config = { focusSoundTrack: "gentle-midday-rain.mp3", focusSoundVolume: 0.8 };
     const { result, rerender } = renderHook(
       (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
       [false, config, null]
     );
 
-    expect(result.current.selectedTrack).toBe("after-school-rain.mp3");
+    expect(result.current.selectedTrack).toBe("gentle-midday-rain.mp3");
     expect(result.current.volume).toBe(0.8);
 
     // New account/config with no saved sound prefs
@@ -481,7 +481,7 @@ describe("useFocusAudio", () => {
 
     const ctx = MockAudioContext.instances[0];
 
-    result.current.selectTrack("after-school-rain.mp3");
+    result.current.selectTrack("gentle-midday-rain.mp3");
 
     expect(ctx.oscillators[0].stopCalled).toBe(true);
     expect(ctx.oscillators[1].stopCalled).toBe(true);
@@ -520,16 +520,16 @@ describe("useFocusAudio", () => {
 
       result.current.selectCategory("rain");
 
-      expect(result.current.selectedTrack).toBe("rain-light");
+      expect(result.current.selectedTrack).toBe("gentle-midday-rain.mp3");
       expect(saveSubPath).toHaveBeenCalledWith("config", expect.objectContaining({
-        focusSoundTrack: "rain-light"
+        focusSoundTrack: "gentle-midday-rain.mp3"
       }));
     });
 
     it("selectCategory toggles the category off if it is already active", () => {
       vi.spyOn(Math, "random").mockReturnValue(0);
 
-      const config = { focusSoundTrack: "rain-light" };
+      const config = { focusSoundTrack: "gentle-midday-rain.mp3" };
       const { result } = renderHook(
         (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
         [false, config, null]
@@ -555,7 +555,7 @@ describe("useFocusAudio", () => {
     it("reshuffleTrack switches to a different variation in the same category", () => {
       vi.spyOn(Math, "random").mockReturnValue(0.99);
 
-      const config = { focusSoundTrack: "rain-light" };
+      const config = { focusSoundTrack: "gentle-midday-rain.mp3" };
       const { result } = renderHook(
         (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
         [false, config, null]
@@ -563,8 +563,8 @@ describe("useFocusAudio", () => {
 
       result.current.reshuffleTrack();
 
-      expect(result.current.selectedTrack).not.toBe("rain-light");
-      expect(result.current.selectedTrack.startsWith("rain-")).toBe(true);
+      expect(result.current.selectedTrack).not.toBe("gentle-midday-rain.mp3");
+      expect(result.current.selectedTrack.includes("rain")).toBe(true);
     });
 
     it("reshuffleTrack does nothing when no ambient category is selected", () => {
