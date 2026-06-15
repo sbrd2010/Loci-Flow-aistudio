@@ -32,6 +32,11 @@ describe("buildProfileContext", () => {
     expect(context).toContain("This profile never authorizes action tags");
   });
 
+  it("encourages drawing on the profile naturally rather than only on request", () => {
+    const context = buildProfileContext({ coachProfileNote: "Some background." });
+    expect(context).toContain("draw on this naturally");
+  });
+
   it("caps an overly long note", () => {
     const longNote = "a".repeat(1000);
     const context = buildProfileContext({ coachProfileNote: longNote });
