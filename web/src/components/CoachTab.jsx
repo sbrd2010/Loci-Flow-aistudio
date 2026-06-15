@@ -319,7 +319,7 @@ ${buildReasoningInstruction(firstName)}`;
 
     try {
       const reply = await callAI({ groqKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens: 400 });
-      // The hidden THINK scratchpad (see buildReasoningInstruction) is at the
+      // The hidden response plan (see buildReasoningInstruction) is at the
       // start of the output, so it's stripped first, before any other tag
       // parsing.
       const afterReasoning = stripReasoningTag(reply.trim());

@@ -38,4 +38,38 @@ Hey, let's tackle that deadline together.`;
 Got it, marked as done.`;
     expect(stripReasoningTag(raw)).toBe("Got it, marked as done.");
   });
+
+  it("strips an unclosed THINK block instead of leaking it, falling back to a safe reply", () => {
+    const raw = `[[THINK:
+- State: feeling stuck on a deadline.
+- Relevant: deadline is due tomorrow.
+- Angle: suggest the smallest next step.`;
+    const result = stripReasoningTag(raw);
+    expect(result).not.toContain("[[THINK:");
+    expect(result).toBe("I'm here. Let's pick one small next step.");
+  });
+
+  it("strips multiple well-formed THINK blocks without leaking either", () => {
+    const raw = `[[THINK:
+- State: first pass.
+- Relevant: nothing specific.
+- Angle: placeholder.
+]]
+[[THINK:
+- State: second pass.
+- Relevant: nothing specific.
+- Angle: real angle.
+]]
+Hey, let's get moving.`;
+    expect(stripReasoningTag(raw)).toBe("Hey, let's get moving.");
+  });
+
+  it("returns the fallback reply when stripping the THINK block leaves nothing visible", () => {
+    const raw = `[[THINK:
+- State: feeling stuck.
+- Relevant: nothing specific.
+- Angle: confirm and close out.
+]]`;
+    expect(stripReasoningTag(raw)).toBe("I'm here. Let's pick one small next step.");
+  });
 });
