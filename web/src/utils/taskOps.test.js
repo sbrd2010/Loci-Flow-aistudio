@@ -369,6 +369,16 @@ describe("normalizeAiOrganizeSuggestions", () => {
     expect(result.droppedSourceIds.has("d1")).toBe(true);
   });
 
+  it("droppedSourceIds covers every brain-dump item when a valid suggestion's sourceId can't be attributed (AI omitted/garbled a split's sourceId)", () => {
+    const raw = [
+      { sourceId: "d1", title: "Plan team offsite", horizonLevel: "week", priority: "P2" },
+      { sourceId: null, title: "Order catering", horizonLevel: "week", priority: "P2" }, // split lost its sourceId
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result).toHaveLength(2);
+    expect(result.droppedSourceIds).toEqual(new Set(["d1", "d2", "d3"]));
+  });
+
   it("droppedSourceIds is empty when no caps drop any suggestion", () => {
     const raw = [
       { sourceId: "d1", title: "Buy groceries", horizonLevel: "today", priority: "P3" },
@@ -475,6 +485,17 @@ describe("buildClearedBrainDump", () => {
     const result = buildClearedBrainDump(DUMP_ITEMS, allSuggestions, allSuggestions);
     expect(result).toHaveLength(2);
     expect(result.find((d) => d.id === "d1")).toBeUndefined();
+  });
+
+  it("keeps the source brain dump item when a sibling split suggestion lost its sourceId, even though the linked suggestion was accepted", () => {
+    const raw = [
+      { sourceId: "d1", title: "Plan team offsite", horizonLevel: "week", priority: "P2" },
+      { sourceId: null, title: "Order catering", horizonLevel: "week", priority: "P2" },
+    ];
+    const all = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    const accepted = [all[0]]; // user accepts the linked suggestion, rejects the unlinked one
+    const result = buildClearedBrainDump(DUMP_ITEMS, accepted, all, all.droppedSourceIds);
+    expect(result.find((d) => d.id === "d1")).toBeDefined();
   });
 
   it("keeps the source brain dump item when droppedSourceIds marks it as truncated, even if every visible suggestion was accepted", () => {

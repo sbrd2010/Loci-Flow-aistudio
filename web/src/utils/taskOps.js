@@ -77,8 +77,10 @@ function isValidAiSuggestion(t) {
 // the AI generated more suggestions than ended up in the result — either because
 // the per-source/overall caps below dropped an otherwise-valid suggestion, or
 // because a sibling suggestion sharing the sourceId was rejected for invalid
-// horizon/priority. buildClearedBrainDump uses this so a source isn't treated as
-// "fully represented" when some of its suggestions never made it into the result.
+// horizon/priority, or because some OTHER suggestion in this batch is valid but
+// couldn't be attributed to any brain-dump item (see hasUnattributedSuggestion
+// below). buildClearedBrainDump uses this so a source isn't treated as "fully
+// represented" when some of its suggestions never made it into the result.
 export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
   if (!Array.isArray(rawSuggestions)) return [];
   const validIds = new Set((brainDumpItems || []).map((d) => d.id).filter(Boolean));
@@ -88,9 +90,17 @@ export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
   // suggestion rejected for invalid horizon/priority still means this source
   // wasn't fully represented in the result, so it must not be cleared later.
   const rawCountBySource = new Map();
+  // A valid suggestion whose sourceId is missing/garbled could be a split of ANY
+  // submitted brain-dump item — we can't tell which, so it blocks clearing of
+  // every source in this batch rather than risk losing it (see droppedSourceIds).
+  let hasUnattributedSuggestion = false;
   for (const t of rawSuggestions) {
-    if (!t || !validIds.has(t.sourceId)) continue;
-    rawCountBySource.set(t.sourceId, (rawCountBySource.get(t.sourceId) || 0) + 1);
+    if (!t) continue;
+    if (validIds.has(t.sourceId)) {
+      rawCountBySource.set(t.sourceId, (rawCountBySource.get(t.sourceId) || 0) + 1);
+    } else if (isValidAiSuggestion(t)) {
+      hasUnattributedSuggestion = true;
+    }
   }
 
   const sourceCounts = new Map();
@@ -121,11 +131,13 @@ export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
     if (result.length >= MAX_SUGGESTIONS) break;
   }
 
-  result.droppedSourceIds = new Set(
-    [...rawCountBySource]
-      .filter(([sourceId, rawCount]) => rawCount > (sourceCounts.get(sourceId) || 0))
-      .map(([sourceId]) => sourceId)
-  );
+  result.droppedSourceIds = hasUnattributedSuggestion
+    ? new Set(validIds)
+    : new Set(
+        [...rawCountBySource]
+          .filter(([sourceId, rawCount]) => rawCount > (sourceCounts.get(sourceId) || 0))
+          .map(([sourceId]) => sourceId)
+      );
 
   return result;
 }
