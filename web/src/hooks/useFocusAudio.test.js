@@ -1,6 +1,7 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { useFocusAudio } from "./useFocusAudio";
 import { BINAURAL_TRACK_ID } from "../utils/binauralBeat";
+import { getCategoryKeyForTrack } from "../utils/soundLibrary";
 
 // Mock global Audio
 class MockAudio {
@@ -665,73 +666,36 @@ describe("useFocusAudio", () => {
     });
   });
 
-  describe("rainAmbience synthesis", () => {
-    it("creates a rain ambience node (not an Audio element) for the rain presets", () => {
-      const config = { focusSoundTrack: "rain-steady", focusSoundVolume: 0.8 };
-      renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
-        [true, config, null]
-      );
+  describe("stale track ID migrations", () => {
+    it("migrates synthesized rain presets and old rain files to gentle-midday-rain.mp3", () => {
+      const legacyTracks = [
+        "rain-light",
+        "rain-steady",
+        "rain-heavy",
+        "after-school-rain.mp3",
+        "sounds/rain/amber-sidewalks.mp3",
+        "sounds/rain/sidewalk-puddles.mp3",
+        "sounds/rain/blossoms-on-the-pavement.mp3",
+        "sounds/rain/petals-after-rain.mp3",
+        "sounds/rain/amber-windowpane.mp3",
+        "sounds/rain/storm-over-side-streets.mp3",
+        "sounds/rain/bloom-between-showers.mp3"
+      ];
 
-      expect(MockAudio.instances.length).toBe(0);
-      expect(MockAudioContext.instances.length).toBe(1);
+      legacyTracks.forEach(trackId => {
+        const config = { focusSoundTrack: trackId };
+        const { result } = renderHook(
+          (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+          [false, config, null]
+        );
 
-      const ctx = MockAudioContext.instances[0];
-      expect(ctx.sources.length).toBe(1);
-      expect(ctx.filters.length).toBe(1);
-      expect(ctx.filters[0].type).toBe("highpass");
-      expect(ctx.filters[0].frequency.value).toBe(1400); // steady rain cutoff
-      expect(ctx.state).toBe("running"); // isRunning true on init
-    });
+        // Check that it migrates to gentle-midday-rain.mp3 on load
+        expect(result.current.selectedTrack).toBe("gentle-midday-rain.mp3");
 
-    it("resumes/suspends the rain ambience when timer running state changes", () => {
-      const config = { focusSoundTrack: "rain-light" };
-      const { rerender } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
-        [false, config, null]
-      );
-
-      const ctx = MockAudioContext.instances[0];
-      expect(ctx.state).toBe("suspended");
-
-      rerender([true, config, null]);
-      expect(ctx.state).toBe("running");
-
-      rerender([false, config, null]);
-      expect(ctx.state).toBe("suspended");
-    });
-
-    it("disposes the rain context when switching to a different track", () => {
-      const config = { focusSoundTrack: "rain-steady" };
-      const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
-        [true, config, null]
-      );
-
-      const ctx = MockAudioContext.instances[0];
-
-      result.current.selectTrack("2-am-debug-loop.mp3");
-
-      expect(ctx.sources[0].stopCalled).toBe(true);
-      expect(ctx.oscillators[0].stopCalled).toBe(true);
-      expect(ctx.state).toBe("closed");
-      expect(MockAudio.instances.length).toBe(1);
-    });
-
-    it("disposes the rain context on unmount", () => {
-      const config = { focusSoundTrack: "rain-heavy" };
-      const { unmount } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
-        [true, config, null]
-      );
-
-      const ctx = MockAudioContext.instances[0];
-
-      unmount();
-
-      expect(ctx.sources[0].stopCalled).toBe(true);
-      expect(ctx.oscillators[0].stopCalled).toBe(true);
-      expect(ctx.state).toBe("closed");
+        // Verify that getCategoryKeyForTrack resolves it to "rain"
+        const categoryKey = getCategoryKeyForTrack(result.current.selectedTrack);
+        expect(categoryKey).toBe("rain");
+      });
     });
   });
 
