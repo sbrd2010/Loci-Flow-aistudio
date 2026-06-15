@@ -6,6 +6,7 @@ import { ref, push } from "firebase/database";
 import { exportPayloadAsJson, exportTasksAsCsv } from "../utils/exportTasks";
 import { parseTimeToMinutes } from "../utils/focusWindows";
 import { COACH_PERSONAS, normalizeCoachPersona } from "../utils/coachPersona";
+import { COACH_PROFILE_NOTE_MAX_LENGTH } from "../utils/coachProfile";
 import { clearAllMemory, isMemoryEnabled, removePinnedFact, removeRecentObservation } from "../utils/coachMemory";
 
 export default function SettingsTab({ payload, savePayload, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut }) {
@@ -37,6 +38,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const [editedCoachNudgesEnabled, setEditedCoachNudgesEnabled] = useState(config.coachNudgesEnabled !== false);
   const [editedCoachPersona, setEditedCoachPersona] = useState(() => normalizeCoachPersona(config.coachPersona));
   const [editedCoachPersonaNote, setEditedCoachPersonaNote] = useState(config.coachPersonaNote || "");
+  const [editedCoachProfileNote, setEditedCoachProfileNote] = useState(config.coachProfileNote || "");
   const [editedHeaderStyle, setEditedHeaderStyle] = useState(
     config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full")
   );
@@ -60,6 +62,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
     setEditedCoachNudgesEnabled(config.coachNudgesEnabled !== false);
     setEditedCoachPersona(normalizeCoachPersona(config.coachPersona));
     setEditedCoachPersonaNote(config.coachPersonaNote || "");
+    setEditedCoachProfileNote(config.coachProfileNote || "");
     setEditedHeaderStyle(config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full"));
     setEditedToolsStyle(config.toolsStyle || "inline");
     setEditedDeadlineLabel(config.deadlineLabel || "");
@@ -72,7 +75,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
       config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualEnabled, config.coachNudgesEnabled, config.headerStyle, config.toolsStyle,
       config.deadlineLabel, config.deadlineDate,
       config.deadlineStartDate, config.deadlineAction,
-      config.coachPersona, config.coachPersonaNote]);
+      config.coachPersona, config.coachPersonaNote, config.coachProfileNote]);
 
   // ── Focus window editing helpers ─────────────────────────────────────────
   const handleAddFocusWindow = () => {
@@ -191,6 +194,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
       coachNudgesEnabled: editedCoachNudgesEnabled,
       coachPersona: editedCoachPersona,
       coachPersonaNote: editedCoachPersonaNote.trim().slice(0, 300),
+      coachProfileNote: editedCoachProfileNote.trim().slice(0, COACH_PROFILE_NOTE_MAX_LENGTH),
       headerStyle: editedHeaderStyle,
       toolsStyle: editedToolsStyle,
       roadmapStyle: "compact",
@@ -314,11 +318,31 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
             <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
               {COACH_PERSONAS.find(p => p.key === editedCoachPersona)?.desc}
             </p>
-            <input className="text-input" type="text"
+            <label className="form-label" htmlFor="settings-persona-note" style={{ fontSize: "12px" }}>
+              Tone notes (style only)
+            </label>
+            <input id="settings-persona-note" className="text-input" type="text"
               value={editedCoachPersonaNote}
               onChange={e => setEditedCoachPersonaNote(e.target.value)}
-              placeholder="Anything else your coach should know about how to talk to you? (optional)"
+              placeholder="e.g. Keep it short and skip the cheerleading. (style only — for facts about you, use Coach Profile below)"
               maxLength={300} />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="settings-coach-profile">Coach Profile</label>
+            <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
+              Stable background about you that helps the coach personalize advice. You control this directly.
+            </p>
+            <textarea
+              id="settings-coach-profile"
+              className="text-input"
+              value={editedCoachProfileNote}
+              onChange={e => setEditedCoachProfileNote(e.target.value)}
+              placeholder="e.g. I am a polymer scientist in Arnhem, currently focused on job-search momentum and low-shame execution."
+              maxLength={COACH_PROFILE_NOTE_MAX_LENGTH}
+              rows={3}
+              style={{ resize: "vertical", minHeight: "72px", fontFamily: "var(--font-sans)" }}
+            />
           </div>
 
           <div className="form-group">

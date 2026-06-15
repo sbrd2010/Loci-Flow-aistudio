@@ -188,3 +188,24 @@ export function buildLociMemoryContext(coachMemory = {}) {
   }
   return sections.join("\n\n");
 }
+
+// Instructions for WRITING new memory during chat (REMEMBER/NOTE/FORGET).
+// Kept as a pure function (not inline in CoachTab) so its wording — especially
+// the shame-label rules — can be unit-tested without component-level test
+// infrastructure. Only included in the prompt when memory is enabled; reading
+// back existing memory (buildLociMemoryContext above) and the user's own
+// Coach Profile are handled separately and are not gated on this.
+export function buildMemoryWritingRules(firstName = "friend") {
+  return `MEMORY — building a picture of ${firstName} over time:
+- Memory can include sensitive coaching context (e.g. focus-challenge patterns, mood, financial pressure) ONLY when ${firstName} states it themselves or clearly asks you to remember it — never infer it.
+- Preserve uncertainty: if ${firstName} says something like "I think I might have ADHD", store the pattern using the neutral language from LANGUAGE below (e.g. "User suspects a focus-challenge pattern and wants extra structure for starting tasks") — never the clinical term, and never as a diagnosis. Even if ${firstName} says it's clinically diagnosed, store it using that same neutral language.
+- "I procrastinate", "I lose track of time", "I can't start tasks", or "I've been feeling low" describe BEHAVIOR, not a diagnosis — store the behavior (e.g. "User struggles with task initiation"), never "User has ADHD/depression/anxiety".
+- Never store shame-based or judgmental labels ("lazy", "no discipline", "hopeless", "broken", "low completion rate", "bad at planning", "failing") — reframe as a neutral, coachable summary instead. For example, write "User benefits from shorter planning windows and concrete completion-focused next steps" rather than "low completion rate", and "User can spiral into self-criticism and needs low-shame coaching" rather than "lazy" or "hopeless".
+- Never store secrets, passwords, API keys, account numbers, or exact financial figures — broad context only (e.g. "User is under financial pressure", not amounts).
+- Use neutral, respectful, non-shaming language. Store short coaching-relevant summaries, not raw quotes or long paragraphs. If you're unsure whether something belongs in memory, don't store it.
+- If ${firstName} shares something durable worth remembering in every future conversation (a goal, a real deadline, a recurring pattern, a coaching preference), end your reply with [[REMEMBER: <one short neutral sentence>]] on its own line. Use sparingly.
+- If something notable happened this conversation worth recalling for the next few sessions but isn't permanent (how today went, a one-off struggle or win), end your reply with [[NOTE: <one short sentence>]] on its own line.
+- If ${firstName} asks you to forget, delete, or stop remembering something, or if something in "WHAT YOU KNOW ABOUT THEM" / "RECENT NOTES" above is now outdated or contradicted by what they just told you, end your reply with [[FORGET: <copy the exact text of that fact/note from memory above>]] on its own line — and if it's outdated rather than just wrong, also add a [[REMEMBER: <corrected fact>]] for the update.
+- REMEMBER, NOTE, and FORGET tags are invisible and stripped automatically, like CHECKIN_IN — never mention or explain them to ${firstName}.
+- Memory is for coaching adaptation only — never medical, legal, or financial advice.`;
+}
