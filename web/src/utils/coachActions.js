@@ -279,11 +279,13 @@ const CLARIFICATION_NOTES = {
 };
 
 // Assembles the AI Coach's visible reply from its own text plus the outcome
-// of any action tags. cleanText (the model's own narration) is trusted only
-// when every tag matched (or there were none) — the model wrote it assuming
-// success. If even one tag failed, cleanText is dropped and the reply is
-// built entirely from successLines + notes instead, so it never claims
-// success right next to a note saying it didn't happen. Within notes:
+// of any action tags. cleanText (the model's own narration) is used as-is
+// only when there's nothing else to report: every tag matched (or there were
+// none), or the only unmatched tags are stale blocked ones that don't even
+// warrant a note (see below). Otherwise — at least one success line or
+// failure/clarification note — cleanText is dropped entirely and the reply
+// is built from successLines + notes instead, so it never claims success
+// right next to a note saying it didn't happen. Within notes:
 //  - "blocked" tags (matchesUserIntent failed) only contribute a note when
 //    the user's message reads as a request for that action type at all
 //    (messageSeemsActionLike) — a stale tag the model carried forward from an
