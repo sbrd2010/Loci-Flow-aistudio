@@ -194,6 +194,15 @@ export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
   return result;
 }
 
+// Folds an AI Organize suggestion's sourceSummary into subSteps as a labeled
+// "Context: ..." entry, so accepting the suggestion doesn't lose detail that
+// only appeared in sourceSummary — without adding a new field to the task model.
+export function buildOrganizedTaskSubSteps(subSteps, sourceSummary) {
+  const base = Array.isArray(subSteps) ? subSteps : [];
+  if (!sourceSummary) return base;
+  return [...base, { id: `ai-ctx-${Date.now()}`, text: `Context: ${sourceSummary}`, done: false }];
+}
+
 // Removes brain-dump items whose ID was explicitly claimed by accepted AI
 // suggestions via sourceId — but only once EVERY suggestion generated for that
 // source has been accepted. A long entry can split into several suggestions

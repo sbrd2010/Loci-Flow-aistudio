@@ -3,7 +3,7 @@ import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI, extractJsonArray } from "../utils/aiCall";
-import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, CATEGORY_ICONS } from "../utils/taskOps";
+import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTaskSubSteps, CATEGORY_ICONS } from "../utils/taskOps";
 import { submitOnEnter } from "../utils/formEvents";
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
 import {
@@ -409,7 +409,10 @@ Return ONLY a JSON array, no markdown:
         dateCompletedString: null,
         isDeleted: false,
         lastUpdated: Date.now(),
-        ...(t.subSteps && t.subSteps.length > 0 && { subSteps: t.subSteps }),
+        ...(() => {
+          const subSteps = buildOrganizedTaskSubSteps(t.subSteps, t.sourceSummary);
+          return subSteps.length > 0 ? { subSteps } : {};
+        })(),
       };
     });
     // Pass all suggestions (not just accepted) so a split entry's source is only
@@ -578,6 +581,7 @@ Return ONLY a JSON array, no markdown:
             const horizonLabel = { today: "Today", week: "This Week", month: "Month", quarter: "Quarter", halfyear: "6 Months", office: "Work" };
             const priorityOptions = ["P1","P2","P3","P4"];
             const categoryOptions = Object.keys(CATEGORY_ICONS);
+            const timeEstimateOptions = [15, 25, 45, 60, 120, 240, 360];
             // Suggestions sharing a sourceId came from splitting one brain-dump entry
             const sourceCounts = {};
             organizeResults.forEach(t => { if (t.sourceId) sourceCounts[t.sourceId] = (sourceCounts[t.sourceId] || 0) + 1; });
@@ -693,6 +697,14 @@ Return ONLY a JSON array, no markdown:
                                 <button key={c} type="button" onClick={e => { e.stopPropagation(); updateOrganizeResult(i, "category", c); }}
                                   style={{ padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "700", cursor: "pointer", border: t.category === c ? "2px solid var(--accent)" : "1.5px solid var(--border)", background: t.category === c ? "var(--accent)" : "var(--bg-card)", color: t.category === c ? "#fff" : "var(--text-secondary)" }}>
                                   {CATEGORY_ICONS[c]} {c}
+                                </button>
+                              ))}
+                            </div>
+                            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                              {timeEstimateOptions.map(m => (
+                                <button key={m} type="button" onClick={e => { e.stopPropagation(); updateOrganizeResult(i, "timeEstimateMinutes", m); }}
+                                  style={{ padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "700", cursor: "pointer", border: t.timeEstimateMinutes === m ? "2px solid var(--accent)" : "1.5px solid var(--border)", background: t.timeEstimateMinutes === m ? "var(--accent)" : "var(--bg-card)", color: t.timeEstimateMinutes === m ? "#fff" : "var(--text-secondary)" }}>
+                                  ⏱ {m}m
                                 </button>
                               ))}
                             </div>

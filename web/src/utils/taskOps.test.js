@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildToggleCompletedTasks, applyAiRewriteToTask, normalizeAiOrganizeSuggestions, buildClearedBrainDump, sanitizeTaskField, byPriorityThenOrder, CATEGORY_ICONS } from "./taskOps";
+import { buildToggleCompletedTasks, applyAiRewriteToTask, normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTaskSubSteps, sanitizeTaskField, byPriorityThenOrder, CATEGORY_ICONS } from "./taskOps";
 
 const T = (overrides = {}) => ({
   uuid: "task-1",
@@ -659,6 +659,34 @@ describe("buildClearedBrainDump", () => {
     const result = buildClearedBrainDump(DUMP_ITEMS, allSuggestions, allSuggestions, droppedSourceIds);
     expect(result).toHaveLength(3);
     expect(result.find((d) => d.id === "d1")).toBeDefined();
+  });
+});
+
+describe("buildOrganizedTaskSubSteps", () => {
+  it("appends sourceSummary as a labeled Context entry when subSteps is empty", () => {
+    const result = buildOrganizedTaskSubSteps([], "Contract renewal with Sarah at Acme Corp is due June 20.");
+    expect(result).toHaveLength(1);
+    expect(result[0].text).toBe("Context: Contract renewal with Sarah at Acme Corp is due June 20.");
+    expect(result[0].done).toBe(false);
+  });
+
+  it("appends sourceSummary after existing subSteps without dropping them", () => {
+    const existing = [{ id: "ss-1", text: "Bring ID", done: false }];
+    const result = buildOrganizedTaskSubSteps(existing, "Office is on the 4th floor.");
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual(existing[0]);
+    expect(result[1].text).toBe("Context: Office is on the 4th floor.");
+  });
+
+  it("returns subSteps unchanged when sourceSummary is empty or missing", () => {
+    const existing = [{ id: "ss-1", text: "Bring ID", done: false }];
+    expect(buildOrganizedTaskSubSteps(existing, "")).toBe(existing);
+    expect(buildOrganizedTaskSubSteps(existing, undefined)).toBe(existing);
+  });
+
+  it("returns an empty array when both subSteps and sourceSummary are absent", () => {
+    expect(buildOrganizedTaskSubSteps(undefined, "")).toEqual([]);
+    expect(buildOrganizedTaskSubSteps(null, undefined)).toEqual([]);
   });
 });
 
