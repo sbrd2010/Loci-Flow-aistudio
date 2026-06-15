@@ -60,6 +60,23 @@ export function buildExecutionCoachSignal(payload = {}, date = new Date()) {
   const deadlineMissStreak = getDeadlineMissStreak(config, date);
   const deadlineAction = (config.deadlineAction || "make one visible move").trim();
 
+  if (
+    hasDeadline &&
+    config.deadlineDate &&
+    config.deadlineDate < todayStr &&
+    config.deadlineFollowupAskedFor !== config.deadlineDate
+  ) {
+    const label = (config.deadlineLabel || "your key deadline").trim();
+    return {
+      shouldShow: true,
+      level: "nudge",
+      reason: "deadline_date_passed_followup",
+      title: `How did ${label} go?`,
+      body: `Your deadline for ${label} has passed. Want to check in on how it went and plan what's next?`,
+      primaryTaskUuid: null,
+    };
+  }
+
   if (hasDeadline && !deadlineDoneToday && deadlineMissStreak >= 3) {
     return {
       shouldShow: true,

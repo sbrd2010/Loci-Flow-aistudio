@@ -139,4 +139,88 @@ describe("buildExecutionCoachSignal", () => {
     expect(signal.reason).not.toBe("deadline_move_open_today");
     expect(signal.reason).toBe("next_task_available");
   });
+
+  it("fires a retrospective nudge when the deadline date has passed", () => {
+    const signal = buildExecutionCoachSignal({
+      config: {
+        deadlineLabel: "Q2 OKR review",
+        deadlineDate: "2026-06-10",
+        deadlineAction: "Update spreadsheet",
+      },
+      tasks: []
+    }, new Date(2026, 5, 15, 10, 0)); // today is 2026-06-15, deadline was 2026-06-10
+
+    expect(signal.shouldShow).toBe(true);
+    expect(signal.level).toBe("nudge");
+    expect(signal.reason).toBe("deadline_date_passed_followup");
+    expect(signal.title).toContain("Q2 OKR review");
+    expect(signal.body).toContain("Q2 OKR review");
+    expect(signal.primaryTaskUuid).toBe(null);
+  });
+
+  it("does not fire the retrospective when deadlineDate is today", () => {
+    const signal = buildExecutionCoachSignal({
+      config: {
+        deadlineLabel: "Tax filing",
+        deadlineDate: "2026-06-15",
+        deadlineAction: "Submit forms",
+      },
+      tasks: [task()]
+    }, new Date(2026, 5, 15, 10, 0)); // today IS the deadline date
+
+    expect(signal.reason).not.toBe("deadline_date_passed_followup");
+  });
+
+  it("does not fire the retrospective when deadlineDate is in the future", () => {
+    const signal = buildExecutionCoachSignal({
+      config: {
+        deadlineLabel: "Book launch",
+        deadlineDate: "2026-07-01",
+        deadlineAction: "Write one page",
+      },
+      tasks: [task()]
+    }, new Date(2026, 5, 15, 10, 0));
+
+    expect(signal.reason).not.toBe("deadline_date_passed_followup");
+  });
+
+  it("does not fire the retrospective when deadlineFollowupAskedFor matches deadlineDate", () => {
+    const signal = buildExecutionCoachSignal({
+      config: {
+        deadlineLabel: "Q2 OKR review",
+        deadlineDate: "2026-06-10",
+        deadlineFollowupAskedFor: "2026-06-10",
+      },
+      tasks: []
+    }, new Date(2026, 5, 15, 10, 0));
+
+    expect(signal.reason).not.toBe("deadline_date_passed_followup");
+  });
+
+  it("does not fire the retrospective when no deadline is set", () => {
+    const signal = buildExecutionCoachSignal({
+      config: {},
+      tasks: []
+    }, new Date(2026, 5, 15, 10, 0));
+
+    expect(signal.reason).not.toBe("deadline_date_passed_followup");
+  });
+
+  it("retrospective preempts deadline_missed_three_days when the deadline date has passed", () => {
+    const signal = buildExecutionCoachSignal({
+      config: {
+        deadlineLabel: "Conference talk",
+        deadlineDate: "2026-06-10",
+        deadlineAction: "Finish slides",
+        deadlineMoveHistory: {
+          "2026-06-14": "missed",
+          "2026-06-13": "missed",
+          "2026-06-12": "missed",
+        }
+      },
+      tasks: [task()]
+    }, new Date(2026, 5, 15, 10, 0));
+
+    expect(signal.reason).toBe("deadline_date_passed_followup");
+  });
 });
