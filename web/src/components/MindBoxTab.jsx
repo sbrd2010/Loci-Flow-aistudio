@@ -333,12 +333,25 @@ Return ONLY a JSON array, no markdown:
         maxTokens: 4000
       });
       const cleaned = raw.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
-      const parsed = JSON.parse(cleaned);
+      let parsed;
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch {
+        // The AI sometimes adds stray text around the array (e.g. an "AI usage
+        // note" appended by callAI, or a leading sentence) — fall back to just
+        // the [...] portion before giving up.
+        const match = cleaned.match(/\[[\s\S]*\]/);
+        if (match) parsed = JSON.parse(match[0]);
+        else throw new Error("invalid");
+      }
       if (!Array.isArray(parsed)) throw new Error("invalid");
       const valid = normalizeAiOrganizeSuggestions(parsed, brainDumpItems);
       setOrganizeResults(valid);
       setOrganizeDroppedSourceIds(valid.droppedSourceIds || new Set());
       setOrganizeSelected(new Set(valid.map((_, i) => i)));
+      if (valid.length === 0) {
+        setOrganizeError("AI couldn't turn that into tasks — try again, or add tasks manually.");
+      }
     } catch (_) {
       setOrganizeError("Couldn't organize — try again, or add tasks manually.");
     } finally {

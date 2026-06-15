@@ -7,8 +7,8 @@ import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext
 import { getTodayCheckedIds, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
 import { requestNotifPermission } from "../utils/focusNotifications";
-import { scheduleCoachCheckin, cancelCoachCheckin } from "../utils/reminders";
-import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, buildCheckinResumeMessage } from "../utils/coachCheckin";
+import { scheduleCoachCheckin } from "../utils/reminders";
+import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue } from "../utils/coachCheckin";
 import { parseCoachActionTags, applyCoachActions, buildActionReplyText } from "../utils/coachActions";
 import { isPendingCoachNudgeStale, shouldDeliverPendingCoachNudge } from "../utils/coachNudge";
 import { buildPersonaInstruction } from "../utils/coachPersona";
@@ -111,26 +111,6 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
     return () => { isMountedRef.current = false; };
   }, []);
 
-  useEffect(() => {
-    const checkDue = () => {
-      const checkin = configRef.current.coachCheckin;
-      if (!isCheckinDue(checkin)) return;
-      // Defer until cloud sync is confirmed — saveConfigPatch() before the
-      // first RTDB snapshot stamps a still-cached config as "newest" (see
-      // saveConfigPatch in useSync.js), which could overwrite newer config
-      // synced from another device. Retried every 60s via the interval below
-      // (and on remount), so this just delays delivery until sync confirms.
-      if (cloudSyncUnconfirmedRef.current) return;
-      const resumeMsg = buildCheckinResumeMessage(firstName, checkin.note);
-      saveSubPath("chatHistory", [...chatHistoryRef.current, { text: resumeMsg, isUser: false }]);
-      saveConfigPatch({ coachCheckin: null });
-      cancelCoachCheckin();
-    };
-    checkDue();
-    const interval = setInterval(checkDue, 60000);
-    return () => clearInterval(interval);
-  }, [config.coachCheckin?.fireAt, firstName]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Deliver a Proactive Coach Nudge (see utils/coachNudge.js) handed off from
   // the Today tab — voiced by the AI when a key is available, falling back to
   // the signal's own canned text otherwise. Runs on mount, and again once
@@ -139,10 +119,10 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
   // confirms, instead of waiting for the next Coach remount.
   const deliveredNudgeRef = useRef(null);
   useEffect(() => {
-    // Defer to the Coach Check-In resume effect above if it's also acting on
-    // this mount — both write a fresh `config`/`chatHistory` snapshot from
-    // the same pre-effect refs, so running both here would let one clobber
-    // the other. The nudge stays pending and is picked up on a later mount.
+    // Defer to App's Coach Check-In resume effect if it's also acting on
+    // this tick — both write a fresh `config`/`chatHistory` snapshot, so
+    // running both here would let one clobber the other. The nudge stays
+    // pending and is picked up on a later mount.
     if (isCheckinDue(configRef.current.coachCheckin)) return;
 
     const nudge = configRef.current.pendingCoachNudge;
@@ -299,7 +279,7 @@ GUARD RAILS:
 - Stay within: productivity, tasks, focus, execution support, time management, motivation, gentle life-management support.
 
 COACH ACTIONS:
-- If ${firstName} asks you to check in, follow up, or remind them again later in this chat, end your reply with [[CHECKIN_IN:N]] on its own line, where N is a whole number of minutes from now (1-180). This tag is invisible to ${firstName} — never mention it or explain it.
+- If ${firstName} asks you to check in, follow up, circle back, or remind them again later — by a duration ("in 30 minutes") or a specific time ("at 11am") — you MUST end your reply with [[CHECKIN_IN:N]] on its own line, where N is a whole number of minutes from now (1-180), even if your visible reply is just "Got it" or a casual confirmation. The current time is ${nowLabel} — for a specific time, compute N as the difference (e.g. if it's 10:03 AM and they say "at 11am", use [[CHECKIN_IN:57]]). This tag is invisible to ${firstName} — never mention it or explain it.
 - Only use this tag when explicitly asked for a later check-in. Do not offer it proactively, and never use it for any other purpose.
 - If ${firstName} explicitly asks to switch focus to or prioritize a specific task right now, end your reply with [[SET_NOW_FOCUS:<exact task title from the list above>]] on its own line — AND say what you're doing in your visible reply (e.g., "On it — switching your focus to '<title>'.").
 - If ${firstName} explicitly says they finished, completed, or are done with a specific task, end your reply with [[COMPLETE_TASK:<exact task title from the list above>]] on its own line — AND say what you're doing in your visible reply (e.g., "Nice work — marking '<title>' complete!").

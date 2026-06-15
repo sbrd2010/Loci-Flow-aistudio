@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { auth, track, setAnalyticsUser } from "./firebase";
 import { computeUserProfile } from "./utils/userProfile";
-import { scheduleAllReminders, scheduleCoachCheckin, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
+import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
+import { isCheckinDue, buildCheckinResumeMessage } from "./utils/coachCheckin";
 import { getFocusWindows } from "./utils/focusWindows";
 import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
@@ -263,6 +264,11 @@ export default function App() {
   const clearCache = demoMode ? () => {} : (rtdbClearCache || (() => {}));
   const syncWarning = demoMode ? null : rtdbSyncWarning;
 
+  // Live ref for the check-in poller below, which runs on an interval and
+  // needs the latest chatHistory/config without restarting on every change.
+  const payloadRef = useRef(payload);
+  payloadRef.current = payload;
+
   // Schedule task reminders whenever payload loads/changes
   useEffect(() => {
     if (payload?.tasks) scheduleAllReminders(payload.tasks);
@@ -272,6 +278,27 @@ export default function App() {
   useEffect(() => {
     if (payload?.config?.coachCheckin) scheduleCoachCheckin(payload.config.coachCheckin);
   }, [payload?.config?.coachCheckin]);
+
+  // Resume a "Coach Check-In" (see CoachTab) once it's due, regardless of
+  // which tab is active. CoachTab unmounts on tab switch, so without this,
+  // a check-in due while the user is elsewhere only ever arrives via a push
+  // notification (gated on Notification permission). Runs on load and every
+  // 60s; CoachTab's nudge effect defers to this via isCheckinDue.
+  useEffect(() => {
+    if (!payload?.config || isSyncingFromCache || syncWarning === "offline") return;
+    const checkDue = () => {
+      const current = payloadRef.current;
+      const checkin = current?.config?.coachCheckin;
+      if (!isCheckinDue(checkin)) return;
+      const firstName = (current.config.userName || "").split(" ")[0] || "friend";
+      saveSubPath("chatHistory", [...(current.chatHistory || []), { text: buildCheckinResumeMessage(firstName, checkin.note), isUser: false }]);
+      saveConfigPatch({ coachCheckin: null });
+      cancelCoachCheckin();
+    };
+    checkDue();
+    const id = setInterval(checkDue, 60000);
+    return () => clearInterval(id);
+  }, [payload?.config?.coachCheckin?.fireAt, isSyncingFromCache, syncWarning]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const todayStr = useTodayStr();
 

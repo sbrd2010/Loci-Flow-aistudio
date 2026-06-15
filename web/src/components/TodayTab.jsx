@@ -549,7 +549,16 @@ export default function TodayTab({
         maxTokens: 200
       });
       const cleaned = raw.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
-      const steps = JSON.parse(cleaned);
+      let steps;
+      try {
+        steps = JSON.parse(cleaned);
+      } catch {
+        // The AI sometimes adds stray text around the array (e.g. an "AI usage
+        // note" appended by callAI) — fall back to just the [...] portion.
+        const match = cleaned.match(/\[[\s\S]*\]/);
+        if (match) steps = JSON.parse(match[0]);
+        else throw new Error("bad response");
+      }
       if (!Array.isArray(steps) || steps.length === 0) throw new Error("bad response");
       const subSteps = steps.slice(0, 5).map(text => ({ id: safeUUID(), text: String(text).trim(), done: false }));
       savePayload({ ...payload, tasks: tasks.map(t => t.uuid === task.uuid ? { ...t, subSteps, lastUpdated: Date.now() } : t) });
