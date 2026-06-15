@@ -40,10 +40,10 @@ export function applyAiRewriteToTask(originalTask, aiSuggestion) {
 // Roadmap cards), keyed by the categories offered in AddTaskDialog. Tasks
 // with no category, or one outside this map, show no icon — never inferred.
 export const CATEGORY_ICONS = {
-  Career: "💼",
-  Work: "🏢",
-  Health: "❤️",
-  Personal: "🏠",
+  Career: "🎯",
+  Work: "💼",
+  Health: "🩺",
+  Personal: "👤",
 };
 
 // Roadmap horizons always show higher-priority tasks first; within the same

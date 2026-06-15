@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { callAI, getAIKeys } from "../utils/aiCall";
 import { safeUUID } from "../utils/uuid";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
-import { applyAiRewriteToTask } from "../utils/taskOps";
+import { applyAiRewriteToTask, CATEGORY_ICONS } from "../utils/taskOps";
 
 function defaultReminderDateTime() {
   const d = new Date();
@@ -435,12 +435,12 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
               </div>
               <div className="form-group">
                 <label className="form-label">CATEGORY</label>
-                <div className="btn-group" style={{ gap: "6px" }}>
+                <div className="btn-group" style={{ gap: "4px" }}>
                   {categories.map((c) => (
                     <button key={c} type="button"
                       className={`selector-btn ${category === c ? "selected" : ""}`}
-                      style={{ padding: "6px 4px", fontSize: "11.5px" }}
-                      onClick={() => setCategory(c)}>{c}</button>
+                      style={{ padding: "6px 2px", fontSize: "11px", whiteSpace: "nowrap" }}
+                      onClick={() => setCategory(c)}>{CATEGORY_ICONS[c]} {c}</button>
                   ))}
                 </div>
               </div>
