@@ -14,6 +14,7 @@ import { isPendingCoachNudgeStale, shouldDeliverPendingCoachNudge } from "../uti
 import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
 import { addPinnedFact, addRecentObservation, buildLociMemoryContext, buildMemoryWritingRules, forgetFromMemory, isMemoryEnabled, parseMemoryTags } from "../utils/coachMemory";
+import { buildReasoningInstruction, stripReasoningTag } from "../utils/coachReasoning";
 
 export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
@@ -310,17 +311,23 @@ If memory is off or has nothing stored, say so plainly rather than guessing — 
 
 LANGUAGE: Never use the word "ADHD". Use instead: focus challenge, overwhelm, execution support, momentum, time awareness, micro-step, reset, low-energy mode.
 ${profileToCoachContext(userProfile) ? `\n${profileToCoachContext(userProfile)}\n` : ""}
-SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak, ${todayActive.length} active tasks today.`;
+SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak, ${todayActive.length} active tasks today.
+
+${buildReasoningInstruction(firstName)}`;
 
     const messages = withUser.map(m => ({ role: m.isUser ? "user" : "assistant", content: m.text }));
 
     try {
-      const reply = await callAI({ groqKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens: 300 });
+      const reply = await callAI({ groqKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens: 400 });
+      // The hidden THINK scratchpad (see buildReasoningInstruction) is at the
+      // start of the output, so it's stripped first, before any other tag
+      // parsing.
+      const afterReasoning = stripReasoningTag(reply.trim());
       // Memory tags are parsed first so that if one ever contains a nested
       // tag-like sequence (e.g. "[[REMEMBER: ...describing [[ADD_TASK:X]]...]]"),
       // the whole memory tag — including the nested text — is stripped before
       // the checkin/action parsers can see it as a tag of their own.
-      const { cleanText: afterMemory, pinnedFacts, observations, forgets } = parseMemoryTags(reply.trim());
+      const { cleanText: afterMemory, pinnedFacts, observations, forgets } = parseMemoryTags(afterReasoning);
       const { cleanText: afterCheckin, minutes } = parseCheckinTag(afterMemory);
       const { cleanText, actions } = parseCoachActionTags(afterCheckin);
 
