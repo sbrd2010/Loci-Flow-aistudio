@@ -15,6 +15,17 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+const PRIORITY_RANK = { P1: 0, P2: 1, P3: 2, P4: 3 };
+
+// Roadmap horizons always show higher-priority tasks first; within the same
+// priority, manual drag order (orderIndex) still applies.
+function byPriorityThenOrder(a, b) {
+  const pa = PRIORITY_RANK[a.priority] ?? PRIORITY_RANK.P4;
+  const pb = PRIORITY_RANK[b.priority] ?? PRIORITY_RANK.P4;
+  if (pa !== pb) return pa - pb;
+  return (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
+}
+
 function SortableRoadmapCard({ id, task, onTaskClick }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   return (
@@ -424,7 +435,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   const renderTaskList = (colKey) => {
     const colTasks = tasks
       .filter(t => t.horizonLevel === colKey && isVisibleRoadmapTask(t))
-      .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+      .sort(byPriorityThenOrder);
     return (
       <SortableRoadmapList
         colKey={colKey}
@@ -526,7 +537,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
         {columns.map((col) => {
           const colTasks = tasks
             .filter((t) => t.horizonLevel === col.key && isVisibleRoadmapTask(t))
-            .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+            .sort(byPriorityThenOrder);
           const isExpanded = expandedCol === col.key;
           return (
             <div key={col.key} className={`roadmap-column${isExpanded ? " expanded" : ""}`}>

@@ -176,13 +176,13 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
 
       {/* Task content */}
       <div className="task-middle">
+        {isMVD && !isCompleted && (
+          <span style={{ fontSize: "8px", fontWeight: "800", color: "var(--accent)", background: "var(--accent-ring, rgba(99,102,241,0.10))", padding: "1px 5px", borderRadius: "3px", letterSpacing: "0.04em", alignSelf: "flex-start" }}>★ MUST-DO</span>
+        )}
         <div className="task-row-top">
           <span className={`priority-badge ${(priority || "P4").toLowerCase()}`}>{priority || "P4"}</span>
           {isNowFocus && !isCompleted && (
             <span style={{ fontSize: "8px", fontWeight: "800", color: "var(--warning)", background: "rgba(245,158,11,0.12)", padding: "1px 5px", borderRadius: "3px", letterSpacing: "0.04em" }}>FOCUS</span>
-          )}
-          {isMVD && !isCompleted && (
-            <span style={{ fontSize: "8px", fontWeight: "800", color: "var(--accent)", background: "var(--accent-ring, rgba(99,102,241,0.10))", padding: "1px 5px", borderRadius: "3px", letterSpacing: "0.04em" }}>★ MUST-DO</span>
           )}
           <span className="task-title-text" title={title}>{title}</span>
         </div>
