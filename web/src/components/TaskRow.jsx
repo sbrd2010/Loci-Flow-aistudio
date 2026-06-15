@@ -106,7 +106,7 @@ const ROADMAP_HORIZONS = [
   { key: "office",   label: "Work" },
 ];
 
-export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, onToggleMVD, dragHandleListeners, dragHandleAttributes }) {
+export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, onToggleMVD, dragHandleListeners, dragHandleAttributes }) {
   const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD, category } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const [showRoadmapOptions, setShowRoadmapOptions] = useState(false);
@@ -182,9 +182,9 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         )}
         <div className="task-row-top">
           <span className={`priority-badge ${(priority || "P4").toLowerCase()}`}>{priority || "P4"}</span>
-          {CATEGORY_ICONS[category || "Personal"] && (
-            <span className="task-category-icon" title={category || "Personal"} aria-label={category || "Personal"}>
-              {CATEGORY_ICONS[category || "Personal"]}
+          {CATEGORY_ICONS[category] && (
+            <span className="task-category-icon" title={category} aria-label={category}>
+              {CATEGORY_ICONS[category]}
             </span>
           )}
           {isNowFocus && !isCompleted && (
@@ -249,6 +249,16 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         {isBreakingDown && (
           <span style={{ fontSize: "11px", color: "var(--accent)", fontStyle: "italic", marginTop: "6px", display: "block" }}>
             ✨ Breaking it down…
+          </span>
+        )}
+
+        {breakdownError && !isBreakingDown && (
+          <span style={{ fontSize: "11px", color: "var(--danger)", marginTop: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+            Couldn't break this down.
+            <button
+              onClick={e => { e.stopPropagation(); onBreakdown(task); }}
+              style={{ background: "none", border: "none", padding: 0, fontSize: "11px", fontWeight: "700", color: "var(--accent)", cursor: "pointer", textDecoration: "underline" }}
+            >Try again</button>
           </span>
         )}
       </div>

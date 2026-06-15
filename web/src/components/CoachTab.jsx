@@ -8,7 +8,7 @@ import { getTodayCheckedIds, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
 import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin } from "../utils/reminders";
-import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue } from "../utils/coachCheckin";
+import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, parseCheckinRequestFromMessage } from "../utils/coachCheckin";
 import { parseCoachActionTags, applyCoachActions, buildActionReplyText } from "../utils/coachActions";
 import { isPendingCoachNudgeStale, shouldDeliverPendingCoachNudge } from "../utils/coachNudge";
 import { buildPersonaInstruction } from "../utils/coachPersona";
@@ -322,9 +322,14 @@ SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak,
       const { cleanText: afterCheckin, minutes } = parseCheckinTag(afterMemory);
       const { cleanText, actions } = parseCoachActionTags(afterCheckin);
 
+      // If the AI's reply omitted [[CHECKIN_IN:N]] despite a clear, non-recurring
+      // check-in request in the user's latest message, fall back to a
+      // deterministic parse of that request rather than dropping it silently.
+      const checkinMinutes = minutes ?? parseCheckinRequestFromMessage(userText);
+
       let configPatch = null;
-      if (minutes != null) {
-        const checkin = buildCoachCheckin(minutes, pickCheckinNote(todayActive));
+      if (checkinMinutes != null) {
+        const checkin = buildCoachCheckin(checkinMinutes, pickCheckinNote(todayActive));
         configPatch = { ...configPatch, coachCheckin: checkin };
         scheduleCoachCheckin(checkin);
         requestNotifPermission();

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildToggleCompletedTasks, applyAiRewriteToTask, normalizeAiOrganizeSuggestions, buildClearedBrainDump, sanitizeTaskField } from "./taskOps";
+import { buildToggleCompletedTasks, applyAiRewriteToTask, normalizeAiOrganizeSuggestions, buildClearedBrainDump, sanitizeTaskField, byPriorityThenOrder, CATEGORY_ICONS } from "./taskOps";
 
 const T = (overrides = {}) => ({
   uuid: "task-1",
@@ -507,5 +507,47 @@ describe("buildClearedBrainDump", () => {
     const result = buildClearedBrainDump(DUMP_ITEMS, allSuggestions, allSuggestions, droppedSourceIds);
     expect(result).toHaveLength(3);
     expect(result.find((d) => d.id === "d1")).toBeDefined();
+  });
+});
+
+describe("byPriorityThenOrder", () => {
+  it("sorts P1 before P2 before P3 before P4", () => {
+    const tasks = [
+      T({ uuid: "p4", priority: "P4", orderIndex: 0 }),
+      T({ uuid: "p1", priority: "P1", orderIndex: 0 }),
+      T({ uuid: "p3", priority: "P3", orderIndex: 0 }),
+      T({ uuid: "p2", priority: "P2", orderIndex: 0 }),
+    ];
+    expect(tasks.sort(byPriorityThenOrder).map(t => t.uuid)).toEqual(["p1", "p2", "p3", "p4"]);
+  });
+
+  it("preserves orderIndex within the same priority", () => {
+    const tasks = [
+      T({ uuid: "b", priority: "P2", orderIndex: 1 }),
+      T({ uuid: "a", priority: "P2", orderIndex: 0 }),
+    ];
+    expect(tasks.sort(byPriorityThenOrder).map(t => t.uuid)).toEqual(["a", "b"]);
+  });
+
+  it("treats a missing priority as P4", () => {
+    const tasks = [
+      T({ uuid: "p3", priority: "P3", orderIndex: 0 }),
+      T({ uuid: "none", orderIndex: 0 }),
+    ];
+    expect(tasks.sort(byPriorityThenOrder).map(t => t.uuid)).toEqual(["p3", "none"]);
+  });
+});
+
+describe("CATEGORY_ICONS", () => {
+  it("has an icon for each category offered in AddTaskDialog", () => {
+    expect(CATEGORY_ICONS.Career).toBeTruthy();
+    expect(CATEGORY_ICONS.Work).toBeTruthy();
+    expect(CATEGORY_ICONS.Health).toBeTruthy();
+    expect(CATEGORY_ICONS.Personal).toBeTruthy();
+  });
+
+  it("has no icon for a missing or unknown category", () => {
+    expect(CATEGORY_ICONS[undefined]).toBeUndefined();
+    expect(CATEGORY_ICONS["NotACategory"]).toBeUndefined();
   });
 });

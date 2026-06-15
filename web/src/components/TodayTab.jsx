@@ -196,6 +196,7 @@ export default function TodayTab({
   }, []);
 
   const [breakdownLoadingUuid, setBreakdownLoadingUuid] = useState(null);
+  const [breakdownErrorUuid, setBreakdownErrorUuid] = useState(null);
 
   const [editingTask, setEditingTask] = useState(null);
   const [undoTask, setUndoTask] = useState(null);
@@ -537,6 +538,7 @@ export default function TodayTab({
 
   const handleBreakdown = async (task) => {
     setBreakdownLoadingUuid(task.uuid);
+    setBreakdownErrorUuid(null);
     const { groqKey, geminiKey } = getAIKeys();
     try {
       const raw = await callAI({
@@ -563,7 +565,7 @@ export default function TodayTab({
       const subSteps = steps.slice(0, 5).map(text => ({ id: safeUUID(), text: String(text).trim(), done: false }));
       savePayload({ ...payload, tasks: tasks.map(t => t.uuid === task.uuid ? { ...t, subSteps, lastUpdated: Date.now() } : t) });
     } catch (_) {
-      // silently fail — user can retry via menu
+      setBreakdownErrorUuid(task.uuid);
     } finally {
       setBreakdownLoadingUuid(null);
     }
@@ -1110,6 +1112,7 @@ export default function TodayTab({
                 onSubStepToggle={handleSubStepToggle}
                 onDeleteSubStep={handleDeleteSubStep}
                 isBreakingDown={breakdownLoadingUuid === pinnedFocusTask.uuid}
+                breakdownError={breakdownErrorUuid === pinnedFocusTask.uuid}
                 onToggleMVD={handleToggleMVD}
               />
               <button
@@ -1307,6 +1310,7 @@ export default function TodayTab({
                             onSubStepToggle={handleSubStepToggle}
                             onDeleteSubStep={handleDeleteSubStep}
                             isBreakingDown={breakdownLoadingUuid === task.uuid}
+                            breakdownError={breakdownErrorUuid === task.uuid}
                             onToggleMVD={handleToggleMVD}
                             dragHandleListeners={dragHandleListeners}
                             dragHandleAttributes={dragHandleAttributes}

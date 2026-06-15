@@ -3,7 +3,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { celebrate } from "../utils/celebrations";
 import { getAIKeys, callAI } from "../utils/aiCall";
-import { sanitizeTaskField, CATEGORY_ICONS } from "../utils/taskOps";
+import { sanitizeTaskField, CATEGORY_ICONS, byPriorityThenOrder } from "../utils/taskOps";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor,
@@ -14,17 +14,6 @@ import {
   useSortable, arrayMove
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-
-const PRIORITY_RANK = { P1: 0, P2: 1, P3: 2, P4: 3 };
-
-// Roadmap horizons always show higher-priority tasks first; within the same
-// priority, manual drag order (orderIndex) still applies.
-function byPriorityThenOrder(a, b) {
-  const pa = PRIORITY_RANK[a.priority] ?? PRIORITY_RANK.P4;
-  const pb = PRIORITY_RANK[b.priority] ?? PRIORITY_RANK.P4;
-  if (pa !== pb) return pa - pb;
-  return (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
-}
 
 function SortableRoadmapCard({ id, task, onTaskClick }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -60,9 +49,9 @@ function SortableRoadmapCard({ id, task, onTaskClick }) {
         <span className={`priority-badge ${task.priority?.toLowerCase() || "p3"}`} style={{ flexShrink: 0 }}>
           {task.priority || "P3"}
         </span>
-        {CATEGORY_ICONS[task.category || "Personal"] && (
-          <span className="task-category-icon" title={task.category || "Personal"} aria-label={task.category || "Personal"}>
-            {CATEGORY_ICONS[task.category || "Personal"]}
+        {CATEGORY_ICONS[task.category] && (
+          <span className="task-category-icon" title={task.category} aria-label={task.category}>
+            {CATEGORY_ICONS[task.category]}
           </span>
         )}
         <span className="roadmap-task-title" style={{ flex: 1, minWidth: 0 }}>{task.title}</span>
@@ -484,6 +473,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)" }}>
             {expandedCol === "inbox" ? "📥 Brain Dump Inbox" : currentCol?.label || ""}
+            {expandedCol !== "inbox" && <span className="roadmap-sort-hint">Sorted by priority</span>}
           </span>
           {expandedCol !== "inbox" && (
             <button className="column-add-btn" onClick={() => onOpenAddTask(expandedCol)}
@@ -547,7 +537,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
           return (
             <div key={col.key} className={`roadmap-column${isExpanded ? " expanded" : ""}`}>
               <div className="column-header" onClick={() => setExpandedCol(isExpanded ? "" : col.key)} style={{ cursor: "pointer", userSelect: "none" }}>
-                <span className="column-title">{col.label}</span>
+                <span className="column-title">{col.label}<span className="roadmap-sort-hint">Sorted by priority</span></span>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <span className="column-count">{colTasks.length}</span>
                   <button className="column-add-btn" onClick={(e) => { e.stopPropagation(); onOpenAddTask(col.key); }} title={`Add task directly to ${col.label}`}>+</button>

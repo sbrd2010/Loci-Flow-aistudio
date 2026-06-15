@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { auth, track, setAnalyticsUser } from "./firebase";
 import { computeUserProfile } from "./utils/userProfile";
 import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
-import { isCheckinDue, buildCheckinResumeMessage } from "./utils/coachCheckin";
+import { isCheckinDue, buildCheckinResumeMessage, isDuplicateCheckinResume } from "./utils/coachCheckin";
 import { getFocusWindows } from "./utils/focusWindows";
 import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
@@ -291,7 +291,13 @@ export default function App() {
       const checkin = current?.config?.coachCheckin;
       if (!isCheckinDue(checkin)) return;
       const firstName = (current.config.userName || "").split(" ")[0] || "friend";
-      saveSubPath("chatHistory", [...(current.chatHistory || []), { text: buildCheckinResumeMessage(firstName, checkin.note), isUser: false }]);
+      const resumeText = buildCheckinResumeMessage(firstName, checkin.note);
+      // Two tabs (or a reload near fireAt) can both see this same due coachCheckin
+      // before either tab's "coachCheckin: null" write propagates to the other —
+      // skip appending if the resume message is already the last chat message.
+      if (!isDuplicateCheckinResume(current.chatHistory, resumeText)) {
+        saveSubPath("chatHistory", [...(current.chatHistory || []), { text: resumeText, isUser: false }]);
+      }
       saveConfigPatch({ coachCheckin: null });
       cancelCoachCheckin();
     };
