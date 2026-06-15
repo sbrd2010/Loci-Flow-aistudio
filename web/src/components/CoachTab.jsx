@@ -51,7 +51,9 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const chatBottomRef = useRef(null);
+  const chatInputRef = useRef(null);
   const prevHistoryLenRef = useRef(chatHistory.length);
+  const prevChatLoadingRef = useRef(chatLoading);
 
   useEffect(() => {
     // Only scroll when a new message is added — not on tab switch / initial mount
@@ -60,6 +62,15 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
     }
     prevHistoryLenRef.current = chatHistory.length;
   }, [chatHistory, chatLoading]);
+
+  useEffect(() => {
+    // Restore focus to the chat input once the AI reply finishes, so the
+    // user can keep typing without re-clicking the textarea.
+    if (prevChatLoadingRef.current && !chatLoading) {
+      chatInputRef.current?.focus();
+    }
+    prevChatLoadingRef.current = chatLoading;
+  }, [chatLoading]);
 
   // Resume a "Coach Check-In" the user asked for earlier — on mount (came
   // back to this tab) and every minute while it stays open (sitting here
@@ -595,7 +606,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
           </div>
         ) : (
           <form onSubmit={handleSendChat} className="chat-input-row" style={{ marginTop: "8px" }}>
-            <textarea className="text-input" rows={3} value={chatInput}
+            <textarea ref={chatInputRef} className="text-input" rows={3} value={chatInput}
               onChange={e => setChatInput(e.target.value)}
               onKeyDown={e => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
