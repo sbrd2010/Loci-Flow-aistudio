@@ -3,7 +3,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { celebrate } from "../utils/celebrations";
 import { getAIKeys, callAI } from "../utils/aiCall";
-import { sanitizeTaskField } from "../utils/taskOps";
+import { sanitizeTaskField, CATEGORY_ICONS } from "../utils/taskOps";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor,
@@ -60,6 +60,11 @@ function SortableRoadmapCard({ id, task, onTaskClick }) {
         <span className={`priority-badge ${task.priority?.toLowerCase() || "p3"}`} style={{ flexShrink: 0 }}>
           {task.priority || "P3"}
         </span>
+        {CATEGORY_ICONS[task.category || "Personal"] && (
+          <span className="task-category-icon" title={task.category || "Personal"} aria-label={task.category || "Personal"}>
+            {CATEGORY_ICONS[task.category || "Personal"]}
+          </span>
+        )}
         <span className="roadmap-task-title" style={{ flex: 1, minWidth: 0 }}>{task.title}</span>
       </div>
     </div>

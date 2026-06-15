@@ -36,6 +36,15 @@ export function applyAiRewriteToTask(originalTask, aiSuggestion) {
   };
 }
 
+// Small glanceable icon shown next to a task's priority badge (TaskRow,
+// Roadmap cards), keyed by the categories offered in AddTaskDialog.
+export const CATEGORY_ICONS = {
+  Career: "💼",
+  Work: "🏢",
+  Health: "❤️",
+  Personal: "🏠",
+};
+
 // Valid horizons for the AI Organize flow (includes "office" for Work tasks).
 export const AI_ORGANIZE_VALID_HORIZONS = new Set(["today","week","month","quarter","halfyear","office"]);
 const AI_ORGANIZE_VALID_PRIORITIES = new Set(["P1","P2","P3","P4"]);

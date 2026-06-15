@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { formatReminderLabel } from "../utils/reminders";
+import { CATEGORY_ICONS } from "../utils/taskOps";
 
 const GripIcon = () => (
   <svg width="10" height="15" viewBox="0 0 10 15" fill="currentColor">
@@ -106,7 +107,7 @@ const ROADMAP_HORIZONS = [
 ];
 
 export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, onToggleMVD, dragHandleListeners, dragHandleAttributes }) {
-  const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
+  const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD, category } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const [showRoadmapOptions, setShowRoadmapOptions] = useState(false);
   const menuRef = useRef(null);
@@ -181,6 +182,11 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         )}
         <div className="task-row-top">
           <span className={`priority-badge ${(priority || "P4").toLowerCase()}`}>{priority || "P4"}</span>
+          {CATEGORY_ICONS[category || "Personal"] && (
+            <span className="task-category-icon" title={category || "Personal"} aria-label={category || "Personal"}>
+              {CATEGORY_ICONS[category || "Personal"]}
+            </span>
+          )}
           {isNowFocus && !isCompleted && (
             <span style={{ fontSize: "8px", fontWeight: "800", color: "var(--warning)", background: "rgba(245,158,11,0.12)", padding: "1px 5px", borderRadius: "3px", letterSpacing: "0.04em" }}>FOCUS</span>
           )}
