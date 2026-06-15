@@ -4,12 +4,12 @@ import { SOUND_CATEGORIES, trackUrl, getCategoryKeyForTrack, getTrackTitle, pick
 describe("soundLibrary", () => {
   describe("trackUrl", () => {
     it("resolves a bundled local file against /sounds/", () => {
-      expect(trackUrl("after-school-rain.mp3")).toBe("/sounds/after-school-rain.mp3");
+      expect(trackUrl("gentle-midday-rain.mp3")).toBe("/sounds/gentle-midday-rain.mp3");
     });
 
     it("resolves a CDN variation path against the jsDelivr CDN base", () => {
-      expect(trackUrl("sounds/rain/amber-sidewalks.mp3")).toBe(
-        "https://cdn.jsdelivr.net/gh/sbrd2010/Loci-flow-sounds@main/sounds/rain/amber-sidewalks.mp3"
+      expect(trackUrl("sounds/rain/calming-rain.mp3")).toBe(
+        "https://cdn.jsdelivr.net/gh/sbrd2010/Loci-flow-sounds@main/sounds/rain/calming-rain.mp3"
       );
     });
   });
@@ -21,11 +21,12 @@ describe("soundLibrary", () => {
     });
 
     it("returns the category key for a bundled local track", () => {
-      expect(getCategoryKeyForTrack("after-school-rain.mp3")).toBe("lofi");
+      expect(getCategoryKeyForTrack("gentle-midday-rain.mp3")).toBe("rain");
+      expect(getCategoryKeyForTrack("forest-birds.mp3")).toBe("nature");
       expect(getCategoryKeyForTrack("2-am-debug-loop.mp3")).toBe("lofi");
       expect(getCategoryKeyForTrack("midnight-amber-room.mp3")).toBe("jazz");
       expect(getCategoryKeyForTrack("dust-on-the-morning-keys.mp3")).toBe("piano");
-      expect(getCategoryKeyForTrack("rain-light")).toBe("rain");
+      expect(getCategoryKeyForTrack("2tech-audio-technology.mp3")).toBe("chillhop");
     });
 
     it("returns the category key for a CDN variation", () => {
@@ -40,8 +41,8 @@ describe("soundLibrary", () => {
 
   describe("getTrackTitle", () => {
     it("returns the human-readable title for a known track", () => {
-      expect(getTrackTitle("sounds/rain/amber-sidewalks.mp3")).toBe("Amber Sidewalks");
-      expect(getTrackTitle("after-school-rain.mp3")).toBe("After School Rain");
+      expect(getTrackTitle("sounds/rain/calming-rain.mp3")).toBe("Calming Rain");
+      expect(getTrackTitle("2tech-audio-technology.mp3")).toBe("Technology");
     });
 
     it("returns null for an unknown track", () => {
