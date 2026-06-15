@@ -60,6 +60,7 @@ export default function TodayTab({
   pipOpen, handleOpenPiP, isAddTaskDialogOpen,
   selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
   isSyncingFromCache = false,
+  pendingCheckinSlot, setPendingCheckinSlot,
 }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
   const windows = getFocusWindows(config);
@@ -346,23 +347,42 @@ export default function TodayTab({
     if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin) return;
     const now = new Date();
     const morningRitualPending = shouldShowMorningRitual(now, config);
+    const dueSlots = {
+      morning: shouldShowMorningCommitment(now, windows, config, anchorTodayStr, morningRitualPending),
+      midday: shouldShowMiddayCheck(now, windows, config, anchorTodayStr),
+      reflection: shouldShowReflection(now, windows, config, anchorTodayStr),
+    };
+    // A tapped daily check-in notification names a specific slot — show that one
+    // (if still due) instead of letting normal priority order pick a different card.
     let slot = null;
-    if (shouldShowMorningCommitment(now, windows, config, anchorTodayStr, morningRitualPending)) {
+    if (pendingCheckinSlot && dueSlots[pendingCheckinSlot]) {
+      slot = pendingCheckinSlot;
+    } else if (dueSlots.morning) {
       slot = "morning";
-    } else if (shouldShowMiddayCheck(now, windows, config, anchorTodayStr)) {
+    } else if (dueSlots.midday) {
       slot = "midday";
-    } else if (shouldShowReflection(now, windows, config, anchorTodayStr)) {
+    } else if (dueSlots.reflection) {
       slot = "reflection";
     }
-    if (!slot) return;
+    if (!slot) {
+      // Consumed (or no longer due) — don't let it keep overriding priority order.
+      if (pendingCheckinSlot) setPendingCheckinSlot(null);
+      return;
+    }
     setDailyCheckinSlot(slot);
     if (slot === "morning") setCommitmentSelection([]);
     if (slot === "reflection") { setReflectionMood(null); setReflectionNote(""); }
-    const timer = setTimeout(() => setShowDailyCheckin(true), 2500);
+    // Clear pendingCheckinSlot only once the modal actually opens — clearing it now
+    // would change a dependency of this effect, canceling this timer (via cleanup)
+    // and re-running with the override gone before it ever fires.
+    const timer = setTimeout(() => {
+      setShowDailyCheckin(true);
+      if (pendingCheckinSlot) setPendingCheckinSlot(null);
+    }, 2500);
     return () => clearTimeout(timer);
   }, [
     anchorTodayStr, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, isAddTaskDialogOpen,
-    showAnchorSheet, showDailyCheckin, config.anchorsSnoozeUntil,
+    showAnchorSheet, showDailyCheckin, pendingCheckinSlot, config.anchorsSnoozeUntil,
     config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, config.morningRitualEnabled, visibilityTick,
     config.dailyCommitmentDate, config.dailyCommitmentSkippedDate, config.dailyCommitmentSnoozeUntil, config.dailyCommitmentTaskIds,
     config.dailyMiddayCheckDate, config.dailyMiddayCheckSnoozeUntil, config.dailyReflectionDate,

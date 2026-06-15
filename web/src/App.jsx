@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { auth, track, setAnalyticsUser } from "./firebase";
 import { computeUserProfile } from "./utils/userProfile";
-import { scheduleAllReminders, scheduleCoachCheckin } from "./utils/reminders";
+import { scheduleAllReminders, scheduleCoachCheckin, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
+import { getFocusWindows } from "./utils/focusWindows";
 import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { useSync, CONN } from "./useSync";
@@ -35,6 +36,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("today");
+  const [pendingCheckinSlot, setPendingCheckinSlot] = useState(null);
   const [mindBoxInitialPanel, setMindBoxInitialPanel] = useState(null);
   const [showAddTask, setShowAddTask] = useState(false);
   const [preselectedHorizon, setPreselectedHorizon] = useState("today");
@@ -97,6 +99,72 @@ export default function App() {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
+  }, []);
+
+  // Deep-link to the Coach tab when opened via a "🤖 Coach check-in" notification
+  // (clients.openWindow("/?tab=coach") in sw.js when no app window was open), or to
+  // a specific Daily Coach Check-in slot via "?checkin=<slot>" (daily-checkin).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    let changed = false;
+    if (params.get("tab") === "coach") {
+      setActiveTab("coach");
+      params.delete("tab");
+      changed = true;
+    }
+    const checkinSlot = params.get("checkin");
+    if (checkinSlot) {
+      setActiveTab("today");
+      if (DAILY_CHECKIN_SLOTS.has(checkinSlot)) setPendingCheckinSlot(checkinSlot);
+      params.delete("checkin");
+      params.delete("tab");
+      changed = true;
+    }
+    if (changed) {
+      const rest = params.toString();
+      window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
+    }
+  }, []);
+
+  // Same deep-link when the notification is tapped while an app window is already
+  // open — sw.js posts a message to it instead of opening a new window. Fallback
+  // (non-SW) notifications dispatch an equivalent window event (see reminders.js).
+  useEffect(() => {
+    const routeNotificationClick = (notificationType, slot) => {
+      if (notificationType === "coach-checkin") setActiveTab("coach");
+      else if (notificationType === "daily-checkin") {
+        setActiveTab("today");
+        if (DAILY_CHECKIN_SLOTS.has(slot)) setPendingCheckinSlot(slot);
+      }
+    };
+    const onMessage = (event) => {
+      if (event.data?.type !== "loci-notification-click") return;
+      routeNotificationClick(event.data.notificationType, event.data.slot);
+    };
+    const onFallbackClick = (event) => {
+      routeNotificationClick(event.detail?.type, event.detail?.slot);
+    };
+    if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", onMessage);
+    window.addEventListener("loci-notification-click", onFallbackClick);
+    return () => {
+      if ("serviceWorker" in navigator) navigator.serviceWorker.removeEventListener("message", onMessage);
+      window.removeEventListener("loci-notification-click", onFallbackClick);
+    };
+  }, []);
+
+  // Heartbeat so a backgrounded Loci tab can tell another Loci tab is visible
+  // right now, and skip sending a redundant daily check-in notification (reminders.js).
+  useEffect(() => {
+    const markVisible = () => {
+      if (document.visibilityState === "visible") localStorage.setItem(VISIBLE_HEARTBEAT_KEY, String(Date.now()));
+    };
+    markVisible();
+    document.addEventListener("visibilitychange", markVisible);
+    const id = setInterval(markVisible, 10_000);
+    return () => {
+      document.removeEventListener("visibilitychange", markVisible);
+      clearInterval(id);
+    };
   }, []);
 
   useEffect(() => {
@@ -260,6 +328,22 @@ export default function App() {
   // Focus Sounds audio also lives here so ambient sound keeps playing across
   // tab switches and after exiting the Deep Focus overlay.
   const focusAudio = useFocusAudio(focusTimer.isTimerRunning, payload?.config || {}, saveSubPath);
+
+  // Poll for due daily check-ins (Morning Commitment / Midday / Reflection) and
+  // fire a push notification if the app is backgrounded/closed when one comes due.
+  // Suppressed during an active focus session (mirrors TodayTab's auto-show guard)
+  // so a backgrounded Deep Focus session isn't interrupted by these notifications.
+  useEffect(() => {
+    // syncWarning === "offline" means RTDB hasn't confirmed within 15s and we're
+    // still on stale cached config (mirrors CoachTab's cloudSyncUnconfirmed check).
+    if (!payload?.config || isSyncingFromCache || syncWarning === "offline") return;
+    if (!demoMode && payload.config.isOnboardingCompleted === false) return;
+    if (focusTimer.isFocusMode || focusTimer.sessionCompletePending) return;
+    const check = () => checkDailyCheckinNotifications(payload.config, getFocusWindows(payload.config));
+    check();
+    const id = setInterval(check, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [payload?.config, isSyncingFromCache, syncWarning, demoMode, focusTimer.isFocusMode, focusTimer.sessionCompletePending]);
 
   // Auto-start the timer when arriving from Day Map's "Start Focus" action
   useEffect(() => {
@@ -579,6 +663,8 @@ export default function App() {
             onOpenMindBox={openMindBox}
             onOpenCoach={() => setActiveTab("coach")}
             isAddTaskDialogOpen={showAddTask}
+            pendingCheckinSlot={pendingCheckinSlot}
+            setPendingCheckinSlot={setPendingCheckinSlot}
             {...focusTimer}
             {...focusAudio}
           />
