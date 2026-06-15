@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { BINAURAL_TRACK_ID, createBinauralBeatNode, migrateTrackId } from "../utils/binauralBeat";
-import { SOUND_CATEGORIES, trackUrl, getCategoryKeyForTrack, pickRandomVariation } from "../utils/soundLibrary";
-import { RAIN_TRACK_IDS, createRainAmbienceNode } from "../utils/rainAmbience";
+import { BINAURAL_TRACK_ID, createBinauralBeatNode, migrateTrackId as migrateBinauralTrackId } from "../utils/binauralBeat";
+import { SOUND_CATEGORIES, trackUrl, getCategoryKeyForTrack, pickRandomVariation, migrateTrackId as migrateSoundLibraryTrackId } from "../utils/soundLibrary";
+
+function migrateTrackId(trackId) {
+  return migrateSoundLibraryTrackId(migrateBinauralTrackId(trackId));
+}
 
 export function useFocusAudio(isRunning, config = {}, saveSubPath) {
   const [selectedTrack, setSelectedTrack] = useState(migrateTrackId(config.focusSoundTrack) || null);
@@ -48,17 +51,6 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
         if (isRunning) {
           node.play().catch(err => {
             console.warn("Binaural beat play failed or blocked by browser:", err);
-          });
-        }
-      }
-    } else if (RAIN_TRACK_IDS.has(selectedTrack)) {
-      const node = createRainAmbienceNode(selectedTrack, volume);
-      if (node) {
-        audioRef.current = node;
-        setTrackLoadState("ready");
-        if (isRunning) {
-          node.play().catch(err => {
-            console.warn("Rain play failed or blocked by browser:", err);
           });
         }
       }
