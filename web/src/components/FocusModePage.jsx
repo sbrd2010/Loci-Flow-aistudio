@@ -321,10 +321,12 @@ export default function FocusModePage({
           <div className="focus-sounds-tiles">
             {[
               { id: "none", title: "None", icon: "🚫", desc: "Silent focus" },
-              { id: "rain", title: SOUND_CATEGORIES.rain.title, icon: SOUND_CATEGORIES.rain.icon, desc: "Pure rain ambience" },
+              { id: "rain", title: SOUND_CATEGORIES.rain.title, icon: SOUND_CATEGORIES.rain.icon, desc: "Real rain tracks" },
+              { id: "nature", title: SOUND_CATEGORIES.nature.title, icon: SOUND_CATEGORIES.nature.icon, desc: "Forest & river" },
               { id: "lofi", title: SOUND_CATEGORIES.lofi.title, icon: SOUND_CATEGORIES.lofi.icon, desc: "Downtempo beats" },
               { id: "jazz", title: SOUND_CATEGORIES.jazz.title, icon: SOUND_CATEGORIES.jazz.icon, desc: "Smooth jazz" },
-              { id: "piano", title: SOUND_CATEGORIES.piano.title, icon: SOUND_CATEGORIES.piano.icon, desc: "Cozy chill beats" },
+              { id: "piano", title: SOUND_CATEGORIES.piano.title, icon: SOUND_CATEGORIES.piano.icon, desc: "Cozy piano" },
+              { id: "chillhop", title: SOUND_CATEGORIES.chillhop.title, icon: SOUND_CATEGORIES.chillhop.icon, desc: "Melodic beats" },
               { id: BINAURAL_TRACK_ID, title: "Binaural 40Hz", icon: "🧠", desc: "Focus tone (use headphones)" }
             ].map(track => {
               const isActive = activeSoundKey === track.id;

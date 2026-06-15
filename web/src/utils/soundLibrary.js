@@ -13,9 +13,20 @@ export const SOUND_CATEGORIES = {
     title: "Relaxing Rain",
     icon: "🌧️",
     variations: [
-      { file: "rain-light", title: "Light Rain" },
-      { file: "rain-steady", title: "Steady Rain" },
-      { file: "rain-heavy", title: "Heavy Rain" },
+      { file: "gentle-midday-rain.mp3", title: "Gentle Midday Rain" },
+      { file: "sounds/rain/calming-rain.mp3", title: "Calming Rain" },
+      { file: "sounds/rain/gentle-rain.mp3", title: "Gentle Rain" },
+      { file: "sounds/rain/light-rain-loop.mp3", title: "Light Rain Loop" },
+      { file: "sounds/rain/rain-in-the-jungle-and-birds.mp3", title: "Rain in the Jungle and Birds" },
+    ]
+  },
+  nature: {
+    title: "Nature Sounds",
+    icon: "🌲",
+    variations: [
+      { file: "forest-birds.mp3", title: "Forest Birds" },
+      { file: "sounds/nature/river-atmosphere.mp3", title: "River Atmosphere" },
+      { file: "sounds/nature/river-wildlife-environment.mp3", title: "River Wildlife Environment" },
     ]
   },
   lofi: {
@@ -30,14 +41,6 @@ export const SOUND_CATEGORIES = {
       { file: "sounds/lofi/graphite-mornings.mp3", title: "Graphite Mornings" },
       { file: "sounds/lofi/margin-notes-at-dusk.mp3", title: "Margin Notes at Dusk" },
       { file: "sounds/lofi/morning-pages.mp3", title: "Morning Pages" },
-      { file: "after-school-rain.mp3", title: "After School Rain" },
-      { file: "sounds/rain/amber-sidewalks.mp3", title: "Amber Sidewalks" },
-      { file: "sounds/rain/sidewalk-puddles.mp3", title: "Sidewalk Puddles" },
-      { file: "sounds/rain/blossoms-on-the-pavement.mp3", title: "Blossoms on the Pavement" },
-      { file: "sounds/rain/petals-after-rain.mp3", title: "Petals After Rain" },
-      { file: "sounds/rain/amber-windowpane.mp3", title: "Amber Windowpane" },
-      { file: "sounds/rain/storm-over-side-streets.mp3", title: "Storm Over Side Streets" },
-      { file: "sounds/rain/bloom-between-showers.mp3", title: "Bloom Between Showers" },
     ]
   },
   jazz: {
@@ -55,8 +58,8 @@ export const SOUND_CATEGORIES = {
     ]
   },
   piano: {
-    title: "Cozy Chillhop",
-    icon: "🌇",
+    title: "Cozy Piano",
+    icon: "🎹",
     variations: [
       { file: "dust-on-the-morning-keys.mp3", title: "Dust on the Morning Keys" },
       { file: "sounds/piano/dusk-between-stoops.mp3", title: "Dusk Between Stoops" },
@@ -66,6 +69,27 @@ export const SOUND_CATEGORIES = {
       { file: "sounds/piano/glow-on-the-overpass.mp3", title: "Glow on the Overpass" },
       { file: "sounds/piano/sidewalk-slow-jam.mp3", title: "Sidewalk Slow Jam" },
       { file: "sounds/piano/sunset-offbeat.mp3", title: "Sunset Offbeat" },
+    ]
+  },
+  chillhop: {
+    title: "Chillhop",
+    icon: "🌇",
+    variations: [
+      { file: "2tech-audio-technology.mp3", title: "Technology" },
+      { file: "sounds/chillhop/aerohead-leaving.mp3", title: "Leaving" },
+      { file: "sounds/chillhop/nettson-dont-leave.mp3", title: "Don't Leave" },
+      { file: "sounds/chillhop/oraeth-reflections.mp3", title: "Reflections" },
+      { file: "sounds/chillhop/oraeth-still-falling.mp3", title: "Still Falling" },
+      { file: "sounds/chillhop/neutrin05-rain-and-tears.mp3", title: "Rain and Tears" },
+      { file: "sounds/chillhop/sappheiros-aura.mp3", title: "Aura" },
+      { file: "sounds/chillhop/sappheiros-dawn.mp3", title: "Dawn" },
+      { file: "sounds/chillhop/sappheiros-escape.mp3", title: "Escape" },
+      { file: "sounds/chillhop/sappheiros-falling.mp3", title: "Falling" },
+      { file: "sounds/chillhop/sappheiros-memories.mp3", title: "Memories" },
+      { file: "sounds/chillhop/sappheiros-passion.mp3", title: "Passion" },
+      { file: "sounds/chillhop/sappheiros-descent.mp3", title: "Descent" },
+      { file: "sounds/chillhop/sappheiros-embrace.mp3", title: "Embrace" },
+      { file: "sounds/chillhop/sappheiros-stay.mp3", title: "Stay" },
     ]
   }
 };
@@ -93,4 +117,25 @@ export function getTrackTitle(trackId) {
 export function pickRandomVariation(categoryKey, excludeFile = null) {
   const pool = SOUND_CATEGORIES[categoryKey].variations.filter(v => v.file !== excludeFile);
   return pool[Math.floor(Math.random() * pool.length)].file;
+}
+
+export function migrateTrackId(trackId) {
+  if (!trackId) return trackId;
+  const legacyRainTracks = new Set([
+    "rain-light",
+    "rain-steady",
+    "rain-heavy",
+    "after-school-rain.mp3",
+    "sounds/rain/amber-sidewalks.mp3",
+    "sounds/rain/sidewalk-puddles.mp3",
+    "sounds/rain/blossoms-on-the-pavement.mp3",
+    "sounds/rain/petals-after-rain.mp3",
+    "sounds/rain/amber-windowpane.mp3",
+    "sounds/rain/storm-over-side-streets.mp3",
+    "sounds/rain/bloom-between-showers.mp3"
+  ]);
+  if (legacyRainTracks.has(trackId)) {
+    return "gentle-midday-rain.mp3";
+  }
+  return trackId;
 }
