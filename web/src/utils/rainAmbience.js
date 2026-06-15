@@ -108,16 +108,8 @@ export function createRainAmbienceNode(trackId, initialVolume = 0.5) {
     },
     dispose() {
       this.paused = true;
-      try {
-        source.stop();
-      } catch (e) {
-        // Source may not be started or already stopped
-      }
-      try {
-        lfo.stop();
-      } catch (e) {
-        // Oscillator may not be started or already stopped
-      }
+      source.stop();
+      lfo.stop();
       return ctx.close();
     },
     get volume() {
