@@ -607,9 +607,9 @@ describe("buildActionReplyText", () => {
     expect(buildActionReplyText("", results, "How's it going?")).toBe("");
   });
 
-  it("appends a COMPLETE_TASK clarification when the message is action-like but the tag's title didn't match", () => {
+  it("drops the model's narration and asks which task when the message is action-like but the tag's title didn't match", () => {
     const results = [{ type: "COMPLETE_TASK", title: "Email client", matched: false, blocked: true }];
-    expect(buildActionReplyText("Nice work!", results, "I finished the report")).toBe(`Nice work! Which task should I mark complete?`);
+    expect(buildActionReplyText("Nice work!", results, "I finished the report")).toBe(`Which task should I mark complete?`);
   });
 
   it("uses the SET_NOW_FOCUS/START_FOCUS clarification when the user asks to focus but the tag's title doesn't match", () => {
@@ -624,7 +624,7 @@ describe("buildActionReplyText", () => {
 
   it("uses the PARK_TASK clarification when the user asks to park something but the tag's title doesn't match", () => {
     const results = [{ type: "PARK_TASK", title: "Write report", matched: false, blocked: true }];
-    expect(buildActionReplyText("Sure thing.", results, "Let's park that for now")).toBe(`Sure thing. Which task should I park?`);
+    expect(buildActionReplyText("Sure thing.", results, "Let's park that for now")).toBe(`Which task should I park?`);
   });
 
   it("dedupes identical clarification notes from multiple blocked actions of related types", () => {
@@ -642,6 +642,23 @@ describe("buildActionReplyText", () => {
     ];
     expect(buildActionReplyText("Some narration the model wrote.", results, "I finished the report, and park walk the dog")).toBe(
       `Marked "Write report" complete — +100 XP! I couldn't find "Walk the dog" in your task list — could you double-check the name?`
+    );
+  });
+
+  it("drops contradictory narration when the only action wasn't found, leaving just the note", () => {
+    const results = [{ type: "SET_NOW_FOCUS", title: "Report", matched: false }];
+    expect(buildActionReplyText("Switching your focus to the report now!", results, "Let's focus on the report")).toBe(
+      `I couldn't find "Report" in your task list — could you double-check the name?`
+    );
+  });
+
+  it("drops contradictory narration when multiple actions aren't found, leaving the combined note", () => {
+    const results = [
+      { type: "COMPLETE_TASK", title: "Write report", matched: false },
+      { type: "PARK_TASK", title: "Walk the dog", matched: false },
+    ];
+    expect(buildActionReplyText("Done and done!", results, "I finished the report and park walk the dog")).toBe(
+      `I couldn't find "Write report" or "Walk the dog" in your task list — could you double-check the name?`
     );
   });
 
