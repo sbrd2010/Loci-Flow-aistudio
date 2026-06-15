@@ -118,3 +118,24 @@ export function pickRandomVariation(categoryKey, excludeFile = null) {
   const pool = SOUND_CATEGORIES[categoryKey].variations.filter(v => v.file !== excludeFile);
   return pool[Math.floor(Math.random() * pool.length)].file;
 }
+
+export function migrateTrackId(trackId) {
+  if (!trackId) return trackId;
+  const legacyRainTracks = new Set([
+    "rain-light",
+    "rain-steady",
+    "rain-heavy",
+    "after-school-rain.mp3",
+    "sounds/rain/amber-sidewalks.mp3",
+    "sounds/rain/sidewalk-puddles.mp3",
+    "sounds/rain/blossoms-on-the-pavement.mp3",
+    "sounds/rain/petals-after-rain.mp3",
+    "sounds/rain/amber-windowpane.mp3",
+    "sounds/rain/storm-over-side-streets.mp3",
+    "sounds/rain/bloom-between-showers.mp3"
+  ]);
+  if (legacyRainTracks.has(trackId)) {
+    return "gentle-midday-rain.mp3";
+  }
+  return trackId;
+}
