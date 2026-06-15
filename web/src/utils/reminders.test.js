@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { getFocusWindows } from "./focusWindows";
-import { getDueDailyCheckins, checkDailyCheckinNotifications } from "./reminders";
+import { getDueDailyCheckins, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY } from "./reminders";
 
 const dt = (h, mi = 0) => new Date(2024, 5, 15, h, mi);
 const TODAY = "2024-06-15";
@@ -95,5 +95,32 @@ describe("checkDailyCheckinNotifications", () => {
 
     const notified = JSON.parse(store["loci_notified_daily_checkins"] || "[]");
     expect(notified.some((k) => k.startsWith("morning-"))).toBe(false);
+  });
+
+  it("does not notify when another Loci tab heartbeated as visible recently", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(dt(9, 0));
+
+    const showNotification = vi.fn(() => Promise.resolve());
+    const store = stubEnv({ showNotification });
+    store[VISIBLE_HEARTBEAT_KEY] = String(Date.now());
+
+    await checkDailyCheckinNotifications(config, windows);
+
+    expect(showNotification).not.toHaveBeenCalled();
+    expect(store["loci_notified_daily_checkins"]).toBeUndefined();
+  });
+
+  it("notifies when the other tab's visibility heartbeat is stale", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(dt(9, 0));
+
+    const showNotification = vi.fn(() => Promise.resolve());
+    const store = stubEnv({ showNotification });
+    store[VISIBLE_HEARTBEAT_KEY] = String(Date.now() - 20_000); // older than the 15s staleness window
+
+    await checkDailyCheckinNotifications(config, windows);
+
+    expect(showNotification).toHaveBeenCalledTimes(1);
   });
 });
