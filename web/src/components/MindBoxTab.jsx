@@ -141,6 +141,9 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [organizeLoading, setOrganizeLoading] = useState(false);
   const [organizeResults, setOrganizeResults] = useState([]);
+  // Tracked separately from organizeResults — updateOrganizeResult/moveOrganizeResult
+  // replace that array via map()/spread, which would drop an expando property.
+  const [organizeDroppedSourceIds, setOrganizeDroppedSourceIds] = useState(new Set());
   const [organizeSelected, setOrganizeSelected] = useState(new Set());
   const [organizeError, setOrganizeError] = useState("");
   const [organizeExpandedIndex, setOrganizeExpandedIndex] = useState(null);
@@ -287,6 +290,7 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
     if (!brainDumpItems.length) return;
     setOrganizeLoading(true);
     setOrganizeResults([]);
+    setOrganizeDroppedSourceIds(new Set());
     setOrganizeError("");
     setOrganizeSelected(new Set());
     setToolPanel("organize");
@@ -333,6 +337,7 @@ Return ONLY a JSON array, no markdown:
       if (!Array.isArray(parsed)) throw new Error("invalid");
       const valid = normalizeAiOrganizeSuggestions(parsed, brainDumpItems);
       setOrganizeResults(valid);
+      setOrganizeDroppedSourceIds(valid.droppedSourceIds || new Set());
       setOrganizeSelected(new Set(valid.map((_, i) => i)));
     } catch (_) {
       setOrganizeError("Couldn't organize — try again, or add tasks manually.");
@@ -398,10 +403,11 @@ Return ONLY a JSON array, no markdown:
     });
     // Pass all suggestions (not just accepted) so a split entry's source is only
     // cleared once every suggestion generated from it has been accepted.
-    const clearedDump = buildClearedBrainDump(payload.brainDump || [], toAdd, organizeResults, organizeResults.droppedSourceIds);
+    const clearedDump = buildClearedBrainDump(payload.brainDump || [], toAdd, organizeResults, organizeDroppedSourceIds);
     savePayload({ ...payload, tasks: [...(payload.tasks || []), ...newTasks], brainDump: clearedDump });
     setToolPanel(null);
     setOrganizeResults([]);
+    setOrganizeDroppedSourceIds(new Set());
     setOrganizeSelected(new Set());
   };
 
@@ -540,7 +546,7 @@ Return ONLY a JSON array, no markdown:
       {toolPanel === "organize" && (
         <>
           <div className="mindbox-subview-header">
-            <button className="mindbox-back-btn" onClick={() => { setToolPanel(null); setOrganizeResults([]); setOrganizeError(""); }}>← Back</button>
+            <button className="mindbox-back-btn" onClick={() => { setToolPanel(null); setOrganizeResults([]); setOrganizeDroppedSourceIds(new Set()); setOrganizeError(""); }}>← Back</button>
             <h2 className="mindbox-subview-title">Organize Dump</h2>
           </div>
           {organizeLoading && (

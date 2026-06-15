@@ -74,17 +74,22 @@ function isValidAiSuggestion(t) {
 // subSteps, defaulting to [] when absent or malformed.
 //
 // The returned array also carries a `droppedSourceIds` Set: sourceIds for which
-// the per-source/overall caps below dropped at least one otherwise-valid
-// suggestion. buildClearedBrainDump uses this so a source isn't treated as
+// the AI generated more suggestions than ended up in the result — either because
+// the per-source/overall caps below dropped an otherwise-valid suggestion, or
+// because a sibling suggestion sharing the sourceId was rejected for invalid
+// horizon/priority. buildClearedBrainDump uses this so a source isn't treated as
 // "fully represented" when some of its suggestions never made it into the result.
 export function normalizeAiOrganizeSuggestions(rawSuggestions, brainDumpItems) {
   if (!Array.isArray(rawSuggestions)) return [];
   const validIds = new Set((brainDumpItems || []).map((d) => d.id).filter(Boolean));
   const now = Date.now();
 
+  // Counted by recognized sourceId alone (not isValidAiSuggestion) — a sibling
+  // suggestion rejected for invalid horizon/priority still means this source
+  // wasn't fully represented in the result, so it must not be cleared later.
   const rawCountBySource = new Map();
   for (const t of rawSuggestions) {
-    if (!isValidAiSuggestion(t) || !validIds.has(t.sourceId)) continue;
+    if (!t || !validIds.has(t.sourceId)) continue;
     rawCountBySource.set(t.sourceId, (rawCountBySource.get(t.sourceId) || 0) + 1);
   }
 

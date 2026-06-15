@@ -359,6 +359,16 @@ describe("normalizeAiOrganizeSuggestions", () => {
     expect(result.length).toBeLessThanOrEqual(25);
   });
 
+  it("droppedSourceIds includes a source where a sibling suggestion was rejected for invalid horizon/priority", () => {
+    const raw = [
+      { sourceId: "d1", title: "Update CV", horizonLevel: "week", priority: "P1" },
+      { sourceId: "d1", title: "Bad split", horizonLevel: "someday", priority: "P1" }, // rejected: invalid horizon
+    ];
+    const result = normalizeAiOrganizeSuggestions(raw, DUMP_ITEMS);
+    expect(result).toHaveLength(1);
+    expect(result.droppedSourceIds.has("d1")).toBe(true);
+  });
+
   it("droppedSourceIds is empty when no caps drop any suggestion", () => {
     const raw = [
       { sourceId: "d1", title: "Buy groceries", horizonLevel: "today", priority: "P3" },
