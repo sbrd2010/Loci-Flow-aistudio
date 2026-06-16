@@ -256,24 +256,30 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
     return `${Math.floor(mins / 60)}h ago`;
   };
 
-  const groqPersonalKey   = localStorage.getItem("loci_groq_key")   || "";
-  const groqBuiltinKey    = import.meta.env.VITE_GROQ_KEY           || "";
-  const groqKey           = groqPersonalKey || groqBuiltinKey;
-  const nvidiaPersonalKey = localStorage.getItem("loci_nvidia_key") || "";
-  const personalKey       = localStorage.getItem("loci_gemini_key") || "";
-  const defaultKey        = import.meta.env.VITE_GEMINI_KEY         || "";
-  const hasAnyKey         = !!(groqKey || nvidiaPersonalKey || personalKey || defaultKey);
-  const keyStatusLabel    = groqPersonalKey
-    ? "✓ Groq AI active — personal key"
-    : groqBuiltinKey
-    ? "✓ Groq AI active — built-in key (all users)"
-    : nvidiaPersonalKey
-    ? "✓ NVIDIA AI active (personal key)"
-    : personalKey
-    ? "✓ Gemini AI active (personal key)"
-    : defaultKey
-    ? "✓ Gemini AI active (default key)"
-    : "✗ No AI key — add Groq, NVIDIA or Gemini below";
+  const groqPersonalKey    = localStorage.getItem("loci_groq_key")   || "";
+  const groqBuiltinKey     = import.meta.env.VITE_GROQ_KEY           || "";
+  const nvidiaPersonalKey  = localStorage.getItem("loci_nvidia_key") || "";
+  const nvidiaBuiltinKey   = import.meta.env.VITE_NVIDIA_KEY         || "";
+  const geminiPersonalKey  = localStorage.getItem("loci_gemini_key") || "";
+  const geminiBuiltinKey   = import.meta.env.VITE_GEMINI_KEY         || "";
+  const effectiveGroqKey   = groqPersonalKey  || groqBuiltinKey;
+  const effectiveNvidiaKey = nvidiaPersonalKey || nvidiaBuiltinKey;
+  const effectiveGeminiKey = geminiPersonalKey || geminiBuiltinKey;
+  const hasAnyKey          = !!(effectiveGroqKey || effectiveNvidiaKey || effectiveGeminiKey);
+
+  const prefOrders = {
+    auto:   ["groq", "nvidia", "gemini"],
+    groq:   ["groq", "nvidia", "gemini"],
+    nvidia: ["nvidia", "groq", "gemini"],
+    gemini: ["gemini", "groq", "nvidia"],
+  };
+  const effectiveKeyMap  = { groq: effectiveGroqKey, nvidia: effectiveNvidiaKey, gemini: effectiveGeminiKey };
+  const personalKeyMap   = { groq: groqPersonalKey, nvidia: nvidiaPersonalKey, gemini: geminiPersonalKey };
+  const providerNameMap  = { groq: "Groq", nvidia: "NVIDIA", gemini: "Gemini" };
+  const activeProvider   = (prefOrders[providerPref] || prefOrders.auto).find(p => effectiveKeyMap[p]) || null;
+  const keyStatusLabel   = activeProvider
+    ? `✓ ${providerNameMap[activeProvider]} active — ${personalKeyMap[activeProvider] ? "your key" : "built-in"}`
+    : "✗ No AI key — add one below";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -759,107 +765,99 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
 
         {aiKeysOpen && (
           <>
-            <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "12px" }}>
+            <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "14px" }}>
               Keys are stored only in this browser — never sent to Loci servers.
             </p>
 
             {/* Provider preference */}
             <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid var(--border)" }}>
-              <span style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "4px", display: "block" }}>
-                AI Provider Preference
+              <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--text-secondary)", marginBottom: "8px", display: "block", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                AI Provider
               </span>
-              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
-                Choose which AI Loci should try first. If that provider fails, Loci can fall back to the others if keys are available.
-              </p>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 {[
-                  { key: "auto",   label: "Auto (recommended)", desc: "Tries Groq → NVIDIA → Gemini" },
-                  { key: "groq",   label: "Groq GPT-OSS-120B",  desc: "Groq first, then NVIDIA, then Gemini" },
-                  { key: "nvidia", label: "NVIDIA Nemotron Super", desc: "NVIDIA first, then Groq, then Gemini" },
-                  { key: "gemini", label: "Gemini",              desc: "Gemini first, then Groq, then NVIDIA" },
-                ].map(opt => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => handleProviderPref(opt.key)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: "10px",
-                      padding: "8px 12px", borderRadius: "var(--radius-sm)", textAlign: "left",
-                      background: providerPref === opt.key ? "var(--accent)" : "var(--bg-secondary)",
-                      color: providerPref === opt.key ? "var(--btn-text, #fff)" : "var(--text-primary)",
-                      border: providerPref === opt.key ? "2px solid var(--accent)" : "1.5px solid var(--border)",
-                      cursor: "pointer", fontSize: "12.5px", fontWeight: "700"
-                    }}
-                  >
-                    <span style={{ flex: 1 }}>{opt.label}</span>
-                    <span style={{ fontSize: "11px", fontWeight: "400", opacity: providerPref === opt.key ? 0.85 : 0.6 }}>{opt.desc}</span>
-                  </button>
-                ))}
+                  { key: "auto",   label: "Auto",   chain: "Groq → NVIDIA → Gemini" },
+                  { key: "groq",   label: "Groq",   chain: "Groq → NVIDIA → Gemini" },
+                  { key: "nvidia", label: "NVIDIA", chain: "NVIDIA → Groq → Gemini" },
+                  { key: "gemini", label: "Gemini", chain: "Gemini → Groq → NVIDIA" },
+                ].map(opt => {
+                  const isSelected = providerPref === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => handleProviderPref(opt.key)}
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "10px 14px", borderRadius: "var(--radius-sm)", textAlign: "left",
+                        background: isSelected ? "var(--accent)" : "var(--bg-secondary)",
+                        color: isSelected ? "var(--btn-text, #fff)" : "var(--text-primary)",
+                        border: isSelected ? "2px solid var(--accent)" : "1.5px solid var(--border)",
+                        cursor: "pointer"
+                      }}
+                    >
+                      <div>
+                        <span style={{ fontSize: "13px", fontWeight: "700" }}>
+                          {opt.label}{opt.key === "auto" && <span style={{ fontSize: "10px", fontWeight: "600", opacity: 0.75, marginLeft: "6px" }}>recommended</span>}
+                        </span>
+                        {isSelected && (
+                          <div style={{ fontSize: "11px", opacity: 0.8, marginTop: "2px", fontWeight: "400" }}>{opt.chain}</div>
+                        )}
+                      </div>
+                      {isSelected && <span style={{ fontSize: "14px", fontWeight: "800", flexShrink: 0, marginLeft: "12px" }}>✓</span>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             {/* Groq — recommended */}
-            <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid var(--border)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+            <div style={{ marginBottom: "14px", paddingBottom: "14px", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                 <span style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-primary)" }}>
-                  🚀 Groq <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--success)", background: "rgba(52,211,153,0.12)", padding: "2px 6px", borderRadius: "4px", marginLeft: "4px" }}>RECOMMENDED</span>
+                  🚀 Groq
+                  <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--success)", background: "rgba(52,211,153,0.12)", padding: "2px 6px", borderRadius: "4px", marginLeft: "6px" }}>RECOMMENDED</span>
                 </span>
+                <a href="https://console.groq.com" target="_blank" rel="noreferrer" style={{ fontSize: "11.5px", color: "var(--accent)", fontWeight: "600" }}>Get key ↗</a>
               </div>
-              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
-                Sub-200ms responses, 14,400 free requests/day. Get a key at{" "}
-                <a href="https://console.groq.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontWeight: "600" }}>
-                  console.groq.com
-                </a> (free, no card needed).
-              </p>
               <form onSubmit={handleSaveGroq} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <input className="text-input" type="password"
                   value={groqInput} onChange={e => setGroqInput(e.target.value)}
-                  placeholder="gsk_... (from Groq Console)" />
+                  placeholder="gsk_..." />
                 <button className="btn" type="submit" style={{ width: "100%" }}>
-                  {savedGroq ? "✓ Groq key saved" : "Save Groq Key"}
+                  {savedGroq ? "✓ Saved" : "Save Groq Key"}
                 </button>
               </form>
             </div>
 
-            {/* NVIDIA Nemotron Super */}
-            <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid var(--border)" }}>
-              <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>
-                NVIDIA Nemotron Super
-              </span>
-              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
-                NVIDIA Nemotron Super — stronger fallback/deep coach option. Used when selected or when earlier providers fail.{" "}
-                Get a key at{" "}
-                <a href="https://build.nvidia.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontWeight: "600" }}>
-                  build.nvidia.com
-                </a>.
-              </p>
+            {/* NVIDIA */}
+            <div style={{ marginBottom: "14px", paddingBottom: "14px", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>NVIDIA Nemotron</span>
+                <a href="https://build.nvidia.com" target="_blank" rel="noreferrer" style={{ fontSize: "11.5px", color: "var(--accent)", fontWeight: "600" }}>Get key ↗</a>
+              </div>
               <form onSubmit={handleSaveNvidia} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <input className="text-input" type="password"
                   value={nvidiaInput} onChange={e => setNvidiaInput(e.target.value)}
-                  placeholder="nvapi-... (from NVIDIA Build)" />
+                  placeholder="nvapi-..." />
                 <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
-                  {savedNvidia ? "✓ NVIDIA key saved" : "Save NVIDIA Key"}
+                  {savedNvidia ? "✓ Saved" : "Save NVIDIA Key"}
                 </button>
               </form>
             </div>
 
             {/* Gemini */}
             <div>
-              <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>
-                Gemini
-              </span>
-              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
-                Free key from{" "}
-                <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontWeight: "600" }}>
-                  aistudio.google.com
-                </a> — used when selected or as a fallback.
-              </p>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>Gemini</span>
+                <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" style={{ fontSize: "11.5px", color: "var(--accent)", fontWeight: "600" }}>Get key ↗</a>
+              </div>
               <form onSubmit={handleSaveKey} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <input className="text-input" type="password"
                   value={keyInput} onChange={e => setKeyInput(e.target.value)}
-                  placeholder="AIzaSy... (from AI Studio)" />
+                  placeholder="AIzaSy..." />
                 <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
-                  {savedKey ? "✓ Gemini key saved" : "Save Gemini Key"}
+                  {savedKey ? "✓ Saved" : "Save Gemini Key"}
                 </button>
               </form>
             </div>
