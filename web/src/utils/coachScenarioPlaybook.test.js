@@ -138,7 +138,8 @@ describe("coach scenario playbook structure", () => {
 
     it("every crisis scenario has Should suggest task action: No", () => {
       crisisScenarios.forEach((scenario) => {
-        expect(scenario["Should suggest task action"]).toBe("No.");
+        const normalizedTaskAction = scenario["Should suggest task action"].replace(/\.$/, "");
+        expect(normalizedTaskAction).toBe("No");
       });
     });
 
