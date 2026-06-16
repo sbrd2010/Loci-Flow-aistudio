@@ -188,6 +188,25 @@ describe("AI call resilience", () => {
     expect(body.max_tokens).toBe(4000);
   });
 
+  it("groq pref falls back through NVIDIA then Gemini when Groq fails", async () => {
+    storage.setItem("loci_provider_pref", "groq");
+    fetch
+      .mockResolvedValueOnce(providerError(429))   // Groq fails
+      .mockResolvedValueOnce(providerError(503))   // NVIDIA fails
+      .mockResolvedValueOnce(geminiOk("Gemini emergency."));
+
+    const reply = await callAI(baseRequest({
+      nvidiaKey: "test-nvidia-key",
+      geminiKey: "test-gemini-key",
+    }));
+
+    expect(reply).toBe("Gemini emergency.");
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(fetch.mock.calls[1][0]).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
+    expect(String(fetch.mock.calls[2][0])).toContain("generativelanguage.googleapis.com");
+  });
+
   it("falls back through NVIDIA to Gemini when Groq fails in auto mode", async () => {
     fetch
       .mockResolvedValueOnce(providerError(429))   // Groq fails

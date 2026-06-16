@@ -108,7 +108,7 @@ function buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey) 
   };
   const orders = {
     auto:   ["groq", "nvidia", "gemini"],
-    groq:   ["groq", "gemini", "nvidia"],
+    groq:   ["groq", "nvidia", "gemini"],
     nvidia: ["nvidia", "groq", "gemini"],
     gemini: ["gemini", "groq", "nvidia"],
   };
