@@ -496,7 +496,8 @@ ${buildReasoningInstruction(firstName)}`;
     if (text.length > 300)           chips.push({ label: "Be more direct",  prompt: "Give me the key point in one sentence." });
     if (/[-•]|\d+\.\s/.test(text))  chips.push({ label: "Make it smaller", prompt: "Can you make that shorter?" });
     if (/step|\d+\.\s/i.test(text)) chips.push({ label: "3 concrete steps",prompt: "Turn that into 3 concrete steps." });
-    if (/\bor\b|\d+\.\s/i.test(text)) chips.push({ label: "Help me choose",prompt: "Help me choose one option." });
+    if (/\d+\.\s/.test(text) || /\boptions?\b|\bchoose\b|\beither\b/i.test(text) || (text.match(/\bor\b/gi) || []).length >= 2)
+      chips.push({ label: "Help me choose", prompt: "Help me choose one option." });
     chips.push({ label: "10-min version", prompt: "What’s the 10-minute version of this?" });
     return chips.slice(0, 3);
   };
@@ -700,7 +701,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
               {!m.isUser && m.actions && m.actions.length > 0 && (
                 <div className="coach-action-chips">
                   {m.actions.map((a, i) => {
-                    const icons  = { COMPLETE_TASK: "✅", SET_NOW_FOCUS: "🎯", START_FOCUS: "🟢", ADD_TASK: "＋", PARK_TASK: "🔵" };
+                    const icons  = { COMPLETE_TASK: "✅", SET_NOW_FOCUS: "🎯", START_FOCUS: "🟢", ADD_TASK: "+", PARK_TASK: "🔵" };
                     const labels = { COMPLETE_TASK: "Done", SET_NOW_FOCUS: "Focus", START_FOCUS: "Session", ADD_TASK: "Added", PARK_TASK: "Parked" };
                     const title  = (a.task?.title || a.title || "").slice(0, 28);
                     return (
