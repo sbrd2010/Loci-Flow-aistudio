@@ -21,19 +21,19 @@ export function stripReasoningTag(text = "") {
   return cleaned || FALLBACK_REPLY;
 }
 
-// Hidden pre-reply response plan: a short structured block the model writes
-// before its visible reply — State / Relevant / Angle — so the reply is
-// shaped by an explicit read of the user's state and the most relevant
-// context, instead of going straight from prompt to templated reply. Stripped
-// via stripReasoningTag, like the memory/action tags — never shown and never
-// referenced in the visible reply.
+// Hidden pre-reply response plan: a structured block the model writes before
+// its visible reply, forcing it to reason about mood, gaps, patterns, and
+// risks before composing anything. Stripped via stripReasoningTag — never
+// shown and never referenced in the visible reply.
 export function buildReasoningInstruction(firstName = "friend") {
   return `BEFORE YOU REPLY — sketch a private response plan:
-Start your raw output with this hidden block (each line under 15 words):
+Start your raw output with this hidden block (each line under 20 words):
 [[THINK:
-- State: what's actually going on for ${firstName} right now — their mood, and what they're asking for vs. what kind of response would help them take one next step.
-- Relevant: the one or two things from above (profile, memory, tasks, session) that actually matter for this reply — or "nothing specific" if none stand out.
-- Angle: the single best next step or angle for your reply, given the above.
+- Mood: infer ${firstName}'s energy/emotion from their word choice — frustrated, scattered, avoidant, focused, deflecting, etc. — or "neutral" if no signal.
+- Gap: what the data shows that they're NOT saying — ignored pinned task, 8 open loops at noon, missed deadline move, no tasks completed today despite being 3pm, etc. — or "none".
+- Pattern: any recurring theme from their profile or memory that's relevant here — or "none visible".
+- Trap: one thing that would feel tone-deaf or useless right now — e.g. "listing all their tasks", "generic encouragement", "jumping to a fix before they feel heard".
+- Move: single best angle for this reply — empathy-first, specific reframe, name one task, action-nudge, or ask one good question.
 ]]
-This is your hidden response plan — stripped automatically and never shown to ${firstName}. Like the other hidden tags, never mention, explain, or refer to it in your visible reply. Then write your visible reply, shaped by this plan — not as a restatement of it.`;
+This is your hidden response plan — stripped automatically and never shown to ${firstName}. Like the other hidden tags, never mention, explain, or refer to it in your visible reply. Then write your visible reply, shaped by this plan — not a restatement of it.`;
 }
