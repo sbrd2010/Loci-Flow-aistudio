@@ -331,8 +331,8 @@ For each task, return:
 
 Rules: default horizonLevel to "week" unless clearly urgent or work-related. Never use the word "ADHD".
 
-Return ONLY a JSON array, no markdown:
-[{"sourceId":"<id from list>","title":"...","horizonLevel":"week","priority":"P3","category":"Personal","timeEstimateMinutes":25,"concreteStep":"...","subSteps":[{"text":"key point 1"}],"sourceSummary":"","splitReason":""}]`;
+Return ONLY a JSON array, no markdown. Example showing a thought split into two tasks, each with preserved details:
+[{"sourceId":"abc1","title":"Email Priya at Acme re June 20 deadline","horizonLevel":"week","priority":"P2","category":"Work","timeEstimateMinutes":25,"concreteStep":"Open email, write 3 sentences, hit send","subSteps":[{"text":"Mention the June 20 sprint deadline explicitly"},{"text":"Ask for the updated spec doc link"},{"text":"CC manager on the thread"}],"sourceSummary":"Priya at Acme needs a reply before their June 20 sprint planning; she asked about the API contract.","splitReason":"Recruiter follow-up"},{"sourceId":"abc1","title":"Update project tracker for Acme sprint","horizonLevel":"week","priority":"P3","category":"Work","timeEstimateMinutes":15,"concreteStep":"Open Notion, mark Acme block as 'waiting on response'","subSteps":[{"text":"Link the email thread in the tracker"},{"text":"Set a follow-up flag for June 19"}],"sourceSummary":"","splitReason":"Tracker update"}]`;
 
     try {
       const raw = await callAI({

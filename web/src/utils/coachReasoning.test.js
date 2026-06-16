@@ -6,9 +6,11 @@ describe("buildReasoningInstruction", () => {
     const instruction = buildReasoningInstruction("Alex");
     expect(instruction).toContain("[[THINK:");
     expect(instruction).toContain("never shown");
-    expect(instruction).toContain("State:");
-    expect(instruction).toContain("Relevant:");
-    expect(instruction).toContain("Angle:");
+    expect(instruction).toContain("Mood:");
+    expect(instruction).toContain("Gap:");
+    expect(instruction).toContain("Pattern:");
+    expect(instruction).toContain("Trap:");
+    expect(instruction).toContain("Move:");
     expect(instruction).toContain("Alex");
   });
 });
