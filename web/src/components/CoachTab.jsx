@@ -18,8 +18,8 @@ import { buildReasoningInstruction, stripReasoningTag } from "../utils/coachReas
 
 export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
-  const { groqKey, geminiKey } = getAIKeys();
-  const hasAnyKey = !!(groqKey || geminiKey);
+  const { groqKey, nvidiaKey, geminiKey } = getAIKeys();
+  const hasAnyKey = !!(groqKey || nvidiaKey || geminiKey);
 
   // True until RTDB has actually delivered a snapshot for this session — true
   // while rendering from cache, but ALSO once the 15s offline warning fires
@@ -166,7 +166,7 @@ ${buildPersonaInstruction(configRef.current, firstName)}
 ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryContext}\n` : ""}`;
 
         const reply = await callAI({
-          groqKey, geminiKey,
+          groqKey, nvidiaKey, geminiKey,
           systemPrompt: systemInstruction,
           messages: [{ role: "user", content: "(Start the conversation.)" }],
           maxTokens: 120
@@ -320,7 +320,7 @@ ${buildReasoningInstruction(firstName)}`;
     const messages = withUser.map(m => ({ role: m.isUser ? "user" : "assistant", content: m.text }));
 
     try {
-      const reply = await callAI({ groqKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens: 550 });
+      const reply = await callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens: 550 });
       // The hidden response plan (see buildReasoningInstruction) is at the
       // start of the output, so it's stripped first, before any other tag
       // parsing.
@@ -537,7 +537,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
 
     try {
       const reply = await callAI({
-        groqKey, geminiKey,
+        groqKey, nvidiaKey, geminiKey,
         systemPrompt: `${buildLociCoreInstruction({ firstName })}\n\nYou are ${config.mentorName || "a focus coach"}, an expert productivity coach.`,
         messages: [{ role: "user", content: prompt }],
         maxTokens: 800

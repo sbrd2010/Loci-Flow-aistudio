@@ -40,6 +40,14 @@ function groqOk(content = "One tiny step is enough.") {
   };
 }
 
+function nvidiaOk(content = "NVIDIA reply.") {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({ choices: [{ message: { content } }] }),
+  };
+}
+
 function geminiOk(content = "Gemini fallback reply.") {
   return {
     ok: true,
@@ -59,6 +67,7 @@ function providerError(status) {
 function baseRequest(overrides = {}) {
   return {
     groqKey: "test-groq-key",
+    nvidiaKey: "",
     geminiKey: "",
     systemPrompt: "You are a focus coach.",
     messages: [{ role: "user", content: "What should I do next?" }],
@@ -123,6 +132,65 @@ describe("AI call resilience", () => {
 
     expect(reply).toContain("AI daily limit reached");
     expect(reply).toContain("120/120");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("calls NVIDIA endpoint when NVIDIA key is provided and pref is nvidia", async () => {
+    storage.setItem("loci_provider_pref", "nvidia");
+    fetch.mockResolvedValue(nvidiaOk("Focus on the one task in front of you."));
+
+    const reply = await callAI(baseRequest({ groqKey: "", nvidiaKey: "test-nvidia-key" }));
+
+    expect(reply).toBe("Focus on the one task in front of you.");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][0]).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
+  });
+
+  it("falls back through NVIDIA to Gemini when Groq fails in auto mode", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(429))   // Groq fails
+      .mockResolvedValueOnce(providerError(503))   // NVIDIA fails
+      .mockResolvedValueOnce(geminiOk("Gemini here."));
+
+    const reply = await callAI(baseRequest({
+      nvidiaKey: "test-nvidia-key",
+      geminiKey: "test-gemini-key",
+    }));
+
+    expect(reply).toBe("Gemini here.");
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(fetch.mock.calls[1][0]).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
+    expect(String(fetch.mock.calls[2][0])).toContain("generativelanguage.googleapis.com");
+  });
+
+  it("uses NVIDIA first then falls back to Groq when pref is nvidia and NVIDIA fails", async () => {
+    storage.setItem("loci_provider_pref", "nvidia");
+    fetch
+      .mockResolvedValueOnce(providerError(503))   // NVIDIA fails
+      .mockResolvedValueOnce(groqOk("Groq saved the day."));
+
+    const reply = await callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }));
+
+    expect(reply).toBe("Groq saved the day.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][0]).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
+    expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+  });
+
+  it("uses Gemini first when pref is gemini", async () => {
+    storage.setItem("loci_provider_pref", "gemini");
+    fetch.mockResolvedValue(geminiOk("Gemini first."));
+
+    const reply = await callAI(baseRequest({ groqKey: "", geminiKey: "test-gemini-key" }));
+
+    expect(reply).toBe("Gemini first.");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(String(fetch.mock.calls[0][0])).toContain("generativelanguage.googleapis.com");
+  });
+
+  it("throws no_key when all keys are empty", async () => {
+    await expect(callAI(baseRequest({ groqKey: "", nvidiaKey: "", geminiKey: "" }))).rejects.toThrow("no_key");
     expect(fetch).not.toHaveBeenCalled();
   });
 });
