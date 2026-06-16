@@ -47,7 +47,9 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens) {
   return reply;
 }
 
-async function callNvidia(nvidiaKey, systemPrompt, messages) {
+async function callNvidia(nvidiaKey, systemPrompt, messages, maxTokens) {
+  // Use at least 1500 to leave room for reasoning tokens alongside the visible reply.
+  const effectiveMaxTokens = Math.max(1500, maxTokens || 0);
   const res = await fetchWithTimeout(NVIDIA_URL, {
     method: "POST",
     headers: {
@@ -57,7 +59,7 @@ async function callNvidia(nvidiaKey, systemPrompt, messages) {
     body: JSON.stringify({
       model: NVIDIA_MODEL,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
-      max_tokens: 1500,
+      max_tokens: effectiveMaxTokens,
       temperature: 0.4,
       top_p: 0.9,
       reasoning_effort: "high",
@@ -107,7 +109,7 @@ function buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey) 
   };
   const orders = {
     auto:   ["groq", "nvidia", "gemini"],
-    groq:   ["groq", "nvidia", "gemini"],
+    groq:   ["groq", "gemini", "nvidia"],
     nvidia: ["nvidia", "groq", "gemini"],
     gemini: ["gemini", "groq", "nvidia"],
   };
@@ -133,7 +135,7 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
       if (provider.name === "groq") {
         reply = await callGroq(provider.key, systemPrompt, messages, maxTokens);
       } else if (provider.name === "nvidia") {
-        reply = await callNvidia(provider.key, systemPrompt, messages);
+        reply = await callNvidia(provider.key, systemPrompt, messages, maxTokens);
       } else {
         reply = await callGemini(provider.key, systemPrompt, messages);
       }

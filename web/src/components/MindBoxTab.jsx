@@ -519,14 +519,7 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
             <button className="mindbox-back-btn" onClick={() => setToolPanel(null)}>← Back</button>
             <h2 className="mindbox-subview-title">Brain Dump</h2>
             {dumpCount > 0 && (
-              <button
-                type="button"
-                data-testid="brain-dump-inbox-btn"
-                onClick={() => setToolPanel("dump")}
-                style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--accent)", fontWeight: "700", marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}
-              >
-                Inbox ({dumpCount})
-              </button>
+              <span style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700", marginLeft: "auto" }}>{dumpCount}/50</span>
             )}
           </div>
           {dumpCount >= 50 && (
@@ -968,7 +961,14 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
               </span>
               <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)" }}>Brain Dump</span>
               {dumpCount > 0 && (
-                <span style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700", marginLeft: "auto" }}>{dumpCount}/50</span>
+                <button
+                  type="button"
+                  data-testid="brain-dump-inbox-btn"
+                  onClick={() => setToolPanel("dump")}
+                  style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--accent)", fontWeight: "700", marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: "6px 8px" }}
+                >
+                  Inbox ({dumpCount})
+                </button>
               )}
             </div>
             <form className="braindump-form" onSubmit={handleBrainDumpSubmit}>
