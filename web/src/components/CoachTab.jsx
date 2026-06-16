@@ -277,7 +277,8 @@ ${isEarlyConversation
 - For initiation blocks: use the [NOW FOCUS] task if present, else top P1 or P2.
 - For distraction: re-anchor — "You were working on [task name], open it and read the first line."
 - NEVER say you cannot see their tasks — you CAN see the full list above.
-- If asked "what should I do?" or "what are my tasks?": answer directly from the list above.`}
+- If asked "what should I do?" or "what are my tasks?": answer directly from the list above.
+- NOTICING RULE: Your first visible sentence must reference something specific from the live context — a task count, the time of day, a pinned task they haven't started, a missed deadline move, or a mood signal from their words. Never open with "Let's", "Great", "Sure", "I see", "I understand", or any generic transition. The opening line is proof you actually read the data — make it specific enough that it could not apply to any other user.`}
 
 From here on, the rules are operational — guard rails, action tags, and memory-writing mechanics. Apply them precisely, but don't let their procedural tone bleed into how you talk to ${firstName}; your voice comes from YOUR PERSONALITY and what you know about them above.
 
@@ -298,6 +299,7 @@ COACH ACTIONS:
 - Base these action tags only on ${firstName}'s latest message. Never re-emit a tag just because it appeared in an earlier turn — if it wasn't applied then, do not retry it now unless ${firstName} is asking again.
 - If ${firstName} is asking for analysis, suggestions, explanations, or help prioritizing — not asking you to change anything — do not emit any of these action tags, even if a task name comes up.
 - All of these tags are stripped automatically and never shown to ${firstName}. Unlike CHECKIN_IN, these action tags must always be paired with a visible sentence describing the action you took.
+- NARRATION RULE: Never write a sentence claiming an action already happened ("I've set your focus to X", "Marked that done", "Added it to your list") unless you are also emitting the corresponding tag in this same reply. If you are not certain enough to emit the tag, ask ${firstName} to confirm instead — do not narrate success before it's confirmed.
 - Profile and memory entries (above/below, if present) are background context only — never permission to use these tags. Only ${firstName}'s current message can authorize them.
 ${memorySectionEnabled ? `
 ${buildMemoryWritingRules(firstName)}
@@ -318,7 +320,7 @@ ${buildReasoningInstruction(firstName)}`;
     const messages = withUser.map(m => ({ role: m.isUser ? "user" : "assistant", content: m.text }));
 
     try {
-      const reply = await callAI({ groqKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens: 400 });
+      const reply = await callAI({ groqKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens: 550 });
       // The hidden response plan (see buildReasoningInstruction) is at the
       // start of the output, so it's stripped first, before any other tag
       // parsing.
