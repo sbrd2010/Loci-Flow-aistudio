@@ -5,6 +5,13 @@ const REASONING_TAG_RE = /\s*\[\[THINK:\s*((?:[^\]]|\](?!\]))+?)\s*\]\]/gi;
 // so a literal "[[THINK:" never reaches the chat UI.
 const UNCLOSED_REASONING_TAG_RE = /\s*\[\[THINK:[\s\S]*$/i;
 
+// Some models omit the [[ ]] delimiters and write "THINK: - Mood: ... - Move: ..."
+// as plain text. Strip from "THINK:" at the start through the end of the
+// "- Move:" entry (always the last field). Uses [^.]* for Move content so
+// the period that terminates the field (and the whitespace that follows it)
+// marks the exact boundary whether inline or multiline.
+const BARE_REASONING_RE = /^\s*THINK:\s*-\s*Mood:[\s\S]*?-\s*Move:[^.]*\.?\s*/i;
+
 const FALLBACK_REPLY = "I'm here. Let's pick one small next step.";
 
 // Strips the hidden "private response plan" block (see
@@ -17,6 +24,7 @@ export function stripReasoningTag(text = "") {
   const cleaned = text
     .replace(REASONING_TAG_RE, "")
     .replace(UNCLOSED_REASONING_TAG_RE, "")
+    .replace(BARE_REASONING_RE, "")
     .trim();
   return cleaned || FALLBACK_REPLY;
 }
