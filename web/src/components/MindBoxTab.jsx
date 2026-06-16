@@ -965,7 +965,7 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
                   type="button"
                   data-testid="brain-dump-inbox-btn"
                   onClick={() => setToolPanel("dump")}
-                  style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--accent)", fontWeight: "700", marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: "6px 8px" }}
+                  style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--accent)", fontWeight: "700", marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: "10px 12px", minHeight: "44px" }}
                 >
                   Inbox ({dumpCount})
                 </button>

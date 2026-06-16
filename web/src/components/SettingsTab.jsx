@@ -214,7 +214,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const [savedGroq, setSavedGroq] = useState(false);
   const handleSaveGroq = (e) => {
     e.preventDefault();
-    localStorage.setItem("loci_groq_key", groqInput.trim());
+    try { localStorage.setItem("loci_groq_key", groqInput.trim()); } catch (_) {}
     setSavedGroq(true);
     setTimeout(() => setSavedGroq(false), 2000);
   };
@@ -224,7 +224,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const [savedKey, setSavedKey] = useState(false);
   const handleSaveKey = (e) => {
     e.preventDefault();
-    localStorage.setItem("loci_gemini_key", keyInput.trim());
+    try { localStorage.setItem("loci_gemini_key", keyInput.trim()); } catch (_) {}
     setSavedKey(true);
     setTimeout(() => setSavedKey(false), 2000);
   };
@@ -234,7 +234,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const [savedNvidia, setSavedNvidia] = useState(false);
   const handleSaveNvidia = (e) => {
     e.preventDefault();
-    localStorage.setItem("loci_nvidia_key", nvidiaInput.trim());
+    try { localStorage.setItem("loci_nvidia_key", nvidiaInput.trim()); } catch (_) {}
     setSavedNvidia(true);
     setTimeout(() => setSavedNvidia(false), 2000);
   };
@@ -243,7 +243,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const [providerPref, setProviderPref] = useState(localStorage.getItem("loci_provider_pref") || "auto");
   const handleProviderPref = (pref) => {
     setProviderPref(pref);
-    localStorage.setItem("loci_provider_pref", pref);
+    try { localStorage.setItem("loci_provider_pref", pref); } catch (_) {}
   };
 
   // ── Sync status ───────────────────────────────────────────────────────────
@@ -816,7 +816,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
                   value={groqInput} onChange={e => setGroqInput(e.target.value)}
                   placeholder="gsk_... (from Groq Console)" />
                 <button className="btn" type="submit" style={{ width: "100%" }}>
-                  {savedGroq ? "✓ Groq key saved — reloading..." : "Save Groq Key"}
+                  {savedGroq ? "✓ Groq key saved" : "Save Groq Key"}
                 </button>
               </form>
             </div>
@@ -859,7 +859,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
                   value={keyInput} onChange={e => setKeyInput(e.target.value)}
                   placeholder="AIzaSy... (from AI Studio)" />
                 <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
-                  {savedKey ? "✓ Gemini key saved — reloading..." : "Save Gemini Key"}
+                  {savedKey ? "✓ Gemini key saved" : "Save Gemini Key"}
                 </button>
               </form>
             </div>
