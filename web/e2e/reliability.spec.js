@@ -104,13 +104,17 @@ test("reliability: brain dump item survives tab switch and returns to Mind Box",
   await page.locator(".braindump-input").first().fill(thought);
   await page.locator(".braindump-submit").first().click();
 
-  // Item should appear immediately in the recent dump preview
+  // Open inbox to verify item was saved (preview removed — items live in inbox only)
+  await page.getByTestId("brain-dump-inbox-btn").click();
   await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: /Back/i }).click();
 
   // Switch away and back — item must survive the tab switch
   await page.getByRole("button", { name: "Roadmap" }).click();
   await page.getByRole("button", { name: "Mind Box" }).click();
 
+  // Re-open inbox and verify item still there after tab switch
+  await page.getByTestId("brain-dump-inbox-btn").click();
   await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
 });
 

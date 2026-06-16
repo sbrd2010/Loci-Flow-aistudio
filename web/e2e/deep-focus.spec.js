@@ -69,6 +69,8 @@ test("mobile reliability: Deep Focus overlay supports pause, resume, and brain-d
 
   await page.locator(".bottom-nav").getByRole("button", { name: "Mind Box" }).click();
   await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 8_000 });
+  // Brain dump items live in inbox only — open it to verify the captured thought is there
+  await page.getByTestId("brain-dump-inbox-btn").click();
   await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
 });

@@ -1,14 +1,12 @@
 import { auth } from "../firebase";
 import { appendAIUsageWarning, checkAndRecordAIUsage } from "./aiUsageLimits";
 
-const GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "openai/gpt-oss-120b";
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
+const GROQ_URL     = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODEL   = "openai/gpt-oss-120b";
+const NVIDIA_URL   = "https://integrate.api.nvidia.com/v1/chat/completions";
+const NVIDIA_MODEL = "nvidia/nemotron-3-super-120b-a12b";
+const GEMINI_URL   = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 
-/**
- * Unified AI call - prefers Groq (fast, free) over Gemini.
- * messages: [{ role: "user"|"assistant", content: string }]
- */
 const AI_TIMEOUT_MS = 30000;
 
 function fetchWithTimeout(url, opts) {
@@ -37,14 +35,41 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens) {
     body: JSON.stringify({
       model: GROQ_MODEL,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
-      max_tokens: maxTokens,
-      temperature: 0.8
+      max_tokens: maxTokens ?? 300,
+      temperature: 0.4,
+      top_p: 0.9
     })
   });
   if (!res.ok) throw statusError("groq", res.status);
   const data = await res.json();
   const reply = data.choices?.[0]?.message?.content || "";
   if (!reply) throw new Error("groq_empty");
+  return reply;
+}
+
+async function callNvidia(nvidiaKey, systemPrompt, messages, maxTokens) {
+  const outputMaxTokens = Math.min(maxTokens ?? 1500, 4000);
+  const res = await fetchWithTimeout(NVIDIA_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${nvidiaKey}`
+    },
+    body: JSON.stringify({
+      model: NVIDIA_MODEL,
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
+      max_tokens: outputMaxTokens,
+      temperature: 0.4,
+      top_p: 0.9,
+      reasoning_effort: "high",
+      reasoning_budget: 4096,
+      stream: false
+    })
+  });
+  if (!res.ok) throw statusError("nvidia", res.status);
+  const data = await res.json();
+  const reply = data.choices?.[0]?.message?.content || "";
+  if (!reply) throw new Error("nvidia_empty");
   return reply;
 }
 
@@ -73,48 +98,71 @@ async function callGemini(geminiKey, systemPrompt, messages) {
   return reply;
 }
 
-export async function callAI({ groqKey, geminiKey, systemPrompt, messages, maxTokens = 300 }) {
-  const cleanGroqKey = (groqKey || "").trim();
+// Returns ordered list of providers to try based on user's preference.
+// Providers with no key are skipped automatically.
+function buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey) {
+  const available = {
+    groq:   cleanGroqKey   ? { name: "groq",   key: cleanGroqKey }   : null,
+    nvidia: cleanNvidiaKey ? { name: "nvidia",  key: cleanNvidiaKey } : null,
+    gemini: cleanGeminiKey ? { name: "gemini",  key: cleanGeminiKey } : null,
+  };
+  const orders = {
+    auto:   ["groq", "nvidia", "gemini"],
+    groq:   ["groq", "nvidia", "gemini"],
+    nvidia: ["nvidia", "groq", "gemini"],
+    gemini: ["gemini", "groq", "nvidia"],
+  };
+  return (orders[pref] || orders.auto).map(n => available[n]).filter(Boolean);
+}
+
+export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, messages, maxTokens }) {
+  const cleanGroqKey   = (groqKey   || "").trim();
+  const cleanNvidiaKey = (nvidiaKey || "").trim();
   const cleanGeminiKey = (geminiKey || "").trim();
 
-  if (!cleanGroqKey && !cleanGeminiKey) {
-    throw new Error("no_key");
-  }
+  const pref  = localStorage.getItem("loci_provider_pref") || "auto";
+  const order = buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey);
+  if (order.length === 0) throw new Error("no_key");
 
   const usage = checkAndRecordAIUsage({ userId: getAIUsageUserId() });
-  if (!usage.allowed) {
-    return usage.message;
-  }
+  if (!usage.allowed) return usage.message;
 
-  if (cleanGroqKey) {
+  let lastErr;
+  for (const provider of order) {
     try {
-      const reply = await callGroq(cleanGroqKey, systemPrompt, messages, maxTokens);
+      let reply;
+      if (provider.name === "groq") {
+        reply = await callGroq(provider.key, systemPrompt, messages, maxTokens);
+      } else if (provider.name === "nvidia") {
+        reply = await callNvidia(provider.key, systemPrompt, messages, maxTokens);
+      } else {
+        reply = await callGemini(provider.key, systemPrompt, messages);
+      }
       return appendAIUsageWarning(reply, usage.warning);
     } catch (err) {
-      // Rate-limited or quota exhausted - fall through to Gemini if available
-      if (!cleanGeminiKey) throw err;
-      console.warn("Groq failed, falling back to Gemini:", err.message);
+      lastErr = err;
+      if (provider !== order[order.length - 1]) {
+        console.warn(`${provider.name} failed, trying next provider:`, err.message);
+      }
     }
   }
-
-  if (cleanGeminiKey) {
-    const reply = await callGemini(cleanGeminiKey, systemPrompt, messages);
-    return appendAIUsageWarning(reply, usage.warning);
-  }
-
-  throw new Error("no_key");
+  // Preserve 429/503 so callers can surface rate-limit/busy hints.
+  // All other failures become a stable, provider-agnostic error code.
+  if (lastErr.message === "429" || lastErr.message === "503") throw lastErr;
+  throw new Error("all_providers_failed");
 }
 
 export function getAIKeys() {
   return {
     groqKey:   (localStorage.getItem("loci_groq_key")   || import.meta.env.VITE_GROQ_KEY   || "").trim(),
+    nvidiaKey: (localStorage.getItem("loci_nvidia_key") || "").trim(),
     geminiKey: (localStorage.getItem("loci_gemini_key") || import.meta.env.VITE_GEMINI_KEY || "").trim(),
   };
 }
 
 export function hasAIKey() {
-  const { groqKey, geminiKey } = getAIKeys();
-  return !!(groqKey || geminiKey);
+  const { groqKey, nvidiaKey, geminiKey } = getAIKeys();
+  return !!(groqKey || nvidiaKey || geminiKey);
 }
 
 // Parses a JSON array out of an AI reply, tolerating markdown code fences,

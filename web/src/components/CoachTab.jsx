@@ -18,8 +18,8 @@ import { buildReasoningInstruction, stripReasoningTag } from "../utils/coachReas
 
 export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
-  const { groqKey, geminiKey } = getAIKeys();
-  const hasAnyKey = !!(groqKey || geminiKey);
+  const { groqKey, nvidiaKey, geminiKey } = getAIKeys();
+  const hasAnyKey = !!(groqKey || nvidiaKey || geminiKey);
 
   // True until RTDB has actually delivered a snapshot for this session — true
   // while rendering from cache, but ALSO once the 15s offline warning fires
@@ -166,7 +166,7 @@ ${buildPersonaInstruction(configRef.current, firstName)}
 ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryContext}\n` : ""}`;
 
         const reply = await callAI({
-          groqKey, geminiKey,
+          groqKey, nvidiaKey, geminiKey,
           systemPrompt: systemInstruction,
           messages: [{ role: "user", content: "(Start the conversation.)" }],
           maxTokens: 120
@@ -320,7 +320,7 @@ ${buildReasoningInstruction(firstName)}`;
     const messages = withUser.map(m => ({ role: m.isUser ? "user" : "assistant", content: m.text }));
 
     try {
-      const reply = await callAI({ groqKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens: 550 });
+      const reply = await callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens: 550 });
       // The hidden response plan (see buildReasoningInstruction) is at the
       // start of the output, so it's stripped first, before any other tag
       // parsing.
@@ -451,7 +451,8 @@ ${buildReasoningInstruction(firstName)}`;
 
       saveSubPath("chatHistory", [...chatHistoryRef.current, { text: replyText || "Got it.", isUser: false }]);
     } catch (err) {
-      const hint = err.message === "429" ? "Rate limit — wait 30 sec and retry." : err.message === "503" ? "AI server busy — try again." : err.message === "no_key" ? "Add an AI key in Settings." : `AI error ${err.message}`;
+      console.error("[CoachTab] AI chat failed:", err);
+      const hint = err.message === "429" ? "Rate limit — wait 30 sec and retry." : err.message === "503" ? "AI server busy — try again." : err.message === "no_key" ? "Add an AI key in Settings." : "AI is unavailable right now. Check your AI keys in Settings or try again later.";
       saveSubPath("chatHistory", [...chatHistoryRef.current, { text: hint, isUser: false }]);
     } finally {
       setChatLoading(false);
@@ -537,14 +538,15 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
 
     try {
       const reply = await callAI({
-        groqKey, geminiKey,
+        groqKey, nvidiaKey, geminiKey,
         systemPrompt: `${buildLociCoreInstruction({ firstName })}\n\nYou are ${config.mentorName || "a focus coach"}, an expert productivity coach.`,
         messages: [{ role: "user", content: prompt }],
         maxTokens: 800
       });
       setBriefingResult(reply);
     } catch (err) {
-      setBriefingResult(`Focus Briefing failed: ${err.message}`);
+      console.error("[CoachTab] Focus briefing failed:", err);
+      setBriefingResult("AI is unavailable right now. Check your AI keys in Settings or try again later.");
     } finally {
       setBriefingLoading(false);
     }

@@ -217,8 +217,8 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
   }, [ritualDone]);
 
   // ── AI keys ────────────────────────────────────────────────────────────────
-  const { groqKey, geminiKey } = getAIKeys();
-  const hasAnyKey = !!(groqKey || geminiKey);
+  const { groqKey, nvidiaKey, geminiKey } = getAIKeys();
+  const hasAnyKey = !!(groqKey || nvidiaKey || geminiKey);
 
   // ── Brain Dump DnD ─────────────────────────────────────────────────────────
   const dumpSensors = useSensors(
@@ -336,7 +336,7 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
 
     try {
       const raw = await callAI({
-        groqKey, geminiKey,
+        groqKey, nvidiaKey, geminiKey,
         systemPrompt: "You are a productivity coach. Respond ONLY with a valid JSON array, no markdown.",
         messages: [{ role: "user", content: prompt }],
         maxTokens: 4000
@@ -470,8 +470,6 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
-  const recentDump = [...(payload.brainDump || [])].slice(-3).reverse();
-
   const handleAddAnchor = () => {
     if (!newAnchorText.trim()) return;
     const next = [...editedAnchors, { id: safeUUID(), text: newAnchorText.trim() }];
@@ -963,7 +961,14 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
               </span>
               <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)" }}>Brain Dump</span>
               {dumpCount > 0 && (
-                <span style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700", marginLeft: "auto" }}>{dumpCount}/50</span>
+                <button
+                  type="button"
+                  data-testid="brain-dump-inbox-btn"
+                  onClick={() => setToolPanel("dump")}
+                  style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--accent)", fontWeight: "700", marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: "10px 12px", minHeight: "44px" }}
+                >
+                  Inbox ({dumpCount})
+                </button>
               )}
             </div>
             <form className="braindump-form" onSubmit={handleBrainDumpSubmit}>
@@ -989,20 +994,6 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
               >
                 ✨ Organize into tasks with AI
               </button>
-            )}
-            {recentDump.length > 0 && (
-              <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "5px" }}>
-                {recentDump.map(item => (
-                  <p key={item.id} style={{ fontSize: "12px", color: "var(--text-secondary)", margin: 0, padding: "5px 8px", background: "var(--bg-secondary)", borderRadius: "6px", lineHeight: "1.4" }}>
-                    {item.text}
-                  </p>
-                ))}
-                {dumpCount > 3 && (
-                  <button onClick={() => setToolPanel("dump")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "11px", color: "var(--accent)", fontWeight: "700", textAlign: "left", padding: "2px 8px" }}>
-                    See all {dumpCount} items →
-                  </button>
-                )}
-              </div>
             )}
           </div>
 

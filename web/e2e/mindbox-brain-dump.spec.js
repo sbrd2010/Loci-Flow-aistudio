@@ -46,15 +46,18 @@ test("mobile reliability: Brain Dump item survives navigation and can be deleted
   await input.fill(thought);
   await page.locator(".braindump-submit").first().click();
   await expect(input).toHaveValue("");
+  // Open inbox to verify item was saved (preview removed — items live in inbox only)
+  await page.getByTestId("brain-dump-inbox-btn").click();
   await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
+  await page.getByRole("button", { name: /Back/i }).click();
 
   await openTab(page, "Today");
   await expect(page.getByTestId("today-tasks-list")).toBeVisible({ timeout: 8_000 });
   await openTab(page, "Mind Box");
-  await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
 
-  await page.getByRole("button", { name: /See all \d+ items/i }).click();
+  // Open inbox and verify item survived navigation
+  await page.getByTestId("brain-dump-inbox-btn").click();
   await expect(page.getByRole("heading", { name: "Brain Dump" })).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);

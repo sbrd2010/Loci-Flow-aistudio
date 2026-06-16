@@ -214,7 +214,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const [savedGroq, setSavedGroq] = useState(false);
   const handleSaveGroq = (e) => {
     e.preventDefault();
-    localStorage.setItem("loci_groq_key", groqInput.trim());
+    try { localStorage.setItem("loci_groq_key", groqInput.trim()); } catch (_) {}
     setSavedGroq(true);
     setTimeout(() => setSavedGroq(false), 2000);
   };
@@ -224,9 +224,26 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const [savedKey, setSavedKey] = useState(false);
   const handleSaveKey = (e) => {
     e.preventDefault();
-    localStorage.setItem("loci_gemini_key", keyInput.trim());
+    try { localStorage.setItem("loci_gemini_key", keyInput.trim()); } catch (_) {}
     setSavedKey(true);
     setTimeout(() => setSavedKey(false), 2000);
+  };
+
+  // ── NVIDIA API key ────────────────────────────────────────────────────────
+  const [nvidiaInput, setNvidiaInput] = useState(localStorage.getItem("loci_nvidia_key") || "");
+  const [savedNvidia, setSavedNvidia] = useState(false);
+  const handleSaveNvidia = (e) => {
+    e.preventDefault();
+    try { localStorage.setItem("loci_nvidia_key", nvidiaInput.trim()); } catch (_) {}
+    setSavedNvidia(true);
+    setTimeout(() => setSavedNvidia(false), 2000);
+  };
+
+  // ── Provider preference ───────────────────────────────────────────────────
+  const [providerPref, setProviderPref] = useState(localStorage.getItem("loci_provider_pref") || "auto");
+  const handleProviderPref = (pref) => {
+    setProviderPref(pref);
+    try { localStorage.setItem("loci_provider_pref", pref); } catch (_) {}
   };
 
   // ── Sync status ───────────────────────────────────────────────────────────
@@ -239,21 +256,24 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
     return `${Math.floor(mins / 60)}h ago`;
   };
 
-  const groqPersonalKey = localStorage.getItem("loci_groq_key") || "";
-  const groqBuiltinKey  = import.meta.env.VITE_GROQ_KEY || "";
-  const groqKey         = groqPersonalKey || groqBuiltinKey;
-  const personalKey     = localStorage.getItem("loci_gemini_key") || "";
-  const defaultKey      = import.meta.env.VITE_GEMINI_KEY || "";
-  const hasAnyKey       = !!(groqKey || personalKey || defaultKey);
-  const keyStatusLabel  = groqPersonalKey
+  const groqPersonalKey   = localStorage.getItem("loci_groq_key")   || "";
+  const groqBuiltinKey    = import.meta.env.VITE_GROQ_KEY           || "";
+  const groqKey           = groqPersonalKey || groqBuiltinKey;
+  const nvidiaPersonalKey = localStorage.getItem("loci_nvidia_key") || "";
+  const personalKey       = localStorage.getItem("loci_gemini_key") || "";
+  const defaultKey        = import.meta.env.VITE_GEMINI_KEY         || "";
+  const hasAnyKey         = !!(groqKey || nvidiaPersonalKey || personalKey || defaultKey);
+  const keyStatusLabel    = groqPersonalKey
     ? "✓ Groq AI active — personal key"
     : groqBuiltinKey
     ? "✓ Groq AI active — built-in key (all users)"
+    : nvidiaPersonalKey
+    ? "✓ NVIDIA AI active (personal key)"
     : personalKey
     ? "✓ Gemini AI active (personal key)"
     : defaultKey
     ? "✓ Gemini AI active (default key)"
-    : "✗ No AI key — add Groq or Gemini below";
+    : "✗ No AI key — add Groq, NVIDIA or Gemini below";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -743,6 +763,41 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
               Keys are stored only in this browser — never sent to Loci servers.
             </p>
 
+            {/* Provider preference */}
+            <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid var(--border)" }}>
+              <span style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "4px", display: "block" }}>
+                AI Provider Preference
+              </span>
+              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
+                Choose which AI Loci should try first. If that provider fails, Loci can fall back to the others if keys are available.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                {[
+                  { key: "auto",   label: "Auto (recommended)", desc: "Tries Groq → NVIDIA → Gemini" },
+                  { key: "groq",   label: "Groq GPT-OSS-120B",  desc: "Groq first, then NVIDIA, then Gemini" },
+                  { key: "nvidia", label: "NVIDIA Nemotron Super", desc: "NVIDIA first, then Groq, then Gemini" },
+                  { key: "gemini", label: "Gemini",              desc: "Gemini first, then Groq, then NVIDIA" },
+                ].map(opt => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => handleProviderPref(opt.key)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "10px",
+                      padding: "8px 12px", borderRadius: "var(--radius-sm)", textAlign: "left",
+                      background: providerPref === opt.key ? "var(--accent)" : "var(--bg-secondary)",
+                      color: providerPref === opt.key ? "var(--btn-text, #fff)" : "var(--text-primary)",
+                      border: providerPref === opt.key ? "2px solid var(--accent)" : "1.5px solid var(--border)",
+                      cursor: "pointer", fontSize: "12.5px", fontWeight: "700"
+                    }}
+                  >
+                    <span style={{ flex: 1 }}>{opt.label}</span>
+                    <span style={{ fontSize: "11px", fontWeight: "400", opacity: providerPref === opt.key ? 0.85 : 0.6 }}>{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Groq — recommended */}
             <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid var(--border)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
@@ -761,28 +816,50 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
                   value={groqInput} onChange={e => setGroqInput(e.target.value)}
                   placeholder="gsk_... (from Groq Console)" />
                 <button className="btn" type="submit" style={{ width: "100%" }}>
-                  {savedGroq ? "✓ Groq key saved — reloading..." : "Save Groq Key"}
+                  {savedGroq ? "✓ Groq key saved" : "Save Groq Key"}
                 </button>
               </form>
             </div>
 
-            {/* Gemini — fallback */}
+            {/* NVIDIA Nemotron Super */}
+            <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid var(--border)" }}>
+              <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>
+                NVIDIA Nemotron Super
+              </span>
+              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
+                NVIDIA Nemotron Super — stronger fallback/deep coach option. Used when selected or when earlier providers fail.{" "}
+                Get a key at{" "}
+                <a href="https://build.nvidia.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontWeight: "600" }}>
+                  build.nvidia.com
+                </a>.
+              </p>
+              <form onSubmit={handleSaveNvidia} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <input className="text-input" type="password"
+                  value={nvidiaInput} onChange={e => setNvidiaInput(e.target.value)}
+                  placeholder="nvapi-... (from NVIDIA Build)" />
+                <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
+                  {savedNvidia ? "✓ NVIDIA key saved" : "Save NVIDIA Key"}
+                </button>
+              </form>
+            </div>
+
+            {/* Gemini */}
             <div>
               <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>
-                Gemini (fallback)
+                Gemini
               </span>
               <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
                 Free key from{" "}
                 <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontWeight: "600" }}>
                   aistudio.google.com
-                </a> — used if no Groq key is set.
+                </a> — used when selected or as a fallback.
               </p>
               <form onSubmit={handleSaveKey} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <input className="text-input" type="password"
                   value={keyInput} onChange={e => setKeyInput(e.target.value)}
                   placeholder="AIzaSy... (from AI Studio)" />
                 <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
-                  {savedKey ? "✓ Gemini key saved — reloading..." : "Save Gemini Key"}
+                  {savedKey ? "✓ Gemini key saved" : "Save Gemini Key"}
                 </button>
               </form>
             </div>
