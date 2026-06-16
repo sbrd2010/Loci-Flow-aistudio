@@ -155,7 +155,7 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
 export function getAIKeys() {
   return {
     groqKey:   (localStorage.getItem("loci_groq_key")   || import.meta.env.VITE_GROQ_KEY   || "").trim(),
-    nvidiaKey: (localStorage.getItem("loci_nvidia_key") || "").trim(),
+    nvidiaKey: (localStorage.getItem("loci_nvidia_key") || import.meta.env.VITE_NVIDIA_KEY || "").trim(),
     geminiKey: (localStorage.getItem("loci_gemini_key") || import.meta.env.VITE_GEMINI_KEY || "").trim(),
   };
 }
