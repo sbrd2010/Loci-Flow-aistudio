@@ -9,7 +9,7 @@ import { getFocusWindows } from "../utils/focusWindows";
 import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, parseCheckinRequestFromMessage } from "../utils/coachCheckin";
-import { parseCoachActionTags, applyCoachActions, buildActionReplyText } from "../utils/coachActions";
+import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks } from "../utils/coachActions";
 import { isPendingCoachNudgeStale, shouldDeliverPendingCoachNudge } from "../utils/coachNudge";
 import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
@@ -58,6 +58,8 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
   const [chatLoading, setChatLoading] = useState(false);
   const chatBottomRef = useRef(null);
   const chatInputRef = useRef(null);
+  const chatFormRef = useRef(null);
+  const chipTextRef = useRef(null);
   const prevHistoryLenRef = useRef(chatHistory.length);
   const prevChatLoadingRef = useRef(chatLoading);
 
@@ -184,10 +186,11 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
 
   const handleSendChat = async (e) => {
     e.preventDefault();
-    if (!chatInput.trim() || !hasAnyKey || chatLoading) return;
-
-    const userText = chatInput.trim();
-    setChatInput("");
+    const pendingChip = chipTextRef.current;
+    chipTextRef.current = null;
+    const userText = (pendingChip || chatInput).trim();
+    if (!userText || !hasAnyKey || chatLoading) return;
+    if (!pendingChip) setChatInput("");
 
     const MAX_HISTORY = 20;
     const trimmed = chatHistory.length >= MAX_HISTORY
@@ -478,6 +481,79 @@ ${buildReasoningInstruction(firstName)}`;
     }
   };
 
+  // -- Interactive chips (Phase A: prompt chips, Phase B: task-action chips) --
+
+  const handlePromptChip = (promptText) => {
+    if (!hasAnyKey || chatLoading) return;
+    chipTextRef.current = promptText;
+    chatFormRef.current?.requestSubmit();
+  };
+
+  // Phase A: select up to 3 context-aware follow-up prompts for a message
+  const getPromptChips = (text) => {
+    const chips = [];
+    if (text.length > 300)           chips.push({ label: "Summarize",       prompt: "Summarize that in 2 sentences." });
+    if (text.length > 300)           chips.push({ label: "Be more direct",  prompt: "Give me the key point in one sentence." });
+    if (/[-•]|\d+\.\s/.test(text))  chips.push({ label: "Make it smaller", prompt: "Can you make that shorter?" });
+    if (/step|\d+\.\s/i.test(text)) chips.push({ label: "3 concrete steps",prompt: "Turn that into 3 concrete steps." });
+    if (/\bor\b|\d+\.\s/i.test(text)) chips.push({ label: "Help me choose",prompt: "Help me choose one option." });
+    chips.push({ label: "10-min version", prompt: "What’s the 10-minute version of this?" });
+    return chips.slice(0, 3);
+  };
+
+  // Phase B: return a fresh task only when exactly one matched action has a uuid
+  const taskChipsFor = (actions) => {
+    const matched = (actions || []).filter(a => a.matched && a.task?.uuid);
+    if (matched.length !== 1) return null;
+    const fresh = tasks.find(t => t.uuid === matched[0].task.uuid && !t.isDeleted);
+    return fresh || null;
+  };
+
+  const handleTaskChip = (action, taskUuid) => {
+    // Re-read from tasksRef.current at click time — not from render-time closure
+    const task = tasksRef.current.find(t => t.uuid === taskUuid && !t.isDeleted);
+    if (!task) return; // task gone between render and click — silent no-op per guardrail
+    const msgs = {
+      focus:         `Set "${task.title}" as your Now Focus?`,
+      'focus+today': `Move "${task.title}" to Today and set as Now Focus?`,
+      today:         `Move "${task.title}" to Today?`,
+      park:          `Park "${task.title}" for later?`,
+    };
+    setConfirmDialog({
+      message: msgs[action],
+      confirmLabel: action === 'park' ? 'Park it' : 'Yes',
+      onConfirm: () => { applyTaskChip(action, taskUuid); setConfirmDialog(null); },
+      onCancel:  () => setConfirmDialog(null),
+    });
+  };
+
+  const applyTaskChip = (action, taskUuid) => {
+    const current = tasksRef.current;
+    const task = current.find(t => t.uuid === taskUuid && !t.isDeleted);
+    if (!task) return;
+    const now = Date.now();
+    if (action === 'focus') {
+      savePayload({ ...payload, tasks: buildSetNowFocusTasks(current, taskUuid, now) });
+    } else if (action === 'focus+today') {
+      const todayActive = current.filter(t => t.horizonLevel === 'today' && !t.isDeleted);
+      const maxOrder = todayActive.reduce((m, t) => Math.max(m, t.orderIndex ?? 0), -1);
+      savePayload({ ...payload, tasks: current.map(t => {
+        if (t.uuid === taskUuid) return { ...t, horizonLevel: 'today', isNowFocus: true, isParked: false, orderIndex: maxOrder + 1, lastUpdated: now };
+        return t.isNowFocus ? { ...t, isNowFocus: false, lastUpdated: now } : t;
+      })});
+    } else if (action === 'today') {
+      const todayActive = current.filter(t => t.horizonLevel === 'today' && !t.isDeleted);
+      const maxOrder = todayActive.reduce((m, t) => Math.max(m, t.orderIndex ?? 0), -1);
+      savePayload({ ...payload, tasks: current.map(t =>
+        t.uuid === taskUuid
+          ? { ...t, horizonLevel: 'today', isNowFocus: false, isParked: false, orderIndex: maxOrder + 1, lastUpdated: now }
+          : t
+      )});
+    } else if (action === 'park') {
+      savePayload({ ...payload, tasks: buildParkTaskTasks(current, taskUuid, now) });
+    }
+  };
+
   // -- Focus Briefing (AI task analysis across all horizons) -----------------
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [briefingResult, setBriefingResult] = useState("");
@@ -600,7 +676,9 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
         </div>
 
         <div className="chat-window coach-chat">
-          {chatHistory.map((m, idx) => (
+          {(() => {
+            const lastMentorIdx = chatHistory.reduce((last, m, i) => (!m.isUser ? i : last), -1);
+            return chatHistory.map((m, idx) => (
             <div key={idx} className={`chat-bubble ${m.isUser ? "chat-bubble-user" : "chat-bubble-mentor"}`}
               style={m.isUser ? { alignSelf: "flex-end" } : undefined}>
               {m.isUser ? (
@@ -633,11 +711,52 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                   })}
                 </div>
               )}
+              {/* Phase A — prompt chips: last mentor message only, ephemeral */}
+              {!m.isUser && idx === lastMentorIdx && (() => {
+                const chips = getPromptChips(m.text);
+                return chips.length > 0 ? (
+                  <div className="coach-prompt-chips">
+                    {chips.map((c, i) => (
+                      <button key={i} type="button" className="coach-prompt-chip"
+                        disabled={chatLoading}
+                        onClick={() => handlePromptChip(c.prompt)}>
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
+              {/* Phase B — task-action chips: last mentor message, exactly one matched task */}
+              {!m.isUser && idx === lastMentorIdx && (() => {
+                const task = taskChipsFor(m.actions);
+                if (!task) return null;
+                const phaseB = [];
+                if (task.horizonLevel === 'today' && !task.isNowFocus)
+                  phaseB.push({ action: 'focus',       label: 'Set as Focus' });
+                else if (task.horizonLevel !== 'today' && !task.isNowFocus)
+                  phaseB.push({ action: 'focus+today', label: 'Move to Today & Focus' });
+                if (task.horizonLevel !== 'today')
+                  phaseB.push({ action: 'today',       label: 'Move to Today' });
+                if (!task.isParked)
+                  phaseB.push({ action: 'park',        label: 'Park' });
+                return phaseB.length > 0 ? (
+                  <div className="coach-task-chips">
+                    {phaseB.map((c, i) => (
+                      <button key={i} type="button" className="coach-task-chip"
+                        disabled={chatLoading}
+                        onClick={() => handleTaskChip(c.action, task.uuid)}>
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
               <div className="chat-sender" style={{ color: m.isUser ? "rgba(255,255,255,0.7)" : "var(--text-muted)" }}>
                 {m.isUser ? "You" : config.mentorName || "Mentor"}
               </div>
             </div>
-          ))}
+          ));
+          })()}
           {chatLoading && (
             <div className="chat-bubble chat-bubble-mentor" style={{ fontStyle: "italic", color: "var(--text-muted)", alignSelf: "flex-start" }}>
               <span>{config.mentorName || "Mentor"} is thinking…</span>
@@ -651,7 +770,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
             🔑 Add an AI key in <strong>Settings → AI Keys</strong> to enable chat.
           </div>
         ) : (
-          <form onSubmit={handleSendChat} className="chat-input-row" style={{ marginTop: "8px" }}>
+          <form ref={chatFormRef} onSubmit={handleSendChat} className="chat-input-row" style={{ marginTop: "8px" }}>
             <textarea ref={chatInputRef} className="text-input" rows={3} value={chatInput}
               onChange={e => setChatInput(e.target.value)}
               onKeyDown={e => {
