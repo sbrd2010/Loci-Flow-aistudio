@@ -596,7 +596,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
         <div className="chat-window coach-chat">
           {chatHistory.map((m, idx) => (
             <div key={idx} className={`chat-bubble ${m.isUser ? "chat-bubble-user" : "chat-bubble-mentor"}`}
-              style={{ alignSelf: m.isUser ? "flex-end" : "flex-start" }}>
+              style={m.isUser ? { alignSelf: "flex-end" } : undefined}>
               {m.isUser ? (
                 <span>{m.text}</span>
               ) : (

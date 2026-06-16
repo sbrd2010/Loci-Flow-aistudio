@@ -7,6 +7,7 @@
 /* ── Override: AI response → full-width professional card ──────── */
 .coach-chat .chat-bubble-mentor {
   max-width: 100%;
+  width: 100%;
   align-self: stretch;
   border-radius: var(--radius-sm);
   border-bottom-left-radius: var(--radius-sm);
