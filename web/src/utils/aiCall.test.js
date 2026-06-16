@@ -146,6 +146,16 @@ describe("AI call resilience", () => {
     expect(fetch.mock.calls[0][0]).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
   });
 
+  it("sends reasoning_effort high and reasoning_budget 4096 in NVIDIA request body", async () => {
+    storage.setItem("loci_provider_pref", "nvidia");
+    fetch.mockResolvedValue(nvidiaOk("reply"));
+    await callAI(baseRequest({ groqKey: "", nvidiaKey: "test-nvidia-key" }));
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.reasoning_effort).toBe("high");
+    expect(body.reasoning_budget).toBe(4096);
+    expect(body.stream).toBe(false);
+  });
+
   it("falls back through NVIDIA to Gemini when Groq fails in auto mode", async () => {
     fetch
       .mockResolvedValueOnce(providerError(429))   // Groq fails

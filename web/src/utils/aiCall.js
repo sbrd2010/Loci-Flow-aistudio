@@ -60,6 +60,8 @@ async function callNvidia(nvidiaKey, systemPrompt, messages) {
       max_tokens: 1500,
       temperature: 0.4,
       top_p: 0.9,
+      reasoning_effort: "high",
+      reasoning_budget: 4096,
       stream: false
     })
   });
