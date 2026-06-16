@@ -4,7 +4,7 @@ vi.mock("../firebase", () => ({
   auth: { currentUser: null },
 }));
 
-import { callAI, extractJsonArray } from "./aiCall";
+import { callAI, extractJsonArray, resetProviderCooldowns } from "./aiCall";
 
 function makeStorage() {
   const store = new Map();
@@ -85,6 +85,7 @@ describe("AI call resilience", () => {
     vi.setSystemTime(new Date(2026, 5, 4, 15, 30, 0));
     vi.stubGlobal("localStorage", storage);
     vi.stubGlobal("fetch", vi.fn());
+    resetProviderCooldowns();
   });
 
   afterEach(() => {

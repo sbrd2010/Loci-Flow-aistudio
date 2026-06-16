@@ -8,6 +8,14 @@ const NVIDIA_MODEL = "nvidia/nemotron-3-super-120b-a12b";
 const GEMINI_URL   = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 
 const AI_TIMEOUT_MS = 30000;
+const RATE_LIMIT_COOLDOWN_MS = 30000;
+const SERVICE_UNAVAILABLE_COOLDOWN_MS = 10000;
+const MAX_RETRY_AFTER_MS = 5 * 60 * 1000;
+
+// Per-provider cooldown so a rate-limited provider is skipped (not re-hit)
+// on subsequent calls until its cooldown expires.
+const providerCooldownUntil = { groq: 0, nvidia: 0, gemini: 0 };
+const providerCooldownReason = { groq: null, nvidia: null, gemini: null };
 
 function fetchWithTimeout(url, opts) {
   const controller = new AbortController();
@@ -15,9 +23,40 @@ function fetchWithTimeout(url, opts) {
   return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(id));
 }
 
-function statusError(provider, status) {
+// Reads Retry-After (seconds or HTTP-date) off a 429/503 response.
+// Returns null if missing/unparseable/non-positive, capped to 5 minutes.
+function parseRetryAfterMs(res) {
+  const header = res.headers?.get?.("Retry-After");
+  if (!header) return null;
+  let ms = null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) {
+    ms = seconds * 1000;
+  } else {
+    const dateMs = Date.parse(header);
+    if (!Number.isNaN(dateMs)) ms = dateMs - Date.now();
+  }
+  if (ms === null || ms <= 0) return null;
+  return Math.min(ms, MAX_RETRY_AFTER_MS);
+}
+
+// Test-only: clears per-provider cooldown state between unrelated test cases.
+export function resetProviderCooldowns() {
+  providerCooldownUntil.groq = 0;
+  providerCooldownUntil.nvidia = 0;
+  providerCooldownUntil.gemini = 0;
+  providerCooldownReason.groq = null;
+  providerCooldownReason.nvidia = null;
+  providerCooldownReason.gemini = null;
+}
+
+function statusError(provider, status, res) {
   // CoachTab already maps plain 429/503 to friendly messages.
-  if (status === 429 || status === 503) return new Error(String(status));
+  if (status === 429 || status === 503) {
+    const err = new Error(String(status));
+    err.retryAfterMs = parseRetryAfterMs(res);
+    return err;
+  }
   return new Error(`${provider}_${status}`);
 }
 
@@ -40,7 +79,7 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens) {
       top_p: 0.9
     })
   });
-  if (!res.ok) throw statusError("groq", res.status);
+  if (!res.ok) throw statusError("groq", res.status, res);
   const data = await res.json();
   const reply = data.choices?.[0]?.message?.content || "";
   if (!reply) throw new Error("groq_empty");
@@ -66,7 +105,7 @@ async function callNvidia(nvidiaKey, systemPrompt, messages, maxTokens) {
       stream: false
     })
   });
-  if (!res.ok) throw statusError("nvidia", res.status);
+  if (!res.ok) throw statusError("nvidia", res.status, res);
   const data = await res.json();
   const reply = data.choices?.[0]?.message?.content || "";
   if (!reply) throw new Error("nvidia_empty");
@@ -91,7 +130,7 @@ async function callGemini(geminiKey, systemPrompt, messages) {
       contents
     })
   });
-  if (!res.ok) throw statusError("gemini", res.status);
+  if (!res.ok) throw statusError("gemini", res.status, res);
   const data = await res.json();
   const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
   if (!reply) throw new Error("gemini_empty");
@@ -129,6 +168,10 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
 
   let lastErr;
   for (const provider of order) {
+    if (Date.now() < providerCooldownUntil[provider.name]) {
+      lastErr = new Error(providerCooldownReason[provider.name] || "503");
+      continue; // skip the provider network call; no extra provider attempt
+    }
     try {
       let reply;
       if (provider.name === "groq") {
@@ -141,6 +184,13 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
       return appendAIUsageWarning(reply, usage.warning);
     } catch (err) {
       lastErr = err;
+      if (err.message === "429") {
+        providerCooldownUntil[provider.name] = Date.now() + (err.retryAfterMs ?? RATE_LIMIT_COOLDOWN_MS);
+        providerCooldownReason[provider.name] = "429";
+      } else if (err.message === "503") {
+        providerCooldownUntil[provider.name] = Date.now() + (err.retryAfterMs ?? SERVICE_UNAVAILABLE_COOLDOWN_MS);
+        providerCooldownReason[provider.name] = "503";
+      }
       if (provider !== order[order.length - 1]) {
         console.warn(`${provider.name} failed, trying next provider:`, err.message);
       }
