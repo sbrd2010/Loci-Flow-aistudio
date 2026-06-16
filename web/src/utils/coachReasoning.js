@@ -30,7 +30,7 @@ export function buildReasoningInstruction(firstName = "friend") {
 Start your raw output with this hidden block (each line under 20 words):
 [[THINK:
 - Mood: infer ${firstName}'s energy/emotion from their word choice — frustrated, scattered, avoidant, focused, deflecting, etc. — or "neutral" if no signal.
-- Gap: what the data shows that they're NOT saying — ignored pinned task, 8 open loops at noon, missed deadline move, no tasks completed today despite being 3pm, etc. — or "none".
+- Gap: any observed friction from the data — pinned task not started, many open tasks, missed deadline move, no completions yet today — or "none".
 - Pattern: any recurring theme from their profile or memory that's relevant here — or "none visible".
 - Trap: one thing that would feel tone-deaf or useless right now — e.g. "listing all their tasks", "generic encouragement", "jumping to a fix before they feel heard".
 - Move: single best angle for this reply — empathy-first, specific reframe, name one task, action-nudge, or ask one good question.
