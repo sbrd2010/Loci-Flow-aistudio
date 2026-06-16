@@ -4,7 +4,7 @@ vi.mock("../firebase", () => ({
   auth: { currentUser: null },
 }));
 
-import { callAI, extractJsonArray } from "./aiCall";
+import { callAI, extractJsonArray, resetProviderCooldowns } from "./aiCall";
 
 function makeStorage() {
   const store = new Map();
@@ -56,10 +56,11 @@ function geminiOk(content = "Gemini fallback reply.") {
   };
 }
 
-function providerError(status) {
+function providerError(status, headers = {}) {
   return {
     ok: false,
     status,
+    headers: { get: (name) => headers[name] ?? null },
     json: async () => ({ error: { message: String(status) } }),
   };
 }
@@ -85,6 +86,7 @@ describe("AI call resilience", () => {
     vi.setSystemTime(new Date(2026, 5, 4, 15, 30, 0));
     vi.stubGlobal("localStorage", storage);
     vi.stubGlobal("fetch", vi.fn());
+    resetProviderCooldowns();
   });
 
   afterEach(() => {
@@ -282,6 +284,80 @@ describe("AI call resilience", () => {
       .mockResolvedValueOnce(providerError(429)); // NVIDIA 429
 
     await expect(callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }))).rejects.toThrow("429");
+  });
+});
+
+describe("AI provider cooldown and fallback", () => {
+  let storage;
+
+  beforeEach(() => {
+    storage = makeStorage();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 4, 15, 30, 0));
+    vi.stubGlobal("localStorage", storage);
+    vi.stubGlobal("fetch", vi.fn());
+    resetProviderCooldowns();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("falls through to NVIDIA when Groq returns 429, with no 429 thrown", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(429))
+      .mockResolvedValueOnce(nvidiaOk("NVIDIA saved it."));
+
+    const reply = await callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }));
+
+    expect(reply).toBe("NVIDIA saved it.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(fetch.mock.calls[1][0]).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
+  });
+
+  it("skips Groq on the very next call after a 429 with no fallback configured", async () => {
+    fetch.mockResolvedValueOnce(providerError(429));
+    await expect(callAI(baseRequest())).rejects.toThrow("429");
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    // Immediate next call: Groq is cooling down and should be skipped entirely.
+    await expect(callAI(baseRequest())).rejects.toThrow("429");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("honors Retry-After for Groq cooldown duration", async () => {
+    fetch.mockResolvedValueOnce(providerError(429, { "Retry-After": "60" }));
+    await expect(callAI(baseRequest())).rejects.toThrow("429");
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    // Still within the 60s Retry-After window: Groq stays skipped.
+    vi.setSystemTime(new Date(2026, 5, 4, 15, 30, 30));
+    await expect(callAI(baseRequest())).rejects.toThrow("429");
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    // Past the 60s window: Groq is attempted again.
+    vi.setSystemTime(new Date(2026, 5, 4, 15, 31, 1));
+    fetch.mockResolvedValueOnce(groqOk("Groq is back."));
+    const reply = await callAI(baseRequest());
+    expect(reply).toBe("Groq is back.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+  });
+
+  it("does not create a cooldown for a non-429/503 Groq error", async () => {
+    fetch.mockResolvedValueOnce(providerError(401));
+    await expect(callAI(baseRequest())).rejects.toThrow("all_providers_failed");
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    // Immediate next call: Groq was not put on cooldown, so it's attempted again.
+    fetch.mockResolvedValueOnce(groqOk("Groq retried fine."));
+    const reply = await callAI(baseRequest());
+    expect(reply).toBe("Groq retried fine.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
   });
 });
 
