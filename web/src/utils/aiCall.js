@@ -36,7 +36,8 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens) {
       model: GROQ_MODEL,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
       max_tokens: maxTokens,
-      temperature: 0.8
+      temperature: 0.4,
+      top_p: 0.9
     })
   });
   if (!res.ok) throw statusError("groq", res.status);
@@ -142,7 +143,10 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
       }
     }
   }
-  throw lastErr;
+  // Preserve 429/503 so callers can surface rate-limit/busy hints.
+  // All other failures become a stable, provider-agnostic error code.
+  if (lastErr.message === "429" || lastErr.message === "503") throw lastErr;
+  throw new Error("all_providers_failed");
 }
 
 export function getAIKeys() {

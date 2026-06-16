@@ -451,7 +451,7 @@ ${buildReasoningInstruction(firstName)}`;
 
       saveSubPath("chatHistory", [...chatHistoryRef.current, { text: replyText || "Got it.", isUser: false }]);
     } catch (err) {
-      const hint = err.message === "429" ? "Rate limit — wait 30 sec and retry." : err.message === "503" ? "AI server busy — try again." : err.message === "no_key" ? "Add an AI key in Settings." : `AI error ${err.message}`;
+      const hint = err.message === "429" ? "Rate limit — wait 30 sec and retry." : err.message === "503" ? "AI server busy — try again." : err.message === "no_key" ? "Add an AI key in Settings." : "AI is unavailable right now. Check your AI keys in Settings or try again later.";
       saveSubPath("chatHistory", [...chatHistoryRef.current, { text: hint, isUser: false }]);
     } finally {
       setChatLoading(false);
@@ -544,7 +544,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
       });
       setBriefingResult(reply);
     } catch (err) {
-      setBriefingResult(`Focus Briefing failed: ${err.message}`);
+      setBriefingResult("AI is unavailable right now. Check your AI keys in Settings or try again later.");
     } finally {
       setBriefingLoading(false);
     }

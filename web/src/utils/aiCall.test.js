@@ -193,6 +193,35 @@ describe("AI call resilience", () => {
     await expect(callAI(baseRequest({ groqKey: "", nvidiaKey: "", geminiKey: "" }))).rejects.toThrow("no_key");
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it("sends temperature 0.4 and top_p 0.9 in Groq request body", async () => {
+    fetch.mockResolvedValue(groqOk("reply"));
+    await callAI(baseRequest());
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.temperature).toBe(0.4);
+    expect(body.top_p).toBe(0.9);
+    expect(body.model).toBe("openai/gpt-oss-120b");
+  });
+
+  it("throws all_providers_failed when all providers fail with non-rate-limit errors", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(401))  // Groq 401
+      .mockResolvedValueOnce(providerError(400))  // NVIDIA 400
+      .mockResolvedValueOnce(providerError(400)); // Gemini 400
+
+    await expect(callAI(baseRequest({
+      nvidiaKey: "test-nvidia-key",
+      geminiKey: "test-gemini-key",
+    }))).rejects.toThrow("all_providers_failed");
+  });
+
+  it("preserves 429 error when all providers are rate-limited", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(429))  // Groq 429
+      .mockResolvedValueOnce(providerError(429)); // NVIDIA 429
+
+    await expect(callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }))).rejects.toThrow("429");
+  });
 });
 
 describe("extractJsonArray", () => {
