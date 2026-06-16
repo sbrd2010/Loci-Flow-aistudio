@@ -35,7 +35,7 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens) {
     body: JSON.stringify({
       model: GROQ_MODEL,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
-      max_tokens: maxTokens,
+      max_tokens: maxTokens ?? 300,
       temperature: 0.4,
       top_p: 0.9
     })
@@ -48,8 +48,7 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens) {
 }
 
 async function callNvidia(nvidiaKey, systemPrompt, messages, maxTokens) {
-  // Use at least 1500 to leave room for reasoning tokens alongside the visible reply.
-  const effectiveMaxTokens = Math.max(1500, maxTokens || 0);
+  const outputMaxTokens = Math.min(maxTokens ?? 1500, 4000);
   const res = await fetchWithTimeout(NVIDIA_URL, {
     method: "POST",
     headers: {
@@ -59,7 +58,7 @@ async function callNvidia(nvidiaKey, systemPrompt, messages, maxTokens) {
     body: JSON.stringify({
       model: NVIDIA_MODEL,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
-      max_tokens: effectiveMaxTokens,
+      max_tokens: outputMaxTokens,
       temperature: 0.4,
       top_p: 0.9,
       reasoning_effort: "high",
@@ -116,7 +115,7 @@ function buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey) 
   return (orders[pref] || orders.auto).map(n => available[n]).filter(Boolean);
 }
 
-export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, messages, maxTokens = 300 }) {
+export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, messages, maxTokens }) {
   const cleanGroqKey   = (groqKey   || "").trim();
   const cleanNvidiaKey = (nvidiaKey || "").trim();
   const cleanGeminiKey = (geminiKey || "").trim();

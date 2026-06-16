@@ -156,6 +156,38 @@ describe("AI call resilience", () => {
     expect(body.stream).toBe(false);
   });
 
+  it("NVIDIA respects a small caller maxTokens (700)", async () => {
+    storage.setItem("loci_provider_pref", "nvidia");
+    fetch.mockResolvedValue(nvidiaOk("reply"));
+    await callAI(baseRequest({ groqKey: "", nvidiaKey: "test-nvidia-key", maxTokens: 700 }));
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.max_tokens).toBe(700);
+  });
+
+  it("NVIDIA allows a large caller maxTokens (4000)", async () => {
+    storage.setItem("loci_provider_pref", "nvidia");
+    fetch.mockResolvedValue(nvidiaOk("reply"));
+    await callAI(baseRequest({ groqKey: "", nvidiaKey: "test-nvidia-key", maxTokens: 4000 }));
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.max_tokens).toBe(4000);
+  });
+
+  it("NVIDIA defaults to 1500 when maxTokens is not provided", async () => {
+    storage.setItem("loci_provider_pref", "nvidia");
+    fetch.mockResolvedValue(nvidiaOk("reply"));
+    await callAI(baseRequest({ groqKey: "", nvidiaKey: "test-nvidia-key", maxTokens: undefined }));
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.max_tokens).toBe(1500);
+  });
+
+  it("NVIDIA caps max_tokens at 4000 when caller requests more", async () => {
+    storage.setItem("loci_provider_pref", "nvidia");
+    fetch.mockResolvedValue(nvidiaOk("reply"));
+    await callAI(baseRequest({ groqKey: "", nvidiaKey: "test-nvidia-key", maxTokens: 9999 }));
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.max_tokens).toBe(4000);
+  });
+
   it("falls back through NVIDIA to Gemini when Groq fails in auto mode", async () => {
     fetch
       .mockResolvedValueOnce(providerError(429))   // Groq fails
