@@ -392,6 +392,7 @@ ${buildReasoningInstruction(firstName)}`;
       }
 
       let replyText = cleanText;
+      let actionResults = [];
       if (actions.length > 0 && isSyncingFromCache) {
         // The model's narration above (e.g. "Added 'X' to your list") describes an
         // action that was NOT applied below — replace it entirely so the user
@@ -403,6 +404,7 @@ ${buildReasoningInstruction(firstName)}`;
           actions,
           { lociDateStr: todayStr, localDateStr: getLocalDateString(now), lastUserMessage: userText, now: now.getTime() }
         );
+        actionResults = results;
 
         const patch = {};
         if (updatedPayload.tasks !== tasksRef.current) patch.tasks = updatedPayload.tasks;
@@ -462,7 +464,11 @@ ${buildReasoningInstruction(firstName)}`;
           : configPatch);
       }
 
-      saveSubPath("chatHistory", [...chatHistoryRef.current, { text: replyText || "Got it.", isUser: false }]);
+      saveSubPath("chatHistory", [...chatHistoryRef.current, {
+        text: replyText || "Got it.",
+        isUser: false,
+        ...(actionResults.some(r => r.matched) && { actions: actionResults.filter(r => r.matched) }),
+      }]);
     } catch (err) {
       console.error("[CoachTab] AI chat failed:", err);
       const hint = err.message === "429" ? "Rate limit — wait 30 sec and retry." : err.message === "503" ? "AI server busy — try again." : err.message === "no_key" ? "Add an AI key in Settings." : "AI is unavailable right now. Check your AI keys in Settings or try again later.";
@@ -612,6 +618,20 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                 >
                   {m.text}
                 </ReactMarkdown>
+              )}
+              {!m.isUser && m.actions && m.actions.length > 0 && (
+                <div className="coach-action-chips">
+                  {m.actions.map((a, i) => {
+                    const icons  = { COMPLETE_TASK: "✅", SET_NOW_FOCUS: "🎯", START_FOCUS: "🟢", ADD_TASK: "＋", PARK_TASK: "🔵" };
+                    const labels = { COMPLETE_TASK: "Done", SET_NOW_FOCUS: "Focus", START_FOCUS: "Session", ADD_TASK: "Added", PARK_TASK: "Parked" };
+                    const title  = (a.task?.title || a.title || "").slice(0, 28);
+                    return (
+                      <span key={i} className="coach-action-chip">
+                        {icons[a.type] || "·"} {labels[a.type] || a.type}: {title}
+                      </span>
+                    );
+                  })}
+                </div>
               )}
               <div className="chat-sender" style={{ color: m.isUser ? "rgba(255,255,255,0.7)" : "var(--text-muted)" }}>
                 {m.isUser ? "You" : config.mentorName || "Mentor"}
