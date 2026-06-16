@@ -60,7 +60,7 @@ export function buildExecutionCoachSignal(payload = {}, date = new Date()) {
   const deadlineMissStreak = getDeadlineMissStreak(config, date);
   const deadlineAction = (config.deadlineAction || "make one visible move").trim();
 
-  if (hasDeadline && !deadlineDoneToday && deadlineMissStreak >= 3) {
+  if (hasDeadline && !deadlineDoneToday && deadlineMissStreak >= 3 && (!config.deadlineDate || config.deadlineDate >= lociTodayStr)) {
     return {
       shouldShow: true,
       level: "mirror",
@@ -90,6 +90,22 @@ export function buildExecutionCoachSignal(payload = {}, date = new Date()) {
       title: "Follow the route",
       body: `Your next Day Map task is ${formatTaskTitle(dayMapNext)}. Start there.`,
       primaryTaskUuid: dayMapNext.uuid || null
+    };
+  }
+
+  if (
+    config.deadlineDate &&
+    config.deadlineDate < lociTodayStr &&
+    config.deadlineFollowupAskedFor !== config.deadlineDate
+  ) {
+    const label = (config.deadlineLabel || "your key deadline").trim();
+    return {
+      shouldShow: true,
+      level: "nudge",
+      reason: "deadline_date_passed_followup",
+      title: `How did ${label} go?`,
+      body: `Your deadline for ${label} has passed. Want to check in on how it went and plan what's next?`,
+      primaryTaskUuid: null,
     };
   }
 

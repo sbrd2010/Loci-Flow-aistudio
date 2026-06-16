@@ -530,7 +530,10 @@ export default function TodayTab({
 
   const handleCoachNudgeTalk = () => {
     track("coach_nudge_engaged", { reason: coachNudge.reason });
-    saveSubPath("config", { ...config, ...buildCoachNudgeClearedConfig(payload, new Date()), pendingCoachNudge: buildPendingCoachNudge(coachNudge, payload, new Date()), lastUpdated: Date.now() });
+    const extraPatch = coachNudge.reason === "deadline_date_passed_followup"
+      ? { deadlineFollowupAskedFor: config.deadlineDate }
+      : {};
+    saveSubPath("config", { ...config, ...buildCoachNudgeClearedConfig(payload, new Date()), ...extraPatch, pendingCoachNudge: buildPendingCoachNudge(coachNudge, payload, new Date()), lastUpdated: Date.now() });
     onOpenCoach?.();
   };
 
