@@ -15,6 +15,10 @@ import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
 import { addPinnedFact, addRecentObservation, buildLociMemoryContext, buildMemoryWritingRules, forgetFromMemory, isMemoryEnabled, parseMemoryTags } from "../utils/coachMemory";
 import { buildReasoningInstruction, stripReasoningTag } from "../utils/coachReasoning";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeSanitize from "rehype-sanitize";
+import "../styles/coachUI.css";
 
 export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
@@ -312,7 +316,15 @@ IF ${firstName.toUpperCase()} ASKS "WHAT DO YOU KNOW ABOUT ME?" (or similar), di
 If memory is off or has nothing stored, say so plainly rather than guessing — don't claim pinned facts or recent notes that aren't shown above.
 
 LANGUAGE: Never use the word "ADHD". Use instead: focus challenge, overwhelm, execution support, momentum, time awareness, micro-step, reset, low-energy mode.
-TONE AND FORMAT: Write in warm, direct prose — conversational, not clinical. Avoid scattering **bold** throughout or using asterisk-heavy bullet lists; use short paragraphs or clean bullets only when ${firstName} explicitly asks for them. Never reveal internal labels, scratchpad content, or raw app metrics ("Completion Rate", "Task Estimate", "Priority Use", "Date Context", etc.) unless ${firstName} directly asks for numbers. When ${firstName} asks what you know about them, translate the data into human insight: what they are carrying, what pattern Loci notices, what support makes sense next. Lead with the person, not the data.
+TONE AND FORMAT: Responses render as Markdown — use it purposefully, not decoratively. Default is warm, direct prose in short paragraphs. This is a coaching conversation, not a report.
+- **Bold** only for task names or a single critical action per reply. Not for praise words.
+- Bullet lists only when genuinely listing 3+ parallel items, or when ${firstName} explicitly asks for a breakdown.
+- Numbered lists for explicit step-by-step sequences only.
+- Headings (## or ###) only for multi-section structured output like a Focus Brief. Never in a normal chat reply.
+- Start longer replies with one short context-aware hook sentence. End with one clear next move when appropriate.
+- Semantic emoji contract — use ONLY when semantically appropriate: 🟢 do now, 🔵 do later, 🟠 watch out, 🟣 reset/reframe, ✅ resolved. No other emoji. No emoji when ${firstName} is emotional, venting, or distressed.
+- Do not use clinical, diagnostic, or medical language unless ${firstName} explicitly uses that framing first.
+- Never reveal internal labels, scratchpad content, or raw app metrics ("Completion Rate", "Task Estimate", "Priority Use", "Date Context", etc.) unless ${firstName} directly asks for numbers. When ${firstName} asks what you know about them, translate the data into human insight: what they are carrying, what pattern Loci notices, what support makes sense next. Lead with the person, not the data.
 ${profileToCoachContext(userProfile) ? `\n${profileToCoachContext(userProfile)}\n` : ""}
 SESSION: ${nowLabel} (${timeOfDay}), ${config.visitStreakCount || 0}-day streak, ${todayActive.length} active tasks today.
 
@@ -581,11 +593,26 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
           )}
         </div>
 
-        <div className="chat-window">
+        <div className="chat-window coach-chat">
           {chatHistory.map((m, idx) => (
             <div key={idx} className={`chat-bubble ${m.isUser ? "chat-bubble-user" : "chat-bubble-mentor"}`}
-              style={{ alignSelf: m.isUser ? "flex-end" : "flex-start" }}>
-              <span>{m.text}</span>
+              style={m.isUser ? { alignSelf: "flex-end" } : undefined}>
+              {m.isUser ? (
+                <span>{m.text}</span>
+              ) : (
+                <ReactMarkdown
+                  className="coach-md"
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeSanitize]}
+                  components={{
+                    a: ({ node, href, children, ...props }) => (
+                      <a href={href} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>
+                    ),
+                  }}
+                >
+                  {m.text}
+                </ReactMarkdown>
+              )}
               <div className="chat-sender" style={{ color: m.isUser ? "rgba(255,255,255,0.7)" : "var(--text-muted)" }}>
                 {m.isUser ? "You" : config.mentorName || "Mentor"}
               </div>
@@ -733,8 +760,19 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
               {briefingLoading ? "Analyzing your tasks…" : "Get AI Focus Brief"}
             </button>
             {briefingResult && (
-              <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "14px", fontSize: "12.5px", lineHeight: "1.7", maxHeight: "380px", overflowY: "auto", whiteSpace: "pre-line", color: "var(--text-primary)" }}>
-                {briefingResult}
+              <div className="coach-briefing-box">
+                <ReactMarkdown
+                  className="coach-md"
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeSanitize]}
+                  components={{
+                    a: ({ node, href, children, ...props }) => (
+                      <a href={href} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>
+                    ),
+                  }}
+                >
+                  {briefingResult}
+                </ReactMarkdown>
               </div>
             )}
           </div>
