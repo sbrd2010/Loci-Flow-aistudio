@@ -74,4 +74,25 @@ Hey, let's get moving.`;
 ]]`;
     expect(stripReasoningTag(raw)).toBe("I'm here. Let's pick one small next step.");
   });
+
+  it("strips a bare THINK block without [[ ]] delimiters (inline format)", () => {
+    const raw = "THINK: - Mood: cooperative. - Gap: none. - Pattern: none visible. - Trap: being too brief. - Move: structure in bullet points as requested.\nRohan, here's what I know about you.";
+    expect(stripReasoningTag(raw)).toBe("Rohan, here's what I know about you.");
+  });
+
+  it("strips a bare THINK block without [[ ]] delimiters (multiline format)", () => {
+    const raw = `THINK:
+- Mood: scattered.
+- Gap: no completions yet.
+- Pattern: over-planning tendency.
+- Trap: listing all tasks.
+- Move: empathy-first.
+Hey, I hear you.`;
+    expect(stripReasoningTag(raw)).toBe("Hey, I hear you.");
+  });
+
+  it("strips a bare inline THINK block with visible content appended on same line after Move", () => {
+    const raw = "THINK: - Mood: frustrated. - Gap: none. - Pattern: none visible. - Trap: jumping to tasks. - Move: empathy-first. * Your Profile: ...";
+    expect(stripReasoningTag(raw)).toBe("* Your Profile: ...");
+  });
 });
