@@ -470,8 +470,6 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
-  const recentDump = [...(payload.brainDump || [])].slice(-3).reverse();
-
   const handleAddAnchor = () => {
     if (!newAnchorText.trim()) return;
     const next = [...editedAnchors, { id: safeUUID(), text: newAnchorText.trim() }];
@@ -989,20 +987,6 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
               >
                 ✨ Organize into tasks with AI
               </button>
-            )}
-            {recentDump.length > 0 && (
-              <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "5px" }}>
-                {recentDump.map(item => (
-                  <p key={item.id} style={{ fontSize: "12px", color: "var(--text-secondary)", margin: 0, padding: "5px 8px", background: "var(--bg-secondary)", borderRadius: "6px", lineHeight: "1.4" }}>
-                    {item.text}
-                  </p>
-                ))}
-                {dumpCount > 3 && (
-                  <button onClick={() => setToolPanel("dump")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "11px", color: "var(--accent)", fontWeight: "700", textAlign: "left", padding: "2px 8px" }}>
-                    See all {dumpCount} items →
-                  </button>
-                )}
-              </div>
             )}
           </div>
 
