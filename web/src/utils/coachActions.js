@@ -73,7 +73,9 @@ const TITLE_CHECK_TYPES = new Set(["SET_NOW_FOCUS", "START_FOCUS", "COMPLETE_TAS
 // (e.g. "it") are passed through — findTaskByTitle's own length guard
 // handles those.
 function titleMentionedInMessage(title, message) {
-  const words = normalizeTitle(title).split(" ").filter(w => w.length >= 3);
+  const words = normalizeTitle(title)
+    .split(" ")
+    .filter(w => w.length >= 3 && !/^(pr\d+|task|tasks)$/i.test(w));
   if (words.length === 0) return true;
   const normMessage = normalizeTitle(message);
   return words.some(w => normMessage.includes(w));
