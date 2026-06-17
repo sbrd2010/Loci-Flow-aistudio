@@ -13,9 +13,42 @@ const SERVICE_UNAVAILABLE_COOLDOWN_MS = 10000;
 const MAX_RETRY_AFTER_MS = 5 * 60 * 1000;
 
 // Per-provider cooldown so a rate-limited provider is skipped (not re-hit)
-// on subsequent calls until its cooldown expires.
-const providerCooldownUntil = { groq: 0, nvidia: 0, gemini: 0 };
-const providerCooldownReason = { groq: null, nvidia: null, gemini: null };
+// on subsequent calls until its cooldown expires. Keyed by provider name +
+// key fingerprint (not provider name alone) so pasting a new key after an
+// old key's 429 isn't blocked by the old key's cooldown.
+const providerCooldownUntil = new Map();
+const providerCooldownReason = new Map();
+
+// One-way bucketing key for cooldown state only — never logged, never used
+// to recover the key.
+function keyFingerprint(key) {
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) {
+    hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0;
+  }
+  return `${key.length}:${Math.abs(hash)}`;
+}
+
+function cooldownKey(provider) {
+  return `${provider.name}:${keyFingerprint(provider.key)}`;
+}
+
+// Logs counts/metadata only — never the API key, key fingerprint, system
+// prompt content, message content, or raw request body.
+function logAICallDiagnostics({ provider, outcome, retryAfterMs, contextMode, systemPrompt, messages }) {
+  const messagesChars = (messages || []).reduce((sum, m) => sum + String(m.content || "").length, 0);
+  const systemPromptChars = String(systemPrompt || "").length;
+  console.debug("[aiCall]", {
+    provider,
+    outcome,
+    retryAfterMs: retryAfterMs ?? null,
+    contextMode: contextMode ?? null,
+    systemPromptChars,
+    messagesCount: (messages || []).length,
+    messagesChars,
+    approxTotalChars: systemPromptChars + messagesChars,
+  });
+}
 
 function fetchWithTimeout(url, opts) {
   const controller = new AbortController();
@@ -42,12 +75,8 @@ function parseRetryAfterMs(res) {
 
 // Test-only: clears per-provider cooldown state between unrelated test cases.
 export function resetProviderCooldowns() {
-  providerCooldownUntil.groq = 0;
-  providerCooldownUntil.nvidia = 0;
-  providerCooldownUntil.gemini = 0;
-  providerCooldownReason.groq = null;
-  providerCooldownReason.nvidia = null;
-  providerCooldownReason.gemini = null;
+  providerCooldownUntil.clear();
+  providerCooldownReason.clear();
 }
 
 function statusError(provider, status, res) {
@@ -154,7 +183,7 @@ function buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey) 
   return (orders[pref] || orders.auto).map(n => available[n]).filter(Boolean);
 }
 
-export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, messages, maxTokens }) {
+export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, messages, maxTokens, contextMode }) {
   const cleanGroqKey   = (groqKey   || "").trim();
   const cleanNvidiaKey = (nvidiaKey || "").trim();
   const cleanGeminiKey = (geminiKey || "").trim();
@@ -168,8 +197,10 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
 
   let lastErr;
   for (const provider of order) {
-    if (Date.now() < providerCooldownUntil[provider.name]) {
-      lastErr = new Error(providerCooldownReason[provider.name] || "503");
+    const ckey = cooldownKey(provider);
+    if (Date.now() < (providerCooldownUntil.get(ckey) || 0)) {
+      lastErr = new Error(providerCooldownReason.get(ckey) || "503");
+      logAICallDiagnostics({ provider: provider.name, outcome: "cooldown_skip", contextMode, systemPrompt, messages });
       continue; // skip the provider network call; no extra provider attempt
     }
     try {
@@ -181,16 +212,18 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
       } else {
         reply = await callGemini(provider.key, systemPrompt, messages);
       }
+      logAICallDiagnostics({ provider: provider.name, outcome: "ok", contextMode, systemPrompt, messages });
       return appendAIUsageWarning(reply, usage.warning);
     } catch (err) {
       lastErr = err;
       if (err.message === "429") {
-        providerCooldownUntil[provider.name] = Date.now() + (err.retryAfterMs ?? RATE_LIMIT_COOLDOWN_MS);
-        providerCooldownReason[provider.name] = "429";
+        providerCooldownUntil.set(ckey, Date.now() + (err.retryAfterMs ?? RATE_LIMIT_COOLDOWN_MS));
+        providerCooldownReason.set(ckey, "429");
       } else if (err.message === "503") {
-        providerCooldownUntil[provider.name] = Date.now() + (err.retryAfterMs ?? SERVICE_UNAVAILABLE_COOLDOWN_MS);
-        providerCooldownReason[provider.name] = "503";
+        providerCooldownUntil.set(ckey, Date.now() + (err.retryAfterMs ?? SERVICE_UNAVAILABLE_COOLDOWN_MS));
+        providerCooldownReason.set(ckey, "503");
       }
+      logAICallDiagnostics({ provider: provider.name, outcome: err.message, retryAfterMs: err.retryAfterMs, contextMode, systemPrompt, messages });
       if (provider !== order[order.length - 1]) {
         console.warn(`${provider.name} failed, trying next provider:`, err.message);
       }
