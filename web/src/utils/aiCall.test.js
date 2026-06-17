@@ -359,6 +359,75 @@ describe("AI provider cooldown and fallback", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
   });
+
+  it("does not block a brand-new key on the same provider after the old key's 429", async () => {
+    fetch.mockResolvedValueOnce(providerError(429));
+    await expect(callAI(baseRequest({ nvidiaKey: "", groqKey: "old-key" }))).rejects.toThrow("429");
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    // Same provider, brand-new key: must be attempted, not skipped via the old key's cooldown.
+    fetch.mockResolvedValueOnce(groqOk("New key works."));
+    const reply = await callAI(baseRequest({ nvidiaKey: "", groqKey: "brand-new-key" }));
+    expect(reply).toBe("New key works.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+  });
+
+  it("still cools down the old key itself on a subsequent call with that same key", async () => {
+    fetch.mockResolvedValueOnce(providerError(429));
+    await expect(callAI(baseRequest({ nvidiaKey: "", groqKey: "old-key" }))).rejects.toThrow("429");
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    // Same provider, same old key: still on cooldown, skipped entirely.
+    await expect(callAI(baseRequest({ nvidiaKey: "", groqKey: "old-key" }))).rejects.toThrow("429");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("AI call diagnostics", () => {
+  let storage;
+
+  beforeEach(() => {
+    storage = makeStorage();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 4, 15, 30, 0));
+    vi.stubGlobal("localStorage", storage);
+    vi.stubGlobal("fetch", vi.fn());
+    resetProviderCooldowns();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("logs provider name, contextMode, and char counts only — never the key, fingerprint, or prompt/message content", async () => {
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+    fetch.mockResolvedValue(groqOk("reply"));
+
+    const secretKey = "super-secret-groq-key-12345";
+    const systemPrompt = "CONFIDENTIAL SYSTEM PROMPT CONTENT";
+    await callAI(baseRequest({ groqKey: secretKey, systemPrompt, contextMode: "light" }));
+
+    expect(debugSpy).toHaveBeenCalled();
+    const loggedArgs = debugSpy.mock.calls.flat();
+    const loggedText = loggedArgs.map(a => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
+
+    expect(loggedText).not.toContain(secretKey);
+    expect(loggedText).not.toContain(systemPrompt);
+    expect(loggedText).not.toContain("What should I do next?"); // message content from baseRequest()
+
+    const loggedPayload = loggedArgs.find(a => typeof a === "object" && a !== null);
+    expect(loggedPayload).toMatchObject({
+      provider: "groq",
+      outcome: "ok",
+      contextMode: "light",
+      systemPromptChars: systemPrompt.length,
+    });
+    expect(typeof loggedPayload.messagesChars).toBe("number");
+    expect(typeof loggedPayload.approxTotalChars).toBe("number");
+  });
 });
 
 describe("extractJsonArray", () => {
