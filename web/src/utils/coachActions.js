@@ -36,6 +36,10 @@ function normalizeTitle(str = "") {
   return String(str).toLowerCase().trim().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ");
 }
 
+function normalizeStopWords(str = "") {
+  return String(str || "").replace(/\b(the|a|an)\b/gi, "").replace(/\s+/g, " ").trim();
+}
+
 // Deterministic, code-enforced gating: a coach action tag may only mutate
 // state if the user's own last message contains language that clearly
 // requests that kind of action. Keeps the AI's "explicit-request-only" rule
@@ -43,9 +47,9 @@ function normalizeTitle(str = "") {
 // misread request.
 const INTENT_PATTERNS = {
   COMPLETE_TASK: /\b(done|finish(ed|ing)?|complet(e|ed|ing)|wrapped? up|knocked out)\b/i,
-  SET_NOW_FOCUS: /\b(focus on|switch.*focus|prioriti[sz]e|now focus)\b/i,
+  SET_NOW_FOCUS: /\b(focus on|switch.*focus|prioriti[sz]e|now focus|pin( this| that)? task|pin\b|focus.*now)\b/i,
   START_FOCUS: /\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\b/i,
-  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don'?t forget|add .+ to (my |the )?(today'?s? )?(list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s? )?(list|tasks?)\b)/i,
+  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don'?t forget|add .+ to (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b)/i,
   PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|skip)\b/i,
 };
 
@@ -69,7 +73,9 @@ const TITLE_CHECK_TYPES = new Set(["SET_NOW_FOCUS", "START_FOCUS", "COMPLETE_TAS
 // (e.g. "it") are passed through — findTaskByTitle's own length guard
 // handles those.
 function titleMentionedInMessage(title, message) {
-  const words = normalizeTitle(title).split(" ").filter(w => w.length >= 3);
+  const words = normalizeTitle(title)
+    .split(" ")
+    .filter(w => w.length >= 3 && !/^(pr\d+|task|tasks)$/i.test(w));
   if (words.length === 0) return true;
   const normMessage = normalizeTitle(message);
   return words.some(w => normMessage.includes(w));
@@ -112,10 +118,70 @@ export function messageSeemsActionLike(actionType, message = "") {
   return false;
 }
 
-export function matchesUserIntent(actionType, lastUserMessage = "", title = "") {
+function isClarificationFlow(actionType, lastUserMessage, prevUserMessage, prevAssistantMessage) {
+  if (!prevUserMessage || !prevAssistantMessage) return false;
+  
+  const msg = String(lastUserMessage || "").trim().toLowerCase();
+  const prevAssistant = String(prevAssistantMessage || "").trim().toLowerCase();
+  
+  // Enforce that the current message is a short response
+  if (msg.length > 150) return false;
+
+  // Assistant's previous message must be a question/clarification
+  const isAssistantQuestion = (prevAssistant.includes("?") || 
+                               /\b(which|should|would|choose|separate|one|or|confirm)\b/i.test(prevAssistant)) &&
+                              /\b(task|tasks|focus|add|park|done|complete|which|separate|one|or|confirm)\b/i.test(prevAssistant);
+  if (!isAssistantQuestion) return false;
+
+  if (actionType === "ADD_TASK") {
+    // Clarification for adding: e.g. "2 separate", "one task", "yes", "separate"
+    return /\b(separate|one|yes|no|ok|both|neither|2|two|1|single)\b/i.test(msg) || 
+           msg.length < 50;
+  }
+
+  // For other actions, the user is naming/clarifying the task title in response to a question
+  return msg.length < 100;
+}
+
+export function matchesUserIntent(actionType, lastUserMessage = "", title = "", chatHistory = []) {
   if (!INTENT_PATTERNS[actionType]) return false;
-  if (TITLE_CHECK_TYPES.has(actionType) && !titleMentionedInMessage(title, String(lastUserMessage || ""))) return false;
-  return messageSeemsActionLike(actionType, lastUserMessage);
+
+  let prevUserMessage = "";
+  let prevAssistantMessage = "";
+  
+  for (let i = chatHistory.length - 1; i >= 0; i--) {
+    const msg = chatHistory[i];
+    if (msg.isUser) {
+      if (!prevUserMessage) {
+        prevUserMessage = msg.text || "";
+      }
+    } else {
+      if (!prevAssistantMessage) {
+        prevAssistantMessage = msg.text || "";
+      }
+    }
+  }
+
+  let hasIntent = false;
+  if (messageSeemsActionLike(actionType, lastUserMessage)) {
+    hasIntent = true;
+  } else if (prevUserMessage && messageSeemsActionLike(actionType, prevUserMessage)) {
+    if (isClarificationFlow(actionType, lastUserMessage, prevUserMessage, prevAssistantMessage)) {
+      hasIntent = true;
+    }
+  }
+  
+  if (!hasIntent) return false;
+
+  // Check if title is mentioned in current user message, previous user message, or previous assistant message
+  const titleInCurrent = titleMentionedInMessage(title, String(lastUserMessage || ""));
+  const titleInPrevUser = prevUserMessage ? titleMentionedInMessage(title, prevUserMessage) : false;
+  const titleInPrevAssistant = prevAssistantMessage ? titleMentionedInMessage(title, prevAssistantMessage) : false;
+  const isClarification = isClarificationFlow(actionType, lastUserMessage, prevUserMessage, prevAssistantMessage);
+  const isPronounRef = /\b(this task|that task|the task|it|that|this)\b/i.test(String(lastUserMessage || ""));
+  const pronounAllowed = isPronounRef && (titleInPrevUser || titleInPrevAssistant || isClarification);
+
+  return !!(titleInCurrent || titleInPrevUser || titleInPrevAssistant || pronounAllowed);
 }
 
 // Exact-title-only match against active tasks — used to detect "obvious"
@@ -143,9 +209,10 @@ export function findTaskByTitle(tasks = [], rawTitle = "") {
   // title match for short fragments instead.
   if (target.length < 4) return null;
 
+  const targetNorm = normalizeStopWords(target);
   const partial = active.filter(t => {
-    const norm = normalizeTitle(t.title);
-    return norm.includes(target) || target.includes(norm);
+    const norm = normalizeStopWords(normalizeTitle(t.title));
+    return norm.includes(targetNorm) || targetNorm.includes(norm);
   });
   return partial.length === 1 ? partial[0] : null;
 }
@@ -227,7 +294,7 @@ export function applyCoachActions(payload, actions, { lociDateStr, localDateStr,
   const results = [];
 
   for (const action of actions) {
-    if (!matchesUserIntent(action.type, lastUserMessage, action.title)) {
+    if (!matchesUserIntent(action.type, lastUserMessage, action.title, payload.chatHistory || [])) {
       results.push({ ...action, matched: false, blocked: true });
       continue;
     }
@@ -295,8 +362,7 @@ const CLARIFICATION_NOTES = {
 //    Guard) always contribute a note, since these reflect a real outcome the
 //    user should know about.
 export function buildActionReplyText(cleanText, results = [], lastUserMessage = "") {
-  if (results.every(r => r.matched)) return cleanText;
-
+  const userWantedAction = Object.keys(INTENT_PATTERNS).some(type => messageSeemsActionLike(type, lastUserMessage));
   const successLines = results.filter(r => r.matched).map(r => {
     const title = r.task ? r.task.title : r.title;
     switch (r.type) {
@@ -309,6 +375,21 @@ export function buildActionReplyText(cleanText, results = [], lastUserMessage = 
     }
   }).filter(Boolean);
 
+  const allUnmatchedAreStaleBlocked = results.every(r => 
+    r.matched || (r.blocked && !messageSeemsActionLike(r.type, lastUserMessage))
+  );
+
+  if (results.length > 0) {
+    if (allUnmatchedAreStaleBlocked) {
+      return cleanText;
+    }
+  } else {
+    if (!userWantedAction) {
+      return cleanText;
+    }
+  }
+
+  // Otherwise, we must construct the response purely from successLines and notes.
   const notFound = results.filter(r => !r.matched && !r.blocked && r.type !== "ADD_TASK");
   const addSkipped = results.filter(r => !r.matched && !r.blocked && r.type === "ADD_TASK" && !r.eveningGuardBlocked);
   const eveningGuardBlocked = results.filter(r => r.eveningGuardBlocked);
@@ -332,6 +413,8 @@ export function buildActionReplyText(cleanText, results = [], lastUserMessage = 
   }
   notes.push(...clarifications);
 
-  if (successLines.length === 0 && notes.length === 0) return cleanText;
+  if (successLines.length === 0 && notes.length === 0) {
+    notes.push("I couldn't save that action yet.");
+  }
   return [...successLines, ...notes].join(" ");
 }
