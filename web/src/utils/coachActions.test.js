@@ -672,3 +672,136 @@ describe("buildActionReplyText", () => {
     );
   });
 });
+
+describe("Coach Action Integrity Constraints (PR #269 Fixes)", () => {
+  const dateOpts = { lociDateStr: "2026-06-13", localDateStr: "2026-06-13" };
+
+  it("a) direct add two tasks to Today", () => {
+    const payload = { tasks: [], config: {}, contributions: [] };
+    const actions = [
+      { type: "ADD_TASK", title: "drink water" },
+      { type: "ADD_TASK", title: "open laptop" }
+    ];
+    const { payload: next, results } = applyCoachActions(payload, actions, {
+      ...dateOpts,
+      lastUserMessage: "Add drink water and open laptop to Today."
+    });
+    expect(next.tasks).toHaveLength(2);
+    expect(next.tasks[0].title).toBe("drink water");
+    expect(next.tasks[0].horizonLevel).toBe("today");
+    expect(next.tasks[1].title).toBe("open laptop");
+    expect(next.tasks[1].horizonLevel).toBe("today");
+    expect(results.every(r => r.matched)).toBe(true);
+  });
+
+  it("b) add task with clarification: '2 separate'", () => {
+    const payload = {
+      tasks: [],
+      config: {},
+      contributions: [],
+      chatHistory: [
+        { text: "Add drink water and open laptop to Today.", isUser: true },
+        { text: "Should I add them as two separate items or one task?", isUser: false }
+      ]
+    };
+    const actions = [
+      { type: "ADD_TASK", title: "drink water" },
+      { type: "ADD_TASK", title: "open laptop" }
+    ];
+    const { payload: next, results } = applyCoachActions(payload, actions, {
+      ...dateOpts,
+      lastUserMessage: "2 separate"
+    });
+    expect(next.tasks).toHaveLength(2);
+    expect(next.tasks[0].title).toBe("drink water");
+    expect(next.tasks[1].title).toBe("open laptop");
+    expect(results.every(r => r.matched)).toBe(true);
+  });
+
+  it("c) 'Can you add more detail?' does not create a task", () => {
+    const payload = { tasks: [], config: {}, contributions: [] };
+    const actions = [{ type: "ADD_TASK", title: "more detail" }];
+    const { payload: next, results } = applyCoachActions(payload, actions, {
+      ...dateOpts,
+      lastUserMessage: "Can you add more detail?"
+    });
+    expect(next.tasks).toHaveLength(0);
+    expect(results[0].matched).toBe(false);
+  });
+
+  it("d) choose one task and set as Now Focus", () => {
+    const payload = {
+      tasks: [
+        { uuid: "1", title: "Review SHM adhesive layer and send it to Danny", horizonLevel: "today", isCompleted: false, isDeleted: false, isParked: false, isNowFocus: false }
+      ],
+      config: {},
+      contributions: []
+    };
+    const actions = [{ type: "SET_NOW_FOCUS", title: "Review SHM adhesive layer and send it to Danny" }];
+    const { payload: next, results } = applyCoachActions(payload, actions, {
+      ...dateOpts,
+      lastUserMessage: "Focus on Review SHM adhesive layer and send it to Danny"
+    });
+    expect(next.tasks[0].isNowFocus).toBe(true);
+    expect(results[0].matched).toBe(true);
+  });
+
+  it("e) user says 'Set that as my Now Focus' after Yoda recommends a task (pronoun resolution)", () => {
+    const payload = {
+      tasks: [
+        { uuid: "1", title: "Review SHM adhesive layer and send it to Danny", horizonLevel: "today", isCompleted: false, isDeleted: false, isParked: false, isNowFocus: false }
+      ],
+      config: {},
+      contributions: [],
+      chatHistory: [
+        { text: "I feel scattered. Help me plan today, but don't overwhelm me.", isUser: true },
+        { text: "I recommend Review SHM adhesive layer and send it to Danny.", isUser: false }
+      ]
+    };
+    const actions = [{ type: "SET_NOW_FOCUS", title: "Review SHM adhesive layer and send it to Danny" }];
+    const { payload: next, results } = applyCoachActions(payload, actions, {
+      ...dateOpts,
+      lastUserMessage: "Set that as my Now Focus."
+    });
+    expect(next.tasks[0].isNowFocus).toBe(true);
+    expect(results[0].matched).toBe(true);
+  });
+
+  it("f) user says 'pin this task to focus now' (verb-less title clarification)", () => {
+    const payload = {
+      tasks: [
+        { uuid: "1", title: "Review SHM adhesive layer and send it to Danny", horizonLevel: "today", isCompleted: false, isDeleted: false, isParked: false, isNowFocus: false }
+      ],
+      config: {},
+      contributions: [],
+      chatHistory: [
+        { text: "I feel scattered. Help me plan today.", isUser: true },
+        { text: "Which task should I focus on? Say: 'Start focus on [task name].'", isUser: false }
+      ]
+    };
+    const actions = [{ type: "SET_NOW_FOCUS", title: "Review SHM adhesive layer and send it to Danny" }];
+    const { payload: next, results } = applyCoachActions(payload, actions, {
+      ...dateOpts,
+      lastUserMessage: "pin this task to focus now"
+    });
+    expect(next.tasks[0].isNowFocus).toBe(true);
+    expect(results[0].matched).toBe(true);
+  });
+
+  it("g) failed action does not show success confirmation", () => {
+    const results = [{ type: "SET_NOW_FOCUS", title: "Non-existing task", matched: false }];
+    const cleanText = "All set! I've pinned Non-existing task as your Now Focus.";
+    const response = buildActionReplyText(cleanText, results, "Set that task as my Now Focus");
+    expect(response).not.toContain("All set");
+    expect(response).not.toContain("I've pinned");
+    expect(response).toContain("I couldn't find");
+  });
+
+  it("h) user wants task mutation but no tag/action executed displays failure note", () => {
+    const results = [];
+    const cleanText = "All set! I've added a new task to your list.";
+    const response = buildActionReplyText(cleanText, results, "Add buy milk to my list");
+    expect(response).not.toContain("All set");
+    expect(response).toBe("I couldn't save that action yet.");
+  });
+});
