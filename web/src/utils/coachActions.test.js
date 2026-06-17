@@ -804,4 +804,33 @@ describe("Coach Action Integrity Constraints (PR #269 Fixes)", () => {
     expect(response).not.toContain("All set");
     expect(response).toBe("I couldn't save that action yet.");
   });
+
+  it("i) 'Set that as my Now Focus' with multiple tasks and no previous assistant recommendation does not mutate and fails safely", () => {
+    const payload = {
+      tasks: [
+        { uuid: "1", title: "Review SHM adhesive layer and send it to Danny", horizonLevel: "today", isCompleted: false, isDeleted: false, isParked: false, isNowFocus: false },
+        { uuid: "2", title: "Buy groceries", horizonLevel: "today", isCompleted: false, isDeleted: false, isParked: false, isNowFocus: false }
+      ],
+      config: {},
+      contributions: [],
+      chatHistory: [
+        { text: "Just say hello.", isUser: true },
+        { text: "Hello! How can I help you today?", isUser: false }
+      ]
+    };
+    const actions = [{ type: "SET_NOW_FOCUS", title: "Review SHM adhesive layer and send it to Danny" }];
+    const { payload: next, results } = applyCoachActions(payload, actions, {
+      ...dateOpts,
+      lastUserMessage: "Set that as my Now Focus."
+    });
+    expect(next.tasks[0].isNowFocus).toBe(false);
+    expect(next.tasks[1].isNowFocus).toBe(false);
+    expect(results[0].matched).toBe(false);
+    expect(results[0].blocked).toBe(true);
+
+    const cleanText = "All set! I've pinned Review SHM adhesive layer and send it to Danny as your Now Focus.";
+    const response = buildActionReplyText(cleanText, results, "Set that as my Now Focus.");
+    expect(response).not.toContain("All set");
+    expect(response).toContain("Which task should I focus on?");
+  });
 });

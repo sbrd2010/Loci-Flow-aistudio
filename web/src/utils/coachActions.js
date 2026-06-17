@@ -126,8 +126,9 @@ function isClarificationFlow(actionType, lastUserMessage, prevUserMessage, prevA
   if (msg.length > 150) return false;
 
   // Assistant's previous message must be a question/clarification
-  const isAssistantQuestion = prevAssistant.includes("?") || 
-                              /\b(which|should|would|choose|separate|one|or|confirm)\b/i.test(prevAssistant);
+  const isAssistantQuestion = (prevAssistant.includes("?") || 
+                               /\b(which|should|would|choose|separate|one|or|confirm)\b/i.test(prevAssistant)) &&
+                              /\b(task|tasks|focus|add|park|done|complete|which|separate|one|or|confirm)\b/i.test(prevAssistant);
   if (!isAssistantQuestion) return false;
 
   if (actionType === "ADD_TASK") {
@@ -174,9 +175,11 @@ export function matchesUserIntent(actionType, lastUserMessage = "", title = "", 
   const titleInCurrent = titleMentionedInMessage(title, String(lastUserMessage || ""));
   const titleInPrevUser = prevUserMessage ? titleMentionedInMessage(title, prevUserMessage) : false;
   const titleInPrevAssistant = prevAssistantMessage ? titleMentionedInMessage(title, prevAssistantMessage) : false;
+  const isClarification = isClarificationFlow(actionType, lastUserMessage, prevUserMessage, prevAssistantMessage);
   const isPronounRef = /\b(this task|that task|the task|it|that|this)\b/i.test(String(lastUserMessage || ""));
+  const pronounAllowed = isPronounRef && (titleInPrevUser || titleInPrevAssistant || isClarification);
 
-  return !!(titleInCurrent || titleInPrevUser || titleInPrevAssistant || isPronounRef);
+  return !!(titleInCurrent || titleInPrevUser || titleInPrevAssistant || pronounAllowed);
 }
 
 // Exact-title-only match against active tasks — used to detect "obvious"
