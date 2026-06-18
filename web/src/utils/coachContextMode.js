@@ -14,7 +14,7 @@ function isCheckinRequest(text) {
   return (REMINDER_VERB_RE.test(text) && TIME_SIGNAL_RE.test(text)) || STANDALONE_TIME_RE.test(text);
 }
 
-const TASK_RE = /\b(plan(?:ning)? (?:my|the|today)|prioriti[sz]e|deadline|schedule|agenda|now focus|set now focus|pin now focus|what should i do|what do i have to do|what are my tasks|what should i work on|help me choose|next step|add (?:this |that )?task|add (?:it )?to (?:my|the|today['’]?s) list|add\b.{1,50}\bto (?:my|the) list|create (?:a )?task|capture this|put (?:this|it) in (?:my|the) tasks|mark\b.{1,50}\bdone\b|mark (?:it |this )?done|completed|finished|complete this|i(['’]m| am) done with (?:this|that|it)?\s*task|i(['’]m| am) done with .{1,50}\btask|(?:done with|finished)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|delete (?:this|that) task|undo|park (?:this|that)|defer (?:this|that)|move (?:this|it) to (?:today|week|month|quarter|6 months|work)|start (?:a )?timer|start (?:a )?focus|focus session|overdue|(?:what['’]?s|what is|anything) due|due (?:today|tomorrow|this week|date)|tasks?|my list|on my list|parked|what did i park|should i start|which task should i start)\b/i;
+const TASK_RE = /\b(plan(?:ning)? (?:my|the|today)|prioriti[sz]e|deadline|schedule|agenda|now focus|set now focus|pin now focus|what should i do|what do i have to do|what are my tasks|what should i work on|help me choose|next step|add (?:this |that )?task|add (?:it )?to (?:my|the|today['’]?s) list|add\b.{1,50}\bto (?:my|the) list|create (?:a )?task|capture this|put (?:this|it) in (?:my|the) tasks|mark\b.{1,50}\bdone\b|mark (?:it |this )?done|completed|finished|complete this|i(['’]m| am) done with (?:this|that|it)?\s*task|i(['’]m| am) done with .{1,50}\btask|(?:done with|finished)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|delete (?:this|that) task|undo|park (?:this|that)|defer (?:this|that)|(?:park|defer)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|move (?:this|it) to (?:today|week|month|quarter|6 months|work)|start (?:a )?timer|start (?:a\s+|current\s+|now\s+)?focus|focus session|overdue|(?:what['’]?s|what is|anything) due|due (?:today|tomorrow|this week|date)|tasks?|my list|on my list|parked|what did i park|should i start|which task should i start)\b/i;
 
 const EMOTIONAL_RE = /\b(comfort me|i feel (?:terrible|awful|horrible|useless|down|bad|sad|low|hopeless)|i hate this|i failed|i wasted (?:the|my) day|i(['’]m| am) overwhelmed|too many things|don['’]?t know where to start|don['’]?t push (?:tasks|me)|i(['’]m| am) stuck|can['’]?t (?:start|focus)|i(['’]m| am) stressed|i(['’]m| am) anxious|fight with|my family is stressing me|i need rest|i just want to (?:play games|rest)|i did it|small win|i(['’]m| am) frustrated|i can['’]?t work|done with everything)\b/i;
 
@@ -22,7 +22,7 @@ const FRESH_SCAN_RE = /\b(scan (everything|all|my list|all my tasks|my whole lis
 
 const COMPACT_FOLLOWUP_RE = /\b(key point|one sentence|10-minute version|make it smaller|shorter|how do i start|make this easier|concrete steps|what should i do next|set that|do next|tell me more|what did you mean|how do i do that|which one|why\??|explain that|elaborate|clarify)\b/i;
 
-const EXPLICIT_ACTION_RE = /\b(add (?:this|that)?\s*task|add\b.{1,50}\bto (?:my |the )?(?:today['’]?s?\s+)?list|add\b.{1,50}\bto (?:today|week|month|quarter|work)|create (?:a )?task|capture this|put (?:this|it) in (?:my|the)?\s*tasks|mark\b.*\bdone|mark (?:it|this)? done|done with (?:this|that|it)?\s*task|done with .{1,50}\btask|(?:done with|finished)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|complete this|delete (?:this|that) task|park (?:this|that|it|task)\b|park\s+.{1,50}\btask|defer (?:this|that|it|task)\b|defer\s+.{1,50}\btask|move (?:this|it) to|start (?:a )?timer|start (?:a )?focus|focus session)\b/i;
+const EXPLICIT_ACTION_RE = /\b(add (?:this|that)?\s*task|add\b.{1,50}\bto (?:my |the )?(?:today['’]?s?\s+)?list|add\b.{1,50}\bto (?:today|week|month|quarter|work)|create (?:a )?task|capture this|put (?:this|it) in (?:my|the)?\s*tasks|mark\b.*\bdone|mark (?:it|this)? done|done with (?:this|that|it)?\s*task|done with .{1,50}\btask|(?:done with|finished)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|complete this|delete (?:this|that) task|park (?:this|that|it|task)\b|park\s+.{1,50}\btask|defer (?:this|that|it|task)\b|defer\s+.{1,50}\btask|(?:park|defer)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|move (?:this|it) to|start (?:a )?timer|start (?:a\s+|current\s+|now\s+)?focus|focus session)\b/i;
 
 /**
  * Classifies a Coach chat message into the smallest context mode that
@@ -39,10 +39,15 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
   const isPaced = lastFullTaskTime > 0 && (Date.now() - lastFullTaskTime < 10 * 60 * 1000);
   const isFreshScanRequested = FRESH_SCAN_RE.test(text);
   const isBroadQuery = BROAD_TASK_QUERY_RE.test(text);
+  const isCheckin = isCheckinRequest(text);
+
+  // Define target reference keyword checker for explicit mutations
+  const TARGET_REF_RE = /\b(this|that|it|this task|that task|current task|current focus|now focus|the plan|next step)\b/i;
+  const isTargetedMutation = TARGET_REF_RE.test(text);
 
   // 1. Explicit task action mutations take priority over emotional support
   if (EXPLICIT_ACTION_RE.test(text)) {
-    if (isPaced && hasLastPlan && !isFreshScanRequested && !isBroadQuery) {
+    if (isPaced && hasLastPlan && !isFreshScanRequested && !isBroadQuery && !isCheckin && isTargetedMutation) {
       return "compact_task";
     }
     return "full_task";
@@ -51,19 +56,19 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
   // 2. Emotional distress takes priority over general task planning or follow-ups
   if (EMOTIONAL_RE.test(text)) return "emotional";
 
-  // Broad task/deadline queries bypass pacing and route to full_task
-  if (isBroadQuery) return "full_task";
+  // Broad task/deadline queries and standalone fresh-scan requests route to full_task
+  if (isBroadQuery || isFreshScanRequested) return "full_task";
 
   // 3. General task queries and check-in requests
-  if (isCheckinRequest(text) || TASK_RE.test(text)) {
-    if (isPaced && hasLastPlan && !isFreshScanRequested && !isBroadQuery) {
+  if (isCheckin || TASK_RE.test(text)) {
+    if (isPaced && hasLastPlan && !isFreshScanRequested && !isBroadQuery && !isCheckin) {
       return "compact_task";
     }
     return "full_task";
   }
 
   // 4. Compact follow-up requests
-  if (isPaced && hasLastPlan && !isFreshScanRequested && COMPACT_FOLLOWUP_RE.test(text)) {
+  if (isPaced && hasLastPlan && !isFreshScanRequested && !isCheckin && COMPACT_FOLLOWUP_RE.test(text)) {
     return "compact_task";
   }
 
