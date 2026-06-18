@@ -176,7 +176,7 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("I'm done with the report")).toBe("full_task");
       expect(classifyContextMode("done with CV update")).toBe("full_task");
       expect(classifyContextMode("finished the application")).toBe("full_task");
-      expect(classifyContextMode("finished the application", { lastFullTaskTime: Date.now(), hasLastPlan: true })).toBe("compact_task");
+      expect(classifyContextMode("finished the application", { lastFullTaskTime: Date.now(), hasLastPlan: true })).toBe("full_task");
 
       // Curly apostrophe support for named completions
       expect(classifyContextMode("I’m done with CV update")).toBe("full_task");
@@ -211,6 +211,29 @@ describe("classifyContextMode", () => {
       broadQueries.forEach(query => {
         expect(classifyContextMode(query, { lastFullTaskTime: Date.now(), hasLastPlan: true })).toBe("full_task");
       });
+    });
+
+    it("PR #272 New Codex Fixes - named mutations, fresh scans, and check-ins pacing routing", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+
+      // 1. Named mutations vs Targeted mutations
+      expect(classifyContextMode("mark Budget review done", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("start a timer for Write report", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("park CV update", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("mark it done", pacedOpts)).toBe("compact_task");
+      expect(classifyContextMode("start current focus", pacedOpts)).toBe("compact_task");
+      expect(classifyContextMode("start timer on this", pacedOpts)).toBe("compact_task");
+
+      // 2. Standalone fresh-scan requests
+      expect(classifyContextMode("fresh scan")).toBe("full_task");
+      expect(classifyContextMode("full scan")).toBe("full_task");
+      expect(classifyContextMode("re-plan")).toBe("full_task");
+      expect(classifyContextMode("look at everything again")).toBe("full_task");
+      expect(classifyContextMode("fresh scan", pacedOpts)).toBe("full_task");
+
+      // 3. Check-ins bypass compact mode
+      expect(classifyContextMode("remind me in 30 minutes", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("check in tomorrow morning", pacedOpts)).toBe("full_task");
     });
   });
 });
