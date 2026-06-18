@@ -33,12 +33,12 @@ Record test results for:
 ## 1. Auth Tests
 
 * [ ] Fresh open app
-* [ ] Sign up works
-* [ ] Login works
-* [ ] Logout works
-* [ ] Wrong password shows clear error
+* [ ] Google sign-in opens correctly
+* [ ] User cancellation is handled gracefully
+* [ ] Popup blocked or redirect fallback is handled gracefully
+* [ ] Failed Google sign-in shows a friendly error
+* [ ] Logout clears current user state
 * [ ] Closing and reopening app preserves expected session
-* [ ] Logging out clears current user state
 * [ ] Logging in as another user does not show previous user’s tasks
 
 Result:
@@ -181,8 +181,14 @@ Notes:
 * [ ] Open Mind Box
 * [ ] Test Morning Ritual if available
 * [ ] Test Rescue Mode
-* [ ] Test Bad Day Reset
-* [ ] Verify active tasks are not accidentally lost
+* [ ] Test Bad Day Reset:
+  * [ ] Create active tasks
+  * [ ] Run Bad Day Reset
+  * [ ] Confirm tasks are parked, not lost
+  * [ ] Go to Coach → Parked Tasks
+  * [ ] Restore one parked task
+  * [ ] Confirm it returns correctly to the active list
+  * [ ] Refresh and verify state persists
 * [ ] Refresh and verify recovery state is consistent
 * [ ] Check sync if recovery action changes tasks
 
@@ -218,14 +224,18 @@ Notes:
 
 ## 10. Settings Tests
 
-* [ ] Change user name
-* [ ] Change coach name
-* [ ] Change challenge type
-* [ ] Change timer setting if available
-* [ ] Change AI/provider setting if available
-* [ ] Refresh and verify settings persist
-* [ ] Logout/login and verify settings persist
-* [ ] Check settings across devices
+* Synced/Account Settings:
+  * [ ] Change user name
+  * [ ] Change coach name
+  * [ ] Change challenge type
+  * [ ] Verify settings persist after refresh
+  * [ ] Verify settings persist after logout/login
+  * [ ] Check settings sync correctly across devices
+* Device-Local/Browser-Local Settings:
+  * [ ] Change AI provider preference and API keys
+  * [ ] Verify AI provider preference and API keys persist on the local device/browser after refresh
+  * [ ] Confirm that AI provider preference and API keys do NOT sync across different devices (they are stored locally for security and device-local flexibility, and should not be expected to sync unless intentionally changed in a future feature)
+  * [ ] Change timer setting if available (if device-local)
 
 Result:
 
