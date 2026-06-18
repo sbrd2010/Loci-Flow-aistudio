@@ -482,10 +482,12 @@ describe("buildLociBrainDumpContext", () => {
     const items = Array.from({ length: 7 }, (_, i) => ({ id: String(i), text: `Item ${i + 1}` }));
     const context = buildLociBrainDumpContext(items);
     expect(context).toContain("Item 1");
-    expect(context).toContain("Item 5");
+    expect(context).toContain("Item 3");
+    expect(context).not.toContain("Item 4");
+    expect(context).not.toContain("Item 5");
     expect(context).not.toContain("Item 6");
     expect(context).not.toContain("Item 7");
-    expect(context).toContain("+2 more");
+    expect(context).toContain("+4 more");
   });
 
   it("truncates long item text", () => {
