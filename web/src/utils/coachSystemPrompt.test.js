@@ -89,4 +89,16 @@ describe("buildCoachSystemPrompt", () => {
     const out = buildCoachSystemPrompt("not_a_real_mode", baseCtx());
     expect(out).toEqual(buildCoachSystemPrompt("light", baseCtx()));
   });
+
+  it("compact_task mode conditionally carries the CURRENT NOW FOCUS line", () => {
+    // Case 1: focus task exists
+    const ctxWithFocus = { ...baseCtx(), currentFocusTitle: "My Focus Task" };
+    const outWithFocus = buildCoachSystemPrompt("compact_task", ctxWithFocus);
+    expect(outWithFocus).toContain('CURRENT NOW FOCUS: "My Focus Task"');
+
+    // Case 2: no focus task exists
+    const ctxNoFocus = { ...baseCtx(), currentFocusTitle: null };
+    const outNoFocus = buildCoachSystemPrompt("compact_task", ctxNoFocus);
+    expect(outNoFocus).not.toContain("CURRENT NOW FOCUS");
+  });
 });
