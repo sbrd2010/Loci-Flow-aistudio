@@ -544,8 +544,8 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         const actionTagTasks = [];
 
         for (const action of actions) {
-          if (action.type === "COMPLETE_TASK" || action.type === "PARK_TASK") {
-            continue; // Do not update lastCoachPlan from complete or park action tags
+          if (action.type === "COMPLETE_TASK" || action.type === "PARK_TASK" || action.type === "ADD_TASK") {
+            continue; // Do not update lastCoachPlan from complete, park, or add action tags
           }
           const task = findTaskByTitle(currentTasks, action.title);
           if (task && !actionTagTasks.some(t => t.uuid === task.uuid)) {
@@ -565,17 +565,33 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           const activeTasks = currentTasks.filter(isActiveLociTask);
           const lowerReply = cleanText.toLowerCase();
           const matchedTasks = [];
-
-          for (const task of activeTasks) {
-            const title = task.title;
-            if (isTitleSafeForTextMatching(title)) {
-              const escapedTitle = escapeRegExp(title.toLowerCase());
-              const regex = new RegExp(`\\b${escapedTitle}\\b`, 'i');
-              if (regex.test(lowerReply)) {
-                matchedTasks.push(task);
-              }
-            }
-          }
+ 
+           // Collect and normalize titles of excluded tasks (added, completed, parked in this turn)
+           const normalizeTitleForCache = (title) => (title || "").trim().toLowerCase().replace(/\s+/g, " ");
+           const excludedTitles = new Set();
+           for (const action of actions) {
+             if (action.type === "COMPLETE_TASK" || action.type === "PARK_TASK" || action.type === "ADD_TASK") {
+               if (action.title) {
+                 excludedTitles.add(normalizeTitleForCache(action.title));
+               }
+             }
+           }
+ 
+           const normalizedReply = normalizeTitleForCache(cleanText);
+           for (const task of activeTasks) {
+             const title = task.title;
+             if (excludedTitles.has(normalizeTitleForCache(title))) {
+               continue; // Exclude added/completed/parked tasks from fallback matching
+             }
+             if (isTitleSafeForTextMatching(title)) {
+               const normalizedTitle = normalizeTitleForCache(title);
+               const escapedTitle = escapeRegExp(normalizedTitle);
+               const regex = new RegExp(`\\b${escapedTitle}\\b`, 'i');
+               if (regex.test(normalizedReply)) {
+                 matchedTasks.push(task);
+               }
+             }
+           }
 
           if (matchedTasks.length === 1) {
             recommendedTask = matchedTasks[0];
