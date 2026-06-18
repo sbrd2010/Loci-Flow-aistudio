@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { track } from "../firebase";
+import { track, auth } from "../firebase";
 import { callAI, getAIKeys } from "../utils/aiCall";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
@@ -39,25 +39,35 @@ function isTitleSafeForTextMatching(title = "") {
   return meaningfulCount >= 2;
 }
 
-function getLastCoachPlan() {
-  const raw = localStorage.getItem("loci_last_coach_plan");
+function getLastCoachPlan(userId) {
+  // Discard old global key to prevent leakage across users
+  if (localStorage.getItem("loci_last_coach_plan")) {
+    localStorage.removeItem("loci_last_coach_plan");
+  }
+  const key = `loci_last_coach_plan_${userId}`;
+  const raw = localStorage.getItem(key);
   if (!raw) return null;
   try {
     const plan = JSON.parse(raw);
     const EXPIRE_MS = 45 * 60 * 1000; // 45 minutes
     if (Date.now() - plan.createdAt > EXPIRE_MS) {
-      localStorage.removeItem("loci_last_coach_plan");
+      localStorage.removeItem(key);
       return null;
     }
     return plan;
   } catch {
-    localStorage.removeItem("loci_last_coach_plan");
+    localStorage.removeItem(key);
     return null;
   }
 }
 
-function getLastFullTaskTime() {
-  const raw = localStorage.getItem("loci_last_full_task_time");
+function getLastFullTaskTime(userId) {
+  // Discard old global key to prevent leakage across users
+  if (localStorage.getItem("loci_last_full_task_time")) {
+    localStorage.removeItem("loci_last_full_task_time");
+  }
+  const key = `loci_last_full_task_time_${userId}`;
+  const raw = localStorage.getItem(key);
   return raw ? Number(raw) : 0;
 }
 
@@ -250,6 +260,9 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       if (!pendingChip) setChatInput("");
       if (isClear) {
         saveSubPath("chatHistory", null);
+        const userId = auth?.currentUser?.uid || "signed-out";
+        localStorage.removeItem(`loci_last_coach_plan_${userId}`);
+        localStorage.removeItem(`loci_last_full_task_time_${userId}`);
         localStorage.removeItem("loci_last_coach_plan");
         localStorage.removeItem("loci_last_full_task_time");
         return;
@@ -291,8 +304,16 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const savedHistory = trimHistoryForDb(chatHistory, userText, MAX_DB_HISTORY);
     saveSubPath("chatHistory", savedHistory);
 
-    const lastPlan = getLastCoachPlan();
-    const lastFullTaskTime = getLastFullTaskTime();
+    const userId = auth?.currentUser?.uid || "signed-out";
+    let lastPlan = getLastCoachPlan(userId);
+    if (lastPlan) {
+      const task = tasks.find(t => t.uuid === lastPlan.recommendedTaskId);
+      if (!task || !isActiveLociTask(task) || task.title !== lastPlan.recommendedTaskTitle) {
+        localStorage.removeItem(`loci_last_coach_plan_${userId}`);
+        lastPlan = null;
+      }
+    }
+    const lastFullTaskTime = getLastFullTaskTime(userId);
     const contextMode = classifyContextMode(userText, { lastFullTaskTime, hasLastPlan: !!lastPlan });
     const isReference = needsConversationContext(userText);
     const trimmedForLLM = trimHistoryForLLM(withUser, contextMode, isReference);
@@ -339,6 +360,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const isEarlyConversation = userMessageCount <= 1;
 
     const profileBlock = profileToCoachContext(userProfile);
+    const currentFocusTitle = tasks.find(t => isActiveLociTask(t) && t.isNowFocus)?.title || null;
     const systemInstruction = buildCoachSystemPrompt(contextMode, {
       lociCoreInstruction,
       mentorName: config.mentorName || "Loci AI Coach",
@@ -368,6 +390,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       streakCount: config.visitStreakCount || 0,
       profileBlock,
       lastCoachPlan: lastPlan,
+      currentFocusTitle,
     });
 
     const messages = trimmedForLLM.map(m => ({ role: m.isUser ? "user" : "assistant", content: m.text }));
@@ -388,7 +411,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     try {
       const reply = await callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens, contextMode });
       if (contextMode === "full_task") {
-        localStorage.setItem("loci_last_full_task_time", String(Date.now()));
+        localStorage.setItem(`loci_last_full_task_time_${userId}`, String(Date.now()));
       }
       // The hidden response plan (see buildReasoningInstruction) is at the
       // start of the output, so it's stripped first, before any other tag
@@ -402,63 +425,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       const { cleanText: afterCheckin, minutes } = parseCheckinTag(afterMemory);
       const { cleanText, actions } = parseCoachActionTags(afterCheckin);
 
-      // Extract and save lastCoachPlan
-      if (contextMode === "full_task" || contextMode === "compact_task") {
-        let recommendedTask = null;
-        let matchedFromActionTag = false;
-        const actionTagTasks = [];
-
-        for (const action of actions) {
-          const task = findTaskByTitle(tasks, action.title);
-          if (task && !actionTagTasks.some(t => t.uuid === task.uuid)) {
-            actionTagTasks.push(task);
-          }
-        }
-
-        if (actionTagTasks.length === 1) {
-          recommendedTask = actionTagTasks[0];
-          matchedFromActionTag = true;
-        } else if (actionTagTasks.length > 1) {
-          recommendedTask = null;
-          matchedFromActionTag = true; // Multiple matches, ambiguous, do not guess or match text
-        }
-
-        if (!matchedFromActionTag) {
-          const activeTasks = tasks.filter(isActiveLociTask);
-          const lowerReply = cleanText.toLowerCase();
-          const matchedTasks = [];
-
-          for (const task of activeTasks) {
-            const title = task.title;
-            if (isTitleSafeForTextMatching(title)) {
-              const escapedTitle = escapeRegExp(title.toLowerCase());
-              const regex = new RegExp(`\\b${escapedTitle}\\b`, 'i');
-              if (regex.test(lowerReply)) {
-                matchedTasks.push(task);
-              }
-            }
-          }
-
-          if (matchedTasks.length === 1) {
-            recommendedTask = matchedTasks[0];
-          } else {
-            recommendedTask = null; // Ambiguous (0 or multiple matches), do not guess
-          }
-        }
-
-        if (recommendedTask) {
-          const plan = {
-            recommendedTaskId: recommendedTask.uuid,
-            recommendedTaskTitle: recommendedTask.title,
-            horizon: recommendedTask.horizonLevel,
-            reason: "Extracted from Coach turn",
-            nextStep: recommendedTask.concreteStep || "Do first tiny step",
-            alternateTaskIds: [],
-            createdAt: Date.now()
-          };
-          localStorage.setItem("loci_last_coach_plan", JSON.stringify(plan));
-        }
-      }
+      let currentTasks = tasks;
 
       // If the AI's reply omitted [[CHECKIN_IN:N]] despite a clear, non-recurring
       // check-in request in the user's latest message, fall back to a
@@ -519,6 +486,9 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           { lociDateStr: todayStr, localDateStr: getLocalDateString(now), lastUserMessage: userText, now: now.getTime() }
         );
         actionResults = results;
+        if (updatedPayload.tasks) {
+          currentTasks = updatedPayload.tasks;
+        }
 
         const patch = {};
         if (updatedPayload.tasks !== tasksRef.current) patch.tasks = updatedPayload.tasks;
@@ -565,6 +535,67 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         // buildActionReplyText for how blocked-but-stale tags are silently
         // dropped vs. surfaced as a clarifying question.
         replyText = buildActionReplyText(cleanText, results, userText);
+      }
+
+      // Extract and save lastCoachPlan
+      if (contextMode === "full_task" || contextMode === "compact_task") {
+        let recommendedTask = null;
+        let matchedFromActionTag = false;
+        const actionTagTasks = [];
+
+        for (const action of actions) {
+          if (action.type === "COMPLETE_TASK" || action.type === "PARK_TASK") {
+            continue; // Do not update lastCoachPlan from complete or park action tags
+          }
+          const task = findTaskByTitle(currentTasks, action.title);
+          if (task && !actionTagTasks.some(t => t.uuid === task.uuid)) {
+            actionTagTasks.push(task);
+          }
+        }
+
+        if (actionTagTasks.length === 1) {
+          recommendedTask = actionTagTasks[0];
+          matchedFromActionTag = true;
+        } else if (actionTagTasks.length > 1) {
+          recommendedTask = null;
+          matchedFromActionTag = true; // Multiple matches, ambiguous, do not guess or match text
+        }
+
+        if (!matchedFromActionTag) {
+          const activeTasks = currentTasks.filter(isActiveLociTask);
+          const lowerReply = cleanText.toLowerCase();
+          const matchedTasks = [];
+
+          for (const task of activeTasks) {
+            const title = task.title;
+            if (isTitleSafeForTextMatching(title)) {
+              const escapedTitle = escapeRegExp(title.toLowerCase());
+              const regex = new RegExp(`\\b${escapedTitle}\\b`, 'i');
+              if (regex.test(lowerReply)) {
+                matchedTasks.push(task);
+              }
+            }
+          }
+
+          if (matchedTasks.length === 1) {
+            recommendedTask = matchedTasks[0];
+          } else {
+            recommendedTask = null; // Ambiguous (0 or multiple matches), do not guess
+          }
+        }
+
+        if (recommendedTask) {
+          const plan = {
+            recommendedTaskId: recommendedTask.uuid,
+            recommendedTaskTitle: recommendedTask.title,
+            horizon: recommendedTask.horizonLevel,
+            reason: "Extracted from Coach turn",
+            nextStep: recommendedTask.concreteStep || "Do first tiny step",
+            alternateTaskIds: [],
+            createdAt: Date.now()
+          };
+          localStorage.setItem(`loci_last_coach_plan_${userId}`, JSON.stringify(plan));
+        }
       }
 
       if (configPatch || memoryPatch) {
@@ -801,7 +832,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
           </div>
           {payload.chatHistory && payload.chatHistory.length > 0 && (
             <button
-              onClick={() => setConfirmDialog({ message: "Clear all chat history?", confirmLabel: "Clear", danger: true, onConfirm: () => { saveSubPath("chatHistory", null); localStorage.removeItem("loci_last_coach_plan"); localStorage.removeItem("loci_last_full_task_time"); setConfirmDialog(null); }, onCancel: () => setConfirmDialog(null) })}
+              onClick={() => setConfirmDialog({ message: "Clear all chat history?", confirmLabel: "Clear", danger: true, onConfirm: () => { saveSubPath("chatHistory", null); const uId = auth?.currentUser?.uid || "signed-out"; localStorage.removeItem(`loci_last_coach_plan_${uId}`); localStorage.removeItem(`loci_last_full_task_time_${uId}`); localStorage.removeItem("loci_last_coach_plan"); localStorage.removeItem("loci_last_full_task_time"); setConfirmDialog(null); }, onCancel: () => setConfirmDialog(null) })}
               style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "11px", fontWeight: "700", cursor: "pointer", padding: "4px 8px", flexShrink: 0 }}
             >
               Clear
