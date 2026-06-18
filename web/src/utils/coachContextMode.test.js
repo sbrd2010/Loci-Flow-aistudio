@@ -170,5 +170,47 @@ describe("classifyContextMode", () => {
       expect(withUserCapped[0].text).toBe("Msg 7"); // Wiped older messages past 20
       expect(withUserCapped[19].text).toBe("Hi");
     });
+
+    it("PR #272 Codex Fix 4 & 5 - routes broad task/deadline queries and named completions properly", () => {
+      // 1. Named completions (positive cases)
+      expect(classifyContextMode("I'm done with the report")).toBe("full_task");
+      expect(classifyContextMode("done with CV update")).toBe("full_task");
+      expect(classifyContextMode("finished the application")).toBe("full_task");
+      expect(classifyContextMode("finished the application", { lastFullTaskTime: Date.now(), hasLastPlan: true })).toBe("compact_task");
+
+      // Curly apostrophe support for named completions
+      expect(classifyContextMode("I’m done with CV update")).toBe("full_task");
+
+      // 2. Emotional/Safety exclusions (negative cases)
+      expect(classifyContextMode("I'm done with life")).toBe("emotional");
+      expect(classifyContextMode("done with life")).toBe("emotional");
+      expect(classifyContextMode("I'm done with everything")).toBe("emotional");
+      expect(classifyContextMode("done with everything")).toBe("emotional");
+
+      // 3. Broad task/deadline queries bypass compact pacing window
+      const broadQueries = [
+        "what are my tasks?",
+        "what's due?",
+        "what’s due?", // curly apostrophe
+        "what is due",
+        "anything due?",
+        "due date",
+        "what's my deadline",
+        "what’s my deadline", // curly apostrophe
+        "what is my deadline",
+        "show my tasks",
+        "what do I have today?",
+        "what tasks do I have?",
+        "list my tasks",
+        "my task list",
+        "show my list",
+        "what's on my list",
+        "what’s on my list", // curly apostrophe
+        "what do I need to do today"
+      ];
+      broadQueries.forEach(query => {
+        expect(classifyContextMode(query, { lastFullTaskTime: Date.now(), hasLastPlan: true })).toBe("full_task");
+      });
+    });
   });
 });
