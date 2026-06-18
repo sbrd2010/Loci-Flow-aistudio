@@ -254,7 +254,7 @@ function buildCompactTaskPrompt(ctx) {
   const {
     lociCoreInstruction, mentorName, firstName, challengeLabel,
     profileContext, memoryContext, personaInstruction,
-    nowFocusContext, lastCoachPlan, nowLabel
+    nowFocusContext, lastCoachPlan, nowLabel, currentFocusTitle
   } = ctx;
 
   const staticPrefix = `${lociCoreInstruction}
@@ -286,12 +286,17 @@ ${buildReasoningInstruction(firstName)}`;
 - Reason: "${lastCoachPlan.reason}"`
     : "No previous plan recommendation exists for this session.";
 
+  const focusSection = currentFocusTitle
+    ? `CURRENT NOW FOCUS: "${currentFocusTitle}"`
+    : "";
+
   const dynamicSuffix = `
 ========================================
 CURRENT CLIENT & APP SESSION CONTEXT:
 
 ${profileContext ? `${profileContext}\n` : ""}${memoryContext ? `${memoryContext}\n` : ""}
 ${planSection}
+${focusSection}
 ${nowFocusContext ? `${nowFocusContext}\n` : ""}
 SESSION STATS:
 Current Time: ${nowLabel}`;
