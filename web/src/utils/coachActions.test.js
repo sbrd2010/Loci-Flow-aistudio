@@ -263,6 +263,12 @@ describe("matchesUserIntent", () => {
   it("scans past an earlier negated match to find a later, unnegated completion request", () => {
     expect(matchesUserIntent("COMPLETE_TASK", "I'm not done with Write report, but I finished Email client", "Email client")).toBe(true);
   });
+
+  it("allows current-focus references when the target is the actual current focus task", () => {
+    expect(matchesUserIntent("START_FOCUS", "start current focus", "Write report", [], "Write report")).toBe(true);
+    expect(matchesUserIntent("START_FOCUS", "start now focus", "Write report", [], "Write report")).toBe(true);
+    expect(matchesUserIntent("START_FOCUS", "start now focus", "Email client", [], "Write report")).toBe(false);
+  });
 });
 
 describe("applyCoachActions", () => {
