@@ -235,5 +235,21 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("remind me in 30 minutes", pacedOpts)).toBe("full_task");
       expect(classifyContextMode("check in tomorrow morning", pacedOpts)).toBe("full_task");
     });
+
+    it("PR #272 Codex Fix - routes distressed task asks to full_task", () => {
+      // Mixed distress + task planning asks route to full_task
+      expect(classifyContextMode("I’m overwhelmed, what should I do?")).toBe("full_task");
+      expect(classifyContextMode("I’m stuck, what should I work on?")).toBe("full_task");
+      expect(classifyContextMode("I feel scattered, help me choose a task")).toBe("full_task");
+      expect(classifyContextMode("I feel low and behind, help me pick one thing")).toBe("full_task");
+
+      // Pure emotional distress still routes to emotional
+      expect(classifyContextMode("I feel low")).toBe("emotional");
+      expect(classifyContextMode("I'm overwhelmed")).toBe("emotional");
+
+      // Crisis/safety phrases still route to emotional with highest priority
+      expect(classifyContextMode("I want to die, what should I do?")).toBe("emotional");
+      expect(classifyContextMode("I might hurt myself, help me pick a task")).toBe("emotional");
+    });
   });
 });
