@@ -156,7 +156,7 @@ async function callNvidia(nvidiaKey, systemPrompt, messages, maxTokens) {
   return { reply, usage: data.usage };
 }
 
-async function callGemini(geminiKey, systemPrompt, messages) {
+async function callGemini(geminiKey, systemPrompt, messages, maxTokens) {
   // Gemini requires contents to start with "user" role - strip leading AI messages
   let contents = messages.map(m => ({
     role: m.role === "assistant" ? "model" : "user",
@@ -166,13 +166,18 @@ async function callGemini(geminiKey, systemPrompt, messages) {
   if (contents.length === 0) {
     contents = [{ role: "user", parts: [{ text: "Hello" }] }];
   }
+  const requestBody = {
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents
+  };
+  const parsedMaxTokens = Number(maxTokens);
+  if (Number.isInteger(parsedMaxTokens) && parsedMaxTokens > 0) {
+    requestBody.generationConfig = { maxOutputTokens: parsedMaxTokens };
+  }
   const res = await fetchWithTimeout(`${GEMINI_URL}?key=${geminiKey}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents
-    })
+    body: JSON.stringify(requestBody)
   });
   if (!res.ok) throw statusError("gemini", res.status, res);
   const data = await res.json();
@@ -232,7 +237,7 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
       } else if (provider.name === "nvidia") {
         result = await callNvidia(provider.key, systemPrompt, messages, maxTokens);
       } else {
-        result = await callGemini(provider.key, systemPrompt, messages);
+        result = await callGemini(provider.key, systemPrompt, messages, maxTokens);
       }
       const { reply, usage: callUsage } = result;
       logAICallDiagnostics({ provider: provider.name, outcome: "ok", contextMode, systemPrompt, messages, usage: callUsage });
