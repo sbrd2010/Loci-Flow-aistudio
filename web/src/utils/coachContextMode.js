@@ -24,6 +24,8 @@ const COMPACT_FOLLOWUP_RE = /\b(key point|one sentence|10-minute version|make it
 
 const EXPLICIT_ACTION_RE = /\b(add (?:this|that)?\s*task|add\b.{1,50}\bto (?:my |the )?(?:today['’]?s?\s+)?list|add\b.{1,50}\bto (?:today|week|month|quarter|work)|create (?:a )?task|capture this|put (?:this|it) in (?:my|the)?\s*tasks|mark\b.*\bdone|mark (?:it|this)? done|done with (?:this|that|it)?\s*task|done with .{1,50}\btask|(?:done with|finished)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|complete this|delete (?:this|that) task|park (?:this|that|it|task)\b|park\s+.{1,50}\btask|defer (?:this|that|it|task)\b|defer\s+.{1,50}\btask|(?:park|defer)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|move (?:this|it) to|start (?:a )?timer|start (?:a\s+|current\s+|now\s+)?focus|focus session)\b/i;
 
+const TASK_ASK_RE = /\b(what should i (?:do|work on|start)|help me (?:choose|pick|prioritize|plan)|choose a task|pick a task|pick one (?:thing|task)|next step|prioritize my|plan my|plan today)\b/i;
+
 /**
  * Classifies a Coach chat message into the smallest context mode that
  * still serves it well: "light", "emotional", "full_task", "compact_task", or
@@ -54,13 +56,18 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
   }
 
   // 2. Emotional distress takes priority over general task planning or follow-ups
-  if (EMOTIONAL_RE.test(text)) return "emotional";
+  if (EMOTIONAL_RE.test(text)) {
+    if (TASK_ASK_RE.test(text)) {
+      return "full_task";
+    }
+    return "emotional";
+  }
 
   // Broad task/deadline queries and standalone fresh-scan requests route to full_task
   if (isBroadQuery || isFreshScanRequested) return "full_task";
 
   // 3. General task queries and check-in requests
-  if (isCheckin || TASK_RE.test(text)) {
+  if (isCheckin || TASK_RE.test(text) || TASK_ASK_RE.test(text)) {
     if (isPaced && hasLastPlan && !isFreshScanRequested && !isBroadQuery && !isCheckin) {
       return "compact_task";
     }
