@@ -35,9 +35,18 @@ function cooldownKey(provider) {
 
 // Logs counts/metadata only — never the API key, key fingerprint, system
 // prompt content, message content, or raw request body.
-function logAICallDiagnostics({ provider, outcome, retryAfterMs, contextMode, systemPrompt, messages }) {
+function logAICallDiagnostics({ provider, outcome, retryAfterMs, contextMode, systemPrompt, messages, usage }) {
   const messagesChars = (messages || []).reduce((sum, m) => sum + String(m.content || "").length, 0);
   const systemPromptChars = String(systemPrompt || "").length;
+
+  const promptTokens = usage?.prompt_tokens ?? null;
+  const cachedTokens = usage?.prompt_tokens_details?.cached_tokens ?? usage?.cached_tokens ?? null;
+  const completionTokens = usage?.completion_tokens ?? null;
+  const totalTokens = usage?.total_tokens ?? null;
+  const cacheHitRate = (promptTokens && cachedTokens !== null)
+    ? Number((cachedTokens / promptTokens).toFixed(4))
+    : null;
+
   console.debug("[aiCall]", {
     provider,
     outcome,
@@ -47,6 +56,11 @@ function logAICallDiagnostics({ provider, outcome, retryAfterMs, contextMode, sy
     messagesCount: (messages || []).length,
     messagesChars,
     approxTotalChars: systemPromptChars + messagesChars,
+    promptTokens,
+    cachedTokens,
+    completionTokens,
+    totalTokens,
+    cacheHitRate,
   });
 }
 
@@ -79,6 +93,7 @@ export function resetProviderCooldowns() {
   providerCooldownReason.clear();
 }
 
+// Helper to determine status errors
 function statusError(provider, status, res) {
   // CoachTab already maps plain 429/503 to friendly messages.
   if (status === 429 || status === 503) {
@@ -112,7 +127,7 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens) {
   const data = await res.json();
   const reply = data.choices?.[0]?.message?.content || "";
   if (!reply) throw new Error("groq_empty");
-  return reply;
+  return { reply, usage: data.usage };
 }
 
 async function callNvidia(nvidiaKey, systemPrompt, messages, maxTokens) {
@@ -138,10 +153,10 @@ async function callNvidia(nvidiaKey, systemPrompt, messages, maxTokens) {
   const data = await res.json();
   const reply = data.choices?.[0]?.message?.content || "";
   if (!reply) throw new Error("nvidia_empty");
-  return reply;
+  return { reply, usage: data.usage };
 }
 
-async function callGemini(geminiKey, systemPrompt, messages) {
+async function callGemini(geminiKey, systemPrompt, messages, maxTokens) {
   // Gemini requires contents to start with "user" role - strip leading AI messages
   let contents = messages.map(m => ({
     role: m.role === "assistant" ? "model" : "user",
@@ -151,19 +166,31 @@ async function callGemini(geminiKey, systemPrompt, messages) {
   if (contents.length === 0) {
     contents = [{ role: "user", parts: [{ text: "Hello" }] }];
   }
+  const requestBody = {
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents
+  };
+  const parsedMaxTokens = Number(maxTokens);
+  if (Number.isInteger(parsedMaxTokens) && parsedMaxTokens > 0) {
+    requestBody.generationConfig = { maxOutputTokens: parsedMaxTokens };
+  }
   const res = await fetchWithTimeout(`${GEMINI_URL}?key=${geminiKey}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents
-    })
+    body: JSON.stringify(requestBody)
   });
   if (!res.ok) throw statusError("gemini", res.status, res);
   const data = await res.json();
   const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
   if (!reply) throw new Error("gemini_empty");
-  return reply;
+  
+  const usage = data.usageMetadata ? {
+    prompt_tokens: data.usageMetadata.promptTokenCount,
+    completion_tokens: data.usageMetadata.candidatesTokenCount,
+    total_tokens: data.usageMetadata.totalTokenCount
+  } : null;
+  
+  return { reply, usage };
 }
 
 // Returns ordered list of providers to try based on user's preference.
@@ -204,15 +231,16 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
       continue; // skip the provider network call; no extra provider attempt
     }
     try {
-      let reply;
+      let result;
       if (provider.name === "groq") {
-        reply = await callGroq(provider.key, systemPrompt, messages, maxTokens);
+        result = await callGroq(provider.key, systemPrompt, messages, maxTokens);
       } else if (provider.name === "nvidia") {
-        reply = await callNvidia(provider.key, systemPrompt, messages, maxTokens);
+        result = await callNvidia(provider.key, systemPrompt, messages, maxTokens);
       } else {
-        reply = await callGemini(provider.key, systemPrompt, messages);
+        result = await callGemini(provider.key, systemPrompt, messages, maxTokens);
       }
-      logAICallDiagnostics({ provider: provider.name, outcome: "ok", contextMode, systemPrompt, messages });
+      const { reply, usage: callUsage } = result;
+      logAICallDiagnostics({ provider: provider.name, outcome: "ok", contextMode, systemPrompt, messages, usage: callUsage });
       return appendAIUsageWarning(reply, usage.warning);
     } catch (err) {
       lastErr = err;

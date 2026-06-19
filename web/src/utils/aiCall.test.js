@@ -252,6 +252,22 @@ describe("AI call resilience", () => {
     expect(String(fetch.mock.calls[0][0])).toContain("generativelanguage.googleapis.com");
   });
 
+  it("Gemini respects a small caller maxTokens (700)", async () => {
+    storage.setItem("loci_provider_pref", "gemini");
+    fetch.mockResolvedValue(geminiOk("reply"));
+    await callAI(baseRequest({ groqKey: "", geminiKey: "test-gemini-key", maxTokens: 700 }));
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.generationConfig.maxOutputTokens).toBe(700);
+  });
+
+  it("Gemini does not include maxOutputTokens when maxTokens is invalid or zero", async () => {
+    storage.setItem("loci_provider_pref", "gemini");
+    fetch.mockResolvedValue(geminiOk("reply"));
+    await callAI(baseRequest({ groqKey: "", geminiKey: "test-gemini-key", maxTokens: 0 }));
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.generationConfig).toBeUndefined();
+  });
+
   it("throws no_key when all keys are empty", async () => {
     await expect(callAI(baseRequest({ groqKey: "", nvidiaKey: "", geminiKey: "" }))).rejects.toThrow("no_key");
     expect(fetch).not.toHaveBeenCalled();

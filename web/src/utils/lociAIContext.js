@@ -13,6 +13,15 @@ const HORIZON_LABELS = {
   office: "WORK"
 };
 
+const HORIZON_CAPS = {
+  today: 10,
+  week: 5,
+  month: 3,
+  quarter: 3,
+  halfyear: 3,
+  office: 5
+};
+
 export function isActiveLociTask(task) {
   return !!task && !task.isDeleted && !task.isCompleted && !task.isParked;
 }
@@ -31,13 +40,14 @@ export function buildLociTaskContext(allTasks = [], date = new Date(), windows =
     if (horizonTasks.length === 0) continue;
 
     total += horizonTasks.length;
+    const cap = HORIZON_CAPS[horizon] || 8;
     lines.push(`${HORIZON_LABELS[horizon]} (${horizonTasks.length}):`);
-    horizonTasks.slice(0, 8).forEach(task => {
+    horizonTasks.slice(0, cap).forEach(task => {
       const focus = task.isNowFocus ? " [NOW FOCUS]" : "";
       const estimate = task.timeEstimateMinutes ? ` (${task.timeEstimateMinutes}min)` : "";
       lines.push(`  - [${task.priority || "P3"}]${focus} ${task.title}${estimate}`);
     });
-    if (horizonTasks.length > 8) lines.push(`  ... +${horizonTasks.length - 8} more`);
+    if (horizonTasks.length > cap) lines.push(`  ... +${horizonTasks.length - cap} more`);
   }
 
   const todayStr = getLociDayStr(date, windows);
@@ -212,7 +222,7 @@ export function buildLociDayMapContext(tasks = [], todayStr) {
   return ["TODAY'S DAY MAP (planned route, in order):", ...lines].join("\n");
 }
 
-const BRAIN_DUMP_ITEMS_IN_PROMPT = 5;
+const BRAIN_DUMP_ITEMS_IN_PROMPT = 3;
 const BRAIN_DUMP_ITEM_MAX_LENGTH = 100;
 
 // Brain Dump backlog — always-on so the coach knows raw thoughts are waiting
@@ -304,7 +314,13 @@ export function buildLociRecentlyParkedContext(tasks = [], date = new Date()) {
   );
   if (recentlyParked.length === 0) return "";
 
-  return `RECENTLY PARKED (last 24h): ${quoteTitles(recentlyParked.map(t => t.title))}.`;
+  const sortedParked = [...recentlyParked].sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
+  const displayed = sortedParked.slice(0, 2);
+  const count = sortedParked.length;
+  if (count <= 2) {
+    return `RECENTLY PARKED (last 24h): ${quoteTitles(displayed.map(t => t.title))}.`;
+  }
+  return `RECENTLY PARKED (last 24h): ${quoteTitles(displayed.map(t => t.title))} ... +${count - 2} more.`;
 }
 
 export function buildLociCoreInstruction({ firstName = "friend" } = {}) {

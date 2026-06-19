@@ -170,5 +170,86 @@ describe("classifyContextMode", () => {
       expect(withUserCapped[0].text).toBe("Msg 7"); // Wiped older messages past 20
       expect(withUserCapped[19].text).toBe("Hi");
     });
+
+    it("PR #272 Codex Fix 4 & 5 - routes broad task/deadline queries and named completions properly", () => {
+      // 1. Named completions (positive cases)
+      expect(classifyContextMode("I'm done with the report")).toBe("full_task");
+      expect(classifyContextMode("done with CV update")).toBe("full_task");
+      expect(classifyContextMode("finished the application")).toBe("full_task");
+      expect(classifyContextMode("finished the application", { lastFullTaskTime: Date.now(), hasLastPlan: true })).toBe("full_task");
+
+      // Curly apostrophe support for named completions
+      expect(classifyContextMode("I’m done with CV update")).toBe("full_task");
+
+      // 2. Emotional/Safety exclusions (negative cases)
+      expect(classifyContextMode("I'm done with life")).toBe("emotional");
+      expect(classifyContextMode("done with life")).toBe("emotional");
+      expect(classifyContextMode("I'm done with everything")).toBe("emotional");
+      expect(classifyContextMode("done with everything")).toBe("emotional");
+
+      // 3. Broad task/deadline queries bypass compact pacing window
+      const broadQueries = [
+        "what are my tasks?",
+        "what's due?",
+        "what’s due?", // curly apostrophe
+        "what is due",
+        "anything due?",
+        "due date",
+        "what's my deadline",
+        "what’s my deadline", // curly apostrophe
+        "what is my deadline",
+        "show my tasks",
+        "what do I have today?",
+        "what tasks do I have?",
+        "list my tasks",
+        "my task list",
+        "show my list",
+        "what's on my list",
+        "what’s on my list", // curly apostrophe
+        "what do I need to do today"
+      ];
+      broadQueries.forEach(query => {
+        expect(classifyContextMode(query, { lastFullTaskTime: Date.now(), hasLastPlan: true })).toBe("full_task");
+      });
+    });
+
+    it("PR #272 New Codex Fixes - named mutations, fresh scans, and check-ins pacing routing", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+
+      // 1. Named mutations vs Targeted mutations
+      expect(classifyContextMode("mark Budget review done", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("start a timer for Write report", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("park CV update", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("mark it done", pacedOpts)).toBe("compact_task");
+      expect(classifyContextMode("start current focus", pacedOpts)).toBe("compact_task");
+      expect(classifyContextMode("start timer on this", pacedOpts)).toBe("compact_task");
+
+      // 2. Standalone fresh-scan requests
+      expect(classifyContextMode("fresh scan")).toBe("full_task");
+      expect(classifyContextMode("full scan")).toBe("full_task");
+      expect(classifyContextMode("re-plan")).toBe("full_task");
+      expect(classifyContextMode("look at everything again")).toBe("full_task");
+      expect(classifyContextMode("fresh scan", pacedOpts)).toBe("full_task");
+
+      // 3. Check-ins bypass compact mode
+      expect(classifyContextMode("remind me in 30 minutes", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("check in tomorrow morning", pacedOpts)).toBe("full_task");
+    });
+
+    it("PR #272 Codex Fix - routes distressed task asks to full_task", () => {
+      // Mixed distress + task planning asks route to full_task
+      expect(classifyContextMode("I’m overwhelmed, what should I do?")).toBe("full_task");
+      expect(classifyContextMode("I’m stuck, what should I work on?")).toBe("full_task");
+      expect(classifyContextMode("I feel scattered, help me choose a task")).toBe("full_task");
+      expect(classifyContextMode("I feel low and behind, help me pick one thing")).toBe("full_task");
+
+      // Pure emotional distress still routes to emotional
+      expect(classifyContextMode("I feel low")).toBe("emotional");
+      expect(classifyContextMode("I'm overwhelmed")).toBe("emotional");
+
+      // Crisis/safety phrases still route to emotional with highest priority
+      expect(classifyContextMode("I want to die, what should I do?")).toBe("emotional");
+      expect(classifyContextMode("I might hurt myself, help me pick a task")).toBe("emotional");
+    });
   });
 });

@@ -36,13 +36,13 @@ function baseCtx() {
 describe("buildCoachSystemPrompt", () => {
   it("light mode omits the full task universe and action-tag machinery", () => {
     const out = buildCoachSystemPrompt("light", baseCtx());
-    expect(out).not.toContain("THEIR FULL TASK LIST");
+    expect(out).not.toContain("CURRENT CAPPED TASK CONTEXT");
     expect(out).not.toContain("COACH ACTIONS:");
   });
 
   it("light and profile_reflection modes contain the compact session line", () => {
     const ctx = baseCtx();
-    const expectedSessionLine = `SESSION: ${ctx.nowLabel} (${ctx.timeOfDay}).`;
+    const expectedSessionLine = `Current Time: ${ctx.nowLabel} (${ctx.timeOfDay})`;
     
     const lightPrompt = buildCoachSystemPrompt("light", ctx);
     expect(lightPrompt).toContain(expectedSessionLine);
@@ -53,18 +53,18 @@ describe("buildCoachSystemPrompt", () => {
 
   it("emotional mode omits the full task universe but keeps support-mode safety content", () => {
     const out = buildCoachSystemPrompt("emotional", baseCtx());
-    expect(out).not.toContain("THEIR FULL TASK LIST");
+    expect(out).not.toContain("CURRENT CAPPED TASK CONTEXT");
     expect(out).toContain("SUPPORT MODE");
   });
 
   it("profile_reflection mode omits the full task universe", () => {
     const out = buildCoachSystemPrompt("profile_reflection", baseCtx());
-    expect(out).not.toContain("THEIR FULL TASK LIST");
+    expect(out).not.toContain("CURRENT CAPPED TASK CONTEXT");
   });
 
   it("full_task mode keeps the full task universe and action-tag machinery", () => {
     const out = buildCoachSystemPrompt("full_task", baseCtx());
-    expect(out).toContain("THEIR FULL TASK LIST");
+    expect(out).toContain("CURRENT CAPPED TASK CONTEXT");
     expect(out).toContain("COACH ACTIONS:");
   });
 
@@ -88,5 +88,17 @@ describe("buildCoachSystemPrompt", () => {
   it("falls back to light for an unrecognized mode", () => {
     const out = buildCoachSystemPrompt("not_a_real_mode", baseCtx());
     expect(out).toEqual(buildCoachSystemPrompt("light", baseCtx()));
+  });
+
+  it("compact_task mode conditionally carries the CURRENT NOW FOCUS line", () => {
+    // Case 1: focus task exists
+    const ctxWithFocus = { ...baseCtx(), currentFocusTitle: "My Focus Task" };
+    const outWithFocus = buildCoachSystemPrompt("compact_task", ctxWithFocus);
+    expect(outWithFocus).toContain('CURRENT NOW FOCUS: "My Focus Task"');
+
+    // Case 2: no focus task exists
+    const ctxNoFocus = { ...baseCtx(), currentFocusTitle: null };
+    const outNoFocus = buildCoachSystemPrompt("compact_task", ctxNoFocus);
+    expect(outNoFocus).not.toContain("CURRENT NOW FOCUS");
   });
 });
