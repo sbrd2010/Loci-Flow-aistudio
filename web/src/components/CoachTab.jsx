@@ -296,13 +296,22 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       return;
     }
 
-    if (!hasAnyKey) return;
     if (!pendingChip) setChatInput("");
 
     const MAX_DB_HISTORY = 20;
     const withUser = [...chatHistory, { text: userText, isUser: true }];
     const savedHistory = trimHistoryForDb(chatHistory, userText, MAX_DB_HISTORY);
     saveSubPath("chatHistory", savedHistory);
+
+    if (!hasAnyKey) {
+      const replyMsg = { text: "🔑 Add an AI key in **Settings → AI Keys** to enable chat.", isUser: false };
+      const withReply = [...savedHistory, replyMsg];
+      const savedWithReply = withReply.length > MAX_DB_HISTORY
+        ? withReply.slice(withReply.length - MAX_DB_HISTORY)
+        : withReply;
+      saveSubPath("chatHistory", savedWithReply);
+      return;
+    }
 
     const userId = auth?.currentUser?.uid || "signed-out";
     let lastPlan = getLastCoachPlan(userId);
@@ -611,6 +620,8 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
             createdAt: Date.now()
           };
           localStorage.setItem(`loci_last_coach_plan_${userId}`, JSON.stringify(plan));
+        } else if (contextMode === "full_task") {
+          localStorage.removeItem(`loci_last_coach_plan_${userId}`);
         }
       }
 
@@ -946,29 +957,23 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
           <div ref={chatBottomRef} />
         </div>
 
-        {!hasAnyKey ? (
-          <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px", fontSize: "12px", color: "var(--text-secondary)", textAlign: "center", marginTop: "8px" }}>
-            🔑 Add an AI key in <strong>Settings → AI Keys</strong> to enable chat.
-          </div>
-        ) : (
-          <form ref={chatFormRef} onSubmit={handleSendChat} className="chat-input-row" style={{ marginTop: "8px" }}>
-            <textarea ref={chatInputRef} className="text-input" rows={3} value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  e.currentTarget.form?.requestSubmit();
-                }
-              }}
-              placeholder={`Ask ${config.mentorName || "your mentor"}… (Shift+Enter for a new line)`}
-              disabled={chatLoading}
-              style={{ background: "var(--accent-ring)", border: "1.5px solid var(--accent-light)" }} />
-            {chatLoading
-              ? <span style={{ fontSize: "12px", color: "var(--text-muted)", padding: "0 10px" }}>…</span>
-              : <button className="btn" type="submit" disabled={!chatInput.trim()} style={{ padding: "10px 16px", fontSize: "13px" }}>Send</button>
-            }
-          </form>
-        )}
+        <form ref={chatFormRef} onSubmit={handleSendChat} className="chat-input-row" style={{ marginTop: "8px" }}>
+          <textarea ref={chatInputRef} className="text-input" rows={3} value={chatInput}
+            onChange={e => setChatInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                e.currentTarget.form?.requestSubmit();
+              }
+            }}
+            placeholder={`Ask ${config.mentorName || "your mentor"}… (Shift+Enter for a new line)`}
+            disabled={chatLoading}
+            style={{ background: "var(--accent-ring)", border: "1.5px solid var(--accent-light)" }} />
+          {chatLoading
+            ? <span style={{ fontSize: "12px", color: "var(--text-muted)", padding: "0 10px" }}>…</span>
+            : <button className="btn" type="submit" disabled={!chatInput.trim()} style={{ padding: "10px 16px", fontSize: "13px" }}>Send</button>
+          }
+        </form>
       </section>
 
       {/* 2 -- Focus Briefing */}
