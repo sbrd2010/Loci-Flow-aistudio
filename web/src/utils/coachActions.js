@@ -143,7 +143,7 @@ function isClarificationFlow(actionType, lastUserMessage, prevUserMessage, prevA
   return msg.length < 100;
 }
 
-export function matchesUserIntent(actionType, lastUserMessage = "", title = "", chatHistory = []) {
+export function matchesUserIntent(actionType, lastUserMessage = "", title = "", chatHistory = [], currentFocusTitle = null) {
   if (!INTENT_PATTERNS[actionType]) return false;
 
   let prevUserMessage = "";
@@ -181,7 +181,11 @@ export function matchesUserIntent(actionType, lastUserMessage = "", title = "", 
   const isPronounRef = /\b(this task|that task|the task|it|that|this)\b/i.test(String(lastUserMessage || ""));
   const pronounAllowed = isPronounRef && (titleInPrevUser || titleInPrevAssistant || isClarification);
 
-  return !!(titleInCurrent || titleInPrevUser || titleInPrevAssistant || pronounAllowed);
+  const isCurrentFocusRef = /\b(current focus|now focus|current task)\b/i.test(String(lastUserMessage || ""));
+  const isTargetCurrentFocus = currentFocusTitle && (normalizeTitle(title) === normalizeTitle(currentFocusTitle));
+  const currentFocusAllowed = isCurrentFocusRef && isTargetCurrentFocus;
+
+  return !!(titleInCurrent || titleInPrevUser || titleInPrevAssistant || pronounAllowed || currentFocusAllowed);
 }
 
 // Exact-title-only match against active tasks — used to detect "obvious"
@@ -292,9 +296,10 @@ function buildCompleteTaskPayload(payload, task, lociDateStr, localDateStr) {
 export function applyCoachActions(payload, actions, { lociDateStr, localDateStr, lastUserMessage = "", now = Date.now() } = {}) {
   let nextPayload = payload;
   const results = [];
+  const currentFocusTitle = (payload.tasks || []).find(t => isActiveLociTask(t) && t.isNowFocus)?.title || null;
 
   for (const action of actions) {
-    if (!matchesUserIntent(action.type, lastUserMessage, action.title, payload.chatHistory || [])) {
+    if (!matchesUserIntent(action.type, lastUserMessage, action.title, payload.chatHistory || [], currentFocusTitle)) {
       results.push({ ...action, matched: false, blocked: true });
       continue;
     }
