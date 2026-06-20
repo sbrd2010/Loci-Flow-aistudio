@@ -781,6 +781,30 @@ describe("useFocusAudio", () => {
       expect(result.current.selectedTrack).toBeNull();
     });
 
+    it("reconciles the shuffle queue after an external config sync, avoiding an accidental toggle-off", () => {
+      vi.spyOn(Math, "random").mockReturnValue(0);
+
+      const { result, rerender } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, {}, null]
+      );
+
+      result.current.selectCategory("lofi");
+      expect(result.current.selectedTrack).toBe("sounds/lofi/first-coffee-thoughts.mp3");
+
+      // Simulate an external sync (different device/account, reload) landing
+      // a track that happens to be queued up next in this category's now-stale
+      // in-memory shuffle order.
+      const syncedConfig = { focusSoundTrack: "sounds/lofi/penciled-sunbeams.mp3" };
+      rerender([false, syncedConfig, null]);
+      expect(result.current.selectedTrack).toBe("sounds/lofi/penciled-sunbeams.mp3");
+
+      // Reshuffling after the sync must advance to a different track, not
+      // echo back the just-synced one and toggle the sound off.
+      result.current.reshuffleTrack();
+      expect(result.current.selectedTrack).toBe("sounds/lofi/first-coffee-thoughts.mp3");
+    });
+
     it("leaves binaural/none unaffected by the shuffle queue", () => {
       const config = { focusSoundTrack: BINAURAL_TRACK_ID };
       const { result } = renderHook(

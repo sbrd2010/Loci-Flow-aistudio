@@ -92,6 +92,11 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
   useEffect(() => {
     const next = config.focusSoundTrack !== undefined ? migrateTrackId(config.focusSoundTrack) : null;
     if (next !== selectedTrack) {
+      // Drop the affected category's in-memory queue: it may be stale
+      // relative to this externally-synced track, and reshuffling off a
+      // stale queue could hand back the very track that was just synced in.
+      const categoryKey = getCategoryKeyForTrack(next);
+      if (categoryKey) delete shuffleQueuesRef.current[categoryKey];
       setSelectedTrack(next);
     }
   }, [config.focusSoundTrack]); // eslint-disable-line react-hooks/exhaustive-deps
