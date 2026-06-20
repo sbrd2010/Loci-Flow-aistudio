@@ -29,14 +29,31 @@ class MockAudio {
 
   play() {
     this.paused = false;
+    // Tests can opt into a controllable (not-yet-resolved) play() promise via
+    // MockAudio.delayPlay, to simulate the real-browser race where pause() is
+    // called before play() has settled.
+    if (MockAudio.delayPlay) {
+      return new Promise((resolve) => {
+        this._resolvePlay = resolve;
+      });
+    }
     return Promise.resolve();
   }
 
   pause() {
     this.paused = true;
   }
+
+  removeAttribute(attr) {
+    this[attr] = null;
+  }
+
+  load() {
+    this._loaded = true;
+  }
 }
 MockAudio.instances = [];
+MockAudio.delayPlay = false;
 
 globalThis.Audio = MockAudio;
 
@@ -257,6 +274,7 @@ describe("useFocusAudio", () => {
 
     // Reset Mock Audio instances
     MockAudio.instances = [];
+    MockAudio.delayPlay = false;
     MockAudioContext.instances = [];
   });
 
@@ -385,6 +403,119 @@ describe("useFocusAudio", () => {
 
     unmount();
     expect(audio.paused).toBe(true);
+  });
+
+  it("removes canplay/error listeners and releases the media resource on track change", () => {
+    const config = { focusSoundTrack: "gentle-midday-rain.mp3" };
+    const { result } = renderHook(
+      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      [false, config, null]
+    );
+
+    const rainAudio = MockAudio.instances[0];
+    expect(rainAudio._listeners.canplay.length).toBe(1);
+    expect(rainAudio._listeners.error.length).toBe(1);
+
+    result.current.selectTrack("midnight-amber-room.mp3");
+
+    expect(rainAudio._listeners.canplay.length).toBe(0);
+    expect(rainAudio._listeners.error.length).toBe(0);
+    expect(rainAudio.src).toBeNull();
+    expect(rainAudio._loaded).toBe(true);
+  });
+
+  it("removes canplay/error listeners on unmount", () => {
+    const config = { focusSoundTrack: "2-am-debug-loop.mp3" };
+    const { unmount } = renderHook(
+      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      [true, config, null]
+    );
+
+    const audio = MockAudio.instances[0];
+    unmount();
+
+    expect(audio._listeners.canplay.length).toBe(0);
+    expect(audio._listeners.error.length).toBe(0);
+  });
+
+  it("re-asserts pause once a still-pending play() promise settles after switching tracks", async () => {
+    MockAudio.delayPlay = true;
+    const { result } = renderHook(
+      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      [true, {}, null]
+    );
+
+    result.current.selectTrack("gentle-midday-rain.mp3");
+    const rainAudio = MockAudio.instances[0];
+    // play() was called but hasn't resolved yet (simulating a slow/real browser).
+    expect(rainAudio.paused).toBe(false);
+    expect(typeof rainAudio._resolvePlay).toBe("function");
+
+    // Switch tracks before the previous play() promise has settled.
+    result.current.selectTrack("midnight-amber-room.mp3");
+    const jazzAudio = MockAudio.instances[1];
+    expect(jazzAudio).not.toBe(rainAudio);
+
+    // The old track's deferred play() now resolves late.
+    rainAudio._resolvePlay();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The old (discarded) track must stay paused — the deferred pause must
+    // never act on whatever is current (jazzAudio), only on rainAudio itself.
+    expect(rainAudio.paused).toBe(true);
+    expect(jazzAudio.paused).toBe(false);
+  });
+
+  it("re-asserts pause once a still-pending play() promise settles after the timer is paused", async () => {
+    MockAudio.delayPlay = true;
+    const config = { focusSoundTrack: "dust-on-the-morning-keys.mp3" };
+    const { rerender } = renderHook(
+      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      [true, config, null]
+    );
+
+    const audio = MockAudio.instances[0];
+    expect(typeof audio._resolvePlay).toBe("function");
+
+    // User pauses the timer before play() has settled.
+    rerender([false, config, null]);
+
+    audio._resolvePlay();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(audio.paused).toBe(true);
+  });
+
+  it("does not re-pause audio if the timer is resumed before a stale pending play() settles", async () => {
+    MockAudio.delayPlay = true;
+    const config = { focusSoundTrack: "dust-on-the-morning-keys.mp3" };
+    const { rerender } = renderHook(
+      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      [true, config, null]
+    );
+
+    const audio = MockAudio.instances[0];
+    const firstResolvePlay = audio._resolvePlay;
+    expect(typeof firstResolvePlay).toBe("function");
+
+    // User pauses before the first play() settles, then resumes again before
+    // that stale play() promise fires its deferred pause callback.
+    rerender([false, config, null]);
+    rerender([true, config, null]);
+    const secondResolvePlay = audio._resolvePlay;
+    expect(secondResolvePlay).not.toBe(firstResolvePlay);
+
+    // The stale first play() promise settles late.
+    firstResolvePlay();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The newer play() is still pending/wanted — the stale deferred pause
+    // must not have stopped it.
+    expect(audio.paused).toBe(false);
+
+    secondResolvePlay();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(audio.paused).toBe(false);
   });
 
   it("preserves the new volume when a track is selected immediately after a volume change", () => {
