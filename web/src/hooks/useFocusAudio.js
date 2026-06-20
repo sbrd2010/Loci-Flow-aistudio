@@ -34,10 +34,17 @@ function safePause(instance) {
 function stopInstance(instance, hardTeardown = false) {
   if (!instance) return;
   safePause(instance);
-  Promise.resolve(instance.__pendingPlay)
+  // Capture the in-flight play() promise by reference so the deferred pause
+  // below only re-fires for *this* play() call. If the user resumes the same
+  // instance before it settles, __pendingPlay is reassigned to the new play()
+  // call, and this stale callback must not pause that newer, still-wanted playback.
+  const pendingPlay = instance.__pendingPlay;
+  Promise.resolve(pendingPlay)
     .catch(() => {})
     .then(() => {
-      safePause(instance);
+      if (instance.__pendingPlay === pendingPlay) {
+        safePause(instance);
+      }
     })
     .catch(() => {});
 

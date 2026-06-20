@@ -486,6 +486,38 @@ describe("useFocusAudio", () => {
     expect(audio.paused).toBe(true);
   });
 
+  it("does not re-pause audio if the timer is resumed before a stale pending play() settles", async () => {
+    MockAudio.delayPlay = true;
+    const config = { focusSoundTrack: "dust-on-the-morning-keys.mp3" };
+    const { rerender } = renderHook(
+      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      [true, config, null]
+    );
+
+    const audio = MockAudio.instances[0];
+    const firstResolvePlay = audio._resolvePlay;
+    expect(typeof firstResolvePlay).toBe("function");
+
+    // User pauses before the first play() settles, then resumes again before
+    // that stale play() promise fires its deferred pause callback.
+    rerender([false, config, null]);
+    rerender([true, config, null]);
+    const secondResolvePlay = audio._resolvePlay;
+    expect(secondResolvePlay).not.toBe(firstResolvePlay);
+
+    // The stale first play() promise settles late.
+    firstResolvePlay();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The newer play() is still pending/wanted — the stale deferred pause
+    // must not have stopped it.
+    expect(audio.paused).toBe(false);
+
+    secondResolvePlay();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(audio.paused).toBe(false);
+  });
+
   it("preserves the new volume when a track is selected immediately after a volume change", () => {
     const config = { focusSoundTrack: "gentle-midday-rain.mp3", focusSoundVolume: 0.5 };
     const saveSubPath = vi.fn();
