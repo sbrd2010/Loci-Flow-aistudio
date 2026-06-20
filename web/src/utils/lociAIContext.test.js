@@ -51,6 +51,7 @@ describe("lociAIContext", () => {
     expect(instruction).toContain("Do not delete, overwrite, or replace user data without clear confirmation");
     expect(instruction).toContain("Today, Week, Month, Quarter, 6 Months, Work");
     expect(instruction).toContain("Never use the word \"ADHD\" in user-facing responses");
+    expect(instruction).toContain("Trust the \"Current Time\"");
   });
 });
 

@@ -236,6 +236,22 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("check in tomorrow morning", pacedOpts)).toBe("full_task");
     });
 
+    it("PR276 - routes 'check today/week focus/horizon' and 'focus on' phrasing to full_task, not light", () => {
+      expect(classifyContextMode("Check today's focus and tell me which one shall I focus")).toBe("full_task");
+      expect(classifyContextMode("Check this week horizon")).toBe("full_task");
+      expect(classifyContextMode("What should I focus on")).toBe("full_task");
+
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("What should I focus on", pacedOpts)).toBe("compact_task");
+    });
+
+    it("PR276 - widens compact follow-up detection for '10-min version' and 'turn that into N steps'", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("give me the 10-min version", pacedOpts)).toBe("compact_task");
+      expect(classifyContextMode("turn that into 3 steps", pacedOpts)).toBe("compact_task");
+      expect(classifyContextMode("turn this into concrete steps", pacedOpts)).toBe("compact_task");
+    });
+
     it("PR #272 Codex Fix - routes distressed task asks to full_task", () => {
       // Mixed distress + task planning asks route to full_task
       expect(classifyContextMode("I’m overwhelmed, what should I do?")).toBe("full_task");
