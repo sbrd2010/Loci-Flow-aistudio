@@ -830,6 +830,33 @@ describe("useFocusAudio", () => {
       expect(result.current.selectedTrack).toBe("sounds/lofi/first-coffee-thoughts.mp3");
     });
 
+    it("reconciles the shuffle queue after a CDN track falls back to its bundled local track", () => {
+      vi.spyOn(Math, "random").mockReturnValue(0);
+
+      const config = { focusSoundTrack: "sounds/lofi/first-coffee-thoughts.mp3" };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, config, null]
+      );
+
+      // Build up some shuffle-queue state for this category before the
+      // error fires, so there's a stale `remaining` queue to reconcile.
+      result.current.reshuffleTrack();
+      expect(getCategoryKeyForTrack(result.current.selectedTrack)).toBe("lofi");
+      expect(result.current.selectedTrack).not.toBe("2-am-debug-loop.mp3");
+
+      const cdnAudio = MockAudio.instances[MockAudio.instances.length - 1];
+      cdnAudio.dispatchEvent("error");
+      expect(result.current.selectedTrack).toBe("2-am-debug-loop.mp3");
+
+      // Reshuffling after the fallback must advance to a different track,
+      // not echo back the bundled track that's now playing and toggle off.
+      result.current.reshuffleTrack();
+      expect(result.current.selectedTrack).not.toBeNull();
+      expect(result.current.selectedTrack).not.toBe("2-am-debug-loop.mp3");
+      expect(getCategoryKeyForTrack(result.current.selectedTrack)).toBe("lofi");
+    });
+
     it("leaves binaural/none unaffected by the shuffle queue", () => {
       const config = { focusSoundTrack: BINAURAL_TRACK_ID };
       const { result } = renderHook(

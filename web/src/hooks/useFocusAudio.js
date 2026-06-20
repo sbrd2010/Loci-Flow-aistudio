@@ -155,6 +155,10 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
         const categoryKey = getCategoryKeyForTrack(selectedTrack);
         const bundled = categoryKey && SOUND_CATEGORIES[categoryKey].variations.find(v => !v.file.includes("/"));
         if (bundled && bundled.file !== selectedTrack) {
+          // Drop the category's in-memory queue: it's stale relative to this
+          // out-of-band fallback, and reshuffling off a stale queue could
+          // hand back the very track that's now playing.
+          if (categoryKey) delete shuffleQueuesRef.current[categoryKey];
           setSelectedTrack(bundled.file);
         } else {
           setTrackLoadState("error");
