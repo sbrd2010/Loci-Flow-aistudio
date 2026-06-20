@@ -79,8 +79,15 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
     const state = shuffleQueuesRef.current[categoryKey];
     let remaining = forceNewCycle ? null : state?.remaining;
     if (!remaining || remaining.length === 0) {
-      const avoidFirst = state?.last ?? (forceNewCycle ? null : selectedTrack);
-      remaining = shuffleCategoryOrder(categoryKey, avoidFirst);
+      if (!state && !forceNewCycle && getCategoryKeyForTrack(selectedTrack) === categoryKey) {
+        // First shuffle for a track that's already playing (e.g. loaded from
+        // saved config rather than picked via selectCategory) — treat it as
+        // already played this cycle so it can't resurface on the very next
+        // click, not merely avoided as the first pick.
+        remaining = shuffleCategoryOrder(categoryKey).filter(file => file !== selectedTrack);
+      } else {
+        remaining = shuffleCategoryOrder(categoryKey, state?.last);
+      }
     }
     const [next, ...rest] = remaining;
     shuffleQueuesRef.current[categoryKey] = { remaining: rest, last: next };

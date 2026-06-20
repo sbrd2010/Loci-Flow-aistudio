@@ -735,6 +735,31 @@ describe("useFocusAudio", () => {
       seen.forEach(track => expect(getCategoryKeyForTrack(track)).toBe("lofi"));
     });
 
+    it("does not let a saved/initial category track reappear before the rest of the category is exhausted", () => {
+      // Track loaded from saved config, not picked via selectCategory — so
+      // there's no pre-existing shuffle queue for its category yet.
+      const config = { focusSoundTrack: "2-am-debug-loop.mp3" };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, config, null]
+      );
+
+      const initialTrack = result.current.selectedTrack;
+      expect(getCategoryKeyForTrack(initialTrack)).toBe("lofi");
+
+      const lofiCount = 8;
+      const seen = [];
+      for (let i = 0; i < lofiCount - 1; i++) {
+        result.current.reshuffleTrack();
+        seen.push(result.current.selectedTrack);
+      }
+
+      // All other lofi variations should play before the saved track can
+      // resurface — not merely be avoided as the very first pick.
+      expect(seen).not.toContain(initialTrack);
+      expect(new Set(seen).size).toBe(lofiCount - 1);
+    });
+
     it("generates a new shuffled cycle after the current one is exhausted", () => {
       const { result } = renderHook(
         (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
