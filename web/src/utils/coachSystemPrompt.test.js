@@ -97,6 +97,12 @@ describe("buildCoachSystemPrompt", () => {
     expect(out).toContain("I'm missing the task snapshot for this request — that looks like a Loci context issue.");
   });
 
+  it("light mode's missing-snapshot guard explicitly excludes plain date/day/time questions", () => {
+    const out = buildCoachSystemPrompt("light", baseCtx());
+    expect(out).toContain('This does NOT apply to plain date/day/time questions');
+    expect(out).toContain("answer those directly using the Current Time below");
+  });
+
   it("full_task and compact_task modes instruct the Coach not to silently drop extra tasks", () => {
     const fullOut = buildCoachSystemPrompt("full_task", baseCtx());
     expect(fullOut).toContain("MULTIPLE TASKS RULE");
