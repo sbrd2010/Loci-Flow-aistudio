@@ -15,13 +15,29 @@ function migrateTrackId(trackId) {
 // `hardTeardown` additionally removes the canplay/error listeners and
 // releases the media resource; used when the instance is being discarded
 // for good (track change, unmount) rather than just paused for resume later.
+// Some pause() implementations are synchronous (HTMLAudioElement), while the
+// binaural beat node's pause() returns ctx.suspend() — a promise that can
+// reject if the AudioContext has already been closed (e.g. by dispose()
+// during hard teardown). safePause() handles both shapes without leaving an
+// unhandled promise rejection.
+function safePause(instance) {
+  try {
+    const result = instance.pause?.();
+    if (result && typeof result.catch === "function") {
+      result.catch(() => {});
+    }
+  } catch {
+    // ignore pause failures during cleanup
+  }
+}
+
 function stopInstance(instance, hardTeardown = false) {
   if (!instance) return;
-  instance.pause?.();
+  safePause(instance);
   Promise.resolve(instance.__pendingPlay)
     .catch(() => {})
     .then(() => {
-      instance.pause?.();
+      safePause(instance);
     })
     .catch(() => {});
 
