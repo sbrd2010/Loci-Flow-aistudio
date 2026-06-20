@@ -6,6 +6,35 @@ function migrateTrackId(trackId) {
   return migrateSoundLibraryTrackId(migrateBinauralTrackId(trackId));
 }
 
+// Stops a specific audio/binaural instance, re-asserting pause once any
+// in-flight play() promise settles (some mobile browsers can keep playing
+// past a pause() called while play() is still pending). Operates only on
+// the instance passed in — never on whatever audioRef.current is by the
+// time the promise settles — so a delayed pause can't stop a track the
+// user has since switched to.
+// `hardTeardown` additionally removes the canplay/error listeners and
+// releases the media resource; used when the instance is being discarded
+// for good (track change, unmount) rather than just paused for resume later.
+function stopInstance(instance, hardTeardown = false) {
+  if (!instance) return;
+  instance.pause?.();
+  Promise.resolve(instance.__pendingPlay)
+    .catch(() => {})
+    .then(() => {
+      instance.pause?.();
+    })
+    .catch(() => {});
+
+  if (hardTeardown) {
+    if (typeof instance.removeEventListener === "function") {
+      if (instance.__onCanPlay) instance.removeEventListener("canplay", instance.__onCanPlay);
+      if (instance.__onError) instance.removeEventListener("error", instance.__onError);
+    }
+    if (typeof instance.removeAttribute === "function") instance.removeAttribute("src");
+    if (typeof instance.load === "function") instance.load();
+  }
+}
+
 export function useFocusAudio(isRunning, config = {}, saveSubPath) {
   const [selectedTrack, setSelectedTrack] = useState(migrateTrackId(config.focusSoundTrack) || null);
   const [volume, setVolume] = useState(config.focusSoundVolume !== undefined ? config.focusSoundVolume : 0.5);
@@ -37,7 +66,7 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
   useEffect(() => {
     // 1. Pause and fully release the previous audio instance immediately
     if (audioRef.current) {
-      audioRef.current.pause();
+      stopInstance(audioRef.current, true);
       audioRef.current.dispose?.();
       audioRef.current = null;
     }
@@ -49,7 +78,7 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
         audioRef.current = node;
         setTrackLoadState("ready");
         if (isRunning) {
-          node.play().catch(err => {
+          node.__pendingPlay = node.play().catch(err => {
             console.warn("Binaural beat play failed or blocked by browser:", err);
           });
         }
@@ -62,10 +91,10 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
       audioRef.current = audio;
 
       setTrackLoadState("loading");
-      audio.addEventListener("canplay", () => {
+      audio.__onCanPlay = () => {
         if (audioRef.current === audio) setTrackLoadState("ready");
-      });
-      audio.addEventListener("error", () => {
+      };
+      audio.__onError = () => {
         if (audioRef.current !== audio) return;
         // CDN variations can fail to load (network issue, cold CDN cache, etc.) —
         // fall back to the category's bundled local track, which is always
@@ -77,11 +106,13 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
         } else {
           setTrackLoadState("error");
         }
-      });
+      };
+      audio.addEventListener("canplay", audio.__onCanPlay);
+      audio.addEventListener("error", audio.__onError);
 
       // Play if timer is already running
       if (isRunning) {
-        audio.play().catch(err => {
+        audio.__pendingPlay = audio.play().catch(err => {
           console.warn("Audio play failed or blocked by browser:", err);
         });
       }
@@ -96,11 +127,11 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
     if (!audio) return;
 
     if (isRunning) {
-      audio.play().catch(err => {
+      audio.__pendingPlay = audio.play().catch(err => {
         console.warn("Audio play failed on timer run:", err);
       });
     } else {
-      audio.pause();
+      stopInstance(audio);
     }
   }, [isRunning]);
 
@@ -115,7 +146,7 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
   useEffect(() => {
     return () => {
       if (audioRef.current) {
-        audioRef.current.pause();
+        stopInstance(audioRef.current, true);
         audioRef.current.dispose?.();
         audioRef.current = null;
       }
