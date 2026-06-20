@@ -652,9 +652,9 @@ describe("useFocusAudio", () => {
 
       result.current.selectCategory("rain");
 
-      expect(result.current.selectedTrack).toBe("gentle-midday-rain.mp3");
+      expect(result.current.selectedTrack).toBe("sounds/rain/calming-rain.mp3");
       expect(saveSubPath).toHaveBeenCalledWith("config", expect.objectContaining({
-        focusSoundTrack: "gentle-midday-rain.mp3"
+        focusSoundTrack: "sounds/rain/calming-rain.mp3"
       }));
     });
 
@@ -700,6 +700,88 @@ describe("useFocusAudio", () => {
     });
 
     it("reshuffleTrack does nothing when no ambient category is selected", () => {
+      const config = { focusSoundTrack: BINAURAL_TRACK_ID };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [true, config, null]
+      );
+
+      result.current.reshuffleTrack();
+      expect(result.current.selectedTrack).toBe(BINAURAL_TRACK_ID);
+    });
+  });
+
+  describe("no-repeat shuffle queue", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("does not repeat a variation until all category variations are exhausted", () => {
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, {}, null]
+      );
+
+      result.current.selectCategory("lofi");
+      const lofiCount = 8;
+      const seen = [result.current.selectedTrack];
+
+      for (let i = 0; i < lofiCount - 1; i++) {
+        result.current.reshuffleTrack();
+        seen.push(result.current.selectedTrack);
+      }
+
+      expect(new Set(seen).size).toBe(lofiCount);
+      seen.forEach(track => expect(getCategoryKeyForTrack(track)).toBe("lofi"));
+    });
+
+    it("generates a new shuffled cycle after the current one is exhausted", () => {
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, {}, null]
+      );
+
+      result.current.selectCategory("lofi");
+      const lofiCount = 8;
+      for (let i = 0; i < lofiCount - 1; i++) {
+        result.current.reshuffleTrack();
+      }
+
+      // One more click after exhaustion should still resolve to a valid
+      // lofi variation rather than erroring or stalling.
+      result.current.reshuffleTrack();
+      expect(getCategoryKeyForTrack(result.current.selectedTrack)).toBe("lofi");
+    });
+
+    it("avoids starting a new cycle with the same track that just finished playing", () => {
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, {}, null]
+      );
+
+      result.current.selectCategory("lofi");
+      const lofiCount = 8;
+      for (let i = 0; i < lofiCount - 1; i++) {
+        result.current.reshuffleTrack();
+      }
+      const lastOfPreviousCycle = result.current.selectedTrack;
+
+      result.current.reshuffleTrack();
+      expect(result.current.selectedTrack).not.toBe(lastOfPreviousCycle);
+    });
+
+    it("still toggles the category off when selecting an already-active category", () => {
+      const config = { focusSoundTrack: "gentle-midday-rain.mp3" };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, config, null]
+      );
+
+      result.current.selectCategory("rain");
+      expect(result.current.selectedTrack).toBeNull();
+    });
+
+    it("leaves binaural/none unaffected by the shuffle queue", () => {
       const config = { focusSoundTrack: BINAURAL_TRACK_ID };
       const { result } = renderHook(
         (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),

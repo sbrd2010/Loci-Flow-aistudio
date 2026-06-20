@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { BINAURAL_TRACK_ID, createBinauralBeatNode, migrateTrackId as migrateBinauralTrackId } from "../utils/binauralBeat";
-import { SOUND_CATEGORIES, trackUrl, getCategoryKeyForTrack, pickRandomVariation, migrateTrackId as migrateSoundLibraryTrackId } from "../utils/soundLibrary";
+import { SOUND_CATEGORIES, trackUrl, getCategoryKeyForTrack, shuffleCategoryOrder, migrateTrackId as migrateSoundLibraryTrackId } from "../utils/soundLibrary";
 
 function migrateTrackId(trackId) {
   return migrateSoundLibraryTrackId(migrateBinauralTrackId(trackId));
@@ -68,6 +68,24 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
   const [trackLoadState, setTrackLoadState] = useState("idle");
 
   const audioRef = useRef(null);
+
+  // No-repeat shuffle queue per sound category, in-memory only (never
+  // persisted to config/Firebase): { remaining: string[], last: string }.
+  // "remaining" holds this cycle's not-yet-played files; when it runs out,
+  // the next pick starts a fresh shuffled cycle.
+  const shuffleQueuesRef = useRef({});
+
+  function nextInCategoryShuffle(categoryKey, { forceNewCycle = false } = {}) {
+    const state = shuffleQueuesRef.current[categoryKey];
+    let remaining = forceNewCycle ? null : state?.remaining;
+    if (!remaining || remaining.length === 0) {
+      const avoidFirst = state?.last ?? (forceNewCycle ? null : selectedTrack);
+      remaining = shuffleCategoryOrder(categoryKey, avoidFirst);
+    }
+    const [next, ...rest] = remaining;
+    shuffleQueuesRef.current[categoryKey] = { remaining: rest, last: next };
+    return next;
+  }
 
   // Sync state if config changes externally (e.g. from sync/reload, or a
   // different account/config with no saved sound prefs).
@@ -195,23 +213,23 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
     }
   };
 
-  // Selecting one of the ambient categories (Rain, Lo-Fi, Jazz, Piano) picks
-  // a random variation from its 8 tracks (1 bundled + 7 CDN), or toggles the
-  // category off if it's already playing.
+  // Selecting one of the ambient categories (Rain, Lo-Fi, Jazz, Piano) starts
+  // a fresh shuffled play order for that category, or toggles the category
+  // off if it's already playing.
   const selectCategory = (categoryKey) => {
     if (getCategoryKeyForTrack(selectedTrack) === categoryKey) {
       selectTrack("none");
     } else {
-      selectTrack(pickRandomVariation(categoryKey));
+      selectTrack(nextInCategoryShuffle(categoryKey, { forceNewCycle: true }));
     }
   };
 
-  // Swap the current track for a different random variation in the same
-  // category, without changing the active category.
+  // Swap the current track for the next unplayed variation in the active
+  // category's shuffle order, without changing the active category.
   const reshuffleTrack = () => {
     const categoryKey = getCategoryKeyForTrack(selectedTrack);
     if (!categoryKey) return;
-    selectTrack(pickRandomVariation(categoryKey, selectedTrack));
+    selectTrack(nextInCategoryShuffle(categoryKey));
   };
 
   const changeVolume = (newVolume) => {
