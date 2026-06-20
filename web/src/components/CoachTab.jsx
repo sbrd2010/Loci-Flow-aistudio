@@ -71,7 +71,7 @@ function getLastFullTaskTime(userId) {
   return raw ? Number(raw) : 0;
 }
 
-export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null }) {
+export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {} }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
   const { groqKey, nvidiaKey, geminiKey } = getAIKeys();
   const hasAnyKey = !!(groqKey || nvidiaKey || geminiKey);
@@ -105,7 +105,8 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
     ? payload.chatHistory
     : defaultWelcome;
 
-  const [chatInput, setChatInput] = useState("");
+  const chatInput = chatDraft;
+  const setChatInput = setChatDraft;
   const [chatLoading, setChatLoading] = useState(false);
   const chatBottomRef = useRef(null);
   const chatInputRef = useRef(null);
@@ -331,7 +332,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const now = new Date();
     const hour = now.getHours();
     const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
-    const nowLabel = now.toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    const nowLabel = now.toLocaleString([], { weekday: "short", year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
     const todayActive = tasks.filter(t => t.horizonLevel === "today" && isActiveLociTask(t));
     const taskContext = buildLociTaskContext(tasks, new Date(), getFocusWindows(config));
     const todayStr = getLociDayStr(new Date(), getFocusWindows(config));

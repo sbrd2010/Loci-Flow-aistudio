@@ -363,6 +363,17 @@ export default function App() {
   // tab switches and after exiting the Deep Focus overlay.
   const focusAudio = useFocusAudio(focusTimer.isTimerRunning, payload?.config || {}, saveSubPath);
 
+  // Unsent Coach chat draft also lives here (not in CoachTab) so it survives
+  // tab switches — CoachTab unmounts when activeTab !== "coach". In-memory
+  // only, cleared by CoachTab once the message actually sends.
+  const [coachChatDraft, setCoachChatDraft] = useState("");
+
+  // Clear the draft on sign-out/switch-account so one user's unsent text
+  // never leaks into another user's session.
+  useEffect(() => {
+    setCoachChatDraft("");
+  }, [user?.uid]);
+
   // Poll for due daily check-ins (Morning Commitment / Midday / Reflection) and
   // fire a push notification if the app is backgrounded/closed when one comes due.
   // Suppressed during an active focus session (mirrors TodayTab's auto-show guard)
@@ -721,7 +732,7 @@ export default function App() {
           />
         )}
         {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} userProfile={userProfile} initialPanel={mindBoxInitialPanel} />}
-        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} />}
+        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} />}
         {activeTab === "settings" && (
           <SettingsTab
             payload={payload}

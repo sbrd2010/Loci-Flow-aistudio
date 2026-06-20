@@ -90,6 +90,27 @@ describe("buildCoachSystemPrompt", () => {
     expect(out).toEqual(buildCoachSystemPrompt("light", baseCtx()));
   });
 
+  it("light mode never denies access to Loci task data and gives the context-issue line instead", () => {
+    const out = buildCoachSystemPrompt("light", baseCtx());
+    expect(out).not.toContain("no direct access to Loci app data");
+    expect(out).not.toContain("I have no access");
+    expect(out).toContain("I'm missing the task snapshot for this request — that looks like a Loci context issue.");
+  });
+
+  it("light mode's missing-snapshot guard explicitly excludes plain date/day/time questions", () => {
+    const out = buildCoachSystemPrompt("light", baseCtx());
+    expect(out).toContain('This does NOT apply to plain date/day/time questions');
+    expect(out).toContain("answer those directly using the Current Time below");
+  });
+
+  it("full_task and compact_task modes instruct the Coach not to silently drop extra tasks", () => {
+    const fullOut = buildCoachSystemPrompt("full_task", baseCtx());
+    expect(fullOut).toContain("MULTIPLE TASKS RULE");
+
+    const compactOut = buildCoachSystemPrompt("compact_task", baseCtx());
+    expect(compactOut).toContain("MULTIPLE TASKS RULE");
+  });
+
   it("compact_task mode conditionally carries the CURRENT NOW FOCUS line", () => {
     // Case 1: focus task exists
     const ctxWithFocus = { ...baseCtx(), currentFocusTitle: "My Focus Task" };

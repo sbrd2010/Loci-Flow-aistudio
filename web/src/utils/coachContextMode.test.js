@@ -28,6 +28,17 @@ describe("classifyContextMode", () => {
     expect(classifyContextMode("set now focus")).toBe("full_task");
   });
 
+  it("PR276 follow-up - routes priority/check phrasing to full_task, not light", () => {
+    expect(classifyContextMode("what are my priorities")).toBe("full_task");
+    expect(classifyContextMode("tell me my priorities")).toBe("full_task");
+    expect(classifyContextMode("show me my priorities")).toBe("full_task");
+    expect(classifyContextMode("what should be my priority")).toBe("full_task");
+    expect(classifyContextMode("which priority should I focus on")).toBe("full_task");
+    expect(classifyContextMode("cant you check?")).toBe("full_task");
+    expect(classifyContextMode("can't you check?")).toBe("full_task");
+    expect(classifyContextMode("check my week")).toBe("full_task");
+  });
+
   it("routes action/mutation phrases to full_task", () => {
     expect(classifyContextMode("I finished the report")).toBe("full_task");
     expect(classifyContextMode("start timer for writing")).toBe("full_task");
@@ -234,6 +245,22 @@ describe("classifyContextMode", () => {
       // 3. Check-ins bypass compact mode
       expect(classifyContextMode("remind me in 30 minutes", pacedOpts)).toBe("full_task");
       expect(classifyContextMode("check in tomorrow morning", pacedOpts)).toBe("full_task");
+    });
+
+    it("PR276 - routes 'check today/week focus/horizon' and 'focus on' phrasing to full_task, not light", () => {
+      expect(classifyContextMode("Check today's focus and tell me which one shall I focus")).toBe("full_task");
+      expect(classifyContextMode("Check this week horizon")).toBe("full_task");
+      expect(classifyContextMode("What should I focus on")).toBe("full_task");
+
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("What should I focus on", pacedOpts)).toBe("compact_task");
+    });
+
+    it("PR276 - widens compact follow-up detection for '10-min version' and 'turn that into N steps'", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("give me the 10-min version", pacedOpts)).toBe("compact_task");
+      expect(classifyContextMode("turn that into 3 steps", pacedOpts)).toBe("compact_task");
+      expect(classifyContextMode("turn this into concrete steps", pacedOpts)).toBe("compact_task");
     });
 
     it("PR #272 Codex Fix - routes distressed task asks to full_task", () => {
