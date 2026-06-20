@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { BINAURAL_TRACK_ID, createBinauralBeatNode, migrateTrackId as migrateBinauralTrackId } from "../utils/binauralBeat";
-import { SOUND_CATEGORIES, trackUrl, getCategoryKeyForTrack, pickRandomVariation, migrateTrackId as migrateSoundLibraryTrackId } from "../utils/soundLibrary";
+import { SOUND_CATEGORIES, trackUrl, getCategoryKeyForTrack, shuffleCategoryOrder, migrateTrackId as migrateSoundLibraryTrackId } from "../utils/soundLibrary";
 
 function migrateTrackId(trackId) {
   return migrateSoundLibraryTrackId(migrateBinauralTrackId(trackId));
@@ -69,11 +69,41 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
 
   const audioRef = useRef(null);
 
+  // No-repeat shuffle queue per sound category, in-memory only (never
+  // persisted to config/Firebase): { remaining: string[], last: string }.
+  // "remaining" holds this cycle's not-yet-played files; when it runs out,
+  // the next pick starts a fresh shuffled cycle.
+  const shuffleQueuesRef = useRef({});
+
+  function nextInCategoryShuffle(categoryKey, { forceNewCycle = false } = {}) {
+    const state = shuffleQueuesRef.current[categoryKey];
+    let remaining = forceNewCycle ? null : state?.remaining;
+    if (!remaining || remaining.length === 0) {
+      if (!state && !forceNewCycle && getCategoryKeyForTrack(selectedTrack) === categoryKey) {
+        // First shuffle for a track that's already playing (e.g. loaded from
+        // saved config rather than picked via selectCategory) — treat it as
+        // already played this cycle so it can't resurface on the very next
+        // click, not merely avoided as the first pick.
+        remaining = shuffleCategoryOrder(categoryKey).filter(file => file !== selectedTrack);
+      } else {
+        remaining = shuffleCategoryOrder(categoryKey, state?.last);
+      }
+    }
+    const [next, ...rest] = remaining;
+    shuffleQueuesRef.current[categoryKey] = { remaining: rest, last: next };
+    return next;
+  }
+
   // Sync state if config changes externally (e.g. from sync/reload, or a
   // different account/config with no saved sound prefs).
   useEffect(() => {
     const next = config.focusSoundTrack !== undefined ? migrateTrackId(config.focusSoundTrack) : null;
     if (next !== selectedTrack) {
+      // Drop the affected category's in-memory queue: it may be stale
+      // relative to this externally-synced track, and reshuffling off a
+      // stale queue could hand back the very track that was just synced in.
+      const categoryKey = getCategoryKeyForTrack(next);
+      if (categoryKey) delete shuffleQueuesRef.current[categoryKey];
       setSelectedTrack(next);
     }
   }, [config.focusSoundTrack]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -125,6 +155,10 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
         const categoryKey = getCategoryKeyForTrack(selectedTrack);
         const bundled = categoryKey && SOUND_CATEGORIES[categoryKey].variations.find(v => !v.file.includes("/"));
         if (bundled && bundled.file !== selectedTrack) {
+          // Drop the category's in-memory queue: it's stale relative to this
+          // out-of-band fallback, and reshuffling off a stale queue could
+          // hand back the very track that's now playing.
+          if (categoryKey) delete shuffleQueuesRef.current[categoryKey];
           setSelectedTrack(bundled.file);
         } else {
           setTrackLoadState("error");
@@ -195,23 +229,23 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
     }
   };
 
-  // Selecting one of the ambient categories (Rain, Lo-Fi, Jazz, Piano) picks
-  // a random variation from its 8 tracks (1 bundled + 7 CDN), or toggles the
-  // category off if it's already playing.
+  // Selecting one of the ambient categories (Rain, Lo-Fi, Jazz, Piano) starts
+  // a fresh shuffled play order for that category, or toggles the category
+  // off if it's already playing.
   const selectCategory = (categoryKey) => {
     if (getCategoryKeyForTrack(selectedTrack) === categoryKey) {
       selectTrack("none");
     } else {
-      selectTrack(pickRandomVariation(categoryKey));
+      selectTrack(nextInCategoryShuffle(categoryKey, { forceNewCycle: true }));
     }
   };
 
-  // Swap the current track for a different random variation in the same
-  // category, without changing the active category.
+  // Swap the current track for the next unplayed variation in the active
+  // category's shuffle order, without changing the active category.
   const reshuffleTrack = () => {
     const categoryKey = getCategoryKeyForTrack(selectedTrack);
     if (!categoryKey) return;
-    selectTrack(pickRandomVariation(categoryKey, selectedTrack));
+    selectTrack(nextInCategoryShuffle(categoryKey));
   };
 
   const changeVolume = (newVolume) => {

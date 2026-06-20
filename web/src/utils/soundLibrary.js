@@ -119,6 +119,32 @@ export function pickRandomVariation(categoryKey, excludeFile = null) {
   return pool[Math.floor(Math.random() * pool.length)].file;
 }
 
+function shuffle(array) {
+  const result = array.slice();
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+// Builds a freshly shuffled no-repeat play order covering every variation in
+// a category. When avoidFirst is given and the category has more than one
+// variation, deterministically swaps the first slot with the next entry
+// that isn't avoidFirst, so a new cycle never starts with the track that
+// just finished playing.
+export function shuffleCategoryOrder(categoryKey, avoidFirst = null) {
+  const files = SOUND_CATEGORIES[categoryKey].variations.map(v => v.file);
+  const order = shuffle(files);
+  if (avoidFirst && files.length > 1 && order[0] === avoidFirst) {
+    const swapIndex = order.findIndex(file => file !== avoidFirst);
+    if (swapIndex > 0) {
+      [order[0], order[swapIndex]] = [order[swapIndex], order[0]];
+    }
+  }
+  return order;
+}
+
 export function migrateTrackId(trackId) {
   if (!trackId) return trackId;
   const legacyRainTracks = new Set([

@@ -652,9 +652,9 @@ describe("useFocusAudio", () => {
 
       result.current.selectCategory("rain");
 
-      expect(result.current.selectedTrack).toBe("gentle-midday-rain.mp3");
+      expect(result.current.selectedTrack).toBe("sounds/rain/calming-rain.mp3");
       expect(saveSubPath).toHaveBeenCalledWith("config", expect.objectContaining({
-        focusSoundTrack: "gentle-midday-rain.mp3"
+        focusSoundTrack: "sounds/rain/calming-rain.mp3"
       }));
     });
 
@@ -700,6 +700,164 @@ describe("useFocusAudio", () => {
     });
 
     it("reshuffleTrack does nothing when no ambient category is selected", () => {
+      const config = { focusSoundTrack: BINAURAL_TRACK_ID };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [true, config, null]
+      );
+
+      result.current.reshuffleTrack();
+      expect(result.current.selectedTrack).toBe(BINAURAL_TRACK_ID);
+    });
+  });
+
+  describe("no-repeat shuffle queue", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("does not repeat a variation until all category variations are exhausted", () => {
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, {}, null]
+      );
+
+      result.current.selectCategory("lofi");
+      const lofiCount = 8;
+      const seen = [result.current.selectedTrack];
+
+      for (let i = 0; i < lofiCount - 1; i++) {
+        result.current.reshuffleTrack();
+        seen.push(result.current.selectedTrack);
+      }
+
+      expect(new Set(seen).size).toBe(lofiCount);
+      seen.forEach(track => expect(getCategoryKeyForTrack(track)).toBe("lofi"));
+    });
+
+    it("does not let a saved/initial category track reappear before the rest of the category is exhausted", () => {
+      // Track loaded from saved config, not picked via selectCategory — so
+      // there's no pre-existing shuffle queue for its category yet.
+      const config = { focusSoundTrack: "2-am-debug-loop.mp3" };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, config, null]
+      );
+
+      const initialTrack = result.current.selectedTrack;
+      expect(getCategoryKeyForTrack(initialTrack)).toBe("lofi");
+
+      const lofiCount = 8;
+      const seen = [];
+      for (let i = 0; i < lofiCount - 1; i++) {
+        result.current.reshuffleTrack();
+        seen.push(result.current.selectedTrack);
+      }
+
+      // All other lofi variations should play before the saved track can
+      // resurface — not merely be avoided as the very first pick.
+      expect(seen).not.toContain(initialTrack);
+      expect(new Set(seen).size).toBe(lofiCount - 1);
+    });
+
+    it("generates a new shuffled cycle after the current one is exhausted", () => {
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, {}, null]
+      );
+
+      result.current.selectCategory("lofi");
+      const lofiCount = 8;
+      for (let i = 0; i < lofiCount - 1; i++) {
+        result.current.reshuffleTrack();
+      }
+
+      // One more click after exhaustion should still resolve to a valid
+      // lofi variation rather than erroring or stalling.
+      result.current.reshuffleTrack();
+      expect(getCategoryKeyForTrack(result.current.selectedTrack)).toBe("lofi");
+    });
+
+    it("avoids starting a new cycle with the same track that just finished playing", () => {
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, {}, null]
+      );
+
+      result.current.selectCategory("lofi");
+      const lofiCount = 8;
+      for (let i = 0; i < lofiCount - 1; i++) {
+        result.current.reshuffleTrack();
+      }
+      const lastOfPreviousCycle = result.current.selectedTrack;
+
+      result.current.reshuffleTrack();
+      expect(result.current.selectedTrack).not.toBe(lastOfPreviousCycle);
+    });
+
+    it("still toggles the category off when selecting an already-active category", () => {
+      const config = { focusSoundTrack: "gentle-midday-rain.mp3" };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, config, null]
+      );
+
+      result.current.selectCategory("rain");
+      expect(result.current.selectedTrack).toBeNull();
+    });
+
+    it("reconciles the shuffle queue after an external config sync, avoiding an accidental toggle-off", () => {
+      vi.spyOn(Math, "random").mockReturnValue(0);
+
+      const { result, rerender } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, {}, null]
+      );
+
+      result.current.selectCategory("lofi");
+      expect(result.current.selectedTrack).toBe("sounds/lofi/first-coffee-thoughts.mp3");
+
+      // Simulate an external sync (different device/account, reload) landing
+      // a track that happens to be queued up next in this category's now-stale
+      // in-memory shuffle order.
+      const syncedConfig = { focusSoundTrack: "sounds/lofi/penciled-sunbeams.mp3" };
+      rerender([false, syncedConfig, null]);
+      expect(result.current.selectedTrack).toBe("sounds/lofi/penciled-sunbeams.mp3");
+
+      // Reshuffling after the sync must advance to a different track, not
+      // echo back the just-synced one and toggle the sound off.
+      result.current.reshuffleTrack();
+      expect(result.current.selectedTrack).toBe("sounds/lofi/first-coffee-thoughts.mp3");
+    });
+
+    it("reconciles the shuffle queue after a CDN track falls back to its bundled local track", () => {
+      vi.spyOn(Math, "random").mockReturnValue(0);
+
+      const config = { focusSoundTrack: "sounds/lofi/first-coffee-thoughts.mp3" };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [false, config, null]
+      );
+
+      // Build up some shuffle-queue state for this category before the
+      // error fires, so there's a stale `remaining` queue to reconcile.
+      result.current.reshuffleTrack();
+      expect(getCategoryKeyForTrack(result.current.selectedTrack)).toBe("lofi");
+      expect(result.current.selectedTrack).not.toBe("2-am-debug-loop.mp3");
+
+      const cdnAudio = MockAudio.instances[MockAudio.instances.length - 1];
+      cdnAudio.dispatchEvent("error");
+      expect(result.current.selectedTrack).toBe("2-am-debug-loop.mp3");
+
+      // Reshuffling after the fallback must advance to a different track,
+      // not echo back the bundled track that's now playing and toggle off.
+      result.current.reshuffleTrack();
+      expect(result.current.selectedTrack).not.toBeNull();
+      expect(result.current.selectedTrack).not.toBe("2-am-debug-loop.mp3");
+      expect(getCategoryKeyForTrack(result.current.selectedTrack)).toBe("lofi");
+    });
+
+    it("leaves binaural/none unaffected by the shuffle queue", () => {
       const config = { focusSoundTrack: BINAURAL_TRACK_ID };
       const { result } = renderHook(
         (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
