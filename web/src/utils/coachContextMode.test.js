@@ -28,6 +28,17 @@ describe("classifyContextMode", () => {
     expect(classifyContextMode("set now focus")).toBe("full_task");
   });
 
+  it("PR276 follow-up - routes priority/check phrasing to full_task, not light", () => {
+    expect(classifyContextMode("what are my priorities")).toBe("full_task");
+    expect(classifyContextMode("tell me my priorities")).toBe("full_task");
+    expect(classifyContextMode("show me my priorities")).toBe("full_task");
+    expect(classifyContextMode("what should be my priority")).toBe("full_task");
+    expect(classifyContextMode("which priority should I focus on")).toBe("full_task");
+    expect(classifyContextMode("cant you check?")).toBe("full_task");
+    expect(classifyContextMode("can't you check?")).toBe("full_task");
+    expect(classifyContextMode("check my week")).toBe("full_task");
+  });
+
   it("routes action/mutation phrases to full_task", () => {
     expect(classifyContextMode("I finished the report")).toBe("full_task");
     expect(classifyContextMode("start timer for writing")).toBe("full_task");

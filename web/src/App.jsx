@@ -368,6 +368,12 @@ export default function App() {
   // only, cleared by CoachTab once the message actually sends.
   const [coachChatDraft, setCoachChatDraft] = useState("");
 
+  // Clear the draft on sign-out/switch-account so one user's unsent text
+  // never leaks into another user's session.
+  useEffect(() => {
+    setCoachChatDraft("");
+  }, [user?.uid]);
+
   // Poll for due daily check-ins (Morning Commitment / Midday / Reflection) and
   // fire a push notification if the app is backgrounded/closed when one comes due.
   // Suppressed during an active focus session (mirrors TodayTab's auto-show guard)

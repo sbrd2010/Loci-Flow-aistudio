@@ -8,7 +8,7 @@ const REMINDER_VERB_RE = /\b(remind me|check in|follow up|circle back|ask me aga
 const TIME_SIGNAL_RE = /\b(later|in \d+\s*min\w*|at \d{1,2}(:\d{2})?\s*(am|pm)?|tomorrow(?: morning)?)\b/i;
 const STANDALONE_TIME_RE = /\b(in \d+\s*min\w*|tomorrow morning)\b/i;
 
-const BROAD_TASK_QUERY_RE = /\b(what are my tasks|what['’]?s due|what is due|anything due|due date|what['’]?s my deadline|what is my deadline|show my tasks|what do i have today|what tasks do i have|list my tasks|my task list|show my list|what['’]?s on my list|what do i need to do today|check (?:my |the )?(?:today['’]?s|this week['’]?s?|week) (?:focus|horizon)|check (?:this|my) week horizon|check today['’]?s focus)\b/i;
+const BROAD_TASK_QUERY_RE = /\b(what are my tasks|what['’]?s due|what is due|anything due|due date|what['’]?s my deadline|what is my deadline|show my tasks|what do i have today|what tasks do i have|list my tasks|my task list|show my list|what['’]?s on my list|what do i need to do today|check (?:my |the )?(?:today['’]?s|this week['’]?s?|week) (?:focus|horizon)|check (?:this|my) week horizon|check today['’]?s focus|what are my priorities|tell me my priorities|show me my priorities|what should be my priority|which priority should i focus on|can['’]?t you check|check my week)\b/i;
 
 function isCheckinRequest(text) {
   return (REMINDER_VERB_RE.test(text) && TIME_SIGNAL_RE.test(text)) || STANDALONE_TIME_RE.test(text);

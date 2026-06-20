@@ -71,7 +71,7 @@ function getLastFullTaskTime(userId) {
   return raw ? Number(raw) : 0;
 }
 
-export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft, setChatDraft }) {
+export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {} }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
   const { groqKey, nvidiaKey, geminiKey } = getAIKeys();
   const hasAnyKey = !!(groqKey || nvidiaKey || geminiKey);
