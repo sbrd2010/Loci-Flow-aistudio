@@ -409,7 +409,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     if (contextMode === "light") {
       maxTokens = 150;
     } else if (contextMode === "compact_task") {
-      maxTokens = 220;
+      maxTokens = 280;
     } else if (contextMode === "emotional") {
       maxTokens = 300;
     } else if (contextMode === "full_task") {
