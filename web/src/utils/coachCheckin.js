@@ -23,11 +23,14 @@ export function parseCheckinTag(text = "") {
   return { cleanText, minutes };
 }
 
-// Picks which task the check-in should reference: the pinned Now Focus task
-// if there is one, else the first active Today task, else null.
-export function pickCheckinNote(todayActiveTasks = []) {
-  const nowFocus = todayActiveTasks.find(t => t.isNowFocus);
-  return (nowFocus || todayActiveTasks[0])?.title || null;
+// Picks which task the check-in should reference: an explicitly mentioned
+// task (caller-resolved exact-title match against the user's message) wins,
+// else the pinned Now Focus task if there is one, else null (generic
+// check-in) — never an arbitrary task the user didn't ask about.
+export function pickCheckinNote(activeTasks = [], mentionedTitle = null) {
+  if (mentionedTitle) return mentionedTitle;
+  const nowFocus = activeTasks.find(t => t.isNowFocus);
+  return nowFocus?.title || null;
 }
 
 export function buildCoachCheckin(minutes, note, now = Date.now()) {

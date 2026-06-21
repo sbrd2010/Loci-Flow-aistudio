@@ -444,7 +444,17 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
 
       let configPatch = null;
       if (checkinMinutes != null) {
-        const checkin = buildCoachCheckin(checkinMinutes, pickCheckinNote(todayActive));
+        // Exact-title-only match (no fuzzy/partial matching) against the
+        // user's own message, so the check-in never silently attaches to an
+        // unrelated task — see pickCheckinNote.
+        const activeForCheckin = currentTasks.filter(isActiveLociTask);
+        const lowerUserText = userText.toLowerCase();
+        const mentionedTasks = activeForCheckin.filter(t =>
+          isTitleSafeForTextMatching(t.title) &&
+          new RegExp(`\\b${escapeRegExp(t.title.trim().toLowerCase())}\\b`, "i").test(lowerUserText)
+        );
+        const mentionedTitle = mentionedTasks.length === 1 ? mentionedTasks[0].title : null;
+        const checkin = buildCoachCheckin(checkinMinutes, pickCheckinNote(activeForCheckin, mentionedTitle));
         configPatch = { ...configPatch, coachCheckin: checkin };
         scheduleCoachCheckin(checkin);
         requestNotifPermission();

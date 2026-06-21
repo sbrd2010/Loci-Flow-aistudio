@@ -37,18 +37,33 @@ describe("parseCheckinTag", () => {
 });
 
 describe("pickCheckinNote", () => {
-  it("returns null when there are no active today tasks", () => {
+  it("returns null when there are no active tasks and no explicit mention", () => {
     expect(pickCheckinNote([])).toBeNull();
   });
 
-  it("prefers the Now Focus task", () => {
+  it("prefers the Now Focus task when there is no explicit mention", () => {
     const tasks = [{ title: "Email client" }, { title: "Write report", isNowFocus: true }];
     expect(pickCheckinNote(tasks)).toBe("Write report");
   });
 
-  it("falls back to the first active today task", () => {
+  it("returns null (generic check-in) when there is no Now Focus and no explicit mention, never guessing an unrelated task", () => {
     const tasks = [{ title: "Email client" }, { title: "Write report" }];
-    expect(pickCheckinNote(tasks)).toBe("Email client");
+    expect(pickCheckinNote(tasks)).toBeNull();
+  });
+
+  it("prefers an explicitly mentioned task over the Now Focus task", () => {
+    const tasks = [{ title: "Email client" }, { title: "Write report", isNowFocus: true }];
+    expect(pickCheckinNote(tasks, "Email client")).toBe("Email client");
+  });
+
+  it("uses the explicitly mentioned task when there is no Now Focus", () => {
+    const tasks = [{ title: "Email client" }, { title: "Write report" }];
+    expect(pickCheckinNote(tasks, "Write report")).toBe("Write report");
+  });
+
+  it("falls back to Now Focus when the mentioned title is null", () => {
+    const tasks = [{ title: "Email client" }, { title: "Write report", isNowFocus: true }];
+    expect(pickCheckinNote(tasks, null)).toBe("Write report");
   });
 });
 

@@ -68,6 +68,19 @@ describe("buildCoachSystemPrompt", () => {
     expect(out).toContain("COACH ACTIONS:");
   });
 
+  it("full_task mode gives honest, conditional answers for check-in/reminder questions", () => {
+    const out = buildCoachSystemPrompt("full_task", baseCtx());
+    expect(out).toContain("HONESTY ABOUT CHECK-INS");
+    expect(out).toContain('I set a Coach check-in, not a task reminder attached to a task.');
+    expect(out).toContain("I haven't set a reminder yet. I can set a Coach check-in here if you tell me when.");
+    expect(out).not.toContain('always answer "I set a Coach check-in"');
+  });
+
+  it("emotional mode's check-in line is honest about what happens", () => {
+    const out = buildCoachSystemPrompt("emotional", baseCtx());
+    expect(out).toContain('call it a check-in here in the app — never "reminder," "notification," or "alert."');
+  });
+
   it("light, emotional, and profile_reflection each carry the Loci voice capsule", () => {
     const capsule = buildLociVoiceCapsule("Rohan");
     ["light", "emotional", "profile_reflection"].forEach(mode => {
