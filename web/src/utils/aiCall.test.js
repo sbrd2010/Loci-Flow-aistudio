@@ -325,6 +325,20 @@ describe("AI call resilience", () => {
     expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
   });
 
+  it("does not retry Cerebras when the initial budget already equals the retry cap", async () => {
+    storage.setItem("loci_provider_pref", "cerebras");
+    fetch
+      .mockResolvedValueOnce(cerebrasEmpty("length"))   // Cerebras at the cap, still empty
+      .mockResolvedValueOnce(groqOk("Groq saved it after Cerebras at cap."));
+
+    const reply = await callAI(baseRequest({ cerebrasKey: "test-cerebras-key", maxTokens: 4000 }));
+
+    expect(reply).toBe("Groq saved it after Cerebras at cap.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
+    expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+  });
+
   it("falls back to Gemini when Cerebras stays empty after a length retry", async () => {
     storage.setItem("loci_provider_pref", "cerebras");
     fetch
