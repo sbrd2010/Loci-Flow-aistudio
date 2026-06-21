@@ -136,4 +136,9 @@ describe("buildCoachSystemPrompt", () => {
     const out = buildCoachSystemPrompt("compact_task", baseCtx());
     expect(out).toContain("these tags are stripped automatically and are not part of the \"nothing else\" reply text");
   });
+
+  it("PR277 follow-up - compact_task FORMAT RULES give explicit precedence for combined date/time + numbered-step asks", () => {
+    const out = buildCoachSystemPrompt("compact_task", baseCtx());
+    expect(out).toContain("answer the date/time in one complete sentence first, then give the numbered list");
+  });
 });
