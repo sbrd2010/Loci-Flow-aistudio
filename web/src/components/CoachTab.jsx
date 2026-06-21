@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { track, auth } from "../firebase";
-import { callAI, getAIKeys } from "../utils/aiCall";
+import { callAI, describeAIError, getAIKeys } from "../utils/aiCall";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
 import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, getLocalDateString, isActiveLociTask } from "../utils/lociAIContext";
@@ -655,7 +655,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       saveSubPath("chatHistory", savedWithReply);
     } catch (err) {
       console.error("[CoachTab] AI chat failed:", err);
-      const hint = err.message === "429" ? "Rate limit — wait 30 sec and retry." : err.message === "503" ? "AI server busy — try again." : err.message === "no_key" ? "Add an AI key in Settings." : "AI is unavailable right now. Check your AI keys in Settings or try again later.";
+      const hint = describeAIError(err);
       
       const currentHistory = chatHistoryRef.current || [];
       const hasUserMsg = currentHistory.length > 0 &&
@@ -834,7 +834,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
       setBriefingResult(reply);
     } catch (err) {
       console.error("[CoachTab] Focus briefing failed:", err);
-      setBriefingResult("AI is unavailable right now. Check your AI keys in Settings or try again later.");
+      setBriefingResult(describeAIError(err));
     } finally {
       setBriefingLoading(false);
     }

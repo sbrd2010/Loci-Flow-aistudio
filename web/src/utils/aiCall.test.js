@@ -4,7 +4,7 @@ vi.mock("../firebase", () => ({
   auth: { currentUser: null },
 }));
 
-import { callAI, extractJsonArray, resetProviderCooldowns } from "./aiCall";
+import { callAI, classifyAIError, describeAIError, extractJsonArray, resetProviderCooldowns } from "./aiCall";
 
 function makeStorage() {
   const store = new Map();
@@ -301,6 +301,107 @@ describe("AI call resilience", () => {
 
     await expect(callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }))).rejects.toThrow("429");
   });
+
+  it("throws invalid_key when every attempted provider fails with 401/403", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(401))  // Groq 401
+      .mockResolvedValueOnce(providerError(403)); // NVIDIA 403
+
+    await expect(callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }))).rejects.toThrow("invalid_key");
+  });
+
+  it("prefers the real rate-limit over a fallback's unrelated auth failure (Groq 429 + backup 401)", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(429))  // Groq rate-limited — the real bottleneck
+      .mockResolvedValueOnce(providerError(401)); // NVIDIA backup unauthorized
+
+    // Must surface as the rate limit, not invalid_key — an unrelated backup
+    // failure shouldn't make the user think their primary key is bad.
+    await expect(callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }))).rejects.toThrow("429");
+  });
+
+  it("prefers service_unavailable over a network-only secondary failure (Groq 503 + backup network error)", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(503))            // Groq busy
+      .mockRejectedValueOnce(new TypeError("Failed to fetch")); // NVIDIA network failure
+
+    await expect(callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }))).rejects.toThrow("503");
+  });
+
+  it("throws network when every attempted provider fails with a network/fetch error", async () => {
+    fetch
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    await expect(callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }))).rejects.toThrow("network");
+  });
+
+  it("attempts each configured provider at most once per call (no hammering)", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(500))
+      .mockResolvedValueOnce(providerError(500))
+      .mockResolvedValueOnce(providerError(500));
+
+    await expect(callAI(baseRequest({
+      nvidiaKey: "test-nvidia-key",
+      geminiKey: "test-gemini-key",
+    }))).rejects.toThrow("all_providers_failed");
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("classifyAIError", () => {
+  it("classifies 429 as rate_limit", () => {
+    expect(classifyAIError(new Error("429"))).toBe("rate_limit");
+  });
+
+  it("classifies 503 as service_unavailable", () => {
+    expect(classifyAIError(new Error("503"))).toBe("service_unavailable");
+  });
+
+  it("classifies provider-prefixed 401/403 as invalid_key", () => {
+    expect(classifyAIError(new Error("groq_401"))).toBe("invalid_key");
+    expect(classifyAIError(new Error("nvidia_403"))).toBe("invalid_key");
+  });
+
+  it("classifies a TypeError (fetch/network failure) as network", () => {
+    expect(classifyAIError(new TypeError("Failed to fetch"))).toBe("network");
+  });
+
+  it("classifies an AbortError (timeout) as network", () => {
+    const abortErr = new Error("The operation was aborted");
+    abortErr.name = "AbortError";
+    expect(classifyAIError(abortErr)).toBe("network");
+  });
+
+  it("classifies anything else as unknown", () => {
+    expect(classifyAIError(new Error("groq_400"))).toBe("unknown");
+    expect(classifyAIError(new Error("groq_empty"))).toBe("unknown");
+  });
+});
+
+describe("describeAIError", () => {
+  it("describes each known error code with calm, non-technical copy that reassures task data is safe", () => {
+    expect(describeAIError(new Error("429"))).toMatch(/temporarily busy or rate-limited.*tasks are safe/i);
+    expect(describeAIError(new Error("503"))).toMatch(/temporarily unavailable.*tasks are safe/i);
+    expect(describeAIError(new Error("invalid_key"))).toMatch(/invalid or unauthorized.*tasks are safe/i);
+    expect(describeAIError(new Error("network"))).toMatch(/couldn.t reach the ai service.*tasks are safe/i);
+    expect(describeAIError(new Error("no_key"))).toMatch(/add an ai key in settings/i);
+  });
+
+  it("falls back to the calm generic message for all_providers_failed or any unrecognized code", () => {
+    const fallback = "AI is temporarily busy or rate-limited. Your tasks are safe. Please wait a minute and try again.";
+    expect(describeAIError(new Error("all_providers_failed"))).toBe(fallback);
+    expect(describeAIError(new Error("something_unexpected"))).toBe(fallback);
+  });
+
+  it("never leaks a raw status code or provider name into the user-facing copy", () => {
+    const codes = ["429", "503", "invalid_key", "network", "no_key", "all_providers_failed", "groq_401"];
+    for (const code of codes) {
+      const text = describeAIError(new Error(code));
+      expect(text).not.toMatch(/groq|nvidia|gemini|\b401\b|\b403\b/i);
+    }
+  });
 });
 
 describe("AI provider cooldown and fallback", () => {
@@ -365,7 +466,7 @@ describe("AI provider cooldown and fallback", () => {
 
   it("does not create a cooldown for a non-429/503 Groq error", async () => {
     fetch.mockResolvedValueOnce(providerError(401));
-    await expect(callAI(baseRequest())).rejects.toThrow("all_providers_failed");
+    await expect(callAI(baseRequest())).rejects.toThrow("invalid_key");
     expect(fetch).toHaveBeenCalledTimes(1);
 
     // Immediate next call: Groq was not put on cooldown, so it's attempted again.
