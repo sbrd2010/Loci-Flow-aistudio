@@ -204,7 +204,7 @@ async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens) {
     body: JSON.stringify({
       model: CEREBRAS_MODEL,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
-      max_tokens: maxTokens ?? 300,
+      max_completion_tokens: maxTokens ?? 300,
       temperature: 0.4,
       top_p: 0.9
     })
