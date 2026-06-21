@@ -92,10 +92,10 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
     return () => clearTimeout(t);
   }, [timerSecs]);
 
-  const { groqKey, nvidiaKey, geminiKey, cerebrasKey } = getAIKeys();
+  const { groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const effectiveGeminiKey = geminiKey || (apiKey || "").trim();
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
-  const hasKey = buildProviderOrder(pref, groqKey, nvidiaKey, effectiveGeminiKey, cerebrasKey).length > 0;
+  const hasKey = buildProviderOrder(pref, groqKey, nvidiaKey, effectiveGeminiKey, cerebrasKey, zaiKey).length > 0;
 
   const aiCall = async (r, history) => {
     setLoading(true);
@@ -110,6 +110,7 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
         groqKey,
         nvidiaKey,
         cerebrasKey,
+        zaiKey,
         geminiKey: effectiveGeminiKey,
         systemPrompt: getRescuePrompt(r, firstName, task, allTasks),
         messages: messages.length > 0 ? messages : [{ role: "user", content: "I'm stuck and need help." }],

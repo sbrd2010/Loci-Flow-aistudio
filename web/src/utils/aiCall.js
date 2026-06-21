@@ -8,6 +8,16 @@ const NVIDIA_MODEL = "nvidia/nemotron-3-super-120b-a12b";
 const CEREBRAS_URL   = "https://api.cerebras.ai/v1/chat/completions";
 const CEREBRAS_MODEL = import.meta.env.VITE_CEREBRAS_MODEL || "gpt-oss-120b";
 const GEMINI_URL   = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
+const ZAI_URL   = "https://api.z.ai/api/paas/v4/chat/completions";
+const ZAI_MODEL = import.meta.env.VITE_ZAI_MODEL || "glm-4.7-flash";
+
+// Z.ai's free GLM-4.7-Flash tier has a concurrency limit of 1 — only one
+// request may be in flight at a time across the whole app instance. No
+// queueing and no retries: a busy Z.ai is treated as "unavailable right now"
+// and the next provider in the chain is tried instead.
+const ZAI_MAX_OUTPUT_TOKENS = 800;
+const ZAI_MAX_PAYLOAD_CHARS = 12000; // rough char-based size estimate, not a real tokenizer
+let zaiInFlight = false;
 
 const AI_TIMEOUT_MS = 30000;
 const RATE_LIMIT_COOLDOWN_MS = 30000;
@@ -332,36 +342,82 @@ async function callGemini(geminiKey, systemPrompt, messages, maxTokens) {
   return { reply, usage };
 }
 
+// Z.ai is an emergency-only fallback (free tier, concurrency limit 1), not a
+// primary provider: single-flight guard (no queueing, no internal retries),
+// a conservative output-token cap, and a rough char-count payload check that
+// skips Z.ai entirely for large requests rather than risking a slow/failed
+// call on a concurrency-1 backend.
+async function callZai(zaiKey, systemPrompt, messages, maxTokens) {
+  if (zaiInFlight) throw new Error("zai_busy");
+
+  const payloadChars = String(systemPrompt || "").length +
+    (messages || []).reduce((sum, m) => sum + String(m.content || "").length, 0);
+  if (payloadChars > ZAI_MAX_PAYLOAD_CHARS) throw new Error("zai_too_large");
+
+  zaiInFlight = true;
+  try {
+    const res = await fetchWithTimeout(ZAI_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${zaiKey}`
+      },
+      body: JSON.stringify({
+        model: ZAI_MODEL,
+        messages: [{ role: "system", content: systemPrompt }, ...messages],
+        max_tokens: Math.min(maxTokens ?? 300, ZAI_MAX_OUTPUT_TOKENS),
+        temperature: 0.4
+      })
+    });
+    if (!res.ok) throw statusError("zai", res.status, res);
+    const data = await res.json();
+    const message = data.choices?.[0]?.message;
+    const reply = extractMessageContent(message);
+    if (!reply) {
+      logEmptyReplyDiagnostics("zai", data, message);
+      throw new Error("zai_empty");
+    }
+    return { reply, usage: data.usage };
+  } finally {
+    zaiInFlight = false;
+  }
+}
+
 // Returns ordered list of providers to try based on user's preference.
 // Providers with no key are skipped automatically.
-export function buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey, cleanCerebrasKey) {
+export function buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey) {
   const available = {
     groq:     cleanGroqKey     ? { name: "groq",     key: cleanGroqKey }     : null,
     nvidia:   cleanNvidiaKey   ? { name: "nvidia",    key: cleanNvidiaKey }   : null,
     gemini:   cleanGeminiKey   ? { name: "gemini",    key: cleanGeminiKey }   : null,
     cerebras: cleanCerebrasKey ? { name: "cerebras",  key: cleanCerebrasKey } : null,
+    zai:      cleanZaiKey      ? { name: "zai",       key: cleanZaiKey }      : null,
   };
   // NVIDIA is excluded from "auto"/"groq"/"gemini" orders — currently
   // inaccessible due to a backend/provider issue; stays manual/experimental
-  // via the explicit "nvidia" preference only.
+  // via the explicit "nvidia" preference only. Z.ai is an emergency-only
+  // fallback (free tier, concurrency limit 1) — placed after Cerebras and
+  // before Gemini in every chain except the explicit Gemini/Z.ai preferences.
   const orders = {
-    auto:     ["groq", "cerebras", "gemini"],
-    groq:     ["groq", "cerebras", "gemini"],
-    cerebras: ["cerebras", "groq", "gemini"],
-    gemini:   ["gemini", "groq", "cerebras"],
-    nvidia:   ["nvidia", "groq", "cerebras", "gemini"],
+    auto:     ["groq", "cerebras", "zai", "gemini"],
+    groq:     ["groq", "cerebras", "zai", "gemini"],
+    cerebras: ["cerebras", "groq", "zai", "gemini"],
+    zai:      ["zai", "groq", "cerebras", "gemini"],
+    gemini:   ["gemini", "groq", "cerebras", "zai"],
+    nvidia:   ["nvidia", "groq", "cerebras", "zai", "gemini"],
   };
   return (orders[pref] || orders.auto).map(n => available[n]).filter(Boolean);
 }
 
-export async function callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, systemPrompt, messages, maxTokens, contextMode }) {
+export async function callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey, systemPrompt, messages, maxTokens, contextMode }) {
   const cleanGroqKey     = (groqKey     || "").trim();
   const cleanNvidiaKey   = (nvidiaKey   || "").trim();
   const cleanGeminiKey   = (geminiKey   || "").trim();
   const cleanCerebrasKey = (cerebrasKey || "").trim();
+  const cleanZaiKey      = (zaiKey      || "").trim();
 
   const pref  = localStorage.getItem("loci_provider_pref") || "auto";
-  const order = buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey, cleanCerebrasKey);
+  const order = buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey);
   if (order.length === 0) throw new Error("no_key");
 
   const usage = checkAndRecordAIUsage({ userId: getAIUsageUserId() });
@@ -389,6 +445,8 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, syste
         result = await callNvidia(provider.key, systemPrompt, messages, maxTokens);
       } else if (provider.name === "cerebras") {
         result = await callCerebras(provider.key, systemPrompt, messages, maxTokens);
+      } else if (provider.name === "zai") {
+        result = await callZai(provider.key, systemPrompt, messages, maxTokens);
       } else {
         result = await callGemini(provider.key, systemPrompt, messages, maxTokens);
       }
@@ -441,6 +499,7 @@ export function getAIKeys() {
     nvidiaKey:   (localStorage.getItem("loci_nvidia_key")   || import.meta.env.VITE_NVIDIA_KEY    || "").trim(),
     geminiKey:   (localStorage.getItem("loci_gemini_key")   || import.meta.env.VITE_GEMINI_KEY    || "").trim(),
     cerebrasKey: (localStorage.getItem("loci_cerebras_key") || import.meta.env.VITE_CEREBRAS_KEY  || "").trim(),
+    zaiKey:      (localStorage.getItem("loci_zai_key")      || import.meta.env.VITE_ZAI_KEY       || "").trim(),
   };
 }
 
@@ -449,9 +508,9 @@ export function getAIKeys() {
 // NVIDIA is excluded from the auto/groq/gemini chains and callAI would
 // throw "no_key" for that combination.
 export function hasAIKey() {
-  const { groqKey, nvidiaKey, geminiKey, cerebrasKey } = getAIKeys();
+  const { groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
-  return buildProviderOrder(pref, groqKey, nvidiaKey, geminiKey, cerebrasKey).length > 0;
+  return buildProviderOrder(pref, groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey).length > 0;
 }
 
 // Parses a JSON array out of an AI reply, tolerating markdown code fences,
