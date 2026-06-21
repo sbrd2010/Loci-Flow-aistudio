@@ -133,8 +133,10 @@ export function describeAIError(err) {
       return "Couldn't reach the AI service — check your connection. Your tasks are safe, please try again.";
     case "no_key":
       return "Add an AI key in Settings to chat with your Coach.";
-    default:
+    case "all_providers_failed":
       return "AI is temporarily busy or rate-limited. Your tasks are safe. Please wait a minute and try again.";
+    default:
+      return "Something went wrong. Your tasks are safe — please try again.";
   }
 }
 

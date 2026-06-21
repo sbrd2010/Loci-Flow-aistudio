@@ -389,9 +389,13 @@ describe("describeAIError", () => {
     expect(describeAIError(new Error("no_key"))).toMatch(/add an ai key in settings/i);
   });
 
-  it("falls back to the calm generic message for all_providers_failed or any unrecognized code", () => {
-    const fallback = "AI is temporarily busy or rate-limited. Your tasks are safe. Please wait a minute and try again.";
-    expect(describeAIError(new Error("all_providers_failed"))).toBe(fallback);
+  it("uses the calm rate-limit-style message specifically for all_providers_failed", () => {
+    expect(describeAIError(new Error("all_providers_failed")))
+      .toBe("AI is temporarily busy or rate-limited. Your tasks are safe. Please wait a minute and try again.");
+  });
+
+  it("falls back to a neutral generic message for any other unrecognized code, without implying a rate limit", () => {
+    const fallback = "Something went wrong. Your tasks are safe — please try again.";
     expect(describeAIError(new Error("something_unexpected"))).toBe(fallback);
   });
 
