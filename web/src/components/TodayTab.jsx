@@ -5,7 +5,7 @@ import FocusModePage from "./FocusModePage";
 import { safeUUID } from "../utils/uuid";
 import { buildToggleCompletedTasks } from "../utils/taskOps";
 import { shouldStopFocusOnComplete } from "../utils/focusSession";
-import { getAIKeys, callAI, extractJsonArray } from "../utils/aiCall";
+import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
@@ -197,6 +197,7 @@ export default function TodayTab({
 
   const [breakdownLoadingUuid, setBreakdownLoadingUuid] = useState(null);
   const [breakdownErrorUuid, setBreakdownErrorUuid] = useState(null);
+  const [breakdownNoKeyUuid, setBreakdownNoKeyUuid] = useState(null);
 
   const [editingTask, setEditingTask] = useState(null);
   const [undoTask, setUndoTask] = useState(null);
@@ -540,12 +541,17 @@ export default function TodayTab({
   const handleStartEdit = (task) => setEditingTask(task);
 
   const handleBreakdown = async (task) => {
-    setBreakdownLoadingUuid(task.uuid);
     setBreakdownErrorUuid(null);
-    const { groqKey, nvidiaKey, geminiKey } = getAIKeys();
+    setBreakdownNoKeyUuid(null);
+    if (!hasAIKey()) {
+      setBreakdownNoKeyUuid(task.uuid);
+      return;
+    }
+    setBreakdownLoadingUuid(task.uuid);
+    const { groqKey, nvidiaKey, geminiKey, cerebrasKey } = getAIKeys();
     try {
       const raw = await callAI({
-        groqKey, nvidiaKey, geminiKey,
+        groqKey, nvidiaKey, geminiKey, cerebrasKey,
         systemPrompt: "You are a productivity coach. Respond ONLY with a valid JSON array of strings, no markdown, no explanation.",
         messages: [{
           role: "user",
@@ -1107,6 +1113,7 @@ export default function TodayTab({
                 onDeleteSubStep={handleDeleteSubStep}
                 isBreakingDown={breakdownLoadingUuid === pinnedFocusTask.uuid}
                 breakdownError={breakdownErrorUuid === pinnedFocusTask.uuid}
+                breakdownNoKey={breakdownNoKeyUuid === pinnedFocusTask.uuid}
                 onToggleMVD={handleToggleMVD}
               />
               <button
@@ -1305,6 +1312,7 @@ export default function TodayTab({
                             onDeleteSubStep={handleDeleteSubStep}
                             isBreakingDown={breakdownLoadingUuid === task.uuid}
                             breakdownError={breakdownErrorUuid === task.uuid}
+                            breakdownNoKey={breakdownNoKeyUuid === task.uuid}
                             onToggleMVD={handleToggleMVD}
                             dragHandleListeners={dragHandleListeners}
                             dragHandleAttributes={dragHandleAttributes}

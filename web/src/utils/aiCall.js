@@ -5,6 +5,8 @@ const GROQ_URL     = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL   = "openai/gpt-oss-120b";
 const NVIDIA_URL   = "https://integrate.api.nvidia.com/v1/chat/completions";
 const NVIDIA_MODEL = "nvidia/nemotron-3-super-120b-a12b";
+const CEREBRAS_URL   = "https://api.cerebras.ai/v1/chat/completions";
+const CEREBRAS_MODEL = import.meta.env.VITE_CEREBRAS_MODEL || "gpt-oss-120b";
 const GEMINI_URL   = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 
 const AI_TIMEOUT_MS = 30000;
@@ -192,6 +194,28 @@ async function callNvidia(nvidiaKey, systemPrompt, messages, maxTokens) {
   return { reply, usage: data.usage };
 }
 
+async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens) {
+  const res = await fetchWithTimeout(CEREBRAS_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${cerebrasKey}`
+    },
+    body: JSON.stringify({
+      model: CEREBRAS_MODEL,
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
+      max_completion_tokens: maxTokens ?? 300,
+      temperature: 0.4,
+      top_p: 0.9
+    })
+  });
+  if (!res.ok) throw statusError("cerebras", res.status, res);
+  const data = await res.json();
+  const reply = data.choices?.[0]?.message?.content || "";
+  if (!reply) throw new Error("cerebras_empty");
+  return { reply, usage: data.usage };
+}
+
 async function callGemini(geminiKey, systemPrompt, messages, maxTokens) {
   // Gemini requires contents to start with "user" role - strip leading AI messages
   let contents = messages.map(m => ({
@@ -231,28 +255,34 @@ async function callGemini(geminiKey, systemPrompt, messages, maxTokens) {
 
 // Returns ordered list of providers to try based on user's preference.
 // Providers with no key are skipped automatically.
-function buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey) {
+export function buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey, cleanCerebrasKey) {
   const available = {
-    groq:   cleanGroqKey   ? { name: "groq",   key: cleanGroqKey }   : null,
-    nvidia: cleanNvidiaKey ? { name: "nvidia",  key: cleanNvidiaKey } : null,
-    gemini: cleanGeminiKey ? { name: "gemini",  key: cleanGeminiKey } : null,
+    groq:     cleanGroqKey     ? { name: "groq",     key: cleanGroqKey }     : null,
+    nvidia:   cleanNvidiaKey   ? { name: "nvidia",    key: cleanNvidiaKey }   : null,
+    gemini:   cleanGeminiKey   ? { name: "gemini",    key: cleanGeminiKey }   : null,
+    cerebras: cleanCerebrasKey ? { name: "cerebras",  key: cleanCerebrasKey } : null,
   };
+  // NVIDIA is excluded from "auto"/"groq"/"gemini" orders — currently
+  // inaccessible due to a backend/provider issue; stays manual/experimental
+  // via the explicit "nvidia" preference only.
   const orders = {
-    auto:   ["groq", "nvidia", "gemini"],
-    groq:   ["groq", "nvidia", "gemini"],
-    nvidia: ["nvidia", "groq", "gemini"],
-    gemini: ["gemini", "groq", "nvidia"],
+    auto:     ["groq", "cerebras", "gemini"],
+    groq:     ["groq", "cerebras", "gemini"],
+    cerebras: ["cerebras", "groq", "gemini"],
+    gemini:   ["gemini", "groq", "cerebras"],
+    nvidia:   ["nvidia", "groq", "cerebras", "gemini"],
   };
   return (orders[pref] || orders.auto).map(n => available[n]).filter(Boolean);
 }
 
-export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, messages, maxTokens, contextMode }) {
-  const cleanGroqKey   = (groqKey   || "").trim();
-  const cleanNvidiaKey = (nvidiaKey || "").trim();
-  const cleanGeminiKey = (geminiKey || "").trim();
+export async function callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, systemPrompt, messages, maxTokens, contextMode }) {
+  const cleanGroqKey     = (groqKey     || "").trim();
+  const cleanNvidiaKey   = (nvidiaKey   || "").trim();
+  const cleanGeminiKey   = (geminiKey   || "").trim();
+  const cleanCerebrasKey = (cerebrasKey || "").trim();
 
   const pref  = localStorage.getItem("loci_provider_pref") || "auto";
-  const order = buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey);
+  const order = buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey, cleanCerebrasKey);
   if (order.length === 0) throw new Error("no_key");
 
   const usage = checkAndRecordAIUsage({ userId: getAIUsageUserId() });
@@ -278,6 +308,8 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
         result = await callGroq(provider.key, systemPrompt, messages, maxTokens);
       } else if (provider.name === "nvidia") {
         result = await callNvidia(provider.key, systemPrompt, messages, maxTokens);
+      } else if (provider.name === "cerebras") {
+        result = await callCerebras(provider.key, systemPrompt, messages, maxTokens);
       } else {
         result = await callGemini(provider.key, systemPrompt, messages, maxTokens);
       }
@@ -319,17 +351,28 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
   throw new Error("all_providers_failed");
 }
 
+// Private-alpha build-key pattern: localStorage (user-entered BYOK) wins,
+// otherwise falls back to a build-time VITE_* env var. This is the same
+// pattern already in use for Groq/NVIDIA/Gemini and is a known, accepted
+// exposure for this stage — see SettingsTab.jsx AI Keys section copy and
+// the PR description for the server-side-proxy migration plan.
 export function getAIKeys() {
   return {
-    groqKey:   (localStorage.getItem("loci_groq_key")   || import.meta.env.VITE_GROQ_KEY   || "").trim(),
-    nvidiaKey: (localStorage.getItem("loci_nvidia_key") || import.meta.env.VITE_NVIDIA_KEY || "").trim(),
-    geminiKey: (localStorage.getItem("loci_gemini_key") || import.meta.env.VITE_GEMINI_KEY || "").trim(),
+    groqKey:     (localStorage.getItem("loci_groq_key")     || import.meta.env.VITE_GROQ_KEY     || "").trim(),
+    nvidiaKey:   (localStorage.getItem("loci_nvidia_key")   || import.meta.env.VITE_NVIDIA_KEY    || "").trim(),
+    geminiKey:   (localStorage.getItem("loci_gemini_key")   || import.meta.env.VITE_GEMINI_KEY    || "").trim(),
+    cerebrasKey: (localStorage.getItem("loci_cerebras_key") || import.meta.env.VITE_CEREBRAS_KEY  || "").trim(),
   };
 }
 
+// True only if the user's selected provider order actually has a usable
+// provider — e.g. an NVIDIA-only key with pref "auto" returns false, since
+// NVIDIA is excluded from the auto/groq/gemini chains and callAI would
+// throw "no_key" for that combination.
 export function hasAIKey() {
-  const { groqKey, nvidiaKey, geminiKey } = getAIKeys();
-  return !!(groqKey || nvidiaKey || geminiKey);
+  const { groqKey, nvidiaKey, geminiKey, cerebrasKey } = getAIKeys();
+  const pref = localStorage.getItem("loci_provider_pref") || "auto";
+  return buildProviderOrder(pref, groqKey, nvidiaKey, geminiKey, cerebrasKey).length > 0;
 }
 
 // Parses a JSON array out of an AI reply, tolerating markdown code fences,

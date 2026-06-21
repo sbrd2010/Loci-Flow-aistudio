@@ -47,5 +47,7 @@ Copy `web/.env.example` to `web/.env`. All variables are optional for local deve
 | `VITE_GA_MEASUREMENT_ID` | Google Analytics (optional) |
 | `VITE_GROQ_KEY` | Groq API key for AI features (optional) |
 | `VITE_GEMINI_KEY` | Gemini API key for AI features (optional) |
+| `VITE_CEREBRAS_KEY` | Cerebras API key for AI features (optional) |
+| `VITE_CEREBRAS_MODEL` | Cerebras model override (optional, defaults to `gpt-oss-120b`) |
 
 Firebase config beyond the app ID (API key, project ID, etc.) is baked into the app for the hosted version. For your own Firebase project, update `web/src/firebase.js`.

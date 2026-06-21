@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { celebrate } from "../utils/celebrations";
-import { getAIKeys, callAI } from "../utils/aiCall";
+import { getAIKeys, callAI, hasAIKey } from "../utils/aiCall";
 import { sanitizeTaskField, CATEGORY_ICONS, byPriorityThenOrder } from "../utils/taskOps";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import {
@@ -238,6 +238,10 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
 
   const handleAIBreakdown = async (item) => {
     const textToBreakdown = editingDumpItem?.id === item.id ? editingDumpItem.text : item.text;
+    if (!hasAIKey()) {
+      setAiBreakdownSuggestion({ id: item.id, title: null, concreteStep: null, noKey: true });
+      return;
+    }
     setAiBreakdownLoading(item.id);
     try {
       const keys = getAIKeys();
@@ -382,6 +386,8 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
                   <p style={{ fontSize: "11px", color: "var(--text-secondary)" }}>⚡ {aiBreakdownSuggestion.concreteStep}</p>
                 )}
               </div>
+            ) : aiBreakdownSuggestion.noKey ? (
+              <p style={{ fontSize: "11px", color: "var(--text-secondary)", marginBottom: "6px" }}>🔑 Add an AI key in Settings → AI Keys to use this. Edit or move as-is.</p>
             ) : (
               <p style={{ fontSize: "11px", color: "var(--danger)", marginBottom: "6px" }}>AI unavailable. Edit or move as-is.</p>
             )}

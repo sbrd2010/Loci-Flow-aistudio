@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
-import { getAIKeys, callAI, extractJsonArray } from "../utils/aiCall";
+import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTaskSubSteps, CATEGORY_ICONS } from "../utils/taskOps";
 import { submitOnEnter } from "../utils/formEvents";
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
@@ -217,8 +217,8 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
   }, [ritualDone]);
 
   // ── AI keys ────────────────────────────────────────────────────────────────
-  const { groqKey, nvidiaKey, geminiKey } = getAIKeys();
-  const hasAnyKey = !!(groqKey || nvidiaKey || geminiKey);
+  const { groqKey, nvidiaKey, geminiKey, cerebrasKey } = getAIKeys();
+  const hasAnyKey = hasAIKey();
 
   // ── Brain Dump DnD ─────────────────────────────────────────────────────────
   const dumpSensors = useSensors(
@@ -336,7 +336,7 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
 
     try {
       const raw = await callAI({
-        groqKey, nvidiaKey, geminiKey,
+        groqKey, nvidiaKey, geminiKey, cerebrasKey,
         systemPrompt: "You are a productivity coach. Respond ONLY with a valid JSON array, no markdown.",
         messages: [{ role: "user", content: prompt }],
         maxTokens: 4000
