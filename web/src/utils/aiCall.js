@@ -104,6 +104,42 @@ function statusError(provider, status, res) {
   return new Error(`${provider}_${status}`);
 }
 
+// Classifies a thrown provider error into a stable, caller-agnostic bucket.
+// Used to pick the final error across all attempted providers (see callAI)
+// and to drive describeAIError's user-facing copy.
+export function classifyAIError(err) {
+  const message = err?.message;
+  if (message === "429") return "rate_limit";
+  if (message === "503") return "service_unavailable";
+  if (/_(401|403)$/.test(message || "")) return "invalid_key";
+  if (err?.name === "AbortError" || err instanceof TypeError) return "network";
+  return "unknown";
+}
+
+// Calm, non-technical copy for a final callAI() rejection (or its message
+// code). Always makes clear that task data is untouched and this is a
+// provider/connectivity issue, not the Coach "forgetting" or failing to
+// reason — so callers can show this directly without their own mapping.
+export function describeAIError(err) {
+  const message = (err instanceof Error ? err.message : err) || "";
+  switch (message) {
+    case "429":
+      return "AI is temporarily busy or rate-limited. Your tasks are safe — please wait a minute and try again.";
+    case "503":
+      return "AI service is temporarily unavailable. Your tasks are safe — please try again in a moment.";
+    case "invalid_key":
+      return "Your AI key looks invalid or unauthorized. Your tasks are safe — please check your AI key in Settings.";
+    case "network":
+      return "Couldn't reach the AI service — check your connection. Your tasks are safe, please try again.";
+    case "no_key":
+      return "Add an AI key in Settings to chat with your Coach.";
+    case "all_providers_failed":
+      return "AI is temporarily busy or rate-limited. Your tasks are safe. Please wait a minute and try again.";
+    default:
+      return "Something went wrong. Your tasks are safe — please try again.";
+  }
+}
+
 function getAIUsageUserId() {
   return auth?.currentUser?.uid || auth?.currentUser?.email || "signed-out";
 }
@@ -222,11 +258,17 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
   const usage = checkAndRecordAIUsage({ userId: getAIUsageUserId() });
   if (!usage.allowed) return usage.message;
 
-  let lastErr;
+  // Request-local only (cleared every callAI invocation) — tracks every
+  // attempted provider's failure so the final error reflects the real
+  // bottleneck rather than whichever provider happened to fail last. E.g.
+  // Groq 429 (real rate-limit) + fallback NVIDIA 401 (unrelated/likely
+  // unconfigured) must surface as rate_limit, not invalid_key.
+  const attempts = [];
   for (const provider of order) {
     const ckey = cooldownKey(provider);
     if (Date.now() < (providerCooldownUntil.get(ckey) || 0)) {
-      lastErr = new Error(providerCooldownReason.get(ckey) || "503");
+      const cooldownErr = new Error(providerCooldownReason.get(ckey) || "503");
+      attempts.push({ err: cooldownErr, classification: classifyAIError(cooldownErr), live: false });
       logAICallDiagnostics({ provider: provider.name, outcome: "cooldown_skip", contextMode, systemPrompt, messages });
       continue; // skip the provider network call; no extra provider attempt
     }
@@ -243,7 +285,7 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
       logAICallDiagnostics({ provider: provider.name, outcome: "ok", contextMode, systemPrompt, messages, usage: callUsage });
       return appendAIUsageWarning(reply, usage.warning);
     } catch (err) {
-      lastErr = err;
+      attempts.push({ err, classification: classifyAIError(err), live: true });
       if (err.message === "429") {
         providerCooldownUntil.set(ckey, Date.now() + (err.retryAfterMs ?? RATE_LIMIT_COOLDOWN_MS));
         providerCooldownReason.set(ckey, "429");
@@ -257,9 +299,23 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
       }
     }
   }
-  // Preserve 429/503 so callers can surface rate-limit/busy hints.
-  // All other failures become a stable, provider-agnostic error code.
-  if (lastErr.message === "429" || lastErr.message === "503") throw lastErr;
+
+  // Pick the final error by priority across all attempts, not just the last
+  // one — see comment above. Real availability issues (rate limit / service
+  // down / network) always outrank a same-request auth failure on a
+  // secondary/fallback provider. Cooldown-skips reflect a stale failure from
+  // a previous call, not this request — prefer live attempts for the
+  // decision whenever at least one provider was actually contacted, so a
+  // live invalid-key failure isn't masked by an old cooldown reason.
+  const liveAttempts = attempts.filter(a => a.live);
+  const decisionAttempts = liveAttempts.length > 0 ? liveAttempts : attempts;
+  const findAttempt = (classification) => decisionAttempts.find(a => a.classification === classification);
+  if (decisionAttempts.every(a => a.classification === "invalid_key")) throw new Error("invalid_key");
+  const rateLimited = findAttempt("rate_limit");
+  if (rateLimited) throw rateLimited.err;
+  const serviceUnavailable = findAttempt("service_unavailable");
+  if (serviceUnavailable) throw serviceUnavailable.err;
+  if (findAttempt("network")) throw new Error("network");
   throw new Error("all_providers_failed");
 }
 
