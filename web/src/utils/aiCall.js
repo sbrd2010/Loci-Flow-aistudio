@@ -362,13 +362,54 @@ const ZAI_DROP_HEADERS_TIER2 = [...ZAI_DROP_HEADERS_TIER1, "THIS WEEK ("];
 function dropZaiHorizonSections(text, dropHeaders) {
   if (!text) return text;
   let dropping = false;
+  let keepDetailsRemaining = 0;
   return text.split("\n").filter(line => {
+    const trimmed = line.trim();
+    const trimmedUpper = trimmed.toUpperCase();
+
+    // 1. Preserve explicit NOW FOCUS / Now Focus section if encountered.
+    // If a line starts with the header of the Now Focus section, stop dropping.
+    if (trimmedUpper.startsWith("NOW FOCUS") || trimmedUpper.startsWith("CURRENT NOW FOCUS")) {
+      dropping = false;
+      keepDetailsRemaining = 0;
+    }
+
     const headerHit = ZAI_ALL_HORIZON_HEADERS.find(h => line.startsWith(h));
     if (headerHit) {
       dropping = dropHeaders.includes(headerHit);
+      keepDetailsRemaining = 0;
       return !dropping;
     }
-    if (dropping && line.trim() === "") dropping = false;
+    if (dropping && line.trim() === "") {
+      dropping = false;
+      keepDetailsRemaining = 0;
+    }
+
+    // 2. If Now Focus is embedded inside a horizon section that is being dropped,
+    // keep only this line and up to 4 subsequent detail lines.
+    if (dropping) {
+      if (line.toUpperCase().includes("[NOW FOCUS]")) {
+        keepDetailsRemaining = 4;
+        return true;
+      }
+
+      if (keepDetailsRemaining > 0) {
+        const isNewTask = /^\s*-\s*\[/.test(line);
+        if (isNewTask) {
+          keepDetailsRemaining = 0;
+        } else {
+          const hasSpaceOrTab = line.startsWith(" ") || line.startsWith("\t");
+          const hasLabel = /\b(concrete step|next step|substep|focus|timer)\b/i.test(line);
+          if (hasSpaceOrTab || hasLabel) {
+            keepDetailsRemaining--;
+            return true;
+          } else {
+            keepDetailsRemaining = 0;
+          }
+        }
+      }
+    }
+
     return !dropping;
   }).join("\n");
 }
