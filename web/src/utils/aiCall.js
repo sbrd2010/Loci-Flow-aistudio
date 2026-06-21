@@ -255,7 +255,7 @@ async function callGemini(geminiKey, systemPrompt, messages, maxTokens) {
 
 // Returns ordered list of providers to try based on user's preference.
 // Providers with no key are skipped automatically.
-function buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey, cleanCerebrasKey) {
+export function buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey, cleanCerebrasKey) {
   const available = {
     groq:     cleanGroqKey     ? { name: "groq",     key: cleanGroqKey }     : null,
     nvidia:   cleanNvidiaKey   ? { name: "nvidia",    key: cleanNvidiaKey }   : null,

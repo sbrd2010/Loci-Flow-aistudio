@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { callAI, getAIKeys } from "../utils/aiCall";
+import { callAI, getAIKeys, buildProviderOrder } from "../utils/aiCall";
 
 const REASONS = [
   { id: "overwhelmed", emoji: "😵", label: "Too much going on",     color: "#f59e0b" },
@@ -93,7 +93,9 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
   }, [timerSecs]);
 
   const { groqKey, nvidiaKey, geminiKey, cerebrasKey } = getAIKeys();
-  const hasKey = !!(groqKey || nvidiaKey || geminiKey || cerebrasKey || (apiKey || "").trim());
+  const effectiveGeminiKey = geminiKey || (apiKey || "").trim();
+  const pref = localStorage.getItem("loci_provider_pref") || "auto";
+  const hasKey = buildProviderOrder(pref, groqKey, nvidiaKey, effectiveGeminiKey, cerebrasKey).length > 0;
 
   const aiCall = async (r, history) => {
     setLoading(true);
@@ -108,7 +110,7 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
         groqKey,
         nvidiaKey,
         cerebrasKey,
-        geminiKey: geminiKey || (apiKey || "").trim(),
+        geminiKey: effectiveGeminiKey,
         systemPrompt: getRescuePrompt(r, firstName, task, allTasks),
         messages: messages.length > 0 ? messages : [{ role: "user", content: "I'm stuck and need help." }],
         maxTokens: 200
