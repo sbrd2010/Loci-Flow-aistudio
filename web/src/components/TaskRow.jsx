@@ -106,7 +106,7 @@ const ROADMAP_HORIZONS = [
   { key: "office",   label: "Work" },
 ];
 
-export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, onToggleMVD, dragHandleListeners, dragHandleAttributes }) {
+export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, onToggleMVD, dragHandleListeners, dragHandleAttributes }) {
   const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD, category } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const [showRoadmapOptions, setShowRoadmapOptions] = useState(false);
@@ -252,7 +252,13 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
           </span>
         )}
 
-        {breakdownError && !isBreakingDown && (
+        {breakdownNoKey && !isBreakingDown && (
+          <span style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "6px", display: "block" }}>
+            🔑 Add an AI key in Settings → AI Keys to use this.
+          </span>
+        )}
+
+        {breakdownError && !breakdownNoKey && !isBreakingDown && (
           <span style={{ fontSize: "11px", color: "var(--danger)", marginTop: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
             Couldn't break this down.
             <button
