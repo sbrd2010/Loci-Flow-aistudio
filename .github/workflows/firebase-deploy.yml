@@ -23,6 +23,7 @@ jobs:
           VITE_NVIDIA_KEY: ${{ secrets.VITE_NVIDIA_KEY }}
           VITE_GEMINI_KEY: ${{ secrets.VITE_GEMINI_KEY }}
           VITE_CEREBRAS_KEY: ${{ secrets.VITE_CEREBRAS_KEY }}
+          VITE_ZAI_KEY: ${{ secrets.VITE_ZAI_KEY }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_GA_MEASUREMENT_ID: ${{ secrets.VITE_GA_MEASUREMENT_ID }}
         run: |

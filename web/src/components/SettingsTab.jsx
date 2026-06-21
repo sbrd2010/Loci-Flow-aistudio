@@ -249,6 +249,16 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
     setTimeout(() => setSavedCerebras(false), 2000);
   };
 
+  // ── Z.ai API key ──────────────────────────────────────────────────────────
+  const [zaiInput, setZaiInput] = useState(localStorage.getItem("loci_zai_key") || "");
+  const [savedZai, setSavedZai] = useState(false);
+  const handleSaveZai = (e) => {
+    e.preventDefault();
+    try { localStorage.setItem("loci_zai_key", zaiInput.trim()); } catch (_) {}
+    setSavedZai(true);
+    setTimeout(() => setSavedZai(false), 2000);
+  };
+
   // ── Provider preference ───────────────────────────────────────────────────
   const [providerPref, setProviderPref] = useState(localStorage.getItem("loci_provider_pref") || "auto");
   const handleProviderPref = (pref) => {
@@ -274,23 +284,26 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const geminiBuiltinKey    = import.meta.env.VITE_GEMINI_KEY           || "";
   const cerebrasPersonalKey = localStorage.getItem("loci_cerebras_key") || "";
   const cerebrasBuiltinKey  = import.meta.env.VITE_CEREBRAS_KEY         || "";
+  const zaiPersonalKey      = localStorage.getItem("loci_zai_key")      || "";
+  const zaiBuiltinKey       = import.meta.env.VITE_ZAI_KEY              || "";
   const effectiveGroqKey     = groqPersonalKey     || groqBuiltinKey;
   const effectiveNvidiaKey   = nvidiaPersonalKey   || nvidiaBuiltinKey;
   const effectiveGeminiKey   = geminiPersonalKey   || geminiBuiltinKey;
   const effectiveCerebrasKey = cerebrasPersonalKey || cerebrasBuiltinKey;
-  const hasAnyKey          = !!(effectiveGroqKey || effectiveNvidiaKey || effectiveGeminiKey || effectiveCerebrasKey);
-
+  const effectiveZaiKey      = zaiPersonalKey      || zaiBuiltinKey;
   const prefOrders = {
-    auto:     ["groq", "cerebras", "gemini"],
-    groq:     ["groq", "cerebras", "gemini"],
-    cerebras: ["cerebras", "groq", "gemini"],
-    gemini:   ["gemini", "groq", "cerebras"],
-    nvidia:   ["nvidia", "groq", "cerebras", "gemini"],
+    auto:     ["groq", "cerebras", "zai", "gemini"],
+    groq:     ["groq", "cerebras", "zai", "gemini"],
+    cerebras: ["cerebras", "groq", "zai", "gemini"],
+    zai:      ["zai", "groq", "cerebras", "gemini"],
+    gemini:   ["gemini", "groq", "cerebras", "zai"],
+    nvidia:   ["nvidia", "groq", "cerebras", "zai", "gemini"],
   };
-  const effectiveKeyMap  = { groq: effectiveGroqKey, nvidia: effectiveNvidiaKey, gemini: effectiveGeminiKey, cerebras: effectiveCerebrasKey };
-  const personalKeyMap   = { groq: groqPersonalKey, nvidia: nvidiaPersonalKey, gemini: geminiPersonalKey, cerebras: cerebrasPersonalKey };
-  const providerNameMap  = { groq: "Groq", nvidia: "NVIDIA", gemini: "Gemini", cerebras: "Cerebras" };
+  const effectiveKeyMap  = { groq: effectiveGroqKey, nvidia: effectiveNvidiaKey, gemini: effectiveGeminiKey, cerebras: effectiveCerebrasKey, zai: effectiveZaiKey };
+  const personalKeyMap   = { groq: groqPersonalKey, nvidia: nvidiaPersonalKey, gemini: geminiPersonalKey, cerebras: cerebrasPersonalKey, zai: zaiPersonalKey };
+  const providerNameMap  = { groq: "Groq", nvidia: "NVIDIA", gemini: "Gemini", cerebras: "Cerebras", zai: "Z.ai" };
   const activeProvider   = (prefOrders[providerPref] || prefOrders.auto).find(p => effectiveKeyMap[p]) || null;
+  const hasUsableProvider = !!activeProvider;
   const keyStatusLabel   = activeProvider
     ? `✓ ${providerNameMap[activeProvider]} active — ${personalKeyMap[activeProvider] ? "your key" : "built-in"}`
     : "✗ No AI key — add one below";
@@ -766,10 +779,10 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
             <div style={{
               display: "inline-flex", alignItems: "center", gap: "6px",
               padding: "4px 10px", borderRadius: "var(--radius-sm)",
-              background: hasAnyKey ? "rgba(52, 211, 153, 0.08)" : "rgba(248, 113, 113, 0.08)",
-              border: `1px solid ${hasAnyKey ? "var(--success)" : "var(--danger)"}`,
+              background: hasUsableProvider ? "rgba(52, 211, 153, 0.08)" : "rgba(248, 113, 113, 0.08)",
+              border: `1px solid ${hasUsableProvider ? "var(--success)" : "var(--danger)"}`,
               fontSize: "11.5px", fontWeight: "600",
-              color: hasAnyKey ? "var(--success)" : "var(--danger)"
+              color: hasUsableProvider ? "var(--success)" : "var(--danger)"
             }}>
               {keyStatusLabel}
             </div>
@@ -790,11 +803,12 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
               </span>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 {[
-                  { key: "auto",     label: "Auto",     chain: "Groq → Cerebras → Gemini" },
-                  { key: "groq",     label: "Groq",     chain: "Groq → Cerebras → Gemini" },
-                  { key: "cerebras", label: "Cerebras", chain: "Cerebras → Groq → Gemini" },
-                  { key: "gemini",   label: "Gemini",   chain: "Gemini → Groq → Cerebras" },
-                  { key: "nvidia",   label: "NVIDIA",   chain: "NVIDIA → Groq → Cerebras → Gemini" },
+                  { key: "auto",     label: "Auto",     chain: "Groq → Cerebras → Z.ai → Gemini" },
+                  { key: "groq",     label: "Groq",     chain: "Groq → Cerebras → Z.ai → Gemini" },
+                  { key: "cerebras", label: "Cerebras", chain: "Cerebras → Groq → Z.ai → Gemini" },
+                  { key: "zai",      label: "Z.ai",     chain: "Z.ai → Groq → Cerebras → Gemini" },
+                  { key: "gemini",   label: "Gemini",   chain: "Gemini → Groq → Cerebras → Z.ai" },
+                  { key: "nvidia",   label: "NVIDIA",   chain: "NVIDIA → Groq → Cerebras → Z.ai → Gemini" },
                 ].map(opt => {
                   const isSelected = providerPref === opt.key;
                   return (
@@ -857,6 +871,28 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
                   placeholder="csk-..." />
                 <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
                   {savedCerebras ? "✓ Saved" : "Save Cerebras Key"}
+                </button>
+              </form>
+            </div>
+
+            {/* Z.ai */}
+            <div style={{ marginBottom: "14px", paddingBottom: "14px", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>
+                  Z.ai
+                  <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-secondary)", background: "var(--bg-secondary)", padding: "2px 6px", borderRadius: "4px", marginLeft: "6px" }}>EMERGENCY FALLBACK / FREE-TIER</span>
+                </span>
+                <a href="https://z.ai" target="_blank" rel="noreferrer" style={{ fontSize: "11.5px", color: "var(--accent)", fontWeight: "600" }}>Get key ↗</a>
+              </div>
+              <p style={{ fontSize: "11px", color: "var(--text-secondary)", marginBottom: "8px" }}>
+                Z.ai free fallback has low concurrency, so it is used only when earlier providers fail.
+              </p>
+              <form onSubmit={handleSaveZai} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <input className="text-input" type="password"
+                  value={zaiInput} onChange={e => setZaiInput(e.target.value)}
+                  placeholder="API key" />
+                <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
+                  {savedZai ? "✓ Saved" : "Save Z.ai Key"}
                 </button>
               </form>
             </div>

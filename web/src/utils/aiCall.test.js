@@ -75,6 +75,14 @@ function cerebrasEmpty(finishReason = "stop") {
   };
 }
 
+function zaiOk(content = "Z.ai reply.") {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({ choices: [{ message: { content } }] }),
+  };
+}
+
 function geminiOk(content = "Gemini fallback reply.") {
   return {
     ok: true,
@@ -560,6 +568,175 @@ describe("AI call resilience", () => {
       geminiKey: "test-gemini-key",
     }))).rejects.toThrow("all_providers_failed");
     expect(fetch).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("Z.ai emergency fallback", () => {
+  let storage;
+
+  beforeEach(() => {
+    storage = makeStorage();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 4, 15, 30, 0));
+    vi.stubGlobal("localStorage", storage);
+    vi.stubGlobal("fetch", vi.fn());
+    resetProviderCooldowns();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("calls Z.ai standalone when pref is zai", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("Z.ai standalone reply."));
+
+    const reply = await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key" }));
+
+    expect(reply).toBe("Z.ai standalone reply.");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][0]).toBe("https://api.z.ai/api/paas/v4/chat/completions");
+  });
+
+  it("auto order is Groq -> Cerebras -> Z.ai -> Gemini", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(503))   // Groq fails
+      .mockResolvedValueOnce(providerError(503))   // Cerebras fails
+      .mockResolvedValueOnce(zaiOk("Z.ai picked up the slack."));
+
+    const reply = await callAI(baseRequest({
+      cerebrasKey: "test-cerebras-key",
+      zaiKey: "test-zai-key",
+      geminiKey: "test-gemini-key",
+    }));
+
+    expect(reply).toBe("Z.ai picked up the slack.");
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(fetch.mock.calls[1][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
+    expect(fetch.mock.calls[2][0]).toBe("https://api.z.ai/api/paas/v4/chat/completions");
+  });
+
+  it("falls back to Z.ai when both Groq and Cerebras fail", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(429))
+      .mockResolvedValueOnce(providerError(503))
+      .mockResolvedValueOnce(zaiOk("Z.ai emergency reply."));
+
+    const reply = await callAI(baseRequest({
+      cerebrasKey: "test-cerebras-key",
+      zaiKey: "test-zai-key",
+    }));
+
+    expect(reply).toBe("Z.ai emergency reply.");
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("falls back to Gemini when Z.ai fails", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch
+      .mockResolvedValueOnce(providerError(503))   // Z.ai fails
+      .mockResolvedValueOnce(geminiOk("Gemini after Z.ai failure."));
+
+    const reply = await callAI(baseRequest({
+      groqKey: "",
+      zaiKey: "test-zai-key",
+      geminiKey: "test-gemini-key",
+    }));
+
+    expect(reply).toBe("Gemini after Z.ai failure.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][0]).toBe("https://api.z.ai/api/paas/v4/chat/completions");
+    expect(String(fetch.mock.calls[1][0])).toContain("generativelanguage.googleapis.com");
+  });
+
+  it("skips Z.ai entirely when no Z.ai key is configured", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(503))   // Groq fails
+      .mockResolvedValueOnce(geminiOk("Gemini, Z.ai skipped."));
+
+    const reply = await callAI(baseRequest({ geminiKey: "test-gemini-key" }));
+
+    expect(reply).toBe("Gemini, Z.ai skipped.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(String(fetch.mock.calls[1][0])).toContain("generativelanguage.googleapis.com");
+  });
+
+  it("skips a concurrent Z.ai attempt as busy (single-flight guard) and falls through to Gemini", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    let resolveZaiFetch;
+    fetch.mockImplementation((url) => {
+      if (String(url).includes("z.ai")) {
+        return new Promise((resolve) => { resolveZaiFetch = resolve; });
+      }
+      return Promise.resolve(geminiOk("Second call used Gemini."));
+    });
+
+    const firstCall = callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key" }));
+    const secondCall = callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", geminiKey: "test-gemini-key" }));
+
+    resolveZaiFetch(zaiOk("First call's Z.ai reply."));
+    const [firstReply, secondReply] = await Promise.all([firstCall, secondCall]);
+
+    expect(firstReply).toBe("First call's Z.ai reply.");
+    expect(secondReply).toBe("Second call used Gemini.");
+    // Z.ai was only actually called once — the concurrent attempt was skipped, not queued/retried.
+    const zaiCalls = fetch.mock.calls.filter(call => String(call[0]).includes("z.ai"));
+    expect(zaiCalls.length).toBe(1);
+  });
+
+  it("sends model glm-4.7-flash and max_tokens (not max_completion_tokens) in the Z.ai request body", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("reply"));
+    await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", maxTokens: 300 }));
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.model).toBe("glm-4.7-flash");
+    expect(body.max_tokens).toBe(300);
+    expect(body.max_completion_tokens).toBeUndefined();
+  });
+
+  it("skips Z.ai entirely (no truncation) when the caller requests more than its 800-token cap", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(geminiOk("Gemini reply."));
+    const reply = await callAI(baseRequest({
+      groqKey: "", zaiKey: "test-zai-key", geminiKey: "test-gemini-key", maxTokens: 4000,
+    }));
+    expect(reply).toBe("Gemini reply.");
+    // Z.ai was skipped without ever being called — caller fell straight through to Gemini.
+    const zaiCalls = fetch.mock.calls.filter(call => String(call[0]).includes("z.ai"));
+    expect(zaiCalls.length).toBe(0);
+  });
+
+  it("still excludes NVIDIA from the auto order even with a Z.ai key present", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(503))   // Groq fails
+      .mockResolvedValueOnce(zaiOk("Z.ai, NVIDIA skipped."));
+
+    const reply = await callAI(baseRequest({
+      nvidiaKey: "test-nvidia-key",
+      zaiKey: "test-zai-key",
+    }));
+
+    expect(reply).toBe("Z.ai, NVIDIA skipped.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[1][0]).toBe("https://api.z.ai/api/paas/v4/chat/completions");
+  });
+
+  it("keeps the calm all_providers_failed message when Groq, Cerebras, Z.ai, and Gemini all fail", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(500))
+      .mockResolvedValueOnce(providerError(500))
+      .mockResolvedValueOnce(providerError(500))
+      .mockResolvedValueOnce(providerError(500));
+
+    await expect(callAI(baseRequest({
+      cerebrasKey: "test-cerebras-key",
+      zaiKey: "test-zai-key",
+      geminiKey: "test-gemini-key",
+    }))).rejects.toThrow("all_providers_failed");
+    expect(fetch).toHaveBeenCalledTimes(4);
   });
 });
 

@@ -73,7 +73,7 @@ function getLastFullTaskTime(userId) {
 
 export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {} }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
-  const { groqKey, nvidiaKey, geminiKey, cerebrasKey } = getAIKeys();
+  const { groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const hasAnyKey = hasAIKey();
 
   // True until RTDB has actually delivered a snapshot for this session — true
@@ -229,7 +229,7 @@ ${buildPersonaInstruction(configRef.current, firstName)}
 ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryContext}\n` : ""}`;
 
         const reply = await callAI({
-          groqKey, nvidiaKey, geminiKey, cerebrasKey,
+          groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey,
           systemPrompt: systemInstruction,
           messages: [{ role: "user", content: "(Start the conversation.)" }],
           maxTokens: 120
@@ -419,7 +419,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     }
 
     try {
-      const reply = await callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, systemPrompt: systemInstruction, messages, maxTokens, contextMode });
+      const reply = await callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey, systemPrompt: systemInstruction, messages, maxTokens, contextMode });
       if (contextMode === "full_task") {
         localStorage.setItem(`loci_last_full_task_time_${userId}`, String(Date.now()));
       }
@@ -826,7 +826,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
 
     try {
       const reply = await callAI({
-        groqKey, nvidiaKey, geminiKey, cerebrasKey,
+        groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey,
         systemPrompt: `${buildLociCoreInstruction({ firstName })}\n\nYou are ${config.mentorName || "a focus coach"}, an expert productivity coach.`,
         messages: [{ role: "user", content: prompt }],
         maxTokens: 800
