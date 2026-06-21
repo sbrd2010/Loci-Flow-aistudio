@@ -5,7 +5,10 @@ web/test-results/
 web/playwright-report/
 
 # Local agent/tooling state
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/loopcheck/
 
 # Local environment files and secrets
 .env
