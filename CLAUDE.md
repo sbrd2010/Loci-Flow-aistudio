@@ -64,3 +64,14 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+## 5. PR Loophole Check ("loopcheck")
+
+When the user types `loopcheck` (optionally with a PR number, e.g. "loopcheck PR 280"), run a single independent bug hunt on that PR before merge:
+
+1. If no PR number is given, use the most recently pushed/open PR in this repo.
+2. Fetch that PR's full diff (GitHub MCP tools, e.g. `pull_request_read` with `get_diff`).
+3. Spawn exactly **one** `general-purpose` Agent call. Hand it the diff verbatim plus enough surrounding context to understand scope (file paths, what the PR claims to do). Ask it to independently hunt for P0/P1/P2 bugs/loopholes/future risks — fresh eyes, no memory of how or why the code was written — and report back ranked findings with file/line, concrete failure scenario, and severity, plus an overall merge verdict.
+4. For each finding: fix it now if it's small and you're confident, otherwise surface it to the user and ask before changing anything.
+
+This is intentionally **one agent spawn only** — not the heavier multi-agent `code-review` skill — to keep cost low for routine per-PR use on a metered plan. Recommended cadence: once per PR, right before merge.
