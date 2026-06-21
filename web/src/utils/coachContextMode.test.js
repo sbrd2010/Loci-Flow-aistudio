@@ -263,6 +263,32 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("turn this into concrete steps", pacedOpts)).toBe("compact_task");
     });
 
+    it("PR277 - routes natural category/horizon priority asks without requiring 'task' wording to full_task", () => {
+      expect(classifyContextMode("What are my career priorities?")).toBe("full_task");
+      expect(classifyContextMode("What are my work priorities?")).toBe("full_task");
+      expect(classifyContextMode("What are my health priorities?")).toBe("full_task");
+      expect(classifyContextMode("What are my personal priorities?")).toBe("full_task");
+      expect(classifyContextMode("What are my health and work priorities?")).toBe("full_task");
+      expect(classifyContextMode("What are my health task and work task priorities?")).toBe("full_task");
+      expect(classifyContextMode("What are my this month priorities?")).toBe("full_task");
+      expect(classifyContextMode("What are my month priorities?")).toBe("full_task");
+      expect(classifyContextMode("What are my quarter priorities?")).toBe("full_task");
+      expect(classifyContextMode("What are my 6 month priorities?")).toBe("full_task");
+      expect(classifyContextMode("What should I focus on this month?")).toBe("full_task");
+      expect(classifyContextMode("Which work task should I do first?")).toBe("full_task");
+      expect(classifyContextMode("Which career task should I do first?")).toBe("full_task");
+      expect(classifyContextMode("Which health task should I do first?")).toBe("full_task");
+      expect(classifyContextMode("What are my this month’s priorities?")).toBe("full_task");
+      expect(classifyContextMode("What are my health/work priorities?")).toBe("full_task");
+      expect(classifyContextMode("What are my health & work priorities?")).toBe("full_task");
+      expect(classifyContextMode("Tell me my health priorities")).toBe("full_task");
+      expect(classifyContextMode("Show me my work priorities")).toBe("full_task");
+
+      // Possessive references to someone else's priorities must NOT be treated as a Loci task request
+      expect(classifyContextMode("What are my boss's priorities?")).not.toBe("full_task");
+      expect(classifyContextMode("What are my partner's priorities?")).not.toBe("full_task");
+    });
+
     it("PR #272 Codex Fix - routes distressed task asks to full_task", () => {
       // Mixed distress + task planning asks route to full_task
       expect(classifyContextMode("I’m overwhelmed, what should I do?")).toBe("full_task");
