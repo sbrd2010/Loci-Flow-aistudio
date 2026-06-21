@@ -293,6 +293,28 @@ describe("AI call resilience", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("ignores non-text parts (e.g. reasoning) when parsing array content", async () => {
+    storage.setItem("loci_provider_pref", "cerebras");
+    fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: [
+              { type: "reasoning", text: "hidden chain of thought" },
+              { type: "text", text: "Visible answer." },
+            ],
+          },
+        }],
+      }),
+    });
+
+    const reply = await callAI(baseRequest({ groqKey: "", cerebrasKey: "test-cerebras-key" }));
+
+    expect(reply).toBe("Visible answer.");
+  });
+
   it("retries Cerebras once with a larger token budget when finish_reason is length", async () => {
     storage.setItem("loci_provider_pref", "cerebras");
     fetch

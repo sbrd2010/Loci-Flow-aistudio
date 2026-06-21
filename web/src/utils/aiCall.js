@@ -75,8 +75,11 @@ function extractMessageContent(message) {
   const content = message?.content;
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
+    // Only "text" parts are visible reply content — a "reasoning" part with
+    // its own .text field must not be mistaken for the answer, since that's
+    // exactly the hidden-token-consumption case this PR exists to detect.
     return content
-      .map(part => (typeof part === "string" ? part : (typeof part?.text === "string" ? part.text : "")))
+      .map(part => (typeof part === "string" ? part : (part?.type === "text" && typeof part.text === "string" ? part.text : "")))
       .join("")
       .trim();
   }
@@ -95,7 +98,11 @@ function logEmptyReplyDiagnostics(provider, data, message) {
     finishReason: data?.choices?.[0]?.finish_reason ?? null,
     contentType: Array.isArray(content) ? "array" : typeof content,
     contentLength: typeof content === "string" ? content.length : (Array.isArray(content) ? content.length : 0),
-    usage: data?.usage ?? null,
+    // Allowlisted token counts only, matching logAICallDiagnostics — never
+    // the raw usage object, in case a provider ever nests extra fields there.
+    promptTokens: data?.usage?.prompt_tokens ?? null,
+    completionTokens: data?.usage?.completion_tokens ?? null,
+    totalTokens: data?.usage?.total_tokens ?? null,
   });
 }
 
