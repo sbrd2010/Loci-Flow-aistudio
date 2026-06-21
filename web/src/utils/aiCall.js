@@ -269,7 +269,10 @@ async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens) {
   let { reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, initialBudget);
 
   if (!reply && finishReason === "length") {
-    const retryBudget = Math.min(initialBudget * 2, CEREBRAS_RETRY_TOKEN_CAP);
+    // A small initial budget (e.g. 220-300) can leave too little room for
+    // gpt-oss-120b's hidden reasoning even after doubling, so the retry
+    // budget has a 1000-token floor in addition to the doubling.
+    const retryBudget = Math.min(Math.max(initialBudget * 2, 1000), CEREBRAS_RETRY_TOKEN_CAP);
     ({ reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, retryBudget));
   }
 

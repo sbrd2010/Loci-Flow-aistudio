@@ -306,6 +306,9 @@ describe("AI call resilience", () => {
     const firstBody = JSON.parse(fetch.mock.calls[0][1].body);
     const retryBody = JSON.parse(fetch.mock.calls[1][1].body);
     expect(retryBody.max_completion_tokens).toBeGreaterThan(firstBody.max_completion_tokens);
+    // baseRequest's maxTokens (120) doubles to 240 — below the 1000-token
+    // floor needed for gpt-oss-120b's reasoning overhead to actually recover.
+    expect(retryBody.max_completion_tokens).toBe(1000);
   });
 
   it("does not retry Cerebras when content is empty but finish_reason is not length", async () => {
