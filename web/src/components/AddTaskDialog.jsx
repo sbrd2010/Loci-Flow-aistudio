@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { callAI, getAIKeys } from "../utils/aiCall";
+import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { safeUUID } from "../utils/uuid";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
 import { applyAiRewriteToTask, CATEGORY_ICONS } from "../utils/taskOps";
@@ -44,7 +44,7 @@ export default function AddTaskDialog({ email, payload, savePayload, userProfile
   });
 
   const { groqKey, nvidiaKey, geminiKey, cerebrasKey } = getAIKeys();
-  const hasAnyKey = !!(groqKey || nvidiaKey || geminiKey || cerebrasKey);
+  const hasAnyKey = hasAIKey();
 
   const handleAiSuggest = async () => {
     if (!title.trim()) { setAiError("Type a rough task idea first, then tap Ask AI."); return; }

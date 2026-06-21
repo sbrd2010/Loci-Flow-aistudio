@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
-import { getAIKeys, callAI, extractJsonArray } from "../utils/aiCall";
+import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTaskSubSteps, CATEGORY_ICONS } from "../utils/taskOps";
 import { submitOnEnter } from "../utils/formEvents";
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
@@ -218,7 +218,7 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
 
   // ── AI keys ────────────────────────────────────────────────────────────────
   const { groqKey, nvidiaKey, geminiKey, cerebrasKey } = getAIKeys();
-  const hasAnyKey = !!(groqKey || nvidiaKey || geminiKey || cerebrasKey);
+  const hasAnyKey = hasAIKey();
 
   // ── Brain Dump DnD ─────────────────────────────────────────────────────────
   const dumpSensors = useSensors(

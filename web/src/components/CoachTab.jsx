@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { track, auth } from "../firebase";
-import { callAI, describeAIError, getAIKeys } from "../utils/aiCall";
+import { callAI, describeAIError, getAIKeys, hasAIKey } from "../utils/aiCall";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
 import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, getLocalDateString, isActiveLociTask } from "../utils/lociAIContext";
@@ -74,7 +74,7 @@ function getLastFullTaskTime(userId) {
 export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {} }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
   const { groqKey, nvidiaKey, geminiKey, cerebrasKey } = getAIKeys();
-  const hasAnyKey = !!(groqKey || nvidiaKey || geminiKey || cerebrasKey);
+  const hasAnyKey = hasAIKey();
 
   // True until RTDB has actually delivered a snapshot for this session — true
   // while rendering from cache, but ALSO once the 15s offline warning fires

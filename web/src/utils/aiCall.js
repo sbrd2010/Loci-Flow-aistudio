@@ -365,9 +365,14 @@ export function getAIKeys() {
   };
 }
 
+// True only if the user's selected provider order actually has a usable
+// provider — e.g. an NVIDIA-only key with pref "auto" returns false, since
+// NVIDIA is excluded from the auto/groq/gemini chains and callAI would
+// throw "no_key" for that combination.
 export function hasAIKey() {
   const { groqKey, nvidiaKey, geminiKey, cerebrasKey } = getAIKeys();
-  return !!(groqKey || nvidiaKey || geminiKey || cerebrasKey);
+  const pref = localStorage.getItem("loci_provider_pref") || "auto";
+  return buildProviderOrder(pref, groqKey, nvidiaKey, geminiKey, cerebrasKey).length > 0;
 }
 
 // Parses a JSON array out of an AI reply, tolerating markdown code fences,
