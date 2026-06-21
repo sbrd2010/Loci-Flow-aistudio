@@ -821,6 +821,76 @@ describe("Z.ai emergency fallback", () => {
     }))).rejects.toThrow("all_providers_failed");
     expect(fetch).toHaveBeenCalledTimes(4);
   });
+
+  it("preserves explicit NOW FOCUS / CURRENT NOW FOCUS sections during compression", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("reply"));
+
+    const systemPrompt = `You am Loci Coach.
+CURRENT CAPPED TASK CONTEXT:
+${horizonSection("TODAY", 3, 50)}
+${horizonSection("THIS MONTH", 5, 1000)}
+${horizonSection("QUARTER", 5, 1000)}
+${horizonSection("6 MONTHS", 5, 1000)}
+${horizonSection("WORK", 5, 1000)}
+
+CURRENT NOW FOCUS: "Task TODAY 0"
+NOW FOCUS SUBTASKS for "Task TODAY 0" (0/2 done):
+  [ ] Subtask A
+  [ ] Subtask B`;
+
+    await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", systemPrompt }));
+    const sentPrompt = JSON.parse(fetch.mock.calls[0][1].body).messages[0].content;
+    expect(sentPrompt).toContain("CURRENT NOW FOCUS: \"Task TODAY 0\"");
+    expect(sentPrompt).toContain("NOW FOCUS SUBTASKS for \"Task TODAY 0\"");
+    expect(sentPrompt).toContain("  [ ] Subtask A");
+    expect(sentPrompt).toContain("  [ ] Subtask B");
+    expect(sentPrompt).not.toContain("THIS MONTH (");
+  });
+
+  it("preserves embedded NOW FOCUS task and its detail/subtask lines inside a dropped horizon section", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("reply"));
+
+    const systemPrompt = `You are Loci Coach.
+CURRENT CAPPED TASK CONTEXT:
+TODAY (1):
+  - [P3] Today task
+THIS MONTH (3):
+  - [P1] [NOW FOCUS] Pinned Focus Task
+    Concrete step: Open file
+    Substep: Read line 10
+  - [P2] Unimportant task 1 ${"x".repeat(5000)}
+  - [P3] Unimportant task 2 ${"x".repeat(5000)}
+QUARTER (1):
+  - [P3] Quarter task ${"x".repeat(5000)}
+
+SESSION STATS:
+Current Time: 3:30 PM`;
+
+    await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", systemPrompt }));
+    const sentPrompt = JSON.parse(fetch.mock.calls[0][1].body).messages[0].content;
+
+    // TODAY section should be kept
+    expect(sentPrompt).toContain("TODAY (1):");
+    expect(sentPrompt).toContain("Today task");
+
+    // NOW FOCUS task line should be preserved
+    expect(sentPrompt).toContain("- [P1] [NOW FOCUS] Pinned Focus Task");
+
+    // Related detail lines should be preserved
+    expect(sentPrompt).toContain("Concrete step: Open file");
+    expect(sentPrompt).toContain("Substep: Read line 10");
+
+    // Other non-focus tasks in the dropped horizon should be removed
+    expect(sentPrompt).not.toContain("Unimportant task 1");
+    expect(sentPrompt).not.toContain("Unimportant task 2");
+    expect(sentPrompt).not.toContain("THIS MONTH (3):");
+
+    // Other dropped horizons should be removed
+    expect(sentPrompt).not.toContain("QUARTER (1):");
+    expect(sentPrompt).not.toContain("Quarter task");
+  });
 });
 
 describe("classifyAIError", () => {
