@@ -278,6 +278,9 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("Which work task should I do first?")).toBe("full_task");
       expect(classifyContextMode("Which career task should I do first?")).toBe("full_task");
       expect(classifyContextMode("Which health task should I do first?")).toBe("full_task");
+      expect(classifyContextMode("What are my this month’s priorities?")).toBe("full_task");
+      expect(classifyContextMode("What are my health/work priorities?")).toBe("full_task");
+      expect(classifyContextMode("What are my health & work priorities?")).toBe("full_task");
     });
 
     it("PR #272 Codex Fix - routes distressed task asks to full_task", () => {
