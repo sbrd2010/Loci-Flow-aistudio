@@ -709,6 +709,92 @@ describe("Z.ai emergency fallback", () => {
     expect(zaiCalls.length).toBe(0);
   });
 
+  // Mirrors the horizon-section format buildLociTaskContext (lociAIContext.js)
+  // embeds into Coach's full_task system prompt: "HEADER (n):" followed by
+  // indented "  - ..." bullet lines, with no blank line between sections.
+  function horizonSection(header, count, padChars) {
+    const lines = [`${header} (${count}):`];
+    for (let i = 0; i < count; i++) lines.push(`  - [P2] Task ${header} ${i} ${"x".repeat(padChars)}`);
+    return lines.join("\n");
+  }
+
+  function bigCoachPrompt({ includeWeek = true, weekPad = 50 } = {}) {
+    const sections = [
+      horizonSection("TODAY", 3, 50),
+      includeWeek ? horizonSection("THIS WEEK", 3, weekPad) : "",
+      horizonSection("THIS MONTH", 5, 800),
+      horizonSection("QUARTER", 5, 800),
+      horizonSection("6 MONTHS", 5, 800),
+      horizonSection("WORK", 5, 800),
+    ].filter(Boolean);
+    return `You are Loci Coach.\n\nCURRENT CAPPED TASK CONTEXT:\n${sections.join("\n")}\n\nNOW FOCUS: "Task TODAY 0"\n\nSESSION STATS:\nCurrent Time: 3:30 PM`;
+  }
+
+  it("compresses an oversized Coach task prompt for Z.ai instead of skipping it", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("Compressed Z.ai reply."));
+
+    const systemPrompt = bigCoachPrompt();
+    expect(systemPrompt.length).toBeGreaterThan(12000);
+
+    const reply = await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", systemPrompt }));
+
+    expect(reply).toBe("Compressed Z.ai reply.");
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    const sentSystemPrompt = body.messages[0].content;
+    expect(sentSystemPrompt).toContain("TODAY (3):");
+    expect(sentSystemPrompt).toContain("THIS WEEK (3):");
+    expect(sentSystemPrompt).toContain("NOW FOCUS");
+    expect(sentSystemPrompt).not.toContain("THIS MONTH (");
+    expect(sentSystemPrompt).not.toContain("QUARTER (");
+    expect(sentSystemPrompt).not.toContain("6 MONTHS (");
+    expect(sentSystemPrompt).not.toContain("WORK (");
+  });
+
+  it("trims chat history to the latest exchange for Z.ai when compressing an oversized prompt", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("Compressed Z.ai reply."));
+
+    const systemPrompt = `You are Loci Coach.
+CURRENT CAPPED TASK CONTEXT:
+${horizonSection("TODAY", 5, 2270)}`;
+
+    const messages = [
+      { role: "user", content: "old message 1 " + "x".repeat(300) },
+      { role: "assistant", content: "old reply 1" },
+      { role: "user", content: "old message 2 " + "x".repeat(300) },
+      { role: "assistant", content: "old reply 2" },
+      { role: "user", content: "What should I do now?" },
+    ];
+
+    await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", systemPrompt, messages }));
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    // First entry is the system message; the rest is the trimmed history.
+    expect(body.messages.length).toBe(4);
+    expect(body.messages[body.messages.length - 1].content).toBe("What should I do now?");
+  });
+
+  it("falls through to Gemini when This Week is also dropped but the prompt is still too large after both tiers", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(geminiOk("Gemini after Z.ai compression gave up."));
+
+    // TODAY is never dropped (it's always kept), so padding it heavily makes
+    // the prompt irreducibly too large for Z.ai even after both compression
+    // tiers strip every other horizon section.
+    const sections = [horizonSection("TODAY", 5, 3000)];
+    const systemPrompt = `You are Loci Coach.\n\nCURRENT CAPPED TASK CONTEXT:\n${sections.join("\n")}\n\nNOW FOCUS: "Task TODAY 0"`;
+    expect(systemPrompt.length).toBeGreaterThan(12000);
+
+    const reply = await callAI(baseRequest({
+      groqKey: "", zaiKey: "test-zai-key", geminiKey: "test-gemini-key", systemPrompt,
+    }));
+
+    expect(reply).toBe("Gemini after Z.ai compression gave up.");
+    const zaiCalls = fetch.mock.calls.filter(call => String(call[0]).includes("z.ai"));
+    expect(zaiCalls.length).toBe(0);
+  });
+
   it("still excludes NVIDIA from the auto order even with a Z.ai key present", async () => {
     fetch
       .mockResolvedValueOnce(providerError(503))   // Groq fails
@@ -737,6 +823,174 @@ describe("Z.ai emergency fallback", () => {
       geminiKey: "test-gemini-key",
     }))).rejects.toThrow("all_providers_failed");
     expect(fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it("preserves explicit NOW FOCUS / CURRENT NOW FOCUS sections during compression", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("reply"));
+
+    const systemPrompt = `You am Loci Coach.
+CURRENT CAPPED TASK CONTEXT:
+${horizonSection("TODAY", 3, 50)}
+${horizonSection("THIS MONTH", 5, 1000)}
+${horizonSection("QUARTER", 5, 1000)}
+${horizonSection("6 MONTHS", 5, 1000)}
+${horizonSection("WORK", 5, 1000)}
+
+CURRENT NOW FOCUS: "Task TODAY 0"
+NOW FOCUS SUBTASKS for "Task TODAY 0" (0/2 done):
+  [ ] Subtask A
+  [ ] Subtask B`;
+
+    await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", systemPrompt }));
+    const sentPrompt = JSON.parse(fetch.mock.calls[0][1].body).messages[0].content;
+    expect(sentPrompt).toContain("CURRENT NOW FOCUS: \"Task TODAY 0\"");
+    expect(sentPrompt).toContain("NOW FOCUS SUBTASKS for \"Task TODAY 0\"");
+    expect(sentPrompt).toContain("  [ ] Subtask A");
+    expect(sentPrompt).toContain("  [ ] Subtask B");
+    expect(sentPrompt).not.toContain("THIS MONTH (");
+  });
+
+  it("preserves embedded NOW FOCUS task, its detail lines, and the source horizon label during compression", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("reply"));
+
+    const systemPrompt = `You are Loci Coach.
+CURRENT CAPPED TASK CONTEXT:
+TODAY (1):
+  - [P3] Today task
+THIS MONTH (3):
+  - [P1] [NOW FOCUS] Pinned Focus Task
+    Concrete step: Open file
+    Substep: Read line 10
+  - [P2] Unimportant task 1 ${"x".repeat(5000)}
+  - [P3] Unimportant task 2 ${"x".repeat(5000)}
+QUARTER (1):
+  - [P3] Quarter task ${"x".repeat(5000)}
+
+SESSION STATS:
+Current Time: 3:30 PM`;
+
+    await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", systemPrompt }));
+    const sentPrompt = JSON.parse(fetch.mock.calls[0][1].body).messages[0].content;
+
+    expect(sentPrompt).toContain("PRESERVED FROM THIS MONTH:");
+    expect(sentPrompt).toContain("- [P1] [NOW FOCUS] Pinned Focus Task");
+    expect(sentPrompt).toContain("Concrete step: Open file");
+    expect(sentPrompt).toContain("Substep: Read line 10");
+    expect(sentPrompt).not.toContain("Unimportant task 1");
+    expect(sentPrompt).not.toContain("Unimportant task 2");
+  });
+
+  it("defers Coach history trimming if dropping horizons alone is sufficient", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("reply"));
+
+    // Prompt has large Month section. Dropping Month brings it below 12000.
+    const systemPrompt = `You are Loci Coach.
+CURRENT CAPPED TASK CONTEXT:
+${horizonSection("TODAY", 2, 50)}
+${horizonSection("THIS MONTH", 5, 2000)}`;
+
+    const messages = [
+      { role: "user", content: "old query 1" },
+      { role: "assistant", content: "old reply 1" },
+      { role: "user", content: "old query 2" },
+      { role: "assistant", content: "old reply 2" },
+      { role: "user", content: "latest query" }
+    ];
+
+    await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", systemPrompt, messages }));
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    // Since dropping Month made it fit, we did not trim messages. All 5 should be present.
+    expect(body.messages.length).toBe(6); // systemPrompt + 5 messages
+    expect(body.messages[1].content).toBe("old query 1");
+  });
+
+  it("trims chat history if dropping horizons is not sufficient", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("reply"));
+
+    // TODAY is never dropped. Padding it heavily makes prompt irreducibly large for Z.ai.
+    // So it will drop other horizons AND trim chat history.
+    const systemPrompt = `You are Loci Coach.
+CURRENT CAPPED TASK CONTEXT:
+${horizonSection("TODAY", 5, 2070)}`;
+
+    const messages = [
+      { role: "user", content: "old query 1 " + "x".repeat(500) },
+      { role: "assistant", content: "old reply 1 " + "x".repeat(500) },
+      { role: "user", content: "old query 2 " + "x".repeat(500) },
+      { role: "assistant", content: "old reply 2 " + "x".repeat(500) },
+      { role: "user", content: "latest query" }
+    ];
+
+    await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", systemPrompt, messages }));
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    // Dropping alone wasn't enough, so history was trimmed to the last 3.
+    expect(body.messages.length).toBe(4); // systemPrompt + 3 messages
+    expect(body.messages[1].content).toContain("old query 2");
+  });
+
+  it("preserves WORK horizon when user query contains 'work' word boundary", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("reply"));
+
+    const systemPrompt = `You are Loci Coach.
+CURRENT CAPPED TASK CONTEXT:
+${horizonSection("TODAY", 1, 50)}
+${horizonSection("WORK", 5, 1000)}
+${horizonSection("THIS MONTH", 5, 1000)}
+${horizonSection("QUARTER", 5, 1000)}
+${horizonSection("6 MONTHS", 5, 1000)}`;
+
+    const messages = [{ role: "user", content: "What are my work priorities?" }];
+
+    await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", systemPrompt, messages }));
+    const sentPrompt = JSON.parse(fetch.mock.calls[0][1].body).messages[0].content;
+
+    expect(sentPrompt).toContain("WORK (5):");
+    expect(sentPrompt).not.toContain("THIS MONTH (");
+    expect(sentPrompt).not.toContain("QUARTER (");
+  });
+
+  it("does not false-match keywords like 'workflow', 'network', 'homework'", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("reply"));
+
+    const systemPrompt = `You are Loci Coach.
+CURRENT CAPPED TASK CONTEXT:
+${horizonSection("TODAY", 1, 50)}
+${horizonSection("WORK", 5, 1500)}
+${horizonSection("THIS MONTH", 5, 1500)}`;
+
+    const messages = [{ role: "user", content: "my workflow status and homework" }];
+
+    await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", systemPrompt, messages }));
+    const sentPrompt = JSON.parse(fetch.mock.calls[0][1].body).messages[0].content;
+
+    expect(sentPrompt).not.toContain("WORK (");
+    expect(sentPrompt).not.toContain("THIS MONTH (");
+  });
+
+  it("skips Z.ai and falls through to Gemini if preserving requested horizon makes payload too large", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(geminiOk("Gemini fallback."));
+
+    const systemPrompt = `You are Loci Coach.
+CURRENT CAPPED TASK CONTEXT:
+${horizonSection("TODAY", 1, 50)}
+${horizonSection("THIS MONTH", 5, 3000)}`;
+
+    const messages = [{ role: "user", content: "Show my month priorities" }];
+
+    const reply = await callAI(baseRequest({
+      groqKey: "", zaiKey: "test-zai-key", geminiKey: "test-gemini-key", systemPrompt, messages,
+    }));
+
+    expect(reply).toBe("Gemini fallback.");
+    const zaiCalls = fetch.mock.calls.filter(call => String(call[0]).includes("z.ai"));
+    expect(zaiCalls.length).toBe(0);
   });
 });
 
