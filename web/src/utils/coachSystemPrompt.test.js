@@ -19,6 +19,7 @@ function baseCtx() {
     remindersContext: "",
     anchorContext: "",
     checkinContext: "",
+    pendingCheckinContext: "",
     deadlineContext: "",
     brainDumpContext: "",
     velocityContext: "",
@@ -79,6 +80,21 @@ describe("buildCoachSystemPrompt", () => {
   it("emotional mode's check-in line is honest about what happens", () => {
     const out = buildCoachSystemPrompt("emotional", baseCtx());
     expect(out).toContain('call it a check-in here in the app — never "reminder," "notification," or "alert."');
+  });
+
+  it("every mode surfaces the actual pending check-in state when present, so honesty answers aren't guesswork", () => {
+    const ctx = { ...baseCtx(), pendingCheckinContext: 'CURRENT CHECK-IN: A Coach check-in is pending, firing in about 10 minute(s), about "Write report".' };
+    ["light", "emotional", "profile_reflection", "compact_task", "full_task"].forEach(mode => {
+      const out = buildCoachSystemPrompt(mode, ctx);
+      expect(out).toContain('CURRENT CHECK-IN: A Coach check-in is pending, firing in about 10 minute(s), about "Write report".');
+    });
+  });
+
+  it("no mode fabricates a pending check-in when none exists", () => {
+    ["light", "emotional", "profile_reflection", "compact_task", "full_task"].forEach(mode => {
+      const out = buildCoachSystemPrompt(mode, baseCtx());
+      expect(out).not.toContain("CURRENT CHECK-IN:");
+    });
   });
 
   it("light, emotional, and profile_reflection each carry the Loci voice capsule", () => {

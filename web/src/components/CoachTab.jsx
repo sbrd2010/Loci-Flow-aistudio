@@ -8,7 +8,7 @@ import { getTodayCheckedIds, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
 import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin } from "../utils/reminders";
-import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, parseCheckinRequestFromMessage } from "../utils/coachCheckin";
+import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, parseCheckinRequestFromMessage, buildCoachCheckinContext } from "../utils/coachCheckin";
 import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks, findTaskByTitle } from "../utils/coachActions";
 import { isPendingCoachNudgeStale, shouldDeliverPendingCoachNudge } from "../utils/coachNudge";
 import { buildPersonaInstruction } from "../utils/coachPersona";
@@ -348,6 +348,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const brainDumpContext = buildLociBrainDumpContext(brainDump);
     const velocityContext = buildLociVelocityContext(contributions, now);
     const remindersContext = buildLociRemindersContext(tasks, now);
+    const pendingCheckinContext = buildCoachCheckinContext(config.coachCheckin, now.getTime());
     const lowEnergyContext = buildLociLowEnergyContext(config);
     const recentlyParkedContext = buildLociRecentlyParkedContext(tasks, now);
     const lociCoreInstruction = buildLociCoreInstruction({ firstName });
@@ -388,6 +389,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       remindersContext,
       anchorContext,
       checkinContext,
+      pendingCheckinContext,
       deadlineContext,
       brainDumpContext,
       velocityContext,
@@ -449,11 +451,26 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         // unrelated task — see pickCheckinNote.
         const activeForCheckin = currentTasks.filter(isActiveLociTask);
         const lowerUserText = userText.toLowerCase();
+        // Use word-char lookaround instead of \b so titles with leading/trailing
+        // punctuation (e.g. "Call mom?") still match when said verbatim — \b
+        // only fires at a word/non-word transition, which a trailing "?" lacks.
         const mentionedTasks = activeForCheckin.filter(t =>
           isTitleSafeForTextMatching(t.title) &&
-          new RegExp(`\\b${escapeRegExp(t.title.trim().toLowerCase())}\\b`, "i").test(lowerUserText)
+          new RegExp(`(?<![a-z0-9])${escapeRegExp(t.title.trim().toLowerCase())}(?![a-z0-9])`, "i").test(lowerUserText)
         );
-        const mentionedTitle = mentionedTasks.length === 1 ? mentionedTasks[0].title : null;
+        // If multiple titles match (e.g. "Write report" and "Write report draft"
+        // both match a mention of the latter), prefer the most specific one —
+        // the longest match that contains every other match as a substring —
+        // rather than discarding an unambiguous mention to null.
+        let mentionedTitle = null;
+        if (mentionedTasks.length === 1) {
+          mentionedTitle = mentionedTasks[0].title;
+        } else if (mentionedTasks.length > 1) {
+          const sorted = [...mentionedTasks].sort((a, b) => b.title.length - a.title.length);
+          const longestLower = sorted[0].title.trim().toLowerCase();
+          const allContained = sorted.every(t => longestLower.includes(t.title.trim().toLowerCase()));
+          mentionedTitle = allContained ? sorted[0].title : null;
+        }
         const checkin = buildCoachCheckin(checkinMinutes, pickCheckinNote(activeForCheckin, mentionedTitle));
         configPatch = { ...configPatch, coachCheckin: checkin };
         scheduleCoachCheckin(checkin);

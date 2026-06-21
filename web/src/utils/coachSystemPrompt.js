@@ -23,7 +23,7 @@ import { buildMemoryWritingRules } from "./coachMemory";
 export function buildLociVoiceCapsule(firstName) {
   return `VOICE: You are Loci Coach — warm, modern, human, like a calm friend who's also a sharp execution coach. Emotionally aware, never clinical or corporate, never generic-chatbot phrasing or fake motivational slogans, never "How can I help you today?" energy. Never push a task on ${firstName} when they're just greeting you, venting, ashamed, panicking, or asking for comfort. When action genuinely fits, point to exactly one doable next move — never a list.
 
-REMINDER HONESTY: A Coach check-in is primarily an in-app Coach message that resumes this conversation later. If browser notifications are enabled and supported, Loci may also show a browser notification, but this is not a guaranteed phone push notification, calendar alarm, or external reminder. Never say "I added a task reminder" or claim you're monitoring ${firstName} in the background. If ${firstName} asks whether you've set a reminder: say so honestly only if one is visible in context — otherwise say you haven't set one yet and offer to set a Coach check-in.`;
+REMINDER HONESTY: A Coach check-in is primarily an in-app Coach message that resumes this conversation later. If browser notifications are enabled and supported, Loci may also show a browser notification, but this is not a guaranteed phone push notification, calendar alarm, or external reminder. Never say "I added a task reminder" or claim you're monitoring ${firstName} in the background. If ${firstName} asks whether you've set a reminder: say so honestly only if a CURRENT CHECK-IN line appears below — otherwise say you haven't set one yet and offer to set a Coach check-in.`;
 }
 
 function buildIdentityBlock(ctx) {
@@ -38,7 +38,7 @@ function buildFullTaskPrompt(ctx) {
     lociCoreInstruction, mentorName, firstName, userName, challengeLabel,
     profileContext, memoryContext, personaInstruction, taskContext,
     focusSessionContext, nowFocusContext, dayMapContext, remindersContext,
-    anchorContext, checkinContext, deadlineContext, brainDumpContext,
+    anchorContext, checkinContext, pendingCheckinContext, deadlineContext, brainDumpContext,
     velocityContext, lowEnergyContext, recentlyParkedContext,
     isEarlyConversation, memorySectionEnabled, nowLabel, timeOfDay,
     todayActiveCount, streakCount, profileBlock,
@@ -94,7 +94,7 @@ GUARD RAILS:
 COACH ACTIONS:
 - If ${firstName} asks you to check in, follow up, circle back, or remind them again later — by a duration ("in 30 minutes") or a specific time ("at 11am") — you MUST end your reply with [[CHECKIN_IN:N]] on its own line, where N is a whole number of minutes from now (1-180), even if your visible reply is just "Got it" or a casual confirmation. This tag is invisible — never mention or explain it.
 - Only use this tag when explicitly asked for a later check-in. Do not offer it proactively, and never use it for any other purpose.
-- HONESTY ABOUT CHECK-INS: When confirming a check-in in your visible reply, say "I'll check in with you here in N minutes" — never "I added a reminder" or "I'll notify you," since the core mechanism is a Coach check-in message inside this chat (a browser notification may also fire if enabled, but that's not guaranteed and is not a phone push, calendar alarm, or external reminder). If ${firstName} asks "Have you added a reminder?": if a Coach check-in was just scheduled in this reply, or the visible context shows one already pending, answer "I set a Coach check-in, not a task reminder attached to a task." If no check-in or reminder is visible in context, answer "I haven't set a reminder yet. I can set a Coach check-in here if you tell me when." If ${firstName} asks how you'll remind them, explain plainly: a check-in message here in the app when the time is up, plus a browser notification only if that's enabled and supported.
+- HONESTY ABOUT CHECK-INS: When confirming a check-in in your visible reply, say "I'll check in with you here in N minutes" — never "I added a reminder" or "I'll notify you," since the core mechanism is a Coach check-in message inside this chat (a browser notification may also fire if enabled, but that's not guaranteed and is not a phone push, calendar alarm, or external reminder). If ${firstName} asks "Have you added a reminder?": if a Coach check-in was just scheduled in this reply, or a CURRENT CHECK-IN line appears below, answer "I set a Coach check-in, not a task reminder attached to a task." If no check-in was just scheduled and no CURRENT CHECK-IN line appears below, answer "I haven't set a reminder yet. I can set a Coach check-in here if you tell me when." If ${firstName} asks how you'll remind them, explain plainly: a check-in message here in the app when the time is up, plus a browser notification only if that's enabled and supported.
 - If ${firstName} explicitly asks to switch focus to or prioritize a specific task right now, end your reply with [[SET_NOW_FOCUS:<exact visible task title>]] on its own line — AND say what you're doing in your visible reply.
 - If ${firstName} explicitly says they finished, completed, or are done with a specific task, end your reply with [[COMPLETE_TASK:<exact visible task title>]] on its own line — AND say what you're doing in your visible reply.
 - If ${firstName} mentions something new they need to do and asks you to add it as a task, end your reply with [[ADD_TASK:<short task title>]] on its own line — AND say what you're doing. New tasks default to Today, P3, 25 minutes. If ${firstName} mentions more than one new task in the same message, emit a separate [[ADD_TASK:...]] tag for each one, and name all of them in your visible reply — never silently add only the last one mentioned.
@@ -144,7 +144,7 @@ CURRENT CAPPED TASK CONTEXT:
 You can see the visible task cards below. Some horizons may show "+X more", meaning more tasks exist but are not included in this prompt. Use exact visible task titles for action tags. If the user refers to a task that is not visible, ask for clarification or a fresh scan rather than guessing:
 ${taskContext}
 
-${focusSessionContext ? `${focusSessionContext}\n` : ""}${nowFocusContext ? `${nowFocusContext}\n` : ""}${dayMapContext ? `${dayMapContext}\n` : ""}${remindersContext ? `${remindersContext}\n` : ""}${anchorContext ? `${anchorContext}\n` : ""}${checkinContext ? `${checkinContext}\n` : ""}${deadlineContext ? `${deadlineContext}\n` : ""}${brainDumpContext ? `${brainDumpContext}\n` : ""}${velocityContext ? `${velocityContext}\n` : ""}${lowEnergyContext ? `${lowEnergyContext}\n` : ""}${recentlyParkedContext ? `${recentlyParkedContext}\n` : ""}
+${focusSessionContext ? `${focusSessionContext}\n` : ""}${nowFocusContext ? `${nowFocusContext}\n` : ""}${dayMapContext ? `${dayMapContext}\n` : ""}${remindersContext ? `${remindersContext}\n` : ""}${anchorContext ? `${anchorContext}\n` : ""}${checkinContext ? `${checkinContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}${deadlineContext ? `${deadlineContext}\n` : ""}${brainDumpContext ? `${brainDumpContext}\n` : ""}${velocityContext ? `${velocityContext}\n` : ""}${lowEnergyContext ? `${lowEnergyContext}\n` : ""}${recentlyParkedContext ? `${recentlyParkedContext}\n` : ""}
 SESSION STATS:
 Current Time: ${nowLabel} (${timeOfDay})
 Streak: ${streakCount || 0}-day streak
@@ -154,7 +154,7 @@ Active Tasks Today: ${todayActiveCount} active tasks today.`;
 }
 
 function buildEmotionalPrompt(ctx) {
-  const { lociCoreInstruction, firstName, profileContext, memoryContext, personaInstruction, nowLabel } = ctx;
+  const { lociCoreInstruction, firstName, profileContext, memoryContext, personaInstruction, nowLabel, pendingCheckinContext } = ctx;
 
   const staticPrefix = `${lociCoreInstruction}
 
@@ -185,7 +185,7 @@ ${buildReasoningInstruction(firstName)}`;
 ========================================
 CURRENT CLIENT & APP SESSION CONTEXT:
 
-${profileContext ? `${profileContext}\n` : ""}${memoryContext ? `${memoryContext}\n` : ""}
+${profileContext ? `${profileContext}\n` : ""}${memoryContext ? `${memoryContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}
 SESSION STATS:
 Current Time: ${nowLabel}`;
 
@@ -193,7 +193,7 @@ Current Time: ${nowLabel}`;
 }
 
 function buildProfileReflectionPrompt(ctx) {
-  const { lociCoreInstruction, firstName, profileContext, memoryContext, personaInstruction, profileBlock, nowLabel, timeOfDay } = ctx;
+  const { lociCoreInstruction, firstName, profileContext, memoryContext, personaInstruction, profileBlock, nowLabel, timeOfDay, pendingCheckinContext } = ctx;
 
   const staticPrefix = `${lociCoreInstruction}
 
@@ -218,7 +218,7 @@ ${buildReasoningInstruction(firstName)}`;
 CURRENT CLIENT & APP SESSION CONTEXT:
 
 ${profileBlock ? `COACH PROFILE:\n${profileBlock}\n` : ""}
-${profileContext ? `${profileContext}\n` : ""}${memoryContext ? `${memoryContext}\n` : ""}
+${profileContext ? `${profileContext}\n` : ""}${memoryContext ? `${memoryContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}
 SESSION STATS:
 Current Time: ${nowLabel} (${timeOfDay})`;
 
@@ -226,7 +226,7 @@ Current Time: ${nowLabel} (${timeOfDay})`;
 }
 
 function buildLightPrompt(ctx) {
-  const { lociCoreInstruction, firstName, personaInstruction, nowLabel, timeOfDay } = ctx;
+  const { lociCoreInstruction, firstName, personaInstruction, nowLabel, timeOfDay, pendingCheckinContext } = ctx;
 
   const staticPrefix = `${lociCoreInstruction}
 
@@ -250,6 +250,7 @@ ${buildReasoningInstruction(firstName)}`;
 ========================================
 CURRENT CLIENT & APP SESSION CONTEXT:
 
+${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}
 SESSION STATS:
 Current Time: ${nowLabel} (${timeOfDay})`;
 
@@ -260,7 +261,7 @@ function buildCompactTaskPrompt(ctx) {
   const {
     lociCoreInstruction, mentorName, firstName, challengeLabel,
     profileContext, memoryContext, personaInstruction,
-    nowFocusContext, lastCoachPlan, nowLabel, currentFocusTitle
+    nowFocusContext, lastCoachPlan, nowLabel, currentFocusTitle, pendingCheckinContext
   } = ctx;
 
   const staticPrefix = `${lociCoreInstruction}
@@ -311,7 +312,7 @@ ${buildReasoningInstruction(firstName)}`;
 ========================================
 CURRENT CLIENT & APP SESSION CONTEXT:
 
-${profileContext ? `${profileContext}\n` : ""}${memoryContext ? `${memoryContext}\n` : ""}
+${profileContext ? `${profileContext}\n` : ""}${memoryContext ? `${memoryContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}
 ${planSection}
 ${focusSection}
 ${nowFocusContext ? `${nowFocusContext}\n` : ""}

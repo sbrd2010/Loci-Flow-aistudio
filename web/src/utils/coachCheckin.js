@@ -41,6 +41,17 @@ export function isCheckinDue(coachCheckin, now = Date.now()) {
   return !!(coachCheckin && coachCheckin.fireAt && coachCheckin.fireAt <= now);
 }
 
+// Surfaces the actually-pending check-in (if any) as a prompt context line,
+// so the "have you set a reminder?" honesty instructions in
+// coachSystemPrompt.js have real state to check instead of only relying on
+// the confirming message still being present in the trimmed chat history.
+export function buildCoachCheckinContext(coachCheckin, now = Date.now()) {
+  if (!coachCheckin || !coachCheckin.fireAt || coachCheckin.fireAt <= now) return "";
+  const minutesLeft = Math.max(1, Math.round((coachCheckin.fireAt - now) / 60000));
+  const about = coachCheckin.note ? `, about "${coachCheckin.note}"` : "";
+  return `CURRENT CHECK-IN: A Coach check-in is pending, firing in about ${minutesLeft} minute(s)${about}.`;
+}
+
 export function buildCheckinResumeMessage(firstName, note) {
   const name = firstName || "friend";
   return note

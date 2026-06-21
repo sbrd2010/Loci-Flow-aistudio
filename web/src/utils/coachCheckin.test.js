@@ -8,6 +8,7 @@ import {
   buildCheckinNotificationBody,
   parseCheckinRequestFromMessage,
   isDuplicateCheckinResume,
+  buildCoachCheckinContext,
 } from "./coachCheckin";
 
 describe("parseCheckinTag", () => {
@@ -88,6 +89,26 @@ describe("isCheckinDue", () => {
 
   it("is true when fireAt has passed", () => {
     expect(isCheckinDue({ fireAt: 1000 }, 2000)).toBe(true);
+  });
+});
+
+describe("buildCoachCheckinContext", () => {
+  it("returns empty string when there is no check-in", () => {
+    expect(buildCoachCheckinContext(null, 1000)).toBe("");
+  });
+
+  it("returns empty string when the check-in has already fired", () => {
+    expect(buildCoachCheckinContext({ fireAt: 1000 }, 2000)).toBe("");
+  });
+
+  it("includes the note when present", () => {
+    const out = buildCoachCheckinContext({ fireAt: 1000 + 10 * 60000, note: "Write report" }, 1000);
+    expect(out).toBe('CURRENT CHECK-IN: A Coach check-in is pending, firing in about 10 minute(s), about "Write report".');
+  });
+
+  it("omits the note when generic", () => {
+    const out = buildCoachCheckinContext({ fireAt: 1000 + 10 * 60000, note: null }, 1000);
+    expect(out).toBe("CURRENT CHECK-IN: A Coach check-in is pending, firing in about 10 minute(s).");
   });
 });
 
