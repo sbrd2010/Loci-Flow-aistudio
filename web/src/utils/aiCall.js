@@ -266,7 +266,7 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
     const ckey = cooldownKey(provider);
     if (Date.now() < (providerCooldownUntil.get(ckey) || 0)) {
       const cooldownErr = new Error(providerCooldownReason.get(ckey) || "503");
-      attempts.push({ err: cooldownErr, classification: classifyAIError(cooldownErr) });
+      attempts.push({ err: cooldownErr, classification: classifyAIError(cooldownErr), live: false });
       logAICallDiagnostics({ provider: provider.name, outcome: "cooldown_skip", contextMode, systemPrompt, messages });
       continue; // skip the provider network call; no extra provider attempt
     }
@@ -283,7 +283,7 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
       logAICallDiagnostics({ provider: provider.name, outcome: "ok", contextMode, systemPrompt, messages, usage: callUsage });
       return appendAIUsageWarning(reply, usage.warning);
     } catch (err) {
-      attempts.push({ err, classification: classifyAIError(err) });
+      attempts.push({ err, classification: classifyAIError(err), live: true });
       if (err.message === "429") {
         providerCooldownUntil.set(ckey, Date.now() + (err.retryAfterMs ?? RATE_LIMIT_COOLDOWN_MS));
         providerCooldownReason.set(ckey, "429");
@@ -301,9 +301,14 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt, mess
   // Pick the final error by priority across all attempts, not just the last
   // one — see comment above. Real availability issues (rate limit / service
   // down / network) always outrank a same-request auth failure on a
-  // secondary/fallback provider.
-  const findAttempt = (classification) => attempts.find(a => a.classification === classification);
-  if (attempts.every(a => a.classification === "invalid_key")) throw new Error("invalid_key");
+  // secondary/fallback provider. Cooldown-skips reflect a stale failure from
+  // a previous call, not this request — prefer live attempts for the
+  // decision whenever at least one provider was actually contacted, so a
+  // live invalid-key failure isn't masked by an old cooldown reason.
+  const liveAttempts = attempts.filter(a => a.live);
+  const decisionAttempts = liveAttempts.length > 0 ? liveAttempts : attempts;
+  const findAttempt = (classification) => decisionAttempts.find(a => a.classification === classification);
+  if (decisionAttempts.every(a => a.classification === "invalid_key")) throw new Error("invalid_key");
   const rateLimited = findAttempt("rate_limit");
   if (rateLimited) throw rateLimited.err;
   const serviceUnavailable = findAttempt("service_unavailable");

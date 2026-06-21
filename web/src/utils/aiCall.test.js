@@ -499,6 +499,20 @@ describe("AI provider cooldown and fallback", () => {
     await expect(callAI(baseRequest({ nvidiaKey: "", groqKey: "old-key" }))).rejects.toThrow("429");
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+
+  it("prefers a live invalid_key failure over a stale cooldown reason from an earlier call", async () => {
+    // Groq gets rate-limited on the first call (no fallback configured yet) and cools down...
+    fetch.mockResolvedValueOnce(providerError(429));
+    await expect(callAI(baseRequest())).rejects.toThrow("429");
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    // ...next call: Groq is skipped (stale cooldown), and the only live attempt
+    // (NVIDIA) fails with a fresh, real 401. The stale 429 cooldown reason must
+    // not mask the live invalid-key failure that's actually happening now.
+    fetch.mockResolvedValueOnce(providerError(401));
+    await expect(callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }))).rejects.toThrow("invalid_key");
+    expect(fetch).toHaveBeenCalledTimes(2); // first call's Groq 429 + second call's NVIDIA 401 only
+  });
 });
 
 describe("AI call diagnostics", () => {
