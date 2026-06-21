@@ -66,6 +66,39 @@ function logAICallDiagnostics({ provider, outcome, retryAfterMs, contextMode, sy
   });
 }
 
+// Robustly pulls text out of an OpenAI-compatible chat message: most
+// providers return a plain string, but some return an array of content
+// parts (e.g. [{ type: "text", text: "..." }]). Returns "" if neither shape
+// yields text, rather than throwing — callers decide what an empty reply
+// means.
+function extractMessageContent(message) {
+  const content = message?.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map(part => (typeof part === "string" ? part : (typeof part?.text === "string" ? part.text : "")))
+      .join("")
+      .trim();
+  }
+  return "";
+}
+
+// Logs response *shape* only (never content) when a provider returns 200
+// but no usable text — this is the signal needed to diagnose "<provider>_empty"
+// failures without ever touching prompt/message/reply content.
+function logEmptyReplyDiagnostics(provider, data, message) {
+  const content = message?.content;
+  console.debug("[aiCall:empty]", {
+    provider,
+    topLevelKeys: data ? Object.keys(data) : [],
+    choicesLength: Array.isArray(data?.choices) ? data.choices.length : 0,
+    finishReason: data?.choices?.[0]?.finish_reason ?? null,
+    contentType: Array.isArray(content) ? "array" : typeof content,
+    contentLength: typeof content === "string" ? content.length : (Array.isArray(content) ? content.length : 0),
+    usage: data?.usage ?? null,
+  });
+}
+
 function fetchWithTimeout(url, opts) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
@@ -163,8 +196,11 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens) {
   });
   if (!res.ok) throw statusError("groq", res.status, res);
   const data = await res.json();
-  const reply = data.choices?.[0]?.message?.content || "";
-  if (!reply) throw new Error("groq_empty");
+  const reply = extractMessageContent(data.choices?.[0]?.message);
+  if (!reply) {
+    logEmptyReplyDiagnostics("groq", data, data.choices?.[0]?.message);
+    throw new Error("groq_empty");
+  }
   return { reply, usage: data.usage };
 }
 
@@ -189,12 +225,22 @@ async function callNvidia(nvidiaKey, systemPrompt, messages, maxTokens) {
   });
   if (!res.ok) throw statusError("nvidia", res.status, res);
   const data = await res.json();
-  const reply = data.choices?.[0]?.message?.content || "";
-  if (!reply) throw new Error("nvidia_empty");
+  const reply = extractMessageContent(data.choices?.[0]?.message);
+  if (!reply) {
+    logEmptyReplyDiagnostics("nvidia", data, data.choices?.[0]?.message);
+    throw new Error("nvidia_empty");
+  }
   return { reply, usage: data.usage };
 }
 
-async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens) {
+// Cerebras' gpt-oss-120b is a reasoning model: hidden reasoning tokens count
+// against the completion budget, so a small max_completion_tokens can exhaust
+// the budget (finish_reason "length") before any visible content is written,
+// producing an HTTP 200 with empty message.content. One retry at a larger
+// budget recovers most of these without retrying indefinitely.
+const CEREBRAS_RETRY_TOKEN_CAP = 4000;
+
+async function requestCerebras(cerebrasKey, systemPrompt, messages, tokenBudget) {
   const res = await fetchWithTimeout(CEREBRAS_URL, {
     method: "POST",
     headers: {
@@ -204,16 +250,34 @@ async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens) {
     body: JSON.stringify({
       model: CEREBRAS_MODEL,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
-      max_completion_tokens: maxTokens ?? 300,
+      // gpt-oss-120b on Cerebras documents max_completion_tokens as the
+      // current parameter (max_tokens is deprecated for this model), per
+      // Cerebras' own cerebras-cloud-sdk-python completion_create_params.
+      max_completion_tokens: tokenBudget,
       temperature: 0.4,
       top_p: 0.9
     })
   });
   if (!res.ok) throw statusError("cerebras", res.status, res);
   const data = await res.json();
-  const reply = data.choices?.[0]?.message?.content || "";
-  if (!reply) throw new Error("cerebras_empty");
-  return { reply, usage: data.usage };
+  const message = data.choices?.[0]?.message;
+  return { reply: extractMessageContent(message), usage: data.usage, finishReason: data.choices?.[0]?.finish_reason, data, message };
+}
+
+async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens) {
+  const initialBudget = maxTokens ?? 300;
+  let { reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, initialBudget);
+
+  if (!reply && finishReason === "length") {
+    const retryBudget = Math.min(initialBudget * 2, CEREBRAS_RETRY_TOKEN_CAP);
+    ({ reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, retryBudget));
+  }
+
+  if (!reply) {
+    logEmptyReplyDiagnostics("cerebras", data, message);
+    throw new Error("cerebras_empty");
+  }
+  return { reply, usage };
 }
 
 async function callGemini(geminiKey, systemPrompt, messages, maxTokens) {

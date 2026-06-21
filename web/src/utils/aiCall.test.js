@@ -56,6 +56,25 @@ function cerebrasOk(content = "Cerebras reply.") {
   };
 }
 
+function cerebrasArrayContent(text = "Cerebras parts reply.") {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({ choices: [{ message: { content: [{ type: "text", text }] } }] }),
+  };
+}
+
+function cerebrasEmpty(finishReason = "stop") {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      choices: [{ message: { content: "" }, finish_reason: finishReason }],
+      usage: { prompt_tokens: 50, completion_tokens: 0, total_tokens: 50 },
+    }),
+  };
+}
+
 function geminiOk(content = "Gemini fallback reply.") {
   return {
     ok: true,
@@ -262,6 +281,78 @@ describe("AI call resilience", () => {
     expect(fetch.mock.calls[0][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
     const body = JSON.parse(fetch.mock.calls[0][1].body);
     expect(body.model).toBe("gpt-oss-120b");
+  });
+
+  it("parses Cerebras content given as an array of parts", async () => {
+    storage.setItem("loci_provider_pref", "cerebras");
+    fetch.mockResolvedValue(cerebrasArrayContent("Cerebras parts reply."));
+
+    const reply = await callAI(baseRequest({ groqKey: "", cerebrasKey: "test-cerebras-key" }));
+
+    expect(reply).toBe("Cerebras parts reply.");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries Cerebras once with a larger token budget when finish_reason is length", async () => {
+    storage.setItem("loci_provider_pref", "cerebras");
+    fetch
+      .mockResolvedValueOnce(cerebrasEmpty("length"))
+      .mockResolvedValueOnce(cerebrasOk("Cerebras reply after retry."));
+
+    const reply = await callAI(baseRequest({ groqKey: "", cerebrasKey: "test-cerebras-key" }));
+
+    expect(reply).toBe("Cerebras reply after retry.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const firstBody = JSON.parse(fetch.mock.calls[0][1].body);
+    const retryBody = JSON.parse(fetch.mock.calls[1][1].body);
+    expect(retryBody.max_completion_tokens).toBeGreaterThan(firstBody.max_completion_tokens);
+  });
+
+  it("does not retry Cerebras when content is empty but finish_reason is not length", async () => {
+    storage.setItem("loci_provider_pref", "cerebras");
+    fetch
+      .mockResolvedValueOnce(cerebrasEmpty("stop"))   // Cerebras returns empty, no retry
+      .mockResolvedValueOnce(groqOk("Groq saved it after Cerebras empty."));
+
+    const reply = await callAI(baseRequest({ cerebrasKey: "test-cerebras-key" }));
+
+    expect(reply).toBe("Groq saved it after Cerebras empty.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
+    expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+  });
+
+  it("falls back to Gemini when Cerebras stays empty after a length retry", async () => {
+    storage.setItem("loci_provider_pref", "cerebras");
+    fetch
+      .mockResolvedValueOnce(cerebrasEmpty("length"))   // Cerebras first attempt: length, empty
+      .mockResolvedValueOnce(cerebrasEmpty("length"))   // Cerebras retry: still empty
+      .mockResolvedValueOnce(providerError(503))         // Groq fails
+      .mockResolvedValueOnce(geminiOk("Gemini answered instead."));
+
+    const reply = await callAI(baseRequest({ cerebrasKey: "test-cerebras-key", geminiKey: "test-gemini-key" }));
+
+    expect(reply).toBe("Gemini answered instead.");
+    expect(fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not log prompt/message content when Cerebras returns an empty reply", async () => {
+    storage.setItem("loci_provider_pref", "cerebras");
+    fetch
+      .mockResolvedValueOnce(cerebrasEmpty("stop"))
+      .mockResolvedValueOnce(groqOk("Groq saved it."));
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+    await callAI(baseRequest({
+      cerebrasKey: "test-cerebras-key",
+      systemPrompt: "SECRET_SYSTEM_PROMPT_TEXT",
+      messages: [{ role: "user", content: "SECRET_USER_MESSAGE_TEXT" }],
+    }));
+
+    const loggedText = JSON.stringify(debugSpy.mock.calls);
+    expect(loggedText).not.toContain("SECRET_SYSTEM_PROMPT_TEXT");
+    expect(loggedText).not.toContain("SECRET_USER_MESSAGE_TEXT");
+    expect(loggedText).not.toContain("test-cerebras-key");
   });
 
   it("cerebras pref falls back to Groq then Gemini when Cerebras fails", async () => {
