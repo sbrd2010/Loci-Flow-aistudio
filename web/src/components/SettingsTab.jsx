@@ -291,8 +291,6 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const effectiveGeminiKey   = geminiPersonalKey   || geminiBuiltinKey;
   const effectiveCerebrasKey = cerebrasPersonalKey || cerebrasBuiltinKey;
   const effectiveZaiKey      = zaiPersonalKey      || zaiBuiltinKey;
-  const hasAnyKey          = !!(effectiveGroqKey || effectiveNvidiaKey || effectiveGeminiKey || effectiveCerebrasKey || effectiveZaiKey);
-
   const prefOrders = {
     auto:     ["groq", "cerebras", "zai", "gemini"],
     groq:     ["groq", "cerebras", "zai", "gemini"],
@@ -305,6 +303,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const personalKeyMap   = { groq: groqPersonalKey, nvidia: nvidiaPersonalKey, gemini: geminiPersonalKey, cerebras: cerebrasPersonalKey, zai: zaiPersonalKey };
   const providerNameMap  = { groq: "Groq", nvidia: "NVIDIA", gemini: "Gemini", cerebras: "Cerebras", zai: "Z.ai" };
   const activeProvider   = (prefOrders[providerPref] || prefOrders.auto).find(p => effectiveKeyMap[p]) || null;
+  const hasUsableProvider = !!activeProvider;
   const keyStatusLabel   = activeProvider
     ? `✓ ${providerNameMap[activeProvider]} active — ${personalKeyMap[activeProvider] ? "your key" : "built-in"}`
     : "✗ No AI key — add one below";
@@ -780,10 +779,10 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
             <div style={{
               display: "inline-flex", alignItems: "center", gap: "6px",
               padding: "4px 10px", borderRadius: "var(--radius-sm)",
-              background: hasAnyKey ? "rgba(52, 211, 153, 0.08)" : "rgba(248, 113, 113, 0.08)",
-              border: `1px solid ${hasAnyKey ? "var(--success)" : "var(--danger)"}`,
+              background: hasUsableProvider ? "rgba(52, 211, 153, 0.08)" : "rgba(248, 113, 113, 0.08)",
+              border: `1px solid ${hasUsableProvider ? "var(--success)" : "var(--danger)"}`,
               fontSize: "11.5px", fontWeight: "600",
-              color: hasAnyKey ? "var(--success)" : "var(--danger)"
+              color: hasUsableProvider ? "var(--success)" : "var(--danger)"
             }}>
               {keyStatusLabel}
             </div>
