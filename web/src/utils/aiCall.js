@@ -350,6 +350,12 @@ async function callGemini(geminiKey, systemPrompt, messages, maxTokens) {
 async function callZai(zaiKey, systemPrompt, messages, maxTokens) {
   if (zaiInFlight) throw new Error("zai_busy");
 
+  // A caller requesting more than the cap (e.g. MindBox's JSON organizer) would
+  // otherwise get a silently truncated reply that can pass the empty-reply check
+  // but fail downstream parsing. Skip Z.ai entirely instead so callAI falls
+  // through to the next provider with the caller's full requested budget.
+  if ((maxTokens ?? 300) > ZAI_MAX_OUTPUT_TOKENS) throw new Error("zai_too_large_request");
+
   const payloadChars = String(systemPrompt || "").length +
     (messages || []).reduce((sum, m) => sum + String(m.content || "").length, 0);
   if (payloadChars > ZAI_MAX_PAYLOAD_CHARS) throw new Error("zai_too_large");
@@ -365,7 +371,7 @@ async function callZai(zaiKey, systemPrompt, messages, maxTokens) {
       body: JSON.stringify({
         model: ZAI_MODEL,
         messages: [{ role: "system", content: systemPrompt }, ...messages],
-        max_tokens: Math.min(maxTokens ?? 300, ZAI_MAX_OUTPUT_TOKENS),
+        max_tokens: maxTokens ?? 300,
         temperature: 0.4
       })
     });

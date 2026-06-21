@@ -697,12 +697,16 @@ describe("Z.ai emergency fallback", () => {
     expect(body.max_completion_tokens).toBeUndefined();
   });
 
-  it("caps Z.ai output tokens at 800 even when the caller requests more", async () => {
+  it("skips Z.ai entirely (no truncation) when the caller requests more than its 800-token cap", async () => {
     storage.setItem("loci_provider_pref", "zai");
-    fetch.mockResolvedValue(zaiOk("reply"));
-    await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", maxTokens: 4000 }));
-    const body = JSON.parse(fetch.mock.calls[0][1].body);
-    expect(body.max_tokens).toBe(800);
+    fetch.mockResolvedValue(geminiOk("Gemini reply."));
+    const reply = await callAI(baseRequest({
+      groqKey: "", zaiKey: "test-zai-key", geminiKey: "test-gemini-key", maxTokens: 4000,
+    }));
+    expect(reply).toBe("Gemini reply.");
+    // Z.ai was skipped without ever being called — caller fell straight through to Gemini.
+    const zaiCalls = fetch.mock.calls.filter(call => String(call[0]).includes("z.ai"));
+    expect(zaiCalls.length).toBe(0);
   });
 
   it("still excludes NVIDIA from the auto order even with a Z.ai key present", async () => {
