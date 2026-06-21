@@ -43,8 +43,8 @@ export default function AddTaskDialog({ email, payload, savePayload, userProfile
     return defaultReminderDateTime().timeStr;
   });
 
-  const { groqKey, nvidiaKey, geminiKey } = getAIKeys();
-  const hasAnyKey = !!(groqKey || nvidiaKey || geminiKey);
+  const { groqKey, nvidiaKey, geminiKey, cerebrasKey } = getAIKeys();
+  const hasAnyKey = !!(groqKey || nvidiaKey || geminiKey || cerebrasKey);
 
   const handleAiSuggest = async () => {
     if (!title.trim()) { setAiError("Type a rough task idea first, then tap Ask AI."); return; }
@@ -91,7 +91,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
     try {
       const raw = await callAI({
-        groqKey, nvidiaKey, geminiKey,
+        groqKey, nvidiaKey, geminiKey, cerebrasKey,
         systemPrompt: "You are a productivity coach. Respond ONLY with valid JSON, no markdown.",
         messages: [{ role: "user", content: prompt }],
         maxTokens: 350

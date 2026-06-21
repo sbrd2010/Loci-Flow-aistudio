@@ -73,8 +73,8 @@ function getLastFullTaskTime(userId) {
 
 export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {} }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
-  const { groqKey, nvidiaKey, geminiKey } = getAIKeys();
-  const hasAnyKey = !!(groqKey || nvidiaKey || geminiKey);
+  const { groqKey, nvidiaKey, geminiKey, cerebrasKey } = getAIKeys();
+  const hasAnyKey = !!(groqKey || nvidiaKey || geminiKey || cerebrasKey);
 
   // True until RTDB has actually delivered a snapshot for this session — true
   // while rendering from cache, but ALSO once the 15s offline warning fires
@@ -229,7 +229,7 @@ ${buildPersonaInstruction(configRef.current, firstName)}
 ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryContext}\n` : ""}`;
 
         const reply = await callAI({
-          groqKey, nvidiaKey, geminiKey,
+          groqKey, nvidiaKey, geminiKey, cerebrasKey,
           systemPrompt: systemInstruction,
           messages: [{ role: "user", content: "(Start the conversation.)" }],
           maxTokens: 120
@@ -419,7 +419,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     }
 
     try {
-      const reply = await callAI({ groqKey, nvidiaKey, geminiKey, systemPrompt: systemInstruction, messages, maxTokens, contextMode });
+      const reply = await callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, systemPrompt: systemInstruction, messages, maxTokens, contextMode });
       if (contextMode === "full_task") {
         localStorage.setItem(`loci_last_full_task_time_${userId}`, String(Date.now()));
       }
@@ -826,7 +826,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
 
     try {
       const reply = await callAI({
-        groqKey, nvidiaKey, geminiKey,
+        groqKey, nvidiaKey, geminiKey, cerebrasKey,
         systemPrompt: `${buildLociCoreInstruction({ firstName })}\n\nYou are ${config.mentorName || "a focus coach"}, an expert productivity coach.`,
         messages: [{ role: "user", content: prompt }],
         maxTokens: 800

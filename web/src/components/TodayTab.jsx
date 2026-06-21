@@ -542,10 +542,10 @@ export default function TodayTab({
   const handleBreakdown = async (task) => {
     setBreakdownLoadingUuid(task.uuid);
     setBreakdownErrorUuid(null);
-    const { groqKey, nvidiaKey, geminiKey } = getAIKeys();
+    const { groqKey, nvidiaKey, geminiKey, cerebrasKey } = getAIKeys();
     try {
       const raw = await callAI({
-        groqKey, nvidiaKey, geminiKey,
+        groqKey, nvidiaKey, geminiKey, cerebrasKey,
         systemPrompt: "You are a productivity coach. Respond ONLY with a valid JSON array of strings, no markdown, no explanation.",
         messages: [{
           role: "user",

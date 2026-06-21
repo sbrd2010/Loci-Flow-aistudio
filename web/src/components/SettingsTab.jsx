@@ -239,6 +239,16 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
     setTimeout(() => setSavedNvidia(false), 2000);
   };
 
+  // ── Cerebras API key ──────────────────────────────────────────────────────
+  const [cerebrasInput, setCerebrasInput] = useState(localStorage.getItem("loci_cerebras_key") || "");
+  const [savedCerebras, setSavedCerebras] = useState(false);
+  const handleSaveCerebras = (e) => {
+    e.preventDefault();
+    try { localStorage.setItem("loci_cerebras_key", cerebrasInput.trim()); } catch (_) {}
+    setSavedCerebras(true);
+    setTimeout(() => setSavedCerebras(false), 2000);
+  };
+
   // ── Provider preference ───────────────────────────────────────────────────
   const [providerPref, setProviderPref] = useState(localStorage.getItem("loci_provider_pref") || "auto");
   const handleProviderPref = (pref) => {
@@ -256,26 +266,30 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
     return `${Math.floor(mins / 60)}h ago`;
   };
 
-  const groqPersonalKey    = localStorage.getItem("loci_groq_key")   || "";
-  const groqBuiltinKey     = import.meta.env.VITE_GROQ_KEY           || "";
-  const nvidiaPersonalKey  = localStorage.getItem("loci_nvidia_key") || "";
-  const nvidiaBuiltinKey   = import.meta.env.VITE_NVIDIA_KEY         || "";
-  const geminiPersonalKey  = localStorage.getItem("loci_gemini_key") || "";
-  const geminiBuiltinKey   = import.meta.env.VITE_GEMINI_KEY         || "";
-  const effectiveGroqKey   = groqPersonalKey  || groqBuiltinKey;
-  const effectiveNvidiaKey = nvidiaPersonalKey || nvidiaBuiltinKey;
-  const effectiveGeminiKey = geminiPersonalKey || geminiBuiltinKey;
-  const hasAnyKey          = !!(effectiveGroqKey || effectiveNvidiaKey || effectiveGeminiKey);
+  const groqPersonalKey     = localStorage.getItem("loci_groq_key")     || "";
+  const groqBuiltinKey      = import.meta.env.VITE_GROQ_KEY             || "";
+  const nvidiaPersonalKey   = localStorage.getItem("loci_nvidia_key")   || "";
+  const nvidiaBuiltinKey    = import.meta.env.VITE_NVIDIA_KEY           || "";
+  const geminiPersonalKey   = localStorage.getItem("loci_gemini_key")   || "";
+  const geminiBuiltinKey    = import.meta.env.VITE_GEMINI_KEY           || "";
+  const cerebrasPersonalKey = localStorage.getItem("loci_cerebras_key") || "";
+  const cerebrasBuiltinKey  = import.meta.env.VITE_CEREBRAS_KEY         || "";
+  const effectiveGroqKey     = groqPersonalKey     || groqBuiltinKey;
+  const effectiveNvidiaKey   = nvidiaPersonalKey   || nvidiaBuiltinKey;
+  const effectiveGeminiKey   = geminiPersonalKey   || geminiBuiltinKey;
+  const effectiveCerebrasKey = cerebrasPersonalKey || cerebrasBuiltinKey;
+  const hasAnyKey          = !!(effectiveGroqKey || effectiveNvidiaKey || effectiveGeminiKey || effectiveCerebrasKey);
 
   const prefOrders = {
-    auto:   ["groq", "nvidia", "gemini"],
-    groq:   ["groq", "nvidia", "gemini"],
-    nvidia: ["nvidia", "groq", "gemini"],
-    gemini: ["gemini", "groq", "nvidia"],
+    auto:     ["groq", "cerebras", "gemini"],
+    groq:     ["groq", "cerebras", "gemini"],
+    cerebras: ["cerebras", "groq", "gemini"],
+    gemini:   ["gemini", "groq", "cerebras"],
+    nvidia:   ["nvidia", "groq", "cerebras", "gemini"],
   };
-  const effectiveKeyMap  = { groq: effectiveGroqKey, nvidia: effectiveNvidiaKey, gemini: effectiveGeminiKey };
-  const personalKeyMap   = { groq: groqPersonalKey, nvidia: nvidiaPersonalKey, gemini: geminiPersonalKey };
-  const providerNameMap  = { groq: "Groq", nvidia: "NVIDIA", gemini: "Gemini" };
+  const effectiveKeyMap  = { groq: effectiveGroqKey, nvidia: effectiveNvidiaKey, gemini: effectiveGeminiKey, cerebras: effectiveCerebrasKey };
+  const personalKeyMap   = { groq: groqPersonalKey, nvidia: nvidiaPersonalKey, gemini: geminiPersonalKey, cerebras: cerebrasPersonalKey };
+  const providerNameMap  = { groq: "Groq", nvidia: "NVIDIA", gemini: "Gemini", cerebras: "Cerebras" };
   const activeProvider   = (prefOrders[providerPref] || prefOrders.auto).find(p => effectiveKeyMap[p]) || null;
   const keyStatusLabel   = activeProvider
     ? `✓ ${providerNameMap[activeProvider]} active — ${personalKeyMap[activeProvider] ? "your key" : "built-in"}`
@@ -766,7 +780,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
         {aiKeysOpen && (
           <>
             <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "14px" }}>
-              Keys are stored only in this browser — never sent to Loci servers.
+              Built-in private-alpha AI may be preconfigured. You can also add your own key below. Your own keys are stored only in this browser.
             </p>
 
             {/* Provider preference */}
@@ -776,10 +790,11 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
               </span>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 {[
-                  { key: "auto",   label: "Auto",   chain: "Groq → NVIDIA → Gemini" },
-                  { key: "groq",   label: "Groq",   chain: "Groq → NVIDIA → Gemini" },
-                  { key: "nvidia", label: "NVIDIA", chain: "NVIDIA → Groq → Gemini" },
-                  { key: "gemini", label: "Gemini", chain: "Gemini → Groq → NVIDIA" },
+                  { key: "auto",     label: "Auto",     chain: "Groq → Cerebras → Gemini" },
+                  { key: "groq",     label: "Groq",     chain: "Groq → Cerebras → Gemini" },
+                  { key: "cerebras", label: "Cerebras", chain: "Cerebras → Groq → Gemini" },
+                  { key: "gemini",   label: "Gemini",   chain: "Gemini → Groq → Cerebras" },
+                  { key: "nvidia",   label: "NVIDIA",   chain: "NVIDIA → Groq → Cerebras → Gemini" },
                 ].map(opt => {
                   const isSelected = providerPref === opt.key;
                   return (
@@ -830,12 +845,31 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
               </form>
             </div>
 
+            {/* Cerebras */}
+            <div style={{ marginBottom: "14px", paddingBottom: "14px", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>Cerebras</span>
+                <a href="https://cloud.cerebras.ai" target="_blank" rel="noreferrer" style={{ fontSize: "11.5px", color: "var(--accent)", fontWeight: "600" }}>Get key ↗</a>
+              </div>
+              <form onSubmit={handleSaveCerebras} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <input className="text-input" type="password"
+                  value={cerebrasInput} onChange={e => setCerebrasInput(e.target.value)}
+                  placeholder="csk-..." />
+                <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
+                  {savedCerebras ? "✓ Saved" : "Save Cerebras Key"}
+                </button>
+              </form>
+            </div>
+
             {/* NVIDIA */}
             <div style={{ marginBottom: "14px", paddingBottom: "14px", borderBottom: "1px solid var(--border)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                 <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>NVIDIA Nemotron</span>
                 <a href="https://build.nvidia.com" target="_blank" rel="noreferrer" style={{ fontSize: "11.5px", color: "var(--accent)", fontWeight: "600" }}>Get key ↗</a>
               </div>
+              <p style={{ fontSize: "11px", color: "var(--text-secondary)", marginBottom: "8px" }}>
+                Manual/experimental — not part of the Auto, Groq, or Cerebras chains right now.
+              </p>
               <form onSubmit={handleSaveNvidia} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <input className="text-input" type="password"
                   value={nvidiaInput} onChange={e => setNvidiaInput(e.target.value)}

@@ -48,6 +48,14 @@ function nvidiaOk(content = "NVIDIA reply.") {
   };
 }
 
+function cerebrasOk(content = "Cerebras reply.") {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({ choices: [{ message: { content } }] }),
+  };
+}
+
 function geminiOk(content = "Gemini fallback reply.") {
   return {
     ok: true,
@@ -190,41 +198,116 @@ describe("AI call resilience", () => {
     expect(body.max_tokens).toBe(4000);
   });
 
-  it("groq pref falls back through NVIDIA then Gemini when Groq fails", async () => {
+  it("groq pref falls back through Cerebras then Gemini when Groq fails", async () => {
     storage.setItem("loci_provider_pref", "groq");
     fetch
       .mockResolvedValueOnce(providerError(429))   // Groq fails
-      .mockResolvedValueOnce(providerError(503))   // NVIDIA fails
+      .mockResolvedValueOnce(providerError(503))   // Cerebras fails
       .mockResolvedValueOnce(geminiOk("Gemini emergency."));
 
     const reply = await callAI(baseRequest({
-      nvidiaKey: "test-nvidia-key",
+      cerebrasKey: "test-cerebras-key",
       geminiKey: "test-gemini-key",
     }));
 
     expect(reply).toBe("Gemini emergency.");
     expect(fetch).toHaveBeenCalledTimes(3);
     expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
-    expect(fetch.mock.calls[1][0]).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
+    expect(fetch.mock.calls[1][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
     expect(String(fetch.mock.calls[2][0])).toContain("generativelanguage.googleapis.com");
   });
 
-  it("falls back through NVIDIA to Gemini when Groq fails in auto mode", async () => {
+  it("falls back through Cerebras to Gemini when Groq fails in auto mode", async () => {
     fetch
       .mockResolvedValueOnce(providerError(429))   // Groq fails
-      .mockResolvedValueOnce(providerError(503))   // NVIDIA fails
+      .mockResolvedValueOnce(providerError(503))   // Cerebras fails
       .mockResolvedValueOnce(geminiOk("Gemini here."));
 
     const reply = await callAI(baseRequest({
-      nvidiaKey: "test-nvidia-key",
+      cerebrasKey: "test-cerebras-key",
       geminiKey: "test-gemini-key",
     }));
 
     expect(reply).toBe("Gemini here.");
     expect(fetch).toHaveBeenCalledTimes(3);
     expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
-    expect(fetch.mock.calls[1][0]).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
+    expect(fetch.mock.calls[1][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
     expect(String(fetch.mock.calls[2][0])).toContain("generativelanguage.googleapis.com");
+  });
+
+  it("auto mode does not include NVIDIA even when an NVIDIA key is present", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(429))   // Groq fails
+      .mockResolvedValueOnce(geminiOk("Gemini skipped NVIDIA."));
+
+    const reply = await callAI(baseRequest({
+      nvidiaKey: "test-nvidia-key",
+      geminiKey: "test-gemini-key",
+    }));
+
+    expect(reply).toBe("Gemini skipped NVIDIA.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(String(fetch.mock.calls[1][0])).toContain("generativelanguage.googleapis.com");
+  });
+
+  it("calls Cerebras endpoint with the gpt-oss-120b model when pref is cerebras", async () => {
+    storage.setItem("loci_provider_pref", "cerebras");
+    fetch.mockResolvedValue(cerebrasOk("Cerebras first."));
+
+    const reply = await callAI(baseRequest({ groqKey: "", cerebrasKey: "test-cerebras-key" }));
+
+    expect(reply).toBe("Cerebras first.");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.model).toBe("gpt-oss-120b");
+  });
+
+  it("cerebras pref falls back to Groq then Gemini when Cerebras fails", async () => {
+    storage.setItem("loci_provider_pref", "cerebras");
+    fetch
+      .mockResolvedValueOnce(providerError(503))   // Cerebras fails
+      .mockResolvedValueOnce(groqOk("Groq saved it."));
+
+    const reply = await callAI(baseRequest({ cerebrasKey: "test-cerebras-key" }));
+
+    expect(reply).toBe("Groq saved it.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
+    expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+  });
+
+  it("gemini pref falls back through Groq then Cerebras", async () => {
+    storage.setItem("loci_provider_pref", "gemini");
+    fetch
+      .mockResolvedValueOnce(providerError(503))   // Gemini fails
+      .mockResolvedValueOnce(providerError(503))   // Groq fails
+      .mockResolvedValueOnce(cerebrasOk("Cerebras last resort."));
+
+    const reply = await callAI(baseRequest({ cerebrasKey: "test-cerebras-key", geminiKey: "test-gemini-key" }));
+
+    expect(reply).toBe("Cerebras last resort.");
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(String(fetch.mock.calls[0][0])).toContain("generativelanguage.googleapis.com");
+    expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(fetch.mock.calls[2][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
+  });
+
+  it("nvidia pref order still includes Cerebras after Groq", async () => {
+    storage.setItem("loci_provider_pref", "nvidia");
+    fetch
+      .mockResolvedValueOnce(providerError(503))   // NVIDIA fails
+      .mockResolvedValueOnce(providerError(503))   // Groq fails
+      .mockResolvedValueOnce(cerebrasOk("Cerebras via nvidia pref."));
+
+    const reply = await callAI(baseRequest({ nvidiaKey: "test-nvidia-key", cerebrasKey: "test-cerebras-key" }));
+
+    expect(reply).toBe("Cerebras via nvidia pref.");
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch.mock.calls[0][0]).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
+    expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(fetch.mock.calls[2][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
   });
 
   it("uses NVIDIA first then falls back to Groq when pref is nvidia and NVIDIA fails", async () => {
@@ -343,7 +426,7 @@ describe("AI call resilience", () => {
       .mockResolvedValueOnce(providerError(500));
 
     await expect(callAI(baseRequest({
-      nvidiaKey: "test-nvidia-key",
+      cerebrasKey: "test-cerebras-key",
       geminiKey: "test-gemini-key",
     }))).rejects.toThrow("all_providers_failed");
     expect(fetch).toHaveBeenCalledTimes(3);
@@ -426,17 +509,17 @@ describe("AI provider cooldown and fallback", () => {
     vi.restoreAllMocks();
   });
 
-  it("falls through to NVIDIA when Groq returns 429, with no 429 thrown", async () => {
+  it("falls through to Cerebras when Groq returns 429, with no 429 thrown", async () => {
     fetch
       .mockResolvedValueOnce(providerError(429))
-      .mockResolvedValueOnce(nvidiaOk("NVIDIA saved it."));
+      .mockResolvedValueOnce(cerebrasOk("Cerebras saved it."));
 
-    const reply = await callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }));
+    const reply = await callAI(baseRequest({ cerebrasKey: "test-cerebras-key" }));
 
-    expect(reply).toBe("NVIDIA saved it.");
+    expect(reply).toBe("Cerebras saved it.");
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
-    expect(fetch.mock.calls[1][0]).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
+    expect(fetch.mock.calls[1][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
   });
 
   it("skips Groq on the very next call after a 429 with no fallback configured", async () => {
@@ -511,11 +594,11 @@ describe("AI provider cooldown and fallback", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
 
     // ...next call: Groq is skipped (stale cooldown), and the only live attempt
-    // (NVIDIA) fails with a fresh, real 401. The stale 429 cooldown reason must
+    // (Cerebras) fails with a fresh, real 401. The stale 429 cooldown reason must
     // not mask the live invalid-key failure that's actually happening now.
     fetch.mockResolvedValueOnce(providerError(401));
-    await expect(callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }))).rejects.toThrow("invalid_key");
-    expect(fetch).toHaveBeenCalledTimes(2); // first call's Groq 429 + second call's NVIDIA 401 only
+    await expect(callAI(baseRequest({ cerebrasKey: "test-cerebras-key" }))).rejects.toThrow("invalid_key");
+    expect(fetch).toHaveBeenCalledTimes(2); // first call's Groq 429 + second call's Cerebras 401 only
   });
 });
 
