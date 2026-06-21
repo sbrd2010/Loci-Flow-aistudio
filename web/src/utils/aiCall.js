@@ -359,11 +359,18 @@ const ZAI_ALL_HORIZON_HEADERS = ["TODAY (", "THIS WEEK (", "THIS MONTH (", "QUAR
 const ZAI_DROP_HEADERS_TIER1 = ["THIS MONTH (", "QUARTER (", "6 MONTHS (", "WORK ("];
 const ZAI_DROP_HEADERS_TIER2 = [...ZAI_DROP_HEADERS_TIER1, "THIS WEEK ("];
 
-function dropZaiHorizonSections(text, dropHeaders) {
+function dropZaiHorizonSections(text, dropHeaders, preserveHeaders = []) {
   if (!text) return text;
   let dropping = false;
   let keepDetailsRemaining = 0;
-  return text.split("\n").filter(line => {
+  let currentHorizonHeader = "";
+  let headerEmittedForFocus = false;
+
+  const lines = text.split("\n");
+  const outputLines = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const trimmed = line.trim();
     const trimmedUpper = trimmed.toUpperCase();
 
@@ -376,21 +383,34 @@ function dropZaiHorizonSections(text, dropHeaders) {
 
     const headerHit = ZAI_ALL_HORIZON_HEADERS.find(h => line.startsWith(h));
     if (headerHit) {
-      dropping = dropHeaders.includes(headerHit);
+      const shouldDrop = dropHeaders.includes(headerHit) && !preserveHeaders.includes(headerHit);
+      dropping = shouldDrop;
       keepDetailsRemaining = 0;
-      return !dropping;
+      currentHorizonHeader = headerHit.replace(" (", "").trim(); // e.g. "THIS MONTH"
+      headerEmittedForFocus = false;
+
+      if (!dropping) {
+        outputLines.push(line);
+      }
+      continue;
     }
+
     if (dropping && line.trim() === "") {
       dropping = false;
       keepDetailsRemaining = 0;
     }
 
     // 2. If Now Focus is embedded inside a horizon section that is being dropped,
-    // keep only this line and up to 4 subsequent detail lines.
+    // keep only this line and up to 4 subsequent detail lines, and prepend a label.
     if (dropping) {
       if (line.toUpperCase().includes("[NOW FOCUS]")) {
         keepDetailsRemaining = 4;
-        return true;
+        if (!headerEmittedForFocus && currentHorizonHeader) {
+          outputLines.push(`PRESERVED FROM ${currentHorizonHeader}:`);
+          headerEmittedForFocus = true;
+        }
+        outputLines.push(line);
+        continue;
       }
 
       if (keepDetailsRemaining > 0) {
@@ -402,16 +422,42 @@ function dropZaiHorizonSections(text, dropHeaders) {
           const hasLabel = /\b(concrete step|next step|substep|focus|timer)\b/i.test(line);
           if (hasSpaceOrTab || hasLabel) {
             keepDetailsRemaining--;
-            return true;
+            outputLines.push(line);
+            continue;
           } else {
             keepDetailsRemaining = 0;
           }
         }
       }
+    } else {
+      outputLines.push(line);
     }
+  }
 
-    return !dropping;
-  }).join("\n");
+  return outputLines.join("\n");
+}
+
+function detectRequestedHorizons(userText) {
+  const text = (userText || "").toLowerCase();
+  const requested = [];
+
+  if (/\bwork\b/i.test(text)) {
+    requested.push("WORK (");
+  }
+  if (/\b(this\s+)?week\b/i.test(text)) {
+    requested.push("THIS WEEK (");
+  }
+  if (/\b(this\s+)?month\b/i.test(text)) {
+    requested.push("THIS MONTH (");
+  }
+  if (/\bquarter\b/i.test(text)) {
+    requested.push("QUARTER (");
+  }
+  if (/\b(6\s+months|six\s+months|half-year)\b/i.test(text)) {
+    requested.push("6 MONTHS (");
+  }
+
+  return requested;
 }
 
 // Z.ai is an emergency-only fallback (free tier, concurrency limit 1, low
@@ -423,12 +469,25 @@ function dropZaiHorizonSections(text, dropHeaders) {
 // instead of skipping Z.ai outright. Requests that genuinely need a long or
 // structured reply are already excluded above by the output-token check.
 function compressZaiContext(systemPrompt, messages) {
-  const trimmedMessages = (messages || []).length > 3 ? messages.slice(-3) : messages;
+  const userMessages = (messages || []).filter(m => m.role === "user");
+  const latestMessageContent = userMessages.length > 0 ? userMessages[userMessages.length - 1].content : "";
+  const preserveHeaders = detectRequestedHorizons(latestMessageContent);
 
-  let trimmedSystemPrompt = dropZaiHorizonSections(systemPrompt, ZAI_DROP_HEADERS_TIER1);
-  if (computeZaiPayloadChars(trimmedSystemPrompt, trimmedMessages) > ZAI_MAX_PAYLOAD_CHARS) {
-    trimmedSystemPrompt = dropZaiHorizonSections(systemPrompt, ZAI_DROP_HEADERS_TIER2);
+  // 1. Try Tier 1 drops with full messages
+  let trimmedSystemPrompt = dropZaiHorizonSections(systemPrompt, ZAI_DROP_HEADERS_TIER1, preserveHeaders);
+  if (computeZaiPayloadChars(trimmedSystemPrompt, messages) <= ZAI_MAX_PAYLOAD_CHARS) {
+    return { systemPrompt: trimmedSystemPrompt, messages };
   }
+
+  // 2. Try Tier 2 drops (This Week) with full messages
+  trimmedSystemPrompt = dropZaiHorizonSections(systemPrompt, ZAI_DROP_HEADERS_TIER2, preserveHeaders);
+  if (computeZaiPayloadChars(trimmedSystemPrompt, messages) <= ZAI_MAX_PAYLOAD_CHARS) {
+    return { systemPrompt: trimmedSystemPrompt, messages };
+  }
+
+  // 3. Try Tier 2 drops (This Week) with trimmed messages (last 3)
+  const trimmedMessages = (messages || []).length > 3 ? messages.slice(-3) : messages;
+  trimmedSystemPrompt = dropZaiHorizonSections(systemPrompt, ZAI_DROP_HEADERS_TIER2, preserveHeaders);
   return { systemPrompt: trimmedSystemPrompt, messages: trimmedMessages };
 }
 
