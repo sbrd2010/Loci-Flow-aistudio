@@ -709,6 +709,89 @@ describe("Z.ai emergency fallback", () => {
     expect(zaiCalls.length).toBe(0);
   });
 
+  // Mirrors the horizon-section format buildLociTaskContext (lociAIContext.js)
+  // embeds into Coach's full_task system prompt: "HEADER (n):" followed by
+  // indented "  - ..." bullet lines, with no blank line between sections.
+  function horizonSection(header, count, padChars) {
+    const lines = [`${header} (${count}):`];
+    for (let i = 0; i < count; i++) lines.push(`  - [P2] Task ${header} ${i} ${"x".repeat(padChars)}`);
+    return lines.join("\n");
+  }
+
+  function bigCoachPrompt({ includeWeek = true, weekPad = 50 } = {}) {
+    const sections = [
+      horizonSection("TODAY", 3, 50),
+      includeWeek ? horizonSection("THIS WEEK", 3, weekPad) : "",
+      horizonSection("THIS MONTH", 5, 800),
+      horizonSection("QUARTER", 5, 800),
+      horizonSection("6 MONTHS", 5, 800),
+      horizonSection("WORK", 5, 800),
+    ].filter(Boolean);
+    return `You are Loci Coach.\n\nCURRENT CAPPED TASK CONTEXT:\n${sections.join("\n")}\n\nNOW FOCUS: "Task TODAY 0"\n\nSESSION STATS:\nCurrent Time: 3:30 PM`;
+  }
+
+  it("compresses an oversized Coach task prompt for Z.ai instead of skipping it", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("Compressed Z.ai reply."));
+
+    const systemPrompt = bigCoachPrompt();
+    expect(systemPrompt.length).toBeGreaterThan(12000);
+
+    const reply = await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", systemPrompt }));
+
+    expect(reply).toBe("Compressed Z.ai reply.");
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    const sentSystemPrompt = body.messages[0].content;
+    expect(sentSystemPrompt).toContain("TODAY (3):");
+    expect(sentSystemPrompt).toContain("THIS WEEK (3):");
+    expect(sentSystemPrompt).toContain("NOW FOCUS");
+    expect(sentSystemPrompt).not.toContain("THIS MONTH (");
+    expect(sentSystemPrompt).not.toContain("QUARTER (");
+    expect(sentSystemPrompt).not.toContain("6 MONTHS (");
+    expect(sentSystemPrompt).not.toContain("WORK (");
+  });
+
+  it("trims chat history to the latest exchange for Z.ai when compressing an oversized prompt", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("Compressed Z.ai reply."));
+
+    const systemPrompt = bigCoachPrompt();
+    const messages = [
+      { role: "user", content: "old message 1" },
+      { role: "assistant", content: "old reply 1" },
+      { role: "user", content: "old message 2" },
+      { role: "assistant", content: "old reply 2" },
+      { role: "user", content: "What should I do now?" },
+    ];
+
+    await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", systemPrompt, messages }));
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    // First entry is the system message; the rest is the trimmed history.
+    expect(body.messages.length).toBe(4);
+    expect(body.messages[body.messages.length - 1].content).toBe("What should I do now?");
+  });
+
+  it("falls through to Gemini when This Week is also dropped but the prompt is still too large after both tiers", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(geminiOk("Gemini after Z.ai compression gave up."));
+
+    // TODAY is never dropped (it's always kept), so padding it heavily makes
+    // the prompt irreducibly too large for Z.ai even after both compression
+    // tiers strip every other horizon section.
+    const sections = [horizonSection("TODAY", 5, 3000)];
+    const systemPrompt = `You are Loci Coach.\n\nCURRENT CAPPED TASK CONTEXT:\n${sections.join("\n")}\n\nNOW FOCUS: "Task TODAY 0"`;
+    expect(systemPrompt.length).toBeGreaterThan(12000);
+
+    const reply = await callAI(baseRequest({
+      groqKey: "", zaiKey: "test-zai-key", geminiKey: "test-gemini-key", systemPrompt,
+    }));
+
+    expect(reply).toBe("Gemini after Z.ai compression gave up.");
+    const zaiCalls = fetch.mock.calls.filter(call => String(call[0]).includes("z.ai"));
+    expect(zaiCalls.length).toBe(0);
+  });
+
   it("still excludes NVIDIA from the auto order even with a Z.ai key present", async () => {
     fetch
       .mockResolvedValueOnce(providerError(503))   // Groq fails

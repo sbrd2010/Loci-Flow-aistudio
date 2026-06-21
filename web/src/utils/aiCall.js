@@ -342,11 +342,55 @@ async function callGemini(geminiKey, systemPrompt, messages, maxTokens) {
   return { reply, usage };
 }
 
-// Z.ai is an emergency-only fallback (free tier, concurrency limit 1), not a
-// primary provider: single-flight guard (no queueing, no internal retries),
-// a conservative output-token cap, and a rough char-count payload check that
-// skips Z.ai entirely for large requests rather than risking a slow/failed
-// call on a concurrency-1 backend.
+function computeZaiPayloadChars(systemPrompt, messages) {
+  return String(systemPrompt || "").length +
+    (messages || []).reduce((sum, m) => sum + String(m.content || "").length, 0);
+}
+
+// Coach's full task-context prompt embeds the task list as plain-text
+// sections with a fixed set of horizon headers (see buildLociTaskContext in
+// lociAIContext.js: "TODAY (n):", "THIS WEEK (n):", "THIS MONTH (n):",
+// "QUARTER (n):", "6 MONTHS (n):", "WORK (n):", each followed by indented
+// "  - ..." bullet lines). Dropping a header's bullet lines runs until the
+// next header line or the first blank line (the dynamic prompt always has a
+// blank line right after the task-context block ends), so trailing context
+// blocks (Now Focus, day map, etc.) are never swept up by mistake.
+const ZAI_ALL_HORIZON_HEADERS = ["TODAY (", "THIS WEEK (", "THIS MONTH (", "QUARTER (", "6 MONTHS (", "WORK ("];
+const ZAI_DROP_HEADERS_TIER1 = ["THIS MONTH (", "QUARTER (", "6 MONTHS (", "WORK ("];
+const ZAI_DROP_HEADERS_TIER2 = [...ZAI_DROP_HEADERS_TIER1, "THIS WEEK ("];
+
+function dropZaiHorizonSections(text, dropHeaders) {
+  if (!text) return text;
+  let dropping = false;
+  return text.split("\n").filter(line => {
+    const headerHit = ZAI_ALL_HORIZON_HEADERS.find(h => line.startsWith(h));
+    if (headerHit) {
+      dropping = dropHeaders.includes(headerHit);
+      return !dropping;
+    }
+    if (dropping && line.trim() === "") dropping = false;
+    return !dropping;
+  }).join("\n");
+}
+
+// Z.ai is an emergency-only fallback (free tier, concurrency limit 1, low
+// payload cap) — not a primary provider. A normal Coach chat/task question
+// can still be too big only because of the attached task-context snapshot,
+// not because the caller actually needs a long/structured reply; for those,
+// compress the context in stages (drop Month/Quarter/6 months/Work task
+// lists, trim chat history to the latest exchange, then drop This Week too)
+// instead of skipping Z.ai outright. Requests that genuinely need a long or
+// structured reply are already excluded above by the output-token check.
+function compressZaiContext(systemPrompt, messages) {
+  const trimmedMessages = (messages || []).length > 3 ? messages.slice(-3) : messages;
+
+  let trimmedSystemPrompt = dropZaiHorizonSections(systemPrompt, ZAI_DROP_HEADERS_TIER1);
+  if (computeZaiPayloadChars(trimmedSystemPrompt, trimmedMessages) > ZAI_MAX_PAYLOAD_CHARS) {
+    trimmedSystemPrompt = dropZaiHorizonSections(systemPrompt, ZAI_DROP_HEADERS_TIER2);
+  }
+  return { systemPrompt: trimmedSystemPrompt, messages: trimmedMessages };
+}
+
 async function callZai(zaiKey, systemPrompt, messages, maxTokens) {
   if (zaiInFlight) throw new Error("zai_busy");
 
@@ -356,9 +400,14 @@ async function callZai(zaiKey, systemPrompt, messages, maxTokens) {
   // through to the next provider with the caller's full requested budget.
   if ((maxTokens ?? 300) > ZAI_MAX_OUTPUT_TOKENS) throw new Error("zai_too_large_request");
 
-  const payloadChars = String(systemPrompt || "").length +
-    (messages || []).reduce((sum, m) => sum + String(m.content || "").length, 0);
-  if (payloadChars > ZAI_MAX_PAYLOAD_CHARS) throw new Error("zai_too_large");
+  let effectiveSystemPrompt = systemPrompt;
+  let effectiveMessages = messages;
+  if (computeZaiPayloadChars(systemPrompt, messages) > ZAI_MAX_PAYLOAD_CHARS) {
+    ({ systemPrompt: effectiveSystemPrompt, messages: effectiveMessages } = compressZaiContext(systemPrompt, messages));
+  }
+  if (computeZaiPayloadChars(effectiveSystemPrompt, effectiveMessages) > ZAI_MAX_PAYLOAD_CHARS) {
+    throw new Error("zai_too_large");
+  }
 
   zaiInFlight = true;
   try {
@@ -370,7 +419,7 @@ async function callZai(zaiKey, systemPrompt, messages, maxTokens) {
       },
       body: JSON.stringify({
         model: ZAI_MODEL,
-        messages: [{ role: "system", content: systemPrompt }, ...messages],
+        messages: [{ role: "system", content: effectiveSystemPrompt }, ...effectiveMessages],
         max_tokens: maxTokens ?? 300,
         temperature: 0.4
       })
