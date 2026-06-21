@@ -281,6 +281,8 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("What are my this month’s priorities?")).toBe("full_task");
       expect(classifyContextMode("What are my health/work priorities?")).toBe("full_task");
       expect(classifyContextMode("What are my health & work priorities?")).toBe("full_task");
+      expect(classifyContextMode("Tell me my health priorities")).toBe("full_task");
+      expect(classifyContextMode("Show me my work priorities")).toBe("full_task");
     });
 
     it("PR #272 Codex Fix - routes distressed task asks to full_task", () => {

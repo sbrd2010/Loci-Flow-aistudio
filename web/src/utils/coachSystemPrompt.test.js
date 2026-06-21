@@ -126,9 +126,14 @@ describe("buildCoachSystemPrompt", () => {
   it("PR277 - compact_task mode carries FORMAT RULES for numbered steps and date/time answers", () => {
     const out = buildCoachSystemPrompt("compact_task", baseCtx());
     expect(out).toContain("FORMAT RULES");
-    expect(out).toContain("reply with exactly N numbered lines");
+    expect(out).toContain("the visible reply is exactly N numbered lines");
     expect(out).toContain("Never stop mid-sentence");
     expect(out).toContain("give the first 5 complete steps and ask if");
     expect(out).toContain("answer in exactly one complete sentence using the Current Time below");
+  });
+
+  it("PR277 follow-up - compact_task FORMAT RULES do not block COACH ACTIONS tags on numbered-step replies", () => {
+    const out = buildCoachSystemPrompt("compact_task", baseCtx());
+    expect(out).toContain("these tags are stripped automatically and are not part of the \"nothing else\" reply text");
   });
 });
