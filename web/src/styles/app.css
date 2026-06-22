@@ -1668,6 +1668,25 @@ textarea.text-input {
 @media (min-width: 720px) { .fab-option { right: calc(50% - 340px); } }
 @media (min-width: 1024px) { .fab-option { right: calc(50% - 530px); } }
 
+/* Shared by the Undo Delete toast (Today/Roadmap) and the App-level sync-warning
+   pill. Centered by default, but on phone-width screens (same breakpoint as
+   .fab's right:20px) a long task title or warning message can grow this toast
+   up to its 90vw cap, which reaches under the FAB's tap target — reserve the
+   FAB's column so the toast never overlaps it. */
+.bottom-toast {
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 90vw;
+}
+@media (max-width: 480px) {
+  .bottom-toast {
+    left: 16px;
+    right: 84px;
+    transform: none;
+    max-width: none;
+  }
+}
+
 /* Add Task Dialog Modal */
 .modal-overlay {
   position: fixed;

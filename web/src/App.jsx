@@ -619,7 +619,7 @@ export default function App() {
       {/* Subtle cloud-sync indicator — shown while serving from cache, hidden once RTDB responds */}
       {!demoMode && isSyncingFromCache && (
         <div style={{
-          position: "fixed", bottom: "72px", left: "50%", transform: "translateX(-50%)",
+          position: "fixed", bottom: "calc(72px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)",
           background: "var(--bg-card)", border: "1px solid var(--border)",
           borderRadius: "20px", padding: "5px 14px",
           fontSize: "11px", fontWeight: "600", color: "var(--text-muted)",
@@ -635,14 +635,15 @@ export default function App() {
       {syncWarning && (
         <div
           role="alert"
+          className="bottom-toast"
           onClick={() => window.location.reload()}
           style={{
-            position: "fixed", bottom: "72px", left: "50%", transform: "translateX(-50%)",
+            position: "fixed", bottom: "calc(72px + env(safe-area-inset-bottom, 0px))",
             background: "var(--bg-card)", border: "1px solid #f59e0b",
             borderRadius: "20px", padding: "6px 16px",
             fontSize: "11px", fontWeight: "600", color: "#f59e0b",
             zIndex: 490, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
-            cursor: "pointer", whiteSpace: "nowrap", maxWidth: "calc(100vw - 32px)",
+            cursor: "pointer", whiteSpace: "nowrap",
             boxShadow: "0 2px 12px rgba(0,0,0,0.18)", textAlign: "center"
           }}
         >
