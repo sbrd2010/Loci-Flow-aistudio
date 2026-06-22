@@ -454,22 +454,38 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         // Use word-char lookaround instead of \b so titles with leading/trailing
         // punctuation (e.g. "Call mom?") still match when said verbatim — \b
         // only fires at a word/non-word transition, which a trailing "?" lacks.
+        // "_" is included alongside letters/digits (matching \w's definition of
+        // a word character) so "write_report" doesn't falsely match inside the
+        // unrelated task title "write_report_draft".
+        const titleBoundaryRegex = (title) => new RegExp(`(?<![a-z0-9_])${escapeRegExp(title.trim().toLowerCase())}(?![a-z0-9_])`, "gi");
         const mentionedTasks = activeForCheckin.filter(t =>
-          isTitleSafeForTextMatching(t.title) &&
-          new RegExp(`(?<![a-z0-9])${escapeRegExp(t.title.trim().toLowerCase())}(?![a-z0-9])`, "i").test(lowerUserText)
+          isTitleSafeForTextMatching(t.title) && titleBoundaryRegex(t.title).test(lowerUserText)
         );
         // If multiple titles match (e.g. "Write report" and "Write report draft"
-        // both match a mention of the latter), prefer the most specific one —
-        // the longest match that contains every other match as a substring —
-        // rather than discarding an unambiguous mention to null.
+        // both match a single mention of the latter), prefer the most specific
+        // one — but only when every other match is the *same* textual mention
+        // (its occurrence is nested inside the longest title's match span).
+        // If a shorter title is also mentioned as its own separate occurrence
+        // (e.g. "remind me about Write report, not Write report draft"), that's
+        // a genuinely ambiguous/excluding mention, not a single specific one —
+        // fall back to null rather than guessing the excluded task.
         let mentionedTitle = null;
         if (mentionedTasks.length === 1) {
           mentionedTitle = mentionedTasks[0].title;
         } else if (mentionedTasks.length > 1) {
-          const sorted = [...mentionedTasks].sort((a, b) => b.title.length - a.title.length);
-          const longestLower = sorted[0].title.trim().toLowerCase();
-          const allContained = sorted.every(t => longestLower.includes(t.title.trim().toLowerCase()));
-          mentionedTitle = allContained ? sorted[0].title : null;
+          const matchRanges = mentionedTasks.map(t => {
+            const re = titleBoundaryRegex(t.title);
+            const ranges = [];
+            let m;
+            while ((m = re.exec(lowerUserText))) ranges.push([m.index, m.index + m[0].length]);
+            return { task: t, ranges };
+          });
+          const longest = matchRanges.reduce((a, b) => (b.task.title.length > a.task.title.length ? b : a));
+          const [longestStart, longestEnd] = longest.ranges[0];
+          const allNested = matchRanges.every(({ task, ranges }) =>
+            task === longest.task || ranges.every(([s, e]) => s >= longestStart && e <= longestEnd)
+          );
+          mentionedTitle = allNested ? longest.task.title : null;
         }
         const checkin = buildCoachCheckin(checkinMinutes, pickCheckinNote(activeForCheckin, mentionedTitle));
         configPatch = { ...configPatch, coachCheckin: checkin };
