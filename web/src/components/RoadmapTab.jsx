@@ -625,7 +625,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
 
       {/* Undo Delete Toast */}
       {undoTask && (
-        <div style={{ position: "fixed", bottom: "calc(76px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "20px", padding: "10px 16px", display: "flex", alignItems: "center", gap: "12px", boxShadow: "0 4px 20px rgba(0,0,0,0.35)", zIndex: 200, fontSize: "12.5px", whiteSpace: "nowrap", maxWidth: "90vw" }}>
+        <div className="bottom-toast" style={{ position: "fixed", bottom: "calc(76px + env(safe-area-inset-bottom, 0px))", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "20px", padding: "10px 16px", display: "flex", alignItems: "center", gap: "12px", boxShadow: "0 4px 20px rgba(0,0,0,0.35)", zIndex: 200, fontSize: "12.5px", whiteSpace: "nowrap" }}>
           <span style={{ color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis" }}>
             "{undoTask.title.length > 28 ? undoTask.title.substring(0, 28) + "..." : undoTask.title}" deleted
           </span>

@@ -1668,6 +1668,42 @@ textarea.text-input {
 @media (min-width: 720px) { .fab-option { right: calc(50% - 340px); } }
 @media (min-width: 1024px) { .fab-option { right: calc(50% - 530px); } }
 
+/* Shared by the Undo Delete toast (Today/Roadmap) and the App-level sync-warning
+   pill. Centered by default, but on phone-width screens (same breakpoint as
+   .fab's right:20px) a long task title or warning message can grow this toast
+   up to its 90vw cap, which reaches under the FAB's tap target — reserve the
+   FAB's column so the toast never overlaps it. */
+.bottom-toast {
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 90vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 480px) {
+  .bottom-toast {
+    left: 16px;
+    right: 84px;
+    transform: none;
+    max-width: none;
+  }
+}
+/* Above 480px, .fab's right offset becomes viewport-proportional
+   (calc(50% - Xpx), matching its own breakpoints below) instead of a fixed
+   20px, so a fixed left/right reservation no longer tracks it. Staying
+   centered but capping max-width to (2*X - 128) guarantees this toast's
+   right edge can never reach the FAB's left edge (56px wide + 8px gap),
+   at any viewport width within each tier. */
+@media (min-width: 481px) and (max-width: 719px) {
+  .bottom-toast { max-width: 312px; } /* .fab: right: calc(50% - 220px) */
+}
+@media (min-width: 720px) and (max-width: 1023px) {
+  .bottom-toast { max-width: 552px; } /* .fab: right: calc(50% - 340px) */
+}
+@media (min-width: 1024px) {
+  .bottom-toast { max-width: 932px; } /* .fab: right: calc(50% - 530px) */
+}
+
 /* Add Task Dialog Modal */
 .modal-overlay {
   position: fixed;
