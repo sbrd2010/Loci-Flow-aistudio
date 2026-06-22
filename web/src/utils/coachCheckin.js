@@ -23,11 +23,14 @@ export function parseCheckinTag(text = "") {
   return { cleanText, minutes };
 }
 
-// Picks which task the check-in should reference: the pinned Now Focus task
-// if there is one, else the first active Today task, else null.
-export function pickCheckinNote(todayActiveTasks = []) {
-  const nowFocus = todayActiveTasks.find(t => t.isNowFocus);
-  return (nowFocus || todayActiveTasks[0])?.title || null;
+// Picks which task the check-in should reference: an explicitly mentioned
+// task (caller-resolved exact-title match against the user's message) wins,
+// else the pinned Now Focus task if there is one, else null (generic
+// check-in) — never an arbitrary task the user didn't ask about.
+export function pickCheckinNote(activeTasks = [], mentionedTitle = null) {
+  if (mentionedTitle) return mentionedTitle;
+  const nowFocus = activeTasks.find(t => t.isNowFocus);
+  return nowFocus?.title || null;
 }
 
 export function buildCoachCheckin(minutes, note, now = Date.now()) {
@@ -36,6 +39,17 @@ export function buildCoachCheckin(minutes, note, now = Date.now()) {
 
 export function isCheckinDue(coachCheckin, now = Date.now()) {
   return !!(coachCheckin && coachCheckin.fireAt && coachCheckin.fireAt <= now);
+}
+
+// Surfaces the actually-pending check-in (if any) as a prompt context line,
+// so the "have you set a reminder?" honesty instructions in
+// coachSystemPrompt.js have real state to check instead of only relying on
+// the confirming message still being present in the trimmed chat history.
+export function buildCoachCheckinContext(coachCheckin, now = Date.now()) {
+  if (!coachCheckin || !coachCheckin.fireAt || coachCheckin.fireAt <= now) return "";
+  const minutesLeft = Math.max(1, Math.round((coachCheckin.fireAt - now) / 60000));
+  const about = coachCheckin.note ? `, about "${coachCheckin.note}"` : "";
+  return `CURRENT CHECK-IN: A Coach check-in is pending, firing in about ${minutesLeft} minute(s)${about}.`;
 }
 
 export function buildCheckinResumeMessage(firstName, note) {

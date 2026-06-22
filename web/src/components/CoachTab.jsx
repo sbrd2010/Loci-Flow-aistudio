@@ -8,7 +8,7 @@ import { getTodayCheckedIds, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
 import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin } from "../utils/reminders";
-import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, parseCheckinRequestFromMessage } from "../utils/coachCheckin";
+import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, parseCheckinRequestFromMessage, buildCoachCheckinContext } from "../utils/coachCheckin";
 import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks, findTaskByTitle } from "../utils/coachActions";
 import { isPendingCoachNudgeStale, shouldDeliverPendingCoachNudge } from "../utils/coachNudge";
 import { buildPersonaInstruction } from "../utils/coachPersona";
@@ -348,6 +348,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const brainDumpContext = buildLociBrainDumpContext(brainDump);
     const velocityContext = buildLociVelocityContext(contributions, now);
     const remindersContext = buildLociRemindersContext(tasks, now);
+    const pendingCheckinContext = buildCoachCheckinContext(config.coachCheckin, now.getTime());
     const lowEnergyContext = buildLociLowEnergyContext(config);
     const recentlyParkedContext = buildLociRecentlyParkedContext(tasks, now);
     const lociCoreInstruction = buildLociCoreInstruction({ firstName });
@@ -388,6 +389,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       remindersContext,
       anchorContext,
       checkinContext,
+      pendingCheckinContext,
       deadlineContext,
       brainDumpContext,
       velocityContext,
@@ -444,7 +446,48 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
 
       let configPatch = null;
       if (checkinMinutes != null) {
-        const checkin = buildCoachCheckin(checkinMinutes, pickCheckinNote(todayActive));
+        // Exact-title-only match (no fuzzy/partial matching) against the
+        // user's own message, so the check-in never silently attaches to an
+        // unrelated task — see pickCheckinNote.
+        const activeForCheckin = currentTasks.filter(isActiveLociTask);
+        const lowerUserText = userText.toLowerCase();
+        // Use word-char lookaround instead of \b so titles with leading/trailing
+        // punctuation (e.g. "Call mom?") still match when said verbatim — \b
+        // only fires at a word/non-word transition, which a trailing "?" lacks.
+        // "_" is included alongside letters/digits (matching \w's definition of
+        // a word character) so "write_report" doesn't falsely match inside the
+        // unrelated task title "write_report_draft".
+        const titleBoundaryRegex = (title) => new RegExp(`(?<![a-z0-9_])${escapeRegExp(title.trim().toLowerCase())}(?![a-z0-9_])`, "gi");
+        const mentionedTasks = activeForCheckin.filter(t =>
+          isTitleSafeForTextMatching(t.title) && titleBoundaryRegex(t.title).test(lowerUserText)
+        );
+        // If multiple titles match (e.g. "Write report" and "Write report draft"
+        // both match a single mention of the latter), prefer the most specific
+        // one — but only when every other match is the *same* textual mention
+        // (its occurrence is nested inside the longest title's match span).
+        // If a shorter title is also mentioned as its own separate occurrence
+        // (e.g. "remind me about Write report, not Write report draft"), that's
+        // a genuinely ambiguous/excluding mention, not a single specific one —
+        // fall back to null rather than guessing the excluded task.
+        let mentionedTitle = null;
+        if (mentionedTasks.length === 1) {
+          mentionedTitle = mentionedTasks[0].title;
+        } else if (mentionedTasks.length > 1) {
+          const matchRanges = mentionedTasks.map(t => {
+            const re = titleBoundaryRegex(t.title);
+            const ranges = [];
+            let m;
+            while ((m = re.exec(lowerUserText))) ranges.push([m.index, m.index + m[0].length]);
+            return { task: t, ranges };
+          });
+          const longest = matchRanges.reduce((a, b) => (b.task.title.length > a.task.title.length ? b : a));
+          const [longestStart, longestEnd] = longest.ranges[0];
+          const allNested = matchRanges.every(({ task, ranges }) =>
+            task === longest.task || ranges.every(([s, e]) => s >= longestStart && e <= longestEnd)
+          );
+          mentionedTitle = allNested ? longest.task.title : null;
+        }
+        const checkin = buildCoachCheckin(checkinMinutes, pickCheckinNote(activeForCheckin, mentionedTitle));
         configPatch = { ...configPatch, coachCheckin: checkin };
         scheduleCoachCheckin(checkin);
         requestNotifPermission();
