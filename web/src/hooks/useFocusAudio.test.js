@@ -303,7 +303,6 @@ describe("useFocusAudio", () => {
     expect(MockAudio.instances.length).toBe(1);
     expect(MockAudio.instances[0].src).toBe("/sounds/2-am-debug-loop.mp3");
     expect(MockAudio.instances[0].volume).toBe(0.75);
-    expect(MockAudio.instances[0].loop).toBe(true);
     expect(MockAudio.instances[0].paused).toBe(true); // not running
   });
 
@@ -708,6 +707,65 @@ describe("useFocusAudio", () => {
 
       result.current.reshuffleTrack();
       expect(result.current.selectedTrack).toBe(BINAURAL_TRACK_ID);
+    });
+  });
+
+  describe("track ends naturally", () => {
+    it("does not loop the same track, and advances to a different variation in the category", () => {
+      const config = { focusSoundTrack: "2-am-debug-loop.mp3" };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [true, config, null]
+      );
+
+      expect(MockAudio.instances[0].loop).toBeFalsy();
+
+      MockAudio.instances[0].dispatchEvent("ended");
+
+      expect(result.current.selectedTrack).not.toBe("2-am-debug-loop.mp3");
+      expect(getCategoryKeyForTrack(result.current.selectedTrack)).toBe("lofi");
+      expect(MockAudio.instances.length).toBe(2);
+      expect(MockAudio.instances[1].paused).toBe(false);
+    });
+
+    it("does nothing when the binaural tone reports no underlying ended event", () => {
+      const config = { focusSoundTrack: BINAURAL_TRACK_ID };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [true, config, null]
+      );
+
+      expect(MockAudio.instances.length).toBe(0);
+      expect(result.current.selectedTrack).toBe(BINAURAL_TRACK_ID);
+    });
+
+    it("does not persist the auto-advanced track back to saved config", () => {
+      const saveSubPath = vi.fn();
+      const config = { focusSoundTrack: "2-am-debug-loop.mp3", focusSoundVolume: 0.5 };
+      renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [true, config, saveSubPath]
+      );
+
+      MockAudio.instances[0].dispatchEvent("ended");
+
+      expect(saveSubPath).not.toHaveBeenCalled();
+    });
+
+    it("ignores an ended event from a stale, already-replaced audio instance", () => {
+      const config = { focusSoundTrack: "2-am-debug-loop.mp3" };
+      const { result } = renderHook(
+        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        [true, config, null]
+      );
+
+      const staleInstance = MockAudio.instances[0];
+      result.current.reshuffleTrack();
+      const trackAfterReshuffle = result.current.selectedTrack;
+
+      staleInstance.dispatchEvent("ended");
+
+      expect(result.current.selectedTrack).toBe(trackAfterReshuffle);
     });
   });
 
