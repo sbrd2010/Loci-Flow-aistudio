@@ -52,6 +52,7 @@ function stopInstance(instance, hardTeardown = false) {
     if (typeof instance.removeEventListener === "function") {
       if (instance.__onCanPlay) instance.removeEventListener("canplay", instance.__onCanPlay);
       if (instance.__onError) instance.removeEventListener("error", instance.__onError);
+      if (instance.__onEnded) instance.removeEventListener("ended", instance.__onEnded);
     }
     if (typeof instance.removeAttribute === "function") instance.removeAttribute("src");
     if (typeof instance.load === "function") instance.load();
@@ -138,7 +139,6 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
       }
     } else if (selectedTrack && selectedTrack !== "none" && typeof Audio !== "undefined") {
       const audio = new Audio(trackUrl(selectedTrack));
-      audio.loop = true;
       audio.volume = volume;
       audio.preload = "auto";
       audioRef.current = audio;
@@ -147,6 +147,18 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
       audio.__onCanPlay = () => {
         if (audioRef.current === audio) setTrackLoadState("ready");
       };
+      // Advance to the next unplayed variation in this category's shuffle
+      // queue instead of looping the same track forever, so listening
+      // through a category cycles through its full library automatically.
+      // Uses setSelectedTrack (not selectTrack) so this runtime advance
+      // doesn't persist over a possibly-stale closed-over `volume`, same as
+      // the CDN-failure fallback below.
+      audio.__onEnded = () => {
+        if (audioRef.current !== audio) return;
+        const categoryKey = getCategoryKeyForTrack(selectedTrack);
+        if (categoryKey) setSelectedTrack(nextInCategoryShuffle(categoryKey));
+      };
+      audio.addEventListener("ended", audio.__onEnded);
       audio.__onError = () => {
         if (audioRef.current !== audio) return;
         // CDN variations can fail to load (network issue, cold CDN cache, etc.) —
