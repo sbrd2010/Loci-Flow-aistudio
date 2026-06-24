@@ -49,6 +49,9 @@ function SortableRoadmapCard({ id, task, onTaskClick }) {
         <span className={`priority-badge ${task.priority?.toLowerCase() || "p3"}`} style={{ flexShrink: 0 }}>
           {task.priority || "P3"}
         </span>
+        {task.isHorizonPinned && (
+          <span title="Pinned to top" aria-label="Pinned to top" style={{ flexShrink: 0, fontSize: "12px" }}>📌</span>
+        )}
         {CATEGORY_ICONS[task.category] && (
           <span className="task-category-icon" title={task.category} aria-label={task.category}>
             {CATEGORY_ICONS[task.category]}
@@ -77,7 +80,17 @@ function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, on
     const oldIdx = colTasks.findIndex(t => getKey(t) === active.id);
     const newIdx = colTasks.findIndex(t => getKey(t) === over.id);
     if (oldIdx === -1 || newIdx === -1) return;
-    const reordered = arrayMove([...colTasks], oldIdx, newIdx);
+    // colTasks is already pin-sorted-first; reordering across the whole column
+    // would overwrite the *other* pin tier's orderIndex on every drag (its tasks
+    // didn't move but would still get renumbered). Scope the reorder to tasks
+    // sharing the dragged task's pin status, and no-op a drag across the
+    // pin/unpinned boundary — pin status alone decides that ordering, not orderIndex.
+    const draggedPinned = !!colTasks[oldIdx].isHorizonPinned;
+    if (!!colTasks[newIdx].isHorizonPinned !== draggedPinned) return;
+    const tier = colTasks.filter(t => !!t.isHorizonPinned === draggedPinned);
+    const tierOldIdx = tier.findIndex(t => getKey(t) === active.id);
+    const tierNewIdx = tier.findIndex(t => getKey(t) === over.id);
+    const reordered = arrayMove([...tier], tierOldIdx, tierNewIdx);
     const orderMap = new Map(reordered.map((t, i) => [getKey(t), i]));
     savePayload({ ...payload, tasks: tasks.map(t =>
       orderMap.has(getKey(t)) ? { ...t, orderIndex: orderMap.get(getKey(t)), lastUpdated: Date.now() } : t
@@ -183,6 +196,16 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
       ...payload,
       tasks: tasks.map((t) =>
         t.uuid === task.uuid ? { ...t, horizonLevel: "today", orderIndex: todayTasksCount, lastUpdated: Date.now() } : t
+      )
+    });
+    setSelectedTask(null);
+  };
+
+  const handleTogglePin = (task) => {
+    savePayload({
+      ...payload,
+      tasks: tasks.map((t) =>
+        t.uuid === task.uuid ? { ...t, isHorizonPinned: !t.isHorizonPinned, lastUpdated: Date.now() } : t
       )
     });
     setSelectedTask(null);
@@ -591,6 +614,9 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
                 <span className={`priority-badge ${(selectedTask.priority || "P3").toLowerCase()}`} style={{ marginBottom: "6px", display: "inline-block" }}>
                   {selectedTask.priority || "P3"}
                 </span>
+                {selectedTask.isHorizonPinned && (
+                  <span title="Pinned to top" aria-label="Pinned to top" style={{ marginLeft: "6px", fontSize: "13px" }}>📌</span>
+                )}
                 <h4 style={{ fontSize: "15px", fontWeight: "600", color: "var(--text-primary)", lineHeight: "1.4" }}>
                   {selectedTask.title}
                 </h4>
@@ -602,6 +628,10 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
               </div>
               <button className="btn" onClick={() => handleMoveToToday(selectedTask)}>
                 🚀 Move to Today
+              </button>
+              <button className="btn" onClick={() => handleTogglePin(selectedTask)}
+                style={{ background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1.5px solid var(--border)", boxShadow: "none" }}>
+                {selectedTask.isHorizonPinned ? "📌 Unpin from top" : "📌 Pin to top"}
               </button>
               {onEditTask && (
                 <button className="btn" onClick={() => { onEditTask(selectedTask); setSelectedTask(null); }}

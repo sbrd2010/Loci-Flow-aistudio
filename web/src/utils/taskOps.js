@@ -47,10 +47,17 @@ export const CATEGORY_ICONS = {
 };
 
 // Roadmap horizons always show higher-priority tasks first; within the same
-// priority, manual drag order (orderIndex) still applies.
+// priority, manual drag order (orderIndex) still applies. A pinned task
+// (isHorizonPinned) overrides that entirely and sorts to the top regardless
+// of its priority — the user's manual call on what matters right now beats
+// the auto-sort, since the auto-sort otherwise has no way to let a low-priority
+// task (e.g. P3/P4) stay above higher-priority ones even after a manual drag.
 export const PRIORITY_RANK = { P1: 0, P2: 1, P3: 2, P4: 3 };
 
 export function byPriorityThenOrder(a, b) {
+  const aPinned = !!a.isHorizonPinned;
+  const bPinned = !!b.isHorizonPinned;
+  if (aPinned !== bPinned) return aPinned ? -1 : 1;
   const pa = PRIORITY_RANK[a.priority] ?? PRIORITY_RANK.P4;
   const pb = PRIORITY_RANK[b.priority] ?? PRIORITY_RANK.P4;
   if (pa !== pb) return pa - pb;

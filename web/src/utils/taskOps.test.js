@@ -716,6 +716,31 @@ describe("byPriorityThenOrder", () => {
     ];
     expect(tasks.sort(byPriorityThenOrder).map(t => t.uuid)).toEqual(["p3", "none"]);
   });
+
+  it("a pinned P4 task sorts above an unpinned P1 task", () => {
+    const tasks = [
+      T({ uuid: "p1", priority: "P1", orderIndex: 0 }),
+      T({ uuid: "p4-pinned", priority: "P4", orderIndex: 0, isHorizonPinned: true }),
+    ];
+    expect(tasks.sort(byPriorityThenOrder).map(t => t.uuid)).toEqual(["p4-pinned", "p1"]);
+  });
+
+  it("among multiple pinned tasks, priority then orderIndex still applies", () => {
+    const tasks = [
+      T({ uuid: "pinned-p3", priority: "P3", orderIndex: 0, isHorizonPinned: true }),
+      T({ uuid: "pinned-p1", priority: "P1", orderIndex: 0, isHorizonPinned: true }),
+      T({ uuid: "unpinned-p1", priority: "P1", orderIndex: 0 }),
+    ];
+    expect(tasks.sort(byPriorityThenOrder).map(t => t.uuid)).toEqual(["pinned-p1", "pinned-p3", "unpinned-p1"]);
+  });
+
+  it("unpinning a task drops it back into normal priority order", () => {
+    const tasks = [
+      T({ uuid: "p1", priority: "P1", orderIndex: 0 }),
+      T({ uuid: "p4-unpinned", priority: "P4", orderIndex: 0, isHorizonPinned: false }),
+    ];
+    expect(tasks.sort(byPriorityThenOrder).map(t => t.uuid)).toEqual(["p1", "p4-unpinned"]);
+  });
 });
 
 describe("CATEGORY_ICONS", () => {
