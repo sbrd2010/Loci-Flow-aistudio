@@ -195,6 +195,10 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     }
 
     if (isEditMode) {
+      // Mirror DayMap's own duration edit (DayMapPage.jsx's changeDuration), which
+      // writes both fields — otherwise a stale dayMapDurationMinutes from an earlier
+      // DayMap schedule keeps overriding this edit there (DayMap's getEstimate prefers
+      // dayMapDurationMinutes over timeEstimateMinutes).
       const updatedTask = {
         ...editTask,
         title: title.trim(),
@@ -203,6 +207,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
         priority,
         category,
         timeEstimateMinutes: Number(estimateMinutes),
+        dayMapDurationMinutes: Number(estimateMinutes),
         reminderAt,
         lastUpdated: Date.now()
       };
