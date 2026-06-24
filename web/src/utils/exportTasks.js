@@ -7,7 +7,7 @@ const CSV_FIELDS_BASE = [
   "title", "concreteStep",
   "horizonLevel", "priority", "category",
   "timeEstimateMinutes", "deadlineTimestamp", "reminderAt",
-  "isCompleted", "isParked", "isNowFocus", "isDeleted", "isMVD",
+  "isCompleted", "isParked", "isNowFocus", "isDeleted", "isMVD", "isHorizonPinned",
   "orderIndex", "dateCompletedString", "lastUpdated",
   "dayMapDate", "dayMapDurationMinutes", "dayMapOrder",
   "dayMapPeriod", "dayMapStartMinutes",
