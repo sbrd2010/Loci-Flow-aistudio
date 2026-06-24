@@ -425,9 +425,12 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
     if (expandedTaskId === taskId) setExpandedTaskId(null);
   };
 
+  // DayMap's duration edit takes preference over the task's own estimate —
+  // also update timeEstimateMinutes so Today and Focus mode (which read
+  // that field, not dayMapDurationMinutes) pick up the same value.
   const changeDuration = (taskId, duration) => {
     const newScheduled = scheduledTasks.map(t =>
-      getTaskId(t) === taskId ? { ...t, dayMapDurationMinutes: duration } : t
+      getTaskId(t) === taskId ? { ...t, dayMapDurationMinutes: duration, timeEstimateMinutes: duration } : t
     );
     applyAndSave(newScheduled, anchorMinutes);
   };

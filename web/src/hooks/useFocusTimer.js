@@ -25,6 +25,9 @@ export function useFocusTimer(tasks, config, uid) {
   const timerIntervalRef = useRef(null);
   // Absolute deadline for the running timer — lets us snap to correct time on tab-show
   const deadlineRef = useRef(null);
+  // Lets the activeTask-sync effect tell "switched to a different task" apart
+  // from "same task, duration edited mid-session" (the two need different responses).
+  const prevActiveTaskRef = useRef({ uuid: null, timeEstimateMinutes: null });
 
   const activeTask = tasks.find((t) => t.isNowFocus && !t.isDeleted && !t.isCompleted) || null;
 
@@ -172,33 +175,47 @@ export function useFocusTimer(tasks, config, uid) {
   }, [uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    const prev = prevActiveTaskRef.current;
     if (activeTask) {
       const rawMins = Number(activeTask.timeEstimateMinutes);
       const taskSecs = (rawMins > 0 ? rawMins : 25) * 60;
       setTimerMaxSeconds(taskSecs);
-      if (!isTimerRunning) setTimerSecondsLeft(taskSecs);
+      if (!isTimerRunning) {
+        setTimerSecondsLeft(taskSecs);
+      } else if (prev.uuid === activeTask.uuid && prev.timeEstimateMinutes !== activeTask.timeEstimateMinutes) {
+        // Same task whose Focus timer is already running had its duration edited
+        // elsewhere (e.g. DayMap) — preserve elapsed time instead of resetting it,
+        // and re-anchor the wall-clock deadline the running interval reads from.
+        const elapsed = timerMaxSeconds - timerSecondsLeft;
+        const newSecondsLeft = Math.max(0, taskSecs - elapsed);
+        setTimerSecondsLeft(newSecondsLeft);
+        deadlineRef.current = Date.now() + newSecondsLeft * 1000;
+      }
     } else {
       const rawMins = Number(config.pomodoroDurationMinutes);
       const defaultSecs = (rawMins > 0 ? rawMins : 25) * 60;
       setTimerMaxSeconds(defaultSecs);
       if (!isTimerRunning) setTimerSecondsLeft(defaultSecs);
     }
+    prevActiveTaskRef.current = { uuid: activeTask?.uuid ?? null, timeEstimateMinutes: activeTask?.timeEstimateMinutes ?? null };
   }, [activeTask?.uuid, activeTask?.timeEstimateMinutes, config.pomodoroDurationMinutes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isTimerRunning) {
-      // Anchor to wall-clock time so background tabs / GC pauses don't cause drift
-      const targetEndTime = Date.now() + timerSecondsLeft * 1000;
-      deadlineRef.current = targetEndTime;
+      // Anchor to wall-clock time so background tabs / GC pauses don't cause drift.
+      // Reads/writes go through deadlineRef.current (not a local const) so an
+      // external duration edit mid-session (see the activeTask-sync effect above)
+      // can re-anchor the deadline this running interval is already using.
+      deadlineRef.current = Date.now() + timerSecondsLeft * 1000;
       timerIntervalRef.current = setInterval(() => {
-        const remaining = Math.ceil((targetEndTime - Date.now()) / 1000);
+        const remaining = Math.ceil((deadlineRef.current - Date.now()) / 1000);
         setTimerSecondsLeft(remaining <= 0 ? 0 : remaining);
       }, 1000);
       // Snap to correct remaining time the moment the tab becomes visible again —
       // background timers are throttled so the display may be stale after switching back.
       const handleVisible = () => {
         if (document.visibilityState === "visible") {
-          const remaining = Math.ceil((targetEndTime - Date.now()) / 1000);
+          const remaining = Math.ceil((deadlineRef.current - Date.now()) / 1000);
           setTimerSecondsLeft(remaining <= 0 ? 0 : remaining);
         }
       };
