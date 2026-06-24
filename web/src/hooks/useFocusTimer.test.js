@@ -145,6 +145,10 @@ describe("useFocusTimer", () => {
     rerender([[taskA], {}, "u1"]);
     expect(result.current.timerSecondsLeft).toBe(25 * 60);
 
+    // Let some real time elapse on task A's session before the switch —
+    // mirrors the actual bug report, where the prior session wasn't fresh.
+    result.current.setTimerSecondsLeft(10 * 60);
+
     // Switch the active task to a different one with a 15-minute estimate,
     // while the timer is still marked running (mirrors DayMap's
     // pin-then-auto-start flow).
