@@ -180,9 +180,15 @@ export function useFocusTimer(tasks, config, uid) {
       const rawMins = Number(activeTask.timeEstimateMinutes);
       const taskSecs = (rawMins > 0 ? rawMins : 25) * 60;
       setTimerMaxSeconds(taskSecs);
-      if (!isTimerRunning) {
+      const sameTask = prev.uuid === activeTask.uuid;
+      if (!isTimerRunning || !sameTask) {
+        // Not running yet, or the active task itself just changed (e.g. "Start
+        // Focus" pinned a different task while a session was already running) —
+        // start the countdown from this task's own duration, not whatever time
+        // was left on the previous task.
         setTimerSecondsLeft(taskSecs);
-      } else if (prev.uuid === activeTask.uuid && prev.timeEstimateMinutes !== activeTask.timeEstimateMinutes) {
+        if (isTimerRunning) deadlineRef.current = Date.now() + taskSecs * 1000;
+      } else if (prev.timeEstimateMinutes !== activeTask.timeEstimateMinutes) {
         // Same task whose Focus timer is already running had its duration edited
         // elsewhere (e.g. DayMap) — preserve elapsed time instead of resetting it,
         // and re-anchor the wall-clock deadline the running interval reads from.
