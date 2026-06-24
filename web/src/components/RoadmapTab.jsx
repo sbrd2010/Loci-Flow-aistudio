@@ -80,7 +80,17 @@ function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, on
     const oldIdx = colTasks.findIndex(t => getKey(t) === active.id);
     const newIdx = colTasks.findIndex(t => getKey(t) === over.id);
     if (oldIdx === -1 || newIdx === -1) return;
-    const reordered = arrayMove([...colTasks], oldIdx, newIdx);
+    // colTasks is already pin-sorted-first; reordering across the whole column
+    // would overwrite the *other* pin tier's orderIndex on every drag (its tasks
+    // didn't move but would still get renumbered). Scope the reorder to tasks
+    // sharing the dragged task's pin status, and no-op a drag across the
+    // pin/unpinned boundary — pin status alone decides that ordering, not orderIndex.
+    const draggedPinned = !!colTasks[oldIdx].isHorizonPinned;
+    if (!!colTasks[newIdx].isHorizonPinned !== draggedPinned) return;
+    const tier = colTasks.filter(t => !!t.isHorizonPinned === draggedPinned);
+    const tierOldIdx = tier.findIndex(t => getKey(t) === active.id);
+    const tierNewIdx = tier.findIndex(t => getKey(t) === over.id);
+    const reordered = arrayMove([...tier], tierOldIdx, tierNewIdx);
     const orderMap = new Map(reordered.map((t, i) => [getKey(t), i]));
     savePayload({ ...payload, tasks: tasks.map(t =>
       orderMap.has(getKey(t)) ? { ...t, orderIndex: orderMap.get(getKey(t)), lastUpdated: Date.now() } : t
