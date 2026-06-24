@@ -195,10 +195,15 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     }
 
     if (isEditMode) {
-      // Mirror DayMap's own duration edit (DayMapPage.jsx's changeDuration), which
-      // writes both fields — otherwise a stale dayMapDurationMinutes from an earlier
-      // DayMap schedule keeps overriding this edit there (DayMap's getEstimate prefers
-      // dayMapDurationMinutes over timeEstimateMinutes).
+      const newEstimate = Number(estimateMinutes);
+      // Only sync dayMapDurationMinutes when the estimate actually changed in this
+      // edit — otherwise saving an unrelated field (title, priority, reminder...)
+      // would silently clobber a DayMap duration the user deliberately set apart
+      // from the task's general estimate (e.g. extra buffer blocked for today).
+      // When it did change, mirror DayMap's own duration edit (DayMapPage.jsx's
+      // changeDuration), which writes both fields so DayMap doesn't keep showing
+      // a stale duration (DayMap's getEstimate prefers dayMapDurationMinutes).
+      const estimateChanged = newEstimate !== Number(editTask.timeEstimateMinutes);
       const updatedTask = {
         ...editTask,
         title: title.trim(),
@@ -206,8 +211,8 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
         horizonLevel,
         priority,
         category,
-        timeEstimateMinutes: Number(estimateMinutes),
-        dayMapDurationMinutes: Number(estimateMinutes),
+        timeEstimateMinutes: newEstimate,
+        ...(estimateChanged ? { dayMapDurationMinutes: newEstimate } : {}),
         reminderAt,
         lastUpdated: Date.now()
       };
