@@ -115,11 +115,9 @@ export default function FocusModePage({
   const ratio = maxSeconds > 0 ? secondsLeft / maxSeconds : 0;
   const strokeDashoffset = circ * (1 - ratio);
 
-  // Visual state color mappings
+  // Visual state color mappings — always cyan, no shift as time runs out
   const timerState = getTimerState(secondsLeft, maxSeconds);
-  let ringStroke = "#57f1db"; // normal
-  if (timerState === "almost-done" || timerState === "complete") ringStroke = "#d46a5f"; // almost-done/complete
-  else if (timerState === "near-end") ringStroke = "#c99248"; // near-end
+  const ringStroke = "#57f1db";
 
   const mins = Math.floor(secondsLeft / 60);
   const secs = String(secondsLeft % 60).padStart(2, "0");

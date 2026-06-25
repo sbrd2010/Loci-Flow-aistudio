@@ -137,17 +137,11 @@
 }
 
 /* Color states for floating timer progress bar */
-.floating-focus-timer.timer-state-normal {
-  --timer-progress-color: var(--accent);
-}
-.floating-focus-timer.timer-state-near-end {
-  --timer-progress-color: #c99248;
-}
-.floating-focus-timer.timer-state-almost-done {
-  --timer-progress-color: #d46a5f;
-}
+.floating-focus-timer.timer-state-normal,
+.floating-focus-timer.timer-state-near-end,
+.floating-focus-timer.timer-state-almost-done,
 .floating-focus-timer.timer-state-complete {
-  --timer-progress-color: #d46a5f;
+  --timer-progress-color: #57f1db;
 }
 
 .floating-focus-timer-progress {
