@@ -178,4 +178,18 @@ describe("useFocusTimer", () => {
     // estimate should leave 20 minutes, not reset to a full 30 or keep 50.
     expect(result.current.timerSecondsLeft).toBe(20 * 60);
   });
+
+  it("adds time to both the countdown and its max without resetting elapsed progress", () => {
+    const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+    const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+    result.current.setTimerSecondsLeft(10 * 60); // 10 minutes elapsed
+    rerender([[task], {}, "u1"]);
+
+    result.current.addTimeToSession(5);
+    rerender([[task], {}, "u1"]);
+
+    expect(result.current.timerMaxSeconds).toBe(30 * 60);
+    expect(result.current.timerSecondsLeft).toBe(15 * 60);
+  });
 });

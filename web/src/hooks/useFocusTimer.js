@@ -89,13 +89,14 @@ export function useFocusTimer(tasks, config, uid) {
         "#pl { font-size: 10px; color: rgba(196,223,210,0.65); margin-top: 5px;",
         "  max-width: 186px; overflow: hidden; text-overflow: ellipsis;",
         "  white-space: nowrap; text-align: center; }",
-        "#pip-btns { display: flex; gap: 10px; margin-top: 12px; }",
-        "#pip-play, #pip-reset { background: rgba(255,255,255,0.10);",
+        "#pip-btns { display: flex; gap: 8px; margin-top: 12px; }",
+        "#pip-play, #pip-reset, #pip-add5 { background: rgba(255,255,255,0.10);",
         "  border: 1px solid rgba(255,255,255,0.18); color: #edf7f2;",
         "  border-radius: 8px; font-size: 18px; width: 44px; height: 36px;",
         "  display: flex; align-items: center; justify-content: center;",
         "  cursor: pointer; line-height: 1; }",
-        "#pip-play:active, #pip-reset:active { opacity: 0.6; }",
+        "#pip-add5 { font-size: 12px; font-weight: 700; }",
+        "#pip-play:active, #pip-reset:active, #pip-add5:active { opacity: 0.6; }",
       ].join(" ");
       pipWin.document.head.appendChild(style);
 
@@ -123,8 +124,14 @@ export function useFocusTimer(tasks, config, uid) {
         setTimerSecondsLeft(timerMaxSecondsRef.current);
       });
 
+      const add5Btn = pipWin.document.createElement("button");
+      add5Btn.id = "pip-add5";
+      add5Btn.textContent = "+5";
+      add5Btn.addEventListener("click", () => addTimeToSession(5));
+
       btnsEl.appendChild(playBtn);
       btnsEl.appendChild(resetBtn);
+      btnsEl.appendChild(add5Btn);
       pipWin.document.body.appendChild(btnsEl);
 
       pipWin.addEventListener("pagehide", () => {
@@ -311,6 +318,17 @@ export function useFocusTimer(tasks, config, uid) {
     setShowExtendPicker(false);
   };
 
+  // Add time to an in-progress session (e.g. the PiP "+5 min" button) without
+  // resetting it. Uses updater-form setters and mutates deadlineRef directly
+  // so it stays correct no matter how long the PiP button's closure has been
+  // alive — same staleness-safe pattern as the existing resetBtn handler.
+  const addTimeToSession = (minutes) => {
+    const addSecs = Math.round(minutes) * 60;
+    setTimerMaxSeconds((m) => m + addSecs);
+    setTimerSecondsLeft((s) => s + addSecs);
+    if (deadlineRef.current != null) deadlineRef.current += addSecs * 1000;
+  };
+
   return {
     activeTask,
     isTimerRunning, setIsTimerRunning,
@@ -321,6 +339,7 @@ export function useFocusTimer(tasks, config, uid) {
     sessionCompletePending, dismissSessionComplete,
     showExtendPicker, setShowExtendPicker,
     extendTimer,
+    addTimeToSession,
     pipOpen,
     handleOpenPiP,
   };
