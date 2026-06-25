@@ -29,6 +29,13 @@ export function useFocusTimer(tasks, config, uid) {
   useEffect(() => {
     sessionCompletePendingRef.current = sessionCompletePending;
   }, [sessionCompletePending]);
+  // "Keep going" clears sessionCompletePending before the user has actually
+  // chosen a new duration (showExtendPicker stays open in between) — block
+  // +5 during that window too, or it'd skew the just-completed 0:00 state.
+  const showExtendPickerRef = useRef(false);
+  useEffect(() => {
+    showExtendPickerRef.current = showExtendPicker;
+  }, [showExtendPicker]);
 
   const timerIntervalRef = useRef(null);
   // Absolute deadline for the running timer — lets us snap to correct time on tab-show
@@ -330,10 +337,12 @@ export function useFocusTimer(tasks, config, uid) {
   // resetting it. Uses updater-form setters and mutates deadlineRef directly
   // so it stays correct no matter how long the PiP button's closure has been
   // alive — same staleness-safe pattern as the existing resetBtn handler.
-  // No-ops once the session has already finished, so it can't resurrect a
-  // completed countdown behind the global "session complete" prompt.
+  // No-ops once the session has already finished (or while the "keep going"
+  // duration picker is open, before a new duration has been chosen), so it
+  // can't resurrect or skew a just-completed 0:00 countdown behind the
+  // global "session complete" prompt.
   const addTimeToSession = (minutes) => {
-    if (sessionCompletePendingRef.current) return;
+    if (sessionCompletePendingRef.current || showExtendPickerRef.current) return;
     const addSecs = Math.round(minutes) * 60;
     setTimerMaxSeconds((m) => m + addSecs);
     setTimerSecondsLeft((s) => s + addSecs);
