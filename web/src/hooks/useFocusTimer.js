@@ -322,7 +322,10 @@ export function useFocusTimer(tasks, config, uid) {
   // resetting it. Uses updater-form setters and mutates deadlineRef directly
   // so it stays correct no matter how long the PiP button's closure has been
   // alive — same staleness-safe pattern as the existing resetBtn handler.
+  // No-ops once the session has already finished, so it can't resurrect a
+  // completed countdown behind the global "session complete" prompt.
   const addTimeToSession = (minutes) => {
+    if (sessionCompletePending) return;
     const addSecs = Math.round(minutes) * 60;
     setTimerMaxSeconds((m) => m + addSecs);
     setTimerSecondsLeft((s) => s + addSecs);

@@ -192,4 +192,26 @@ describe("useFocusTimer", () => {
     expect(result.current.timerMaxSeconds).toBe(30 * 60);
     expect(result.current.timerSecondsLeft).toBe(15 * 60);
   });
+
+  it("does not resurrect a session that has already completed", () => {
+    const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+    const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+    result.current.setIsTimerRunning(true);
+    rerender([[task], {}, "u1"]);
+
+    // Countdown reaches 0 while running — triggers the "session complete" prompt.
+    result.current.setTimerSecondsLeft(0);
+    rerender([[task], {}, "u1"]);
+    expect(result.current.sessionCompletePending).toBe(true);
+    expect(result.current.isTimerRunning).toBe(false);
+
+    // A stale PiP "+5" click landing after completion must not bring the
+    // countdown back to life behind the user's back.
+    result.current.addTimeToSession(5);
+    rerender([[task], {}, "u1"]);
+
+    expect(result.current.timerSecondsLeft).toBe(0);
+    expect(result.current.sessionCompletePending).toBe(true);
+  });
 });
