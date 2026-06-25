@@ -550,25 +550,17 @@
 /* ================================================================
    Timer state visual states and transitions
    ================================================================ */
-.focus-mode-overlay.timer-state-normal {
+.focus-mode-overlay.timer-state-normal,
+.focus-mode-overlay.timer-state-near-end,
+.focus-mode-overlay.timer-state-almost-done {
   --timer-state-color: #57f1db;
   --timer-state-bg: rgba(87, 241, 219, 0.08);
   --timer-state-border: rgba(87, 241, 219, 0.24);
 }
-.focus-mode-overlay.timer-state-near-end {
-  --timer-state-color: #c99248;
-  --timer-state-bg: rgba(201, 146, 72, 0.08);
-  --timer-state-border: rgba(201, 146, 72, 0.24);
-}
-.focus-mode-overlay.timer-state-almost-done {
-  --timer-state-color: #d46a5f;
-  --timer-state-bg: rgba(212, 106, 95, 0.08);
-  --timer-state-border: rgba(212, 106, 95, 0.24);
-}
 .focus-mode-overlay.timer-state-complete {
-  --timer-state-color: #d46a5f;
-  --timer-state-bg: rgba(212, 106, 95, 0.12);
-  --timer-state-border: rgba(212, 106, 95, 0.38);
+  --timer-state-color: #57f1db;
+  --timer-state-bg: rgba(87, 241, 219, 0.12);
+  --timer-state-border: rgba(87, 241, 219, 0.38);
 }
 
 .focus-mode-state-pill {
