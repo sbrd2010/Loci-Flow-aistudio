@@ -21,6 +21,14 @@ export function useFocusTimer(tasks, config, uid) {
   useEffect(() => {
     timerMaxSecondsRef.current = timerMaxSeconds;
   }, [timerMaxSeconds]);
+  // The PiP "+5" button's click listener is attached once when the popup opens
+  // and is never replaced on later renders, so its addTimeToSession closure can
+  // predate completion — read this through a ref (not the state directly) so a
+  // stale closure still sees the latest value.
+  const sessionCompletePendingRef = useRef(false);
+  useEffect(() => {
+    sessionCompletePendingRef.current = sessionCompletePending;
+  }, [sessionCompletePending]);
 
   const timerIntervalRef = useRef(null);
   // Absolute deadline for the running timer — lets us snap to correct time on tab-show
@@ -325,7 +333,7 @@ export function useFocusTimer(tasks, config, uid) {
   // No-ops once the session has already finished, so it can't resurrect a
   // completed countdown behind the global "session complete" prompt.
   const addTimeToSession = (minutes) => {
-    if (sessionCompletePending) return;
+    if (sessionCompletePendingRef.current) return;
     const addSecs = Math.round(minutes) * 60;
     setTimerMaxSeconds((m) => m + addSecs);
     setTimerSecondsLeft((s) => s + addSecs);

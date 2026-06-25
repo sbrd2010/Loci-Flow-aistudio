@@ -193,12 +193,19 @@ describe("useFocusTimer", () => {
     expect(result.current.timerSecondsLeft).toBe(15 * 60);
   });
 
-  it("does not resurrect a session that has already completed", () => {
+  it("does not resurrect a completed session even via a closure captured before completion", () => {
+    // Mirrors the real PiP "+5" button: its click listener is attached once
+    // when the popup opens and is never replaced on later renders, so it can
+    // hold an addTimeToSession closure from a render where the session hadn't
+    // completed yet. The guard must still block it via a ref, not a stale
+    // closed-over state value.
     const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
     const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
 
     result.current.setIsTimerRunning(true);
     rerender([[task], {}, "u1"]);
+
+    const preCompletionAddTimeToSession = result.current.addTimeToSession;
 
     // Countdown reaches 0 while running — triggers the "session complete" prompt.
     result.current.setTimerSecondsLeft(0);
@@ -208,7 +215,7 @@ describe("useFocusTimer", () => {
 
     // A stale PiP "+5" click landing after completion must not bring the
     // countdown back to life behind the user's back.
-    result.current.addTimeToSession(5);
+    preCompletionAddTimeToSession(5);
     rerender([[task], {}, "u1"]);
 
     expect(result.current.timerSecondsLeft).toBe(0);
