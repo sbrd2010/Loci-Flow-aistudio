@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { formatReminderLabel } from "../utils/reminders";
 import { CATEGORY_ICONS } from "../utils/taskOps";
 import { safeCopyToClipboard } from "../utils/clipboard";
+import LinkifyText from "./LinkifyText";
 
 const GripIcon = () => (
   <svg width="10" height="15" viewBox="0 0 10 15" fill="currentColor">
@@ -205,10 +206,10 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
           {isNowFocus && !isCompleted && (
             <span style={{ fontSize: "8px", fontWeight: "800", color: "var(--warning)", background: "rgba(245,158,11,0.12)", padding: "1px 5px", borderRadius: "3px", letterSpacing: "0.04em" }}>FOCUS</span>
           )}
-          <span className="task-title-text" title={title}>{title}</span>
+          <span className="task-title-text" title={title}><LinkifyText text={title} /></span>
         </div>
         {concreteStep && concreteStep !== "Do first tiny step" && (
-          <span className="task-step-text">⚡ {concreteStep}</span>
+          <span className="task-step-text">⚡ <LinkifyText text={concreteStep} /></span>
         )}
         {reminderAt && !isCompleted && (
           <span style={{

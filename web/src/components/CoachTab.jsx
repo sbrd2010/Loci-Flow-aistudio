@@ -18,6 +18,7 @@ import { stripReasoningTag } from "../utils/coachReasoning";
 import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM } from "../utils/coachContextMode";
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
 import { safeCopyToClipboard } from "../utils/clipboard";
+import LinkifyText from "./LinkifyText";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
@@ -1187,7 +1188,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                       {task.priority}
                     </span>
                     <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {task.title}
+                      <LinkifyText text={task.title} />
                     </span>
                   </div>
                 </div>

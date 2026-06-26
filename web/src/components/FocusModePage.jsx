@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { getTimerState } from "../utils/focusSession";
 import { BINAURAL_TRACK_ID } from "../utils/binauralBeat";
 import { SOUND_CATEGORIES, getCategoryKeyForTrack, getTrackTitle } from "../utils/soundLibrary";
+import LinkifyText from "./LinkifyText";
 import "../styles/focusMode.css";
 
 const DURATION_OPTIONS = [15, 20, 25, 30, 45, 60, 90];
@@ -223,9 +224,9 @@ export default function FocusModePage({
 
         <section className="focus-mode-task-panel" aria-label="Focused task">
           <div className="focus-mode-task-kicker">Now focusing on</div>
-          <h1 className="focus-mode-task-title">{task.title}</h1>
+          <h1 className="focus-mode-task-title"><LinkifyText text={task.title} /></h1>
           {task.concreteStep && (
-            <p className="focus-mode-concrete-step">{task.concreteStep}</p>
+            <p className="focus-mode-concrete-step"><LinkifyText text={task.concreteStep} /></p>
           )}
         </section>
 
