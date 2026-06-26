@@ -5,7 +5,7 @@ import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComp
 // Lifts the Focus timer state to the App level so it survives tab switches
 // (TodayTab unmounts when the user navigates to another tab) and can be
 // surfaced via a floating timer across pages.
-export function useFocusTimer(tasks, config, uid) {
+export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerSecondsLeft, setTimerSecondsLeft] = useState((config.pomodoroDurationMinutes || 25) * 60);
   const [timerMaxSeconds, setTimerMaxSeconds] = useState((config.pomodoroDurationMinutes || 25) * 60);
@@ -56,7 +56,9 @@ export function useFocusTimer(tasks, config, uid) {
     setPipOpen(false);
   };
 
-  const updatePiPUI = (pipWin, seconds, running, title) => {
+  const PIP_RING_CIRC = 2 * Math.PI * 52;
+
+  const updatePiPUI = (pipWin, seconds, maxSeconds, running, title) => {
     if (!pipWin) return;
     const doc = pipWin.document;
     const timeEl = doc.getElementById("pt");
@@ -74,6 +76,11 @@ export function useFocusTimer(tasks, config, uid) {
     if (playBtn) {
       playBtn.textContent = running ? "⏸" : "▶";
     }
+    const ringFg = doc.getElementById("pr-fg");
+    if (ringFg) {
+      const ratio = maxSeconds > 0 ? seconds / maxSeconds : 0;
+      ringFg.setAttribute("stroke-dashoffset", String(PIP_RING_CIRC * (1 - ratio)));
+    }
   };
 
   const handleOpenPiP = async () => {
@@ -86,7 +93,7 @@ export function useFocusTimer(tasks, config, uid) {
       return;
     }
     try {
-      const pipWin = await window.documentPictureInPicture.requestWindow({ width: 200, height: 165 });
+      const pipWin = await window.documentPictureInPicture.requestWindow({ width: 220, height: 210 });
       pipWinRef.current = pipWin;
       setPipOpen(true);
 
@@ -97,27 +104,62 @@ export function useFocusTimer(tasks, config, uid) {
         "body { background: #05090b; display: flex; flex-direction: column;",
         "  align-items: center; justify-content: center; height: 100vh;",
         "  font-family: system-ui, sans-serif; user-select: none; }",
-        "#pt { font-family: 'Space Mono','Courier New',monospace; font-size: 40px;",
+        "#ring-wrap { position: relative; width: 130px; height: 130px;",
+        "  display: flex; align-items: center; justify-content: center; }",
+        "#ring-wrap svg { position: absolute; top: 0; left: 0; transform: rotate(-90deg); }",
+        "#pr-bg { fill: none; stroke: rgba(87,241,219,0.16); stroke-width: 5; }",
+        "#pr-fg { fill: none; stroke: #57f1db; stroke-width: 5; stroke-linecap: round;",
+        "  transition: stroke-dashoffset 0.3s linear; }",
+        "#pt { position: relative; font-family: 'Space Mono','Courier New',monospace; font-size: 32px;",
         "  font-weight: 700; color: #edf7f2; letter-spacing: -0.02em;",
-        "  font-variant-numeric: tabular-nums; transition: color 0.3s; }",
-        "#pt.paused { color: rgba(237,247,242,0.35); }",
+        "  font-variant-numeric: tabular-nums; transition: color 0.3s, text-shadow 0.3s;",
+        "  text-shadow: 0 0 16px rgba(87,241,219,0.55); }",
+        "#pt.paused { color: rgba(237,247,242,0.35); text-shadow: none; }",
         "#pl { font-size: 10px; color: rgba(196,223,210,0.65); margin-top: 5px;",
-        "  max-width: 186px; overflow: hidden; text-overflow: ellipsis;",
+        "  max-width: 200px; overflow: hidden; text-overflow: ellipsis;",
         "  white-space: nowrap; text-align: center; }",
-        "#pip-btns { display: flex; gap: 8px; margin-top: 12px; }",
-        "#pip-play, #pip-reset, #pip-add5 { background: rgba(255,255,255,0.10);",
+        "#pip-btns { display: flex; gap: 8px; margin-top: 10px; }",
+        "#pip-play, #pip-reset, #pip-add5, #pip-shuffle { background: rgba(255,255,255,0.10);",
         "  border: 1px solid rgba(255,255,255,0.18); color: #edf7f2;",
-        "  border-radius: 8px; font-size: 18px; width: 44px; height: 36px;",
+        "  border-radius: 8px; font-size: 16px; width: 40px; height: 32px;",
         "  display: flex; align-items: center; justify-content: center;",
         "  cursor: pointer; line-height: 1; }",
-        "#pip-add5 { font-size: 12px; font-weight: 700; }",
-        "#pip-play:active, #pip-reset:active, #pip-add5:active { opacity: 0.6; }",
+        "#pip-add5 { font-size: 11px; font-weight: 700; }",
+        "#pip-play:active, #pip-reset:active, #pip-add5:active, #pip-shuffle:active { opacity: 0.6; }",
       ].join(" ");
       pipWin.document.head.appendChild(style);
 
+      const ringWrap = pipWin.document.createElement("div");
+      ringWrap.id = "ring-wrap";
+
+      const svgNS = "http://www.w3.org/2000/svg";
+      const ringSvg = pipWin.document.createElementNS(svgNS, "svg");
+      ringSvg.setAttribute("width", "130");
+      ringSvg.setAttribute("height", "130");
+      ringSvg.setAttribute("viewBox", "0 0 120 120");
+
+      const ringBg = pipWin.document.createElementNS(svgNS, "circle");
+      ringBg.id = "pr-bg";
+      ringBg.setAttribute("cx", "60");
+      ringBg.setAttribute("cy", "60");
+      ringBg.setAttribute("r", "52");
+      ringSvg.appendChild(ringBg);
+
+      const ringFg = pipWin.document.createElementNS(svgNS, "circle");
+      ringFg.id = "pr-fg";
+      ringFg.setAttribute("cx", "60");
+      ringFg.setAttribute("cy", "60");
+      ringFg.setAttribute("r", "52");
+      ringFg.setAttribute("stroke-dasharray", String(PIP_RING_CIRC));
+      ringSvg.appendChild(ringFg);
+
+      ringWrap.appendChild(ringSvg);
+
       const timeEl = pipWin.document.createElement("div");
       timeEl.id = "pt";
-      pipWin.document.body.appendChild(timeEl);
+      ringWrap.appendChild(timeEl);
+
+      pipWin.document.body.appendChild(ringWrap);
 
       const labelEl = pipWin.document.createElement("div");
       labelEl.id = "pl";
@@ -142,11 +184,19 @@ export function useFocusTimer(tasks, config, uid) {
       const add5Btn = pipWin.document.createElement("button");
       add5Btn.id = "pip-add5";
       add5Btn.textContent = "+5";
+      add5Btn.title = "Add 5 minutes";
       add5Btn.addEventListener("click", () => addTimeToSession(5));
+
+      const shuffleBtn = pipWin.document.createElement("button");
+      shuffleBtn.id = "pip-shuffle";
+      shuffleBtn.textContent = "🔀";
+      shuffleBtn.title = "Shuffle track";
+      shuffleBtn.addEventListener("click", () => reshuffleTrackRef?.current?.());
 
       btnsEl.appendChild(playBtn);
       btnsEl.appendChild(resetBtn);
       btnsEl.appendChild(add5Btn);
+      btnsEl.appendChild(shuffleBtn);
       pipWin.document.body.appendChild(btnsEl);
 
       pipWin.addEventListener("pagehide", () => {
@@ -154,7 +204,7 @@ export function useFocusTimer(tasks, config, uid) {
         setPipOpen(false);
       });
 
-      updatePiPUI(pipWin, timerSecondsLeft, isTimerRunning, activeTask?.title || "Deep Focus");
+      updatePiPUI(pipWin, timerSecondsLeft, timerMaxSecondsRef.current, isTimerRunning, activeTask?.title || "Deep Focus");
     } catch (e) {
       console.error("Failed to open PiP:", e);
     }
@@ -163,9 +213,9 @@ export function useFocusTimer(tasks, config, uid) {
   // Sync timer state changes to PiP window in real-time
   useEffect(() => {
     if (pipWinRef.current && pipOpen) {
-      updatePiPUI(pipWinRef.current, timerSecondsLeft, isTimerRunning, activeTask?.title || "Deep Focus");
+      updatePiPUI(pipWinRef.current, timerSecondsLeft, timerMaxSeconds, isTimerRunning, activeTask?.title || "Deep Focus");
     }
-  }, [timerSecondsLeft, isTimerRunning, activeTask?.title, pipOpen]);
+  }, [timerSecondsLeft, timerMaxSeconds, isTimerRunning, activeTask?.title, pipOpen]);
 
   // PiP safety close rules: close when session ends or no active task exists
   useEffect(() => {

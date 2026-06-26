@@ -357,11 +357,18 @@ export default function App() {
 
   // Focus timer state lives here (not in TodayTab) so it survives tab switches
   // and can be surfaced via the floating timer across pages.
-  const focusTimer = useFocusTimer(payload?.tasks || [], payload?.config || {}, user?.uid || null);
+  // reshuffleTrackRef bridges useFocusAudio's reshuffleTrack into the timer
+  // hook's PiP popup: useFocusAudio needs focusTimer.isTimerRunning, so it's
+  // constructed after useFocusTimer and isn't available yet at this point.
+  const reshuffleTrackRef = useRef(() => {});
+  const focusTimer = useFocusTimer(payload?.tasks || [], payload?.config || {}, user?.uid || null, reshuffleTrackRef);
 
   // Focus Sounds audio also lives here so ambient sound keeps playing across
   // tab switches and after exiting the Deep Focus overlay.
   const focusAudio = useFocusAudio(focusTimer.isTimerRunning, payload?.config || {}, saveSubPath);
+  useEffect(() => {
+    reshuffleTrackRef.current = focusAudio.reshuffleTrack;
+  }); // no deps - reshuffleTrack is a fresh closure every render, always resync
 
   // Unsent Coach chat draft also lives here (not in CoachTab) so it survives
   // tab switches — CoachTab unmounts when activeTab !== "coach". In-memory
