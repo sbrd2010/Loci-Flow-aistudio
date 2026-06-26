@@ -7,8 +7,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -31,16 +31,26 @@ jobs:
           npm test
           npm run build
 
-      - name: Deploy Database Rules
+      - name: Write Firebase credentials
+        env:
+          FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW }}
         run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW }}' > /tmp/sa.json
-          GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json npx firebase-tools@15.22.1 deploy --only database --project loci-flow
+          umask 077
+          test -n "$FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW" > "$RUNNER_TEMP/firebase-service-account.json"
+          jq -e '
+            .type == "service_account" and
+            .project_id == "loci-flow" and
+            (.private_key | type == "string" and length > 0) and
+            (.client_email | type == "string" and length > 0)
+          ' "$RUNNER_TEMP/firebase-service-account.json" > /dev/null
 
-      - name: Deploy to Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW }}
-          channelId: live
-          projectId: loci-flow
-          firebaseToolsVersion: 15.22.1
+      - name: Deploy Firebase database rules and hosting
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+        run: |
+          npx --yes firebase-tools@15.22.1 deploy \
+            --config firebase.json \
+            --only hosting,database \
+            --project loci-flow \
+            --non-interactive
