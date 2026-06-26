@@ -3,6 +3,8 @@ import { safeCopyToClipboard } from "./clipboard";
 
 // node environment has no DOM; the execCommand fallback only touches
 // document.createElement/body.appendChild/removeChild and execCommand.
+// `navigator` also isn't a guaranteed global across Node versions (CI runs
+// Node 20, which has none), so it's stubbed here too rather than mutated.
 function stubDocument() {
   const ta = { value: "", style: {}, select: vi.fn() };
   globalThis.document = {
@@ -16,16 +18,19 @@ function stubDocument() {
 describe("safeCopyToClipboard", () => {
   beforeEach(() => {
     stubDocument();
+    // Node's own `navigator` global (added in recent versions) is a
+    // read-only accessor, so it must be redefined rather than assigned.
+    Object.defineProperty(globalThis, "navigator", { value: {}, configurable: true, writable: true });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    delete navigator.clipboard;
+    delete globalThis.navigator;
   });
 
   it("uses navigator.clipboard.writeText when available", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    globalThis.navigator.clipboard = { writeText };
 
     const ok = await safeCopyToClipboard("hello");
 
@@ -34,8 +39,6 @@ describe("safeCopyToClipboard", () => {
   });
 
   it("falls back to execCommand when navigator.clipboard is unavailable", async () => {
-    Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
-
     const ok = await safeCopyToClipboard("hello");
 
     expect(document.execCommand).toHaveBeenCalledWith("copy");
@@ -44,7 +47,7 @@ describe("safeCopyToClipboard", () => {
 
   it("falls back to execCommand when navigator.clipboard.writeText rejects", async () => {
     const writeText = vi.fn().mockRejectedValue(new Error("denied"));
-    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    globalThis.navigator.clipboard = { writeText };
 
     const ok = await safeCopyToClipboard("hello");
 
@@ -53,7 +56,6 @@ describe("safeCopyToClipboard", () => {
   });
 
   it("returns false when both paths fail", async () => {
-    Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
     document.execCommand = vi.fn().mockReturnValue(false);
 
     const ok = await safeCopyToClipboard("hello");
