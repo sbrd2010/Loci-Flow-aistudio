@@ -10,8 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    env:
-      FIREBASE_TOOLS_VERSION: 14.26.0
     steps:
       - uses: actions/checkout@v4
 
@@ -48,103 +46,36 @@ jobs:
             (.client_email | type == "string" and length > 0)
           ' "$RUNNER_TEMP/firebase-service-account.json" > /dev/null
 
-      - name: Diagnose service account auth
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
-        run: |
-          set -euo pipefail
-          jq -r '.private_key' "$GOOGLE_APPLICATION_CREDENTIALS" | openssl pkey -noout -check \
-            && echo "PEM parses OK as a private key" \
-            || echo "PEM FAILED to parse as a private key"
-          gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
-          gcloud config set project loci-flow
-          if ! gcloud auth print-access-token > /dev/null; then
-            echo "Token retrieval FAILED"
-            exit 1
-          fi
-          echo "Token obtained OK"
-          gcloud auth application-default print-access-token > /dev/null \
-            && echo "ADC token obtained OK (informational only)" \
-            || echo "ADC token retrieval FAILED (informational only)"
+      - name: Validate database rules deploy script syntax
+        run: node --check scripts/deploy-database-rules-rest.mjs
 
-          ACCESS_TOKEN=$(gcloud auth print-access-token)
+      # RCA test: firebase-tools fails to authenticate with this service
+      # account across both major versions tested (14.x and 15.x), even
+      # though the same gcloud-issued access token is accepted directly by
+      # Firebase's REST APIs. FirebaseExtended/action-hosting-deploy@v0 uses
+      # a different auth path than firebase-tools CLI invocations do, so we
+      # test it here in isolation before committing to a full custom Hosting
+      # REST deploy.
+      - name: Deploy Hosting via Firebase Hosting Action
+        if: github.ref == 'refs/heads/main'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW }}
+          channelId: live
+          projectId: loci-flow
 
-          echo "Calling Firebase Management API project lookup..."
-          PROJECT_STATUS=$(curl -s -o "$RUNNER_TEMP/project_response.json" -w '%{http_code}' \
-            -H "Authorization: Bearer $ACCESS_TOKEN" \
-            "https://firebase.googleapis.com/v1beta1/projects/loci-flow")
-          echo "Firebase Management API project lookup HTTP status: $PROJECT_STATUS"
-          jq -c '{projectId: .projectId, displayName: .displayName, state: .state, errorStatus: .error.status, errorCode: .error.code}' \
-            "$RUNNER_TEMP/project_response.json" 2>/dev/null \
-            || echo "(could not parse Firebase Management API response as JSON)"
-
-          echo "Calling Firebase Hosting sites list..."
-          SITES_STATUS=$(curl -s -o "$RUNNER_TEMP/sites_response.json" -w '%{http_code}' \
-            -H "Authorization: Bearer $ACCESS_TOKEN" \
-            "https://firebasehosting.googleapis.com/v1beta1/projects/loci-flow/sites")
-          echo "Firebase Hosting sites list HTTP status: $SITES_STATUS"
-          jq -c '{sitesCount: (.sites | length), errorStatus: .error.status, errorCode: .error.code}' \
-            "$RUNNER_TEMP/sites_response.json" 2>/dev/null \
-            || echo "(could not parse Firebase Hosting API response as JSON)"
-
-          unset ACCESS_TOKEN
-
-          set +e
-          PROJECTS_LIST_OUTPUT=$(npx --yes firebase-tools@$FIREBASE_TOOLS_VERSION projects:list --project loci-flow --non-interactive 2>&1)
-          PROJECTS_LIST_STATUS=$?
-          set -e
-          if [ "$PROJECTS_LIST_STATUS" -eq 0 ]; then
-            echo "firebase-tools sees ADC auth OK (informational only)"
-          else
-            echo "firebase-tools projects:list FAILED (informational only; may be a project-list permission scope mismatch, not necessarily a deploy blocker). Error output (filtered):"
-            FILTERED_OUTPUT=$(echo "$PROJECTS_LIST_OUTPUT" | grep -v -iE 'BEGIN|PRIVATE KEY|-----|token|Bearer|Authorization|ya29\.|eyJ|client_email|private_key|refresh_token|access_token' || true)
-            if [ -n "$FILTERED_OUTPUT" ]; then
-              echo "$FILTERED_OUTPUT" | tail -20
-            else
-              echo "(all firebase-tools output was redacted or empty)"
-            fi
-          fi
-
-      - name: Authenticate via google-github-actions/auth (experiment)
+      - name: Authenticate to Google Cloud (for database rules REST deploy)
+        if: github.ref == 'refs/heads/main'
         uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW }}
           create_credentials_file: true
           export_environment_variables: true
 
-      - name: Diagnose auth via google-github-actions/auth credentials
+      - name: Deploy database rules via REST
+        if: github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
-          ACTIVE_ACCOUNT_COUNT=$(gcloud auth list --format='value(account)' | wc -l | tr -d ' ')
-          echo "Active gcloud accounts (count only): $ACTIVE_ACCOUNT_COUNT"
-          if ! gcloud auth print-access-token > /dev/null; then
-            echo "Token retrieval via google-github-actions/auth FAILED"
-            exit 1
-          fi
-          echo "Token obtained OK via google-github-actions/auth"
-          set +e
-          AUTH_ACTION_OUTPUT=$(npx --yes firebase-tools@15.22.2 projects:list --project loci-flow --non-interactive 2>&1)
-          AUTH_ACTION_STATUS=$?
-          set -e
-          if [ "$AUTH_ACTION_STATUS" -eq 0 ]; then
-            echo "firebase-tools (via google-github-actions/auth credentials) sees auth OK"
-          else
-            echo "firebase-tools (via google-github-actions/auth credentials) projects:list FAILED. Error output (filtered):"
-            FILTERED_AUTH_ACTION_OUTPUT=$(echo "$AUTH_ACTION_OUTPUT" | grep -v -iE 'BEGIN|PRIVATE KEY|-----|token|Bearer|Authorization|ya29\.|eyJ|client_email|private_key|refresh_token|access_token' || true)
-            if [ -n "$FILTERED_AUTH_ACTION_OUTPUT" ]; then
-              echo "$FILTERED_AUTH_ACTION_OUTPUT" | tail -20
-            else
-              echo "(all firebase-tools output was redacted or empty)"
-            fi
-          fi
-
-      - name: Deploy Firebase database rules and hosting
-        if: github.ref == 'refs/heads/main'
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
-        run: |
-          npx --yes firebase-tools@$FIREBASE_TOOLS_VERSION deploy \
-            --config firebase.json \
-            --only hosting,database \
-            --project loci-flow \
-            --non-interactive
+          export FIREBASE_ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          node scripts/deploy-database-rules-rest.mjs
