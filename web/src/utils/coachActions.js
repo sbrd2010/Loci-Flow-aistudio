@@ -7,7 +7,11 @@
 // [[COMPLETE_TASK:<title>]] - mark a task complete (+100 XP, +1 contribution)
 // [[ADD_TASK:<title>]]      - create a new Today task (P3, 25min default)
 // [[PARK_TASK:<title>]]     - park a task (mirrors Bad Day Reset's per-task patch)
-// [[START_FOCUS:<title>]]   - pin a task as Now Focus so a focus session can start
+// [[START_FOCUS:<title>]] or [[START_FOCUS:<title>|<minutes>]] - pin a task as
+//                            Now Focus so a focus session can start. The
+//                            optional "|<minutes>" suffix (used for
+//                            body-double sessions with a stated duration)
+//                            overwrites the task's time estimate, clamped 5-20.
 //
 // The system prompt tells the AI these tags are "explicit-request-only", but
 // that's advisory — applyCoachActions() additionally requires (via
@@ -20,13 +24,30 @@ import { safeUUID } from "./uuid";
 
 const ACTION_TAG_RE = /\s*\[\[(SET_NOW_FOCUS|COMPLETE_TASK|ADD_TASK|PARK_TASK|START_FOCUS):\s*((?:[^\]]|\](?!\]))+?)\s*\]\]/gi;
 
+const START_FOCUS_DURATION_RE = /^(.*)\|\s*(\d{1,3})\s*(?:min(?:ute)?s?)?\s*$/i;
+
+// Splits a START_FOCUS tag's raw title on an optional "|<minutes>" duration
+// suffix, clamping the minutes to the 5-20 range the BODY-DOUBLE SESSIONS
+// prompt instruction promises. Returns durationMinutes: null when no suffix.
+function parseStartFocusTitle(rawTitle) {
+  const match = START_FOCUS_DURATION_RE.exec(rawTitle);
+  if (!match) return { title: rawTitle.trim(), durationMinutes: null };
+  return { title: match[1].trim(), durationMinutes: Math.min(20, Math.max(5, parseInt(match[2], 10))) };
+}
+
 // Strips all recognized coach action tags from an AI reply. Returns
 // { cleanText, actions } where actions is an ordered list of
-// { type: "SET_NOW_FOCUS"|"COMPLETE_TASK"|"ADD_TASK"|"PARK_TASK"|"START_FOCUS", title }.
+// { type: "SET_NOW_FOCUS"|"COMPLETE_TASK"|"ADD_TASK"|"PARK_TASK"|"START_FOCUS", title, durationMinutes? }.
 export function parseCoachActionTags(text = "") {
   const actions = [];
-  const cleanText = text.replace(ACTION_TAG_RE, (_match, type, title) => {
-    actions.push({ type: type.toUpperCase(), title: title.trim() });
+  const cleanText = text.replace(ACTION_TAG_RE, (_match, type, rawTitle) => {
+    const upperType = type.toUpperCase();
+    if (upperType === "START_FOCUS") {
+      const { title, durationMinutes } = parseStartFocusTitle(rawTitle.trim());
+      actions.push(durationMinutes != null ? { type: upperType, title, durationMinutes } : { type: upperType, title });
+    } else {
+      actions.push({ type: upperType, title: rawTitle.trim() });
+    }
     return "";
   }).trim();
   return { cleanText, actions };
@@ -48,7 +69,10 @@ function normalizeStopWords(str = "") {
 const INTENT_PATTERNS = {
   COMPLETE_TASK: /\b(done|finish(ed|ing)?|complet(e|ed|ing)|wrapped? up|knocked out)\b/i,
   SET_NOW_FOCUS: /\b(focus on|switch.*focus|prioriti[sz]e|now focus|pin( this| that)? task|pin\b|focus.*now)\b/i,
-  START_FOCUS: /\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\b/i,
+  // Second alternative covers body-double requests ("sit with me while I
+  // work", "be my body double") — they ask for a focus session just as
+  // clearly as "start a timer" does, without using start/begin/kick-off wording.
+  START_FOCUS: /\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\b|\b(body[\s-]?double|sit with me|stay with me|work (?:alongside|next to) me|keep me company while i work)\b/i,
   ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don'?t forget|add .+ to (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b)/i,
   PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|skip)\b/i,
 };
@@ -231,6 +255,14 @@ export function buildSetNowFocusTasks(tasks, taskUuid, now = Date.now()) {
   });
 }
 
+// Overwrites a task's time estimate — used by START_FOCUS when the tag
+// carries a "|<minutes>" duration suffix from a body-double session.
+export function buildSetTimeEstimateTasks(tasks, taskUuid, minutes, now = Date.now()) {
+  return tasks.map(t =>
+    t.uuid === taskUuid ? { ...t, timeEstimateMinutes: minutes, lastUpdated: now } : t
+  );
+}
+
 // Parks the given task, unpinning it if it was the Now Focus — mirrors
 // MindBoxTab's Bad Day Reset per-task patch.
 export function buildParkTaskTasks(tasks, taskUuid, now = Date.now()) {
@@ -368,6 +400,9 @@ export function applyCoachActions(payload, actions, { lociDateStr, localDateStr,
     }
     if (action.type === "SET_NOW_FOCUS" || action.type === "START_FOCUS") {
       nextPayload = { ...nextPayload, tasks: buildSetNowFocusTasks(nextPayload.tasks, task.uuid) };
+      if (action.type === "START_FOCUS" && action.durationMinutes) {
+        nextPayload = { ...nextPayload, tasks: buildSetTimeEstimateTasks(nextPayload.tasks, task.uuid, action.durationMinutes) };
+      }
     } else if (action.type === "COMPLETE_TASK") {
       nextPayload = buildCompleteTaskPayload(nextPayload, task, lociDateStr, localDateStr);
     } else if (action.type === "PARK_TASK") {
@@ -413,7 +448,7 @@ export function buildActionReplyText(cleanText, results = [], lastUserMessage = 
     const title = r.task ? r.task.title : r.title;
     switch (r.type) {
       case "SET_NOW_FOCUS": return `Switched your focus to "${title}".`;
-      case "START_FOCUS": return `Started a focus session on "${title}".`;
+      case "START_FOCUS": return r.durationMinutes ? `Started a ${r.durationMinutes}-min focus session on "${title}".` : `Started a focus session on "${title}".`;
       case "COMPLETE_TASK": return `Marked "${title}" complete — +100 XP!`;
       case "ADD_TASK": return `Added "${title}" to your Today list.`;
       case "PARK_TASK": return `Parked "${title}" for later.`;

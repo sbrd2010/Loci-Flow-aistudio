@@ -115,6 +115,25 @@ describe("parseCoachActionTags", () => {
     });
   });
 
+  it("extracts a body-double duration suffix from a START_FOCUS tag", () => {
+    expect(parseCoachActionTags("Starting now!\n[[START_FOCUS:Write report|10]]")).toEqual({
+      cleanText: "Starting now!",
+      actions: [{ type: "START_FOCUS", title: "Write report", durationMinutes: 10 }],
+    });
+    expect(parseCoachActionTags("[[START_FOCUS:Write report|10 minutes]]").actions).toEqual([
+      { type: "START_FOCUS", title: "Write report", durationMinutes: 10 },
+    ]);
+  });
+
+  it("clamps a START_FOCUS duration suffix to the 5-20 minute range", () => {
+    expect(parseCoachActionTags("[[START_FOCUS:Write report|2]]").actions).toEqual([
+      { type: "START_FOCUS", title: "Write report", durationMinutes: 5 },
+    ]);
+    expect(parseCoachActionTags("[[START_FOCUS:Write report|45]]").actions).toEqual([
+      { type: "START_FOCUS", title: "Write report", durationMinutes: 20 },
+    ]);
+  });
+
   it("allows a single bracket character within a tag title", () => {
     expect(parseCoachActionTags("Added it!\n[[ADD_TASK:Review [Q2] metrics]]")).toEqual({
       cleanText: "Added it!",
@@ -238,6 +257,11 @@ describe("matchesUserIntent", () => {
   it("matches SET_NOW_FOCUS on focus/prioritize language", () => {
     expect(matchesUserIntent("SET_NOW_FOCUS", "Focus on the report now")).toBe(true);
     expect(matchesUserIntent("SET_NOW_FOCUS", "What should I do next?")).toBe(false);
+  });
+
+  it("matches START_FOCUS on body-double language without start/focus wording", () => {
+    expect(matchesUserIntent("START_FOCUS", "can you sit with me while I work on Write report", "Write report")).toBe(true);
+    expect(matchesUserIntent("START_FOCUS", "be my body double for Write report", "Write report")).toBe(true);
   });
 
   it("matches START_FOCUS on start+session language", () => {
@@ -443,6 +467,24 @@ describe("applyCoachActions", () => {
     expect(next.tasks.find(t => t.uuid === "2").isNowFocus).toBe(false);
     expect(results[0].matched).toBe(true);
     expect(results[0].task.uuid).toBe("1");
+  });
+
+  it("START_FOCUS with a body-double duration overwrites the matched task's time estimate", () => {
+    const payload = {
+      tasks: [
+        { uuid: "1", title: "Write report", isNowFocus: false, isCompleted: false, isDeleted: false, isParked: false, timeEstimateMinutes: 25 },
+      ],
+      config: {},
+      contributions: [],
+    };
+    const { payload: next, results } = applyCoachActions(
+      payload,
+      [{ type: "START_FOCUS", title: "Write report", durationMinutes: 10 }],
+      { ...dateOpts, lastUserMessage: "Sit with me for 10 minutes while I write the report." },
+    );
+    expect(next.tasks[0].isNowFocus).toBe(true);
+    expect(next.tasks[0].timeEstimateMinutes).toBe(10);
+    expect(results[0].matched).toBe(true);
   });
 
   it("applies multiple actions in order: completing the Now Focus task, then pinning the next one", () => {
@@ -695,6 +737,16 @@ describe("buildActionReplyText", () => {
     ];
     expect(buildActionReplyText("Some narration the model wrote.", results, "I finished the report, and park walk the dog")).toBe(
       `Marked "Write report" complete — +100 XP! I couldn't find "Walk the dog" in your task list — could you double-check the name?`
+    );
+  });
+
+  it("includes the body-double duration in the START_FOCUS success line", () => {
+    const results = [
+      { type: "START_FOCUS", title: "Write report", durationMinutes: 10, matched: true, task: { title: "Write report" } },
+      { type: "PARK_TASK", title: "Walk the dog", matched: false },
+    ];
+    expect(buildActionReplyText("Some narration the model wrote.", results, "Sit with me for 10 minutes, and park walk the dog")).toBe(
+      `Started a 10-min focus session on "Write report". I couldn't find "Walk the dog" in your task list — could you double-check the name?`
     );
   });
 
