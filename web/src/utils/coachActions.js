@@ -260,7 +260,7 @@ const URGENT_KEYWORDS = /\b(urgent|asap|emergency|immediately|right away|critica
 
 // Skips the P1 bump when urgency is explicitly negated ("not urgent",
 // "non-urgent", "isn't an emergency") instead of asserted.
-const NEGATED_URGENT_RE = /\b(?:not|non-?|isn['’]?t|aren['’]?t|no longer)\s*(?:so\s+|that\s+|very\s+|an?\s+)?(?:urgent|asap|emergency|immediate(?:ly)?|critical)\b/i;
+const NEGATED_URGENT_RE = /\b(?:not|non-?|isn['’]?t|aren['’]?t|no longer)\s*(?:so\s+|that\s+|very\s+|really\s+|an?\s+)?(?:urgent|asap|emergency|immediate(?:ly)?|critical|right away)\b/i;
 
 // Best-effort category/priority guess for a Coach-added task, used only
 // when the title doesn't otherwise specify one. Defaults to AddTaskDialog's

@@ -41,6 +41,8 @@ describe("inferTaskMetadata", () => {
   it("does not bump priority when urgency is explicitly negated", () => {
     expect(inferTaskMetadata("email landlord, not urgent")).toEqual({ category: "Personal", priority: "P3" });
     expect(inferTaskMetadata("non-urgent: water the plants")).toEqual({ category: "Personal", priority: "P3" });
+    expect(inferTaskMetadata("water the plants, not right away")).toEqual({ category: "Personal", priority: "P3" });
+    expect(inferTaskMetadata("not really urgent at all, water the plants")).toEqual({ category: "Personal", priority: "P3" });
   });
 
   it("prefers a stronger Career/Work cue over a generic appointment keyword", () => {

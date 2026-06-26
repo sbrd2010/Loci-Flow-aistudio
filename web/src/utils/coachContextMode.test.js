@@ -318,5 +318,24 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("I'm exhausted, what should I work on?", pacedOpts)).toBe("full_task");
       expect(classifyContextMode("I have low energy, what should I do next?")).toBe("full_task");
     });
+
+    it("routes distress over body-double requests to emotional, not full_task", () => {
+      expect(classifyContextMode("I'm overwhelmed, stay with me")).toBe("emotional");
+      expect(classifyContextMode("I am so stressed, can you just sit with me, I can't focus on anything")).toBe("emotional");
+      expect(classifyContextMode("I feel hopeless, can you be my body double")).toBe("emotional");
+    });
+
+    it("never compacts body-double requests, even on the paced path with a targeted reference", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("can you sit with me while I work on this?", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("stay with me on that task", pacedOpts)).toBe("full_task");
+    });
+
+    it("never compacts category/horizon-filtered priority questions, even on the paced path", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("Which work task should I do first?", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("Which career task should I do first?", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("What should I focus on this month?", pacedOpts)).toBe("full_task");
+    });
   });
 });
