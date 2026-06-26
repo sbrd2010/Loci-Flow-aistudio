@@ -49,23 +49,7 @@ jobs:
       - name: Validate database rules deploy script syntax
         run: node --check scripts/deploy-database-rules-rest.mjs
 
-      # RCA test: firebase-tools fails to authenticate with this service
-      # account across both major versions tested (14.x and 15.x), even
-      # though the same gcloud-issued access token is accepted directly by
-      # Firebase's REST APIs. FirebaseExtended/action-hosting-deploy@v0 uses
-      # a different auth path than firebase-tools CLI invocations do, so we
-      # test it here in isolation before committing to a full custom Hosting
-      # REST deploy.
-      - name: Deploy Hosting via Firebase Hosting Action
-        if: github.ref == 'refs/heads/main'
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW }}
-          channelId: live
-          projectId: loci-flow
-
-      - name: Authenticate to Google Cloud (for database rules REST deploy)
+      - name: Authenticate to Google Cloud
         if: github.ref == 'refs/heads/main'
         uses: google-github-actions/auth@v3
         with:
@@ -73,9 +57,84 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
+      # Database rules deploy runs before the Hosting Action (and does not
+      # depend on it) so a Hosting Action false failure - see below - can
+      # never cause rules to be silently skipped.
       - name: Deploy database rules via REST
         if: github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
           export FIREBASE_ACCESS_TOKEN="$(gcloud auth print-access-token)"
           node scripts/deploy-database-rules-rest.mjs
+
+      - name: Record deploy window start time
+        if: github.ref == 'refs/heads/main'
+        id: deploy_window
+        run: echo "start_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      # Confirmed (PR #303's production run) that this action authenticates
+      # successfully - the "Failed to authenticate" bug that affects direct
+      # firebase-tools CLI invocations does not affect this action. The
+      # failure seen instead was: the action's internal firebase-tools
+      # finalizes the Hosting version (HTTP 200), then a "premature close"
+      # network error causes it to retry the release-creation call, and the
+      # retry is correctly rejected with 400 FAILED_PRECONDITION because the
+      # first attempt already succeeded. firebase-tools 15.22.2/15.22.3
+      # changed retry/keep-alive behavior on "premature close" errors,
+      # introducing this non-idempotent retry; 15.22.1 is the last version
+      # confirmed (via job logs) not to have this regression, so we pin the
+      # action to it rather than letting it resolve "latest".
+      - name: Deploy Hosting via Firebase Hosting Action
+        if: github.ref == 'refs/heads/main'
+        id: hosting_deploy
+        continue-on-error: true
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW }}
+          channelId: live
+          projectId: loci-flow
+          firebaseToolsVersion: 15.22.1
+
+      # The Hosting Action step above can report failure even when the
+      # deploy already went live (see comment above). Rather than swallow
+      # all Hosting failures, prove the specific non-fatal case: query the
+      # site's current live release and check whether it was created during
+      # this very job run. If so, the action's failure is the known
+      # duplicate-release retry artifact and we let the job pass; if not,
+      # this is treated as a real Hosting failure and the job fails.
+      - name: Verify live Hosting release after Action failure
+        if: github.ref == 'refs/heads/main' && steps.hosting_deploy.outcome == 'failure'
+        run: |
+          set -euo pipefail
+          ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          STATUS=$(curl -s -o "$RUNNER_TEMP/latest_release.json" -w '%{http_code}' \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "https://firebasehosting.googleapis.com/v1beta1/sites/loci-flow/releases?pageSize=1")
+          echo "Firebase Hosting latest release lookup HTTP status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Could not verify the live release (non-200 response). Treating the Hosting Action failure as real."
+            exit 1
+          fi
+          node -e '
+            const fs = require("fs");
+            const data = JSON.parse(fs.readFileSync(process.env.RELEASE_FILE, "utf8"));
+            const release = data.releases && data.releases[0];
+            if (!release) {
+              console.error("No releases found for the site. Treating the Hosting Action failure as real.");
+              process.exit(1);
+            }
+            const releaseTime = new Date(release.releaseTime).getTime();
+            const windowStart = new Date(process.env.DEPLOY_WINDOW_START).getTime();
+            console.log(`Latest live release time: ${release.releaseTime}`);
+            console.log(`This job deploy window started: ${process.env.DEPLOY_WINDOW_START}`);
+            if (Number.isFinite(releaseTime) && releaseTime >= windowStart) {
+              console.log("The current live release was created during this job run - this matches the known duplicate-release/current-active-version retry issue (FAILED_PRECONDITION), not a real deploy failure. Treating as non-fatal.");
+              process.exit(0);
+            }
+            console.error("The current live release predates this job run. The Hosting Action failure does not match the known non-fatal condition - treating as real.");
+            process.exit(1);
+          '
+        env:
+          RELEASE_FILE: ${{ runner.temp }}/latest_release.json
+          DEPLOY_WINDOW_START: ${{ steps.deploy_window.outputs.start_time }}
