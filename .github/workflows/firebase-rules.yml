@@ -25,4 +25,4 @@ jobs:
           java-version: 21
 
       - name: Run Firebase RTDB rules emulator tests
-        run: npx --yes firebase-tools@latest emulators:exec --project loci-flow --only auth,database "node web/tests/firebase-rules-user-isolation.test.mjs"
+        run: npx --yes firebase-tools@15.22.1 emulators:exec --project loci-flow --only auth,database "node web/tests/firebase-rules-user-isolation.test.mjs"

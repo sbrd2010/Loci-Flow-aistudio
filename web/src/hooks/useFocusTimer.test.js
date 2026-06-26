@@ -221,4 +221,35 @@ describe("useFocusTimer", () => {
     expect(result.current.timerSecondsLeft).toBe(0);
     expect(result.current.sessionCompletePending).toBe(true);
   });
+
+  it("blocks a stale PiP +5 while the keep-going duration picker is open", () => {
+    // After "Keep going", App.jsx clears sessionCompletePending right away
+    // but leaves showExtendPicker open until the user taps a duration. A
+    // stray PiP +5 click landing in that window must not skew the still-0:00
+    // countdown before extendTimer() actually restarts it.
+    const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+    const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+    result.current.setIsTimerRunning(true);
+    rerender([[task], {}, "u1"]);
+
+    const preCompletionAddTimeToSession = result.current.addTimeToSession;
+
+    result.current.setTimerSecondsLeft(0);
+    rerender([[task], {}, "u1"]);
+    expect(result.current.sessionCompletePending).toBe(true);
+
+    // Mirrors handleFocusSessionKeepGoing: dismiss the prompt, open the picker.
+    result.current.dismissSessionComplete();
+    result.current.setShowExtendPicker(true);
+    rerender([[task], {}, "u1"]);
+    expect(result.current.sessionCompletePending).toBe(false);
+    expect(result.current.showExtendPicker).toBe(true);
+
+    preCompletionAddTimeToSession(5);
+    rerender([[task], {}, "u1"]);
+
+    expect(result.current.timerSecondsLeft).toBe(0);
+    expect(result.current.timerMaxSeconds).toBe(25 * 60);
+  });
 });
