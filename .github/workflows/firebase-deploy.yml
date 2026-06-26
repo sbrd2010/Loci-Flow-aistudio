@@ -51,13 +51,6 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
         run: |
           set -euo pipefail
-          echo "private_key line count: $(jq -r '.private_key' "$GOOGLE_APPLICATION_CREDENTIALS" | wc -l)"
-          jq -e '.private_key | startswith("-----BEGIN PRIVATE KEY-----")' "$GOOGLE_APPLICATION_CREDENTIALS" > /dev/null \
-            && echo "private_key has expected BEGIN marker" \
-            || echo "private_key MISSING expected BEGIN marker"
-          jq -e '.private_key | (endswith("-----END PRIVATE KEY-----\n") or endswith("-----END PRIVATE KEY-----"))' "$GOOGLE_APPLICATION_CREDENTIALS" > /dev/null \
-            && echo "private_key has expected END marker" \
-            || echo "private_key MISSING expected END marker"
           jq -r '.private_key' "$GOOGLE_APPLICATION_CREDENTIALS" | openssl pkey -noout -check \
             && echo "PEM parses OK as a private key" \
             || echo "PEM FAILED to parse as a private key"
