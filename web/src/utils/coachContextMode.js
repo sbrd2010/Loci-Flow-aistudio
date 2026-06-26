@@ -24,6 +24,13 @@ const COMPACT_FOLLOWUP_RE = /\b(key point|one sentence|10[-\s]?min(?:ute)?s?\s*v
 
 const EXPLICIT_ACTION_RE = /\b(add (?:this|that)?\s*task|add\b.{1,50}\bto (?:my |the )?(?:today['’]?s?\s+)?list|add\b.{1,50}\bto (?:today|week|month|quarter|work)|create (?:a )?task|capture this|put (?:this|it) in (?:my|the)?\s*tasks|mark\b.*\bdone|mark (?:it|this)? done|done with (?:this|that|it)?\s*task|done with .{1,50}\btask|(?:done with|finished)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|complete this|delete (?:this|that) task|park (?:this|that|it|task)\b|park\s+.{1,50}\btask|defer (?:this|that|it|task)\b|defer\s+.{1,50}\btask|(?:park|defer)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|move (?:this|it) to|start (?:a )?timer|start (?:a\s+|current\s+|now\s+)?focus|focus session)\b/i;
 
+// Body-double session requests ("be my body double", "sit with me while I
+// work", "stay with me") read as task/focus requests even when they don't
+// use "start"/"focus"/"timer" wording — route them to full_task so the
+// coach has task context to confirm and the COACH ACTIONS block to start a
+// session via START_FOCUS.
+const BODY_DOUBLE_RE = /\b(body[\s-]?double|sit with me|stay with me|work (?:alongside|next to) me|keep me company while i work)\b/i;
+
 const TASK_ASK_RE = /\b(what should i (?:do|work on|start|focus on)|which (?:one|task) shall i focus|shall i focus|help me (?:choose|pick|prioritize|plan)|choose a task|pick a task|pick one (?:thing|task)|next step|prioritize my|plan my|plan today)\b/i;
 
 /**
@@ -48,7 +55,7 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
   const isTargetedMutation = TARGET_REF_RE.test(text);
 
   // 1. Explicit task action mutations take priority over emotional support
-  if (EXPLICIT_ACTION_RE.test(text)) {
+  if (EXPLICIT_ACTION_RE.test(text) || BODY_DOUBLE_RE.test(text)) {
     if (isPaced && hasLastPlan && !isFreshScanRequested && !isBroadQuery && !isCheckin && isTargetedMutation) {
       return "compact_task";
     }

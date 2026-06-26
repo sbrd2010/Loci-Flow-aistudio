@@ -304,5 +304,12 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("I want to die, what should I do?")).toBe("emotional");
       expect(classifyContextMode("I might hurt myself, help me pick a task")).toBe("emotional");
     });
+
+    it("routes body-double requests to full_task even without focus/timer wording", () => {
+      expect(classifyContextMode("be my body double for 15 minutes")).toBe("full_task");
+      expect(classifyContextMode("can you sit with me while I work on this?")).toBe("full_task");
+      expect(classifyContextMode("stay with me, I need to write this report")).toBe("full_task");
+      expect(classifyContextMode("can you work alongside me for a bit")).toBe("full_task");
+    });
   });
 });

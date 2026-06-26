@@ -189,4 +189,17 @@ describe("buildCoachSystemPrompt", () => {
       expect(out).not.toContain("PRIORITY QUESTIONS");
     });
   });
+
+  it("full_task mode includes body-double instructions with honesty about not watching the user", () => {
+    const out = buildCoachSystemPrompt("full_task", baseCtx());
+    expect(out).toContain("BODY-DOUBLE SESSIONS");
+    expect(out).toContain("not actually watching");
+  });
+
+  it("light, emotional, profile_reflection, and compact_task modes omit body-double instructions", () => {
+    ["light", "emotional", "profile_reflection", "compact_task"].forEach(mode => {
+      const out = buildCoachSystemPrompt(mode, baseCtx());
+      expect(out).not.toContain("BODY-DOUBLE SESSIONS");
+    });
+  });
 });
