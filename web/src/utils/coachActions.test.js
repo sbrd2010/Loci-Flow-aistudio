@@ -1,8 +1,38 @@
 import { describe, it, expect } from "vitest";
-import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, buildParkTaskTasks, applyCoachActions, matchesUserIntent, buildActionReplyText } from "./coachActions";
+import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, buildParkTaskTasks, applyCoachActions, matchesUserIntent, buildActionReplyText, inferTaskMetadata } from "./coachActions";
 import { parseCheckinTag } from "./coachCheckin";
 import { getFocusWindows, getLociDayStr } from "./focusWindows";
 import { getLocalDateString } from "./lociAIContext";
+
+describe("inferTaskMetadata", () => {
+  it("infers Career for a CV/job-application title", () => {
+    expect(inferTaskMetadata("update my CV for job applications")).toEqual({ category: "Career", priority: "P3" });
+  });
+
+  it("infers Career for a recruiter-call title", () => {
+    expect(inferTaskMetadata("prepare for recruiter call")).toEqual({ category: "Career", priority: "P3" });
+  });
+
+  it("infers Health for a dentist title", () => {
+    expect(inferTaskMetadata("call dentist")).toEqual({ category: "Health", priority: "P3" });
+  });
+
+  it("infers Work for a manager-report title", () => {
+    expect(inferTaskMetadata("prepare report for manager")).toEqual({ category: "Work", priority: "P3" });
+  });
+
+  it("defaults to Personal when nothing matches", () => {
+    expect(inferTaskMetadata("buy milk")).toEqual({ category: "Personal", priority: "P3" });
+  });
+
+  it("infers Health and bumps priority to P1 for an urgent appointment", () => {
+    expect(inferTaskMetadata("urgent blood test appointment")).toEqual({ category: "Health", priority: "P1" });
+  });
+
+  it("does not bump priority for non-urgent titles", () => {
+    expect(inferTaskMetadata("schedule a checkup")).toEqual({ category: "Health", priority: "P3" });
+  });
+});
 
 describe("parseCoachActionTags", () => {
   it("returns no actions and the original text when no tag is present", () => {

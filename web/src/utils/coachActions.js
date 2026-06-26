@@ -239,13 +239,45 @@ export function buildParkTaskTasks(tasks, taskUuid, now = Date.now()) {
   );
 }
 
+// Generic keyword groups for inferTaskMetadata's category guess — no
+// person- or project-specific terms, just the kind of word any user's task
+// titles would naturally contain for that category. Checked in this order
+// (Health first) so a title like "doctor's report" reads as Health, not Work.
+const CATEGORY_KEYWORDS = {
+  Health: /\b(doctor|dentist|appointment|therapy|therapist|gym|workout|exercise|medication|medicine|blood test|checkup|check-up|clinic|hospital|prescription)\b/i,
+  Career: /\b(resume|cv|recruiter|interview|job application|linkedin|cover letter|networking|portfolio|job offer)\b/i,
+  Work: /\b(report|manager|meeting|deadline|client|project|presentation|standup|sprint|colleague|boss|deliverable)\b/i,
+};
+
+// Bumps an inferred task to P1 when the title itself signals urgency —
+// doesn't change priority for any other keyword group.
+const URGENT_KEYWORDS = /\b(urgent|asap|emergency|immediately|right away|critical)\b/i;
+
+// Best-effort category/priority guess for a Coach-added task, used only
+// when the title doesn't otherwise specify one. Defaults to AddTaskDialog's
+// existing Personal/P3 when nothing matches.
+export function inferTaskMetadata(title) {
+  const text = String(title || "");
+  let category = "Personal";
+  for (const [cat, re] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (re.test(text)) {
+      category = cat;
+      break;
+    }
+  }
+  const priority = URGENT_KEYWORDS.test(text) ? "P1" : "P3";
+  return { category, priority };
+}
+
 // Creates a new Today task from a chat-mentioned title — mirrors
-// AddTaskDialog's defaults (P3, 25min, "Do first tiny step").
+// AddTaskDialog's defaults (P3, 25min, "Do first tiny step"), with
+// category/priority inferred from the title via inferTaskMetadata.
 function buildAddTaskPayload(payload, rawTitle, now = Date.now()) {
   const { tasks = [], config = {} } = payload;
   const title = String(rawTitle).trim().slice(0, 1000);
   if (!title) return payload;
   const orderIndex = tasks.filter(t => t.horizonLevel === "today" && !t.isDeleted).length;
+  const { category, priority } = inferTaskMetadata(title);
   const newTask = {
     id: now,
     userId: payload.userId || config.userId || "",
@@ -253,8 +285,8 @@ function buildAddTaskPayload(payload, rawTitle, now = Date.now()) {
     title,
     concreteStep: "Do first tiny step",
     horizonLevel: "today",
-    priority: "P3",
-    category: "Personal",
+    priority,
+    category,
     timeEstimateMinutes: 25,
     deadlineTimestamp: null,
     reminderAt: null,
