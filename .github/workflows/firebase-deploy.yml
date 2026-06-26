@@ -50,14 +50,19 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
         run: |
+          set -euo pipefail
           echo "private_key line count: $(jq -r '.private_key' "$GOOGLE_APPLICATION_CREDENTIALS" | wc -l)"
           echo "private_key starts correctly: $(jq -r '.private_key' "$GOOGLE_APPLICATION_CREDENTIALS" | head -1)"
           echo "private_key ends correctly: $(jq -r '.private_key' "$GOOGLE_APPLICATION_CREDENTIALS" | tail -1)"
-          jq -r '.private_key' "$GOOGLE_APPLICATION_CREDENTIALS" | openssl pkey -noout -text > /dev/null \
+          jq -r '.private_key' "$GOOGLE_APPLICATION_CREDENTIALS" | openssl pkey -noout -check \
             && echo "PEM parses OK as a private key" \
             || echo "PEM FAILED to parse as a private key"
-          gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" --verbosity=debug
-          gcloud auth print-access-token > /dev/null && echo "Token obtained OK" || echo "Token retrieval FAILED"
+          gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+          if ! gcloud auth print-access-token > /dev/null; then
+            echo "Token retrieval FAILED"
+            exit 1
+          fi
+          echo "Token obtained OK"
 
       - name: Deploy Firebase database rules and hosting
         env:
