@@ -45,7 +45,7 @@ export function buildLociTaskContext(allTasks = [], date = new Date(), windows =
     horizonTasks.slice(0, cap).forEach(task => {
       const focus = task.isNowFocus ? " [NOW FOCUS]" : "";
       const estimate = task.timeEstimateMinutes ? ` (${task.timeEstimateMinutes}min)` : "";
-      const category = task.category ? ` {${task.category}}` : "";
+      const category = ` {${task.category || "Personal"}}`;
       lines.push(`  - [${task.priority || "P3"}]${focus} ${task.title}${estimate}${category}`);
     });
     if (horizonTasks.length > cap) lines.push(`  ... +${horizonTasks.length - cap} more`);

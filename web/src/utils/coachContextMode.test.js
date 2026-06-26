@@ -311,5 +311,12 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("stay with me, I need to write this report")).toBe("full_task");
       expect(classifyContextMode("can you work alongside me for a bit")).toBe("full_task");
     });
+
+    it("routes low-energy task asks to full_task even on the paced/compact-follow-up path", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("I have low energy, what should I do next?", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("I'm exhausted, what should I work on?", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("I have low energy, what should I do next?")).toBe("full_task");
+    });
   });
 });

@@ -37,8 +37,9 @@ describe("lociAIContext", () => {
     ]);
 
     expect(context).toContain("Update CV {Career}");
-    expect(context).toContain("No category task");
-    expect(context).not.toMatch(/No category task.*\{/);
+    // Missing category defaults to Personal — matches the rest of the app's
+    // default — so "personal priorities" questions still find this task.
+    expect(context).toContain("No category task {Personal}");
   });
 
   it("counts completedToday using the Loci day (not calendar day) during an overnight focus window", () => {

@@ -244,14 +244,23 @@ export function buildParkTaskTasks(tasks, taskUuid, now = Date.now()) {
 // titles would naturally contain for that category. Checked in this order
 // (Health first) so a title like "doctor's report" reads as Health, not Work.
 const CATEGORY_KEYWORDS = {
-  Health: /\b(doctor|dentist|appointment|therapy|therapist|gym|workout|exercise|medication|medicine|blood test|checkup|check-up|clinic|hospital|prescription)\b/i,
-  Career: /\b(resume|cv|recruiter|interview|job application|linkedin|cover letter|networking|portfolio|job offer)\b/i,
+  // "appointment" alone is intentionally not a Health cue — "recruiter
+  // appointment" or "client appointment" would wrongly win over the
+  // Career/Work cue also in the title. Pairing it with a health-specific
+  // word still catches "doctor's/dentist/therapy appointment" (those terms
+  // already match on their own) plus generic "medical appointment".
+  Health: /\b(doctor|dentist|medical appointment|therapy|therapist|gym|workout|exercise|medication|medicine|blood test|checkup|check-up|clinic|hospital|prescription)\b/i,
+  Career: /\b(resume|cv|recruiter|interview|job applications?|linkedin|cover letters?|networking|portfolio|job offers?)\b/i,
   Work: /\b(report|manager|meeting|deadline|client|project|presentation|standup|sprint|colleague|boss|deliverable)\b/i,
 };
 
 // Bumps an inferred task to P1 when the title itself signals urgency —
 // doesn't change priority for any other keyword group.
 const URGENT_KEYWORDS = /\b(urgent|asap|emergency|immediately|right away|critical)\b/i;
+
+// Skips the P1 bump when urgency is explicitly negated ("not urgent",
+// "non-urgent", "isn't an emergency") instead of asserted.
+const NEGATED_URGENT_RE = /\b(?:not|non-?|isn['’]?t|aren['’]?t|no longer)\s*(?:so\s+|that\s+|very\s+|an?\s+)?(?:urgent|asap|emergency|immediate(?:ly)?|critical)\b/i;
 
 // Best-effort category/priority guess for a Coach-added task, used only
 // when the title doesn't otherwise specify one. Defaults to AddTaskDialog's
@@ -265,7 +274,7 @@ export function inferTaskMetadata(title) {
       break;
     }
   }
-  const priority = URGENT_KEYWORDS.test(text) ? "P1" : "P3";
+  const priority = URGENT_KEYWORDS.test(text) && !NEGATED_URGENT_RE.test(text) ? "P1" : "P3";
   return { category, priority };
 }
 

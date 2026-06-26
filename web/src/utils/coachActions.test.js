@@ -32,6 +32,21 @@ describe("inferTaskMetadata", () => {
   it("does not bump priority for non-urgent titles", () => {
     expect(inferTaskMetadata("schedule a checkup")).toEqual({ category: "Health", priority: "P3" });
   });
+
+  it("infers Career for plural job-application/cover-letter phrasing with no other cue", () => {
+    expect(inferTaskMetadata("submit job applications")).toEqual({ category: "Career", priority: "P3" });
+    expect(inferTaskMetadata("draft cover letters")).toEqual({ category: "Career", priority: "P3" });
+  });
+
+  it("does not bump priority when urgency is explicitly negated", () => {
+    expect(inferTaskMetadata("email landlord, not urgent")).toEqual({ category: "Personal", priority: "P3" });
+    expect(inferTaskMetadata("non-urgent: water the plants")).toEqual({ category: "Personal", priority: "P3" });
+  });
+
+  it("prefers a stronger Career/Work cue over a generic appointment keyword", () => {
+    expect(inferTaskMetadata("prepare for recruiter appointment")).toEqual({ category: "Career", priority: "P3" });
+    expect(inferTaskMetadata("client appointment")).toEqual({ category: "Work", priority: "P3" });
+  });
 });
 
 describe("parseCoachActionTags", () => {

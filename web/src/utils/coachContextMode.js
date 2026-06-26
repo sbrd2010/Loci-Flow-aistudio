@@ -33,6 +33,12 @@ const BODY_DOUBLE_RE = /\b(body[\s-]?double|sit with me|stay with me|work (?:alo
 
 const TASK_ASK_RE = /\b(what should i (?:do|work on|start|focus on)|which (?:one|task) shall i focus|shall i focus|help me (?:choose|pick|prioritize|plan)|choose a task|pick a task|pick one (?:thing|task)|next step|prioritize my|plan my|plan today)\b/i;
 
+// Low-energy asks need the full visible task list with estimates so the
+// coach can prefer the smallest task per the PRIORITY QUESTIONS rule — the
+// compact_task prompt doesn't carry that context, so these always route to
+// full_task even on the paced/compact-follow-up path.
+const LOW_ENERGY_RE = /\b(low energy|no energy|low on energy|out of energy|exhausted|burnt out|burned out|running on empty|drained|too tired)\b/i;
+
 /**
  * Classifies a Coach chat message into the smallest context mode that
  * still serves it well: "light", "emotional", "full_task", "compact_task", or
@@ -49,6 +55,7 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
   const isFreshScanRequested = FRESH_SCAN_RE.test(text);
   const isBroadQuery = BROAD_TASK_QUERY_RE.test(text);
   const isCheckin = isCheckinRequest(text);
+  const isLowEnergy = LOW_ENERGY_RE.test(text);
 
   // Define target reference keyword checker for explicit mutations
   const TARGET_REF_RE = /\b(this|that|it|this task|that task|current task|current focus|now focus|the plan|next step)\b/i;
@@ -75,7 +82,7 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
 
   // 3. General task queries and check-in requests
   if (isCheckin || TASK_RE.test(text) || TASK_ASK_RE.test(text)) {
-    if (isPaced && hasLastPlan && !isFreshScanRequested && !isBroadQuery && !isCheckin) {
+    if (isPaced && hasLastPlan && !isFreshScanRequested && !isBroadQuery && !isCheckin && !isLowEnergy) {
       return "compact_task";
     }
     return "full_task";
