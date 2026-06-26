@@ -32,6 +32,7 @@
 
 .coach-chat .chat-bubble {
   position: relative;
+  padding-bottom: 22px;
 }
 
 .chat-bubble-copy-btn {

@@ -335,6 +335,8 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
                 if (ok) {
                   setCopied(true);
                   setTimeout(() => { setCopied(false); setMenuOpen(false); }, 900);
+                } else {
+                  setMenuOpen(false);
                 }
               });
             }}

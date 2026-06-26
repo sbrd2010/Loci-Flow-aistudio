@@ -343,5 +343,12 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("What should I focus on for work?", pacedOpts)).toBe("full_task");
       expect(classifyContextMode("What should I prioritize for my career?", pacedOpts)).toBe("full_task");
     });
+
+    it("never compacts body-double/priority-filter/low-energy phrasing even when it co-occurs with an explicit-mutation targeted reference", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("be my body double for this and start a focus session", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("start a timer for this work task, which work task should I do first", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("I have low energy, start a timer for this", pacedOpts)).toBe("full_task");
+    });
   });
 });

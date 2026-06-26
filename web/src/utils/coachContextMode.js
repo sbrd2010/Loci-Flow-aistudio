@@ -70,7 +70,12 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
 
   // 1. Explicit task action mutations take priority over emotional support
   if (EXPLICIT_ACTION_RE.test(text)) {
-    if (isPaced && hasLastPlan && !isFreshScanRequested && !isBroadQuery && !isCheckin && isTargetedMutation) {
+    // Body-double/priority-filter/low-energy phrasing can co-occur with
+    // explicit-mutation wording (e.g. "start a timer for this, which work
+    // task should I do first") — don't compact those away from the prompt
+    // blocks they specifically need.
+    if (isPaced && hasLastPlan && !isFreshScanRequested && !isBroadQuery && !isCheckin && isTargetedMutation &&
+        !isLowEnergy && !isPriorityFiltered && !BODY_DOUBLE_RE.test(text)) {
       return "compact_task";
     }
     return "full_task";
