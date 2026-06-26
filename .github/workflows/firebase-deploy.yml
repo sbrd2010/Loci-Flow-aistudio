@@ -57,7 +57,6 @@ jobs:
             && echo "PEM parses OK as a private key" \
             || echo "PEM FAILED to parse as a private key"
           gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
-          gcloud auth list
           gcloud config set project loci-flow
           if ! gcloud auth print-access-token > /dev/null; then
             echo "Token retrieval FAILED"
@@ -116,7 +115,8 @@ jobs:
       - name: Diagnose auth via google-github-actions/auth credentials
         run: |
           set -euo pipefail
-          gcloud auth list
+          ACTIVE_ACCOUNT_COUNT=$(gcloud auth list --format='value(account)' | wc -l | tr -d ' ')
+          echo "Active gcloud accounts (count only): $ACTIVE_ACCOUNT_COUNT"
           if ! gcloud auth print-access-token > /dev/null; then
             echo "Token retrieval via google-github-actions/auth FAILED"
             exit 1
