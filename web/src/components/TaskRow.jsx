@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { formatReminderLabel } from "../utils/reminders";
 import { CATEGORY_ICONS } from "../utils/taskOps";
+import { safeCopyToClipboard } from "../utils/clipboard";
 
 const GripIcon = () => (
   <svg width="10" height="15" viewBox="0 0 10 15" fill="currentColor">
@@ -16,6 +17,19 @@ const GripIcon = () => (
 const PencilIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+  </svg>
+);
+
+const CopyIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2"/>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
   </svg>
 );
 
@@ -110,6 +124,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD, category } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const [showRoadmapOptions, setShowRoadmapOptions] = useState(false);
+  const [copied, setCopied] = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -308,6 +323,24 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
               <PencilIcon /> Edit task
             </MenuItem>
           )}
+          <MenuItem
+            testId="task-menu-copy"
+            color={copied ? "var(--success)" : "var(--text-primary)"}
+            onClick={() => {
+              const text = concreteStep && concreteStep !== "Do first tiny step"
+                ? `${title}\n${concreteStep}`
+                : title;
+              safeCopyToClipboard(text).then(ok => {
+                if (ok) {
+                  setCopied(true);
+                  setTimeout(() => { setCopied(false); setMenuOpen(false); }, 900);
+                }
+              });
+            }}
+          >
+            {copied ? <CheckIcon /> : <CopyIcon />}
+            {copied ? "Copied!" : "Copy"}
+          </MenuItem>
           {onMoveToHorizon && (
             <>
               <div style={{ height: "1px", margin: "5px 8px", background: "var(--border)", opacity: 0.5 }} />

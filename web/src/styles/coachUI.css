@@ -30,6 +30,28 @@
   padding-left: 0;
 }
 
+.coach-chat .chat-bubble {
+  position: relative;
+}
+
+.chat-bubble-copy-btn {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  opacity: 0.35;
+  color: inherit;
+  line-height: 1;
+}
+
+.chat-bubble-copy-btn:hover,
+.chat-bubble-copy-btn:active {
+  opacity: 0.9;
+}
+
 .coach-chat .chat-bubble-mentor.chat-bubble-loading span {
   font-style: italic;
   color: var(--text-muted);

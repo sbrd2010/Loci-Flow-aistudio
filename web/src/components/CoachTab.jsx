@@ -17,6 +17,7 @@ import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFrom
 import { stripReasoningTag } from "../utils/coachReasoning";
 import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM } from "../utils/coachContextMode";
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
+import { safeCopyToClipboard } from "../utils/clipboard";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
@@ -83,6 +84,7 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
   const cloudSyncUnconfirmed = isSyncingFromCache || syncWarning === "offline";
 
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [copiedMsgIdx, setCopiedMsgIdx] = useState(null);
 
   // -- AI Mentor Chat --------------------------------------------------------
   const challengeLabel =
@@ -933,6 +935,23 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                   {m.text}
                 </ReactMarkdown>
               )}
+              <button
+                type="button"
+                className="chat-bubble-copy-btn"
+                aria-label="Copy message"
+                onClick={() => {
+                  safeCopyToClipboard(m.text).then(ok => {
+                    if (ok) { setCopiedMsgIdx(idx); setTimeout(() => setCopiedMsgIdx(null), 1500); }
+                  });
+                }}
+              >
+                {copiedMsgIdx === idx ? "✓" : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                )}
+              </button>
               {!m.isUser && m.actions && m.actions.length > 0 && (
                 <div className="coach-action-chips">
                   {m.actions.map((a, i) => {
