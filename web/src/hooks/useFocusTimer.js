@@ -110,6 +110,8 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
         "#pr-bg { fill: none; stroke: rgba(87,241,219,0.16); stroke-width: 5; }",
         "#pr-fg { fill: none; stroke: #57f1db; stroke-width: 5; stroke-linecap: round;",
         "  transition: stroke-dashoffset 0.3s linear; }",
+        // #pt needs position:relative so it paints above the absolutely-positioned
+        // ring svg (DOM order alone isn't enough once a sibling is positioned).
         "#pt { position: relative; font-family: 'Space Mono','Courier New',monospace; font-size: 32px;",
         "  font-weight: 700; color: #edf7f2; letter-spacing: -0.02em;",
         "  font-variant-numeric: tabular-nums; transition: color 0.3s, text-shadow 0.3s;",
