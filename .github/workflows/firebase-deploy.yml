@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      FIREBASE_TOOLS_VERSION: 15.22.2
     steps:
       - uses: actions/checkout@v4
 
@@ -66,7 +68,7 @@ jobs:
             && echo "ADC token obtained OK (informational only)" \
             || echo "ADC token retrieval FAILED (informational only)"
           set +e
-          PROJECTS_LIST_OUTPUT=$(npx --yes firebase-tools@15.22.1 projects:list --non-interactive 2>&1)
+          PROJECTS_LIST_OUTPUT=$(npx --yes firebase-tools@$FIREBASE_TOOLS_VERSION projects:list --project loci-flow --non-interactive 2>&1)
           PROJECTS_LIST_STATUS=$?
           set -e
           if [ "$PROJECTS_LIST_STATUS" -eq 0 ]; then
@@ -81,7 +83,7 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
         run: |
-          npx --yes firebase-tools@15.22.1 deploy \
+          npx --yes firebase-tools@$FIREBASE_TOOLS_VERSION deploy \
             --config firebase.json \
             --only hosting,database \
             --project loci-flow \
