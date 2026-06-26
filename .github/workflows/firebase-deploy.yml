@@ -65,9 +65,16 @@ jobs:
           gcloud auth application-default print-access-token > /dev/null \
             && echo "ADC token obtained OK (informational only)" \
             || echo "ADC token retrieval FAILED (informational only)"
-          npx --yes firebase-tools@15.22.1 projects:list --non-interactive > /dev/null \
-            && echo "firebase-tools sees ADC auth OK (informational only)" \
-            || echo "firebase-tools projects:list FAILED (informational only; may be a project-list permission scope mismatch, not necessarily a deploy blocker)"
+          set +e
+          PROJECTS_LIST_OUTPUT=$(npx --yes firebase-tools@15.22.1 projects:list --non-interactive 2>&1)
+          PROJECTS_LIST_STATUS=$?
+          set -e
+          if [ "$PROJECTS_LIST_STATUS" -eq 0 ]; then
+            echo "firebase-tools sees ADC auth OK (informational only)"
+          else
+            echo "firebase-tools projects:list FAILED (informational only; may be a project-list permission scope mismatch, not necessarily a deploy blocker). Error output (filtered):"
+            echo "$PROJECTS_LIST_OUTPUT" | grep -v -iE 'BEGIN|PRIVATE KEY|-----|token|Bearer|Authorization|ya29\.|eyJ|client_email|private_key|refresh_token|access_token' | tail -20
+          fi
 
       - name: Deploy Firebase database rules and hosting
         if: github.ref == 'refs/heads/main'
