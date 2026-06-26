@@ -340,6 +340,14 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("START_FOCUS", "start now focus", "Write report", [], "Write report")).toBe(true);
     expect(matchesUserIntent("START_FOCUS", "start now focus", "Email client", [], "Write report")).toBe(false);
   });
+
+  it("allows a no-task-named body-double request to fall back to the current Now Focus task", () => {
+    // "be my body double for 15 minutes" names neither the task nor "now focus" —
+    // it should still resolve against whatever the current Now Focus task is.
+    expect(matchesUserIntent("START_FOCUS", "be my body double for 15 minutes", "Write report", [], "Write report")).toBe(true);
+    expect(matchesUserIntent("START_FOCUS", "be my body double for 15 minutes", "Email client", [], "Write report")).toBe(false);
+    expect(matchesUserIntent("START_FOCUS", "be my body double for 15 minutes", "Write report", [], null)).toBe(false);
+  });
 });
 
 describe("applyCoachActions", () => {
@@ -357,7 +365,10 @@ describe("applyCoachActions", () => {
     const { payload: next, results } = applyCoachActions(payload, [{ type: "SET_NOW_FOCUS", title: "Email client" }], { ...dateOpts, lastUserMessage: "Let's focus on Email client now." });
     expect(next.tasks.find(t => t.uuid === "2").isNowFocus).toBe(true);
     expect(next.tasks.find(t => t.uuid === "1").isNowFocus).toBe(false);
-    expect(results).toEqual([{ type: "SET_NOW_FOCUS", title: "Email client", matched: true, task: payload.tasks[1] }]);
+    // results.task reflects the post-mutation task (isNowFocus now true), not
+    // the pre-mutation snapshot — callers like CoachTab's focus-timer launcher
+    // read fields (e.g. timeEstimateMinutes) that this action may have just updated.
+    expect(results).toEqual([{ type: "SET_NOW_FOCUS", title: "Email client", matched: true, task: next.tasks.find(t => t.uuid === "2") }]);
   });
 
   it("COMPLETE_TASK marks the task done, awards XP, and increments today's contribution", () => {
@@ -485,6 +496,10 @@ describe("applyCoachActions", () => {
     expect(next.tasks[0].isNowFocus).toBe(true);
     expect(next.tasks[0].timeEstimateMinutes).toBe(10);
     expect(results[0].matched).toBe(true);
+    // The result's task must reflect the updated estimate — callers (e.g.
+    // CoachTab's focus-timer launcher) read task.timeEstimateMinutes from
+    // here, not from the payload, to decide how long to run the timer.
+    expect(results[0].task.timeEstimateMinutes).toBe(10);
   });
 
   it("applies multiple actions in order: completing the Now Focus task, then pinning the next one", () => {

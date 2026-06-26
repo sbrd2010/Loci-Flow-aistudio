@@ -66,13 +66,18 @@ function normalizeStopWords(str = "") {
 // requests that kind of action. Keeps the AI's "explicit-request-only" rule
 // from being the only line of defense against acting on a hallucinated or
 // misread request.
+// Body-double phrasing never names a specific task ("be my body double",
+// "sit with me while I work") — used both as a START_FOCUS intent signal and,
+// below, to let such requests fall back to the current Now Focus task.
+const BODY_DOUBLE_REF_RE = /\b(body[\s-]?double|sit with me|stay with me|work (?:alongside|next to) me|keep me company while i work)\b/i;
+
 const INTENT_PATTERNS = {
   COMPLETE_TASK: /\b(done|finish(ed|ing)?|complet(e|ed|ing)|wrapped? up|knocked out)\b/i,
   SET_NOW_FOCUS: /\b(focus on|switch.*focus|prioriti[sz]e|now focus|pin( this| that)? task|pin\b|focus.*now)\b/i,
   // Second alternative covers body-double requests ("sit with me while I
   // work", "be my body double") — they ask for a focus session just as
   // clearly as "start a timer" does, without using start/begin/kick-off wording.
-  START_FOCUS: /\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\b|\b(body[\s-]?double|sit with me|stay with me|work (?:alongside|next to) me|keep me company while i work)\b/i,
+  START_FOCUS: new RegExp(`\\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\\b|${BODY_DOUBLE_REF_RE.source}`, "i"),
   ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don'?t forget|add .+ to (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b)/i,
   PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|skip)\b/i,
 };
@@ -205,7 +210,11 @@ export function matchesUserIntent(actionType, lastUserMessage = "", title = "", 
   const isPronounRef = /\b(this task|that task|the task|it|that|this)\b/i.test(String(lastUserMessage || ""));
   const pronounAllowed = isPronounRef && (titleInPrevUser || titleInPrevAssistant || isClarification);
 
-  const isCurrentFocusRef = /\b(current focus|now focus|current task)\b/i.test(String(lastUserMessage || ""));
+  // Body-double requests ("be my body double") never name a task by
+  // definition, so they imply the current Now Focus task just as clearly as
+  // saying "now focus" or "current task" would.
+  const isCurrentFocusRef = /\b(current focus|now focus|current task)\b/i.test(String(lastUserMessage || "")) ||
+    (actionType === "START_FOCUS" && BODY_DOUBLE_REF_RE.test(String(lastUserMessage || "")));
   const isTargetCurrentFocus = currentFocusTitle && (normalizeTitle(title) === normalizeTitle(currentFocusTitle));
   const currentFocusAllowed = isCurrentFocusRef && isTargetCurrentFocus;
 
@@ -398,17 +407,22 @@ export function applyCoachActions(payload, actions, { lociDateStr, localDateStr,
       results.push({ ...action, matched: false });
       continue;
     }
+    let resultTask = task;
     if (action.type === "SET_NOW_FOCUS" || action.type === "START_FOCUS") {
       nextPayload = { ...nextPayload, tasks: buildSetNowFocusTasks(nextPayload.tasks, task.uuid) };
       if (action.type === "START_FOCUS" && action.durationMinutes) {
         nextPayload = { ...nextPayload, tasks: buildSetTimeEstimateTasks(nextPayload.tasks, task.uuid, action.durationMinutes) };
       }
+      // Re-read the task after the mutations above so callers (e.g. CoachTab's
+      // focus-timer launcher) see the updated timeEstimateMinutes rather than
+      // the pre-mutation snapshot.
+      resultTask = nextPayload.tasks.find(t => t.uuid === task.uuid) || task;
     } else if (action.type === "COMPLETE_TASK") {
       nextPayload = buildCompleteTaskPayload(nextPayload, task, lociDateStr, localDateStr);
     } else if (action.type === "PARK_TASK") {
       nextPayload = { ...nextPayload, tasks: buildParkTaskTasks(nextPayload.tasks, task.uuid) };
     }
-    results.push({ ...action, matched: true, task });
+    results.push({ ...action, matched: true, task: resultTask });
   }
 
   return { payload: nextPayload, results };

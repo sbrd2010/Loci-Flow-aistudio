@@ -337,5 +337,11 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("Which career task should I do first?", pacedOpts)).toBe("full_task");
       expect(classifyContextMode("What should I focus on this month?", pacedOpts)).toBe("full_task");
     });
+
+    it("never compacts 'focus on ... for <category>' phrasing, even on the paced path", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("What should I focus on for work?", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("What should I prioritize for my career?", pacedOpts)).toBe("full_task");
+    });
   });
 });

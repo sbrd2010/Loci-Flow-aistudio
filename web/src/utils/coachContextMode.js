@@ -43,7 +43,7 @@ const LOW_ENERGY_RE = /\b(low energy|no energy|low on energy|out of energy|exhau
 // horizon-filtered ("what should I focus on this month?") priority questions
 // need the PRIORITY QUESTIONS framework and {Category} tags that only the
 // full_task prompt carries — never compact these, even on the paced path.
-const PRIORITY_FILTER_RE = /\bwhich\s+(?:career|work|health|personal)\s+task\b|\b(?:career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b|\bfocus on this\s+(?:month|quarter|week)\b/i;
+const PRIORITY_FILTER_RE = /\bwhich\s+(?:career|work|health|personal)\s+task\b|\b(?:career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b|\bfocus on this\s+(?:month|quarter|week)\b|\b(?:focus on|priorit\w*)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(?:career|work|health|personal)\b/i;
 
 /**
  * Classifies a Coach chat message into the smallest context mode that
