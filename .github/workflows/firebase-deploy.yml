@@ -11,7 +11,7 @@ jobs:
     permissions:
       contents: read
     env:
-      FIREBASE_TOOLS_VERSION: 15.22.2
+      FIREBASE_TOOLS_VERSION: 14.26.0
     steps:
       - uses: actions/checkout@v4
 
@@ -75,7 +75,12 @@ jobs:
             echo "firebase-tools sees ADC auth OK (informational only)"
           else
             echo "firebase-tools projects:list FAILED (informational only; may be a project-list permission scope mismatch, not necessarily a deploy blocker). Error output (filtered):"
-            echo "$PROJECTS_LIST_OUTPUT" | grep -v -iE 'BEGIN|PRIVATE KEY|-----|token|Bearer|Authorization|ya29\.|eyJ|client_email|private_key|refresh_token|access_token' | tail -20
+            FILTERED_OUTPUT=$(echo "$PROJECTS_LIST_OUTPUT" | grep -v -iE 'BEGIN|PRIVATE KEY|-----|token|Bearer|Authorization|ya29\.|eyJ|client_email|private_key|refresh_token|access_token' || true)
+            if [ -n "$FILTERED_OUTPUT" ]; then
+              echo "$FILTERED_OUTPUT" | tail -20
+            else
+              echo "(all firebase-tools output was redacted or empty)"
+            fi
           fi
 
       - name: Deploy Firebase database rules and hosting
