@@ -55,11 +55,19 @@ jobs:
             && echo "PEM parses OK as a private key" \
             || echo "PEM FAILED to parse as a private key"
           gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+          gcloud auth list
+          gcloud config set project loci-flow
           if ! gcloud auth print-access-token > /dev/null; then
             echo "Token retrieval FAILED"
             exit 1
           fi
           echo "Token obtained OK"
+          gcloud auth application-default print-access-token > /dev/null \
+            && echo "ADC token obtained OK (informational only)" \
+            || echo "ADC token retrieval FAILED (informational only)"
+          npx --yes firebase-tools@15.22.1 projects:list --non-interactive > /dev/null \
+            && echo "firebase-tools sees ADC auth OK (informational only)" \
+            || echo "firebase-tools projects:list FAILED (informational only; may be a project-list permission scope mismatch, not necessarily a deploy blocker)"
 
       - name: Deploy Firebase database rules and hosting
         if: github.ref == 'refs/heads/main'
