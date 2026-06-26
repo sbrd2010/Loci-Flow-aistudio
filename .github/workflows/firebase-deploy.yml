@@ -57,7 +57,6 @@ jobs:
             && echo "PEM parses OK as a private key" \
             || echo "PEM FAILED to parse as a private key"
           gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
-          gcloud auth list
           gcloud config set project loci-flow
           if ! gcloud auth print-access-token > /dev/null; then
             echo "Token retrieval FAILED"
@@ -67,6 +66,29 @@ jobs:
           gcloud auth application-default print-access-token > /dev/null \
             && echo "ADC token obtained OK (informational only)" \
             || echo "ADC token retrieval FAILED (informational only)"
+
+          ACCESS_TOKEN=$(gcloud auth print-access-token)
+
+          echo "Calling Firebase Management API project lookup..."
+          PROJECT_STATUS=$(curl -s -o "$RUNNER_TEMP/project_response.json" -w '%{http_code}' \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "https://firebase.googleapis.com/v1beta1/projects/loci-flow")
+          echo "Firebase Management API project lookup HTTP status: $PROJECT_STATUS"
+          jq -c '{projectId: .projectId, displayName: .displayName, state: .state, errorStatus: .error.status, errorCode: .error.code}' \
+            "$RUNNER_TEMP/project_response.json" 2>/dev/null \
+            || echo "(could not parse Firebase Management API response as JSON)"
+
+          echo "Calling Firebase Hosting sites list..."
+          SITES_STATUS=$(curl -s -o "$RUNNER_TEMP/sites_response.json" -w '%{http_code}' \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "https://firebasehosting.googleapis.com/v1beta1/projects/loci-flow/sites")
+          echo "Firebase Hosting sites list HTTP status: $SITES_STATUS"
+          jq -c '{sitesCount: (.sites | length), errorStatus: .error.status, errorCode: .error.code}' \
+            "$RUNNER_TEMP/sites_response.json" 2>/dev/null \
+            || echo "(could not parse Firebase Hosting API response as JSON)"
+
+          unset ACCESS_TOKEN
+
           set +e
           PROJECTS_LIST_OUTPUT=$(npx --yes firebase-tools@$FIREBASE_TOOLS_VERSION projects:list --project loci-flow --non-interactive 2>&1)
           PROJECTS_LIST_STATUS=$?
@@ -78,6 +100,39 @@ jobs:
             FILTERED_OUTPUT=$(echo "$PROJECTS_LIST_OUTPUT" | grep -v -iE 'BEGIN|PRIVATE KEY|-----|token|Bearer|Authorization|ya29\.|eyJ|client_email|private_key|refresh_token|access_token' || true)
             if [ -n "$FILTERED_OUTPUT" ]; then
               echo "$FILTERED_OUTPUT" | tail -20
+            else
+              echo "(all firebase-tools output was redacted or empty)"
+            fi
+          fi
+
+      - name: Authenticate via google-github-actions/auth (experiment)
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Diagnose auth via google-github-actions/auth credentials
+        run: |
+          set -euo pipefail
+          ACTIVE_ACCOUNT_COUNT=$(gcloud auth list --format='value(account)' | wc -l | tr -d ' ')
+          echo "Active gcloud accounts (count only): $ACTIVE_ACCOUNT_COUNT"
+          if ! gcloud auth print-access-token > /dev/null; then
+            echo "Token retrieval via google-github-actions/auth FAILED"
+            exit 1
+          fi
+          echo "Token obtained OK via google-github-actions/auth"
+          set +e
+          AUTH_ACTION_OUTPUT=$(npx --yes firebase-tools@15.22.2 projects:list --project loci-flow --non-interactive 2>&1)
+          AUTH_ACTION_STATUS=$?
+          set -e
+          if [ "$AUTH_ACTION_STATUS" -eq 0 ]; then
+            echo "firebase-tools (via google-github-actions/auth credentials) sees auth OK"
+          else
+            echo "firebase-tools (via google-github-actions/auth credentials) projects:list FAILED. Error output (filtered):"
+            FILTERED_AUTH_ACTION_OUTPUT=$(echo "$AUTH_ACTION_OUTPUT" | grep -v -iE 'BEGIN|PRIVATE KEY|-----|token|Bearer|Authorization|ya29\.|eyJ|client_email|private_key|refresh_token|access_token' || true)
+            if [ -n "$FILTERED_AUTH_ACTION_OUTPUT" ]; then
+              echo "$FILTERED_AUTH_ACTION_OUTPUT" | tail -20
             else
               echo "(all firebase-tools output was redacted or empty)"
             fi
