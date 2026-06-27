@@ -201,7 +201,13 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
       )}
 
       {/* Checkbox */}
-      <div className="checkbox-container" data-testid="task-checkbox" onClick={e => { e.stopPropagation(); onToggleComplete(task); }}>
+      <div
+        className="checkbox-container"
+        data-testid="task-checkbox"
+        onClick={e => { e.stopPropagation(); onToggleComplete(task); }}
+        onMouseDown={e => e.stopPropagation()}
+        onTouchStart={e => e.stopPropagation()}
+      >
         <div className={`custom-checkbox ${isCompleted ? "checked" : ""}`}>
           {isCompleted && <span className="checkmark">✓</span>}
         </div>
@@ -246,6 +252,8 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
               <div key={step.id} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "3px 0" }}>
                 <div
                   onClick={e => { e.stopPropagation(); onSubStepToggle && onSubStepToggle(task, step.id); }}
+                  onMouseDown={e => e.stopPropagation()}
+                  onTouchStart={e => e.stopPropagation()}
                   style={{ display: "flex", alignItems: "center", gap: "8px", cursor: onSubStepToggle ? "pointer" : "default", flex: 1, minWidth: 0 }}
                 >
                   <div style={{
@@ -265,6 +273,8 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
                 {onDeleteSubStep && (
                   <button
                     onClick={e => { e.stopPropagation(); onDeleteSubStep(task, step.id); }}
+                    onMouseDown={e => e.stopPropagation()}
+                    onTouchStart={e => e.stopPropagation()}
                     style={{ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "var(--text-muted)", padding: "0 2px", lineHeight: 1, flexShrink: 0, opacity: 0.55 }}
                     title="Remove step"
                     aria-label="Remove step"
@@ -295,6 +305,8 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
             Couldn't break this down.
             <button
               onClick={e => { e.stopPropagation(); onBreakdown(task); }}
+              onMouseDown={e => e.stopPropagation()}
+              onTouchStart={e => e.stopPropagation()}
               style={{ background: "none", border: "none", padding: 0, fontSize: "11px", fontWeight: "700", color: "var(--accent)", cursor: "pointer", textDecoration: "underline" }}
             >Try again</button>
           </span>
@@ -306,7 +318,8 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         <div
           data-testid="task-options-menu"
           onClick={e => e.stopPropagation()}
-          onPointerDown={e => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
           style={{
           position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 300,
           background: "var(--bg-card)",
@@ -404,6 +417,8 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         <button
           className="action-btn action-btn-delete"
           onClick={e => { e.stopPropagation(); onDelete(task); }}
+          onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
           title="Delete"
         >🗑</button>
       )}
