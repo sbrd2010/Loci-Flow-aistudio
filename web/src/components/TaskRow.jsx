@@ -169,7 +169,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
       style={{
         ...(menuOpen ? { zIndex: 400, position: "relative" } : {}),
         ...(hasActions ? { cursor: "pointer" } : {}),
-        ...(isDragAnywhere ? { cursor: "grab", touchAction: "none" } : {}),
+        ...(isDragAnywhere ? { cursor: "grab" } : {}),
       }}
     >
       {/* Grip handle */}

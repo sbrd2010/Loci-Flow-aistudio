@@ -37,7 +37,7 @@ function SortableRoadmapCard({ id, task, onTaskClick, interactionStyle = "classi
         {...(isDragAnywhere ? { ...listeners, ...attributes } : {})}
         style={{
           display: "flex", alignItems: "center", gap: "6px",
-          ...(isDragAnywhere ? { cursor: "grab", touchAction: "none" } : {}),
+          ...(isDragAnywhere ? { cursor: "grab" } : {}),
         }}
       >
         {!isDragAnywhere && (
