@@ -208,7 +208,7 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
               aria-expanded={isExpanded}
               aria-label="Card options"
             >
-              ⋯
+              ⋮
             </button>
           </div>
 

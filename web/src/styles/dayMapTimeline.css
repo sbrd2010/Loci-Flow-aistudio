@@ -322,6 +322,7 @@
   padding: 7px 6px 7px 10px;
   min-height: 42px;
   cursor: grab;
+  touch-action: none;
 }
 
 .dm-card-main:active { cursor: grabbing; }
@@ -378,7 +379,7 @@
 .dm-card .day-map-priority.p3 { background: rgba(20, 184, 166, 0.25);  color: #5eead4; border: 1px solid rgba(20,184,166,0.35); }
 .dm-card .day-map-priority.p4 { background: rgba(255, 255, 255, 0.08); color: rgba(232, 238, 255, 0.50); border: 1px solid rgba(255,255,255,0.12); }
 
-/* ⋯ menu button */
+/* ⋮ menu button */
 .dm-btn-menu {
   flex-shrink: 0;
   width: 30px;
