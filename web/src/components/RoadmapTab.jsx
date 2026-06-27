@@ -5,6 +5,7 @@ import { celebrate } from "../utils/celebrations";
 import { getAIKeys, callAI, hasAIKey } from "../utils/aiCall";
 import { sanitizeTaskField, CATEGORY_ICONS, byPriorityThenOrder } from "../utils/taskOps";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
+import { safeCopyToClipboard } from "../utils/clipboard";
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor,
   useSensor, useSensors, DragOverlay
@@ -161,6 +162,8 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [undoTask, setUndoTask] = useState(null);
   const undoTimeoutRef = useRef(null);
+  const [copied, setCopied] = useState(false);
+  const copyTimeoutRef = useRef(null);
   const [longDumpWarning, setLongDumpWarning] = useState(null); // {id, horizon}
   const [aiBreakdownSuggestion, setAiBreakdownSuggestion] = useState(null); // {id, title, concreteStep}
   const [aiBreakdownLoading, setAiBreakdownLoading] = useState(null); // item.id
@@ -169,8 +172,29 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   useEffect(() => {
     return () => {
       if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
     };
   }, []);
+
+  const openTask = (task) => {
+    setCopied(false);
+    setSelectedTask(task);
+  };
+
+  const handleCopy = (task) => {
+    const text = task.concreteStep && task.concreteStep !== "Do first tiny step"
+      ? `${task.title}\n${task.concreteStep}`
+      : task.title;
+    safeCopyToClipboard(text).then(ok => {
+      if (!ok) return;
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      setCopied(true);
+      copyTimeoutRef.current = setTimeout(() => {
+        setCopied(false);
+        copyTimeoutRef.current = null;
+      }, 900);
+    });
+  };
 
   const isVisibleRoadmapTask = (t) => !t.isDeleted && !t.isCompleted && !t.isParked;
 
@@ -467,7 +491,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
         tasks={tasks}
         payload={payload}
         savePayload={savePayload}
-        onTaskClick={setSelectedTask}
+        onTaskClick={openTask}
       />
     );
   };
@@ -581,7 +605,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
                   tasks={tasks}
                   payload={payload}
                   savePayload={savePayload}
-                  onTaskClick={setSelectedTask}
+                  onTaskClick={openTask}
                 />
               </div>
             </div>
@@ -618,12 +642,12 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
                 {selectedTask.isHorizonPinned && (
                   <span title="Pinned to top" aria-label="Pinned to top" style={{ marginLeft: "6px", fontSize: "13px" }}>📌</span>
                 )}
-                <h4 style={{ fontSize: "15px", fontWeight: "600", color: "var(--text-primary)", lineHeight: "1.4" }}>
-                  {selectedTask.title}
+                <h4 style={{ fontSize: "15px", fontWeight: "600", color: "var(--text-primary)", lineHeight: "1.4", overflowWrap: "anywhere", wordBreak: "break-word" }}>
+                  <LinkifyText text={selectedTask.title} />
                 </h4>
                 {selectedTask.concreteStep && selectedTask.concreteStep !== "Do first tiny step" && (
-                  <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                    ⚡ {selectedTask.concreteStep}
+                  <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px", overflowWrap: "anywhere", wordBreak: "break-word" }}>
+                    ⚡ <LinkifyText text={selectedTask.concreteStep} />
                   </p>
                 )}
               </div>
@@ -640,6 +664,10 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
                   ✏ Edit task
                 </button>
               )}
+              <button className="btn" onClick={() => handleCopy(selectedTask)}
+                style={{ background: "var(--bg-secondary)", color: copied ? "var(--success)" : "var(--text-primary)", border: "1.5px solid var(--border)", boxShadow: "none" }}>
+                {copied ? "✓ Copied!" : "📋 Copy"}
+              </button>
               <button className="btn" onClick={() => handleMarkDone(selectedTask)} style={{ background: "var(--success)" }}>
                 ✓ Mark Done (+100 XP)
               </button>
