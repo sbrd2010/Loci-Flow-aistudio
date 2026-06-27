@@ -325,6 +325,12 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("I feel hopeless, can you be my body double")).toBe("emotional");
     });
 
+    it("routes fear/distress phrasing that overlaps body-double wording to emotional, not full_task", () => {
+      expect(classifyContextMode("I'm scared, stay with me")).toBe("emotional");
+      expect(classifyContextMode("I am afraid, can you sit with me?")).toBe("emotional");
+      expect(classifyContextMode("don't leave me, stay with me")).toBe("emotional");
+    });
+
     it("never compacts body-double requests, even on the paced path with a targeted reference", () => {
       const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
       expect(classifyContextMode("can you sit with me while I work on this?", pacedOpts)).toBe("full_task");

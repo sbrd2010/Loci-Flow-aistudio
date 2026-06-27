@@ -410,7 +410,7 @@ export function applyCoachActions(payload, actions, { lociDateStr, localDateStr,
     let resultTask = task;
     if (action.type === "SET_NOW_FOCUS" || action.type === "START_FOCUS") {
       nextPayload = { ...nextPayload, tasks: buildSetNowFocusTasks(nextPayload.tasks, task.uuid) };
-      if (action.type === "START_FOCUS" && action.durationMinutes) {
+      if (action.type === "START_FOCUS" && action.durationMinutes != null) {
         nextPayload = { ...nextPayload, tasks: buildSetTimeEstimateTasks(nextPayload.tasks, task.uuid, action.durationMinutes) };
       }
       // Re-read the task after the mutations above so callers (e.g. CoachTab's
@@ -462,7 +462,7 @@ export function buildActionReplyText(cleanText, results = [], lastUserMessage = 
     const title = r.task ? r.task.title : r.title;
     switch (r.type) {
       case "SET_NOW_FOCUS": return `Switched your focus to "${title}".`;
-      case "START_FOCUS": return r.durationMinutes ? `Started a ${r.durationMinutes}-min focus session on "${title}".` : `Started a focus session on "${title}".`;
+      case "START_FOCUS": return r.durationMinutes != null ? `Started a ${r.durationMinutes}-min focus session on "${title}".` : `Started a focus session on "${title}".`;
       case "COMPLETE_TASK": return `Marked "${title}" complete — +100 XP!`;
       case "ADD_TASK": return `Added "${title}" to your Today list.`;
       case "PARK_TASK": return `Parked "${title}" for later.`;

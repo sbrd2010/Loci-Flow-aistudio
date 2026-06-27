@@ -31,6 +31,11 @@ const EXPLICIT_ACTION_RE = /\b(add (?:this|that)?\s*task|add\b.{1,50}\bto (?:my 
 // session via START_FOCUS.
 const BODY_DOUBLE_RE = /\b(body[\s-]?double|sit with me|stay with me|work (?:alongside|next to) me|keep me company while i work)\b/i;
 
+// Fear/distress phrasing ("I'm scared, stay with me") can overlap with
+// BODY_DOUBLE_RE's "stay with me" wording but is emotional support, not a
+// work-session request — route it to "emotional" instead of "full_task".
+const FEAR_DISTRESS_RE = /\b(i(['’]m| am) (?:scared|afraid|terrified|frightened)|don['’]?t leave me)\b/i;
+
 const TASK_ASK_RE = /\b(what should i (?:do|work on|start|focus on)|which (?:one|task) shall i focus|shall i focus|help me (?:choose|pick|prioritize|plan)|choose a task|pick a task|pick one (?:thing|task)|next step|prioritize my|plan my|plan today)\b/i;
 
 // Low-energy asks need the full visible task list with estimates so the
@@ -93,8 +98,13 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
 
   // Body-double sessions always need the full visible task list (to confirm
   // the task) and the BODY-DOUBLE SESSIONS prompt instructions, which only
-  // exist in full_task mode — never compact this one.
-  if (BODY_DOUBLE_RE.test(text)) return "full_task";
+  // exist in full_task mode — never compact this one. But fear/distress
+  // phrasing ("I'm scared, stay with me") is emotional support, not a
+  // session to start.
+  if (BODY_DOUBLE_RE.test(text)) {
+    if (FEAR_DISTRESS_RE.test(text)) return "emotional";
+    return "full_task";
+  }
 
   // Broad task/deadline queries, standalone fresh-scan requests, and
   // category/horizon-filtered priority questions route to full_task

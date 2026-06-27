@@ -86,6 +86,8 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
 
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [copiedMsgIdx, setCopiedMsgIdx] = useState(null);
+  const copyTimeoutRef = useRef(null);
+  useEffect(() => () => { if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current); }, []);
 
   // -- AI Mentor Chat --------------------------------------------------------
   const challengeLabel =
@@ -942,7 +944,14 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                 aria-label="Copy message"
                 onClick={() => {
                   safeCopyToClipboard(m.text).then(ok => {
-                    if (ok) { setCopiedMsgIdx(idx); setTimeout(() => setCopiedMsgIdx(null), 1500); }
+                    if (ok) {
+                      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+                      setCopiedMsgIdx(idx);
+                      copyTimeoutRef.current = setTimeout(() => {
+                        setCopiedMsgIdx(curr => (curr === idx ? null : curr));
+                        copyTimeoutRef.current = null;
+                      }, 1500);
+                    }
                   });
                 }}
               >

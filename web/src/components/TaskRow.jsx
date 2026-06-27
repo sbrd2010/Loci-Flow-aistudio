@@ -127,6 +127,9 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   const [showRoadmapOptions, setShowRoadmapOptions] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef(null);
+  const copyTimeoutRef = useRef(null);
+
+  useEffect(() => () => { if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current); }, []);
 
   useEffect(() => {
     if (!menuOpen) setShowRoadmapOptions(false);
@@ -333,8 +336,13 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
                 : title;
               safeCopyToClipboard(text).then(ok => {
                 if (ok) {
+                  if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
                   setCopied(true);
-                  setTimeout(() => { setCopied(false); setMenuOpen(false); }, 900);
+                  copyTimeoutRef.current = setTimeout(() => {
+                    setCopied(false);
+                    setMenuOpen(false);
+                    copyTimeoutRef.current = null;
+                  }, 900);
                 } else {
                   setMenuOpen(false);
                 }

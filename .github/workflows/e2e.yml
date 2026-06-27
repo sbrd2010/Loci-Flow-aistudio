@@ -18,6 +18,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
+          # Pinned to match firebase-deploy.yml and firebase-rules.yml, which
+          # already run Node 22 — keeps all CI workflows on one Node version.
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
