@@ -480,10 +480,10 @@ describe("applyCoachActions", () => {
     expect(results[0].task.uuid).toBe("1");
   });
 
-  it("START_FOCUS with a body-double duration overwrites the matched task's time estimate", () => {
+  it("START_FOCUS with a body-double duration carries it on the result without touching the task's own time estimate", () => {
     const payload = {
       tasks: [
-        { uuid: "1", title: "Write report", isNowFocus: false, isCompleted: false, isDeleted: false, isParked: false, timeEstimateMinutes: 25 },
+        { uuid: "1", title: "Write report", isNowFocus: false, isCompleted: false, isDeleted: false, isParked: false, timeEstimateMinutes: 60 },
       ],
       config: {},
       contributions: [],
@@ -494,12 +494,14 @@ describe("applyCoachActions", () => {
       { ...dateOpts, lastUserMessage: "Sit with me for 10 minutes while I write the report." },
     );
     expect(next.tasks[0].isNowFocus).toBe(true);
-    expect(next.tasks[0].timeEstimateMinutes).toBe(10);
+    // The task's real time estimate (e.g. for planning totals, Today cards,
+    // Focus Briefing) must survive a body-double session unrelated to it.
+    expect(next.tasks[0].timeEstimateMinutes).toBe(60);
     expect(results[0].matched).toBe(true);
-    // The result's task must reflect the updated estimate — callers (e.g.
-    // CoachTab's focus-timer launcher) read task.timeEstimateMinutes from
-    // here, not from the payload, to decide how long to run the timer.
-    expect(results[0].task.timeEstimateMinutes).toBe(10);
+    expect(results[0].task.timeEstimateMinutes).toBe(60);
+    // The session duration itself is on the result (spread from the action)
+    // for the caller's timer launcher to use directly.
+    expect(results[0].durationMinutes).toBe(10);
   });
 
   it("applies multiple actions in order: completing the Now Focus task, then pinning the next one", () => {

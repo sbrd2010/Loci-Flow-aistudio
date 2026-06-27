@@ -10,8 +10,10 @@
 // [[START_FOCUS:<title>]] or [[START_FOCUS:<title>|<minutes>]] - pin a task as
 //                            Now Focus so a focus session can start. The
 //                            optional "|<minutes>" suffix (used for
-//                            body-double sessions with a stated duration)
-//                            overwrites the task's time estimate, clamped 5-20.
+//                            body-double sessions with a stated duration,
+//                            clamped 5-20) is a one-off session length carried
+//                            on the result for the timer launcher — it never
+//                            overwrites the task's own time estimate.
 //
 // The system prompt tells the AI these tags are "explicit-request-only", but
 // that's advisory — applyCoachActions() additionally requires (via
@@ -264,14 +266,6 @@ export function buildSetNowFocusTasks(tasks, taskUuid, now = Date.now()) {
   });
 }
 
-// Overwrites a task's time estimate — used by START_FOCUS when the tag
-// carries a "|<minutes>" duration suffix from a body-double session.
-export function buildSetTimeEstimateTasks(tasks, taskUuid, minutes, now = Date.now()) {
-  return tasks.map(t =>
-    t.uuid === taskUuid ? { ...t, timeEstimateMinutes: minutes, lastUpdated: now } : t
-  );
-}
-
 // Parks the given task, unpinning it if it was the Now Focus — mirrors
 // MindBoxTab's Bad Day Reset per-task patch.
 export function buildParkTaskTasks(tasks, taskUuid, now = Date.now()) {
@@ -410,12 +404,10 @@ export function applyCoachActions(payload, actions, { lociDateStr, localDateStr,
     let resultTask = task;
     if (action.type === "SET_NOW_FOCUS" || action.type === "START_FOCUS") {
       nextPayload = { ...nextPayload, tasks: buildSetNowFocusTasks(nextPayload.tasks, task.uuid) };
-      if (action.type === "START_FOCUS" && action.durationMinutes != null) {
-        nextPayload = { ...nextPayload, tasks: buildSetTimeEstimateTasks(nextPayload.tasks, task.uuid, action.durationMinutes) };
-      }
-      // Re-read the task after the mutations above so callers (e.g. CoachTab's
-      // focus-timer launcher) see the updated timeEstimateMinutes rather than
-      // the pre-mutation snapshot.
+      // A body-double session's "|<minutes>" duration is a one-off session
+      // length, not a correction to the task's own time estimate — it's
+      // carried on the result (action.durationMinutes, spread below) for the
+      // caller's timer launcher to use directly, never written into the task.
       resultTask = nextPayload.tasks.find(t => t.uuid === task.uuid) || task;
     } else if (action.type === "COMPLETE_TASK") {
       nextPayload = buildCompleteTaskPayload(nextPayload, task, lociDateStr, localDateStr);

@@ -584,7 +584,8 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         if (startFocus && typeof focusTimer.extendTimer === "function") {
           const isSwitchingTask = focusTimer.activeTask?.uuid !== startFocus.task.uuid;
           if (!focusTimer.isTimerRunning || isSwitchingTask) {
-            const mins = Number(startFocus.task.timeEstimateMinutes) > 0 ? Number(startFocus.task.timeEstimateMinutes) : 25;
+            const mins = Number(startFocus.durationMinutes) > 0 ? Number(startFocus.durationMinutes)
+              : Number(startFocus.task.timeEstimateMinutes) > 0 ? Number(startFocus.task.timeEstimateMinutes) : 25;
             focusTimer.extendTimer(mins);
           }
         }
