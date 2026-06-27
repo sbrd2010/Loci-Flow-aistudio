@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { formatReminderLabel } from "../utils/reminders";
 import { CATEGORY_ICONS } from "../utils/taskOps";
 import { safeCopyToClipboard } from "../utils/clipboard";
@@ -121,7 +121,7 @@ const ROADMAP_HORIZONS = [
   { key: "office",   label: "Work" },
 ];
 
-export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, onToggleMVD, dragHandleListeners, dragHandleAttributes }) {
+export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, onToggleMVD, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic" }) {
   const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD, category } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const [showRoadmapOptions, setShowRoadmapOptions] = useState(false);
@@ -152,20 +152,33 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   const activeSubSteps = subSteps?.filter(s => !s.done) ?? [];
   const doneSubSteps = subSteps?.filter(s => s.done) ?? [];
   const hasSubSteps = subSteps && subSteps.length > 0;
+  const isDragAnywhere = interactionStyle === "dragAnywhere" && !!dragHandleListeners;
+
+  const setRowRef = useCallback(node => {
+    menuRef.current = node;
+    if (isDragAnywhere && dragActivatorRef) dragActivatorRef(node);
+  }, [isDragAnywhere, dragActivatorRef]);
 
   return (
     <div
       className={`task-row ${isCompleted ? "completed" : ""}`}
       data-testid="task-row"
-      ref={menuRef}
+      ref={setRowRef}
       onClick={hasActions ? () => setMenuOpen(o => !o) : undefined}
+      {...(isDragAnywhere ? {
+        ...dragHandleListeners,
+        tabIndex: dragHandleAttributes?.tabIndex,
+        "aria-disabled": dragHandleAttributes?.["aria-disabled"],
+        "aria-describedby": dragHandleAttributes?.["aria-describedby"],
+      } : {})}
       style={{
         ...(menuOpen ? { zIndex: 400, position: "relative" } : {}),
         ...(hasActions ? { cursor: "pointer" } : {}),
+        ...(isDragAnywhere ? { cursor: "grab" } : {}),
       }}
     >
       {/* Grip handle */}
-      {dragHandleListeners && (
+      {dragHandleListeners && !isDragAnywhere && (
         <button
           {...dragHandleListeners}
           {...(dragHandleAttributes || {})}
@@ -188,7 +201,13 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
       )}
 
       {/* Checkbox */}
-      <div className="checkbox-container" data-testid="task-checkbox" onClick={e => { e.stopPropagation(); onToggleComplete(task); }}>
+      <div
+        className="checkbox-container"
+        data-testid="task-checkbox"
+        onClick={e => { e.stopPropagation(); onToggleComplete(task); }}
+        onMouseDown={e => e.stopPropagation()}
+        onTouchStart={e => e.stopPropagation()}
+      >
         <div className={`custom-checkbox ${isCompleted ? "checked" : ""}`}>
           {isCompleted && <span className="checkmark">✓</span>}
         </div>
@@ -233,6 +252,8 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
               <div key={step.id} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "3px 0" }}>
                 <div
                   onClick={e => { e.stopPropagation(); onSubStepToggle && onSubStepToggle(task, step.id); }}
+                  onMouseDown={e => e.stopPropagation()}
+                  onTouchStart={e => e.stopPropagation()}
                   style={{ display: "flex", alignItems: "center", gap: "8px", cursor: onSubStepToggle ? "pointer" : "default", flex: 1, minWidth: 0 }}
                 >
                   <div style={{
@@ -252,6 +273,8 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
                 {onDeleteSubStep && (
                   <button
                     onClick={e => { e.stopPropagation(); onDeleteSubStep(task, step.id); }}
+                    onMouseDown={e => e.stopPropagation()}
+                    onTouchStart={e => e.stopPropagation()}
                     style={{ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "var(--text-muted)", padding: "0 2px", lineHeight: 1, flexShrink: 0, opacity: 0.55 }}
                     title="Remove step"
                     aria-label="Remove step"
@@ -282,6 +305,8 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
             Couldn't break this down.
             <button
               onClick={e => { e.stopPropagation(); onBreakdown(task); }}
+              onMouseDown={e => e.stopPropagation()}
+              onTouchStart={e => e.stopPropagation()}
               style={{ background: "none", border: "none", padding: 0, fontSize: "11px", fontWeight: "700", color: "var(--accent)", cursor: "pointer", textDecoration: "underline" }}
             >Try again</button>
           </span>
@@ -293,7 +318,8 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         <div
           data-testid="task-options-menu"
           onClick={e => e.stopPropagation()}
-          onPointerDown={e => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
           style={{
           position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 300,
           background: "var(--bg-card)",
@@ -391,8 +417,21 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         <button
           className="action-btn action-btn-delete"
           onClick={e => { e.stopPropagation(); onDelete(task); }}
+          onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
           title="Delete"
         >🗑</button>
+      )}
+      {isDragAnywhere && hasActions && (
+        <button
+          className="task-row-kebab-btn"
+          onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
+          onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
+          aria-label="Task options"
+          aria-expanded={menuOpen}
+          title="Task options"
+        >⋮</button>
       )}
     </div>
   );

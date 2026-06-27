@@ -187,7 +187,9 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
           <div
             ref={setActivatorNodeRef}
             className="dm-card-main"
-            {...attributes}
+            tabIndex={attributes.tabIndex}
+            aria-disabled={attributes["aria-disabled"]}
+            aria-describedby={attributes["aria-describedby"]}
             {...listeners}
           >
             <div className="dm-card-body">
