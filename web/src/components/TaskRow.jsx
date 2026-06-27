@@ -165,7 +165,12 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
       data-testid="task-row"
       ref={setRowRef}
       onClick={hasActions ? () => setMenuOpen(o => !o) : undefined}
-      {...(isDragAnywhere ? { onMouseDown: dragHandleListeners.onMouseDown, onTouchStart: dragHandleListeners.onTouchStart } : {})}
+      {...(isDragAnywhere ? {
+        ...dragHandleListeners,
+        tabIndex: dragHandleAttributes?.tabIndex,
+        "aria-disabled": dragHandleAttributes?.["aria-disabled"],
+        "aria-describedby": dragHandleAttributes?.["aria-describedby"],
+      } : {})}
       style={{
         ...(menuOpen ? { zIndex: 400, position: "relative" } : {}),
         ...(hasActions ? { cursor: "pointer" } : {}),
@@ -406,7 +411,8 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         <button
           className="task-row-kebab-btn"
           onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
-          onPointerDown={e => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
           aria-label="Task options"
           aria-expanded={menuOpen}
           title="Task options"

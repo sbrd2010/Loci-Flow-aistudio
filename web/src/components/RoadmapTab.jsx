@@ -34,7 +34,12 @@ function SortableRoadmapCard({ id, task, onTaskClick, interactionStyle = "classi
         ref={isDragAnywhere ? setActivatorNodeRef : undefined}
         className="roadmap-task-card"
         onClick={() => onTaskClick(task)}
-        {...(isDragAnywhere ? { onMouseDown: listeners.onMouseDown, onTouchStart: listeners.onTouchStart } : {})}
+        {...(isDragAnywhere ? {
+          ...listeners,
+          tabIndex: attributes?.tabIndex,
+          "aria-disabled": attributes?.["aria-disabled"],
+          "aria-describedby": attributes?.["aria-describedby"],
+        } : {})}
         style={{
           display: "flex", alignItems: "center", gap: "6px",
           ...(isDragAnywhere ? { cursor: "grab" } : {}),
@@ -72,7 +77,8 @@ function SortableRoadmapCard({ id, task, onTaskClick, interactionStyle = "classi
           <button
             className="task-row-kebab-btn"
             onClick={e => { e.stopPropagation(); onTaskClick(task); }}
-            onPointerDown={e => e.stopPropagation()}
+            onMouseDown={e => e.stopPropagation()}
+            onTouchStart={e => e.stopPropagation()}
             aria-label="Task options"
             title="Task options"
           >⋮</button>
