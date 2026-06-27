@@ -11,7 +11,7 @@ export default function LinkifyText({ text }) {
     <>
       {parts.map((p, i) =>
         p.type === "link"
-          ? <a key={i} href={p.value} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>{p.value}</a>
+          ? <a key={i} href={p.value} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>{p.value}</a>
           : <React.Fragment key={i}>{p.value}</React.Fragment>
       )}
     </>
