@@ -30,6 +30,18 @@ describe("lociAIContext", () => {
     expect(context).not.toContain("Done task");
   });
 
+  it("tags each task line with its category when present, so the coach can filter by category", () => {
+    const context = buildLociTaskContext([
+      { title: "Update CV", horizonLevel: "today", priority: "P1", category: "Career" },
+      { title: "No category task", horizonLevel: "today", priority: "P3" },
+    ]);
+
+    expect(context).toContain("Update CV {Career}");
+    // Missing category defaults to Personal — matches the rest of the app's
+    // default — so "personal priorities" questions still find this task.
+    expect(context).toContain("No category task {Personal}");
+  });
+
   it("counts completedToday using the Loci day (not calendar day) during an overnight focus window", () => {
     const windows = getFocusWindows({ focusWindows: [{ start: "22:00", end: "04:00" }] });
     // 2026-06-12 at 1:00 AM is still inside the 22:00-04:00 window that started

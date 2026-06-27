@@ -24,7 +24,31 @@ const COMPACT_FOLLOWUP_RE = /\b(key point|one sentence|10[-\s]?min(?:ute)?s?\s*v
 
 const EXPLICIT_ACTION_RE = /\b(add (?:this|that)?\s*task|add\b.{1,50}\bto (?:my |the )?(?:today['’]?s?\s+)?list|add\b.{1,50}\bto (?:today|week|month|quarter|work)|create (?:a )?task|capture this|put (?:this|it) in (?:my|the)?\s*tasks|mark\b.*\bdone|mark (?:it|this)? done|done with (?:this|that|it)?\s*task|done with .{1,50}\btask|(?:done with|finished)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|complete this|delete (?:this|that) task|park (?:this|that|it|task)\b|park\s+.{1,50}\btask|defer (?:this|that|it|task)\b|defer\s+.{1,50}\btask|(?:park|defer)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|move (?:this|it) to|start (?:a )?timer|start (?:a\s+|current\s+|now\s+)?focus|focus session)\b/i;
 
+// Body-double session requests ("be my body double", "sit with me while I
+// work", "stay with me") read as task/focus requests even when they don't
+// use "start"/"focus"/"timer" wording — route them to full_task so the
+// coach has task context to confirm and the COACH ACTIONS block to start a
+// session via START_FOCUS.
+const BODY_DOUBLE_RE = /\b(body[\s-]?double|sit with me|stay with me|work (?:alongside|next to) me|keep me company while i work)\b/i;
+
+// Fear/distress phrasing ("I'm scared, stay with me") can overlap with
+// BODY_DOUBLE_RE's "stay with me" wording but is emotional support, not a
+// work-session request — route it to "emotional" instead of "full_task".
+const FEAR_DISTRESS_RE = /\b(i(['’]m| am) (?:scared|afraid|terrified|frightened)|don['’]?t leave me)\b/i;
+
 const TASK_ASK_RE = /\b(what should i (?:do|work on|start|focus on)|which (?:one|task) shall i focus|shall i focus|help me (?:choose|pick|prioritize|plan)|choose a task|pick a task|pick one (?:thing|task)|next step|prioritize my|plan my|plan today)\b/i;
+
+// Low-energy asks need the full visible task list with estimates so the
+// coach can prefer the smallest task per the PRIORITY QUESTIONS rule — the
+// compact_task prompt doesn't carry that context, so these always route to
+// full_task even on the paced/compact-follow-up path.
+const LOW_ENERGY_RE = /\b(low energy|no energy|low on energy|out of energy|exhausted|burnt out|burned out|running on empty|drained|too tired)\b/i;
+
+// Category-filtered ("which work task should I do first?") or
+// horizon-filtered ("what should I focus on this month?") priority questions
+// need the PRIORITY QUESTIONS framework and {Category} tags that only the
+// full_task prompt carries — never compact these, even on the paced path.
+const PRIORITY_FILTER_RE = /\bwhich\s+(?:career|work|health|personal)\s+task\b|\b(?:career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b|\bfocus on this\s+(?:month|quarter|week)\b|\b(?:focus on|priorit\w*)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(?:career|work|health|personal)\b/i;
 
 /**
  * Classifies a Coach chat message into the smallest context mode that
@@ -42,6 +66,8 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
   const isFreshScanRequested = FRESH_SCAN_RE.test(text);
   const isBroadQuery = BROAD_TASK_QUERY_RE.test(text);
   const isCheckin = isCheckinRequest(text);
+  const isLowEnergy = LOW_ENERGY_RE.test(text);
+  const isPriorityFiltered = PRIORITY_FILTER_RE.test(text);
 
   // Define target reference keyword checker for explicit mutations
   const TARGET_REF_RE = /\b(this|that|it|this task|that task|current task|current focus|now focus|the plan|next step)\b/i;
@@ -49,13 +75,20 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
 
   // 1. Explicit task action mutations take priority over emotional support
   if (EXPLICIT_ACTION_RE.test(text)) {
-    if (isPaced && hasLastPlan && !isFreshScanRequested && !isBroadQuery && !isCheckin && isTargetedMutation) {
+    // Body-double/priority-filter/low-energy phrasing can co-occur with
+    // explicit-mutation wording (e.g. "start a timer for this, which work
+    // task should I do first") — don't compact those away from the prompt
+    // blocks they specifically need.
+    if (isPaced && hasLastPlan && !isFreshScanRequested && !isBroadQuery && !isCheckin && isTargetedMutation &&
+        !isLowEnergy && !isPriorityFiltered && !BODY_DOUBLE_RE.test(text)) {
       return "compact_task";
     }
     return "full_task";
   }
 
-  // 2. Emotional distress takes priority over general task planning or follow-ups
+  // 2. Emotional distress takes priority over general task planning, follow-ups,
+  // and body-double requests — "I'm overwhelmed, stay with me" is distress
+  // first, not a session to start.
   if (EMOTIONAL_RE.test(text)) {
     if (TASK_ASK_RE.test(text)) {
       return "full_task";
@@ -63,12 +96,23 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
     return "emotional";
   }
 
-  // Broad task/deadline queries and standalone fresh-scan requests route to full_task
-  if (isBroadQuery || isFreshScanRequested) return "full_task";
+  // Body-double sessions always need the full visible task list (to confirm
+  // the task) and the BODY-DOUBLE SESSIONS prompt instructions, which only
+  // exist in full_task mode — never compact this one. But fear/distress
+  // phrasing ("I'm scared, stay with me") is emotional support, not a
+  // session to start.
+  if (BODY_DOUBLE_RE.test(text)) {
+    if (FEAR_DISTRESS_RE.test(text)) return "emotional";
+    return "full_task";
+  }
+
+  // Broad task/deadline queries, standalone fresh-scan requests, and
+  // category/horizon-filtered priority questions route to full_task
+  if (isBroadQuery || isFreshScanRequested || isPriorityFiltered) return "full_task";
 
   // 3. General task queries and check-in requests
   if (isCheckin || TASK_RE.test(text) || TASK_ASK_RE.test(text)) {
-    if (isPaced && hasLastPlan && !isFreshScanRequested && !isBroadQuery && !isCheckin) {
+    if (isPaced && hasLastPlan && !isFreshScanRequested && !isBroadQuery && !isCheckin && !isLowEnergy) {
       return "compact_task";
     }
     return "full_task";

@@ -14,6 +14,7 @@ import {
   useSortable, arrayMove
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import LinkifyText from "./LinkifyText";
 
 function SortableRoadmapCard({ id, task, onTaskClick }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -57,7 +58,7 @@ function SortableRoadmapCard({ id, task, onTaskClick }) {
             {CATEGORY_ICONS[task.category]}
           </span>
         )}
-        <span className="roadmap-task-title" style={{ flex: 1, minWidth: 0 }}>{task.title}</span>
+        <span className="roadmap-task-title" style={{ flex: 1, minWidth: 0 }}><LinkifyText text={task.title} /></span>
       </div>
     </div>
   );

@@ -304,5 +304,57 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("I want to die, what should I do?")).toBe("emotional");
       expect(classifyContextMode("I might hurt myself, help me pick a task")).toBe("emotional");
     });
+
+    it("routes body-double requests to full_task even without focus/timer wording", () => {
+      expect(classifyContextMode("be my body double for 15 minutes")).toBe("full_task");
+      expect(classifyContextMode("can you sit with me while I work on this?")).toBe("full_task");
+      expect(classifyContextMode("stay with me, I need to write this report")).toBe("full_task");
+      expect(classifyContextMode("can you work alongside me for a bit")).toBe("full_task");
+    });
+
+    it("routes low-energy task asks to full_task even on the paced/compact-follow-up path", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("I have low energy, what should I do next?", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("I'm exhausted, what should I work on?", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("I have low energy, what should I do next?")).toBe("full_task");
+    });
+
+    it("routes distress over body-double requests to emotional, not full_task", () => {
+      expect(classifyContextMode("I'm overwhelmed, stay with me")).toBe("emotional");
+      expect(classifyContextMode("I am so stressed, can you just sit with me, I can't focus on anything")).toBe("emotional");
+      expect(classifyContextMode("I feel hopeless, can you be my body double")).toBe("emotional");
+    });
+
+    it("routes fear/distress phrasing that overlaps body-double wording to emotional, not full_task", () => {
+      expect(classifyContextMode("I'm scared, stay with me")).toBe("emotional");
+      expect(classifyContextMode("I am afraid, can you sit with me?")).toBe("emotional");
+      expect(classifyContextMode("don't leave me, stay with me")).toBe("emotional");
+    });
+
+    it("never compacts body-double requests, even on the paced path with a targeted reference", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("can you sit with me while I work on this?", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("stay with me on that task", pacedOpts)).toBe("full_task");
+    });
+
+    it("never compacts category/horizon-filtered priority questions, even on the paced path", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("Which work task should I do first?", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("Which career task should I do first?", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("What should I focus on this month?", pacedOpts)).toBe("full_task");
+    });
+
+    it("never compacts 'focus on ... for <category>' phrasing, even on the paced path", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("What should I focus on for work?", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("What should I prioritize for my career?", pacedOpts)).toBe("full_task");
+    });
+
+    it("never compacts body-double/priority-filter/low-energy phrasing even when it co-occurs with an explicit-mutation targeted reference", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("be my body double for this and start a focus session", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("start a timer for this work task, which work task should I do first", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("I have low energy, start a timer for this", pacedOpts)).toBe("full_task");
+    });
   });
 });

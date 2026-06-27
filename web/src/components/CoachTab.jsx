@@ -17,6 +17,8 @@ import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFrom
 import { stripReasoningTag } from "../utils/coachReasoning";
 import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM } from "../utils/coachContextMode";
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
+import { safeCopyToClipboard } from "../utils/clipboard";
+import LinkifyText from "./LinkifyText";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
@@ -83,6 +85,9 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
   const cloudSyncUnconfirmed = isSyncingFromCache || syncWarning === "offline";
 
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [copiedMsgIdx, setCopiedMsgIdx] = useState(null);
+  const copyTimeoutRef = useRef(null);
+  useEffect(() => () => { if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current); }, []);
 
   // -- AI Mentor Chat --------------------------------------------------------
   const challengeLabel =
@@ -579,7 +584,8 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         if (startFocus && typeof focusTimer.extendTimer === "function") {
           const isSwitchingTask = focusTimer.activeTask?.uuid !== startFocus.task.uuid;
           if (!focusTimer.isTimerRunning || isSwitchingTask) {
-            const mins = Number(startFocus.task.timeEstimateMinutes) > 0 ? Number(startFocus.task.timeEstimateMinutes) : 25;
+            const mins = Number(startFocus.durationMinutes) > 0 ? Number(startFocus.durationMinutes)
+              : Number(startFocus.task.timeEstimateMinutes) > 0 ? Number(startFocus.task.timeEstimateMinutes) : 25;
             focusTimer.extendTimer(mins);
           }
         }
@@ -933,6 +939,30 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                   {m.text}
                 </ReactMarkdown>
               )}
+              <button
+                type="button"
+                className="chat-bubble-copy-btn"
+                aria-label="Copy message"
+                onClick={() => {
+                  safeCopyToClipboard(m.text).then(ok => {
+                    if (ok) {
+                      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+                      setCopiedMsgIdx(idx);
+                      copyTimeoutRef.current = setTimeout(() => {
+                        setCopiedMsgIdx(curr => (curr === idx ? null : curr));
+                        copyTimeoutRef.current = null;
+                      }, 1500);
+                    }
+                  });
+                }}
+              >
+                {copiedMsgIdx === idx ? "✓" : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                )}
+              </button>
               {!m.isUser && m.actions && m.actions.length > 0 && (
                 <div className="coach-action-chips">
                   {m.actions.map((a, i) => {
@@ -1168,7 +1198,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                       {task.priority}
                     </span>
                     <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {task.title}
+                      <LinkifyText text={task.title} />
                     </span>
                   </div>
                 </div>

@@ -16,6 +16,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { shouldReflowPastRoute } from "../utils/dayMapRoute";
 import { useTodayStr } from "../hooks/useTodayStr";
+import LinkifyText from "./LinkifyText";
 import "../styles/dayMap.css";
 import "../styles/dayMapPlanning.css";
 import "../styles/dayMapTimeline.css";
@@ -190,8 +191,8 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
             {...listeners}
           >
             <div className="dm-card-body">
-              <span className="dm-card-title">{task.title}</span>
-              {task.concreteStep && <span className="dm-card-step">{task.concreteStep}</span>}
+              <span className="dm-card-title"><LinkifyText text={task.title} /></span>
+              {task.concreteStep && <span className="dm-card-step"><LinkifyText text={task.concreteStep} /></span>}
             </div>
             <div className="dm-card-right">
               <PriorityBadge priority={task.priority} />

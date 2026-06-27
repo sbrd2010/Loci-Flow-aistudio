@@ -1,8 +1,55 @@
 import { describe, it, expect } from "vitest";
-import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, buildParkTaskTasks, applyCoachActions, matchesUserIntent, buildActionReplyText } from "./coachActions";
+import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, buildParkTaskTasks, applyCoachActions, matchesUserIntent, buildActionReplyText, inferTaskMetadata } from "./coachActions";
 import { parseCheckinTag } from "./coachCheckin";
 import { getFocusWindows, getLociDayStr } from "./focusWindows";
 import { getLocalDateString } from "./lociAIContext";
+
+describe("inferTaskMetadata", () => {
+  it("infers Career for a CV/job-application title", () => {
+    expect(inferTaskMetadata("update my CV for job applications")).toEqual({ category: "Career", priority: "P3" });
+  });
+
+  it("infers Career for a recruiter-call title", () => {
+    expect(inferTaskMetadata("prepare for recruiter call")).toEqual({ category: "Career", priority: "P3" });
+  });
+
+  it("infers Health for a dentist title", () => {
+    expect(inferTaskMetadata("call dentist")).toEqual({ category: "Health", priority: "P3" });
+  });
+
+  it("infers Work for a manager-report title", () => {
+    expect(inferTaskMetadata("prepare report for manager")).toEqual({ category: "Work", priority: "P3" });
+  });
+
+  it("defaults to Personal when nothing matches", () => {
+    expect(inferTaskMetadata("buy milk")).toEqual({ category: "Personal", priority: "P3" });
+  });
+
+  it("infers Health and bumps priority to P1 for an urgent appointment", () => {
+    expect(inferTaskMetadata("urgent blood test appointment")).toEqual({ category: "Health", priority: "P1" });
+  });
+
+  it("does not bump priority for non-urgent titles", () => {
+    expect(inferTaskMetadata("schedule a checkup")).toEqual({ category: "Health", priority: "P3" });
+  });
+
+  it("infers Career for plural job-application/cover-letter phrasing with no other cue", () => {
+    expect(inferTaskMetadata("submit job applications")).toEqual({ category: "Career", priority: "P3" });
+    expect(inferTaskMetadata("draft cover letters")).toEqual({ category: "Career", priority: "P3" });
+  });
+
+  it("does not bump priority when urgency is explicitly negated", () => {
+    expect(inferTaskMetadata("email landlord, not urgent")).toEqual({ category: "Personal", priority: "P3" });
+    expect(inferTaskMetadata("non-urgent: water the plants")).toEqual({ category: "Personal", priority: "P3" });
+    expect(inferTaskMetadata("water the plants, not right away")).toEqual({ category: "Personal", priority: "P3" });
+    expect(inferTaskMetadata("not really urgent at all, water the plants")).toEqual({ category: "Personal", priority: "P3" });
+  });
+
+  it("prefers a stronger Career/Work cue over a generic appointment keyword", () => {
+    expect(inferTaskMetadata("prepare for recruiter appointment")).toEqual({ category: "Career", priority: "P3" });
+    expect(inferTaskMetadata("client appointment")).toEqual({ category: "Work", priority: "P3" });
+  });
+});
 
 describe("parseCoachActionTags", () => {
   it("returns no actions and the original text when no tag is present", () => {
@@ -66,6 +113,25 @@ describe("parseCoachActionTags", () => {
       cleanText: "Starting now!",
       actions: [{ type: "START_FOCUS", title: "Write report" }],
     });
+  });
+
+  it("extracts a body-double duration suffix from a START_FOCUS tag", () => {
+    expect(parseCoachActionTags("Starting now!\n[[START_FOCUS:Write report|10]]")).toEqual({
+      cleanText: "Starting now!",
+      actions: [{ type: "START_FOCUS", title: "Write report", durationMinutes: 10 }],
+    });
+    expect(parseCoachActionTags("[[START_FOCUS:Write report|10 minutes]]").actions).toEqual([
+      { type: "START_FOCUS", title: "Write report", durationMinutes: 10 },
+    ]);
+  });
+
+  it("clamps a START_FOCUS duration suffix to the 5-20 minute range", () => {
+    expect(parseCoachActionTags("[[START_FOCUS:Write report|2]]").actions).toEqual([
+      { type: "START_FOCUS", title: "Write report", durationMinutes: 5 },
+    ]);
+    expect(parseCoachActionTags("[[START_FOCUS:Write report|45]]").actions).toEqual([
+      { type: "START_FOCUS", title: "Write report", durationMinutes: 20 },
+    ]);
   });
 
   it("allows a single bracket character within a tag title", () => {
@@ -193,6 +259,11 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("SET_NOW_FOCUS", "What should I do next?")).toBe(false);
   });
 
+  it("matches START_FOCUS on body-double language without start/focus wording", () => {
+    expect(matchesUserIntent("START_FOCUS", "can you sit with me while I work on Write report", "Write report")).toBe(true);
+    expect(matchesUserIntent("START_FOCUS", "be my body double for Write report", "Write report")).toBe(true);
+  });
+
   it("matches START_FOCUS on start+session language", () => {
     expect(matchesUserIntent("START_FOCUS", "Let's start a focus session")).toBe(true);
     expect(matchesUserIntent("START_FOCUS", "Focus on the report")).toBe(false);
@@ -269,6 +340,14 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("START_FOCUS", "start now focus", "Write report", [], "Write report")).toBe(true);
     expect(matchesUserIntent("START_FOCUS", "start now focus", "Email client", [], "Write report")).toBe(false);
   });
+
+  it("allows a no-task-named body-double request to fall back to the current Now Focus task", () => {
+    // "be my body double for 15 minutes" names neither the task nor "now focus" —
+    // it should still resolve against whatever the current Now Focus task is.
+    expect(matchesUserIntent("START_FOCUS", "be my body double for 15 minutes", "Write report", [], "Write report")).toBe(true);
+    expect(matchesUserIntent("START_FOCUS", "be my body double for 15 minutes", "Email client", [], "Write report")).toBe(false);
+    expect(matchesUserIntent("START_FOCUS", "be my body double for 15 minutes", "Write report", [], null)).toBe(false);
+  });
 });
 
 describe("applyCoachActions", () => {
@@ -286,7 +365,10 @@ describe("applyCoachActions", () => {
     const { payload: next, results } = applyCoachActions(payload, [{ type: "SET_NOW_FOCUS", title: "Email client" }], { ...dateOpts, lastUserMessage: "Let's focus on Email client now." });
     expect(next.tasks.find(t => t.uuid === "2").isNowFocus).toBe(true);
     expect(next.tasks.find(t => t.uuid === "1").isNowFocus).toBe(false);
-    expect(results).toEqual([{ type: "SET_NOW_FOCUS", title: "Email client", matched: true, task: payload.tasks[1] }]);
+    // results.task reflects the post-mutation task (isNowFocus now true), not
+    // the pre-mutation snapshot — callers like CoachTab's focus-timer launcher
+    // read fields (e.g. timeEstimateMinutes) that this action may have just updated.
+    expect(results).toEqual([{ type: "SET_NOW_FOCUS", title: "Email client", matched: true, task: next.tasks.find(t => t.uuid === "2") }]);
   });
 
   it("COMPLETE_TASK marks the task done, awards XP, and increments today's contribution", () => {
@@ -396,6 +478,30 @@ describe("applyCoachActions", () => {
     expect(next.tasks.find(t => t.uuid === "2").isNowFocus).toBe(false);
     expect(results[0].matched).toBe(true);
     expect(results[0].task.uuid).toBe("1");
+  });
+
+  it("START_FOCUS with a body-double duration carries it on the result without touching the task's own time estimate", () => {
+    const payload = {
+      tasks: [
+        { uuid: "1", title: "Write report", isNowFocus: false, isCompleted: false, isDeleted: false, isParked: false, timeEstimateMinutes: 60 },
+      ],
+      config: {},
+      contributions: [],
+    };
+    const { payload: next, results } = applyCoachActions(
+      payload,
+      [{ type: "START_FOCUS", title: "Write report", durationMinutes: 10 }],
+      { ...dateOpts, lastUserMessage: "Sit with me for 10 minutes while I write the report." },
+    );
+    expect(next.tasks[0].isNowFocus).toBe(true);
+    // The task's real time estimate (e.g. for planning totals, Today cards,
+    // Focus Briefing) must survive a body-double session unrelated to it.
+    expect(next.tasks[0].timeEstimateMinutes).toBe(60);
+    expect(results[0].matched).toBe(true);
+    expect(results[0].task.timeEstimateMinutes).toBe(60);
+    // The session duration itself is on the result (spread from the action)
+    // for the caller's timer launcher to use directly.
+    expect(results[0].durationMinutes).toBe(10);
   });
 
   it("applies multiple actions in order: completing the Now Focus task, then pinning the next one", () => {
@@ -648,6 +754,16 @@ describe("buildActionReplyText", () => {
     ];
     expect(buildActionReplyText("Some narration the model wrote.", results, "I finished the report, and park walk the dog")).toBe(
       `Marked "Write report" complete — +100 XP! I couldn't find "Walk the dog" in your task list — could you double-check the name?`
+    );
+  });
+
+  it("includes the body-double duration in the START_FOCUS success line", () => {
+    const results = [
+      { type: "START_FOCUS", title: "Write report", durationMinutes: 10, matched: true, task: { title: "Write report" } },
+      { type: "PARK_TASK", title: "Walk the dog", matched: false },
+    ];
+    expect(buildActionReplyText("Some narration the model wrote.", results, "Sit with me for 10 minutes, and park walk the dog")).toBe(
+      `Started a 10-min focus session on "Write report". I couldn't find "Walk the dog" in your task list — could you double-check the name?`
     );
   });
 

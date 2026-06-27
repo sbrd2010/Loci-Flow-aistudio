@@ -170,4 +170,36 @@ describe("buildCoachSystemPrompt", () => {
     const out = buildCoachSystemPrompt("compact_task", baseCtx());
     expect(out).toContain("answer the date/time in one complete sentence first, then give the numbered list");
   });
+
+  it("full_task mode carries the PRIORITY QUESTIONS framework", () => {
+    const out = buildCoachSystemPrompt("full_task", baseCtx());
+    expect(out).toContain("PRIORITY QUESTIONS");
+    expect(out).toContain("Give at most 3 priorities");
+    expect(out).toContain('urgent = overdue or near the key deadline; important = [P1]/[P2]');
+  });
+
+  it("PRIORITY QUESTIONS reinforces answering from the visible snapshot only", () => {
+    const out = buildCoachSystemPrompt("full_task", baseCtx());
+    expect(out).toContain("These are the visible tasks only");
+  });
+
+  it("reduced modes do not carry the PRIORITY QUESTIONS framework (no full task context to apply it to)", () => {
+    ["light", "emotional", "profile_reflection", "compact_task"].forEach(mode => {
+      const out = buildCoachSystemPrompt(mode, baseCtx());
+      expect(out).not.toContain("PRIORITY QUESTIONS");
+    });
+  });
+
+  it("full_task mode includes body-double instructions with honesty about not watching the user", () => {
+    const out = buildCoachSystemPrompt("full_task", baseCtx());
+    expect(out).toContain("BODY-DOUBLE SESSIONS");
+    expect(out).toContain("not actually watching");
+  });
+
+  it("light, emotional, profile_reflection, and compact_task modes omit body-double instructions", () => {
+    ["light", "emotional", "profile_reflection", "compact_task"].forEach(mode => {
+      const out = buildCoachSystemPrompt(mode, baseCtx());
+      expect(out).not.toContain("BODY-DOUBLE SESSIONS");
+    });
+  });
 });

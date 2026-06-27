@@ -7,7 +7,13 @@
 // [[COMPLETE_TASK:<title>]] - mark a task complete (+100 XP, +1 contribution)
 // [[ADD_TASK:<title>]]      - create a new Today task (P3, 25min default)
 // [[PARK_TASK:<title>]]     - park a task (mirrors Bad Day Reset's per-task patch)
-// [[START_FOCUS:<title>]]   - pin a task as Now Focus so a focus session can start
+// [[START_FOCUS:<title>]] or [[START_FOCUS:<title>|<minutes>]] - pin a task as
+//                            Now Focus so a focus session can start. The
+//                            optional "|<minutes>" suffix (used for
+//                            body-double sessions with a stated duration,
+//                            clamped 5-20) is a one-off session length carried
+//                            on the result for the timer launcher — it never
+//                            overwrites the task's own time estimate.
 //
 // The system prompt tells the AI these tags are "explicit-request-only", but
 // that's advisory — applyCoachActions() additionally requires (via
@@ -20,13 +26,30 @@ import { safeUUID } from "./uuid";
 
 const ACTION_TAG_RE = /\s*\[\[(SET_NOW_FOCUS|COMPLETE_TASK|ADD_TASK|PARK_TASK|START_FOCUS):\s*((?:[^\]]|\](?!\]))+?)\s*\]\]/gi;
 
+const START_FOCUS_DURATION_RE = /^(.*)\|\s*(\d{1,3})\s*(?:min(?:ute)?s?)?\s*$/i;
+
+// Splits a START_FOCUS tag's raw title on an optional "|<minutes>" duration
+// suffix, clamping the minutes to the 5-20 range the BODY-DOUBLE SESSIONS
+// prompt instruction promises. Returns durationMinutes: null when no suffix.
+function parseStartFocusTitle(rawTitle) {
+  const match = START_FOCUS_DURATION_RE.exec(rawTitle);
+  if (!match) return { title: rawTitle.trim(), durationMinutes: null };
+  return { title: match[1].trim(), durationMinutes: Math.min(20, Math.max(5, parseInt(match[2], 10))) };
+}
+
 // Strips all recognized coach action tags from an AI reply. Returns
 // { cleanText, actions } where actions is an ordered list of
-// { type: "SET_NOW_FOCUS"|"COMPLETE_TASK"|"ADD_TASK"|"PARK_TASK"|"START_FOCUS", title }.
+// { type: "SET_NOW_FOCUS"|"COMPLETE_TASK"|"ADD_TASK"|"PARK_TASK"|"START_FOCUS", title, durationMinutes? }.
 export function parseCoachActionTags(text = "") {
   const actions = [];
-  const cleanText = text.replace(ACTION_TAG_RE, (_match, type, title) => {
-    actions.push({ type: type.toUpperCase(), title: title.trim() });
+  const cleanText = text.replace(ACTION_TAG_RE, (_match, type, rawTitle) => {
+    const upperType = type.toUpperCase();
+    if (upperType === "START_FOCUS") {
+      const { title, durationMinutes } = parseStartFocusTitle(rawTitle.trim());
+      actions.push(durationMinutes != null ? { type: upperType, title, durationMinutes } : { type: upperType, title });
+    } else {
+      actions.push({ type: upperType, title: rawTitle.trim() });
+    }
     return "";
   }).trim();
   return { cleanText, actions };
@@ -45,10 +68,18 @@ function normalizeStopWords(str = "") {
 // requests that kind of action. Keeps the AI's "explicit-request-only" rule
 // from being the only line of defense against acting on a hallucinated or
 // misread request.
+// Body-double phrasing never names a specific task ("be my body double",
+// "sit with me while I work") — used both as a START_FOCUS intent signal and,
+// below, to let such requests fall back to the current Now Focus task.
+const BODY_DOUBLE_REF_RE = /\b(body[\s-]?double|sit with me|stay with me|work (?:alongside|next to) me|keep me company while i work)\b/i;
+
 const INTENT_PATTERNS = {
   COMPLETE_TASK: /\b(done|finish(ed|ing)?|complet(e|ed|ing)|wrapped? up|knocked out)\b/i,
   SET_NOW_FOCUS: /\b(focus on|switch.*focus|prioriti[sz]e|now focus|pin( this| that)? task|pin\b|focus.*now)\b/i,
-  START_FOCUS: /\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\b/i,
+  // Second alternative covers body-double requests ("sit with me while I
+  // work", "be my body double") — they ask for a focus session just as
+  // clearly as "start a timer" does, without using start/begin/kick-off wording.
+  START_FOCUS: new RegExp(`\\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\\b|${BODY_DOUBLE_REF_RE.source}`, "i"),
   ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don'?t forget|add .+ to (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b)/i,
   PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|skip)\b/i,
 };
@@ -181,7 +212,11 @@ export function matchesUserIntent(actionType, lastUserMessage = "", title = "", 
   const isPronounRef = /\b(this task|that task|the task|it|that|this)\b/i.test(String(lastUserMessage || ""));
   const pronounAllowed = isPronounRef && (titleInPrevUser || titleInPrevAssistant || isClarification);
 
-  const isCurrentFocusRef = /\b(current focus|now focus|current task)\b/i.test(String(lastUserMessage || ""));
+  // Body-double requests ("be my body double") never name a task by
+  // definition, so they imply the current Now Focus task just as clearly as
+  // saying "now focus" or "current task" would.
+  const isCurrentFocusRef = /\b(current focus|now focus|current task)\b/i.test(String(lastUserMessage || "")) ||
+    (actionType === "START_FOCUS" && BODY_DOUBLE_REF_RE.test(String(lastUserMessage || "")));
   const isTargetCurrentFocus = currentFocusTitle && (normalizeTitle(title) === normalizeTitle(currentFocusTitle));
   const currentFocusAllowed = isCurrentFocusRef && isTargetCurrentFocus;
 
@@ -239,13 +274,54 @@ export function buildParkTaskTasks(tasks, taskUuid, now = Date.now()) {
   );
 }
 
+// Generic keyword groups for inferTaskMetadata's category guess — no
+// person- or project-specific terms, just the kind of word any user's task
+// titles would naturally contain for that category. Checked in this order
+// (Health first) so a title like "doctor's report" reads as Health, not Work.
+const CATEGORY_KEYWORDS = {
+  // "appointment" alone is intentionally not a Health cue — "recruiter
+  // appointment" or "client appointment" would wrongly win over the
+  // Career/Work cue also in the title. Pairing it with a health-specific
+  // word still catches "doctor's/dentist/therapy appointment" (those terms
+  // already match on their own) plus generic "medical appointment".
+  Health: /\b(doctor|dentist|medical appointment|therapy|therapist|gym|workout|exercise|medication|medicine|blood test|checkup|check-up|clinic|hospital|prescription)\b/i,
+  Career: /\b(resume|cv|recruiter|interview|job applications?|linkedin|cover letters?|networking|portfolio|job offers?)\b/i,
+  Work: /\b(report|manager|meeting|deadline|client|project|presentation|standup|sprint|colleague|boss|deliverable)\b/i,
+};
+
+// Bumps an inferred task to P1 when the title itself signals urgency —
+// doesn't change priority for any other keyword group.
+const URGENT_KEYWORDS = /\b(urgent|asap|emergency|immediately|right away|critical)\b/i;
+
+// Skips the P1 bump when urgency is explicitly negated ("not urgent",
+// "non-urgent", "isn't an emergency") instead of asserted.
+const NEGATED_URGENT_RE = /\b(?:not|non-?|isn['’]?t|aren['’]?t|no longer)\s*(?:so\s+|that\s+|very\s+|really\s+|an?\s+)?(?:urgent|asap|emergency|immediate(?:ly)?|critical|right away)\b/i;
+
+// Best-effort category/priority guess for a Coach-added task, used only
+// when the title doesn't otherwise specify one. Defaults to AddTaskDialog's
+// existing Personal/P3 when nothing matches.
+export function inferTaskMetadata(title) {
+  const text = String(title || "");
+  let category = "Personal";
+  for (const [cat, re] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (re.test(text)) {
+      category = cat;
+      break;
+    }
+  }
+  const priority = URGENT_KEYWORDS.test(text) && !NEGATED_URGENT_RE.test(text) ? "P1" : "P3";
+  return { category, priority };
+}
+
 // Creates a new Today task from a chat-mentioned title — mirrors
-// AddTaskDialog's defaults (P3, 25min, "Do first tiny step").
+// AddTaskDialog's defaults (P3, 25min, "Do first tiny step"), with
+// category/priority inferred from the title via inferTaskMetadata.
 function buildAddTaskPayload(payload, rawTitle, now = Date.now()) {
   const { tasks = [], config = {} } = payload;
   const title = String(rawTitle).trim().slice(0, 1000);
   if (!title) return payload;
   const orderIndex = tasks.filter(t => t.horizonLevel === "today" && !t.isDeleted).length;
+  const { category, priority } = inferTaskMetadata(title);
   const newTask = {
     id: now,
     userId: payload.userId || config.userId || "",
@@ -253,8 +329,8 @@ function buildAddTaskPayload(payload, rawTitle, now = Date.now()) {
     title,
     concreteStep: "Do first tiny step",
     horizonLevel: "today",
-    priority: "P3",
-    category: "Personal",
+    priority,
+    category,
     timeEstimateMinutes: 25,
     deadlineTimestamp: null,
     reminderAt: null,
@@ -325,14 +401,20 @@ export function applyCoachActions(payload, actions, { lociDateStr, localDateStr,
       results.push({ ...action, matched: false });
       continue;
     }
+    let resultTask = task;
     if (action.type === "SET_NOW_FOCUS" || action.type === "START_FOCUS") {
       nextPayload = { ...nextPayload, tasks: buildSetNowFocusTasks(nextPayload.tasks, task.uuid) };
+      // A body-double session's "|<minutes>" duration is a one-off session
+      // length, not a correction to the task's own time estimate — it's
+      // carried on the result (action.durationMinutes, spread below) for the
+      // caller's timer launcher to use directly, never written into the task.
+      resultTask = nextPayload.tasks.find(t => t.uuid === task.uuid) || task;
     } else if (action.type === "COMPLETE_TASK") {
       nextPayload = buildCompleteTaskPayload(nextPayload, task, lociDateStr, localDateStr);
     } else if (action.type === "PARK_TASK") {
       nextPayload = { ...nextPayload, tasks: buildParkTaskTasks(nextPayload.tasks, task.uuid) };
     }
-    results.push({ ...action, matched: true, task });
+    results.push({ ...action, matched: true, task: resultTask });
   }
 
   return { payload: nextPayload, results };
@@ -372,7 +454,7 @@ export function buildActionReplyText(cleanText, results = [], lastUserMessage = 
     const title = r.task ? r.task.title : r.title;
     switch (r.type) {
       case "SET_NOW_FOCUS": return `Switched your focus to "${title}".`;
-      case "START_FOCUS": return `Started a focus session on "${title}".`;
+      case "START_FOCUS": return r.durationMinutes != null ? `Started a ${r.durationMinutes}-min focus session on "${title}".` : `Started a focus session on "${title}".`;
       case "COMPLETE_TASK": return `Marked "${title}" complete — +100 XP!`;
       case "ADD_TASK": return `Added "${title}" to your Today list.`;
       case "PARK_TASK": return `Parked "${title}" for later.`;
