@@ -322,6 +322,7 @@
   padding: 7px 6px 7px 10px;
   min-height: 42px;
   cursor: grab;
+  touch-action: none;
 }
 
 .dm-card-main:active { cursor: grabbing; }
