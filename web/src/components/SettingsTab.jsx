@@ -30,6 +30,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const [editedPomodoro, setEditedPomodoro] = useState(config.pomodoroDurationMinutes || 25);
   const [editedNagInterval, setEditedNagInterval] = useState(config.reminderNagIntervalMinutes || 15);
   const [editedEveningGuard, setEditedEveningGuard] = useState(!!config.eveningGuardWindowActive);
+  const [editedTaskRowStyle, setEditedTaskRowStyle] = useState(config.taskRowInteractionStyle || "classic");
   const [editedChallenge, setEditedChallenge] = useState(() => normalizeChallengeKey(config.challengeType));
   const [editedFocusWindows, setEditedFocusWindows] = useState(config.focusWindows || []);
   const [editedMorningRitualStart, setEditedMorningRitualStart] = useState(config.morningRitualWindowStart || "05:00");
@@ -54,6 +55,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
     setEditedPomodoro(config.pomodoroDurationMinutes || 25);
     setEditedNagInterval(config.reminderNagIntervalMinutes || 15);
     setEditedEveningGuard(!!config.eveningGuardWindowActive);
+    setEditedTaskRowStyle(config.taskRowInteractionStyle || "classic");
     setEditedChallenge(normalizeChallengeKey(config.challengeType));
     setEditedFocusWindows(config.focusWindows || []);
     setEditedMorningRitualStart(config.morningRitualWindowStart || "05:00");
@@ -70,7 +72,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
     setEditedDeadlineStartDate(config.deadlineStartDate || "");
     setEditedDeadlineAction(config.deadlineAction || "");
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
-      config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.challengeType,
+      config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.taskRowInteractionStyle, config.challengeType,
       config.focusWindows,
       config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualEnabled, config.coachNudgesEnabled, config.headerStyle, config.toolsStyle,
       config.deadlineLabel, config.deadlineDate,
@@ -187,6 +189,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
       pomodoroDurationMinutes: Math.min(120, Math.max(1, parseInt(editedPomodoro) || 25)),
       reminderNagIntervalMinutes: Math.min(60, Math.max(1, parseInt(editedNagInterval) || 15)),
       eveningGuardWindowActive: editedEveningGuard,
+      taskRowInteractionStyle: editedTaskRowStyle,
       focusWindows: editedFocusWindows.filter(w => w.start && w.end && w.start !== w.end),
       morningRitualWindowStart: morningRitualValid ? editedMorningRitualStart : "05:00",
       morningRitualWindowEnd: morningRitualValid ? editedMorningRitualEnd : "11:00",
@@ -653,6 +656,27 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
               </p>
             </div>
             <input type="checkbox" className="pill-toggle" checked={editedEveningGuard} onChange={() => setEditedEveningGuard(v => !v)} />
+          </div>
+
+          <div
+            className="toggle-row"
+            onClick={() => setEditedTaskRowStyle(s => s === "dragAnywhere" ? "classic" : "dragAnywhere")}
+            style={{ cursor: "pointer" }}
+          >
+            <div>
+              <span style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--text-primary)" }}>
+                ✋ Drag-anywhere task rows
+              </span>
+              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                Reorder by dragging anywhere on a task (Today + Horizon), with a ⋮ menu button instead of the left-side grip.
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              className="pill-toggle"
+              checked={editedTaskRowStyle === "dragAnywhere"}
+              onChange={() => setEditedTaskRowStyle(s => s === "dragAnywhere" ? "classic" : "dragAnywhere")}
+            />
           </div>
 
           <button className="btn" type="submit" style={{ width: "100%", marginTop: "4px" }}>

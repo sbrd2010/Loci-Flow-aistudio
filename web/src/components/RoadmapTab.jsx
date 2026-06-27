@@ -17,8 +17,9 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import LinkifyText from "./LinkifyText";
 
-function SortableRoadmapCard({ id, task, onTaskClick }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+function SortableRoadmapCard({ id, task, onTaskClick, interactionStyle = "classic" }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const isDragAnywhere = interactionStyle === "dragAnywhere";
   return (
     <div
       ref={setNodeRef}
@@ -30,24 +31,31 @@ function SortableRoadmapCard({ id, task, onTaskClick }) {
       }}
     >
       <div
+        ref={isDragAnywhere ? setActivatorNodeRef : undefined}
         className="roadmap-task-card"
         onClick={() => onTaskClick(task)}
-        style={{ display: "flex", alignItems: "center", gap: "6px" }}
+        {...(isDragAnywhere ? { ...listeners, ...attributes } : {})}
+        style={{
+          display: "flex", alignItems: "center", gap: "6px",
+          ...(isDragAnywhere ? { cursor: "grab", touchAction: "none" } : {}),
+        }}
       >
-        <button
-          {...listeners}
-          {...attributes}
-          style={{
-            background: "none", border: "none", cursor: "grab",
-            color: "var(--text-muted)", opacity: 0.3, padding: "2px 3px",
-            flexShrink: 0, lineHeight: 1, fontSize: "13px",
-            touchAction: "none",
-          }}
-          onClick={e => e.stopPropagation()}
-          aria-label="Drag to reorder"
-        >
-          ⠿
-        </button>
+        {!isDragAnywhere && (
+          <button
+            {...listeners}
+            {...attributes}
+            style={{
+              background: "none", border: "none", cursor: "grab",
+              color: "var(--text-muted)", opacity: 0.3, padding: "2px 3px",
+              flexShrink: 0, lineHeight: 1, fontSize: "13px",
+              touchAction: "none",
+            }}
+            onClick={e => e.stopPropagation()}
+            aria-label="Drag to reorder"
+          >
+            ⠿
+          </button>
+        )}
         <span className={`priority-badge ${task.priority?.toLowerCase() || "p3"}`} style={{ flexShrink: 0 }}>
           {task.priority || "P3"}
         </span>
@@ -60,12 +68,22 @@ function SortableRoadmapCard({ id, task, onTaskClick }) {
           </span>
         )}
         <span className="roadmap-task-title" style={{ flex: 1, minWidth: 0 }}><LinkifyText text={task.title} /></span>
+        {isDragAnywhere && (
+          <button
+            className="task-row-kebab-btn"
+            onClick={e => { e.stopPropagation(); onTaskClick(task); }}
+            onPointerDown={e => e.stopPropagation()}
+            aria-label="Task options"
+            title="Task options"
+          >⋮</button>
+        )}
       </div>
     </div>
   );
 }
 
 function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, onTaskClick }) {
+  const interactionStyle = payload?.config?.taskRowInteractionStyle === "dragAnywhere" ? "dragAnywhere" : "classic";
   const [activeId, setActiveId] = useState(null);
   const getKey = (t) => t.uuid || String(t.id);
   const ids = colTasks.map(getKey);
@@ -120,6 +138,7 @@ function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, on
             id={getKey(task)}
             task={task}
             onTaskClick={onTaskClick}
+            interactionStyle={interactionStyle}
           />
         ))}
       </SortableContext>

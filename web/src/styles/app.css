@@ -2064,6 +2064,25 @@ textarea.text-input {
   color: var(--text-secondary);
 }
 
+/* Drag-anywhere mode: kebab options button (Today's Focus + Horizon) */
+.task-row-kebab-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  opacity: 0.45;
+  padding: 4px 6px;
+  font-size: 15px;
+  line-height: 1;
+  border-radius: 6px;
+  transition: background 0.12s, opacity 0.12s;
+}
+.task-row-kebab-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .roadmap-empty-state {
   font-size: 12px;
   color: var(--text-muted);

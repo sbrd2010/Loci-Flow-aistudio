@@ -34,8 +34,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-function SortableTaskItem({ id, children }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+function SortableTaskItem({ id, interactionStyle, children }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   return (
     <div
       ref={setNodeRef}
@@ -47,7 +47,11 @@ function SortableTaskItem({ id, children }) {
         zIndex: isDragging ? 0 : "auto",
       }}
     >
-      {children({ dragHandleListeners: listeners, dragHandleAttributes: attributes })}
+      {children({
+        dragHandleListeners: listeners,
+        dragHandleAttributes: attributes,
+        dragActivatorRef: interactionStyle === "dragAnywhere" ? setActivatorNodeRef : undefined,
+      })}
     </div>
   );
 }
@@ -63,6 +67,7 @@ export default function TodayTab({
   pendingCheckinSlot, setPendingCheckinSlot,
 }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
+  const taskRowInteractionStyle = config.taskRowInteractionStyle === "dragAnywhere" ? "dragAnywhere" : "classic";
   const windows = getFocusWindows(config);
 
   const [headerExpanded, setHeaderExpanded] = useState(false);
@@ -1296,8 +1301,8 @@ export default function TodayTab({
                   strategy={verticalListSortingStrategy}
                 >
                   {remainingTasks.map((task, idx) => (
-                      <SortableTaskItem key={getTaskKey(task)} id={getTaskKey(task)}>
-                        {({ dragHandleListeners, dragHandleAttributes }) => (
+                      <SortableTaskItem key={getTaskKey(task)} id={getTaskKey(task)} interactionStyle={taskRowInteractionStyle}>
+                        {({ dragHandleListeners, dragHandleAttributes, dragActivatorRef }) => (
                           <TaskRow
                             task={task}
                             onToggleComplete={handleToggleComplete}
@@ -1316,6 +1321,8 @@ export default function TodayTab({
                             onToggleMVD={handleToggleMVD}
                             dragHandleListeners={dragHandleListeners}
                             dragHandleAttributes={dragHandleAttributes}
+                            dragActivatorRef={dragActivatorRef}
+                            interactionStyle={taskRowInteractionStyle}
                           />
                         )}
                       </SortableTaskItem>

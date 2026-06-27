@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { formatReminderLabel } from "../utils/reminders";
 import { CATEGORY_ICONS } from "../utils/taskOps";
 import { safeCopyToClipboard } from "../utils/clipboard";
@@ -121,7 +121,7 @@ const ROADMAP_HORIZONS = [
   { key: "office",   label: "Work" },
 ];
 
-export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, onToggleMVD, dragHandleListeners, dragHandleAttributes }) {
+export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, onToggleMVD, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic" }) {
   const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD, category } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const [showRoadmapOptions, setShowRoadmapOptions] = useState(false);
@@ -152,20 +152,28 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   const activeSubSteps = subSteps?.filter(s => !s.done) ?? [];
   const doneSubSteps = subSteps?.filter(s => s.done) ?? [];
   const hasSubSteps = subSteps && subSteps.length > 0;
+  const isDragAnywhere = interactionStyle === "dragAnywhere" && !!dragHandleListeners;
+
+  const setRowRef = useCallback(node => {
+    menuRef.current = node;
+    if (isDragAnywhere && dragActivatorRef) dragActivatorRef(node);
+  }, [isDragAnywhere, dragActivatorRef]);
 
   return (
     <div
       className={`task-row ${isCompleted ? "completed" : ""}`}
       data-testid="task-row"
-      ref={menuRef}
+      ref={setRowRef}
       onClick={hasActions ? () => setMenuOpen(o => !o) : undefined}
+      {...(isDragAnywhere ? { ...dragHandleListeners, ...(dragHandleAttributes || {}) } : {})}
       style={{
         ...(menuOpen ? { zIndex: 400, position: "relative" } : {}),
         ...(hasActions ? { cursor: "pointer" } : {}),
+        ...(isDragAnywhere ? { cursor: "grab", touchAction: "none" } : {}),
       }}
     >
       {/* Grip handle */}
-      {dragHandleListeners && (
+      {dragHandleListeners && !isDragAnywhere && (
         <button
           {...dragHandleListeners}
           {...(dragHandleAttributes || {})}
@@ -393,6 +401,16 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
           onClick={e => { e.stopPropagation(); onDelete(task); }}
           title="Delete"
         >🗑</button>
+      )}
+      {isDragAnywhere && hasActions && (
+        <button
+          className="task-row-kebab-btn"
+          onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
+          onPointerDown={e => e.stopPropagation()}
+          aria-label="Task options"
+          aria-expanded={menuOpen}
+          title="Task options"
+        >⋮</button>
       )}
     </div>
   );
