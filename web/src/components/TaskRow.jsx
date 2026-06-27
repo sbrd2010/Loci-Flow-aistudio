@@ -165,7 +165,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
       data-testid="task-row"
       ref={setRowRef}
       onClick={hasActions ? () => setMenuOpen(o => !o) : undefined}
-      {...(isDragAnywhere ? { ...dragHandleListeners, ...(dragHandleAttributes || {}) } : {})}
+      {...(isDragAnywhere ? { onMouseDown: dragHandleListeners.onMouseDown, onTouchStart: dragHandleListeners.onTouchStart } : {})}
       style={{
         ...(menuOpen ? { zIndex: 400, position: "relative" } : {}),
         ...(hasActions ? { cursor: "pointer" } : {}),
