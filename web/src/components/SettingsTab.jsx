@@ -675,6 +675,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
               type="checkbox"
               className="pill-toggle"
               checked={editedTaskRowStyle === "dragAnywhere"}
+              onClick={e => e.stopPropagation()}
               onChange={() => setEditedTaskRowStyle(s => s === "dragAnywhere" ? "classic" : "dragAnywhere")}
             />
           </div>
