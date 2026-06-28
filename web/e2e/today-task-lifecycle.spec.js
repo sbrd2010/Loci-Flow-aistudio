@@ -110,3 +110,18 @@ test("mobile reliability: Today task can be added, edited, focused, completed, r
   await expect(editedRow).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
 });
+
+test("mobile reliability: Today task can be parked from its row menu and disappears from Today", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "Park lifecycle seed task";
+  await openAddTask(page);
+  await page.getByTestId("add-task-title").fill(title);
+  await page.getByTestId("add-task-submit").click();
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(todayRow(page, title)).toBeVisible({ timeout: 5_000 });
+
+  await openTaskMenu(page, title);
+  await page.getByTestId("task-menu-park").click();
+  await expect(todayRow(page, title)).not.toBeVisible({ timeout: 5_000 });
+});

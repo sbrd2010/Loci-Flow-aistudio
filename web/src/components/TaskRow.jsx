@@ -412,7 +412,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
             </>
           )}
           {onPark && (
-            <MenuItem onClick={() => { onPark(task); setMenuOpen(false); }} color="var(--text-secondary)">
+            <MenuItem testId="task-menu-park" onClick={() => { onPark(task); setMenuOpen(false); }} color="var(--text-secondary)">
               <ParkIcon /> Park for later
             </MenuItem>
           )}
