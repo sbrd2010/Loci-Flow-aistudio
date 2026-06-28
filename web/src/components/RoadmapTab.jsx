@@ -187,6 +187,12 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [undoTask, setUndoTask] = useState(null);
   const undoTimeoutRef = useRef(null);
+  // Brain dump deletion is confirmed via a deferred onConfirm callback — by the
+  // time the user clicks "Delete", `payload` in that closure may be stale (e.g.
+  // a background save landed while the dialog was open). Track the latest
+  // payload in a ref so the delete reads/writes current data, not a snapshot.
+  const payloadRef = useRef(payload);
+  payloadRef.current = payload;
   const [copied, setCopied] = useState(false);
   const copyTimeoutRef = useRef(null);
   const [longDumpWarning, setLongDumpWarning] = useState(null); // {id, horizon}
@@ -306,7 +312,16 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   };
 
   const handleDeleteBrainDump = (item) => {
-    savePayload({ ...payload, brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) });
+    setConfirmDialog({
+      message: "Delete this brain dump item?",
+      confirmLabel: "Delete", cancelLabel: "Keep it", danger: true,
+      onConfirm: () => {
+        const latest = payloadRef.current;
+        savePayload({ ...latest, brainDump: (latest.brainDump || []).filter(d => d.id !== item.id) });
+        setConfirmDialog(null);
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
   };
 
   const handleAIBreakdown = async (item) => {
