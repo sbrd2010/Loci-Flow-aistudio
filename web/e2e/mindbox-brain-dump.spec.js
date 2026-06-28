@@ -64,6 +64,8 @@ test("mobile reliability: Brain Dump item survives navigation and can be deleted
 
   const thoughtRow = page.locator("div", { hasText: thought }).filter({ has: page.locator("button[title='Delete']") }).last();
   await thoughtRow.locator("button[title='Delete']").click();
+  await expect(page.getByText("Delete this brain dump item?")).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.getByText(thought)).not.toBeVisible({ timeout: 5_000 });
 
   await page.getByRole("button", { name: /Back/i }).click();
