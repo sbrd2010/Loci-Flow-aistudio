@@ -306,7 +306,15 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   };
 
   const handleDeleteBrainDump = (item) => {
-    savePayload({ ...payload, brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) });
+    setConfirmDialog({
+      message: "Delete this brain dump item?",
+      confirmLabel: "Delete", cancelLabel: "Keep it", danger: true,
+      onConfirm: () => {
+        savePayload({ ...payload, brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) });
+        setConfirmDialog(null);
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
   };
 
   const handleAIBreakdown = async (item) => {
