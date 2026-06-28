@@ -4,6 +4,7 @@ import AddTaskDialog from "./AddTaskDialog";
 import FocusModePage from "./FocusModePage";
 import { safeUUID } from "../utils/uuid";
 import { buildToggleCompletedTasks } from "../utils/taskOps";
+import { buildParkTaskTasks } from "../utils/coachActions";
 import { shouldStopFocusOnComplete } from "../utils/focusSession";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
@@ -600,6 +601,10 @@ export default function TodayTab({
     )});
   };
 
+  const handleParkTask = (task) => {
+    savePayload({ ...payload, tasks: buildParkTaskTasks(tasks, task.uuid) });
+  };
+
   const handleMoveTask = (task, direction) => {
     const list = [...remainingTasks];
     const idx = list.findIndex(t => t.uuid === task.uuid);
@@ -1113,6 +1118,7 @@ export default function TodayTab({
                 onDelete={handleDeleteTask}
                 onEdit={handleStartEdit}
                 onMoveToHorizon={handleMoveToHorizon}
+                onPark={handleParkTask}
                 onBreakdown={handleBreakdown}
                 onSubStepToggle={handleSubStepToggle}
                 onDeleteSubStep={handleDeleteSubStep}
@@ -1312,6 +1318,7 @@ export default function TodayTab({
                             onMoveUp={idx > 0 ? t => handleMoveTask(t, "up") : undefined}
                             onMoveDown={idx < remainingTasks.length - 1 ? t => handleMoveTask(t, "down") : undefined}
                             onMoveToHorizon={handleMoveToHorizon}
+                            onPark={handleParkTask}
                             onBreakdown={handleBreakdown}
                             onSubStepToggle={handleSubStepToggle}
                             onDeleteSubStep={handleDeleteSubStep}

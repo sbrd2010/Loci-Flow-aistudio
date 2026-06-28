@@ -83,6 +83,14 @@ const ArrowRightIcon = () => (
   </svg>
 );
 
+const ParkIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 8H3v13h18V8z"/>
+    <path d="M1 3h22v5H1z"/>
+    <path d="M10 12h4"/>
+  </svg>
+);
+
 function MenuItem({ onClick, color, danger, testId, children }) {
   const [hovered, setHovered] = useState(false);
   return (
@@ -121,7 +129,7 @@ const ROADMAP_HORIZONS = [
   { key: "office",   label: "Work" },
 ];
 
-export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, onToggleMVD, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic" }) {
+export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onPark, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, onToggleMVD, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic" }) {
   const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD, category } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const [showRoadmapOptions, setShowRoadmapOptions] = useState(false);
@@ -148,7 +156,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
     };
   }, [menuOpen]);
 
-  const hasActions = !isCompleted && (onEdit || onPin || onDelete || onBreakdown || onMoveToHorizon);
+  const hasActions = !isCompleted && (onEdit || onPin || onDelete || onBreakdown || onMoveToHorizon || onPark);
   const activeSubSteps = subSteps?.filter(s => !s.done) ?? [];
   const doneSubSteps = subSteps?.filter(s => s.done) ?? [];
   const hasSubSteps = subSteps && subSteps.length > 0;
@@ -402,6 +410,11 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
                 </>
               )}
             </>
+          )}
+          {onPark && (
+            <MenuItem testId="task-menu-park" onClick={() => { onPark(task); setMenuOpen(false); }} color="var(--text-secondary)">
+              <ParkIcon /> Park for later
+            </MenuItem>
           )}
           {onDelete && (
             <>

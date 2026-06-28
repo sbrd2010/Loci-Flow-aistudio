@@ -493,7 +493,17 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
   };
 
   const handleDeleteDumpItem = (id) => {
-    savePayload({ ...payload, brainDump: (payload.brainDump || []).filter(item => item.id !== id) });
+    setConfirmDialog({
+      message: "Delete this brain dump item?",
+      confirmLabel: "Delete",
+      cancelLabel: "Keep it",
+      danger: true,
+      onConfirm: () => {
+        savePayload({ ...payload, brainDump: (payload.brainDump || []).filter(item => item.id !== id) });
+        setConfirmDialog(null);
+      },
+      onCancel: () => setConfirmDialog(null),
+    });
   };
 
   const formatRelTime = (ts) => {
