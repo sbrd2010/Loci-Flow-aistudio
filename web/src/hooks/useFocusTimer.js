@@ -115,10 +115,11 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
         "  transition: stroke-dashoffset 0.3s linear; }",
         // #pt needs position:relative so it paints above the absolutely-positioned
         // ring svg (DOM order alone isn't enough once a sibling is positioned).
-        "#pt { position: relative; font-family: 'Space Mono','Courier New',monospace; font-size: 32px;",
+        "#pt { position: relative; font-family: 'Space Mono','Courier New',monospace;",
+        "  font-size: clamp(24px, 15.25vmin, 32px);",
         "  font-weight: 700; color: #edf7f2; letter-spacing: -0.02em;",
         "  font-variant-numeric: tabular-nums; transition: color 0.3s, text-shadow 0.3s;",
-        "  text-shadow: 0 0 16px rgba(87,241,219,0.55); }",
+        "  text-shadow: 0 0 clamp(3px, 8vmin, 16px) rgba(87,241,219,0.55); }",
         "#pt.paused { color: rgba(237,247,242,0.35); text-shadow: none; }",
         "#pl { font-size: 10px; color: rgba(196,223,210,0.65); margin-top: 5px;",
         "  max-width: 200px; overflow: hidden; text-overflow: ellipsis;",
@@ -136,12 +137,15 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
         // (cyan drains to near-black left-to-right as the session progresses).
         "@media (max-width: 150px), (max-height: 140px) {",
         "  body { background: linear-gradient(to right,",
-        "    rgba(87,241,219,0.16) 0%, rgba(87,241,219,0.16) calc(var(--ratio, 1) * 100%),",
+        "    #0c3a36 0%, #0c3a36 calc(var(--ratio, 1) * 100%),",
         "    #05090b calc(var(--ratio, 1) * 100%), #05090b 100%); }",
-        "  #ring-wrap { width: auto; height: auto; }",
+        "  #ring-wrap { width: 100%; height: clamp(40px, 26vmin, 64px); }",
         "  #ring-wrap svg { display: none; }",
-        "  #pt { font-size: clamp(28px, 22vmin, 56px); }",
+        "  #pt { font-size: clamp(28px, 22vmin, 56px); color: #f5fbfa;",
+        "    text-shadow: 0 0 4px rgba(0, 0, 0, 0.65); }",
         "  #pl { margin-top: 3px; }",
+        "  #pip-play, #pip-reset, #pip-add5, #pip-shuffle {",
+        "    background: rgba(5, 9, 11, 0.78); border: 1px solid rgba(255, 255, 255, 0.35); }",
         "}",
         // Button row no longer fits 4 full-size buttons comfortably.
         "@media (max-width: 180px) {",
