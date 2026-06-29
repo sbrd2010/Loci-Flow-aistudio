@@ -138,6 +138,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
         "  body { background: linear-gradient(to right,",
         "    rgba(87,241,219,0.16) 0%, rgba(87,241,219,0.16) calc(var(--ratio, 1) * 100%),",
         "    #05090b calc(var(--ratio, 1) * 100%), #05090b 100%); }",
+        "  #ring-wrap { width: 0; height: 0; }",
         "  #ring-wrap svg { display: none; }",
         "  #pt { font-size: clamp(28px, 22vmin, 56px); }",
         "  #pl { margin-top: 3px; }",
