@@ -105,8 +105,10 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
         "body { background: #05090b; display: flex; flex-direction: column;",
         "  align-items: center; justify-content: center; height: 100vh;",
         "  font-family: system-ui, sans-serif; user-select: none; overflow: hidden; }",
+        // container-type:size lets #pt size itself in cqmin units relative to this box,
+        // so digits and ring shrink in lockstep at every size (not just at clamp endpoints).
         "#ring-wrap { position: relative; width: clamp(90px, 55vmin, 130px);",
-        "  height: clamp(90px, 55vmin, 130px);",
+        "  height: clamp(90px, 55vmin, 130px); container-type: size;",
         "  display: flex; align-items: center; justify-content: center; }",
         "#ring-wrap svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%;",
         "  transform: rotate(-90deg); }",
@@ -115,8 +117,9 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
         "  transition: stroke-dashoffset 0.3s linear; }",
         // #pt needs position:relative so it paints above the absolutely-positioned
         // ring svg (DOM order alone isn't enough once a sibling is positioned).
+        // line-height:1 avoids the browser default line-height clipping digits at tiny sizes.
         "#pt { position: relative; font-family: 'Space Mono','Courier New',monospace;",
-        "  font-size: clamp(24px, 15.25vmin, 32px);",
+        "  font-size: clamp(22px, 24.6cqmin, 32px); line-height: 1;",
         "  font-weight: 700; color: #edf7f2; letter-spacing: -0.02em;",
         "  font-variant-numeric: tabular-nums; transition: color 0.3s, text-shadow 0.3s;",
         "  text-shadow: 0 0 clamp(3px, 8vmin, 16px) rgba(87,241,219,0.55); }",
@@ -125,37 +128,39 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
         "  max-width: 200px; overflow: hidden; text-overflow: ellipsis;",
         "  white-space: nowrap; text-align: center; }",
         "#pip-btns { display: flex; gap: 8px; margin-top: 10px; }",
+        // Button size/font now scale continuously via clamp (coefficients chosen so the
+        // default 220x210 popup, vmin=210, still resolves to the previous fixed ceiling).
         "#pip-play, #pip-reset, #pip-add5, #pip-shuffle { background: rgba(255,255,255,0.10);",
         "  border: 1px solid rgba(255,255,255,0.18); color: #edf7f2;",
-        "  border-radius: 8px; font-size: 16px; width: 40px; height: 32px;",
+        "  border-radius: 8px; font-size: clamp(11px, 8vmin, 16px);",
+        "  width: clamp(24px, 20vmin, 40px); height: clamp(20px, 16vmin, 32px);",
         "  display: flex; align-items: center; justify-content: center;",
         "  cursor: pointer; line-height: 1; flex-shrink: 0; }",
         "#pip-add5 { font-size: 11px; font-weight: 700; }",
         "#pip-play:active, #pip-reset:active, #pip-add5:active, #pip-shuffle:active { opacity: 0.6; }",
-        // Compact mode: window too small (width OR height) for a clean ring —
-        // hide it, scale up the digits, and tie the background to time-remaining
-        // (cyan drains to near-black left-to-right as the session progresses).
+        // Stage 2 — compact enter: window too small (width OR height) for a clean ring —
+        // hide it, scale up the digits, drop the label and secondary buttons immediately,
+        // and tie the background to time-remaining (cyan drains to near-black over the session).
         "@media (max-width: 150px), (max-height: 140px) {",
         "  body { background: linear-gradient(to right,",
         "    #0c3a36 0%, #0c3a36 calc(var(--ratio, 1) * 100%),",
         "    #05090b calc(var(--ratio, 1) * 100%), #05090b 100%); }",
         "  #ring-wrap { width: 100%; height: clamp(40px, 26vmin, 64px); }",
         "  #ring-wrap svg { display: none; }",
-        "  #pt { font-size: clamp(28px, 22vmin, 56px); color: #f5fbfa;",
+        "  #pt { font-size: clamp(32px, 22vmin, 56px); color: #f5fbfa;",
         "    text-shadow: 0 0 4px rgba(0, 0, 0, 0.65); }",
-        "  #pl { margin-top: 3px; }",
-        "  #pip-play, #pip-reset, #pip-add5, #pip-shuffle {",
+        "  #pl, #pip-add5, #pip-shuffle { display: none; }",
+        "  #pip-play, #pip-reset {",
         "    background: rgba(5, 9, 11, 0.78); border: 1px solid rgba(255, 255, 255, 0.35); }",
         "}",
-        // Button row no longer fits 4 full-size buttons comfortably.
-        "@media (max-width: 180px) {",
-        "  #pip-btns { gap: 4px; margin-top: 6px; }",
-        "  #pip-play, #pip-reset, #pip-add5, #pip-shuffle { width: 30px; height: 26px; font-size: 13px; }",
-        "  #pip-add5 { font-size: 10px; }",
-        "}",
-        // Hide secondary buttons first; always keep play + reset visible.
-        "@media (max-width: 120px) {",
-        "  #pip-add5, #pip-shuffle { display: none; }",
+        // Stage 4 — extreme/height-constrained: only the timer digits should be visible.
+        // #ring-wrap itself must be re-sized here too, since stage 2's compact height
+        // (clamp(40px,26vmin,64px)) is too short to contain these larger digits without
+        // clipping them where they're centered inside #ring-wrap via flex.
+        "@media (max-height: 80px) {",
+        "  #pip-play, #pip-reset, #pip-btns { display: none; }",
+        "  #ring-wrap { width: 100%; height: 100vh; }",
+        "  #pt { font-size: clamp(40px, 60vmin, 90px); }",
         "}",
       ].join(" ");
       pipWin.document.head.appendChild(style);
