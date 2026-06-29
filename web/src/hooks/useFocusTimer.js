@@ -143,7 +143,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
         // and tie the background to time-remaining (cyan drains to near-black over the session).
         "@media (max-width: 150px), (max-height: 140px) {",
         "  body { background: linear-gradient(to right,",
-        "    #0e5a63 0%, #0e5a63 calc(var(--ratio, 1) * 100%),",
+        "    #097a8c 0%, #097a8c calc(var(--ratio, 1) * 100%),",
         "    #05090b calc(var(--ratio, 1) * 100%), #05090b 100%); }",
         "  #ring-wrap { width: 100%; height: clamp(40px, 26vmin, 64px); }",
         "  #ring-wrap svg { display: none; }",
