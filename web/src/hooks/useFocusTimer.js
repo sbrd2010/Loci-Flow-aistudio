@@ -76,11 +76,12 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     if (playBtn) {
       playBtn.textContent = running ? "⏸" : "▶";
     }
+    const ratio = maxSeconds > 0 ? seconds / maxSeconds : 0;
     const ringFg = doc.getElementById("pr-fg");
     if (ringFg) {
-      const ratio = maxSeconds > 0 ? seconds / maxSeconds : 0;
       ringFg.setAttribute("stroke-dashoffset", String(PIP_RING_CIRC * (1 - ratio)));
     }
+    doc.body.style.setProperty("--ratio", String(ratio));
   };
 
   const handleOpenPiP = async () => {
@@ -103,10 +104,12 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
         "* { box-sizing: border-box; margin: 0; padding: 0; }",
         "body { background: #05090b; display: flex; flex-direction: column;",
         "  align-items: center; justify-content: center; height: 100vh;",
-        "  font-family: system-ui, sans-serif; user-select: none; }",
-        "#ring-wrap { position: relative; width: 130px; height: 130px;",
+        "  font-family: system-ui, sans-serif; user-select: none; overflow: hidden; }",
+        "#ring-wrap { position: relative; width: clamp(90px, 55vmin, 130px);",
+        "  height: clamp(90px, 55vmin, 130px);",
         "  display: flex; align-items: center; justify-content: center; }",
-        "#ring-wrap svg { position: absolute; top: 0; left: 0; transform: rotate(-90deg); }",
+        "#ring-wrap svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%;",
+        "  transform: rotate(-90deg); }",
         "#pr-bg { fill: none; stroke: rgba(87,241,219,0.16); stroke-width: 5; }",
         "#pr-fg { fill: none; stroke: #57f1db; stroke-width: 5; stroke-linecap: round;",
         "  transition: stroke-dashoffset 0.3s linear; }",
@@ -125,9 +128,30 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
         "  border: 1px solid rgba(255,255,255,0.18); color: #edf7f2;",
         "  border-radius: 8px; font-size: 16px; width: 40px; height: 32px;",
         "  display: flex; align-items: center; justify-content: center;",
-        "  cursor: pointer; line-height: 1; }",
+        "  cursor: pointer; line-height: 1; flex-shrink: 0; }",
         "#pip-add5 { font-size: 11px; font-weight: 700; }",
         "#pip-play:active, #pip-reset:active, #pip-add5:active, #pip-shuffle:active { opacity: 0.6; }",
+        // Compact mode: window too small (width OR height) for a clean ring —
+        // hide it, scale up the digits, and tie the background to time-remaining
+        // (cyan drains to near-black left-to-right as the session progresses).
+        "@media (max-width: 150px), (max-height: 140px) {",
+        "  body { background: linear-gradient(to right,",
+        "    rgba(87,241,219,0.16) 0%, rgba(87,241,219,0.16) calc(var(--ratio, 1) * 100%),",
+        "    #05090b calc(var(--ratio, 1) * 100%), #05090b 100%); }",
+        "  #ring-wrap svg { display: none; }",
+        "  #pt { font-size: clamp(28px, 22vmin, 56px); }",
+        "  #pl { margin-top: 3px; }",
+        "}",
+        // Button row no longer fits 4 full-size buttons comfortably.
+        "@media (max-width: 180px) {",
+        "  #pip-btns { gap: 4px; margin-top: 6px; }",
+        "  #pip-play, #pip-reset, #pip-add5, #pip-shuffle { width: 30px; height: 26px; font-size: 13px; }",
+        "  #pip-add5 { font-size: 10px; }",
+        "}",
+        // Hide secondary buttons first; always keep play + reset visible.
+        "@media (max-width: 120px) {",
+        "  #pip-add5, #pip-shuffle { display: none; }",
+        "}",
       ].join(" ");
       pipWin.document.head.appendChild(style);
 
@@ -136,8 +160,6 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
 
       const svgNS = "http://www.w3.org/2000/svg";
       const ringSvg = pipWin.document.createElementNS(svgNS, "svg");
-      ringSvg.setAttribute("width", "130");
-      ringSvg.setAttribute("height", "130");
       ringSvg.setAttribute("viewBox", "0 0 120 120");
 
       const ringBg = pipWin.document.createElementNS(svgNS, "circle");
