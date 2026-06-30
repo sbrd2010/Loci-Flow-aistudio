@@ -258,6 +258,13 @@ async function callNvidia(nvidiaKey, systemPrompt, messages, maxTokens) {
 // budget recovers most of these without retrying indefinitely.
 const CEREBRAS_RETRY_TOKEN_CAP = 4000;
 
+// reasoning_effort is only meaningful (and only validated as a known field)
+// for Cerebras' gpt-oss family. VITE_CEREBRAS_MODEL (see README) lets a
+// deployment swap in a different Cerebras model, which may reject an
+// unrecognized reasoning_effort value with a 4xx — so only attach it when
+// the configured model is actually gpt-oss.
+const CEREBRAS_SUPPORTS_REASONING_EFFORT = /^gpt-oss/i.test(CEREBRAS_MODEL);
+
 async function requestCerebras(cerebrasKey, systemPrompt, messages, tokenBudget, reasoningEffort) {
   const res = await fetchWithTimeout(CEREBRAS_URL, {
     method: "POST",
@@ -274,7 +281,7 @@ async function requestCerebras(cerebrasKey, systemPrompt, messages, tokenBudget,
       max_completion_tokens: tokenBudget,
       temperature: 0.4,
       top_p: 0.9,
-      ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {})
+      ...(reasoningEffort && CEREBRAS_SUPPORTS_REASONING_EFFORT ? { reasoning_effort: reasoningEffort } : {})
     })
   });
   if (!res.ok) throw statusError("cerebras", res.status, res);
