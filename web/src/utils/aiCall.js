@@ -258,7 +258,7 @@ async function callNvidia(nvidiaKey, systemPrompt, messages, maxTokens) {
 // budget recovers most of these without retrying indefinitely.
 const CEREBRAS_RETRY_TOKEN_CAP = 4000;
 
-async function requestCerebras(cerebrasKey, systemPrompt, messages, tokenBudget) {
+async function requestCerebras(cerebrasKey, systemPrompt, messages, tokenBudget, reasoningEffort) {
   const res = await fetchWithTimeout(CEREBRAS_URL, {
     method: "POST",
     headers: {
@@ -273,7 +273,8 @@ async function requestCerebras(cerebrasKey, systemPrompt, messages, tokenBudget)
       // Cerebras' own cerebras-cloud-sdk-python completion_create_params.
       max_completion_tokens: tokenBudget,
       temperature: 0.4,
-      top_p: 0.9
+      top_p: 0.9,
+      ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {})
     })
   });
   if (!res.ok) throw statusError("cerebras", res.status, res);
@@ -282,9 +283,9 @@ async function requestCerebras(cerebrasKey, systemPrompt, messages, tokenBudget)
   return { reply: extractMessageContent(message), usage: data.usage, finishReason: data.choices?.[0]?.finish_reason, data, message };
 }
 
-async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens) {
+async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens, reasoningEffort) {
   const initialBudget = maxTokens ?? 300;
-  let { reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, initialBudget);
+  let { reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, initialBudget, reasoningEffort);
 
   if (!reply && finishReason === "length") {
     // A small initial budget (e.g. 220-300) can leave too little room for
@@ -295,7 +296,7 @@ async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens) {
     // get an identical second request with no chance of a different result.
     const retryBudget = Math.min(Math.max(initialBudget * 2, 1000), CEREBRAS_RETRY_TOKEN_CAP);
     if (retryBudget > initialBudget) {
-      ({ reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, retryBudget));
+      ({ reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, retryBudget, reasoningEffort));
     }
   }
 
@@ -600,7 +601,7 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKe
       } else if (provider.name === "nvidia") {
         result = await callNvidia(provider.key, systemPrompt, messages, maxTokens);
       } else if (provider.name === "cerebras") {
-        result = await callCerebras(provider.key, systemPrompt, messages, maxTokens);
+        result = await callCerebras(provider.key, systemPrompt, messages, maxTokens, reasoningEffort);
       } else if (provider.name === "zai") {
         result = await callZai(provider.key, systemPrompt, messages, maxTokens);
       } else {

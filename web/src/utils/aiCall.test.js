@@ -305,6 +305,16 @@ describe("AI call resilience", () => {
     expect(body.model).toBe("gpt-oss-120b");
   });
 
+  it("sends reasoning_effort low to Cerebras when the caller requests it", async () => {
+    storage.setItem("loci_provider_pref", "cerebras");
+    fetch.mockResolvedValue(cerebrasOk("reply"));
+
+    await callAI(baseRequest({ groqKey: "", cerebrasKey: "test-cerebras-key", reasoningEffort: "low" }));
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.reasoning_effort).toBe("low");
+  });
+
   it("parses Cerebras content given as an array of parts", async () => {
     storage.setItem("loci_provider_pref", "cerebras");
     fetch.mockResolvedValue(cerebrasArrayContent("Cerebras parts reply."));
