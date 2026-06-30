@@ -193,6 +193,20 @@ describe("AI call resilience", () => {
     expect(body.stream).toBe(false);
   });
 
+  it("does not send reasoning_effort to Groq by default (existing callers unaffected)", async () => {
+    fetch.mockResolvedValue(groqOk("reply"));
+    await callAI(baseRequest());
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.reasoning_effort).toBeUndefined();
+  });
+
+  it("sends reasoning_effort low to Groq when the caller requests it", async () => {
+    fetch.mockResolvedValue(groqOk("reply"));
+    await callAI(baseRequest({ reasoningEffort: "low" }));
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.reasoning_effort).toBe("low");
+  });
+
   it("NVIDIA respects a small caller maxTokens (700)", async () => {
     storage.setItem("loci_provider_pref", "nvidia");
     fetch.mockResolvedValue(nvidiaOk("reply"));
@@ -289,6 +303,52 @@ describe("AI call resilience", () => {
     expect(fetch.mock.calls[0][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
     const body = JSON.parse(fetch.mock.calls[0][1].body);
     expect(body.model).toBe("gpt-oss-120b");
+  });
+
+  it("sends reasoning_effort low to Cerebras when the caller requests it", async () => {
+    storage.setItem("loci_provider_pref", "cerebras");
+    fetch.mockResolvedValue(cerebrasOk("reply"));
+
+    await callAI(baseRequest({ groqKey: "", cerebrasKey: "test-cerebras-key", reasoningEffort: "low" }));
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.reasoning_effort).toBe("low");
+  });
+
+  it("does not send reasoning_effort to Cerebras when VITE_CEREBRAS_MODEL is overridden to a non-gpt-oss model", async () => {
+    vi.resetModules();
+    vi.stubEnv("VITE_CEREBRAS_MODEL", "llama-3.3-70b");
+    const overrideModule = await import("./aiCall");
+
+    storage.setItem("loci_provider_pref", "cerebras");
+    fetch.mockResolvedValue(cerebrasOk("reply"));
+
+    await overrideModule.callAI(baseRequest({ groqKey: "", cerebrasKey: "test-cerebras-key", reasoningEffort: "low" }));
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.model).toBe("llama-3.3-70b");
+    expect(body.reasoning_effort).toBeUndefined();
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it("still sends reasoning_effort to Cerebras when VITE_CEREBRAS_MODEL uses a namespaced gpt-oss ID", async () => {
+    vi.resetModules();
+    vi.stubEnv("VITE_CEREBRAS_MODEL", "openai/gpt-oss-120b");
+    const overrideModule = await import("./aiCall");
+
+    storage.setItem("loci_provider_pref", "cerebras");
+    fetch.mockResolvedValue(cerebrasOk("reply"));
+
+    await overrideModule.callAI(baseRequest({ groqKey: "", cerebrasKey: "test-cerebras-key", reasoningEffort: "low" }));
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.model).toBe("openai/gpt-oss-120b");
+    expect(body.reasoning_effort).toBe("low");
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
   });
 
   it("parses Cerebras content given as an array of parts", async () => {
