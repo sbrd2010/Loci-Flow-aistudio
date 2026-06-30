@@ -262,8 +262,10 @@ const CEREBRAS_RETRY_TOKEN_CAP = 4000;
 // for Cerebras' gpt-oss family. VITE_CEREBRAS_MODEL (see README) lets a
 // deployment swap in a different Cerebras model, which may reject an
 // unrecognized reasoning_effort value with a 4xx — so only attach it when
-// the configured model is actually gpt-oss.
-const CEREBRAS_SUPPORTS_REASONING_EFFORT = /^gpt-oss/i.test(CEREBRAS_MODEL);
+// the configured model is actually gpt-oss. Matches both the bare Cerebras
+// form ("gpt-oss-120b") and a namespaced form ("openai/gpt-oss-120b", the
+// same naming GROQ_MODEL above uses) in case a deployment copies that form.
+const CEREBRAS_SUPPORTS_REASONING_EFFORT = /(^|\/)gpt-oss/i.test(CEREBRAS_MODEL);
 
 async function requestCerebras(cerebrasKey, systemPrompt, messages, tokenBudget, reasoningEffort) {
   const res = await fetchWithTimeout(CEREBRAS_URL, {

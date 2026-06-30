@@ -333,6 +333,24 @@ describe("AI call resilience", () => {
     vi.resetModules();
   });
 
+  it("still sends reasoning_effort to Cerebras when VITE_CEREBRAS_MODEL uses a namespaced gpt-oss ID", async () => {
+    vi.resetModules();
+    vi.stubEnv("VITE_CEREBRAS_MODEL", "openai/gpt-oss-120b");
+    const overrideModule = await import("./aiCall");
+
+    storage.setItem("loci_provider_pref", "cerebras");
+    fetch.mockResolvedValue(cerebrasOk("reply"));
+
+    await overrideModule.callAI(baseRequest({ groqKey: "", cerebrasKey: "test-cerebras-key", reasoningEffort: "low" }));
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.model).toBe("openai/gpt-oss-120b");
+    expect(body.reasoning_effort).toBe("low");
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
   it("parses Cerebras content given as an array of parts", async () => {
     storage.setItem("loci_provider_pref", "cerebras");
     fetch.mockResolvedValue(cerebrasArrayContent("Cerebras parts reply."));
