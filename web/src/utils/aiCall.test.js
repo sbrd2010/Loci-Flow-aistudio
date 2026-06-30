@@ -193,6 +193,20 @@ describe("AI call resilience", () => {
     expect(body.stream).toBe(false);
   });
 
+  it("does not send reasoning_effort to Groq by default (existing callers unaffected)", async () => {
+    fetch.mockResolvedValue(groqOk("reply"));
+    await callAI(baseRequest());
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.reasoning_effort).toBeUndefined();
+  });
+
+  it("sends reasoning_effort low to Groq when the caller requests it", async () => {
+    fetch.mockResolvedValue(groqOk("reply"));
+    await callAI(baseRequest({ reasoningEffort: "low" }));
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.reasoning_effort).toBe("low");
+  });
+
   it("NVIDIA respects a small caller maxTokens (700)", async () => {
     storage.setItem("loci_provider_pref", "nvidia");
     fetch.mockResolvedValue(nvidiaOk("reply"));

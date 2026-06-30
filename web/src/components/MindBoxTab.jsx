@@ -337,9 +337,10 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
     try {
       const raw = await callAI({
         groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey,
-        systemPrompt: "You are a productivity coach. Respond ONLY with a valid JSON array, no markdown.",
+        systemPrompt: "You are a productivity coach. Respond ONLY with a valid JSON array, no markdown. Preserve every concrete detail from the input — never compress or summarize away names, dates, deadlines, amounts, or other specifics to save space.",
         messages: [{ role: "user", content: prompt }],
-        maxTokens: 4000
+        maxTokens: 4000,
+        reasoningEffort: "low"
       });
       const parsed = extractJsonArray(raw);
       const valid = normalizeAiOrganizeSuggestions(parsed, brainDumpItems);

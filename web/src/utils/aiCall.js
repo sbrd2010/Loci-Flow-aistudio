@@ -196,7 +196,7 @@ function getAIUsageUserId() {
   return auth?.currentUser?.uid || auth?.currentUser?.email || "signed-out";
 }
 
-async function callGroq(groqKey, systemPrompt, messages, maxTokens) {
+async function callGroq(groqKey, systemPrompt, messages, maxTokens, reasoningEffort) {
   const res = await fetchWithTimeout(GROQ_URL, {
     method: "POST",
     headers: {
@@ -208,7 +208,8 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens) {
       messages: [{ role: "system", content: systemPrompt }, ...messages],
       max_tokens: maxTokens ?? 300,
       temperature: 0.4,
-      top_p: 0.9
+      top_p: 0.9,
+      ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {})
     })
   });
   if (!res.ok) throw statusError("groq", res.status, res);
@@ -564,7 +565,7 @@ export function buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGemi
   return (orders[pref] || orders.auto).map(n => available[n]).filter(Boolean);
 }
 
-export async function callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey, systemPrompt, messages, maxTokens, contextMode }) {
+export async function callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey, systemPrompt, messages, maxTokens, contextMode, reasoningEffort }) {
   const cleanGroqKey     = (groqKey     || "").trim();
   const cleanNvidiaKey   = (nvidiaKey   || "").trim();
   const cleanGeminiKey   = (geminiKey   || "").trim();
@@ -595,7 +596,7 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKe
     try {
       let result;
       if (provider.name === "groq") {
-        result = await callGroq(provider.key, systemPrompt, messages, maxTokens);
+        result = await callGroq(provider.key, systemPrompt, messages, maxTokens, reasoningEffort);
       } else if (provider.name === "nvidia") {
         result = await callNvidia(provider.key, systemPrompt, messages, maxTokens);
       } else if (provider.name === "cerebras") {
