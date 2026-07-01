@@ -170,7 +170,7 @@ function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, on
   );
 }
 
-export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEditTask }) {
+export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEditTask, initialExpandedCol }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   const columns = [
@@ -182,8 +182,9 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   ];
 
   const [selectedTask, setSelectedTask] = useState(null);
-  // "week" by default; "inbox" when brain dump pill is selected on mobile
-  const [expandedCol, setExpandedCol] = useState("week");
+  // "week" by default; "inbox" when brain dump pill is selected on mobile,
+  // or when navigated here via initialExpandedCol (e.g. Mind Box's inbox link)
+  const [expandedCol, setExpandedCol] = useState(initialExpandedCol || "week");
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [undoTask, setUndoTask] = useState(null);
   const undoTimeoutRef = useRef(null);

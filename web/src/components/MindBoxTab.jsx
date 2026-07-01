@@ -6,14 +6,6 @@ import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTaskSubSteps, CATEGORY_ICONS } from "../utils/taskOps";
 import { submitOnEnter } from "../utils/formEvents";
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
-import {
-  DndContext, closestCenter, MouseSensor, TouchSensor,
-  useSensor, useSensors
-} from "@dnd-kit/core";
-import {
-  SortableContext, verticalListSortingStrategy, useSortable, arrayMove
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 
 function IconTrendingUp() {
   return (
@@ -83,41 +75,7 @@ function IconChevronRight() {
   );
 }
 
-function SortableDumpItem({ item, onDelete, formatRelTime }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
-  return (
-    <div
-      ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.4 : 1,
-        display: "flex", alignItems: "flex-start", gap: "10px",
-        background: "var(--bg-card)", border: "1px solid var(--border)",
-        borderRadius: "10px", padding: "10px 12px",
-      }}
-    >
-      <button
-        {...listeners}
-        {...attributes}
-        style={{
-          background: "none", border: "none", cursor: "grab",
-          color: "var(--text-muted)", opacity: 0.3, padding: "0 2px",
-          flexShrink: 0, lineHeight: 1, fontSize: "16px", marginTop: "1px",
-          touchAction: "none",
-        }}
-        aria-label="Drag to reorder"
-      >⠿</button>
-      <p style={{ flex: 1, fontSize: "13px", color: "var(--text-primary)", margin: 0, lineHeight: "1.5" }}>{item.text}</p>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px", flexShrink: 0 }}>
-        <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>{formatRelTime(item.createdAt)}</span>
-        <button onClick={() => onDelete(item.id)} title="Delete" style={{ background: "none", border: "none", cursor: "pointer", fontSize: "14px", color: "var(--text-muted)", padding: 0, lineHeight: 1 }}>✕</button>
-      </div>
-    </div>
-  );
-}
-
-export default function MindBoxTab({ payload, savePayload, saveSubPath, userProfile, initialPanel }) {
+export default function MindBoxTab({ payload, savePayload, saveSubPath, userProfile, initialPanel, onOpenRoadmapInbox }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -219,21 +177,6 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
   // ── AI keys ────────────────────────────────────────────────────────────────
   const { groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const hasAnyKey = hasAIKey();
-
-  // ── Brain Dump DnD ─────────────────────────────────────────────────────────
-  const dumpSensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
-  );
-
-  const handleDumpDragEnd = ({ active, over }) => {
-    if (!over || active.id === over.id) return;
-    const brainDump = payload.brainDump || [];
-    const oldIdx = brainDump.findIndex(item => item.id === active.id);
-    const newIdx = brainDump.findIndex(item => item.id === over.id);
-    if (oldIdx === -1 || newIdx === -1) return;
-    savePayload({ ...payload, brainDump: arrayMove([...brainDump], oldIdx, newIdx) });
-  };
 
   // ── Helper data ────────────────────────────────────────────────────────────
   const getBentoDays = () => {
@@ -493,77 +436,12 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
     saveSubPath("config", { ...config, dailyAnchors: next, lastUpdated: Date.now() });
   };
 
-  const handleDeleteDumpItem = (id) => {
-    setConfirmDialog({
-      message: "Delete this brain dump item?",
-      confirmLabel: "Delete",
-      cancelLabel: "Keep it",
-      danger: true,
-      onConfirm: () => {
-        savePayload({ ...payload, brainDump: (payload.brainDump || []).filter(item => item.id !== id) });
-        setConfirmDialog(null);
-      },
-      onCancel: () => setConfirmDialog(null),
-    });
-  };
-
-  const formatRelTime = (ts) => {
-    const diff = Date.now() - ts;
-    if (diff < 60_000) return "just now";
-    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-    return `${Math.floor(diff / 86_400_000)}d ago`;
-  };
-
   return (
     <>
       {ritualSuccess && (
         <div style={{ position: "fixed", top: "80px", left: "50%", transform: "translateX(-50%)", background: "var(--success)", color: "#fff", padding: "12px 24px", borderRadius: "20px", fontWeight: "700", fontSize: "14px", zIndex: 300, boxShadow: "0 4px 20px rgba(0,0,0,0.3)", whiteSpace: "nowrap" }}>
           Morning Ritual complete! +80 XP
         </div>
-      )}
-
-      {/* ── Sub-view: Brain Dump full list */}
-      {toolPanel === "dump" && (
-        <>
-          <div className="mindbox-subview-header">
-            <button className="mindbox-back-btn" onClick={() => setToolPanel(null)}>← Back</button>
-            <h2 className="mindbox-subview-title">Brain Dump</h2>
-            {dumpCount > 0 && (
-              <span style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700", marginLeft: "auto" }}>{dumpCount}/50</span>
-            )}
-          </div>
-          {dumpCount >= 50 && (
-            <p style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "10px", fontWeight: "600" }}>Inbox full — delete some items or convert them to Roadmap tasks.</p>
-          )}
-          <form className="braindump-form" onSubmit={handleBrainDumpSubmit} style={{ marginBottom: "16px" }}>
-            <textarea className="braindump-input" rows={3}
-              placeholder="Add anything on your mind. (Shift+Enter for a new line)"
-              value={brainDumpText}
-              onChange={e => setBrainDumpText(e.target.value)}
-              onKeyDown={submitOnEnter}
-              disabled={dumpCount >= 50} />
-            <button type="submit" className="braindump-submit" disabled={dumpCount >= 50}>➔</button>
-          </form>
-          {(payload.brainDump || []).length === 0 ? (
-            <p style={{ fontSize: "13px", color: "var(--text-muted)", textAlign: "center", padding: "32px 0" }}>Nothing captured yet.</p>
-          ) : (
-            <DndContext sensors={dumpSensors} collisionDetection={closestCenter} onDragEnd={handleDumpDragEnd}>
-              <SortableContext items={(payload.brainDump || []).map(i => i.id)} strategy={verticalListSortingStrategy}>
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {(payload.brainDump || []).map(item => (
-                    <SortableDumpItem
-                      key={item.id}
-                      item={item}
-                      onDelete={handleDeleteDumpItem}
-                      formatRelTime={formatRelTime}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-          )}
-        </>
       )}
 
       {/* ── Sub-view: AI Organize Dump */}
@@ -975,10 +853,10 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
                 <button
                   type="button"
                   data-testid="brain-dump-inbox-btn"
-                  onClick={() => setToolPanel("dump")}
-                  style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--accent)", fontWeight: "700", marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: "10px 12px", minHeight: "44px" }}
+                  onClick={() => onOpenRoadmapInbox?.()}
+                  style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--accent)", fontWeight: "700", marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: "10px 12px", minHeight: "44px", textAlign: "right" }}
                 >
-                  Inbox ({dumpCount})
+                  {dumpCount} note{dumpCount === 1 ? "" : "s"} → Roadmap Inbox
                 </button>
               )}
             </div>
