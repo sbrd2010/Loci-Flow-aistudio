@@ -36,7 +36,7 @@ async function expectNoHorizontalOverflow(page) {
   expect(widths.maxScrollWidth).toBeLessThanOrEqual(widths.innerWidth + 8);
 }
 
-test("mobile reliability: Brain Dump item survives navigation and can be deleted intentionally", async ({ page }) => {
+test("mobile reliability: Brain Dump item is addable from Mind Box, browsable only from Roadmap Inbox (via a deep link), survives navigation, and can be deleted intentionally", async ({ page }) => {
   await enterDemo(page);
   await openTab(page, "Mind Box");
   await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 8_000 });
@@ -46,39 +46,38 @@ test("mobile reliability: Brain Dump item survives navigation and can be deleted
   await input.fill(thought);
   await page.locator(".braindump-submit").first().click();
   await expect(input).toHaveValue("");
-  // Open inbox to verify item was saved (preview removed — items live in inbox only)
-  await page.getByTestId("brain-dump-inbox-btn").click();
-  await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
-  await expectNoHorizontalOverflow(page);
-  await page.getByRole("button", { name: /Back/i }).click();
 
+  // Mind Box no longer has its own browsable list — its "N notes" button
+  // jumps straight to Roadmap's Horizon Planning Inbox instead.
+  await expect(page.getByTestId("brain-dump-inbox-btn")).toContainText("Roadmap Inbox");
+  await expectNoHorizontalOverflow(page);
+  await page.getByTestId("brain-dump-inbox-btn").click();
+
+  await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible({ timeout: 8_000 });
+  const dumpItem = page.locator('[data-testid="dump-item"]').filter({ hasText: thought });
+  await expect(dumpItem).toBeVisible({ timeout: 5_000 });
+  await expectNoHorizontalOverflow(page);
+
+  // Survives navigation away and back.
   await openTab(page, "Today");
   await expect(page.getByTestId("today-tasks-list")).toBeVisible({ timeout: 8_000 });
-  await openTab(page, "Mind Box");
+  await openTab(page, "Roadmap");
+  await page.getByRole("tab", { name: /Inbox/ }).click();
+  await expect(dumpItem).toBeVisible({ timeout: 5_000 });
 
-  // Open inbox and verify item survived navigation
-  await page.getByTestId("brain-dump-inbox-btn").click();
-  await expect(page.getByRole("heading", { name: "Brain Dump" })).toBeVisible({ timeout: 5_000 });
-  await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
-  await expectNoHorizontalOverflow(page);
-
-  const thoughtRow = page.locator("div", { hasText: thought }).filter({ has: page.locator("button[title='Delete']") }).last();
-  await thoughtRow.locator("button[title='Delete']").click();
+  await dumpItem.getByText("🗑").click();
   await expect(page.getByText("Delete this brain dump item?")).toBeVisible({ timeout: 5_000 });
   await page.getByRole("button", { name: "Keep it", exact: true }).click();
-  await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
+  await expect(dumpItem).toBeVisible({ timeout: 5_000 });
 
-  await thoughtRow.locator("button[title='Delete']").click();
+  await dumpItem.getByText("🗑").click();
   await expect(page.getByText("Delete this brain dump item?")).toBeVisible({ timeout: 5_000 });
   await page.getByRole("button", { name: "Delete", exact: true }).click();
-  await expect(page.getByText(thought)).not.toBeVisible({ timeout: 5_000 });
+  await expect(dumpItem).not.toBeVisible({ timeout: 5_000 });
 
-  await page.getByRole("button", { name: /Back/i }).click();
-  await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 5_000 });
-  await expect(page.getByText(thought)).not.toBeVisible({ timeout: 5_000 });
-
-  await openTab(page, "Today");
+  // Back in Mind Box, the count is back down to the demo seed's 4 items
+  // (bd1-bd4 in demoData.js) now that the one we added has been deleted.
   await openTab(page, "Mind Box");
-  await expect(page.getByText(thought)).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.getByTestId("brain-dump-inbox-btn")).toContainText("4 notes");
   await expectNoHorizontalOverflow(page);
 });

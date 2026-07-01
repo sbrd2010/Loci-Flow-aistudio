@@ -11,6 +11,13 @@ async function enterDemo(page) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
 }
 
+// Scoped to .bottom-nav so this never collides with in-page buttons that
+// happen to contain a tab's name in their own label (e.g. Mind Box's "N
+// notes → Roadmap Inbox" deep-link button).
+async function openTab(page, name) {
+  await page.locator(".bottom-nav").getByRole("button", { name }).click();
+}
+
 function taskRowByTitle(page, title) {
   return page
     .getByTestId("today-tasks-list")
@@ -48,7 +55,7 @@ test("reliability: today task can be moved to the roadmap", async ({ page }) => 
   await row.getByText("This Week").click();
 
   await expect(tasksList.getByText(title)).not.toBeVisible({ timeout: 5_000 });
-  await page.getByRole("button", { name: "Roadmap" }).click();
+  await openTab(page, "Roadmap");
   await expect(page.getByText(title)).toBeVisible({ timeout: 5_000 });
 });
 
@@ -66,14 +73,14 @@ test("reliability: parked roadmap tasks are hidden after Bad Day Reset", async (
   await row.getByText("This Week").click();
 
   await expect(tasksList.getByText(title)).not.toBeVisible({ timeout: 5_000 });
-  await page.getByRole("button", { name: "Roadmap" }).click();
+  await openTab(page, "Roadmap");
   await expect(page.getByText(title)).toBeVisible({ timeout: 5_000 });
 
-  await page.getByRole("button", { name: "Mind Box" }).click();
+  await openTab(page, "Mind Box");
   await page.getByRole("button", { name: /Bad Day Reset/ }).click();
   await page.getByRole("button", { name: "Yes, restart" }).click();
 
-  await page.getByRole("button", { name: "Roadmap" }).click();
+  await openTab(page, "Roadmap");
   await expect(page.getByText(title)).not.toBeVisible({ timeout: 5_000 });
 });
 
@@ -93,29 +100,29 @@ test("reliability: pinning a task sets Now Focus", async ({ page }) => {
   await expect(pinnedSection).toContainText(title);
 });
 
-test("reliability: brain dump item survives tab switch and returns to Mind Box", async ({ page }) => {
+test("reliability: brain dump item survives tab switch and is browsable via Roadmap's Inbox", async ({ page }) => {
   await enterDemo(page);
 
   // Navigate to Mind Box and add a brain dump item via the inline form
-  await page.getByRole("button", { name: "Mind Box" }).click();
+  await openTab(page, "Mind Box");
   await expect(page.locator(".braindump-input").first()).toBeVisible({ timeout: 8_000 });
 
   const thought = "Test brain dump regression item";
   await page.locator(".braindump-input").first().fill(thought);
   await page.locator(".braindump-submit").first().click();
 
-  // Open inbox to verify item was saved (preview removed — items live in inbox only)
+  // Mind Box's inbox button deep-links straight to Roadmap's Inbox — no
+  // browsable list of its own anymore.
   await page.getByTestId("brain-dump-inbox-btn").click();
-  await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
-  await page.getByRole("button", { name: /Back/i }).click();
+  await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible({ timeout: 8_000 });
+  const dumpItem = page.locator('[data-testid="dump-item"]').filter({ hasText: thought });
+  await expect(dumpItem).toBeVisible({ timeout: 5_000 });
 
   // Switch away and back — item must survive the tab switch
-  await page.getByRole("button", { name: "Roadmap" }).click();
-  await page.getByRole("button", { name: "Mind Box" }).click();
-
-  // Re-open inbox and verify item still there after tab switch
-  await page.getByTestId("brain-dump-inbox-btn").click();
-  await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
+  await openTab(page, "Mind Box");
+  await openTab(page, "Roadmap");
+  await page.getByRole("tab", { name: /Inbox/ }).click();
+  await expect(dumpItem).toBeVisible({ timeout: 5_000 });
 });
 
 test("reliability: low-energy mode filters to low-energy tasks and can be toggled off", async ({ page }) => {

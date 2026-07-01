@@ -40,6 +40,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("today");
   const [pendingCheckinSlot, setPendingCheckinSlot] = useState(null);
   const [mindBoxInitialPanel, setMindBoxInitialPanel] = useState(null);
+  const [roadmapInitialCol, setRoadmapInitialCol] = useState(null);
   const [showAddTask, setShowAddTask] = useState(false);
   const [preselectedHorizon, setPreselectedHorizon] = useState("today");
   const [editingTask, setEditingTask] = useState(null);
@@ -445,6 +446,7 @@ export default function App() {
     tabStartRef.current = Date.now();
     setFabExpanded(false);
     if (tab === "mindbox") setMindBoxInitialPanel(null);
+    if (tab === "roadmap") setRoadmapInitialCol(null);
     setActiveTab(tab);
   };
 
@@ -453,6 +455,14 @@ export default function App() {
   const openMindBox = (panel) => {
     handleTabSelect("mindbox");
     if (panel) setMindBoxInitialPanel(panel);
+  };
+
+  // Switch to Roadmap's Horizon Planning, deep-linking straight to the Brain
+  // Dump Inbox column — used by Mind Box's "N notes waiting" button so that's
+  // the one and only place brain dump items are browsable.
+  const openRoadmapInbox = () => {
+    handleTabSelect("roadmap");
+    setRoadmapInitialCol("inbox");
   };
 
   const goToday = () => { setFabExpanded(false); setActiveTab("today"); };
@@ -737,9 +747,10 @@ export default function App() {
             savePayload={savePayload}
             onOpenAddTask={openAddTask}
             onEditTask={(task) => { setEditingTask(task); setShowAddTask(true); }}
+            initialExpandedCol={roadmapInitialCol}
           />
         )}
-        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} userProfile={userProfile} initialPanel={mindBoxInitialPanel} />}
+        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onOpenRoadmapInbox={openRoadmapInbox} />}
         {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} />}
         {activeTab === "settings" && (
           <SettingsTab
