@@ -188,7 +188,7 @@ test("13. Brain dump long-note gate — move as-is lands in horizon", async ({ p
   await enterDemo(page);
 
   // Navigate to Roadmap and open Brain Dump Inbox
-  await page.getByRole("button", { name: "Roadmap" }).click();
+  await page.locator(".bottom-nav").getByRole("button", { name: "Roadmap" }).click();
   await page.getByRole("tab", { name: /Inbox/ }).click();
 
   // Demo item bd4 is > 20 words — it should be in the inbox
@@ -215,7 +215,7 @@ test("13. Brain dump long-note gate — move as-is lands in horizon", async ({ p
 test("14. Brain dump inbox delete (Roadmap) requires confirmation before removing an item", async ({ page }) => {
   await enterDemo(page);
 
-  await page.getByRole("button", { name: "Roadmap" }).click();
+  await page.locator(".bottom-nav").getByRole("button", { name: "Roadmap" }).click();
   await page.getByRole("tab", { name: /Inbox/ }).click();
 
   const firstDumpItem = page.locator('[data-testid="dump-item"]').first();
