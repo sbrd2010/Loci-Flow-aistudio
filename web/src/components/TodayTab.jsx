@@ -74,6 +74,8 @@ export default function TodayTab({
 
   const [headerExpanded, setHeaderExpanded] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const moreMenuRef = useRef(null);
   const [rescueActive, setRescueActive] = useState(false);
   const [rescueTask, setRescueTask] = useState(null);
   const [isMVDMode, setIsMVDMode] = useState(false);
@@ -105,6 +107,19 @@ export default function TodayTab({
     setRescueActive(true);
     if (isFocusMode) setIsTimerRunning(false);
   };
+
+  useEffect(() => {
+    if (!showMoreMenu) return;
+    const handler = (e) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setShowMoreMenu(false);
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, [showMoreMenu]);
 
   // Auto-exit Focus Now if the selected task is deleted externally
   useEffect(() => {
@@ -1070,30 +1085,6 @@ export default function TodayTab({
                   Day Map
                 </button>
               )}
-              {anchors.length > 0 && (
-                <button
-                  className="stuck-btn"
-                  onClick={() => { setAnchorSheetSlot(null); setShowAnchorSheet(true); }}
-                  title="Daily Anchors"
-                  style={{
-                    background: anchorsCheckedCount === anchors.length ? "rgba(165,214,167,0.15)" : "var(--bg-secondary)",
-                    color: anchorsCheckedCount === anchors.length ? "var(--success)" : "var(--text-secondary)"
-                  }}
-                >
-                  &#128204;{anchorsCheckedCount > 0 ? ` ${anchorsCheckedCount}/${anchors.length}` : " Anchors"}
-                </button>
-              )}
-              <button
-                className="stuck-btn"
-                onClick={handleMVDModeToggle}
-                title={isMVDMode ? "Must-Do mode ON — tap to show all" : "Show only must-do tasks"}
-                style={{
-                  background: isMVDMode ? "var(--warning)" : "var(--bg-secondary)",
-                  color: isMVDMode ? "#fff" : "var(--text-secondary)"
-                }}
-              >
-                ⭐ {isMVDMode ? "Must-Dos" : "Must-Do"}
-              </button>
               <button
                 className="stuck-btn"
                 onClick={handleEnergyToggle}
@@ -1112,6 +1103,60 @@ export default function TodayTab({
               >
                 🛟 Rescue
               </button>
+              <div ref={moreMenuRef} style={{ position: "relative" }}>
+                <button
+                  className="stuck-btn"
+                  onClick={() => setShowMoreMenu(v => !v)}
+                  aria-label="More options"
+                  aria-expanded={showMoreMenu}
+                  title="More options"
+                >
+                  •••
+                </button>
+                {showMoreMenu && (
+                  <div
+                    data-testid="today-more-menu"
+                    style={{
+                      position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 300,
+                      background: "var(--bg-card)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "16px",
+                      boxShadow: "0 16px 48px rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.18)",
+                      minWidth: "180px",
+                      padding: "6px",
+                      backdropFilter: "blur(20px)",
+                      WebkitBackdropFilter: "blur(20px)"
+                    }}
+                  >
+                    {anchors.length > 0 && (
+                      <button
+                        onClick={() => { setAnchorSheetSlot(null); setShowAnchorSheet(true); setShowMoreMenu(false); }}
+                        style={{
+                          display: "flex", alignItems: "center", width: "100%",
+                          background: "transparent", border: "none", padding: "9px 12px",
+                          cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "500",
+                          color: anchorsCheckedCount === anchors.length ? "var(--success)" : "var(--text-primary)",
+                          borderRadius: "9px", fontFamily: "var(--font-sans)"
+                        }}
+                      >
+                        &#128204;&nbsp;Anchors{anchorsCheckedCount > 0 ? ` (${anchorsCheckedCount}/${anchors.length})` : ""}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { handleMVDModeToggle(); setShowMoreMenu(false); }}
+                      style={{
+                        display: "flex", alignItems: "center", width: "100%",
+                        background: "transparent", border: "none", padding: "9px 12px",
+                        cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "500",
+                        color: isMVDMode ? "var(--warning)" : "var(--text-primary)",
+                        borderRadius: "9px", fontFamily: "var(--font-sans)"
+                      }}
+                    >
+                      ⭐&nbsp;{isMVDMode ? "Must-Do mode ON" : "Must-Do"}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
