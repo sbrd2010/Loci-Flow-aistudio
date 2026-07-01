@@ -12,6 +12,13 @@ function defaultReminderDateTime() {
   return { dateStr, timeStr };
 }
 
+function parseManualSubSteps(raw) {
+  return raw
+    .split("\n")
+    .map(line => line.trim().replace(/^(?:[-*•‣▪–—]+|\[[ xX]\]|\d+[.):](?!\d)|[a-zA-Z][.):])\s*/, "").trim())
+    .filter(Boolean);
+}
+
 
 export default function AddTaskDialog({ email, payload, savePayload, userProfile, defaultHorizon, onClose, editTask }) {
   const isEditMode = !!editTask;
@@ -27,6 +34,7 @@ export default function AddTaskDialog({ email, payload, savePayload, userProfile
   const [aiError, setAiError] = useState("");
   const [aiSuggestion, setAiSuggestion] = useState(null);
   const [subSteps, setSubSteps] = useState(editTask?.subSteps || []);
+  const [subStepDraft, setSubStepDraft] = useState("");
   const [formError, setFormError] = useState("");
   const [reminderOn, setReminderOn] = useState(!!editTask?.reminderAt);
   const [reminderDate, setReminderDate] = useState(() => {
@@ -120,6 +128,18 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     }
   };
 
+  const handleAddSubSteps = () => {
+    const lines = parseManualSubSteps(subStepDraft);
+    if (lines.length === 0) return;
+    const now = Date.now();
+    setSubSteps(prev => [
+      ...prev,
+      ...lines.map((text, i) => ({ id: `manual-ss-${now}-${i}`, text, done: false }))
+    ]);
+    setSubStepDraft("");
+    setAdvancedOpen(true);
+  };
+
   const handleApplyAISuggestion = () => {
     if (!aiSuggestion) return;
     if (isEditMode) {
@@ -138,7 +158,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       const est = Number(aiSuggestion.estimateMinutes);
       if ([15,25,45,60,120,240,360].includes(est)) setEstimateMinutes(est);
       if (["today","week","month","quarter","halfyear","office"].includes(aiSuggestion.horizonLevel)) setHorizonLevel(aiSuggestion.horizonLevel);
-      if (aiSuggestion.subSteps.length > 0) {
+      if (aiSuggestion.subSteps.length > 0 && subSteps.length === 0) {
         const now = Date.now();
         setSubSteps(aiSuggestion.subSteps.map((s, i) => ({ id: `ai-ss-${i}-${now}`, text: s.text, done: false })));
         setAdvancedOpen(true);
@@ -158,6 +178,8 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
   const priorities = ["P1", "P2", "P3", "P4"];
   const categories = ["Career", "Health", "Work", "Personal"];
+  const parsedSubStepDraft = parseManualSubSteps(subStepDraft);
+  const hasSubStepDraft = parsedSubStepDraft.length > 0;
   const estimates = [
     { min: 15, label: "15m" }, { min: 25, label: "25m" }, { min: 45, label: "45m" },
     { min: 60, label: "1h" }, { min: 120, label: "2h" }, { min: 240, label: "4h" }, { min: 360, label: "6h" }
@@ -214,9 +236,9 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
         timeEstimateMinutes: newEstimate,
         ...(estimateChanged ? { dayMapDurationMinutes: newEstimate } : {}),
         reminderAt,
+        subSteps,
         lastUpdated: Date.now()
       };
-      if (subSteps.length > 0) updatedTask.subSteps = subSteps;
       if (reminderAt && reminderAt !== editTask.reminderAt) scheduleReminder(updatedTask);
       if (!reminderAt && editTask.reminderAt) cancelReminder(editTask.uuid);
       savePayload({ ...payload, tasks: (payload.tasks || []).map(t => t.uuid === editTask.uuid ? updatedTask : t) });
@@ -244,7 +266,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       dateCompletedString: null,
       isDeleted: false,
       lastUpdated: Date.now(),
-      ...(subSteps.length > 0 && { subSteps }),
+      subSteps,
     };
 
     if (reminderAt) scheduleReminder(freshTask);
@@ -454,19 +476,49 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
                   ))}
                 </div>
               </div>
-              {subSteps.length > 0 && (
-                <div className="form-group">
-                  <label className="form-label">SUB-STEPS ({subSteps.length})</label>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+              <div className="form-group">
+                <label className="form-label">BREAK IT DOWN YOURSELF (OPTIONAL)</label>
+                <textarea
+                  className="text-input"
+                  data-testid="add-task-substeps-draft"
+                  placeholder="One step per line — bullets, a/b/c, or 1/2/3 all work"
+                  rows={3}
+                  value={subStepDraft}
+                  onChange={(e) => setSubStepDraft(e.target.value)}
+                />
+                <button
+                  type="button"
+                  data-testid="add-task-substeps-add"
+                  onClick={handleAddSubSteps}
+                  disabled={!hasSubStepDraft}
+                  style={{
+                    marginTop: "6px", padding: "7px 10px", borderRadius: "var(--radius-sm)",
+                    border: "1px solid var(--border)", background: "var(--bg-secondary)",
+                    color: "var(--text-secondary)", fontSize: "12px", fontWeight: "700",
+                    cursor: !hasSubStepDraft ? "not-allowed" : "pointer",
+                    opacity: !hasSubStepDraft ? 0.55 : 1
+                  }}
+                >
+                  Add step{subStepDraft.includes("\n") ? "s" : ""}
+                </button>
+                {subSteps.length > 0 && (
+                  <div data-testid="add-task-substeps-list" style={{ display: "flex", flexDirection: "column", gap: "5px", marginTop: "8px" }}>
                     {subSteps.map((s) => (
-                      <div key={s.id} style={{ fontSize: "12px", color: "var(--text-secondary)", display: "flex", gap: "6px", padding: "3px 0" }}>
-                        <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>·</span>
-                        <span>{s.text}</span>
+                      <div key={s.id} style={{ fontSize: "12px", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "8px", padding: "5px 7px", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", background: "var(--bg-secondary)" }}>
+                        <span style={{ flex: 1, minWidth: 0 }}>{s.text}</span>
+                        <button
+                          type="button"
+                          aria-label={`Remove step ${s.text}`}
+                          onClick={() => setSubSteps(prev => prev.filter(step => step.id !== s.id))}
+                          style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "14px", lineHeight: 1, padding: "0 2px" }}
+                        >
+                          ×
+                        </button>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </>
           )}
 
