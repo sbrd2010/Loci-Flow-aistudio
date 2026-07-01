@@ -74,3 +74,36 @@ test("mobile reliability: Deep Focus overlay supports pause, resume, and brain-d
   await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
 });
+
+test("mobile reliability: Rescue Mode is reachable from Today and from inside Deep Focus", async ({ page }) => {
+  await enterDemo(page);
+
+  // Today tab: the Rescue chip opens the same triage flow Mind Box's button opens.
+  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
+  await page.getByText("Exit rescue mode").click();
+  await expect(page.getByRole("heading", { name: "What's happening right now?" })).not.toBeVisible({ timeout: 5_000 });
+
+  // Start a Deep Focus session, then reach Rescue Mode from inside it.
+  const pinnedSection = page.locator(".pinned-focus-section");
+  await pinnedSection.scrollIntoViewIfNeeded();
+  await pinnedSection.locator(".pinned-focus-start-btn").click();
+
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 5_000 });
+  await expect(overlay.getByLabel("Pause timer")).toBeVisible({ timeout: 5_000 });
+
+  await page.getByRole("button", { name: "Open Rescue Mode" }).click();
+  await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
+
+  // Opening Rescue Mode mid-session pauses the underlying focus timer.
+  await expect(overlay.getByText("Paused")).toBeVisible({ timeout: 5_000 });
+
+  await page.getByText("Exit rescue mode").click();
+  await expect(page.getByRole("heading", { name: "What's happening right now?" })).not.toBeVisible({ timeout: 5_000 });
+  await expect(overlay).toBeVisible();
+  await expect(overlay.getByLabel("Start timer")).toBeVisible({ timeout: 5_000 });
+
+  await overlay.getByLabel("Exit focus mode").click();
+  await expect(overlay).not.toBeVisible({ timeout: 5_000 });
+});

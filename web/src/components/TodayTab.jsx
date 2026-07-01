@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import TaskRow from "./TaskRow";
 import AddTaskDialog from "./AddTaskDialog";
 import FocusModePage from "./FocusModePage";
+import RescueMode from "./RescueMode";
 import { safeUUID } from "../utils/uuid";
 import { buildToggleCompletedTasks } from "../utils/taskOps";
 import { buildParkTaskTasks } from "../utils/coachActions";
@@ -73,8 +74,8 @@ export default function TodayTab({
 
   const [headerExpanded, setHeaderExpanded] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [showRescue, setShowRescue] = useState(false);
-  const [rescueStep, setRescueStep] = useState(0);
+  const [rescueActive, setRescueActive] = useState(false);
+  const [rescueTask, setRescueTask] = useState(null);
   const [isMVDMode, setIsMVDMode] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [focusNowMode, setFocusNowMode] = useState(false);
@@ -97,12 +98,13 @@ export default function TodayTab({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const rescueSteps = [
-    "Take one deep breath. Breathe in for 4, hold for 4, out for 4.",
-    "What is the laughably smallest first step? A single sentence counts.",
-    "Close all tabs that aren't this task right now.",
-    "Commit to just 2 minutes. You can stop after that.",
-  ];
+  const openRescueMode = () => {
+    const pinned = tasks.find(t => !t.isDeleted && !t.isCompleted && t.isNowFocus);
+    const first = tasks.find(t => !t.isDeleted && !t.isCompleted);
+    setRescueTask(pinned || first || null);
+    setRescueActive(true);
+    if (isFocusMode) setIsTimerRunning(false);
+  };
 
   // Auto-exit Focus Now if the selected task is deleted externally
   useEffect(() => {
@@ -329,7 +331,7 @@ export default function TodayTab({
 
   // ── Daily Anchors / Morning Ritual auto-show ───────────────────────────────
   useEffect(() => {
-    if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || showRescue) return;
+    if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || rescueActive) return;
     let slot = null;
     if (shouldShowMorningRitual(new Date(), config)) {
       slot = "morning";
@@ -346,7 +348,7 @@ export default function TodayTab({
     return () => clearTimeout(timer);
   }, [
     anchors.length, todayShownSlotsKey, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending,
-    isAddTaskDialogOpen, showAnchorSheet, showDailyCheckin, showRescue, config.anchorsSnoozeUntil,
+    isAddTaskDialogOpen, showAnchorSheet, showDailyCheckin, rescueActive, config.anchorsSnoozeUntil,
     config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, config.morningRitualEnabled, visibilityTick,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -523,7 +525,7 @@ export default function TodayTab({
   // ── Proactive Coach Nudge (the coach speaks first) ───────────────────────
   const coachNudge = (
     isSyncingFromCache || isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending ||
-    isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || showRescue
+    isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || rescueActive
   ) ? null : getCoachNudge(payload, new Date());
 
   useEffect(() => {
@@ -1103,6 +1105,13 @@ export default function TodayTab({
               >
                 🔋 {config.isLowEnergyMode ? "Low Energy ON" : "Low Energy"}
               </button>
+              <button
+                className="stuck-btn"
+                onClick={openRescueMode}
+                title="Feeling stuck? Get help getting unstuck"
+              >
+                🛟 Rescue
+              </button>
             </div>
           </div>
         </div>
@@ -1389,6 +1398,7 @@ export default function TodayTab({
           onExit={() => setIsFocusMode(false)}
           onChangeDuration={handleChangeFocusDuration}
           onAddBrainDump={handleFocusBrainDump}
+          onRescue={openRescueMode}
           pipOpen={pipOpen}
           onOpenPiP={handleOpenPiP}
           selectedTrack={selectedTrack}
@@ -1718,29 +1728,20 @@ export default function TodayTab({
         </div>
       )}
 
-      {/* Inline rescue overlay — triggered by Stuck? button on focus card */}
-      {showRescue && (
-        <div className="rescue-overlay" onClick={() => setShowRescue(false)}>
-          <div className="rescue-card card" onClick={e => e.stopPropagation()}>
-            <span className="rescue-icon">⚠️</span>
-            <h3 className="rescue-title">Getting Unstuck</h3>
-            <span className="rescue-step-badge">Step {rescueStep + 1} of {rescueSteps.length}</span>
-            <p className="rescue-step-text">{rescueSteps[rescueStep]}</p>
-            <button
-              className="btn"
-              onClick={() => {
-                if (rescueStep < rescueSteps.length - 1) setRescueStep(rescueStep + 1);
-                else setShowRescue(false);
-              }}
-              style={{ width: "100%", marginTop: "10px" }}
-            >
-              {rescueStep === rescueSteps.length - 1 ? "I'm ready to try again" : "Next →"}
-            </button>
-            <button className="btn btn-cancel" onClick={() => setShowRescue(false)} style={{ width: "100%" }}>
-              Close
-            </button>
-          </div>
-        </div>
+      {/* Rescue Mode — triggered by the Rescue chip or Deep Focus's Stuck? button */}
+      {rescueActive && (
+        <RescueMode
+          task={rescueTask}
+          allTasks={tasks}
+          firstName={(config.userName || "").split(" ")[0] || "friend"}
+          onDismiss={() => setRescueActive(false)}
+          onAccept={() => {
+            setRescueActive(false);
+            if (rescueTask) {
+              savePayload({ ...payload, tasks: tasks.map(t => t.uuid === rescueTask.uuid ? { ...t, isNowFocus: true } : t) });
+            }
+          }}
+        />
       )}
     </>
   );
