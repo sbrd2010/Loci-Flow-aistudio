@@ -15,7 +15,7 @@ function defaultReminderDateTime() {
 function parseManualSubSteps(raw) {
   return raw
     .split("\n")
-    .map(line => line.trim().replace(/^(?:[-*•‣▪–—]+|\[[ xX]\]|\d+[.):]|[a-zA-Z][.):])\s*/, "").trim())
+    .map(line => line.trim().replace(/^(?:[-*•‣▪–—]+|\[[ xX]\]|\d+[.):](?!\d)|[a-zA-Z][.):])\s*/, "").trim())
     .filter(Boolean);
 }
 
@@ -266,7 +266,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       dateCompletedString: null,
       isDeleted: false,
       lastUpdated: Date.now(),
-      ...(subSteps.length > 0 && { subSteps }),
+      subSteps,
     };
 
     if (reminderAt) scheduleReminder(freshTask);
