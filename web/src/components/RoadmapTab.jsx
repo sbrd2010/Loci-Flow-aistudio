@@ -73,6 +73,14 @@ function SortableRoadmapCard({ id, task, onTaskClick, interactionStyle = "classi
           </span>
         )}
         <span className="roadmap-task-title" style={{ flex: 1, minWidth: 0 }}><LinkifyText text={task.title} /></span>
+        {task.subSteps && task.subSteps.length > 0 && (
+          <span
+            title={`${task.subSteps.filter(s => s.done).length}/${task.subSteps.length} steps done`}
+            style={{ flexShrink: 0, fontSize: "11px", color: "var(--text-muted)" }}
+          >
+            ☑ {task.subSteps.filter(s => s.done).length}/{task.subSteps.length}
+          </span>
+        )}
         {isDragAnywhere && (
           <button
             className="task-row-kebab-btn"
@@ -721,6 +729,16 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
                   <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px", overflowWrap: "anywhere", wordBreak: "break-word" }}>
                     ⚡ <LinkifyText text={selectedTask.concreteStep} />
                   </p>
+                )}
+                {selectedTask.subSteps && selectedTask.subSteps.length > 0 && (
+                  <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                    {selectedTask.subSteps.map(s => (
+                      <div key={s.id} style={{ fontSize: "12px", display: "flex", gap: "6px", color: s.done ? "var(--text-muted)" : "var(--text-secondary)", textDecoration: s.done ? "line-through" : "none" }}>
+                        <span style={{ flexShrink: 0 }}>{s.done ? "☑" : "☐"}</span>
+                        <span style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}><LinkifyText text={s.text} /></span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
               <button className="btn" onClick={() => handleMoveToToday(selectedTask)}>
