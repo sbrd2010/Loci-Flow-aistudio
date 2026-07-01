@@ -69,6 +69,7 @@ export default function FocusModePage({
   onExit,
   onChangeDuration,
   onAddBrainDump,
+  onRescue,
   pipOpen,
   onOpenPiP,
   selectedTrack,
@@ -137,6 +138,18 @@ export default function FocusModePage({
       </button>
 
       <div className="focus-mode-top-right-actions">
+        {!isComplete && onRescue && (
+          <button
+            type="button"
+            className="focus-mode-rescue-btn"
+            onClick={onRescue}
+            title="Feeling stuck or distracted? Get help getting unstuck"
+            aria-label="Open Rescue Mode"
+          >
+            🛟 Stuck?
+          </button>
+        )}
+
         {!isComplete && (
           <button
             type="button"

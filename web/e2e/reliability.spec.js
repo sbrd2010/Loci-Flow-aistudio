@@ -141,3 +141,37 @@ test("reliability: low-energy mode filters to low-energy tasks and can be toggle
   await page.locator("button.stuck-btn", { hasText: "Low Energy ON" }).click();
   await expect(tasksList.getByText("25-minute deep work block")).toBeVisible({ timeout: 5_000 });
 });
+
+test("reliability: Today's overflow menu reveals Anchors and Must-Do, closes on outside click", async ({ page }) => {
+  await enterDemo(page);
+
+  const chipRow = page.locator(".focus-now-chip-row");
+  await expect(chipRow.getByText("One Task", { exact: false })).toBeVisible({ timeout: 8_000 });
+  // Anchors and Must-Do are no longer always-visible chips in the row.
+  await expect(chipRow.getByRole("button", { name: "Anchors", exact: false })).toHaveCount(0);
+  await expect(chipRow.getByRole("button", { name: "Must-Do", exact: false })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "More options" }).click();
+  const menu = page.getByTestId("today-more-menu");
+  await expect(menu).toBeVisible({ timeout: 5_000 });
+  await expect(menu.getByText("Anchors", { exact: false })).toBeVisible();
+  await expect(menu.getByText("Must-Do", { exact: false })).toBeVisible();
+
+  // Regression guard: the menu must render outside the horizontally-scrolling,
+  // overflow-clipped chip row/shell, or it would be invisible/unreachable in
+  // a real browser despite passing a shallow visibility check.
+  await expect(chipRow.getByTestId("today-more-menu")).toHaveCount(0);
+  const menuBox = await menu.boundingBox();
+  expect(menuBox?.height).toBeGreaterThan(20);
+
+  // Clicking Must-Do toggles the mode and closes the menu.
+  await menu.getByText("Must-Do", { exact: false }).click();
+  await expect(menu).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText("MUST-DOS")).toBeVisible({ timeout: 5_000 });
+
+  // Reopen, then click outside — menu should close without acting.
+  await page.getByRole("button", { name: "More options" }).click();
+  await expect(page.getByTestId("today-more-menu")).toBeVisible({ timeout: 5_000 });
+  await page.locator("body").click({ position: { x: 5, y: 5 } });
+  await expect(page.getByTestId("today-more-menu")).not.toBeVisible({ timeout: 5_000 });
+});

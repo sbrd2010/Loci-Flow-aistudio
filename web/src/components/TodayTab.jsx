@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import TaskRow from "./TaskRow";
 import AddTaskDialog from "./AddTaskDialog";
 import FocusModePage from "./FocusModePage";
+import RescueMode from "./RescueMode";
 import { safeUUID } from "../utils/uuid";
 import { buildToggleCompletedTasks } from "../utils/taskOps";
 import { buildParkTaskTasks } from "../utils/coachActions";
@@ -73,8 +74,10 @@ export default function TodayTab({
 
   const [headerExpanded, setHeaderExpanded] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [showRescue, setShowRescue] = useState(false);
-  const [rescueStep, setRescueStep] = useState(0);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const moreMenuRef = useRef(null);
+  const [rescueActive, setRescueActive] = useState(false);
+  const [rescueTask, setRescueTask] = useState(null);
   const [isMVDMode, setIsMVDMode] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [focusNowMode, setFocusNowMode] = useState(false);
@@ -97,12 +100,40 @@ export default function TodayTab({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const rescueSteps = [
-    "Take one deep breath. Breathe in for 4, hold for 4, out for 4.",
-    "What is the laughably smallest first step? A single sentence counts.",
-    "Close all tabs that aren't this task right now.",
-    "Commit to just 2 minutes. You can stop after that.",
-  ];
+  const openRescueMode = () => {
+    if (isFocusMode && activeTask) {
+      // Opened from inside an active Deep Focus session (the Stuck? button) —
+      // rescue the task actually being focused on, even if it isn't in
+      // todayTasksAll (e.g. pinned via a Coach action without moving horizons).
+      setRescueTask(activeTask);
+    } else {
+      // Opened from the Today-tab chip, with no session context — restrict
+      // candidates to today's visible, active tasks (matching pinnedFocusTask's
+      // own filtering), since a parked task or one from another horizon can't
+      // be shown by Today's pinned-focus UI even if pinned.
+      const candidates = todayTasksAll.filter(t => !t.isCompleted);
+      const pinned = candidates.find(t => t.isNowFocus);
+      setRescueTask(pinned || candidates[0] || null);
+    }
+    setRescueActive(true);
+    // isFocusMode only reflects whether the full-screen overlay is open —
+    // a session left running via the floating mini-timer after exiting the
+    // overlay keeps isTimerRunning true, so check that directly instead.
+    if (isTimerRunning) setIsTimerRunning(false);
+  };
+
+  useEffect(() => {
+    if (!showMoreMenu) return;
+    const handler = (e) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setShowMoreMenu(false);
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, [showMoreMenu]);
 
   // Auto-exit Focus Now if the selected task is deleted externally
   useEffect(() => {
@@ -329,7 +360,7 @@ export default function TodayTab({
 
   // ── Daily Anchors / Morning Ritual auto-show ───────────────────────────────
   useEffect(() => {
-    if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || showRescue) return;
+    if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || rescueActive) return;
     let slot = null;
     if (shouldShowMorningRitual(new Date(), config)) {
       slot = "morning";
@@ -346,13 +377,13 @@ export default function TodayTab({
     return () => clearTimeout(timer);
   }, [
     anchors.length, todayShownSlotsKey, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending,
-    isAddTaskDialogOpen, showAnchorSheet, showDailyCheckin, showRescue, config.anchorsSnoozeUntil,
+    isAddTaskDialogOpen, showAnchorSheet, showDailyCheckin, rescueActive, config.anchorsSnoozeUntil,
     config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, config.morningRitualEnabled, visibilityTick,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Daily Coach Check-ins auto-show (Today's Commitment / Progress Check / Day Close) ──
   useEffect(() => {
-    if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin) return;
+    if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || rescueActive) return;
     const now = new Date();
     const morningRitualPending = shouldShowMorningRitual(now, config);
     const dueSlots = {
@@ -390,7 +421,7 @@ export default function TodayTab({
     return () => clearTimeout(timer);
   }, [
     anchorTodayStr, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, isAddTaskDialogOpen,
-    showAnchorSheet, showDailyCheckin, pendingCheckinSlot, config.anchorsSnoozeUntil,
+    showAnchorSheet, showDailyCheckin, rescueActive, pendingCheckinSlot, config.anchorsSnoozeUntil,
     config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, config.morningRitualEnabled, visibilityTick,
     config.dailyCommitmentDate, config.dailyCommitmentSkippedDate, config.dailyCommitmentSnoozeUntil, config.dailyCommitmentTaskIds,
     config.dailyMiddayCheckDate, config.dailyMiddayCheckSnoozeUntil, config.dailyReflectionDate,
@@ -523,7 +554,7 @@ export default function TodayTab({
   // ── Proactive Coach Nudge (the coach speaks first) ───────────────────────
   const coachNudge = (
     isSyncingFromCache || isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending ||
-    isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || showRescue
+    isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || rescueActive
   ) ? null : getCoachNudge(payload, new Date());
 
   useEffect(() => {
@@ -1068,30 +1099,6 @@ export default function TodayTab({
                   Day Map
                 </button>
               )}
-              {anchors.length > 0 && (
-                <button
-                  className="stuck-btn"
-                  onClick={() => { setAnchorSheetSlot(null); setShowAnchorSheet(true); }}
-                  title="Daily Anchors"
-                  style={{
-                    background: anchorsCheckedCount === anchors.length ? "rgba(165,214,167,0.15)" : "var(--bg-secondary)",
-                    color: anchorsCheckedCount === anchors.length ? "var(--success)" : "var(--text-secondary)"
-                  }}
-                >
-                  &#128204;{anchorsCheckedCount > 0 ? ` ${anchorsCheckedCount}/${anchors.length}` : " Anchors"}
-                </button>
-              )}
-              <button
-                className="stuck-btn"
-                onClick={handleMVDModeToggle}
-                title={isMVDMode ? "Must-Do mode ON — tap to show all" : "Show only must-do tasks"}
-                style={{
-                  background: isMVDMode ? "var(--warning)" : "var(--bg-secondary)",
-                  color: isMVDMode ? "#fff" : "var(--text-secondary)"
-                }}
-              >
-                ⭐ {isMVDMode ? "Must-Dos" : "Must-Do"}
-              </button>
               <button
                 className="stuck-btn"
                 onClick={handleEnergyToggle}
@@ -1103,7 +1110,71 @@ export default function TodayTab({
               >
                 🔋 {config.isLowEnergyMode ? "Low Energy ON" : "Low Energy"}
               </button>
+              <button
+                className="stuck-btn"
+                onClick={openRescueMode}
+                title="Feeling stuck? Get help getting unstuck"
+              >
+                🛟 Rescue
+              </button>
             </div>
+          </div>
+          {/* Rendered outside .focus-now-chip-shell/.focus-now-chip-row on purpose —
+              those are clipped/horizontally-scrolling containers (focusNow.css), which
+              would clip this dropdown instead of letting it render below its trigger. */}
+          <div ref={moreMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+            <button
+              className="stuck-btn"
+              onClick={() => setShowMoreMenu(v => !v)}
+              aria-label="More options"
+              aria-expanded={showMoreMenu}
+              title="More options"
+            >
+              •••
+            </button>
+            {showMoreMenu && (
+              <div
+                data-testid="today-more-menu"
+                style={{
+                  position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 300,
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "16px",
+                  boxShadow: "0 16px 48px rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.18)",
+                  minWidth: "180px",
+                  padding: "6px",
+                  backdropFilter: "blur(20px)",
+                  WebkitBackdropFilter: "blur(20px)"
+                }}
+              >
+                {anchors.length > 0 && (
+                  <button
+                    onClick={() => { setAnchorSheetSlot(null); setShowAnchorSheet(true); setShowMoreMenu(false); }}
+                    style={{
+                      display: "flex", alignItems: "center", width: "100%",
+                      background: "transparent", border: "none", padding: "9px 12px",
+                      cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "500",
+                      color: anchorsCheckedCount === anchors.length ? "var(--success)" : "var(--text-primary)",
+                      borderRadius: "9px", fontFamily: "var(--font-sans)"
+                    }}
+                  >
+                    &#128204;&nbsp;Anchors{anchorsCheckedCount > 0 ? ` (${anchorsCheckedCount}/${anchors.length})` : ""}
+                  </button>
+                )}
+                <button
+                  onClick={() => { handleMVDModeToggle(); setShowMoreMenu(false); }}
+                  style={{
+                    display: "flex", alignItems: "center", width: "100%",
+                    background: "transparent", border: "none", padding: "9px 12px",
+                    cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "500",
+                    color: isMVDMode ? "var(--warning)" : "var(--text-primary)",
+                    borderRadius: "9px", fontFamily: "var(--font-sans)"
+                  }}
+                >
+                  ⭐&nbsp;{isMVDMode ? "Must-Do mode ON" : "Must-Do"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1389,6 +1460,7 @@ export default function TodayTab({
           onExit={() => setIsFocusMode(false)}
           onChangeDuration={handleChangeFocusDuration}
           onAddBrainDump={handleFocusBrainDump}
+          onRescue={openRescueMode}
           pipOpen={pipOpen}
           onOpenPiP={handleOpenPiP}
           selectedTrack={selectedTrack}
@@ -1718,29 +1790,29 @@ export default function TodayTab({
         </div>
       )}
 
-      {/* Inline rescue overlay — triggered by Stuck? button on focus card */}
-      {showRescue && (
-        <div className="rescue-overlay" onClick={() => setShowRescue(false)}>
-          <div className="rescue-card card" onClick={e => e.stopPropagation()}>
-            <span className="rescue-icon">⚠️</span>
-            <h3 className="rescue-title">Getting Unstuck</h3>
-            <span className="rescue-step-badge">Step {rescueStep + 1} of {rescueSteps.length}</span>
-            <p className="rescue-step-text">{rescueSteps[rescueStep]}</p>
-            <button
-              className="btn"
-              onClick={() => {
-                if (rescueStep < rescueSteps.length - 1) setRescueStep(rescueStep + 1);
-                else setShowRescue(false);
-              }}
-              style={{ width: "100%", marginTop: "10px" }}
-            >
-              {rescueStep === rescueSteps.length - 1 ? "I'm ready to try again" : "Next →"}
-            </button>
-            <button className="btn btn-cancel" onClick={() => setShowRescue(false)} style={{ width: "100%" }}>
-              Close
-            </button>
-          </div>
-        </div>
+      {/* Rescue Mode — triggered by the Rescue chip or Deep Focus's Stuck? button */}
+      {rescueActive && (
+        <RescueMode
+          task={rescueTask}
+          allTasks={tasks}
+          firstName={(config.userName || "").split(" ")[0] || "friend"}
+          onDismiss={() => setRescueActive(false)}
+          onAccept={() => {
+            setRescueActive(false);
+            if (rescueTask) {
+              // Clear isNowFocus everywhere else before setting it on rescueTask
+              // (mirrors handlePinTask's single-pin invariant) — otherwise a
+              // stale/other pinned task would keep winning useFocusTimer's
+              // tasks.find(t => t.isNowFocus...) lookup.
+              const now = Date.now();
+              savePayload({ ...payload, tasks: tasks.map(t => {
+                const newFocus = t.uuid === rescueTask.uuid;
+                if (t.isNowFocus === newFocus) return t;
+                return { ...t, isNowFocus: newFocus, lastUpdated: now };
+              }) });
+            }
+          }}
+        />
       )}
     </>
   );
