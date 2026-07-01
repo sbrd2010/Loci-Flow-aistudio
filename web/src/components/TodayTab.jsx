@@ -101,12 +101,20 @@ export default function TodayTab({
   );
 
   const openRescueMode = () => {
-    // Restrict candidates to today's visible, active tasks (matching
-    // pinnedFocusTask's own filtering) — a parked task or one from another
-    // horizon can't be shown by Today's pinned-focus UI even if pinned.
-    const candidates = todayTasksAll.filter(t => !t.isCompleted);
-    const pinned = candidates.find(t => t.isNowFocus);
-    setRescueTask(pinned || candidates[0] || null);
+    if (isFocusMode && activeTask) {
+      // Opened from inside an active Deep Focus session (the Stuck? button) —
+      // rescue the task actually being focused on, even if it isn't in
+      // todayTasksAll (e.g. pinned via a Coach action without moving horizons).
+      setRescueTask(activeTask);
+    } else {
+      // Opened from the Today-tab chip, with no session context — restrict
+      // candidates to today's visible, active tasks (matching pinnedFocusTask's
+      // own filtering), since a parked task or one from another horizon can't
+      // be shown by Today's pinned-focus UI even if pinned.
+      const candidates = todayTasksAll.filter(t => !t.isCompleted);
+      const pinned = candidates.find(t => t.isNowFocus);
+      setRescueTask(pinned || candidates[0] || null);
+    }
     setRescueActive(true);
     // isFocusMode only reflects whether the full-screen overlay is open —
     // a session left running via the floating mini-timer after exiting the
@@ -1792,7 +1800,16 @@ export default function TodayTab({
           onAccept={() => {
             setRescueActive(false);
             if (rescueTask) {
-              savePayload({ ...payload, tasks: tasks.map(t => t.uuid === rescueTask.uuid ? { ...t, isNowFocus: true } : t) });
+              // Clear isNowFocus everywhere else before setting it on rescueTask
+              // (mirrors handlePinTask's single-pin invariant) — otherwise a
+              // stale/other pinned task would keep winning useFocusTimer's
+              // tasks.find(t => t.isNowFocus...) lookup.
+              const now = Date.now();
+              savePayload({ ...payload, tasks: tasks.map(t => {
+                const newFocus = t.uuid === rescueTask.uuid;
+                if (t.isNowFocus === newFocus) return t;
+                return { ...t, isNowFocus: newFocus, lastUpdated: now };
+              }) });
             }
           }}
         />
