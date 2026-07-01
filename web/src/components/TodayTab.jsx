@@ -101,11 +101,17 @@ export default function TodayTab({
   );
 
   const openRescueMode = () => {
-    const pinned = tasks.find(t => !t.isDeleted && !t.isCompleted && t.isNowFocus);
-    const first = tasks.find(t => !t.isDeleted && !t.isCompleted);
-    setRescueTask(pinned || first || null);
+    // Restrict candidates to today's visible, active tasks (matching
+    // pinnedFocusTask's own filtering) — a parked task or one from another
+    // horizon can't be shown by Today's pinned-focus UI even if pinned.
+    const candidates = todayTasksAll.filter(t => !t.isCompleted);
+    const pinned = candidates.find(t => t.isNowFocus);
+    setRescueTask(pinned || candidates[0] || null);
     setRescueActive(true);
-    if (isFocusMode) setIsTimerRunning(false);
+    // isFocusMode only reflects whether the full-screen overlay is open —
+    // a session left running via the floating mini-timer after exiting the
+    // overlay keeps isTimerRunning true, so check that directly instead.
+    if (isTimerRunning) setIsTimerRunning(false);
   };
 
   useEffect(() => {
@@ -1103,61 +1109,64 @@ export default function TodayTab({
               >
                 🛟 Rescue
               </button>
-              <div ref={moreMenuRef} style={{ position: "relative" }}>
-                <button
-                  className="stuck-btn"
-                  onClick={() => setShowMoreMenu(v => !v)}
-                  aria-label="More options"
-                  aria-expanded={showMoreMenu}
-                  title="More options"
-                >
-                  •••
-                </button>
-                {showMoreMenu && (
-                  <div
-                    data-testid="today-more-menu"
+            </div>
+          </div>
+          {/* Rendered outside .focus-now-chip-shell/.focus-now-chip-row on purpose —
+              those are clipped/horizontally-scrolling containers (focusNow.css), which
+              would clip this dropdown instead of letting it render below its trigger. */}
+          <div ref={moreMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+            <button
+              className="stuck-btn"
+              onClick={() => setShowMoreMenu(v => !v)}
+              aria-label="More options"
+              aria-expanded={showMoreMenu}
+              title="More options"
+            >
+              •••
+            </button>
+            {showMoreMenu && (
+              <div
+                data-testid="today-more-menu"
+                style={{
+                  position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 300,
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "16px",
+                  boxShadow: "0 16px 48px rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.18)",
+                  minWidth: "180px",
+                  padding: "6px",
+                  backdropFilter: "blur(20px)",
+                  WebkitBackdropFilter: "blur(20px)"
+                }}
+              >
+                {anchors.length > 0 && (
+                  <button
+                    onClick={() => { setAnchorSheetSlot(null); setShowAnchorSheet(true); setShowMoreMenu(false); }}
                     style={{
-                      position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 300,
-                      background: "var(--bg-card)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "16px",
-                      boxShadow: "0 16px 48px rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.18)",
-                      minWidth: "180px",
-                      padding: "6px",
-                      backdropFilter: "blur(20px)",
-                      WebkitBackdropFilter: "blur(20px)"
+                      display: "flex", alignItems: "center", width: "100%",
+                      background: "transparent", border: "none", padding: "9px 12px",
+                      cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "500",
+                      color: anchorsCheckedCount === anchors.length ? "var(--success)" : "var(--text-primary)",
+                      borderRadius: "9px", fontFamily: "var(--font-sans)"
                     }}
                   >
-                    {anchors.length > 0 && (
-                      <button
-                        onClick={() => { setAnchorSheetSlot(null); setShowAnchorSheet(true); setShowMoreMenu(false); }}
-                        style={{
-                          display: "flex", alignItems: "center", width: "100%",
-                          background: "transparent", border: "none", padding: "9px 12px",
-                          cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "500",
-                          color: anchorsCheckedCount === anchors.length ? "var(--success)" : "var(--text-primary)",
-                          borderRadius: "9px", fontFamily: "var(--font-sans)"
-                        }}
-                      >
-                        &#128204;&nbsp;Anchors{anchorsCheckedCount > 0 ? ` (${anchorsCheckedCount}/${anchors.length})` : ""}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => { handleMVDModeToggle(); setShowMoreMenu(false); }}
-                      style={{
-                        display: "flex", alignItems: "center", width: "100%",
-                        background: "transparent", border: "none", padding: "9px 12px",
-                        cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "500",
-                        color: isMVDMode ? "var(--warning)" : "var(--text-primary)",
-                        borderRadius: "9px", fontFamily: "var(--font-sans)"
-                      }}
-                    >
-                      ⭐&nbsp;{isMVDMode ? "Must-Do mode ON" : "Must-Do"}
-                    </button>
-                  </div>
+                    &#128204;&nbsp;Anchors{anchorsCheckedCount > 0 ? ` (${anchorsCheckedCount}/${anchors.length})` : ""}
+                  </button>
                 )}
+                <button
+                  onClick={() => { handleMVDModeToggle(); setShowMoreMenu(false); }}
+                  style={{
+                    display: "flex", alignItems: "center", width: "100%",
+                    background: "transparent", border: "none", padding: "9px 12px",
+                    cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "500",
+                    color: isMVDMode ? "var(--warning)" : "var(--text-primary)",
+                    borderRadius: "9px", fontFamily: "var(--font-sans)"
+                  }}
+                >
+                  ⭐&nbsp;{isMVDMode ? "Must-Do mode ON" : "Must-Do"}
+                </button>
               </div>
-            </div>
+            )}
           </div>
         </div>
 

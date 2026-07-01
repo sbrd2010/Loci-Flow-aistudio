@@ -157,6 +157,13 @@ test("reliability: Today's overflow menu reveals Anchors and Must-Do, closes on 
   await expect(menu.getByText("Anchors", { exact: false })).toBeVisible();
   await expect(menu.getByText("Must-Do", { exact: false })).toBeVisible();
 
+  // Regression guard: the menu must render outside the horizontally-scrolling,
+  // overflow-clipped chip row/shell, or it would be invisible/unreachable in
+  // a real browser despite passing a shallow visibility check.
+  await expect(chipRow.getByTestId("today-more-menu")).toHaveCount(0);
+  const menuBox = await menu.boundingBox();
+  expect(menuBox?.height).toBeGreaterThan(20);
+
   // Clicking Must-Do toggles the mode and closes the menu.
   await menu.getByText("Must-Do", { exact: false }).click();
   await expect(menu).not.toBeVisible({ timeout: 5_000 });
