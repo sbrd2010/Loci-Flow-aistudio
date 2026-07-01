@@ -351,7 +351,11 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
         ...keys,
         systemPrompt: "You are a productivity assistant. Respond ONLY with a valid JSON array, no markdown. Preserve every concrete detail from the input — never compress or summarize away names, dates, deadlines, amounts, or other specifics to save space.",
         messages: [{ role: "user", content: prompt }],
-        maxTokens: 600,
+        // Headroom for up to MAX_BREAKDOWN_ITEMS title+concreteStep objects —
+        // 600 was tight enough that a truncated mid-array response (non-empty,
+        // so no provider retries it) would silently collapse to the one-item
+        // fallback below, defeating the point of asking for multiple tasks.
+        maxTokens: 1500,
         reasoningEffort: "low",
       });
       let parsed;
