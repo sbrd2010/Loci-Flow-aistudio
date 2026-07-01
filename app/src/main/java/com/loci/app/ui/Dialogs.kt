@@ -751,6 +751,8 @@ fun AddTaskDialog(
     onCategoryChange: (String) -> Unit,
     duration: String,
     onDurationChange: (String) -> Unit,
+    checklist: String,
+    onChecklistChange: (String) -> Unit,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
@@ -790,6 +792,23 @@ fun AddTaskDialog(
                     label = { Text("Micro action (e.g. Put sneakers on)") },
                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = NaturalText, unfocusedTextColor = NaturalText, focusedBorderColor = BrandPurple, unfocusedBorderColor = NaturalBorder),
                     modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = checklist,
+                    onValueChange = onChecklistChange,
+                    label = { Text("Add your own steps (optional)") },
+                    placeholder = { Text("Paste bullets, 1. 2. 3., or one step per line") },
+                    minLines = 3,
+                    maxLines = 6,
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = NaturalText, unfocusedTextColor = NaturalText, focusedBorderColor = BrandPurple, unfocusedBorderColor = NaturalBorder),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Text(
+                    text = "Manual steps stay tucked under the task with progress on the homepage.",
+                    fontSize = 11.sp,
+                    color = NaturalMuted
                 )
 
                 Row(

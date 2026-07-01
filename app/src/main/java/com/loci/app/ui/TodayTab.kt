@@ -34,7 +34,8 @@ fun LociTodayTabContent(
     config: LociConfig,
     tasks: List<Task>,
     viewModel: LociViewModel,
-    contributions: List<ContributionDay>
+    contributions: List<ContributionDay>,
+    checklistItems: List<TaskChecklistItem>
 ) {
     val activeTask = tasks.firstOrNull { it.isNowFocus }
     val todayTasksAll = tasks.filter { it.horizonLevel == "today" }
@@ -139,6 +140,8 @@ fun LociTodayTabContent(
                 remainingTasks.sortedWith(compareBy<Task> { it.priority }.thenBy { it.orderIndex }).forEach { task ->
                     TaskCommitRow(
                         task = task,
+                        checklistItems = checklistItems.filter { it.taskUuid == task.uuid },
+                        onChecklistItemToggle = viewModel::toggleChecklistItem,
                         onPin = { viewModel.pinTaskToFocus(task) },
                         onComplete = { viewModel.completeTask(task) },
                         onMoveUp = { viewModel.moveTaskUp(task) },
