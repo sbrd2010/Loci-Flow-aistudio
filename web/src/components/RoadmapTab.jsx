@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { celebrate } from "../utils/celebrations";
-import { getAIKeys, callAI, hasAIKey } from "../utils/aiCall";
+import { getAIKeys, callAI, hasAIKey, extractJsonArray } from "../utils/aiCall";
 import { sanitizeTaskField, CATEGORY_ICONS, byPriorityThenOrder } from "../utils/taskOps";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import { safeCopyToClipboard } from "../utils/clipboard";
@@ -196,7 +196,7 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
   const [copied, setCopied] = useState(false);
   const copyTimeoutRef = useRef(null);
   const [longDumpWarning, setLongDumpWarning] = useState(null); // {id, horizon}
-  const [aiBreakdownSuggestion, setAiBreakdownSuggestion] = useState(null); // {id, title, concreteStep}
+  const [aiBreakdownSuggestion, setAiBreakdownSuggestion] = useState(null); // {id, items: [{title, concreteStep}], noKey, error}
   const [aiBreakdownLoading, setAiBreakdownLoading] = useState(null); // item.id
   const [editingDumpItem, setEditingDumpItem] = useState(null); // {id, text}
 
@@ -324,54 +324,79 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
     });
   };
 
+  const MAX_BREAKDOWN_ITEMS = 6;
+
   const handleAIBreakdown = async (item) => {
     const textToBreakdown = editingDumpItem?.id === item.id ? editingDumpItem.text : item.text;
     if (!hasAIKey()) {
-      setAiBreakdownSuggestion({ id: item.id, title: null, concreteStep: null, noKey: true });
+      setAiBreakdownSuggestion({ id: item.id, items: [], noKey: true });
       return;
     }
     setAiBreakdownLoading(item.id);
     try {
       const keys = getAIKeys();
+      const prompt = `Here is a raw brain dump note:
+"${textToBreakdown}"
+
+Turn it into 1-${MAX_BREAKDOWN_ITEMS} clear, atomic, actionable tasks — one task per distinct action in the note. If the note only contains one real action, return a single task; don't pad the list with filler.
+
+Hard rules:
+- Never merge unrelated points into one task, and never write a vague catch-all title
+- Titles are action-style and specific (max 60 chars) — keep the concrete subject: names, dates, amounts, tools, places
+- Every task has a concreteStep: the single easiest first physical/digital action (max 60 chars)
+- Preserve concrete details from the note in the concreteStep or a follow-up task rather than dropping them just to keep a title short
+
+Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}, no markdown, no explanation.`;
       const result = await callAI({
         ...keys,
-        systemPrompt: "You are a productivity assistant. Extract ONE specific, actionable task from the user's note. Return ONLY valid JSON with two fields: title (max 10 words, action-focused) and concreteStep (max 12 words, the very next physical action). No markdown, no explanation.",
-        messages: [{ role: "user", content: textToBreakdown }],
-        maxTokens: 100,
+        systemPrompt: "You are a productivity assistant. Respond ONLY with a valid JSON array, no markdown. Preserve every concrete detail from the input — never compress or summarize away names, dates, deadlines, amounts, or other specifics to save space.",
+        messages: [{ role: "user", content: prompt }],
+        // Headroom for up to MAX_BREAKDOWN_ITEMS title+concreteStep objects —
+        // 600 was tight enough that a truncated mid-array response (non-empty,
+        // so no provider retries it) would silently collapse to the one-item
+        // fallback below, defeating the point of asking for multiple tasks.
+        maxTokens: 1500,
+        reasoningEffort: "low",
       });
       let parsed;
       try {
-        const jsonMatch = result.match(/\{[\s\S]*?\}/);
-        parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result);
+        parsed = extractJsonArray(result);
       } catch {
-        parsed = { title: textToBreakdown.substring(0, 60), concreteStep: "Do first tiny step" };
+        parsed = [{ title: textToBreakdown.substring(0, 60), concreteStep: "Do first tiny step" }];
       }
+      const items = parsed
+        .filter(t => t && typeof t.title === "string" && t.title.trim())
+        .slice(0, MAX_BREAKDOWN_ITEMS)
+        .map(t => ({
+          title: sanitizeTaskField(t.title, 1000) || textToBreakdown.substring(0, 60),
+          concreteStep: sanitizeTaskField(t.concreteStep, 300) || "Do first tiny step"
+        }));
       setAiBreakdownSuggestion({
         id: item.id,
-        title: sanitizeTaskField(parsed.title, 1000) || textToBreakdown.substring(0, 60),
-        concreteStep: sanitizeTaskField(parsed.concreteStep, 300) || "Do first tiny step"
+        items: items.length ? items : [{ title: textToBreakdown.substring(0, 60), concreteStep: "Do first tiny step" }]
       });
     } catch {
-      setAiBreakdownSuggestion({ id: item.id, title: null, concreteStep: null });
+      setAiBreakdownSuggestion({ id: item.id, items: [], error: true });
     }
     setAiBreakdownLoading(null);
   };
 
   const handleConfirmAISuggestion = (item) => {
-    if (!aiBreakdownSuggestion || aiBreakdownSuggestion.id !== item.id) return;
+    if (!aiBreakdownSuggestion || aiBreakdownSuggestion.id !== item.id || !aiBreakdownSuggestion.items?.length) return;
     const horizon = longDumpWarning?.horizon || "today";
     const userId = payload.userId || payload.config?.userId || "";
-    const freshTask = {
-      id: Date.now(), userId, uuid: safeUUID(),
-      title: aiBreakdownSuggestion.title,
-      concreteStep: aiBreakdownSuggestion.concreteStep || "Do first tiny step",
+    const baseOrderIndex = tasks.filter(t => t.horizonLevel === horizon && isVisibleRoadmapTask(t)).length;
+    const freshTasks = aiBreakdownSuggestion.items.map((suggestion, i) => ({
+      id: Date.now() + i, userId, uuid: safeUUID(),
+      title: suggestion.title,
+      concreteStep: suggestion.concreteStep || "Do first tiny step",
       horizonLevel: horizon, priority: "P3", category: "Personal",
       timeEstimateMinutes: 25, deadlineTimestamp: null,
       isCompleted: false, isParked: false, isNowFocus: false,
-      orderIndex: tasks.filter(t => t.horizonLevel === horizon && isVisibleRoadmapTask(t)).length,
+      orderIndex: baseOrderIndex + i,
       dateCompletedString: null, isDeleted: false, lastUpdated: Date.now()
-    };
-    savePayload({ ...payload, tasks: [...tasks, freshTask], brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) });
+    }));
+    savePayload({ ...payload, tasks: [...tasks, ...freshTasks], brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) });
     setLongDumpWarning(null);
     setAiBreakdownSuggestion(null);
     setEditingDumpItem(null);
@@ -466,25 +491,31 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
 
         {hasSuggestion && (
           <div style={{ marginBottom: "8px" }}>
-            {aiBreakdownSuggestion.title ? (
-              <div style={{ background: "var(--bg-card)", border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)", padding: "8px 10px", marginBottom: "6px" }}>
-                <p style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" }}>AI suggestion</p>
-                <p style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "2px" }}>{aiBreakdownSuggestion.title}</p>
-                {aiBreakdownSuggestion.concreteStep && (
-                  <p style={{ fontSize: "11px", color: "var(--text-secondary)" }}>⚡ {aiBreakdownSuggestion.concreteStep}</p>
-                )}
-              </div>
+            {aiBreakdownSuggestion.items?.length ? (
+              <>
+                <p style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" }}>
+                  AI suggestion{aiBreakdownSuggestion.items.length > 1 ? ` (${aiBreakdownSuggestion.items.length} tasks)` : ""}
+                </p>
+                {aiBreakdownSuggestion.items.map((suggestion, i) => (
+                  <div key={i} style={{ background: "var(--bg-card)", border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)", padding: "8px 10px", marginBottom: "6px" }}>
+                    <p style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "2px" }}>{suggestion.title}</p>
+                    {suggestion.concreteStep && (
+                      <p style={{ fontSize: "11px", color: "var(--text-secondary)" }}>⚡ {suggestion.concreteStep}</p>
+                    )}
+                  </div>
+                ))}
+              </>
             ) : aiBreakdownSuggestion.noKey ? (
               <p style={{ fontSize: "11px", color: "var(--text-secondary)", marginBottom: "6px" }}>🔑 Add an AI key in Settings → AI Keys to use this. Edit or move as-is.</p>
             ) : (
               <p style={{ fontSize: "11px", color: "var(--danger)", marginBottom: "6px" }}>AI unavailable. Edit or move as-is.</p>
             )}
             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-              {aiBreakdownSuggestion.title && (
+              {aiBreakdownSuggestion.items?.length > 0 && (
                 <button
                   onClick={() => handleConfirmAISuggestion(item)}
                   style={{ fontSize: "11px", padding: "5px 12px", background: "var(--accent)", border: "none", borderRadius: "var(--radius-sm)", color: "#fff", cursor: "pointer", fontWeight: "700" }}>
-                  Use this →
+                  {aiBreakdownSuggestion.items.length > 1 ? `Use these (${aiBreakdownSuggestion.items.length}) →` : "Use this →"}
                 </button>
               )}
               <button
