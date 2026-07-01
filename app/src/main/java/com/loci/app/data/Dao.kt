@@ -23,21 +23,6 @@ interface LociDao {
     @Query("DELETE FROM tasks WHERE userId = :userId")
     suspend fun deleteAllTasksForUser(userId: String)
 
-    @Query("SELECT * FROM task_checklist_items WHERE userId = :userId AND isDeleted = 0 ORDER BY taskUuid, orderIndex ASC")
-    fun getChecklistItemsForUser(userId: String): Flow<List<TaskChecklistItem>>
-
-    @Query("SELECT * FROM task_checklist_items WHERE userId = :userId")
-    suspend fun getChecklistItemsSnapshotForUser(userId: String): List<TaskChecklistItem>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertChecklistItem(item: TaskChecklistItem)
-
-    @Update
-    suspend fun updateChecklistItem(item: TaskChecklistItem)
-
-    @Query("DELETE FROM task_checklist_items WHERE userId = :userId")
-    suspend fun deleteAllChecklistItemsForUser(userId: String)
-
     // Loci Config state
     @Query("SELECT * FROM loci_config WHERE userId = :userId LIMIT 1")
     fun getLociConfigForUser(userId: String): Flow<LociConfig?>

@@ -19,7 +19,6 @@ data class SyncPayload(
     val tasks: List<Task>,
     val config: LociConfig?,
     val contributions: List<ContributionDay>,
-    val checklistItems: List<TaskChecklistItem> = emptyList(),
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -121,7 +120,6 @@ object LociSyncManager {
             val localTasks = repository.getTasksSnapshotForUser(userId)
             val localConfig = repository.getConfigSnapshotForUser(userId)
             val localContributions = repository.getContributionsSnapshotForUser(userId)
-            val localChecklistItems = repository.getChecklistItemsSnapshotForUser(userId)
 
             val currentUrl = cloudServerUrl.trim()
             if (currentUrl.isEmpty() || !currentUrl.startsWith("http")) {
@@ -141,10 +139,10 @@ object LociSyncManager {
                 val fbAuth = if (cloudApiKey.isNotEmpty()) cloudApiKey else null
                 try {
                     val result = fbApi.pullData(safeUserId, fbAuth)
-                    result ?: SyncPayload(userId, emptyList(), null, emptyList(), emptyList())
+                    result ?: SyncPayload(userId, emptyList(), null, emptyList())
                 } catch (e: Exception) {
                     Log.e(TAG, "Firebase pull failed, acting as new database", e)
-                    SyncPayload(userId, emptyList(), null, emptyList(), emptyList())
+                    SyncPayload(userId, emptyList(), null, emptyList())
                 }
             } else {
                 val api = getRetrofit(currentUrl).create(LociSyncApi::class.java)
@@ -153,12 +151,12 @@ object LociSyncManager {
                     api.pullData(userId, authHeader)
                 } catch (e: retrofit2.HttpException) {
                     if (e.code() == 404) {
-                        SyncPayload(userId, emptyList(), null, emptyList(), emptyList())
+                        SyncPayload(userId, emptyList(), null, emptyList())
                     } else {
                         throw e
                     }
                 } catch (e: java.io.FileNotFoundException) {
-                    SyncPayload(userId, emptyList(), null, emptyList(), emptyList())
+                    SyncPayload(userId, emptyList(), null, emptyList())
                 }
             }
 
@@ -197,26 +195,6 @@ object LociSyncManager {
             }
             val mergedTasks = taskMap.values.toList()
 
-
-            // Merge checklist items
-            val checklistMap = mutableMapOf<String, TaskChecklistItem>()
-            remotePayload.checklistItems.forEach { remoteItem ->
-                checklistMap[remoteItem.uuid] = remoteItem
-            }
-            localChecklistItems.forEach { localItem ->
-                val matchingRemote = checklistMap[localItem.uuid]
-                if (matchingRemote == null) {
-                    checklistMap[localItem.uuid] = localItem
-                } else {
-                    if (localItem.lastUpdated >= matchingRemote.lastUpdated) {
-                        checklistMap[localItem.uuid] = localItem.copy(id = matchingRemote.id)
-                    } else {
-                        checklistMap[localItem.uuid] = matchingRemote.copy(id = localItem.id)
-                    }
-                }
-            }
-            val mergedChecklistItems = checklistMap.values.toList()
-
             // Merge ContributionDays
             val contributionMap = mutableMapOf<String, ContributionDay>()
             remotePayload.contributions.forEach { remoteCont ->
@@ -249,18 +227,12 @@ object LociSyncManager {
                 repository.insertContribution(cont, updateTimestamp = false)
             }
 
-            // Sync manual checklist items
-            for (item in mergedChecklistItems) {
-                repository.insertChecklistItem(item, updateTimestamp = false)
-            }
-
             // 5. Build output consolidation payload & push back to remote server
             val pushPayload = SyncPayload(
                 userId = userId,
                 tasks = mergedTasks,
                 config = mergedConfig,
-                contributions = mergedContributions,
-                checklistItems = mergedChecklistItems
+                contributions = mergedContributions
             )
 
             Log.d(TAG, "Pushing consolidated sync payload to $currentUrl")

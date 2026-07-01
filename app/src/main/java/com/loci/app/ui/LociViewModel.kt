@@ -112,15 +112,6 @@ class LociViewModel(
             initialValue = emptyList()
         )
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val checklistItems: StateFlow<List<TaskChecklistItem>> = currentUserEmail
-        .flatMapLatest { email -> repository.getChecklistItemsForUser(email) }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
-
     // Current State for Active Pomodoro / Focus Timer
     var isTimerRunning by mutableStateOf(false)
         private set
@@ -640,22 +631,18 @@ class LociViewModel(
         priority: String,
         category: String,
         estimateMinutes: Int,
-        deadlineTimestamp: Long? = null,
-        checklistTexts: List<String> = emptyList()
+        deadlineTimestamp: Long? = null
     ) {
         viewModelScope.launch {
             val email = currentUserEmail.value
             val index = tasks.value.filter { it.horizonLevel == horizonLevel }.size
-            val cleanedChecklistTexts = checklistTexts.map { it.trim() }.filter { it.isNotEmpty() }
             val finalStep = if (concreteStep.isBlank() || concreteStep == "Do first tiny step" || concreteStep == "Check status") {
-                cleanedChecklistTexts.firstOrNull() ?: suggestConcreteStep(title)
+                suggestConcreteStep(title)
             } else {
                 concreteStep
             }
-            val taskUuid = java.util.UUID.randomUUID().toString()
             val fresh = Task(
                 userId = email,
-                uuid = taskUuid,
                 title = title,
                 concreteStep = finalStep,
                 horizonLevel = horizonLevel,
@@ -666,26 +653,9 @@ class LociViewModel(
                 orderIndex = index
             )
             repository.insertTask(fresh)
-            cleanedChecklistTexts.forEachIndexed { itemIndex, itemText ->
-                repository.insertChecklistItem(
-                    TaskChecklistItem(
-                        userId = email,
-                        taskUuid = taskUuid,
-                        text = itemText,
-                        orderIndex = itemIndex
-                    )
-                )
-            }
             if (isAutoSyncEnabled) {
                 triggerCloudSyncAnimation()
             }
-        }
-    }
-
-
-    fun toggleChecklistItem(item: TaskChecklistItem) {
-        viewModelScope.launch {
-            repository.updateChecklistItem(item.copy(isCompleted = !item.isCompleted))
         }
     }
 

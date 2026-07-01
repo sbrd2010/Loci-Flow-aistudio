@@ -31,7 +31,6 @@ fun LociScreen(
     val configState by viewModel.config.collectAsStateWithLifecycle()
     val tasksState by viewModel.tasks.collectAsStateWithLifecycle()
     val contributionsState by viewModel.contributions.collectAsStateWithLifecycle()
-    val checklistItemsState by viewModel.checklistItems.collectAsStateWithLifecycle()
 
     val config = configState ?: LociConfig()
 
@@ -43,7 +42,6 @@ fun LociScreen(
     var newTaskLevel by remember { mutableStateOf("today") }
     var newTaskCategory by remember { mutableStateOf("Career") }
     var newTaskDuration by remember { mutableStateOf("25") }
-    var newTaskChecklist by remember { mutableStateOf("") }
 
     // Onboarding dialog
     if (viewModel.showOnboarding) {
@@ -169,7 +167,6 @@ fun LociScreen(
                     newTaskLevel = "today"
                     newTaskCategory = "Career"
                     newTaskDuration = "25"
-                    newTaskChecklist = ""
                     showAddTaskDialog = true
                 },
                 containerColor = NaturalAccent,
@@ -194,13 +191,11 @@ fun LociScreen(
                     config = config,
                     tasks = tasksState,
                     viewModel = viewModel,
-                    contributions = contributionsState,
-                    checklistItems = checklistItemsState
+                    contributions = contributionsState
                 )
                 LociTab.Roadmap -> LociRoadmapTabContent(
                     tasks = tasksState,
-                    viewModel = viewModel,
-                    checklistItems = checklistItemsState
+                    viewModel = viewModel
                 )
                 LociTab.Coach -> LociCoachTabContent(
                     config = config,
@@ -227,8 +222,6 @@ fun LociScreen(
                 onCategoryChange = { newTaskCategory = it },
                 duration = newTaskDuration,
                 onDurationChange = { newTaskDuration = it },
-                checklist = newTaskChecklist,
-                onChecklistChange = { newTaskChecklist = it },
                 onDismiss = { showAddTaskDialog = false },
                 onConfirm = {
                     val minutesNum = newTaskDuration.toIntOrNull() ?: 25
@@ -238,8 +231,7 @@ fun LociScreen(
                         horizonLevel = newTaskLevel,
                         priority = newTaskPriority,
                         category = newTaskCategory,
-                        estimateMinutes = minutesNum,
-                        checklistTexts = parseManualChecklist(newTaskChecklist)
+                        estimateMinutes = minutesNum
                     )
                     showAddTaskDialog = false
                 }
@@ -339,18 +331,4 @@ fun NavigationBarItemCustom(
             )
         )
     }
-}
-
-fun parseManualChecklist(rawChecklist: String): List<String> {
-    return rawChecklist
-        .lines()
-        .map { line ->
-            line.trim()
-                .replace(Regex("""^[-*•–—]\s*"""), "")
-                .replace(Regex("""^\[[ xX]]\s*"""), "")
-                .replace(Regex("""^[0-9]+[.)]\s*"""), "")
-                .replace(Regex("""^[a-zA-Z][.)]\s*"""), "")
-                .trim()
-        }
-        .filter { it.isNotEmpty() }
 }

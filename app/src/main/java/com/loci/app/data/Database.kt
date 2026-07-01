@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [Task::class, TaskChecklistItem::class, LociConfig::class, ContributionDay::class], version = 5, exportSchema = true)
+@Database(entities = [Task::class, LociConfig::class, ContributionDay::class], version = 4, exportSchema = true)
 abstract class LociDatabase : RoomDatabase() {
     abstract fun lociDao(): LociDao
 
@@ -49,24 +49,6 @@ abstract class LociDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATION_4_5 = object : Migration(4, 5) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("""
-                    CREATE TABLE IF NOT EXISTS task_checklist_items (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                        userId TEXT NOT NULL,
-                        taskUuid TEXT NOT NULL,
-                        uuid TEXT NOT NULL,
-                        text TEXT NOT NULL,
-                        isCompleted INTEGER NOT NULL,
-                        orderIndex INTEGER NOT NULL,
-                        isDeleted INTEGER NOT NULL,
-                        lastUpdated INTEGER NOT NULL
-                    )
-                """.trimIndent())
-            }
-        }
-
         fun getDatabase(context: Context): LociDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -74,7 +56,7 @@ abstract class LociDatabase : RoomDatabase() {
                     LociDatabase::class.java,
                     "loci_database"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
                 INSTANCE = instance
                 instance

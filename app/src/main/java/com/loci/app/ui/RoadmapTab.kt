@@ -22,8 +22,7 @@ import com.loci.app.ui.theme.*
 @Composable
 fun LociRoadmapTabContent(
     tasks: List<Task>,
-    viewModel: LociViewModel,
-    checklistItems: List<TaskChecklistItem>
+    viewModel: LociViewModel
 ) {
     val levels = listOf(
         "today" to "Today Commit",
@@ -112,8 +111,6 @@ fun LociRoadmapTabContent(
                 items(filteredTasks.sortedBy { it.priority }) { task ->
                     HorizonTaskPlanningItemRow(
                         task = task,
-                        checklistItems = checklistItems.filter { it.taskUuid == task.uuid },
-                        onChecklistItemToggle = viewModel::toggleChecklistItem,
                         onMoveLevel = { targetLevel ->
                             viewModel.moveTaskToHorizonLevel(task, targetLevel)
                         },

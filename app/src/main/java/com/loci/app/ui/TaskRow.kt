@@ -22,8 +22,6 @@ import com.loci.app.ui.theme.*
 @Composable
 fun TaskCommitRow(
     task: Task,
-    checklistItems: List<TaskChecklistItem> = emptyList(),
-    onChecklistItemToggle: (TaskChecklistItem) -> Unit = {},
     onPin: () -> Unit,
     onComplete: () -> Unit,
     onMoveUp: () -> Unit,
@@ -108,11 +106,15 @@ fun TaskCommitRow(
                 )
             )
 
-            TaskChecklistPreview(
-                checklistItems = checklistItems,
-                fallbackStep = task.concreteStep,
-                onChecklistItemToggle = onChecklistItemToggle
-            )
+            // Step hint text
+            if (task.concreteStep.isNotEmpty()) {
+                Text(
+                    text = "↳ Next step: ${task.concreteStep}",
+                    fontSize = 12.sp,
+                    color = NaturalMuted,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -221,8 +223,6 @@ fun CompletedTaskCommitRow(
 @Composable
 fun HorizonTaskPlanningItemRow(
     task: Task,
-    checklistItems: List<TaskChecklistItem> = emptyList(),
-    onChecklistItemToggle: (TaskChecklistItem) -> Unit = {},
     onMoveLevel: (String) -> Unit,
     onDelete: () -> Unit
 ) {
@@ -308,11 +308,14 @@ fun HorizonTaskPlanningItemRow(
                 color = NaturalText
             )
 
-            TaskChecklistPreview(
-                checklistItems = checklistItems,
-                fallbackStep = task.concreteStep,
-                onChecklistItemToggle = onChecklistItemToggle
-            )
+            if (task.concreteStep.isNotEmpty()) {
+                Text(
+                    text = "↳ Anchor small action: ${task.concreteStep}",
+                    fontSize = 12.sp,
+                    color = NaturalMuted,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -325,71 +328,5 @@ fun HorizonTaskPlanningItemRow(
                 }
             }
         }
-    }
-}
-
-
-@Composable
-private fun TaskChecklistPreview(
-    checklistItems: List<TaskChecklistItem>,
-    fallbackStep: String,
-    onChecklistItemToggle: (TaskChecklistItem) -> Unit
-) {
-    val activeItems = checklistItems.sortedBy { it.orderIndex }
-    if (activeItems.isNotEmpty()) {
-        var expanded by remember { mutableStateOf(false) }
-        val completedCount = activeItems.count { it.isCompleted }
-        val nextItem = activeItems.firstOrNull { !it.isCompleted } ?: activeItems.last()
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 6.dp)
-                .clickable { expanded = !expanded },
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                contentDescription = if (expanded) "Collapse checklist" else "Expand checklist",
-                tint = NaturalMuted,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = "$completedCount/${activeItems.size} steps · Next: ${nextItem.text}",
-                fontSize = 12.sp,
-                color = NaturalMuted
-            )
-        }
-
-        if (expanded) {
-            Column(modifier = Modifier.padding(top = 4.dp)) {
-                activeItems.forEach { item ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = item.isCompleted,
-                            onCheckedChange = { onChecklistItemToggle(item) },
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Text(
-                            text = item.text,
-                            fontSize = 12.sp,
-                            color = if (item.isCompleted) NaturalMuted else NaturalText,
-                            textDecoration = if (item.isCompleted) TextDecoration.LineThrough else TextDecoration.None
-                        )
-                    }
-                }
-            }
-        }
-    } else if (fallbackStep.isNotEmpty()) {
-        Text(
-            text = "↳ Next step: $fallbackStep",
-            fontSize = 12.sp,
-            color = NaturalMuted,
-            modifier = Modifier.padding(top = 2.dp)
-        )
     }
 }

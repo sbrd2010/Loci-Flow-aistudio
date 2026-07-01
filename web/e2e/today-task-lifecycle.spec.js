@@ -125,3 +125,30 @@ test("mobile reliability: Today task can be parked from its row menu and disappe
   await page.getByTestId("task-menu-park").click();
   await expect(todayRow(page, title)).not.toBeVisible({ timeout: 5_000 });
 });
+
+test("mobile reliability: Add Task accepts manual sub-steps from pasted bullets", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "Manual checklist seed task";
+  await openAddTask(page);
+  await page.getByTestId("add-task-title").fill(title);
+  await page.getByRole("button", { name: /Advanced options/i }).click();
+  await page.getByTestId("add-task-substeps-draft").fill("- Check visa rules\n2. Compare flight prices\nc) Book refundable hotel");
+  await page.getByTestId("add-task-substeps-add").click();
+
+  const subStepsList = page.getByTestId("add-task-substeps-list");
+  await expect(subStepsList).toContainText("Check visa rules");
+  await expect(subStepsList).toContainText("Compare flight prices");
+  await expect(subStepsList).toContainText("Book refundable hotel");
+
+  await page.getByRole("button", { name: "Remove step Compare flight prices" }).click();
+  await expect(subStepsList).not.toContainText("Compare flight prices");
+
+  await page.getByTestId("add-task-submit").click();
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  const row = todayRow(page, title);
+  await expect(row).toBeVisible({ timeout: 5_000 });
+  await expect(row).toContainText("Check visa rules");
+  await expect(row).toContainText("Book refundable hotel");
+  await expect(row).not.toContainText("Compare flight prices");
+});

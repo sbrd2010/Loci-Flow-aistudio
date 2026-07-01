@@ -24,19 +24,6 @@ data class Task(
     val lastUpdated: Long = System.currentTimeMillis() // Conflict resolution timestamp
 )
 
-@Entity(tableName = "task_checklist_items")
-data class TaskChecklistItem(
-    @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val userId: String = "husband@gmail.com",
-    val taskUuid: String,
-    val uuid: String = java.util.UUID.randomUUID().toString(),
-    val text: String,
-    val isCompleted: Boolean = false,
-    val orderIndex: Int = 0,
-    val isDeleted: Boolean = false,
-    val lastUpdated: Long = System.currentTimeMillis()
-)
-
 @Entity(tableName = "loci_config")
 data class LociConfig(
     @PrimaryKey val userId: String = "husband@gmail.com", // Unique settings per account ID
