@@ -54,6 +54,15 @@ describe("Morning Commitment eligibility", () => {
     expect(shouldShowMorningCommitment(dt(9, 30), windows, {}, TODAY, true)).toBe(false);
     expect(shouldShowMorningCommitment(dt(9, 30), windows, {}, TODAY, false)).toBe(true);
   });
+
+  it("7. never appears when dailyCheckinsEnabled is false, regardless of other conditions", () => {
+    expect(shouldShowMorningCommitment(dt(9, 30), windows, { dailyCheckinsEnabled: false }, TODAY, false)).toBe(false);
+  });
+
+  it("8. still appears when dailyCheckinsEnabled is undefined or true (default-on)", () => {
+    expect(shouldShowMorningCommitment(dt(9, 30), windows, { dailyCheckinsEnabled: true }, TODAY, false)).toBe(true);
+    expect(shouldShowMorningCommitment(dt(9, 30), windows, {}, TODAY, false)).toBe(true);
+  });
 });
 
 describe("buildMorningCommitmentPrompt", () => {
@@ -151,6 +160,15 @@ describe("Midday Progress Check eligibility", () => {
     expect(shouldShowMiddayCheck(dt(14), windows, { ...baseConfig, dailyMiddayCheckDate: TODAY }, TODAY)).toBe(false);
     expect(shouldShowMiddayCheck(dt(14), windows, { ...baseConfig, dailyMiddayCheckSnoozeUntil: dt(15).getTime() }, TODAY)).toBe(false);
   });
+
+  it("10. never appears when dailyCheckinsEnabled is false, regardless of other conditions", () => {
+    expect(shouldShowMiddayCheck(dt(14), windows, { ...baseConfig, dailyCheckinsEnabled: false }, TODAY)).toBe(false);
+  });
+
+  it("11. still appears when dailyCheckinsEnabled is undefined or true (default-on)", () => {
+    expect(shouldShowMiddayCheck(dt(14), windows, { ...baseConfig, dailyCheckinsEnabled: true }, TODAY)).toBe(true);
+    expect(shouldShowMiddayCheck(dt(14), windows, baseConfig, TODAY)).toBe(true);
+  });
 });
 
 describe("buildMiddayProgressSummary", () => {
@@ -232,6 +250,17 @@ describe("End-of-Day Reflection eligibility", () => {
     expect(shouldShowReflection(earlyMorning, windows, {}, lociDay)).toBe(true);
     // Earlier in the same overnight tail, still before the last-30-min mark:
     expect(shouldShowReflection(new Date(2024, 5, 16, 1, 0), windows, {}, lociDay)).toBe(false);
+  });
+
+  it("13. never appears when dailyCheckinsEnabled is false, regardless of other conditions", () => {
+    const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] });
+    expect(shouldShowReflection(dt(20, 0), windows, { dailyCheckinsEnabled: false }, TODAY)).toBe(false);
+  });
+
+  it("14. still appears when dailyCheckinsEnabled is undefined or true (default-on)", () => {
+    const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] });
+    expect(shouldShowReflection(dt(20, 0), windows, { dailyCheckinsEnabled: true }, TODAY)).toBe(true);
+    expect(shouldShowReflection(dt(20, 0), windows, {}, TODAY)).toBe(true);
   });
 });
 

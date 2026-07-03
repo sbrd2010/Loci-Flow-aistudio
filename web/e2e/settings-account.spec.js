@@ -88,3 +88,26 @@ test("mobile reliability: Settings supports profile save, privacy, bug-report mo
   await expect(page.getByTestId("demo-btn")).toBeVisible({ timeout: 8_000 });
   await expect(page.locator(".app-container")).not.toBeVisible({ timeout: 5_000 });
 });
+
+test("mobile reliability: Daily Coach Check-ins toggle persists off", async ({ page }) => {
+  await enterDemo(page);
+  await openTab(page, "Settings");
+  await ensureProfileOpen(page);
+
+  const toggleRow = page.locator(".toggle-row", { hasText: "Daily Coach Check-ins" });
+  const checkbox = toggleRow.locator("input.pill-toggle");
+  await expect(checkbox).toBeChecked();
+
+  await toggleRow.click();
+  await expect(checkbox).not.toBeChecked();
+  await page.getByRole("button", { name: "Save Profile" }).click();
+  await expect(page.getByRole("button", { name: /Saved/i })).toBeVisible({ timeout: 5_000 });
+
+  // Collapse and reopen the section — this re-syncs the form's local state from
+  // the saved config prop, confirming the off state was actually written to
+  // payload.config (not just held in local component state).
+  await page.getByRole("button", { name: /Your Profile/i }).click();
+  await expect(page.locator("#settings-name")).not.toBeVisible({ timeout: 5_000 });
+  await ensureProfileOpen(page);
+  await expect(page.locator(".toggle-row", { hasText: "Daily Coach Check-ins" }).locator("input.pill-toggle")).not.toBeChecked();
+});
