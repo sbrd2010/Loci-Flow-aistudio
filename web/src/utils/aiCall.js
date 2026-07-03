@@ -196,7 +196,14 @@ function getAIUsageUserId() {
   return auth?.currentUser?.uid || auth?.currentUser?.email || "signed-out";
 }
 
-async function callGroq(groqKey, systemPrompt, messages, maxTokens, reasoningEffort) {
+// gpt-oss-120b is a reasoning model on Groq too (same family Cerebras runs,
+// see the Cerebras retry comment below) — hidden reasoning tokens can eat
+// the whole completion budget before any visible content is written,
+// producing an HTTP 200 with empty message.content. One retry at a larger
+// budget recovers most of these without retrying indefinitely.
+const GROQ_RETRY_TOKEN_CAP = 4000;
+
+async function requestGroq(groqKey, systemPrompt, messages, tokenBudget, reasoningEffort) {
   const res = await fetchWithTimeout(GROQ_URL, {
     method: "POST",
     headers: {
@@ -206,7 +213,7 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens, reasoningEff
     body: JSON.stringify({
       model: GROQ_MODEL,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
-      max_tokens: maxTokens ?? 300,
+      max_tokens: tokenBudget,
       temperature: 0.4,
       top_p: 0.9,
       ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {})
@@ -214,12 +221,26 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens, reasoningEff
   });
   if (!res.ok) throw statusError("groq", res.status, res);
   const data = await res.json();
-  const reply = extractMessageContent(data.choices?.[0]?.message);
+  const message = data.choices?.[0]?.message;
+  return { reply: extractMessageContent(message), usage: data.usage, finishReason: data.choices?.[0]?.finish_reason, data, message };
+}
+
+async function callGroq(groqKey, systemPrompt, messages, maxTokens, reasoningEffort) {
+  const initialBudget = maxTokens ?? 300;
+  let { reply, usage, finishReason, data, message } = await requestGroq(groqKey, systemPrompt, messages, initialBudget, reasoningEffort);
+
+  if (!reply && finishReason === "length") {
+    const retryBudget = Math.min(Math.max(initialBudget * 2, 1000), GROQ_RETRY_TOKEN_CAP);
+    if (retryBudget > initialBudget) {
+      ({ reply, usage, finishReason, data, message } = await requestGroq(groqKey, systemPrompt, messages, retryBudget, reasoningEffort));
+    }
+  }
+
   if (!reply) {
-    logEmptyReplyDiagnostics("groq", data, data.choices?.[0]?.message);
+    logEmptyReplyDiagnostics("groq", data, message);
     throw new Error("groq_empty");
   }
-  return { reply, usage: data.usage };
+  return { reply, usage };
 }
 
 async function callNvidia(nvidiaKey, systemPrompt, messages, maxTokens) {

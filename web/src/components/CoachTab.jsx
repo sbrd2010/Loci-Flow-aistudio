@@ -237,7 +237,8 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey,
           systemPrompt: systemInstruction,
           messages: [{ role: "user", content: "(Start the conversation.)" }],
-          maxTokens: 120
+          maxTokens: 120,
+          reasoningEffort: "low"
         });
         deliver(reply.trim(), true);
       } catch (_) {
@@ -426,7 +427,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     }
 
     try {
-      const reply = await callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey, systemPrompt: systemInstruction, messages, maxTokens, contextMode });
+      const reply = await callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey, systemPrompt: systemInstruction, messages, maxTokens, contextMode, reasoningEffort: "low" });
       if (contextMode === "full_task") {
         localStorage.setItem(`loci_last_full_task_time_${userId}`, String(Date.now()));
       }
@@ -878,7 +879,8 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
         groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey,
         systemPrompt: `${buildLociCoreInstruction({ firstName })}\n\nYou are ${config.mentorName || "a focus coach"}, an expert productivity coach.`,
         messages: [{ role: "user", content: prompt }],
-        maxTokens: 800
+        maxTokens: 800,
+        reasoningEffort: "low"
       });
       setBriefingResult(reply);
     } catch (err) {

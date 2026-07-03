@@ -75,6 +75,17 @@ function cerebrasEmpty(finishReason = "stop") {
   };
 }
 
+function groqEmpty(finishReason = "stop") {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      choices: [{ message: { content: "" }, finish_reason: finishReason }],
+      usage: { prompt_tokens: 50, completion_tokens: 0, total_tokens: 50 },
+    }),
+  };
+}
+
 function zaiOk(content = "Z.ai reply.") {
   return {
     ok: true,
@@ -205,6 +216,78 @@ describe("AI call resilience", () => {
     await callAI(baseRequest({ reasoningEffort: "low" }));
     const body = JSON.parse(fetch.mock.calls[0][1].body);
     expect(body.reasoning_effort).toBe("low");
+  });
+
+  it("retries Groq once with a larger token budget when finish_reason is length", async () => {
+    fetch
+      .mockResolvedValueOnce(groqEmpty("length"))
+      .mockResolvedValueOnce(groqOk("Groq reply after retry."));
+
+    const reply = await callAI(baseRequest());
+
+    expect(reply).toBe("Groq reply after retry.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const firstBody = JSON.parse(fetch.mock.calls[0][1].body);
+    const retryBody = JSON.parse(fetch.mock.calls[1][1].body);
+    expect(retryBody.max_tokens).toBeGreaterThan(firstBody.max_tokens);
+    // baseRequest's maxTokens (120) doubles to 240 — below the 1000-token
+    // floor needed for gpt-oss-120b's reasoning overhead to actually recover.
+    expect(retryBody.max_tokens).toBe(1000);
+  });
+
+  it("does not retry Groq when content is empty but finish_reason is not length", async () => {
+    fetch
+      .mockResolvedValueOnce(groqEmpty("stop"))   // Groq returns empty, no retry
+      .mockResolvedValueOnce(geminiOk("Gemini saved it after Groq empty."));
+
+    const reply = await callAI(baseRequest({ geminiKey: "test-gemini-key" }));
+
+    expect(reply).toBe("Gemini saved it after Groq empty.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+  });
+
+  it("does not retry Groq when the initial budget already equals the retry cap", async () => {
+    fetch
+      .mockResolvedValueOnce(groqEmpty("length"))   // Groq at the cap, still empty
+      .mockResolvedValueOnce(cerebrasOk("Cerebras saved it after Groq at cap."));
+
+    const reply = await callAI(baseRequest({ cerebrasKey: "test-cerebras-key", maxTokens: 4000 }));
+
+    expect(reply).toBe("Cerebras saved it after Groq at cap.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(fetch.mock.calls[1][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
+  });
+
+  it("falls back to Cerebras when Groq stays empty after a length retry", async () => {
+    fetch
+      .mockResolvedValueOnce(groqEmpty("length"))   // Groq first attempt: length, empty
+      .mockResolvedValueOnce(groqEmpty("length"))   // Groq retry: still empty
+      .mockResolvedValueOnce(cerebrasOk("Cerebras answered instead."));
+
+    const reply = await callAI(baseRequest({ cerebrasKey: "test-cerebras-key" }));
+
+    expect(reply).toBe("Cerebras answered instead.");
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not log prompt/message content when Groq returns an empty reply", async () => {
+    fetch
+      .mockResolvedValueOnce(groqEmpty("stop"))
+      .mockResolvedValueOnce(cerebrasOk("Cerebras saved it."));
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+    await callAI(baseRequest({
+      cerebrasKey: "test-cerebras-key",
+      systemPrompt: "SECRET_SYSTEM_PROMPT_TEXT",
+      messages: [{ role: "user", content: "SECRET_USER_MESSAGE_TEXT" }],
+    }));
+
+    const loggedText = JSON.stringify(debugSpy.mock.calls);
+    expect(loggedText).not.toContain("SECRET_SYSTEM_PROMPT_TEXT");
+    expect(loggedText).not.toContain("SECRET_USER_MESSAGE_TEXT");
+    expect(loggedText).not.toContain("test-groq-key");
   });
 
   it("NVIDIA respects a small caller maxTokens (700)", async () => {
