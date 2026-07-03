@@ -442,7 +442,7 @@ export default function TodayTab({
   }, [
     anchorTodayStr, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, isAddTaskDialogOpen,
     showAnchorSheet, showDailyCheckin, rescueActive, pendingCheckinSlot, config.anchorsSnoozeUntil,
-    config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, config.morningRitualEnabled, config.dailyCheckinsEnabled, visibilityTick,
+    config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, config.morningRitualEnabled, visibilityTick,
     config.dailyCommitmentDate, config.dailyCommitmentSkippedDate, config.dailyCommitmentSnoozeUntil, config.dailyCommitmentTaskIds,
     config.dailyMiddayCheckDate, config.dailyMiddayCheckSnoozeUntil, config.dailyReflectionDate, config.dailyCheckinsEnabled,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
