@@ -37,6 +37,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const [editedMorningRitualEnd, setEditedMorningRitualEnd] = useState(config.morningRitualWindowEnd || "11:00");
   const [editedMorningRitualEnabled, setEditedMorningRitualEnabled] = useState(config.morningRitualEnabled !== false);
   const [editedCoachNudgesEnabled, setEditedCoachNudgesEnabled] = useState(config.coachNudgesEnabled !== false);
+  const [editedDailyCheckinsEnabled, setEditedDailyCheckinsEnabled] = useState(config.dailyCheckinsEnabled !== false);
   const [editedCoachPersona, setEditedCoachPersona] = useState(() => normalizeCoachPersona(config.coachPersona));
   const [editedCoachPersonaNote, setEditedCoachPersonaNote] = useState(config.coachPersonaNote || "");
   const [editedCoachProfileNote, setEditedCoachProfileNote] = useState(config.coachProfileNote || "");
@@ -62,6 +63,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
     setEditedMorningRitualEnd(config.morningRitualWindowEnd || "11:00");
     setEditedMorningRitualEnabled(config.morningRitualEnabled !== false);
     setEditedCoachNudgesEnabled(config.coachNudgesEnabled !== false);
+    setEditedDailyCheckinsEnabled(config.dailyCheckinsEnabled !== false);
     setEditedCoachPersona(normalizeCoachPersona(config.coachPersona));
     setEditedCoachPersonaNote(config.coachPersonaNote || "");
     setEditedCoachProfileNote(config.coachProfileNote || "");
@@ -74,7 +76,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
       config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.taskRowInteractionStyle, config.challengeType,
       config.focusWindows,
-      config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualEnabled, config.coachNudgesEnabled, config.headerStyle, config.toolsStyle,
+      config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualEnabled, config.coachNudgesEnabled, config.dailyCheckinsEnabled, config.headerStyle, config.toolsStyle,
       config.deadlineLabel, config.deadlineDate,
       config.deadlineStartDate, config.deadlineAction,
       config.coachPersona, config.coachPersonaNote, config.coachProfileNote]);
@@ -195,6 +197,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
       morningRitualWindowEnd: morningRitualValid ? editedMorningRitualEnd : "11:00",
       morningRitualEnabled: editedMorningRitualEnabled,
       coachNudgesEnabled: editedCoachNudgesEnabled,
+      dailyCheckinsEnabled: editedDailyCheckinsEnabled,
       coachPersona: editedCoachPersona,
       coachPersonaNote: editedCoachPersonaNote.trim().slice(0, 300),
       coachProfileNote: editedCoachProfileNote.trim().slice(0, COACH_PROFILE_NOTE_MAX_LENGTH),
@@ -557,6 +560,22 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
               </p>
             </div>
             <input type="checkbox" className="pill-toggle" checked={editedCoachNudgesEnabled} readOnly />
+          </div>
+
+          <div
+            className="toggle-row"
+            onClick={() => setEditedDailyCheckinsEnabled(!editedDailyCheckinsEnabled)}
+            style={{ cursor: "pointer" }}
+          >
+            <div>
+              <span style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--text-primary)" }}>
+                🎯 Daily Coach Check-ins
+              </span>
+              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                Three once-a-day prompts on Today: pick your non-negotiables in the morning, a midday progress check, and an end-of-day reflection. Turn off if these feel like noise.
+              </p>
+            </div>
+            <input type="checkbox" className="pill-toggle" checked={editedDailyCheckinsEnabled} readOnly />
           </div>
 
           <div className="form-group">

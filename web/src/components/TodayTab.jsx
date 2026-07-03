@@ -424,7 +424,7 @@ export default function TodayTab({
     showAnchorSheet, showDailyCheckin, rescueActive, pendingCheckinSlot, config.anchorsSnoozeUntil,
     config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, config.morningRitualEnabled, visibilityTick,
     config.dailyCommitmentDate, config.dailyCommitmentSkippedDate, config.dailyCommitmentSnoozeUntil, config.dailyCommitmentTaskIds,
-    config.dailyMiddayCheckDate, config.dailyMiddayCheckSnoozeUntil, config.dailyReflectionDate,
+    config.dailyMiddayCheckDate, config.dailyMiddayCheckSnoozeUntil, config.dailyReflectionDate, config.dailyCheckinsEnabled,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAnchorCheck = (id) => {

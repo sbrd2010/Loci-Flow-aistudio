@@ -25,6 +25,7 @@ const SNOOZE_MS = 90 * 60 * 1000;
 // window has opened today, no upper bound), once per Loci day, unless
 // skipped, snoozed, or Morning Ritual is still pending (shown first).
 export function shouldShowMorningCommitment(now, windows, config = {}, todayStr, morningRitualPending) {
+  if (config.dailyCheckinsEnabled === false) return false;
   if (morningRitualPending) return false;
   if (!isMorningRitualSlot(now, windows)) return false;
   if (config.dailyCommitmentDate === todayStr) return false;
@@ -96,6 +97,7 @@ export function getValidCommittedTaskIds(tasks = [], taskIds) {
 // task exists, and only after the scheduled focus-time midpoint has passed
 // (gap-aware — see getFocusProgress for split-window handling).
 export function shouldShowMiddayCheck(now, windows, config = {}, todayStr) {
+  if (config.dailyCheckinsEnabled === false) return false;
   if (config.dailyMiddayCheckDate === todayStr) return false;
   const snoozeUntil = config.dailyMiddayCheckSnoozeUntil;
   if (snoozeUntil && now.getTime() < snoozeUntil) return false;
@@ -170,6 +172,7 @@ export function buildNarrowToOne(config = {}, taskId, now = Date.now()) {
 // getLociNowMinutes pushes early-morning hours of an overnight window's tail
 // past 1440 so this lines up correctly with getOverallSpan's endMin.
 export function shouldShowReflection(now, windows, config = {}, todayStr) {
+  if (config.dailyCheckinsEnabled === false) return false;
   if (config.dailyReflectionDate === todayStr) return false;
   const lociNow = getLociNowMinutes(now, windows);
   const span = getOverallSpan(windows);
