@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildOfflineRescueReply, buildRescuePrompt, buildRescueTaskList } from "./rescueCoachPrompt";
+import { buildLocalSafetyReply, buildOfflineRescueReply, buildRescuePrompt, buildRescueTaskList } from "./rescueCoachPrompt";
 
 describe("rescueCoachPrompt", () => {
   const tasks = [
@@ -36,6 +36,15 @@ describe("rescueCoachPrompt", () => {
     expect(out).toContain("first step: open the outline");
     expect(out).toContain("TODAY: Email Maya");
     expect(out).toContain("WEEK: Submit invoice");
+  });
+
+
+  it("excludes parked tasks from rescue snapshots", () => {
+    const out = buildRescueTaskList([
+      ...tasks,
+      { uuid: "parked", title: "Parked backlog item", horizonLevel: "today", isParked: true },
+    ]);
+    expect(out).not.toContain("Parked backlog item");
   });
 
   it("includes safety/support-mode instructions for anxious rescue", () => {
@@ -99,6 +108,13 @@ describe("rescueCoachPrompt", () => {
     });
     expect(prompt).toContain("Needs low-pressure language");
     expect(prompt).not.toContain("This memory should stay out");
+  });
+
+
+  it("uses local safety fallback before productivity-oriented offline replies", () => {
+    expect(buildLocalSafetyReply("I might hurt myself", "Rohan")).toContain("emergency services");
+    expect(buildLocalSafetyReply("I have chest pain and can't breathe", "Rohan")).toContain("medical help");
+    expect(buildOfflineRescueReply("distracted", "Rohan", "I might hurt myself")).toContain("emergency services");
   });
 
   it("returns rescue-state-specific offline replies", () => {

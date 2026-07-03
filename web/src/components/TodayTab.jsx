@@ -67,6 +67,7 @@ export default function TodayTab({
   selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
   isSyncingFromCache = false,
   pendingCheckinSlot, setPendingCheckinSlot,
+  syncWarning = null,
 }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
   const taskRowInteractionStyle = config.taskRowInteractionStyle === "dragAnywhere" ? "dragAnywhere" : "classic";
@@ -102,7 +103,7 @@ export default function TodayTab({
   );
 
   const openRescueMode = () => {
-    if ((isFocusMode || isTimerRunning) && activeTask) {
+    if ((isFocusMode || isTimerRunning || focusSessionActive) && activeTask) {
       // Opened from inside an active Deep Focus session (the Stuck? button) —
       // rescue the task actually being focused on, even if it isn't in
       // todayTasksAll (e.g. pinned via a Coach action without moving horizons).
@@ -1801,7 +1802,7 @@ export default function TodayTab({
           firstName={(config.userName || "").split(" ")[0] || "friend"}
           config={config}
           entryPoint={rescueEntryPoint}
-          includeMemory={!isSyncingFromCache}
+          includeMemory={!(isSyncingFromCache || syncWarning === "offline")}
           onDismiss={() => setRescueActive(false)}
           onAccept={() => {
             setRescueActive(false);

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { callAI, getAIKeys, buildProviderOrder } from "../utils/aiCall";
-import { buildOfflineRescueReply, buildRescuePrompt } from "../utils/rescueCoachPrompt";
+import { buildLocalSafetyReply, buildOfflineRescueReply, buildRescuePrompt } from "../utils/rescueCoachPrompt";
 
 const REASONS = [
   { id: "overwhelmed", emoji: "😵", label: "Too much going on",     color: "#f59e0b" },
@@ -76,6 +76,13 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
         content: m.text || m.parts?.[0]?.text || ""
       })).filter(m => m.content);
 
+      const lastUserText = [...messages].reverse().find(m => m.role === "user")?.content || "";
+      const localSafetyReply = buildLocalSafetyReply(lastUserText, firstName);
+      if (localSafetyReply) {
+        setMessages(prev => [...prev, { role: "ai", text: localSafetyReply }]);
+        return;
+      }
+
       const reply = await callAI({
         groqKey,
         nvidiaKey,
@@ -89,7 +96,8 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
       setMessages(prev => [...prev, { role: "ai", text: reply }]);
     } catch (err) {
       const hint = err.message === "429" ? " (rate limit — wait a moment)" : err.message === "503" ? " (server busy)" : "";
-      setMessages(prev => [...prev, { role: "ai", text: `AI unavailable${hint}. ${buildOfflineRescueReply(r, firstName)}` }]);
+      const lastUserText = history.map(m => (m.role === "user" ? (m.text || m.parts?.[0]?.text || "") : "")).filter(Boolean).at(-1) || "";
+      setMessages(prev => [...prev, { role: "ai", text: `AI unavailable${hint}. ${buildOfflineRescueReply(r, firstName, lastUserText)}` }]);
     } finally {
       setLoading(false);
       sendingRef.current = false;
@@ -116,7 +124,7 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
     const updated = [...messages, { role: "user", text: msg }];
     setMessages(updated);
     if (!hasKey) {
-      setMessages(prev => [...prev, { role: "ai", text: buildOfflineRescueReply(reason, firstName) }]);
+      setMessages(prev => [...prev, { role: "ai", text: buildOfflineRescueReply(reason, firstName, msg) }]);
       sendingRef.current = false;
       return;
     }
