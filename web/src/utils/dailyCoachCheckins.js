@@ -174,9 +174,15 @@ export function buildNarrowToOne(config = {}, taskId, now = Date.now()) {
 export function shouldShowReflection(now, windows, config = {}, todayStr) {
   if (config.dailyCheckinsEnabled === false) return false;
   if (config.dailyReflectionDate === todayStr) return false;
+  const snoozeUntil = config.dailyReflectionSnoozeUntil;
+  if (snoozeUntil && now.getTime() < snoozeUntil) return false;
   const lociNow = getLociNowMinutes(now, windows);
   const span = getOverallSpan(windows);
   return lociNow >= span.endMin - 30;
+}
+
+export function buildReflectionSnooze(config = {}, now = Date.now()) {
+  return { ...config, dailyReflectionSnoozeUntil: now + SNOOZE_MS, lastUpdated: now };
 }
 
 export const REFLECTION_MOODS = [
@@ -218,6 +224,7 @@ export function buildReflectionSave(config = {}, { mood, note } = {}, todayStr, 
     dailyReflectionMood: mood ?? null,
     dailyReflectionNote: typeof note === "string" ? note.trim().slice(0, 280) : "",
     dailyReflectionCompletedAt: now,
+    dailyReflectionSnoozeUntil: null,
     lastUpdated: now,
   };
 }

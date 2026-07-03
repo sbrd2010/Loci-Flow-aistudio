@@ -22,7 +22,7 @@ import {
   buildMorningCommitmentSave, buildMorningCommitmentSkip, buildMorningCommitmentSnooze,
   shouldShowMiddayCheck, buildMiddayProgressSummary, buildMiddayCheckDone, buildMiddayCheckSnooze,
   buildNarrowToOne, getValidCommittedTaskIds,
-  shouldShowReflection, buildEndOfDaySummary, buildReflectionSave, REFLECTION_MOODS,
+  shouldShowReflection, buildEndOfDaySummary, buildReflectionSave, buildReflectionSnooze, REFLECTION_MOODS,
   MAX_COMMITMENT_TASKS,
 } from "../utils/dailyCoachCheckins";
 import "../styles/focusNow.css";
@@ -444,7 +444,7 @@ export default function TodayTab({
     showAnchorSheet, showDailyCheckin, rescueActive, pendingCheckinSlot, config.anchorsSnoozeUntil,
     config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, config.morningRitualEnabled, visibilityTick,
     config.dailyCommitmentDate, config.dailyCommitmentSkippedDate, config.dailyCommitmentSnoozeUntil, config.dailyCommitmentTaskIds,
-    config.dailyMiddayCheckDate, config.dailyMiddayCheckSnoozeUntil, config.dailyReflectionDate, config.dailyCheckinsEnabled,
+    config.dailyMiddayCheckDate, config.dailyMiddayCheckSnoozeUntil, config.dailyReflectionDate, config.dailyReflectionSnoozeUntil, config.dailyCheckinsEnabled,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAnchorCheck = (id) => {
@@ -553,6 +553,11 @@ export default function TodayTab({
   // Day Close (end-of-day reflection)
   const finishReflection = () => {
     saveSubPath("config", buildReflectionSave(config, { mood: reflectionMood, note: reflectionNote }, anchorTodayStr));
+    closeDailyCheckin();
+  };
+
+  const handleReflectionSnooze = () => {
+    saveSubPath("config", buildReflectionSnooze(config));
     closeDailyCheckin();
   };
 
@@ -1182,7 +1187,7 @@ export default function TodayTab({
         return (
           <div data-testid="daily-checkin-card" style={dailyCheckinCardStyle}>
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button type="button" aria-label="Dismiss daily check-in" style={dailyCheckinDismissStyle} onClick={finishReflection}>✕</button>
+              <button type="button" aria-label="Dismiss daily check-in" style={dailyCheckinDismissStyle} onClick={handleReflectionSnooze}>✕</button>
             </div>
               <div className="morning-ritual-header">
                 <div className="morning-ritual-title">{summary.title}</div>
