@@ -129,7 +129,7 @@ const ROADMAP_HORIZONS = [
   { key: "office",   label: "Work" },
 ];
 
-export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onPark, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, onToggleMVD, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic" }) {
+export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onPark, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, onToggleMVD, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isCommitted = false }) {
   const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD, category } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const [showRoadmapOptions, setShowRoadmapOptions] = useState(false);
@@ -235,6 +235,9 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
           )}
           {isNowFocus && !isCompleted && (
             <span style={{ fontSize: "8px", fontWeight: "800", color: "var(--warning)", background: "rgba(245,158,11,0.12)", padding: "1px 5px", borderRadius: "3px", letterSpacing: "0.04em" }}>FOCUS</span>
+          )}
+          {isCommitted && !isCompleted && (
+            <span style={{ fontSize: "8px", fontWeight: "800", color: "var(--accent)", background: "var(--accent-ring, rgba(99,102,241,0.10))", padding: "1px 5px", borderRadius: "3px", letterSpacing: "0.04em" }}>🎯 TODAY'S PICK</span>
           )}
           <span className="task-title-text" title={title}><LinkifyText text={title} /></span>
         </div>

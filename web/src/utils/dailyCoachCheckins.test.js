@@ -22,6 +22,7 @@ import {
 const dt = (h, mi = 0) => new Date(2024, 5, 15, h, mi);
 const TODAY = "2024-06-15";
 
+
 describe("Morning Commitment eligibility", () => {
   const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] });
 

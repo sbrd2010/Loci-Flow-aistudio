@@ -4,7 +4,7 @@ import AddTaskDialog from "./AddTaskDialog";
 import FocusModePage from "./FocusModePage";
 import RescueMode from "./RescueMode";
 import { safeUUID } from "../utils/uuid";
-import { buildToggleCompletedTasks } from "../utils/taskOps";
+import { buildToggleCompletedTasks, byPriorityThenOrder } from "../utils/taskOps";
 import { buildParkTaskTasks } from "../utils/coachActions";
 import { shouldStopFocusOnComplete } from "../utils/focusSession";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
@@ -93,6 +93,26 @@ export default function TodayTab({
   const [middayNarrowPicker, setMiddayNarrowPicker] = useState(false);
   const [reflectionMood, setReflectionMood] = useState(null);
   const [reflectionNote, setReflectionNote] = useState("");
+
+  const dailyCheckinCardStyle = {
+    background: "var(--accent-light)",
+    border: "1px solid var(--accent)",
+    borderRadius: "var(--radius-sm)",
+    padding: "12px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  };
+
+  const dailyCheckinDismissStyle = {
+    background: "none",
+    border: "none",
+    color: "var(--text-muted)",
+    fontSize: "14px",
+    cursor: "pointer",
+    padding: "0 2px",
+    lineHeight: 1,
+  };
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -422,7 +442,7 @@ export default function TodayTab({
   }, [
     anchorTodayStr, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, isAddTaskDialogOpen,
     showAnchorSheet, showDailyCheckin, rescueActive, pendingCheckinSlot, config.anchorsSnoozeUntil,
-    config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, config.morningRitualEnabled, visibilityTick,
+    config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, config.morningRitualEnabled, config.dailyCheckinsEnabled, visibilityTick,
     config.dailyCommitmentDate, config.dailyCommitmentSkippedDate, config.dailyCommitmentSnoozeUntil, config.dailyCommitmentTaskIds,
     config.dailyMiddayCheckDate, config.dailyMiddayCheckSnoozeUntil, config.dailyReflectionDate, config.dailyCheckinsEnabled,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -665,6 +685,7 @@ export default function TodayTab({
   };
 
   const todayTasksAll = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isParked);
+  const committedTaskIds = new Set(config.dailyCommitmentDate === anchorTodayStr ? getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds) : []);
   const pinnedFocusTask = todayTasksAll.find(t => t.isNowFocus && !t.isCompleted && !t.isDeleted) || null;
   const _d = new Date();
   const _todayStr = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, "0")}-${String(_d.getDate()).padStart(2, "0")}`;
@@ -1058,6 +1079,155 @@ export default function TodayTab({
         </div>
       )}
 
+      {/* ── Today's Commitment (morning check-in) ─────────────────── */}
+      {showDailyCheckin && dailyCheckinSlot === "morning" && (() => {
+        const todayIncompleteTasks = todayTasksAll.filter(t => !t.isCompleted).sort(byPriorityThenOrder);
+        const prompt = buildMorningCommitmentPrompt(todayIncompleteTasks);
+        const canSave = canSaveMorningCommitment(commitmentSelection, todayIncompleteTasks.length);
+        return (
+          <div data-testid="daily-checkin-card" style={dailyCheckinCardStyle}>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button type="button" aria-label="Dismiss daily check-in" style={dailyCheckinDismissStyle} onClick={handleCommitmentLater}>✕</button>
+            </div>
+              <div className="morning-ritual-header">
+                <div className="morning-ritual-title">{prompt.title}</div>
+                <div className="morning-ritual-line">{prompt.line}</div>
+              </div>
+              {prompt.mode === "choose" && (
+                <div className="anchor-chips morning-ritual-chips">
+                  {todayIncompleteTasks.map(task => {
+                    const checked = commitmentSelection.includes(task.uuid);
+                    return (
+                      <button
+                        key={task.uuid}
+                        className={`anchor-chip${checked ? " anchor-chip--checked" : ""}`}
+                        onClick={() => toggleCommitmentTask(task.uuid)}
+                      >
+                        {checked ? "✓ " : ""}{task.title}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="morning-ritual-actions">
+                <button className="morning-ritual-btn-primary" onClick={handleSaveCommitment} disabled={!canSave}>
+                  {prompt.mode === "empty" ? "Got it" : "Save commitment"}
+                </button>
+                <div className="morning-ritual-actions-row">
+                  <button className="morning-ritual-btn-ghost" onClick={handleCommitmentLater}>Later</button>
+                  <button className="morning-ritual-btn-ghost" onClick={handleCommitmentSkip}>Skip today</button>
+                </div>
+              </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Progress Check (midday check-in) ──────────────────────── */}
+      {showDailyCheckin && dailyCheckinSlot === "midday" && (() => {
+        const summary = buildMiddayProgressSummary(tasks, config, new Date(), windows);
+        const remainingCommitted = summary.committedTasks.filter(t => !t.isCompleted);
+        return (
+          <div data-testid="daily-checkin-card" style={dailyCheckinCardStyle}>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button type="button" aria-label="Dismiss daily check-in" style={dailyCheckinDismissStyle} onClick={handleMiddaySnooze}>✕</button>
+            </div>
+              <div className="morning-ritual-header">
+                <div className="morning-ritual-title">{summary.title}</div>
+                {summary.countLine && <div className="morning-ritual-line">{summary.countLine}</div>}
+                <div className="morning-ritual-line">{summary.timeLine}</div>
+              </div>
+              {middayNarrowPicker ? (
+                <div className="anchor-chips morning-ritual-chips">
+                  {remainingCommitted.map(task => (
+                    <button key={task.uuid} className="anchor-chip" onClick={() => handleNarrowToOne(task.uuid)}>
+                      {task.title}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="morning-ritual-nudge">{summary.line}</div>
+              )}
+              <div className="morning-ritual-actions">
+                {middayNarrowPicker ? (
+                  <button className="morning-ritual-btn-ghost" onClick={() => setMiddayNarrowPicker(false)}>Back</button>
+                ) : (
+                  <>
+                    <button className="morning-ritual-btn-primary" onClick={handleMiddayKeepGoing}>
+                      {summary.total === 0 ? "Got it" : "Keep going"}
+                    </button>
+                    {remainingCommitted.length > 1 && (
+                      <div className="morning-ritual-actions-row">
+                        <button className="morning-ritual-btn-ghost" onClick={() => setMiddayNarrowPicker(true)}>Narrow to one</button>
+                      </div>
+                    )}
+                    <div className="morning-ritual-actions-row">
+                      <button className="morning-ritual-btn-ghost" onClick={handleMiddayOpenFocus}>Open One Task Focus</button>
+                    </div>
+                    <div className="morning-ritual-actions-row">
+                      <button className="morning-ritual-btn-ghost" onClick={handleMiddayTalkToCoach}>Talk to Coach</button>
+                    </div>
+                  </>
+                )}
+              </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Day Close (end-of-day reflection) ─────────────────────── */}
+      {showDailyCheckin && dailyCheckinSlot === "reflection" && (() => {
+        const summary = buildEndOfDaySummary(tasks, config, anchorTodayStr);
+        const committedIds = config.dailyCommitmentDate === anchorTodayStr ? getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds) : [];
+        const breakdownTask = committedIds.map(id => todayTasksAll.find(t => t.uuid === id)).find(t => t && !t.isCompleted)
+          || todayTasksAll.find(t => !t.isCompleted) || null;
+        return (
+          <div data-testid="daily-checkin-card" style={dailyCheckinCardStyle}>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button type="button" aria-label="Dismiss daily check-in" style={dailyCheckinDismissStyle} onClick={finishReflection}>✕</button>
+            </div>
+              <div className="morning-ritual-header">
+                <div className="morning-ritual-title">{summary.title}</div>
+                <div className="morning-ritual-line">{summary.verdict}</div>
+              </div>
+              <div className="morning-ritual-nudge">
+                {summary.committedTotal > 0 ? `Commitment: ${summary.committedDone} of ${summary.committedTotal} done. ` : ""}
+                {`Completed today: ${summary.totalCompletedToday}.`}
+                {summary.hasKeyDeadline ? (summary.deadlineMoveDone ? " Key deadline move: done." : " Key deadline move: not yet.") : ""}
+              </div>
+              <div className="morning-ritual-nudge">How does today feel?</div>
+              <div className="anchor-chips morning-ritual-chips">
+                {REFLECTION_MOODS.map(m => (
+                  <button
+                    key={m.key}
+                    className={`anchor-chip${reflectionMood === m.key ? " anchor-chip--checked" : ""}`}
+                    onClick={() => setReflectionMood(m.key)}
+                  >
+                    {reflectionMood === m.key ? "✓ " : ""}{m.label}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                className="daily-checkin-note"
+                placeholder="One sentence for tomorrow (optional)"
+                value={reflectionNote}
+                maxLength={280}
+                onChange={e => setReflectionNote(e.target.value)}
+              />
+              <div className="morning-ritual-actions">
+                <button className="morning-ritual-btn-primary" onClick={finishReflection}>Done</button>
+                {breakdownTask && (
+                  <div className="morning-ritual-actions-row">
+                    <button className="morning-ritual-btn-ghost" onClick={() => handleReflectionBreakdown(breakdownTask)}>Break one task down</button>
+                  </div>
+                )}
+                <div className="morning-ritual-actions-row">
+                  <button className="morning-ritual-btn-ghost" onClick={handleReflectionCleanSlate}>Clean Slate</button>
+                  <button className="morning-ritual-btn-ghost" onClick={handleReflectionTalkToCoach}>Talk to Coach</button>
+                </div>
+              </div>
+          </div>
+        );
+      })()}
+
       {/* ── Today's Focus — tasks dominate the screen */}
       <section className="tasks-section" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
         <div className="section-header" style={{ gap: "8px", alignItems: "center", justifyContent: "flex-start" }}>
@@ -1197,6 +1367,7 @@ export default function TodayTab({
                 breakdownError={breakdownErrorUuid === pinnedFocusTask.uuid}
                 breakdownNoKey={breakdownNoKeyUuid === pinnedFocusTask.uuid}
                 onToggleMVD={handleToggleMVD}
+                isCommitted={committedTaskIds.has(pinnedFocusTask.uuid)}
               />
               <button
                 type="button"
@@ -1401,6 +1572,7 @@ export default function TodayTab({
                             dragHandleAttributes={dragHandleAttributes}
                             dragActivatorRef={dragActivatorRef}
                             interactionStyle={taskRowInteractionStyle}
+                            isCommitted={committedTaskIds.has(task.uuid)}
                           />
                         )}
                       </SortableTaskItem>
@@ -1579,152 +1751,6 @@ export default function TodayTab({
                 <button className="anchor-btn-ghost" onClick={handleAnchorLater}>Later</button>
                 <button className="anchor-btn-ghost" onClick={handleAnchorSkipToday}>Skip today</button>
                 <button className="anchor-btn-ghost" onClick={() => { setShowAnchorSheet(false); onOpenMindBox?.("anchors"); }}>Manage</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── Today's Commitment (morning check-in) ─────────────────── */}
-      {showDailyCheckin && dailyCheckinSlot === "morning" && (() => {
-        const todayIncompleteTasks = todayTasksAll.filter(t => !t.isCompleted);
-        const prompt = buildMorningCommitmentPrompt(todayIncompleteTasks);
-        const canSave = canSaveMorningCommitment(commitmentSelection, todayIncompleteTasks.length);
-        return (
-          <div className="focus-now-backdrop focus-now-backdrop--center" onClick={handleCommitmentLater}>
-            <div className="morning-ritual-card" onClick={e => e.stopPropagation()}>
-              <div className="morning-ritual-header">
-                <div className="morning-ritual-title">{prompt.title}</div>
-                <div className="morning-ritual-line">{prompt.line}</div>
-              </div>
-              {prompt.mode === "choose" && (
-                <div className="anchor-chips morning-ritual-chips">
-                  {todayIncompleteTasks.map(task => {
-                    const checked = commitmentSelection.includes(task.uuid);
-                    return (
-                      <button
-                        key={task.uuid}
-                        className={`anchor-chip${checked ? " anchor-chip--checked" : ""}`}
-                        onClick={() => toggleCommitmentTask(task.uuid)}
-                      >
-                        {checked ? "✓ " : ""}{task.title}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="morning-ritual-actions">
-                <button className="morning-ritual-btn-primary" onClick={handleSaveCommitment} disabled={!canSave}>
-                  {prompt.mode === "empty" ? "Got it" : "Save commitment"}
-                </button>
-                <div className="morning-ritual-actions-row">
-                  <button className="morning-ritual-btn-ghost" onClick={handleCommitmentLater}>Later</button>
-                  <button className="morning-ritual-btn-ghost" onClick={handleCommitmentSkip}>Skip today</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── Progress Check (midday check-in) ──────────────────────── */}
-      {showDailyCheckin && dailyCheckinSlot === "midday" && (() => {
-        const summary = buildMiddayProgressSummary(tasks, config, new Date(), windows);
-        const remainingCommitted = summary.committedTasks.filter(t => !t.isCompleted);
-        return (
-          <div className="focus-now-backdrop focus-now-backdrop--center" onClick={handleMiddaySnooze}>
-            <div className="morning-ritual-card" onClick={e => e.stopPropagation()}>
-              <div className="morning-ritual-header">
-                <div className="morning-ritual-title">{summary.title}</div>
-                {summary.countLine && <div className="morning-ritual-line">{summary.countLine}</div>}
-                <div className="morning-ritual-line">{summary.timeLine}</div>
-              </div>
-              {middayNarrowPicker ? (
-                <div className="anchor-chips morning-ritual-chips">
-                  {remainingCommitted.map(task => (
-                    <button key={task.uuid} className="anchor-chip" onClick={() => handleNarrowToOne(task.uuid)}>
-                      {task.title}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="morning-ritual-nudge">{summary.line}</div>
-              )}
-              <div className="morning-ritual-actions">
-                {middayNarrowPicker ? (
-                  <button className="morning-ritual-btn-ghost" onClick={() => setMiddayNarrowPicker(false)}>Back</button>
-                ) : (
-                  <>
-                    <button className="morning-ritual-btn-primary" onClick={handleMiddayKeepGoing}>
-                      {summary.total === 0 ? "Got it" : "Keep going"}
-                    </button>
-                    {remainingCommitted.length > 1 && (
-                      <div className="morning-ritual-actions-row">
-                        <button className="morning-ritual-btn-ghost" onClick={() => setMiddayNarrowPicker(true)}>Narrow to one</button>
-                      </div>
-                    )}
-                    <div className="morning-ritual-actions-row">
-                      <button className="morning-ritual-btn-ghost" onClick={handleMiddayOpenFocus}>Open One Task Focus</button>
-                    </div>
-                    <div className="morning-ritual-actions-row">
-                      <button className="morning-ritual-btn-ghost" onClick={handleMiddayTalkToCoach}>Talk to Coach</button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── Day Close (end-of-day reflection) ─────────────────────── */}
-      {showDailyCheckin && dailyCheckinSlot === "reflection" && (() => {
-        const summary = buildEndOfDaySummary(tasks, config, anchorTodayStr);
-        const committedIds = config.dailyCommitmentDate === anchorTodayStr ? getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds) : [];
-        const breakdownTask = committedIds.map(id => todayTasksAll.find(t => t.uuid === id)).find(t => t && !t.isCompleted)
-          || todayTasksAll.find(t => !t.isCompleted) || null;
-        return (
-          <div className="focus-now-backdrop focus-now-backdrop--center" onClick={finishReflection}>
-            <div className="morning-ritual-card" onClick={e => e.stopPropagation()}>
-              <div className="morning-ritual-header">
-                <div className="morning-ritual-title">{summary.title}</div>
-                <div className="morning-ritual-line">{summary.verdict}</div>
-              </div>
-              <div className="morning-ritual-nudge">
-                {summary.committedTotal > 0 ? `Commitment: ${summary.committedDone} of ${summary.committedTotal} done. ` : ""}
-                {`Completed today: ${summary.totalCompletedToday}.`}
-                {summary.hasKeyDeadline ? (summary.deadlineMoveDone ? " Key deadline move: done." : " Key deadline move: not yet.") : ""}
-              </div>
-              <div className="morning-ritual-nudge">How does today feel?</div>
-              <div className="anchor-chips morning-ritual-chips">
-                {REFLECTION_MOODS.map(m => (
-                  <button
-                    key={m.key}
-                    className={`anchor-chip${reflectionMood === m.key ? " anchor-chip--checked" : ""}`}
-                    onClick={() => setReflectionMood(m.key)}
-                  >
-                    {reflectionMood === m.key ? "✓ " : ""}{m.label}
-                  </button>
-                ))}
-              </div>
-              <textarea
-                className="daily-checkin-note"
-                placeholder="One sentence for tomorrow (optional)"
-                value={reflectionNote}
-                maxLength={280}
-                onChange={e => setReflectionNote(e.target.value)}
-              />
-              <div className="morning-ritual-actions">
-                <button className="morning-ritual-btn-primary" onClick={finishReflection}>Done</button>
-                {breakdownTask && (
-                  <div className="morning-ritual-actions-row">
-                    <button className="morning-ritual-btn-ghost" onClick={() => handleReflectionBreakdown(breakdownTask)}>Break one task down</button>
-                  </div>
-                )}
-                <div className="morning-ritual-actions-row">
-                  <button className="morning-ritual-btn-ghost" onClick={handleReflectionCleanSlate}>Clean Slate</button>
-                  <button className="morning-ritual-btn-ghost" onClick={handleReflectionTalkToCoach}>Talk to Coach</button>
-                </div>
               </div>
             </div>
           </div>
