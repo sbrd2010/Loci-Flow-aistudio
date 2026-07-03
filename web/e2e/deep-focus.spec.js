@@ -107,3 +107,40 @@ test("mobile reliability: Rescue Mode is reachable from Today and from inside De
   await overlay.getByLabel("Exit focus mode").click();
   await expect(overlay).not.toBeVisible({ timeout: 5_000 });
 });
+
+test("mobile reliability: Rescue chat never reaches the AI provider on crisis language", async ({ page }) => {
+  // A fake key makes hasKey true so Rescue chat takes the live-AI path (aiCall),
+  // not the no-key offline path — this is the code path the safety short-circuit
+  // in RescueMode.jsx's aiCall() must guard, so it's the one worth regression-testing.
+  await page.addInitScript(() => {
+    window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key");
+  });
+
+  let groqCalled = false;
+  await page.route("https://api.groq.com/**", async (route) => {
+    groqCalled = true;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { content: "Let's find one small step together." } }] }),
+    });
+  });
+
+  await enterDemo(page);
+
+  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
+  await page.getByText("Anxious / can't start").click();
+  await page.getByText("Talk it through").click();
+
+  // Opening chat sends a non-crisis opener ("I'm stuck and need help.") that legitimately
+  // reaches the AI — wait for that real call to land before testing the safety short-circuit.
+  await expect.poll(() => groqCalled, { timeout: 8_000 }).toBe(true);
+  groqCalled = false;
+
+  await page.getByPlaceholder(/Tell me what's going on/).fill("I want to kill myself");
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByText(/emergency services/i)).toBeVisible({ timeout: 8_000 });
+  expect(groqCalled).toBe(false);
+});
