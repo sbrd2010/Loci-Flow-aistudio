@@ -75,7 +75,7 @@ function IconChevronRight() {
   );
 }
 
-export default function MindBoxTab({ payload, savePayload, saveSubPath, userProfile, initialPanel, onOpenRoadmapInbox }) {
+export default function MindBoxTab({ payload, savePayload, saveSubPath, userProfile, initialPanel, onOpenRoadmapInbox, isSyncingFromCache = false, syncWarning = null }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -968,6 +968,9 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
           task={rescueTask}
           allTasks={tasks}
           firstName={(config.userName || "").split(" ")[0] || "friend"}
+          config={config}
+          entryPoint="mindbox"
+          includeMemory={!(isSyncingFromCache || syncWarning === "offline")}
           apiKey={getAIKeys().geminiKey}
           onDismiss={() => setRescueActive(false)}
           onAccept={() => {

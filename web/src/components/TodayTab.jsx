@@ -67,6 +67,7 @@ export default function TodayTab({
   selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
   isSyncingFromCache = false,
   pendingCheckinSlot, setPendingCheckinSlot,
+  syncWarning = null,
 }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
   const taskRowInteractionStyle = config.taskRowInteractionStyle === "dragAnywhere" ? "dragAnywhere" : "classic";
@@ -78,6 +79,7 @@ export default function TodayTab({
   const moreMenuRef = useRef(null);
   const [rescueActive, setRescueActive] = useState(false);
   const [rescueTask, setRescueTask] = useState(null);
+  const [rescueEntryPoint, setRescueEntryPoint] = useState("today");
   const [isMVDMode, setIsMVDMode] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [focusNowMode, setFocusNowMode] = useState(false);
@@ -121,11 +123,12 @@ export default function TodayTab({
   );
 
   const openRescueMode = () => {
-    if (isFocusMode && activeTask) {
+    if ((isFocusMode || isTimerRunning || focusSessionActive) && activeTask) {
       // Opened from inside an active Deep Focus session (the Stuck? button) —
       // rescue the task actually being focused on, even if it isn't in
       // todayTasksAll (e.g. pinned via a Coach action without moving horizons).
       setRescueTask(activeTask);
+      setRescueEntryPoint("deep_focus");
     } else {
       // Opened from the Today-tab chip, with no session context — restrict
       // candidates to today's visible, active tasks (matching pinnedFocusTask's
@@ -134,6 +137,7 @@ export default function TodayTab({
       const candidates = todayTasksAll.filter(t => !t.isCompleted);
       const pinned = candidates.find(t => t.isNowFocus);
       setRescueTask(pinned || candidates[0] || null);
+      setRescueEntryPoint("today");
     }
     setRescueActive(true);
     // isFocusMode only reflects whether the full-screen overlay is open —
@@ -1827,6 +1831,9 @@ export default function TodayTab({
           task={rescueTask}
           allTasks={tasks}
           firstName={(config.userName || "").split(" ")[0] || "friend"}
+          config={config}
+          entryPoint={rescueEntryPoint}
+          includeMemory={!(isSyncingFromCache || syncWarning === "offline")}
           onDismiss={() => setRescueActive(false)}
           onAccept={() => {
             setRescueActive(false);
