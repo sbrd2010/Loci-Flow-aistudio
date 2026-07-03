@@ -15,12 +15,14 @@ import {
   shouldShowReflection,
   buildEndOfDaySummary,
   buildReflectionSave,
+  buildReflectionSnooze,
   getLocalCheckinLine,
   pickCheckinLine,
 } from "./dailyCoachCheckins";
 
 const dt = (h, mi = 0) => new Date(2024, 5, 15, h, mi);
 const TODAY = "2024-06-15";
+
 
 describe("Morning Commitment eligibility", () => {
   const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] });
@@ -262,6 +264,21 @@ describe("End-of-Day Reflection eligibility", () => {
     expect(shouldShowReflection(dt(20, 0), windows, { dailyCheckinsEnabled: true }, TODAY)).toBe(true);
     expect(shouldShowReflection(dt(20, 0), windows, {}, TODAY)).toBe(true);
   });
+
+  it("15. respects the reflection snooze, mirroring the morning/midday snooze pattern", () => {
+    const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] });
+    const config = { dailyReflectionSnoozeUntil: dt(21, 0).getTime() };
+    expect(shouldShowReflection(dt(20, 30), windows, config, TODAY)).toBe(false);
+    expect(shouldShowReflection(dt(21, 0), windows, config, TODAY)).toBe(true);
+  });
+});
+
+describe("buildReflectionSnooze", () => {
+  it("sets a snooze window in the future without marking the reflection done", () => {
+    const next = buildReflectionSnooze({}, 1000);
+    expect(next.dailyReflectionSnoozeUntil).toBeGreaterThan(1000);
+    expect(next.dailyReflectionDate).toBeUndefined();
+  });
 });
 
 describe("buildEndOfDaySummary", () => {
@@ -323,6 +340,11 @@ describe("buildReflectionSave", () => {
   it("defaults note to an empty string when omitted", () => {
     const next = buildReflectionSave({}, { mood: "better" }, TODAY, 1000);
     expect(next.dailyReflectionNote).toBe("");
+  });
+
+  it("clears any pending reflection snooze once actually completed", () => {
+    const next = buildReflectionSave({ dailyReflectionSnoozeUntil: 5000 }, { mood: "better" }, TODAY, 1000);
+    expect(next.dailyReflectionSnoozeUntil).toBe(null);
   });
 });
 

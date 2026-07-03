@@ -572,7 +572,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
                 🎯 Daily Coach Check-ins
               </span>
               <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                Three once-a-day prompts on Today: pick your non-negotiables in the morning, a midday progress check, and an end-of-day reflection. Turn off if these feel like noise.
+                Three lightweight, dismissible cards on Today: pick your non-negotiables in the morning, a midday progress check, and an end-of-day reflection. Turn off if these feel like noise.
               </p>
             </div>
             <input type="checkbox" className="pill-toggle" checked={editedDailyCheckinsEnabled} readOnly />
