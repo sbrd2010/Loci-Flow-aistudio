@@ -968,6 +968,8 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
           task={rescueTask}
           allTasks={tasks}
           firstName={(config.userName || "").split(" ")[0] || "friend"}
+          config={config}
+          entryPoint="mindbox"
           apiKey={getAIKeys().geminiKey}
           onDismiss={() => setRescueActive(false)}
           onAccept={() => {

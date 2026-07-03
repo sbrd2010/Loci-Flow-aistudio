@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { callAI, getAIKeys, buildProviderOrder } from "../utils/aiCall";
+import { buildOfflineRescueReply, buildRescuePrompt } from "../utils/rescueCoachPrompt";
 
 const REASONS = [
   { id: "overwhelmed", emoji: "😵", label: "Too much going on",     color: "#f59e0b" },
@@ -34,42 +35,11 @@ const OPTIONS = {
 
 const TIMER_DURATIONS = { break: 5 * 60, water: 2 * 60, breathe: 2 * 60, pomodoro: 25 * 60 };
 
-function buildRescueTaskList(allTasks) {
-  const active = (allTasks || []).filter(t => !t.isDeleted && !t.isCompleted);
-  if (active.length === 0) return null;
-  const todayTasks = active.filter(t => t.horizonLevel === "today");
-  const focusTask = todayTasks.find(t => t.isNowFocus);
-  const lines = [];
-  if (focusTask) lines.push(`NOW FOCUS: [${focusTask.priority}] ${focusTask.title}`);
-  const others = todayTasks.filter(t => !t.isNowFocus).slice(0, 5);
-  if (others.length) lines.push(`TODAY: ${others.map(t => `[${t.priority}] ${t.title}`).join(" | ")}`);
-  const weekTasks = active.filter(t => t.horizonLevel === "week").slice(0, 3);
-  if (weekTasks.length) lines.push(`WEEK: ${weekTasks.map(t => t.title).join(" | ")}`);
-  return lines.join("\n");
-}
-
-function getRescuePrompt(reason, firstName, task, allTasks) {
-  const name = firstName || "friend";
-  const taskList = buildRescueTaskList(allTasks);
-  const ctx = task
-    ? `The user is stuck on: "${task.title}".`
-    : taskList
-      ? `The user has these tasks in Loci Focus:\n${taskList}`
-      : "The user has tasks to do but is stuck.";
-  const base = `You are a compassionate focus and momentum coach embedded in Loci Focus. ${ctx} Keep ALL replies under 3 sentences. Be warm, not clinical. No bullet lists. Ask at most one short question per message. Address the user as ${name}. You CAN see their tasks — reference them by name. Never use the word "ADHD" in your response — use: overwhelm, execution support, momentum, micro-step, low-energy mode, reset.`;
-  return {
-    overwhelmed: `${base} ${name} is overwhelmed. Pick ONE specific task from their list above and name the single door-handle step (30 seconds max to start).`,
-    tired: `${base} ${name} is in low-energy mode. Validate it — this is completely real and valid. Suggest a physical reset (water, 2 deep breaths) then the easiest task on their list.`,
-    anxious: `${base} ${name} is anxious and frozen. Validate in one sentence. Ask one gentle question like "What feels scary about starting [task name]?" — nothing more.`,
-    distracted: `${base} ${name} got distracted — completely understandable. Be non-judgmental. Re-anchor: "You were working on [task name] — open it and read the first line right now."`,
-  }[reason] || base;
-}
-
 function fmt(secs) {
   return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
 }
 
-export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstName, allTasks }) {
+export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstName, allTasks, config = {}, entryPoint = "today", includeMemory = true }) {
   const [step, setStep]       = useState("triage"); // triage | options | chat | timer
   const [reason, setReason]   = useState(null);
   const [messages, setMessages] = useState([]);
@@ -112,14 +82,14 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
         cerebrasKey,
         zaiKey,
         geminiKey: effectiveGeminiKey,
-        systemPrompt: getRescuePrompt(r, firstName, task, allTasks),
+        systemPrompt: buildRescuePrompt({ reason: r, firstName, task, allTasks, config, entryPoint, includeMemory }),
         messages: messages.length > 0 ? messages : [{ role: "user", content: "I'm stuck and need help." }],
         maxTokens: 200
       });
       setMessages(prev => [...prev, { role: "ai", text: reply }]);
     } catch (err) {
       const hint = err.message === "429" ? " (rate limit — wait a moment)" : err.message === "503" ? " (server busy)" : "";
-      setMessages(prev => [...prev, { role: "ai", text: `AI unavailable${hint}. ${firstName || "friend"}, what's one tiny step you can take right now?` }]);
+      setMessages(prev => [...prev, { role: "ai", text: `AI unavailable${hint}. ${buildOfflineRescueReply(r, firstName)}` }]);
     } finally {
       setLoading(false);
       sendingRef.current = false;
@@ -131,7 +101,7 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
     chatStarted.current = true;
     setStep("chat");
     if (!hasKey) {
-      setMessages([{ role: "ai", text: `Hey ${firstName || "friend"}, I'm here with you. What's going on right now?` }]);
+      setMessages([{ role: "ai", text: buildOfflineRescueReply(r, firstName) }]);
       return;
     }
     sendingRef.current = true;
@@ -145,7 +115,11 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
     setInput("");
     const updated = [...messages, { role: "user", text: msg }];
     setMessages(updated);
-    if (!hasKey) { sendingRef.current = false; return; }
+    if (!hasKey) {
+      setMessages(prev => [...prev, { role: "ai", text: buildOfflineRescueReply(reason, firstName) }]);
+      sendingRef.current = false;
+      return;
+    }
     await aiCall(reason, updated);
   };
 
