@@ -9,7 +9,7 @@ const ENTRY_POINT_LABELS = {
   mindbox: "Mind Box",
 };
 
-export function buildRescueTaskList(allTasks) {
+export function buildRescueTaskList(allTasks, { entryPoint = "today", focusTask = null } = {}) {
   const active = (allTasks || []).filter(t => !t.isDeleted && !t.isCompleted && !t.isParked);
   if (active.length === 0) return null;
 
@@ -25,14 +25,16 @@ export function buildRescueTaskList(allTasks) {
   };
 
   const todayTasks = active.filter(t => t.horizonLevel === "today");
-  const focusTask = active.find(t => t.isNowFocus);
+  const visibleFocusTask = entryPoint === "deep_focus"
+    ? (focusTask || active.find(t => t.isNowFocus))
+    : todayTasks.find(t => t.isNowFocus);
   const lines = [];
-  if (focusTask) lines.push(`NOW FOCUS: ${describeTask(focusTask)}`);
+  if (visibleFocusTask) lines.push(`NOW FOCUS: ${describeTask(visibleFocusTask)}`);
 
-  const others = todayTasks.filter(t => !focusTask || t.uuid !== focusTask.uuid).slice(0, 5);
+  const others = todayTasks.filter(t => !visibleFocusTask || t.uuid !== visibleFocusTask.uuid).slice(0, 5);
   if (others.length) lines.push(`TODAY: ${others.map(describeTask).join(" | ")}`);
 
-  const weekTasks = active.filter(t => t.horizonLevel === "week" && (!focusTask || t.uuid !== focusTask.uuid)).slice(0, 3);
+  const weekTasks = active.filter(t => t.horizonLevel === "week" && (!visibleFocusTask || t.uuid !== visibleFocusTask.uuid)).slice(0, 3);
   if (weekTasks.length) lines.push(`WEEK: ${weekTasks.map(describeTask).join(" | ")}`);
 
   return lines.join("\n");
@@ -72,7 +74,7 @@ function buildReasonInstruction(reason, firstName, entryPoint) {
 
 export function buildRescuePrompt({ reason, firstName = "friend", task = null, allTasks = [], entryPoint = "today", config = {}, includeMemory = true }) {
   const name = firstName || "friend";
-  const taskList = buildRescueTaskList(allTasks);
+  const taskList = buildRescueTaskList(allTasks, { entryPoint, focusTask: task });
   const entryContext = buildEntryPointContext(entryPoint, task, taskList);
   const personaInstruction = buildPersonaInstruction(config, name);
   const profileContext = buildProfileContext(config);

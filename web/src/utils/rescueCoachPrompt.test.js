@@ -47,6 +47,25 @@ describe("rescueCoachPrompt", () => {
     expect(out).not.toContain("Parked backlog item");
   });
 
+
+  it("does not promote hidden non-Today pinned tasks as Now Focus for Today rescues", () => {
+    const out = buildRescueTaskList([
+      { uuid: "today", title: "Visible today task", horizonLevel: "today" },
+      { uuid: "week-focus", title: "Hidden week focus", horizonLevel: "week", isNowFocus: true },
+    ], { entryPoint: "today" });
+    expect(out).not.toContain("NOW FOCUS: Hidden week focus");
+    expect(out).toContain("TODAY: Visible today task");
+    expect(out).toContain("WEEK: Hidden week focus");
+  });
+
+  it("uses the active task as Now Focus for Deep Focus rescues even outside Today", () => {
+    const out = buildRescueTaskList([
+      { uuid: "deep", title: "Deep focus week task", horizonLevel: "week" },
+      { uuid: "today", title: "Visible today task", horizonLevel: "today" },
+    ], { entryPoint: "deep_focus", focusTask: { uuid: "deep", title: "Deep focus week task", horizonLevel: "week" } });
+    expect(out).toContain("NOW FOCUS: Deep focus week task");
+  });
+
   it("includes safety/support-mode instructions for anxious rescue", () => {
     const prompt = buildRescuePrompt({
       reason: "anxious",
