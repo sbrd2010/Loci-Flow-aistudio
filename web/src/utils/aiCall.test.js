@@ -86,6 +86,19 @@ function groqEmpty(finishReason = "stop") {
   };
 }
 
+// A non-empty reply cut off by finish_reason "length" — the literal
+// mid-sentence-truncation symptom, distinct from a fully empty reply.
+function truncatedReply(content) {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      choices: [{ message: { content }, finish_reason: "length" }],
+      usage: { prompt_tokens: 50, completion_tokens: 120, total_tokens: 170 },
+    }),
+  };
+}
+
 function zaiOk(content = "Z.ai reply.") {
   return {
     ok: true,
@@ -233,6 +246,17 @@ describe("AI call resilience", () => {
     // baseRequest's maxTokens (120) doubles to 240 — below the 1000-token
     // floor needed for gpt-oss-120b's reasoning overhead to actually recover.
     expect(retryBody.max_tokens).toBe(1000);
+  });
+
+  it("retries Groq when the reply is non-empty but truncated (finish_reason length)", async () => {
+    fetch
+      .mockResolvedValueOnce(truncatedReply("Sounds like a swirl of little pulls. How about a quick"))
+      .mockResolvedValueOnce(groqOk("Sounds like a swirl of little pulls. How about a quick two-minute reset?"));
+
+    const reply = await callAI(baseRequest());
+
+    expect(reply).toBe("Sounds like a swirl of little pulls. How about a quick two-minute reset?");
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("does not retry Groq when content is empty but finish_reason is not length", async () => {
@@ -482,6 +506,18 @@ describe("AI call resilience", () => {
     // baseRequest's maxTokens (120) doubles to 240 — below the 1000-token
     // floor needed for gpt-oss-120b's reasoning overhead to actually recover.
     expect(retryBody.max_completion_tokens).toBe(1000);
+  });
+
+  it("retries Cerebras when the reply is non-empty but truncated (finish_reason length)", async () => {
+    storage.setItem("loci_provider_pref", "cerebras");
+    fetch
+      .mockResolvedValueOnce(truncatedReply("Sounds like a swirl of little pulls. How about a quick"))
+      .mockResolvedValueOnce(cerebrasOk("Sounds like a swirl of little pulls. How about a quick two-minute reset?"));
+
+    const reply = await callAI(baseRequest({ groqKey: "", cerebrasKey: "test-cerebras-key" }));
+
+    expect(reply).toBe("Sounds like a swirl of little pulls. How about a quick two-minute reset?");
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("does not retry Cerebras when content is empty but finish_reason is not length", async () => {

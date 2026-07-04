@@ -229,7 +229,11 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens, reasoningEff
   const initialBudget = maxTokens ?? 300;
   let { reply, usage, finishReason, data, message } = await requestGroq(groqKey, systemPrompt, messages, initialBudget, reasoningEffort);
 
-  if (!reply && finishReason === "length") {
+  // Retry on finish_reason "length" alone, not just an empty reply — a
+  // non-empty-but-truncated reply (hidden reasoning ate most, not all, of
+  // the budget) is the literal mid-sentence-cutoff symptom this exists to
+  // fix, and it would otherwise be returned as if it were a complete reply.
+  if (finishReason === "length") {
     const retryBudget = Math.min(Math.max(initialBudget * 2, 1000), GROQ_RETRY_TOKEN_CAP);
     if (retryBudget > initialBudget) {
       ({ reply, usage, finishReason, data, message } = await requestGroq(groqKey, systemPrompt, messages, retryBudget, reasoningEffort));
@@ -317,7 +321,11 @@ async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens, reas
   const initialBudget = maxTokens ?? 300;
   let { reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, initialBudget, reasoningEffort);
 
-  if (!reply && finishReason === "length") {
+  // Retry on finish_reason "length" alone, not just an empty reply — a
+  // non-empty-but-truncated reply (hidden reasoning ate most, not all, of
+  // the budget) is a mid-sentence cutoff, not a complete answer, and would
+  // otherwise be returned as if it were done.
+  if (finishReason === "length") {
     // A small initial budget (e.g. 220-300) can leave too little room for
     // gpt-oss-120b's hidden reasoning even after doubling, so the retry
     // budget has a 1000-token floor in addition to the doubling. Only retry
