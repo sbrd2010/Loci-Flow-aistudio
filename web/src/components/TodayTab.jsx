@@ -729,6 +729,36 @@ export default function TodayTab({
   const formatTimerMinutes = Math.floor(timerSecondsLeft / 60);
   const formatTimerSeconds = String(timerSecondsLeft % 60).padStart(2, "0");
 
+
+  const setRescueTaskAsNowFocus = ({ close = false } = {}) => {
+    if (close) setRescueActive(false);
+    if (!rescueTask) return;
+    const now = Date.now();
+    savePayload({ ...payload, tasks: tasks.map(t => {
+      const newFocus = t.uuid === rescueTask.uuid;
+      if (!newFocus) {
+        if (!t.isNowFocus) return t;
+        return { ...t, isNowFocus: false, lastUpdated: now };
+      }
+      // Also clear isParked — a task Rescue parked earlier in the same
+      // session (or previously) would otherwise become a hidden focus task:
+      // todayTasksAll filters parked tasks out of view, but useFocusTimer
+      // still treats any non-deleted, non-completed isNowFocus task as active.
+      if (t.isNowFocus && !t.isParked) return t;
+      return { ...t, isNowFocus: true, isParked: false, lastUpdated: now };
+    }) });
+  };
+
+  const parkRescueTask = () => {
+    if (!rescueTask) return;
+    const now = Date.now();
+    savePayload({ ...payload, tasks: tasks.map(t => (
+      t.uuid === rescueTask.uuid
+        ? { ...t, isParked: true, isNowFocus: false, lastUpdated: now }
+        : t
+    )) });
+  };
+
   return (
     <>
       {/* ── Day header: style switchable via Settings → Header Style ── */}
@@ -1834,22 +1864,12 @@ export default function TodayTab({
           config={config}
           entryPoint={rescueEntryPoint}
           includeMemory={!(isSyncingFromCache || syncWarning === "offline")}
+          isSyncingFromCache={isSyncingFromCache}
+          syncWarning={syncWarning}
           onDismiss={() => setRescueActive(false)}
-          onAccept={() => {
-            setRescueActive(false);
-            if (rescueTask) {
-              // Clear isNowFocus everywhere else before setting it on rescueTask
-              // (mirrors handlePinTask's single-pin invariant) — otherwise a
-              // stale/other pinned task would keep winning useFocusTimer's
-              // tasks.find(t => t.isNowFocus...) lookup.
-              const now = Date.now();
-              savePayload({ ...payload, tasks: tasks.map(t => {
-                const newFocus = t.uuid === rescueTask.uuid;
-                if (t.isNowFocus === newFocus) return t;
-                return { ...t, isNowFocus: newFocus, lastUpdated: now };
-              }) });
-            }
-          }}
+          onSetNowFocus={() => setRescueTaskAsNowFocus()}
+          onParkTask={parkRescueTask}
+          onAccept={() => setRescueTaskAsNowFocus({ close: true })}
         />
       )}
     </>

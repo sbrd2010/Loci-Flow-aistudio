@@ -144,3 +144,123 @@ test("mobile reliability: Rescue chat never reaches the AI provider on crisis la
   await expect(page.getByText(/emergency services/i)).toBeVisible({ timeout: 8_000 });
   expect(groqCalled).toBe(false);
 });
+
+test("mobile reliability: Rescue chat action tag starts an in-rescue timer", async ({ page }) => {
+  await enterDemo(page);
+  await page.evaluate(() => localStorage.setItem("loci_groq_key", "test-groq-key"));
+  await page.route("https://api.groq.com/openai/v1/chat/completions", async route => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { content: "Starting a five-minute reset. [[RESCUE_START_TIMER:5]]" } }] }),
+    });
+  });
+
+  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await page.getByText("Low energy / fog").click();
+  await page.getByText("Talk to AI Coach").click();
+
+  await expect(page.getByText("Relax. You'll start when this ends.")).toBeVisible({ timeout: 5_000 });
+});
+
+test("mobile reliability: Rescue chat is reachable again after skipping an AI-started timer", async ({ page }) => {
+  await enterDemo(page);
+  await page.evaluate(() => localStorage.setItem("loci_groq_key", "test-groq-key"));
+  await page.route("https://api.groq.com/openai/v1/chat/completions", async route => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { content: "Starting a five-minute reset. [[RESCUE_START_TIMER:5]]" } }] }),
+    });
+  });
+
+  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await page.getByText("Low energy / fog").click();
+  await page.getByText("Talk to AI Coach").click();
+  // The action tag moves the user from chat to the timer screen.
+  await expect(page.getByText("Relax. You'll start when this ends.")).toBeVisible({ timeout: 5_000 });
+
+  await page.getByRole("button", { name: "Skip timer" }).click();
+  await page.getByText("Talk to AI Coach").click();
+  // Regression: chatStarted only guards the opener message, not navigation —
+  // this must actually land back on the chat screen, not silently no-op.
+  await expect(page.getByPlaceholder("Tell me what's going on…")).toBeVisible({ timeout: 5_000 });
+});
+
+test("mobile reliability: Rescue does not park the task on an unprompted action tag", async ({ page }) => {
+  await enterDemo(page);
+  await page.evaluate(() => localStorage.setItem("loci_groq_key", "test-groq-key"));
+  await page.route("https://api.groq.com/openai/v1/chat/completions", async route => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { content: "Let's take a break from it. [[RESCUE_PARK_TASK]]" } }] }),
+    });
+  });
+
+  const pinnedSection = page.locator(".pinned-focus-section");
+  await pinnedSection.scrollIntoViewIfNeeded();
+  await expect(pinnedSection).toContainText("Reply to the important message sitting in your inbox");
+
+  // Opens Rescue on the pinned task via the Today-tab chip; the opener
+  // message ("I'm stuck and need help.") never asks to park/defer/skip it —
+  // filterApplicableRescueActions (rescueCoachPrompt.js) must block the tag.
+  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await page.getByText("Too much going on").click();
+  await page.getByText("Talk to AI Coach").click();
+  await expect(page.getByText("Let's take a break from it.")).toBeVisible({ timeout: 5_000 });
+
+  await page.getByText("Exit rescue mode").click();
+  await expect(pinnedSection).toContainText("Reply to the important message sitting in your inbox", { timeout: 5_000 });
+});
+
+test("mobile reliability: Rescue ignores an action tag that resolves after the user already exited", async ({ page }) => {
+  await enterDemo(page);
+  await page.evaluate(() => localStorage.setItem("loci_groq_key", "test-groq-key"));
+  await page.route("https://api.groq.com/openai/v1/chat/completions", async route => {
+    // Resolves well after the user has already exited Rescue below.
+    await new Promise(r => setTimeout(r, 1500));
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { content: "Sounds good, taking a break from it. [[RESCUE_PARK_TASK]]" } }] }),
+    });
+  });
+
+  const pinnedSection = page.locator(".pinned-focus-section");
+  await pinnedSection.scrollIntoViewIfNeeded();
+  await expect(pinnedSection).toContainText("Reply to the important message sitting in your inbox");
+
+  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await page.getByText("Too much going on").click();
+  await page.getByText("Talk to AI Coach").click();
+
+  // A message that DOES match park intent — if the reply arrived before exit,
+  // this would legitimately park the task. It resolves only after Rescue is
+  // dismissed below, so the mountedRef guard in RescueMode.jsx must drop it.
+  await page.getByPlaceholder("Tell me what's going on…").fill("let's park this for later");
+  await page.getByRole("button", { name: "↑" }).click();
+  await page.getByText("Exit rescue mode").click();
+
+  await page.waitForTimeout(2_000);
+  await expect(pinnedSection).toContainText("Reply to the important message sitting in your inbox", { timeout: 5_000 });
+});
+
+test("mobile reliability: Rescue safety short-circuit does not call AI again", async ({ page }) => {
+  await enterDemo(page);
+  await page.evaluate(() => localStorage.setItem("loci_groq_key", "test-groq-key"));
+  let aiCalls = 0;
+  await page.route("https://api.groq.com/openai/v1/chat/completions", async route => {
+    aiCalls += 1;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { content: "I’m here with you." } }] }),
+    });
+  });
+
+  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await page.getByText("Anxious / can't start").click();
+  await page.getByText("Talk it through").click();
+  await expect(page.getByText("I’m here with you.")).toBeVisible({ timeout: 5_000 });
+
+  await page.getByPlaceholder("Tell me what's going on…").fill("I might hurt myself");
+  await page.getByRole("button", { name: "↑" }).click();
+  await expect(page.getByText("emergency services")).toBeVisible({ timeout: 5_000 });
+  expect(aiCalls).toBe(1);
+});

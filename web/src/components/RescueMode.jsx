@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { callAI, getAIKeys, buildProviderOrder } from "../utils/aiCall";
-import { buildLocalSafetyReply, buildOfflineRescueReply, buildRescuePrompt } from "../utils/rescueCoachPrompt";
+import { buildLocalSafetyReply, buildOfflineRescueReply, buildRescuePrompt, filterApplicableRescueActions, parseRescueActionTags } from "../utils/rescueCoachPrompt";
 
 const REASONS = [
   { id: "overwhelmed", emoji: "😵", label: "Too much going on",     color: "#f59e0b" },
@@ -39,7 +39,10 @@ function fmt(secs) {
   return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
 }
 
-export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstName, allTasks, config = {}, entryPoint = "today", includeMemory = true }) {
+export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, onParkTask, apiKey, firstName, allTasks, config = {}, entryPoint = "today", includeMemory = true, isSyncingFromCache = false, syncWarning = null }) {
+  // Mirrors CoachTab's cloudSyncUnconfirmed gate: cached/pre-sync payload data
+  // can't be trusted to mutate tasks against yet — see applyRescueActions.
+  const cloudSyncUnconfirmed = isSyncingFromCache || syncWarning === "offline";
   const [step, setStep]       = useState("triage"); // triage | options | chat | timer
   const [reason, setReason]   = useState(null);
   const [messages, setMessages] = useState([]);
@@ -50,6 +53,19 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
   const inputRef    = useRef(null);
   const chatStarted = useRef(false);
   const sendingRef  = useRef(false);
+  // A reply can resolve after the user has already exited Rescue (unmounting
+  // this component) — without this guard, a late RESCUE_PARK_TASK/
+  // RESCUE_SET_NOW_FOCUS tag would still reach onParkTask/onSetNowFocus and
+  // mutate the parent's task list for a flow the user already canceled.
+  const mountedRef  = useRef(true);
+  // Sets true on every effect run (not just the initial useRef default) —
+  // React 18 StrictMode's dev-only mount->cleanup->mount double-invocation
+  // would otherwise leave this stuck false forever after the extra cleanup,
+  // even though the component is genuinely still mounted.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => { document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = ""; }; }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
@@ -66,6 +82,25 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
   const effectiveGeminiKey = geminiKey || (apiKey || "").trim();
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
   const hasKey = buildProviderOrder(pref, groqKey, nvidiaKey, effectiveGeminiKey, cerebrasKey, zaiKey).length > 0;
+
+  // Applies whichever actions filterApplicableRescueActions (rescueCoachPrompt.js)
+  // let through, and reports whether a mutation was withheld specifically
+  // because cloud sync hasn't confirmed yet, so the caller can tell the user
+  // rather than let the model's narration imply it happened.
+  const applyRescueActions = (actions = [], lastUserText = "") => {
+    const { applicable, suppressedForSync } = filterApplicableRescueActions(actions, { lastUserText, cloudSyncUnconfirmed });
+    applicable.forEach(action => {
+      if (action.type === "RESCUE_SET_NOW_FOCUS") {
+        (onSetNowFocus || onAccept)?.();
+      } else if (action.type === "RESCUE_PARK_TASK") {
+        onParkTask?.();
+      } else if (action.type === "RESCUE_START_TIMER") {
+        setTimerSecs(action.minutes * 60);
+        setStep("timer");
+      }
+    });
+    return suppressedForSync;
+  };
 
   const aiCall = async (r, history) => {
     setLoading(true);
@@ -93,21 +128,38 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
         messages: messages.length > 0 ? messages : [{ role: "user", content: "I'm stuck and need help." }],
         maxTokens: 200
       });
-      setMessages(prev => [...prev, { role: "ai", text: reply }]);
+      if (!mountedRef.current) return;
+      const { cleanText, actions } = parseRescueActionTags(reply);
+      // The model's narration above (e.g. "Setting this as your focus...") describes
+      // a mutation that was NOT applied below when sync is unconfirmed — replace it
+      // entirely so the user doesn't believe it happened (mirrors CoachTab.jsx).
+      const suppressedForSync = applyRescueActions(actions, lastUserText);
+      const displayText = suppressedForSync
+        ? "Hold on — still syncing your latest data. Mind asking that again in a moment?"
+        : (cleanText || "Done.");
+      setMessages(prev => [...prev, { role: "ai", text: displayText }]);
     } catch (err) {
+      if (!mountedRef.current) return;
       const hint = err.message === "429" ? " (rate limit — wait a moment)" : err.message === "503" ? " (server busy)" : "";
       const lastUserText = history.map(m => (m.role === "user" ? (m.text || m.parts?.[0]?.text || "") : "")).filter(Boolean).at(-1) || "";
       setMessages(prev => [...prev, { role: "ai", text: `AI unavailable${hint}. ${buildOfflineRescueReply(r, firstName, lastUserText)}` }]);
     } finally {
-      setLoading(false);
-      sendingRef.current = false;
+      if (mountedRef.current) {
+        setLoading(false);
+        sendingRef.current = false;
+      }
     }
   };
 
   const openChat = (r) => {
+    // Always navigate to the chat screen — chatStarted only guards the
+    // opener message below. Without this split, a user who reaches "chat"
+    // via an AI-started timer (RESCUE_START_TIMER sets step to "timer" while
+    // chatStarted is already true) and then taps "Skip timer" -> "Talk to AI
+    // Coach" would have this bail out on the guard and never return to chat.
+    setStep("chat");
     if (chatStarted.current) return;
     chatStarted.current = true;
-    setStep("chat");
     if (!hasKey) {
       setMessages([{ role: "ai", text: buildOfflineRescueReply(r, firstName) }]);
       return;
