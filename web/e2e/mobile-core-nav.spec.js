@@ -68,6 +68,52 @@ for (const viewport of MOBILE_VIEWPORTS) {
   });
 }
 
+const PHONE_VIEWPORTS = MOBILE_VIEWPORTS.filter((v) => v.name !== "Tablet portrait");
+
+for (const viewport of PHONE_VIEWPORTS) {
+  test(`mobile reliability: Today's Focus chip row, more-menu, and Pinned Focus don't overlap on ${viewport.name}`, async ({ page }) => {
+    await enterDemo(page, viewport);
+    await expect(page.getByTestId("today-tasks-list")).toBeVisible({ timeout: 8_000 });
+
+    // Issue 1: the quick-action chip row must fit without needing to scroll.
+    const chipRow = page.locator(".focus-now-chip-row");
+    const chipOverflow = await chipRow.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+    expect(chipOverflow).toBe(false);
+
+    // Issue 2: the "..." more-menu trigger must sit on the same line as the
+    // chip row (not wrapped to its own line), and its dropdown must actually
+    // open on tap.
+    const chipShellBox = await page.locator(".focus-now-chip-shell").boundingBox();
+    const triggerBox = await page.locator(".today-more-menu-trigger").boundingBox();
+    expect(Math.abs(chipShellBox.y - triggerBox.y)).toBeLessThan(5);
+
+    await page.locator(".today-more-menu-trigger > button").click();
+    await expect(page.getByTestId("today-more-menu")).toBeVisible({ timeout: 5_000 });
+    await page.locator(".today-more-menu-trigger > button").click();
+
+    // Issue 3: the pinned task's "Focus →" button must not overlap its title.
+    // Asserted unconditionally (not just when a pinned task happens to exist) —
+    // demo data always pins one, so a future change that silently stopped
+    // rendering it should fail this test, not skip the check.
+    const pinnedSection = page.locator(".pinned-focus-section");
+    await expect(pinnedSection).toHaveCount(1);
+    const focusBtnBox = await page.locator(".pinned-focus-start-btn").boundingBox();
+    const titleBox = await page.locator(".pinned-focus-inner .task-title-text").first().boundingBox();
+    expect(titleBox.x + titleBox.width).toBeLessThanOrEqual(focusBtnBox.x);
+
+    await expectNoHorizontalOverflow(page);
+
+    // The chip row's "no scroll" budget was tuned against the default chip
+    // labels — confirm it still holds once "Low Energy" grows to "Low Energy
+    // ON", the longest label variant this row can show.
+    await page.locator(".focus-now-chip-row button", { hasText: "Low Energy" }).click();
+    await expect(page.locator(".focus-now-chip-row button", { hasText: "Low Energy ON" })).toBeVisible({ timeout: 5_000 });
+    const chipOverflowWithLowEnergyOn = await chipRow.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+    expect(chipOverflowWithLowEnergyOn).toBe(false);
+    await expectNoHorizontalOverflow(page);
+  });
+}
+
 test("mobile reliability: Settings Privacy Policy opens and closes on iPhone-sized screen", async ({ page }) => {
   await enterDemo(page, { name: "iPhone 11 Pro", width: 375, height: 812 });
 

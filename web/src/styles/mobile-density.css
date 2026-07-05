@@ -104,6 +104,14 @@
       var(--bg-card);
   }
 
+  /* Restore the gutter the absolutely-positioned "Focus →" button (app.css)
+     depends on — the shorthand padding rule above resets padding-right to
+     7px for every task row, which silently erases that reservation and lets
+     the button overlap the pinned task's title/badges on mobile widths. */
+  .tasks-section .pinned-focus-inner > .task-row {
+    padding-right: 88px;
+  }
+
   .tasks-section .checkbox-container {
     min-width: 28px;
     min-height: 34px;
@@ -161,7 +169,11 @@
     padding-right: 10px;
   }
 
-  /* Two-line layout on small phones: heading row 1, chips row 2 */
+  /* Two-line layout on small phones: heading row 1, chips + ••• row 2.
+     The chip shell shares row 2 with the more-menu trigger (flex: 1 1 auto,
+     not 0 0 100%) so the trigger never gets pushed to its own third line —
+     min-width: 0 lets the shell shrink below its chips' natural width,
+     leaving room for the fixed-size trigger button beside it. */
   .tasks-section .section-header {
     flex-wrap: wrap !important;
   }
@@ -171,8 +183,24 @@
   }
 
   .tasks-section .focus-now-chip-shell {
-    flex: 0 0 100% !important;
+    flex: 1 1 auto !important;
     min-width: 0;
+  }
+
+  .tasks-section .today-more-menu-trigger {
+    flex: 0 0 auto !important;
+  }
+
+  /* Shrink chips to fit one line without needing to scroll, tuned against
+     the narrower of the two target phones (iPhone 11 Pro, 375px) so it
+     also fits comfortably at Pixel 6a's 412px and wider. */
+  .tasks-section .focus-now-chip-row {
+    gap: 4px;
+  }
+
+  .tasks-section .stuck-btn {
+    padding: 4px 6px;
+    font-size: 9.5px;
   }
 
   .tasks-section .task-title-text {
