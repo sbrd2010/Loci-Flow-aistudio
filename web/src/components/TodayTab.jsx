@@ -1301,7 +1301,7 @@ export default function TodayTab({
           {/* Rendered outside .focus-now-chip-shell/.focus-now-chip-row on purpose —
               those are clipped/horizontally-scrolling containers (focusNow.css), which
               would clip this dropdown instead of letting it render below its trigger. */}
-          <div ref={moreMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+          <div ref={moreMenuRef} className="today-more-menu-trigger" style={{ position: "relative", flexShrink: 0 }}>
             <button
               className="stuck-btn"
               onClick={() => setShowMoreMenu(v => !v)}
