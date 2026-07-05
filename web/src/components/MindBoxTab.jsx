@@ -202,6 +202,28 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
     setRescueActive(true);
   };
 
+
+  const setRescueTaskAsNowFocus = ({ close = false } = {}) => {
+    if (close) setRescueActive(false);
+    if (!rescueTask) return;
+    const now = Date.now();
+    savePayload({ ...payload, tasks: tasks.map(t => {
+      const newFocus = t.uuid === rescueTask.uuid;
+      if (t.isNowFocus === newFocus) return t;
+      return { ...t, isNowFocus: newFocus, lastUpdated: now };
+    }) });
+  };
+
+  const parkRescueTask = () => {
+    if (!rescueTask) return;
+    const now = Date.now();
+    savePayload({ ...payload, tasks: tasks.map(t => (
+      t.uuid === rescueTask.uuid
+        ? { ...t, isParked: true, isNowFocus: false, lastUpdated: now }
+        : t
+    )) });
+  };
+
   const handleBadDayReset = () => {
     setConfirmDialog({
       message: "Park all active tasks for today?\n\nThis is a restart without shame — everything moves to parked. You can restore tasks from the AI Coach tab whenever you're ready.",
@@ -973,12 +995,9 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
           includeMemory={!(isSyncingFromCache || syncWarning === "offline")}
           apiKey={getAIKeys().geminiKey}
           onDismiss={() => setRescueActive(false)}
-          onAccept={() => {
-            setRescueActive(false);
-            if (rescueTask) {
-              savePayload({ ...payload, tasks: tasks.map(t => t.uuid === rescueTask.uuid ? { ...t, isNowFocus: true } : t) });
-            }
-          }}
+          onSetNowFocus={() => setRescueTaskAsNowFocus()}
+          onParkTask={parkRescueTask}
+          onAccept={() => setRescueTaskAsNowFocus({ close: true })}
         />
       )}
 

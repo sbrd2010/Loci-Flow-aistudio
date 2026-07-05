@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { callAI, getAIKeys, buildProviderOrder } from "../utils/aiCall";
-import { buildLocalSafetyReply, buildOfflineRescueReply, buildRescuePrompt } from "../utils/rescueCoachPrompt";
+import { buildLocalSafetyReply, buildOfflineRescueReply, buildRescuePrompt, parseRescueActionTags } from "../utils/rescueCoachPrompt";
 
 const REASONS = [
   { id: "overwhelmed", emoji: "😵", label: "Too much going on",     color: "#f59e0b" },
@@ -39,7 +39,7 @@ function fmt(secs) {
   return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
 }
 
-export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstName, allTasks, config = {}, entryPoint = "today", includeMemory = true }) {
+export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, onParkTask, apiKey, firstName, allTasks, config = {}, entryPoint = "today", includeMemory = true }) {
   const [step, setStep]       = useState("triage"); // triage | options | chat | timer
   const [reason, setReason]   = useState(null);
   const [messages, setMessages] = useState([]);
@@ -67,6 +67,19 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
   const hasKey = buildProviderOrder(pref, groqKey, nvidiaKey, effectiveGeminiKey, cerebrasKey, zaiKey).length > 0;
 
+  const applyRescueActions = (actions = []) => {
+    actions.forEach(action => {
+      if (action.type === "RESCUE_SET_NOW_FOCUS") {
+        (onSetNowFocus || onAccept)?.();
+      } else if (action.type === "RESCUE_PARK_TASK") {
+        onParkTask?.();
+      } else if (action.type === "RESCUE_START_TIMER") {
+        setTimerSecs(action.minutes * 60);
+        setStep("timer");
+      }
+    });
+  };
+
   const aiCall = async (r, history) => {
     setLoading(true);
     try {
@@ -93,7 +106,9 @@ export default function RescueMode({ task, onDismiss, onAccept, apiKey, firstNam
         messages: messages.length > 0 ? messages : [{ role: "user", content: "I'm stuck and need help." }],
         maxTokens: 200
       });
-      setMessages(prev => [...prev, { role: "ai", text: reply }]);
+      const { cleanText, actions } = parseRescueActionTags(reply);
+      setMessages(prev => [...prev, { role: "ai", text: cleanText || "Done." }]);
+      applyRescueActions(actions);
     } catch (err) {
       const hint = err.message === "429" ? " (rate limit — wait a moment)" : err.message === "503" ? " (server busy)" : "";
       const lastUserText = history.map(m => (m.role === "user" ? (m.text || m.parts?.[0]?.text || "") : "")).filter(Boolean).at(-1) || "";

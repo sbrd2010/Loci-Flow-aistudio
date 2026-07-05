@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLocalSafetyReply, buildOfflineRescueReply, buildRescuePrompt, buildRescueTaskList } from "./rescueCoachPrompt";
+import { buildLocalSafetyReply, buildOfflineRescueReply, buildRescuePrompt, buildRescueTaskList, parseRescueActionTags } from "./rescueCoachPrompt";
 
 describe("rescueCoachPrompt", () => {
   const tasks = [
@@ -129,6 +129,27 @@ describe("rescueCoachPrompt", () => {
     expect(prompt).not.toContain("This memory should stay out");
   });
 
+
+  it("parses and strips safe rescue action tags", () => {
+    const { cleanText, actions } = parseRescueActionTags("I’ll start a short timer now. [[RESCUE_START_TIMER:5]] [[RESCUE_SET_NOW_FOCUS]]");
+    expect(cleanText).toBe("I’ll start a short timer now.");
+    expect(actions).toEqual([
+      { type: "RESCUE_START_TIMER", minutes: 5 },
+      { type: "RESCUE_SET_NOW_FOCUS" },
+    ]);
+  });
+
+  it("plain conversational replies do not produce rescue actions", () => {
+    const { cleanText, actions } = parseRescueActionTags("I’m here. Let’s take one breath first.");
+    expect(cleanText).toBe("I’m here. Let’s take one breath first.");
+    expect(actions).toEqual([]);
+  });
+
+  it("ignores invalid timer action tags", () => {
+    const { cleanText, actions } = parseRescueActionTags("Timer maybe. [[RESCUE_START_TIMER:not-a-number]]");
+    expect(cleanText).toBe("Timer maybe.");
+    expect(actions).toEqual([]);
+  });
 
   it("uses local safety fallback before productivity-oriented offline replies", () => {
     expect(buildLocalSafetyReply("I might hurt myself", "Rohan")).toContain("emergency services");

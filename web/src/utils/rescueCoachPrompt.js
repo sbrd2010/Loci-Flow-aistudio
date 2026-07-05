@@ -72,6 +72,26 @@ function buildReasonInstruction(reason, firstName, entryPoint) {
   }[reason] || `${firstName} needs rescue support. Start human-first, then offer one tiny next step only if it fits.`;
 }
 
+const RESCUE_ACTION_TAG_RE = /\s*\[\[(RESCUE_SET_NOW_FOCUS|RESCUE_PARK_TASK|RESCUE_START_TIMER)(?::\s*((?:[^\]]|\](?!\]))+?)\s*)?\]\]/gi;
+
+export function parseRescueActionTags(text = "") {
+  const actions = [];
+  const cleanText = String(text || "").replace(RESCUE_ACTION_TAG_RE, (_match, type, rawValue) => {
+    const upperType = type.toUpperCase();
+    if (upperType === "RESCUE_START_TIMER") {
+      const parsedMinutes = parseInt(rawValue || "", 10);
+      if (Number.isFinite(parsedMinutes) && parsedMinutes > 0) {
+        const minutes = Math.min(60, Math.max(1, parsedMinutes));
+        actions.push({ type: upperType, minutes });
+      }
+    } else {
+      actions.push({ type: upperType });
+    }
+    return "";
+  }).trim();
+  return { cleanText, actions };
+}
+
 export function buildRescuePrompt({ reason, firstName = "friend", task = null, allTasks = [], entryPoint = "today", config = {}, includeMemory = true }) {
   const name = firstName || "friend";
   const taskList = buildRescueTaskList(allTasks, { entryPoint, focusTask: task });
@@ -97,6 +117,13 @@ RESCUE MODE RULES:
 - If the selected task is only inferred from Home/Today or Mind Box, never say "you were working on..."; say "if this is still the right task..." or ask a gentle confirmation.
 - If this came from Deep Focus with an active task, you may speak as if they were working on that task.
 - If there is no reliable task, ground first and ask what feels most urgent.
+
+RESCUE ACTIONS (hidden tags — use sparingly, only when it clearly matches the reply you just wrote):
+- To set the current rescue task as Now Focus, end with [[RESCUE_SET_NOW_FOCUS]] on its own line.
+- To start an in-Rescue timer, end with [[RESCUE_START_TIMER:N]] where N is minutes, e.g. [[RESCUE_START_TIMER:5]].
+- To park the current rescue task, end with [[RESCUE_PARK_TASK]] on its own line.
+- Only act on the current rescue task; never name a different task in these tags.
+- Never emit action tags in safety, crisis, panic, medical-risk, or self-harm situations.
 
 CURRENT RESCUE CONTEXT:
 ${entryContext}
