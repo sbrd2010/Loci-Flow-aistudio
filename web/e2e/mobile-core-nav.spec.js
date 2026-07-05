@@ -92,13 +92,24 @@ for (const viewport of PHONE_VIEWPORTS) {
     await page.locator(".today-more-menu-trigger > button").click();
 
     // Issue 3: the pinned task's "Focus →" button must not overlap its title.
+    // Asserted unconditionally (not just when a pinned task happens to exist) —
+    // demo data always pins one, so a future change that silently stopped
+    // rendering it should fail this test, not skip the check.
     const pinnedSection = page.locator(".pinned-focus-section");
-    if (await pinnedSection.count() > 0) {
-      const focusBtnBox = await page.locator(".pinned-focus-start-btn").boundingBox();
-      const titleBox = await page.locator(".pinned-focus-inner .task-title-text").first().boundingBox();
-      expect(titleBox.x + titleBox.width).toBeLessThanOrEqual(focusBtnBox.x);
-    }
+    await expect(pinnedSection).toHaveCount(1);
+    const focusBtnBox = await page.locator(".pinned-focus-start-btn").boundingBox();
+    const titleBox = await page.locator(".pinned-focus-inner .task-title-text").first().boundingBox();
+    expect(titleBox.x + titleBox.width).toBeLessThanOrEqual(focusBtnBox.x);
 
+    await expectNoHorizontalOverflow(page);
+
+    // The chip row's "no scroll" budget was tuned against the default chip
+    // labels — confirm it still holds once "Low Energy" grows to "Low Energy
+    // ON", the longest label variant this row can show.
+    await page.locator(".focus-now-chip-row button", { hasText: "Low Energy" }).click();
+    await expect(page.locator(".focus-now-chip-row button", { hasText: "Low Energy ON" })).toBeVisible({ timeout: 5_000 });
+    const chipOverflowWithLowEnergyOn = await chipRow.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+    expect(chipOverflowWithLowEnergyOn).toBe(false);
     await expectNoHorizontalOverflow(page);
   });
 }
