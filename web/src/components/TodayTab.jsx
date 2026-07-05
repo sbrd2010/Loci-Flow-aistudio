@@ -736,8 +736,16 @@ export default function TodayTab({
     const now = Date.now();
     savePayload({ ...payload, tasks: tasks.map(t => {
       const newFocus = t.uuid === rescueTask.uuid;
-      if (t.isNowFocus === newFocus) return t;
-      return { ...t, isNowFocus: newFocus, lastUpdated: now };
+      if (!newFocus) {
+        if (!t.isNowFocus) return t;
+        return { ...t, isNowFocus: false, lastUpdated: now };
+      }
+      // Also clear isParked — a task Rescue parked earlier in the same
+      // session (or previously) would otherwise become a hidden focus task:
+      // todayTasksAll filters parked tasks out of view, but useFocusTimer
+      // still treats any non-deleted, non-completed isNowFocus task as active.
+      if (t.isNowFocus && !t.isParked) return t;
+      return { ...t, isNowFocus: true, isParked: false, lastUpdated: now };
     }) });
   };
 
@@ -1856,6 +1864,8 @@ export default function TodayTab({
           config={config}
           entryPoint={rescueEntryPoint}
           includeMemory={!(isSyncingFromCache || syncWarning === "offline")}
+          isSyncingFromCache={isSyncingFromCache}
+          syncWarning={syncWarning}
           onDismiss={() => setRescueActive(false)}
           onSetNowFocus={() => setRescueTaskAsNowFocus()}
           onParkTask={parkRescueTask}

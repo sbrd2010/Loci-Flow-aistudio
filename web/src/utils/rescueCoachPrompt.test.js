@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLocalSafetyReply, buildOfflineRescueReply, buildRescuePrompt, buildRescueTaskList, parseRescueActionTags } from "./rescueCoachPrompt";
+import { buildLocalSafetyReply, buildOfflineRescueReply, buildRescuePrompt, buildRescueTaskList, filterApplicableRescueActions, parseRescueActionTags } from "./rescueCoachPrompt";
 
 describe("rescueCoachPrompt", () => {
   const tasks = [
@@ -149,6 +149,58 @@ describe("rescueCoachPrompt", () => {
     const { cleanText, actions } = parseRescueActionTags("Timer maybe. [[RESCUE_START_TIMER:not-a-number]]");
     expect(cleanText).toBe("Timer maybe.");
     expect(actions).toEqual([]);
+  });
+
+  describe("filterApplicableRescueActions", () => {
+    const setNowFocus = { type: "RESCUE_SET_NOW_FOCUS" };
+    const parkTask = { type: "RESCUE_PARK_TASK" };
+    const startTimer = { type: "RESCUE_START_TIMER", minutes: 5 };
+
+    it("applies a mutating action when the user's message actually asked for it", () => {
+      const { applicable, suppressedForSync } = filterApplicableRescueActions(
+        [setNowFocus], { lastUserText: "yes, let's focus on this now" }
+      );
+      expect(applicable).toEqual([setNowFocus]);
+      expect(suppressedForSync).toBe(false);
+    });
+
+    it("drops a mutating action the user's message never asked for (echoed/hallucinated tag)", () => {
+      const { applicable, suppressedForSync } = filterApplicableRescueActions(
+        [setNowFocus, parkTask], { lastUserText: "haha ok thanks" }
+      );
+      expect(applicable).toEqual([]);
+      expect(suppressedForSync).toBe(false);
+    });
+
+    it("drops PARK_TASK unless the message asks to park/defer/skip it", () => {
+      const { applicable } = filterApplicableRescueActions([parkTask], { lastUserText: "let's park this for later" });
+      expect(applicable).toEqual([parkTask]);
+      const blocked = filterApplicableRescueActions([parkTask], { lastUserText: "I'll do it now" });
+      expect(blocked.applicable).toEqual([]);
+    });
+
+    it("always allows RESCUE_START_TIMER through regardless of message or sync state", () => {
+      const { applicable, suppressedForSync } = filterApplicableRescueActions(
+        [startTimer], { lastUserText: "haha ok thanks", cloudSyncUnconfirmed: true }
+      );
+      expect(applicable).toEqual([startTimer]);
+      expect(suppressedForSync).toBe(false);
+    });
+
+    it("blocks mutating actions outright when cloud sync is unconfirmed, even with matching intent", () => {
+      const { applicable, suppressedForSync } = filterApplicableRescueActions(
+        [setNowFocus], { lastUserText: "let's focus on this now", cloudSyncUnconfirmed: true }
+      );
+      expect(applicable).toEqual([]);
+      expect(suppressedForSync).toBe(true);
+    });
+
+    it("only reports suppressedForSync when a mutation was actually blocked for that reason", () => {
+      const { suppressedForSync } = filterApplicableRescueActions(
+        [setNowFocus], { lastUserText: "haha ok thanks", cloudSyncUnconfirmed: false }
+      );
+      expect(suppressedForSync).toBe(false);
+    });
   });
 
   it("uses local safety fallback before productivity-oriented offline replies", () => {

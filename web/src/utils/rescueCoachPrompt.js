@@ -2,6 +2,7 @@ import { buildSupportModeInstruction } from "./coachSupportMode";
 import { buildPersonaInstruction } from "./coachPersona";
 import { buildProfileContext } from "./coachProfile";
 import { buildLociMemoryContext, isMemoryEnabled } from "./coachMemory";
+import { messageSeemsActionLike } from "./coachActions";
 
 const ENTRY_POINT_LABELS = {
   deep_focus: "Deep Focus session",
@@ -90,6 +91,33 @@ export function parseRescueActionTags(text = "") {
     return "";
   }).trim();
   return { cleanText, actions };
+}
+
+const TASK_MUTATING_ACTION_TYPES = {
+  RESCUE_SET_NOW_FOCUS: "SET_NOW_FOCUS",
+  RESCUE_PARK_TASK: "PARK_TASK",
+};
+
+// Deterministic, code-enforced gate — mirrors coachActions.js's rule that an
+// action tag may only mutate task state if the user's own last message
+// actually asked for it, so the AI's "use sparingly" prompt instruction isn't
+// the only line of defense against an echoed/hallucinated tag. Cloud-sync
+// uncertainty blocks a task mutation outright (a cached/pre-sync snapshot
+// can't be trusted to mutate against), same as CoachTab.jsx's actions gate.
+// RESCUE_START_TIMER is local UI state only, not a task mutation, so it's
+// always allowed through regardless of intent or sync state.
+export function filterApplicableRescueActions(actions = [], { lastUserText = "", cloudSyncUnconfirmed = false } = {}) {
+  let suppressedForSync = false;
+  const applicable = actions.filter(action => {
+    const intentType = TASK_MUTATING_ACTION_TYPES[action.type];
+    if (!intentType) return true;
+    if (cloudSyncUnconfirmed) {
+      suppressedForSync = true;
+      return false;
+    }
+    return messageSeemsActionLike(intentType, lastUserText);
+  });
+  return { applicable, suppressedForSync };
 }
 
 export function buildRescuePrompt({ reason, firstName = "friend", task = null, allTasks = [], entryPoint = "today", config = {}, includeMemory = true }) {
