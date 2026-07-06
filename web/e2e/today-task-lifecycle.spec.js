@@ -141,8 +141,15 @@ test("mobile reliability: Add Task accepts manual sub-steps from pasted bullets"
   await expect(subStepsList).toContainText("Compare flight prices");
   await expect(subStepsList).toContainText("Book refundable hotel");
 
-  await page.getByRole("button", { name: "Remove step Compare flight prices" }).click();
+  // Editing a step in place (the pencil icon) rewrites its text without removing it.
+  await page.getByRole("button", { name: "Edit step Compare flight prices" }).click();
+  await subStepsList.locator("input").fill("Compare flight and train prices");
+  await subStepsList.locator("input").press("Enter");
+  await expect(subStepsList).toContainText("Compare flight and train prices");
   await expect(subStepsList).not.toContainText("Compare flight prices");
+
+  await page.getByRole("button", { name: "Remove step Compare flight and train prices" }).click();
+  await expect(subStepsList).not.toContainText("Compare flight and train prices");
 
   await page.getByTestId("add-task-submit").click();
   await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
@@ -151,4 +158,29 @@ test("mobile reliability: Add Task accepts manual sub-steps from pasted bullets"
   await expect(row).toContainText("Check visa rules");
   await expect(row).toContainText("Book refundable hotel");
   await expect(row).not.toContainText("Compare flight prices");
+});
+
+test("mobile reliability: Add Task flushes an in-progress sub-step edit on submit", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "Flush edit on submit seed task";
+  await openAddTask(page);
+  await page.getByTestId("add-task-title").fill(title);
+  await page.getByRole("button", { name: /Advanced options/i }).click();
+  await page.getByTestId("add-task-substeps-draft").fill("Check visa rules\nCompare flight prices");
+  await page.getByTestId("add-task-substeps-add").click();
+
+  const subStepsList = page.getByTestId("add-task-substeps-list");
+  await expect(subStepsList).toContainText("Compare flight prices");
+
+  // Start editing a step but submit the whole dialog (Save/Add Task button)
+  // instead of the row-level ✓ or Enter — the pending edit must still land.
+  await page.getByRole("button", { name: "Edit step Compare flight prices" }).click();
+  await subStepsList.locator("input").fill("Compare flight and train prices");
+  await page.getByTestId("add-task-submit").click();
+
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  const row = todayRow(page, title);
+  await expect(row).toBeVisible({ timeout: 5_000 });
+  await expect(row).toContainText("Compare flight and train prices");
 });

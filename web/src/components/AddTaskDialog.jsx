@@ -35,6 +35,8 @@ export default function AddTaskDialog({ email, payload, savePayload, userProfile
   const [aiSuggestion, setAiSuggestion] = useState(null);
   const [subSteps, setSubSteps] = useState(editTask?.subSteps || []);
   const [subStepDraft, setSubStepDraft] = useState("");
+  const [editingSubStepId, setEditingSubStepId] = useState(null);
+  const [editingSubStepText, setEditingSubStepText] = useState("");
   const [formError, setFormError] = useState("");
   const [reminderOn, setReminderOn] = useState(!!editTask?.reminderAt);
   const [reminderDate, setReminderDate] = useState(() => {
@@ -189,6 +191,14 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     e.preventDefault();
     if (!title.trim()) return;
 
+    // Flush an in-progress sub-step edit that never hit its row-level ✓/Enter
+    // (e.g. the user clicked this dialog's Save/Add Task button instead) so
+    // it isn't silently dropped in favor of the stale subSteps state.
+    const editedSubStepText = editingSubStepId ? editingSubStepText.trim() : "";
+    const effectiveSubSteps = editedSubStepText
+      ? subSteps.map(step => step.id === editingSubStepId ? { ...step, text: editedSubStepText } : step)
+      : subSteps;
+
     // Evening Guard window block logic
     const now = new Date();
     const hour = now.getHours();
@@ -236,7 +246,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
         timeEstimateMinutes: newEstimate,
         ...(estimateChanged ? { dayMapDurationMinutes: newEstimate } : {}),
         reminderAt,
-        subSteps,
+        subSteps: effectiveSubSteps,
         lastUpdated: Date.now()
       };
       if (reminderAt && reminderAt !== editTask.reminderAt) scheduleReminder(updatedTask);
@@ -266,7 +276,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       dateCompletedString: null,
       isDeleted: false,
       lastUpdated: Date.now(),
-      subSteps,
+      subSteps: effectiveSubSteps,
     };
 
     if (reminderAt) scheduleReminder(freshTask);
@@ -298,7 +308,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
           )}
           {/* Title + Ask AI */}
           <div className="form-group">
-            <label className="form-label">WHAT DO YOU WANT TO DO? (REQUIRED)</label>
+            <label className="form-label">WHAT DO YOU WANT TO DO?</label>
             <textarea
               className="text-input"
               data-testid="add-task-title"
@@ -477,7 +487,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
                 </div>
               </div>
               <div className="form-group">
-                <label className="form-label">BREAK IT DOWN YOURSELF (OPTIONAL)</label>
+                <label className="form-label">SUB-STEPS</label>
                 <textarea
                   className="text-input"
                   data-testid="add-task-substeps-draft"
@@ -505,11 +515,58 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
                   <div data-testid="add-task-substeps-list" style={{ display: "flex", flexDirection: "column", gap: "5px", marginTop: "8px" }}>
                     {subSteps.map((s) => (
                       <div key={s.id} style={{ fontSize: "12px", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "8px", padding: "5px 7px", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", background: "var(--bg-secondary)" }}>
-                        <span style={{ flex: 1, minWidth: 0 }}>{s.text}</span>
+                        {editingSubStepId === s.id ? (
+                          <>
+                            <input
+                              type="text"
+                              value={editingSubStepText}
+                              onChange={(e) => setEditingSubStepText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  const trimmed = editingSubStepText.trim();
+                                  if (trimmed) setSubSteps(prev => prev.map(step => step.id === s.id ? { ...step, text: trimmed } : step));
+                                  setEditingSubStepId(null);
+                                } else if (e.key === "Escape") {
+                                  setEditingSubStepId(null);
+                                }
+                              }}
+                              autoFocus
+                              style={{ flex: 1, minWidth: 0, font: "inherit", color: "inherit", background: "var(--bg-primary)", border: "1px solid var(--accent)", borderRadius: "4px", padding: "3px 6px" }}
+                            />
+                            <button
+                              type="button"
+                              aria-label={`Save step ${s.text}`}
+                              onClick={() => {
+                                const trimmed = editingSubStepText.trim();
+                                if (trimmed) setSubSteps(prev => prev.map(step => step.id === s.id ? { ...step, text: trimmed } : step));
+                                setEditingSubStepId(null);
+                              }}
+                              style={{ background: "none", border: "none", color: "var(--success)", cursor: "pointer", fontSize: "14px", lineHeight: 1, padding: "0 2px" }}
+                            >
+                              ✓
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ flex: 1, minWidth: 0 }}>{s.text}</span>
+                            <button
+                              type="button"
+                              aria-label={`Edit step ${s.text}`}
+                              onClick={() => { setEditingSubStepId(s.id); setEditingSubStepText(s.text); }}
+                              style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "12px", lineHeight: 1, padding: "0 2px" }}
+                            >
+                              <span style={{ display: "inline-block", transform: "scaleX(-1)" }}>✎</span>
+                            </button>
+                          </>
+                        )}
                         <button
                           type="button"
                           aria-label={`Remove step ${s.text}`}
-                          onClick={() => setSubSteps(prev => prev.filter(step => step.id !== s.id))}
+                          onClick={() => {
+                            if (editingSubStepId === s.id) setEditingSubStepId(null);
+                            setSubSteps(prev => prev.filter(step => step.id !== s.id));
+                          }}
                           style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "14px", lineHeight: 1, padding: "0 2px" }}
                         >
                           ×
