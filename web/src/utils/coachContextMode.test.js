@@ -256,6 +256,24 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("What should I focus on", pacedOpts)).toBe("compact_task");
     });
 
+    it("routes bare 'today's focus' mentions and 'check my priorities' to full_task, not light", () => {
+      // No "check" verb, no "tasks" word — a bare reference to the app's
+      // "Today's Focus" section, which previously fell all the way to
+      // "light" (zero task data) since it matched neither TASK_RE nor the
+      // check-prefixed BROAD_TASK_QUERY_RE alternative.
+      expect(classifyContextMode("todays focus i mean")).toBe("full_task");
+      expect(classifyContextMode("today's focus?")).toBe("full_task");
+      expect(classifyContextMode("show me todays focus")).toBe("full_task");
+
+      // "check" as a leading verb on bare "my priorities" (previously only
+      // "what are/tell me/show me my priorities" were recognized).
+      expect(classifyContextMode("check my priorities")).toBe("full_task");
+      expect(classifyContextMode("what about my priorities")).toBe("full_task");
+
+      // Still must not treat a third party's priorities as a task request.
+      expect(classifyContextMode("check my boss's priorities")).not.toBe("full_task");
+    });
+
     it("PR276 - widens compact follow-up detection for '10-min version' and 'turn that into N steps'", () => {
       const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
       expect(classifyContextMode("give me the 10-min version", pacedOpts)).toBe("compact_task");
