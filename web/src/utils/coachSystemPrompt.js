@@ -39,7 +39,7 @@ function buildFullTaskPrompt(ctx) {
     profileContext, memoryContext, personaInstruction, taskContext,
     focusSessionContext, nowFocusContext, dayMapContext, remindersContext,
     anchorContext, checkinContext, pendingCheckinContext, deadlineContext, brainDumpContext,
-    velocityContext, lowEnergyContext, recentlyParkedContext,
+    velocityContext, lowEnergyContext, recentlyParkedContext, rescueHandoffContext,
     isEarlyConversation, memorySectionEnabled, nowLabel, timeOfDay,
     todayActiveCount, streakCount, profileBlock,
   } = ctx;
@@ -159,7 +159,7 @@ CURRENT CAPPED TASK CONTEXT:
 You can see the visible task cards below. Some horizons may show "+X more", meaning more tasks exist but are not included in this prompt. Use exact visible task titles for action tags. If the user refers to a task that is not visible, ask for clarification or a fresh scan rather than guessing:
 ${taskContext}
 
-${focusSessionContext ? `${focusSessionContext}\n` : ""}${nowFocusContext ? `${nowFocusContext}\n` : ""}${dayMapContext ? `${dayMapContext}\n` : ""}${remindersContext ? `${remindersContext}\n` : ""}${anchorContext ? `${anchorContext}\n` : ""}${checkinContext ? `${checkinContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}${deadlineContext ? `${deadlineContext}\n` : ""}${brainDumpContext ? `${brainDumpContext}\n` : ""}${velocityContext ? `${velocityContext}\n` : ""}${lowEnergyContext ? `${lowEnergyContext}\n` : ""}${recentlyParkedContext ? `${recentlyParkedContext}\n` : ""}
+${rescueHandoffContext ? `${rescueHandoffContext}\n` : ""}${focusSessionContext ? `${focusSessionContext}\n` : ""}${nowFocusContext ? `${nowFocusContext}\n` : ""}${dayMapContext ? `${dayMapContext}\n` : ""}${remindersContext ? `${remindersContext}\n` : ""}${anchorContext ? `${anchorContext}\n` : ""}${checkinContext ? `${checkinContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}${deadlineContext ? `${deadlineContext}\n` : ""}${brainDumpContext ? `${brainDumpContext}\n` : ""}${velocityContext ? `${velocityContext}\n` : ""}${lowEnergyContext ? `${lowEnergyContext}\n` : ""}${recentlyParkedContext ? `${recentlyParkedContext}\n` : ""}
 SESSION STATS:
 Current Time: ${nowLabel} (${timeOfDay})
 Streak: ${streakCount || 0}-day streak
@@ -169,7 +169,7 @@ Active Tasks Today: ${todayActiveCount} active tasks today.`;
 }
 
 function buildEmotionalPrompt(ctx) {
-  const { lociCoreInstruction, firstName, profileContext, memoryContext, personaInstruction, nowLabel, pendingCheckinContext } = ctx;
+  const { lociCoreInstruction, firstName, profileContext, memoryContext, personaInstruction, nowLabel, pendingCheckinContext, rescueHandoffContext } = ctx;
 
   const staticPrefix = `${lociCoreInstruction}
 
@@ -200,7 +200,7 @@ ${buildReasoningInstruction(firstName)}`;
 ========================================
 CURRENT CLIENT & APP SESSION CONTEXT:
 
-${profileContext ? `${profileContext}\n` : ""}${memoryContext ? `${memoryContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}
+${profileContext ? `${profileContext}\n` : ""}${memoryContext ? `${memoryContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}${rescueHandoffContext ? `${rescueHandoffContext}\n` : ""}
 SESSION STATS:
 Current Time: ${nowLabel}`;
 
@@ -208,7 +208,7 @@ Current Time: ${nowLabel}`;
 }
 
 function buildProfileReflectionPrompt(ctx) {
-  const { lociCoreInstruction, firstName, profileContext, memoryContext, personaInstruction, profileBlock, nowLabel, timeOfDay, pendingCheckinContext } = ctx;
+  const { lociCoreInstruction, firstName, profileContext, memoryContext, personaInstruction, profileBlock, nowLabel, timeOfDay, pendingCheckinContext, rescueHandoffContext } = ctx;
 
   const staticPrefix = `${lociCoreInstruction}
 
@@ -233,7 +233,7 @@ ${buildReasoningInstruction(firstName)}`;
 CURRENT CLIENT & APP SESSION CONTEXT:
 
 ${profileBlock ? `COACH PROFILE:\n${profileBlock}\n` : ""}
-${profileContext ? `${profileContext}\n` : ""}${memoryContext ? `${memoryContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}
+${profileContext ? `${profileContext}\n` : ""}${memoryContext ? `${memoryContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}${rescueHandoffContext ? `${rescueHandoffContext}\n` : ""}
 SESSION STATS:
 Current Time: ${nowLabel} (${timeOfDay})`;
 
@@ -241,7 +241,7 @@ Current Time: ${nowLabel} (${timeOfDay})`;
 }
 
 function buildLightPrompt(ctx) {
-  const { lociCoreInstruction, firstName, personaInstruction, nowLabel, timeOfDay, pendingCheckinContext } = ctx;
+  const { lociCoreInstruction, firstName, personaInstruction, nowLabel, timeOfDay, pendingCheckinContext, rescueHandoffContext } = ctx;
 
   const staticPrefix = `${lociCoreInstruction}
 
@@ -265,7 +265,7 @@ ${buildReasoningInstruction(firstName)}`;
 ========================================
 CURRENT CLIENT & APP SESSION CONTEXT:
 
-${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}
+${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}${rescueHandoffContext ? `${rescueHandoffContext}\n` : ""}
 SESSION STATS:
 Current Time: ${nowLabel} (${timeOfDay})`;
 
@@ -276,7 +276,7 @@ function buildCompactTaskPrompt(ctx) {
   const {
     lociCoreInstruction, mentorName, firstName, challengeLabel,
     profileContext, memoryContext, personaInstruction,
-    nowFocusContext, lastCoachPlan, nowLabel, currentFocusTitle, pendingCheckinContext
+    nowFocusContext, lastCoachPlan, nowLabel, currentFocusTitle, pendingCheckinContext, rescueHandoffContext
   } = ctx;
 
   const staticPrefix = `${lociCoreInstruction}
@@ -328,7 +328,7 @@ ${buildReasoningInstruction(firstName)}`;
 CURRENT CLIENT & APP SESSION CONTEXT:
 
 ${profileContext ? `${profileContext}\n` : ""}${memoryContext ? `${memoryContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}
-${planSection}
+${rescueHandoffContext ? `${rescueHandoffContext}\n` : ""}${planSection}
 ${focusSection}
 ${nowFocusContext ? `${nowFocusContext}\n` : ""}
 SESSION STATS:

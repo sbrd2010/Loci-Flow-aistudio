@@ -721,6 +721,7 @@ export default function App() {
             saveSubPath={saveSubPath}
             isSyncingFromCache={isSyncingFromCache}
             syncWarning={syncWarning}
+            saveConfigPatch={saveConfigPatch}
             onOpenAddTask={() => openAddTask("today")}
             onOpenDayMap={openDayMap}
             onOpenMindBox={openMindBox}
@@ -751,7 +752,7 @@ export default function App() {
             initialExpandedCol={roadmapInitialCol}
           />
         )}
-        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onOpenRoadmapInbox={openRoadmapInbox} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} />}
+        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onOpenRoadmapInbox={openRoadmapInbox} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} />}
         {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} />}
         {activeTab === "settings" && (
           <SettingsTab

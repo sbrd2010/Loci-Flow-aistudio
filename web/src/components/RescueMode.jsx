@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { callAI, getAIKeys, buildProviderOrder } from "../utils/aiCall";
 import { buildLocalSafetyReply, buildOfflineRescueReply, buildRescuePrompt, filterApplicableRescueActions, parseRescueActionTags } from "../utils/rescueCoachPrompt";
+import { buildRescueHandoffSummary } from "../utils/rescueHandoff";
 
 const REASONS = [
   { id: "overwhelmed", emoji: "😵", label: "Too much going on",     color: "#f59e0b" },
@@ -39,7 +40,7 @@ function fmt(secs) {
   return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
 }
 
-export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, onParkTask, apiKey, firstName, allTasks, config = {}, entryPoint = "today", includeMemory = true, isSyncingFromCache = false, syncWarning = null }) {
+export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, onParkTask, onHandoffSummary, apiKey, firstName, allTasks, config = {}, entryPoint = "today", includeMemory = true, isSyncingFromCache = false, syncWarning = null }) {
   // Mirrors CoachTab's cloudSyncUnconfirmed gate: cached/pre-sync payload data
   // can't be trusted to mutate tasks against yet — see applyRescueActions.
   const cloudSyncUnconfirmed = isSyncingFromCache || syncWarning === "offline";
@@ -53,6 +54,8 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
   const inputRef    = useRef(null);
   const chatStarted = useRef(false);
   const sendingRef  = useRef(false);
+  const userChattedRef = useRef(false);
+  const handoffSavedRef = useRef(false);
   // A reply can resolve after the user has already exited Rescue (unmounting
   // this component) — without this guard, a late RESCUE_PARK_TASK/
   // RESCUE_SET_NOW_FOCUS tag would still reach onParkTask/onSetNowFocus and
@@ -78,6 +81,36 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
     return () => clearTimeout(t);
   }, [timerSecs]);
 
+  const saveHandoff = (outcome = "dismissed") => {
+    if (handoffSavedRef.current) return;
+    // Writing config while cloud sync hasn't confirmed the first RTDB
+    // snapshot yet would stamp a stale cached config as the "winner" once
+    // that snapshot arrives, silently overwriting newer remote config from
+    // another device — matching the same guard used for Coach's memory writes.
+    if (cloudSyncUnconfirmed) return;
+    const summary = buildRescueHandoffSummary({
+      reason,
+      task,
+      entryPoint,
+      outcome,
+      chatted: userChattedRef.current || messages.some(m => m.role === "user"),
+      config,
+    });
+    if (!summary) return;
+    handoffSavedRef.current = true;
+    onHandoffSummary?.(summary);
+  };
+
+  const dismissRescue = (outcome = "dismissed") => {
+    saveHandoff(outcome);
+    onDismiss?.();
+  };
+
+  const acceptRescue = () => {
+    onAccept?.();
+    saveHandoff("accepted");
+  };
+
   const { groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const effectiveGeminiKey = geminiKey || (apiKey || "").trim();
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
@@ -92,11 +125,14 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
     applicable.forEach(action => {
       if (action.type === "RESCUE_SET_NOW_FOCUS") {
         (onSetNowFocus || onAccept)?.();
+        saveHandoff("accepted");
       } else if (action.type === "RESCUE_PARK_TASK") {
         onParkTask?.();
+        saveHandoff("parked");
       } else if (action.type === "RESCUE_START_TIMER") {
         setTimerSecs(action.minutes * 60);
         setStep("timer");
+        saveHandoff("timer_started");
       }
     });
     return suppressedForSync;
@@ -160,6 +196,12 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
     setStep("chat");
     if (chatStarted.current) return;
     chatStarted.current = true;
+    // The synthetic opener below ("I'm stuck and need help.") is sent as a
+    // real Rescue Coach turn but is never added to `messages` with role
+    // "user", so without this the handoff summary would be skipped for
+    // anyone who opens chat and reads the reply/acts on it without typing
+    // their own follow-up message.
+    userChattedRef.current = true;
     if (!hasKey) {
       setMessages([{ role: "ai", text: buildOfflineRescueReply(r, firstName) }]);
       return;
@@ -172,6 +214,7 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
     if (!input.trim() || sendingRef.current) return;
     sendingRef.current = true;
     const msg = input.trim();
+    userChattedRef.current = true;
     setInput("");
     const updated = [...messages, { role: "user", text: msg }];
     setMessages(updated);
@@ -185,11 +228,11 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
 
   const handleOption = (optId) => {
     if (optId === "chat")     { openChat(reason); return; }
-    if (optId === "single")   { onAccept(); return; }
-    if (optId === "easy")     { onAccept(); return; }
-    if (optId === "braindump"){ onDismiss(); return; }
+    if (optId === "single")   { acceptRescue(); return; }
+    if (optId === "easy")     { acceptRescue(); return; }
+    if (optId === "braindump"){ dismissRescue("dismissed"); return; }
     if (TIMER_DURATIONS[optId]) { setTimerSecs(TIMER_DURATIONS[optId]); setStep("timer"); return; }
-    onAccept();
+    acceptRescue();
   };
 
   // ─── shared elements ────────────────────────────────────────────────────────
@@ -218,7 +261,7 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
   ));
 
   const exitBtn = (
-    <button onClick={onDismiss} style={{ background: "none", border: "none",
+    <button onClick={() => dismissRescue("dismissed")} style={{ background: "none", border: "none",
       color: "rgba(255,255,255,0.2)", fontSize: "11px", cursor: "pointer",
       letterSpacing: "0.06em", textTransform: "uppercase", marginTop: "20px", flexShrink: 0 }}>
       Exit rescue mode
@@ -385,7 +428,7 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
           </div>
         </div>
         {done ? (
-          <button onClick={onAccept} style={{ width: "100%", maxWidth: "360px", height: "64px",
+          <button onClick={acceptRescue} style={{ width: "100%", maxWidth: "360px", height: "64px",
             background: "#ff5545", border: "none", borderRadius: "8px",
             color: "#fff", fontSize: "16px", fontWeight: "900",
             letterSpacing: "0.05em", textTransform: "uppercase", cursor: "pointer" }}>

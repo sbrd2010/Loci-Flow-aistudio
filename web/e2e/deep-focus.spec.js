@@ -264,3 +264,46 @@ test("mobile reliability: Rescue safety short-circuit does not call AI again", a
   await expect(page.getByText("emergency services")).toBeVisible({ timeout: 5_000 });
   expect(aiCalls).toBe(1);
 });
+
+test("mobile reliability: Opening Rescue chat without typing still hands off context to Coach", async ({ page }) => {
+  // Regression for a Codex review finding: the synthetic opener sent by
+  // openChat() reaches the AI but is never added to `messages` with role
+  // "user", so a user who reads the reply (or acts on it) without typing
+  // their own follow-up must still count as "chatted" for the handoff summary.
+  await page.addInitScript(() => {
+    window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key");
+  });
+
+  const groqRequestBodies = [];
+  await page.route("https://api.groq.com/**", async (route) => {
+    groqRequestBodies.push(JSON.parse(route.request().postData()));
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { content: "Let's find one small step together." } }] }),
+    });
+  });
+
+  await enterDemo(page);
+
+  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
+  await page.getByText("Too much going on").click();
+  await page.getByText("Talk to AI Coach").click();
+
+  // Wait for the opener's real AI call to land, then leave without typing anything.
+  await expect.poll(() => groqRequestBodies.length, { timeout: 8_000 }).toBeGreaterThan(0);
+  await page.getByText("Exit rescue mode").click();
+  await expect(page.getByRole("heading", { name: "What's happening right now?" })).not.toBeVisible({ timeout: 5_000 });
+
+  groqRequestBodies.length = 0;
+  await page.locator(".bottom-nav").getByRole("button", { name: "AI Coach" }).click();
+  await expect(page.getByRole("heading", { name: /Chat with/ })).toBeVisible({ timeout: 8_000 });
+  await page.getByPlaceholder(/Shift\+Enter for a new line/).fill("I feel a bit scattered right now");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Let's find one small step together.")).toBeVisible({ timeout: 8_000 });
+
+  expect(groqRequestBodies.length).toBeGreaterThan(0);
+  const systemContent = groqRequestBodies[0].messages.find(m => m.role === "system")?.content || "";
+  expect(systemContent).toContain("RECENT RESCUE MODE HANDOFF");
+});
