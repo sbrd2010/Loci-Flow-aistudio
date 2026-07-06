@@ -107,3 +107,42 @@ test("mobile reliability: Rescue Mode is reachable from Today and from inside De
   await overlay.getByLabel("Exit focus mode").click();
   await expect(overlay).not.toBeVisible({ timeout: 5_000 });
 });
+test("mobile reliability: Rescue chat action tag starts an in-rescue timer", async ({ page }) => {
+  await enterDemo(page);
+  await page.evaluate(() => localStorage.setItem("loci_groq_key", "test-groq-key"));
+  await page.route("https://api.groq.com/openai/v1/chat/completions", async route => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { content: "Starting a five-minute reset. [[RESCUE_START_TIMER:5]]" } }] }),
+    });
+  });
+
+  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await page.getByText("Low energy / fog").click();
+  await page.getByText("Talk to AI Coach").click();
+
+  await expect(page.getByText("Relax. You'll start when this ends.")).toBeVisible({ timeout: 5_000 });
+});
+
+test("mobile reliability: Rescue safety short-circuit does not call AI again", async ({ page }) => {
+  await enterDemo(page);
+  await page.evaluate(() => localStorage.setItem("loci_groq_key", "test-groq-key"));
+  let aiCalls = 0;
+  await page.route("https://api.groq.com/openai/v1/chat/completions", async route => {
+    aiCalls += 1;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { content: "I’m here with you." } }] }),
+    });
+  });
+
+  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await page.getByText("Anxious / can't start").click();
+  await page.getByText("Talk it through").click();
+  await expect(page.getByText("I’m here with you.")).toBeVisible({ timeout: 5_000 });
+
+  await page.getByPlaceholder("Tell me what's going on…").fill("I might hurt myself");
+  await page.getByRole("button", { name: "↑" }).click();
+  await expect(page.getByText("emergency services")).toBeVisible({ timeout: 5_000 });
+  expect(aiCalls).toBe(1);
+});

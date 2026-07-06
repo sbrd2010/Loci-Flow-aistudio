@@ -75,7 +75,7 @@ function IconChevronRight() {
   );
 }
 
-export default function MindBoxTab({ payload, savePayload, saveSubPath, userProfile, initialPanel, onOpenRoadmapInbox }) {
+export default function MindBoxTab({ payload, savePayload, saveSubPath, userProfile, initialPanel, onOpenRoadmapInbox, isSyncingFromCache = false, syncWarning = null }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -200,6 +200,28 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, userProf
     const first = tasks.find(t => !t.isDeleted && !t.isCompleted);
     setRescueTask(pinned || first || null);
     setRescueActive(true);
+  };
+
+
+  const setRescueTaskAsNowFocus = ({ close = false } = {}) => {
+    if (close) setRescueActive(false);
+    if (!rescueTask) return;
+    const now = Date.now();
+    savePayload({ ...payload, tasks: tasks.map(t => {
+      const newFocus = t.uuid === rescueTask.uuid;
+      if (t.isNowFocus === newFocus) return t;
+      return { ...t, isNowFocus: newFocus, lastUpdated: now };
+    }) });
+  };
+
+  const parkRescueTask = () => {
+    if (!rescueTask) return;
+    const now = Date.now();
+    savePayload({ ...payload, tasks: tasks.map(t => (
+      t.uuid === rescueTask.uuid
+        ? { ...t, isParked: true, isNowFocus: false, lastUpdated: now }
+        : t
+    )) });
   };
 
   const handleBadDayReset = () => {
@@ -968,14 +990,14 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
           task={rescueTask}
           allTasks={tasks}
           firstName={(config.userName || "").split(" ")[0] || "friend"}
+          config={config}
+          entryPoint="mindbox"
+          includeMemory={!(isSyncingFromCache || syncWarning === "offline")}
           apiKey={getAIKeys().geminiKey}
           onDismiss={() => setRescueActive(false)}
-          onAccept={() => {
-            setRescueActive(false);
-            if (rescueTask) {
-              savePayload({ ...payload, tasks: tasks.map(t => t.uuid === rescueTask.uuid ? { ...t, isNowFocus: true } : t) });
-            }
-          }}
+          onSetNowFocus={() => setRescueTaskAsNowFocus()}
+          onParkTask={parkRescueTask}
+          onAccept={() => setRescueTaskAsNowFocus({ close: true })}
         />
       )}
 
