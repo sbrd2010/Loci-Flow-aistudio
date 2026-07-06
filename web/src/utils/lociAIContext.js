@@ -26,6 +26,25 @@ export function isActiveLociTask(task) {
   return !!task && !task.isDeleted && !task.isCompleted && !task.isParked;
 }
 
+// Returns the flat list of tasks that will actually appear in the prompt's
+// CURRENT CAPPED TASK CONTEXT block (see buildLociTaskContext) — i.e. active
+// tasks within each horizon's HORIZON_CAPS limit. A task beyond its
+// horizon's cap only ever shows up as "+X more", never as itself, so
+// anything checking "is this actually visible to the model" (e.g.
+// buildLociCategoryFilterContext) must use this instead of the full active
+// list, or it can miss a mismatch the model genuinely can't see either.
+export function getVisibleLociTasks(allTasks = []) {
+  const active = (allTasks || []).filter(isActiveLociTask);
+  const visible = [];
+  for (const horizon of HORIZON_ORDER) {
+    const horizonTasks = active.filter(task => task.horizonLevel === horizon);
+    if (horizonTasks.length === 0) continue;
+    const cap = HORIZON_CAPS[horizon] || 8;
+    visible.push(...horizonTasks.slice(0, cap));
+  }
+  return visible;
+}
+
 export function getLocalDateString(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -311,7 +330,10 @@ export function buildLociLowEnergyContext(config = {}) {
 // mismatch both return "" so this is silent unless there's something to flag.
 export function buildLociCategoryFilterContext(tasks = [], requestedCategory) {
   if (!requestedCategory) return "";
-  const hasMatch = (tasks || []).some(t => isActiveLociTask(t) && (t.category || "Personal") === requestedCategory);
+  // Uses the capped visible set, not the full active list — a matching task
+  // that exists but falls beyond its horizon's cap (shown only as "+X more")
+  // is just as invisible to the model as one that doesn't exist at all.
+  const hasMatch = getVisibleLociTasks(tasks).some(t => (t.category || "Personal") === requestedCategory);
   if (hasMatch) return "";
   return `CATEGORY NOTE: No visible tasks are currently tagged {${requestedCategory}} — if asked about ${requestedCategory} priorities, say so plainly rather than picking an unrelated task.`;
 }

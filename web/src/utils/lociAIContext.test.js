@@ -351,8 +351,8 @@ describe("buildLociCategoryFilterContext", () => {
 
   it("returns an empty string when a visible active task matches the requested category", () => {
     const tasks = [
-      { title: "Fix resume", category: "Career" },
-      { title: "Buy groceries", category: "Personal" },
+      { title: "Fix resume", category: "Career", horizonLevel: "today" },
+      { title: "Buy groceries", category: "Personal", horizonLevel: "today" },
     ];
     expect(buildLociCategoryFilterContext(tasks, "Career")).toBe("");
   });
@@ -365,16 +365,27 @@ describe("buildLociCategoryFilterContext", () => {
   });
 
   it("treats an untagged task as Personal, matching buildLociTaskContext's own default", () => {
-    const tasks = [{ title: "Untagged task" }];
+    const tasks = [{ title: "Untagged task", horizonLevel: "today" }];
     expect(buildLociCategoryFilterContext(tasks, "Personal")).toBe("");
+    expect(buildLociCategoryFilterContext(tasks, "Work")).toContain("CATEGORY NOTE");
+  });
+
+  it("does not count a matching task hidden beyond its horizon's visibility cap (Codex review finding)", () => {
+    // HORIZON_CAPS caps "today" at 10 — an 11th Today task only ever shows up
+    // as "+1 more" in the actual prompt, so it's just as invisible to the
+    // model as if it didn't exist.
+    const tasks = [
+      ...Array.from({ length: 10 }, (_, i) => ({ title: `Personal ${i}`, category: "Personal", horizonLevel: "today" })),
+      { title: "Hidden work task", category: "Work", horizonLevel: "today" },
+    ];
     expect(buildLociCategoryFilterContext(tasks, "Work")).toContain("CATEGORY NOTE");
   });
 
   it("ignores deleted, completed, and parked tasks when checking for a category match", () => {
     const tasks = [
-      { title: "Old work task", category: "Work", isDeleted: true },
-      { title: "Done work task", category: "Work", isCompleted: true },
-      { title: "Parked work task", category: "Work", isParked: true },
+      { title: "Old work task", category: "Work", horizonLevel: "today", isDeleted: true },
+      { title: "Done work task", category: "Work", horizonLevel: "today", isCompleted: true },
+      { title: "Parked work task", category: "Work", horizonLevel: "today", isParked: true },
     ];
     expect(buildLociCategoryFilterContext(tasks, "Work")).toContain("CATEGORY NOTE");
   });

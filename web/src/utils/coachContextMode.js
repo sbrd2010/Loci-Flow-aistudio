@@ -121,6 +121,12 @@ const CATEGORY_FILTER_PATTERNS = [
   /\bwhich\s+(career|work|health|personal)\s+task\b/i,
   /\b(career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b/i,
   /\b(?:focus on|priorit\w*)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(career|work|health|personal)\b/i,
+  // Also mirrors BROAD_TASK_QUERY_RE's own "what are/tell me/show me my
+  // <category> priorities" shape (no should/to needed) — that shape already
+  // routes to full_task via BROAD_TASK_QUERY_RE, but detectRequestedCategory
+  // didn't recognize it as naming a category, so no CATEGORY NOTE was added
+  // for e.g. "What are my work priorities?".
+  /(?:what are|tell me|show me|check|what about)\s+my\s+(career|work|health|personal)s?\s*priorit(?:y|ies)\b/i,
 ];
 
 export function detectRequestedCategory(message) {

@@ -527,4 +527,14 @@ describe("detectRequestedCategory", () => {
   it("normalizes shorthand before detecting, consistent with the classifier", () => {
     expect(detectRequestedCategory("wat work task should i do first")).toBe("Work");
   });
+
+  it("detects 'what are/tell me/show me my <category> priorities' phrasing without should/to (Codex review finding)", () => {
+    // These already route to full_task via BROAD_TASK_QUERY_RE's own
+    // category-priority branch — detectRequestedCategory needs the same
+    // coverage or the CATEGORY NOTE silently never fires for them.
+    expect(detectRequestedCategory("What are my work priorities?")).toBe("Work");
+    expect(detectRequestedCategory("Tell me my health priorities")).toBe("Health");
+    expect(detectRequestedCategory("Show me my work priorities")).toBe("Work");
+    expect(detectRequestedCategory("Check my career priorities")).toBe("Career");
+  });
 });
