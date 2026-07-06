@@ -23,6 +23,7 @@
 import { buildToggleCompletedTasks } from "./taskOps";
 import { isActiveLociTask } from "./lociAIContext";
 import { safeUUID } from "./uuid";
+import { normalizeForClassification } from "./coachContextMode";
 
 const ACTION_TAG_RE = /\s*\[\[(SET_NOW_FOCUS|COMPLETE_TASK|ADD_TASK|PARK_TASK|START_FOCUS):\s*((?:[^\]]|\](?!\]))+?)\s*\]\]/gi;
 
@@ -75,7 +76,12 @@ const BODY_DOUBLE_REF_RE = /\b(body[\s-]?double|sit with me|stay with me|work (?
 
 const INTENT_PATTERNS = {
   COMPLETE_TASK: /\b(done|finish(ed|ing)?|complet(e|ed|ing)|wrapped? up|knocked out)\b/i,
-  SET_NOW_FOCUS: /\b(focus on|switch.*focus|prioriti[sz]e|now focus|pin( this| that)? task|pin\b|focus.*now)\b/i,
+  // "set"/"swap" and "make X my focus" mirror the phrasings coachContextMode.js's
+  // EXPLICIT_ACTION_RE now routes to full_task — without a matching intent
+  // pattern here, the model could emit a SET_NOW_FOCUS tag for these that
+  // this gate then blocks, while its visible narration ("switched your
+  // focus...") still shows since messageSeemsActionLike would also be false.
+  SET_NOW_FOCUS: /\b(focus on|switch.*focus|(?:set|swap)\s+(?:my\s+|the\s+)?focus\s+(?:to|on)|make\s+.{1,40}\s+my focus\b|prioriti[sz]e|now focus|pin( this| that)? task|pin\b|focus.*now)\b/i,
   // Second alternative covers body-double requests ("sit with me while I
   // work", "be my body double") — they ask for a focus session just as
   // clearly as "start a timer" does, without using start/begin/kick-off wording.
@@ -109,24 +115,28 @@ const STOPWORDS_RE = /^(the|and|for|are|but|not|you|all|can|her|his|its|our|out|
 
 // Checks that at least one "significant" word (length >= 3, and not a common
 // stopword) from the tag's title appears in the user's message. Titles with
-// no significant words at all (e.g. "it") are passed through — findTaskByTitle's
-// own length guard handles those.
+// no words of length >= 3 at all (e.g. "it") are passed through —
+// findTaskByTitle's own length guard handles those at resolution time.
 function titleMentionedInMessage(title, message) {
-  const lengthFiltered = normalizeTitle(title)
+  const normalizedTitle = normalizeTitle(title);
+  const lengthFiltered = normalizedTitle
     .split(" ")
     .filter(w => w.length >= 3 && !/^pr\d+$/i.test(w));
+  if (lengthFiltered.length === 0) return true;
   const significant = lengthFiltered.filter(w => !STOPWORDS_RE.test(w));
-  // A title made ENTIRELY of common stopwords (e.g. "Just Do It", "Not Now")
-  // is rare but real — falling back to unconditional pass-through here would
-  // let any message satisfying the bare intent pattern (e.g. "done")
-  // corroborate that task regardless of what was actually said, defeating
-  // the exact guard the stopword exclusion exists for. Fall back to the
-  // title's own (unfiltered) words instead, so it still requires a literal
-  // match on the title's actual text.
-  const words = significant.length > 0 ? significant : lengthFiltered;
-  if (words.length === 0) return true;
   const normMessage = normalizeTitle(message);
-  return words.some(w => normMessage.includes(w));
+  if (significant.length === 0) {
+    // Every length->=3 word in this title is itself a common stopword (e.g.
+    // "New Task", "Day Off", "Just Do It") — falling back to the title's own
+    // (still-generic) words would recreate the exact false-corroboration bug
+    // the stopword exclusion exists to close (e.g. "New Task" would match any
+    // message mentioning "task"). No single word here reliably identifies
+    // this task over any other, so only accept a verbatim mention of the
+    // whole title — anything else must go through matchesUserIntent's
+    // separate pronoun/current-focus corroboration paths instead.
+    return normMessage.includes(normalizedTitle);
+  }
+  return significant.some(w => normMessage.includes(w));
 }
 
 // Loosely tests whether the user's message itself uses language associated
@@ -138,7 +148,12 @@ function titleMentionedInMessage(title, message) {
 export function messageSeemsActionLike(actionType, message = "") {
   const pattern = INTENT_PATTERNS[actionType];
   if (!pattern) return false;
-  const msg = String(message || "");
+  // Same shorthand normalization coachContextMode.js applies before deciding
+  // whether this message even reaches a mode with COACH ACTIONS instructions
+  // — without it, a message like "remind me 2 call the plumber" can reach
+  // full_task (via the normalized text) but then have its ADD_TASK tag
+  // blocked here (seeing the raw, un-normalized "2" instead of "to").
+  const msg = normalizeForClassification(String(message || ""));
   if (actionType === "COMPLETE_TASK" && NON_SPECIFIC_COMPLETION_RE.test(msg)) return false;
 
   // Scan every match of the intent pattern, not just the first — an earlier

@@ -116,8 +116,11 @@ describe("classifyContextMode", () => {
     // help route correctly — reintroducing the very "falls to light" bug
     // this normalizer exists to fix, just via a different path.
     expect(classifyContextMode("remind me in 2 minutes")).toBe("full_task");
+    expect(classifyContextMode("check in with me in 4 minutes")).toBe("full_task");
     expect(classifyContextMode("check in with me at 2 pm")).toBe("full_task");
     expect(classifyContextMode("check in with me at 4pm")).toBe("full_task");
+    // Standalone time signal, no reminder verb.
+    expect(classifyContextMode("in 2 minutes")).toBe("full_task");
     // Non-time "2"/"4" usage still normalizes as intended.
     expect(classifyContextMode("yo remind me 2 call the plumber")).toBe("full_task");
   });

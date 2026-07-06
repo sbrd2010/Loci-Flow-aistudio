@@ -52,7 +52,12 @@ const SHORTHAND_MAP = [
   [/\btodo\b/gi, "task"],
 ];
 
-function normalizeForClassification(text) {
+// Exported so coachActions.js's intent-pattern matching (messageSeemsActionLike)
+// can normalize the same way — otherwise a message that reaches full_task
+// via this normalization (e.g. "remind me 2 call the plumber") could still
+// have its resulting action tag blocked by the gate, which would otherwise
+// see the raw, un-normalized text ("2" instead of "to").
+export function normalizeForClassification(text) {
   return SHORTHAND_MAP.reduce((acc, [re, replacement]) => acc.replace(re, replacement), text);
 }
 
