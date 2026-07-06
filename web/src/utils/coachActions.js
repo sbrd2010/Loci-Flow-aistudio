@@ -109,12 +109,21 @@ const STOPWORDS_RE = /^(the|and|for|are|but|not|you|all|can|her|his|its|our|out|
 
 // Checks that at least one "significant" word (length >= 3, and not a common
 // stopword) from the tag's title appears in the user's message. Titles with
-// no significant words (e.g. "it") are passed through — findTaskByTitle's
+// no significant words at all (e.g. "it") are passed through — findTaskByTitle's
 // own length guard handles those.
 function titleMentionedInMessage(title, message) {
-  const words = normalizeTitle(title)
+  const lengthFiltered = normalizeTitle(title)
     .split(" ")
-    .filter(w => w.length >= 3 && !/^pr\d+$/i.test(w) && !STOPWORDS_RE.test(w));
+    .filter(w => w.length >= 3 && !/^pr\d+$/i.test(w));
+  const significant = lengthFiltered.filter(w => !STOPWORDS_RE.test(w));
+  // A title made ENTIRELY of common stopwords (e.g. "Just Do It", "Not Now")
+  // is rare but real — falling back to unconditional pass-through here would
+  // let any message satisfying the bare intent pattern (e.g. "done")
+  // corroborate that task regardless of what was actually said, defeating
+  // the exact guard the stopword exclusion exists for. Fall back to the
+  // title's own (unfiltered) words instead, so it still requires a literal
+  // match on the title's actual text.
+  const words = significant.length > 0 ? significant : lengthFiltered;
   if (words.length === 0) return true;
   const normMessage = normalizeTitle(message);
   return words.some(w => normMessage.includes(w));

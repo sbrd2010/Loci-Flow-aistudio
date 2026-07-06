@@ -87,6 +87,10 @@ describe("classifyContextMode", () => {
     expect(classifyContextMode("i feel like a total failure today")).toBe("emotional");
     expect(classifyContextMode("i wasted the entire day")).toBe("emotional");
     expect(classifyContextMode("i've wasted the whole freaking day")).toBe("emotional");
+    // The "failure" match must require personal-shame framing ("a failure"),
+    // not just the word appearing near "feel like" — otherwise ordinary work
+    // language false-positives into the emotional/safety prompt.
+    expect(classifyContextMode("I feel like the failure rate on our tests is too high, can you add a task to investigate?")).not.toBe("emotional");
   });
 
   it("normalizes common texting shorthand before classification (real-world typos/broken English)", () => {
@@ -103,6 +107,19 @@ describe("classifyContextMode", () => {
     // "i(['']m| am) ..." emotional patterns, not just the apostrophe'd form.
     expect(classifyContextMode("im overwhelmed")).toBe("emotional");
     expect(classifyContextMode("im stressed about this")).toBe("emotional");
+  });
+
+  it("does not let '2'/'4' shorthand normalization corrupt real clock-time/duration signals", () => {
+    // The blind \b2\b->"to" / \b4\b->"for" substitution would otherwise
+    // rewrite "in 2 minutes" into "in to minutes", breaking the pre-existing
+    // digit-based TIME_SIGNAL_RE/STANDALONE_TIME_RE checks it's supposed to
+    // help route correctly — reintroducing the very "falls to light" bug
+    // this normalizer exists to fix, just via a different path.
+    expect(classifyContextMode("remind me in 2 minutes")).toBe("full_task");
+    expect(classifyContextMode("check in with me at 2 pm")).toBe("full_task");
+    expect(classifyContextMode("check in with me at 4pm")).toBe("full_task");
+    // Non-time "2"/"4" usage still normalizes as intended.
+    expect(classifyContextMode("yo remind me 2 call the plumber")).toBe("full_task");
   });
 
   it("routes action/mutation phrases to full_task", () => {

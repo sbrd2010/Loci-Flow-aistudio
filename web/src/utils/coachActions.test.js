@@ -361,6 +361,19 @@ describe("matchesUserIntent", () => {
     // A message that genuinely names the task still matches.
     expect(matchesUserIntent("COMPLETE_TASK", "I finished replying to the important message", title)).toBe(true);
   });
+
+  it("does not let a title made entirely of stopwords bypass the corroboration gate unconditionally", () => {
+    // Excluding stopwords from the "significant word" check must not regress
+    // into the opposite bug: a title whose only length->=3 word(s) are ALL
+    // stopwords (e.g. "Just Do It" -> only "just" survives length filtering,
+    // and "just" is itself a stopword) would otherwise leave zero significant
+    // words, and titleMentionedInMessage treats "zero significant words" as
+    // an unconditional pass — letting ANY message satisfying the bare intent
+    // pattern corroborate this task regardless of what was actually said.
+    const title = "Just Do It";
+    expect(matchesUserIntent("COMPLETE_TASK", "I'm done with the laundry", title, [], title)).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "I finished Just Do It", title)).toBe(true);
+  });
 });
 
 describe("applyCoachActions", () => {

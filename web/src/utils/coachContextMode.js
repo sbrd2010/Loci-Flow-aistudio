@@ -25,8 +25,12 @@ const SHORTHAND_MAP = [
   [/\bu\b/gi, "you"],
   [/\bur\b/gi, "your"],
   [/\br\b/gi, "are"],
-  [/\b2\b/gi, "to"],
-  [/\b4\b/gi, "for"],
+  // Never rewrite a digit that's actually a clock time or duration (e.g.
+  // "in 2 minutes", "at 2 pm", "call me at 4") — TIME_SIGNAL_RE/STANDALONE_TIME_RE
+  // elsewhere in this file need the literal digit to recognize those. The
+  // lookbehind guards "at N", the lookahead guards "N <unit>"/"N am|pm".
+  [/(?<!\bat\s)\b2\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm)\b)/gi, "to"],
+  [/(?<!\bat\s)\b4\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm)\b)/gi, "for"],
   [/\bb4\b/gi, "before"],
   [/\bdis\b/gi, "this"],
   [/\bdat\b/gi, "that"],
@@ -58,7 +62,7 @@ function isCheckinRequest(text) {
 
 const TASK_RE = /\b(plan(?:ning)? (?:my|the|today)|prioriti[sz]e|deadline|schedule|agenda|now focus|set now focus|pin now focus|what should i do|what do i have to do|what are my tasks|what should i work on|help me choose|next step|add (?:this |that )?task|add (?:it )?to (?:my|the|today['’]?s) list|add\b.{1,50}\bto (?:my|the) list|create (?:a )?task|capture this|put (?:this|it) in (?:my|the) tasks|mark\b.{1,50}\bdone\b|mark (?:it |this )?done|completed|finished|complete this|i(['’]m| am) done with (?:this|that|it)?\s*task|i(['’]m| am) done with .{1,50}\btask|(?:done with|finished)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|delete (?:this|that) task|undo|park (?:this|that)|defer (?:this|that)|(?:park|defer)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|move (?:this|it) to (?:today|week|month|quarter|6 months|work)|start (?:a )?timer|start (?:a\s+|current\s+|now\s+)?focus|focus session|overdue|(?:what['’]?s|what is|anything) due|due (?:today|tomorrow|this week|date)|tasks?|my list|on my list|parked|what did i park|should i start|which task should i start)\b/i;
 
-const EMOTIONAL_RE = /\b(comfort me|i feel (?:terrible|awful|horrible|useless|down|bad|sad|low|hopeless)|i feel like .{0,20}\bfailure\b|i hate this|i failed|i(?:['’]ve| have)? wasted (?:the|my)(?:\s+\w+){0,2}\s+day|i(['’]m| am) overwhelmed|too many things|don['’]?t know where to start|don['’]?t push (?:tasks|me)|i(['’]m| am) stuck|can['’]?t (?:start|focus)|i(['’]m| am) stressed|i(['’]m| am) anxious|fight with|my family is stressing me|i need rest|i just want to (?:play games|rest)|i did it|small win|i(['’]m| am) frustrated|i can['’]?t work|done with everything)\b/i;
+const EMOTIONAL_RE = /\b(comfort me|i feel (?:terrible|awful|horrible|useless|down|bad|sad|low|hopeless)|i feel like (?:such a |a total |a real |a complete |a )failure\b|i hate this|i failed|i(?:['’]ve| have)? wasted (?:the|my)(?:\s+\w+){0,2}\s+day|i(['’]m| am) overwhelmed|too many things|don['’]?t know where to start|don['’]?t push (?:tasks|me)|i(['’]m| am) stuck|can['’]?t (?:start|focus)|i(['’]m| am) stressed|i(['’]m| am) anxious|fight with|my family is stressing me|i need rest|i just want to (?:play games|rest)|i did it|small win|i(['’]m| am) frustrated|i can['’]?t work|done with everything)\b/i;
 
 const FRESH_SCAN_RE = /\b(scan (everything|all|my list|all my tasks|my whole list) again|re-plan|look at (everything|all my tasks) again|fresh scan|full scan|check all my tasks|review my whole list|re-plan from my full list|look at all my tasks|scan all my tasks)\b/i;
 
