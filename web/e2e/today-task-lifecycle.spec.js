@@ -141,8 +141,15 @@ test("mobile reliability: Add Task accepts manual sub-steps from pasted bullets"
   await expect(subStepsList).toContainText("Compare flight prices");
   await expect(subStepsList).toContainText("Book refundable hotel");
 
-  await page.getByRole("button", { name: "Remove step Compare flight prices" }).click();
+  // Editing a step in place (the pencil icon) rewrites its text without removing it.
+  await page.getByRole("button", { name: "Edit step Compare flight prices" }).click();
+  await subStepsList.locator("input").fill("Compare flight and train prices");
+  await subStepsList.locator("input").press("Enter");
+  await expect(subStepsList).toContainText("Compare flight and train prices");
   await expect(subStepsList).not.toContainText("Compare flight prices");
+
+  await page.getByRole("button", { name: "Remove step Compare flight and train prices" }).click();
+  await expect(subStepsList).not.toContainText("Compare flight and train prices");
 
   await page.getByTestId("add-task-submit").click();
   await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
