@@ -39,6 +39,72 @@ describe("classifyContextMode", () => {
     expect(classifyContextMode("check my week")).toBe("full_task");
   });
 
+  it("PR335 follow-up - routes urgent/pressing/important phrasing to full_task, not light", () => {
+    expect(classifyContextMode("so like whats actually urgent for me today")).toBe("full_task");
+    expect(classifyContextMode("what is actually urgent today")).toBe("full_task");
+    expect(classifyContextMode("whats urgent")).toBe("full_task");
+    expect(classifyContextMode("what is pressing today")).toBe("full_task");
+    expect(classifyContextMode("whats important today")).toBe("full_task");
+    expect(classifyContextMode("anything urgent")).toBe("full_task");
+    expect(classifyContextMode("anything pressing today")).toBe("full_task");
+    // Non-question mentions of the same words must not be swept in.
+    expect(classifyContextMode("this is really important to me")).toBe("light");
+    expect(classifyContextMode("that meeting felt urgent and stressful")).toBe("light");
+  });
+
+  it("routes task-list/brain-dump synonyms to full_task, not light", () => {
+    expect(classifyContextMode("what's on my plate today")).toBe("full_task");
+    expect(classifyContextMode("what's on my plate")).toBe("full_task");
+    expect(classifyContextMode("what's next on my plate")).toBe("full_task");
+    expect(classifyContextMode("what's in my brain dump")).toBe("full_task");
+    expect(classifyContextMode("check my brain dump")).toBe("full_task");
+  });
+
+  it("tolerates filler words in 'what should I do' phrasing", () => {
+    expect(classifyContextMode("ok what should i actually do now")).toBe("full_task");
+    expect(classifyContextMode("what should i really work on")).toBe("full_task");
+    expect(classifyContextMode("what do i even do")).toBe("full_task");
+    expect(classifyContextMode("what to do right now")).toBe("full_task");
+  });
+
+  it("recognizes 'remind me to X' (no time signal) as an ADD_TASK request, matching coachActions' own intent pattern", () => {
+    expect(classifyContextMode("remind me to book a dentist appointment and also to renew my passport")).toBe("full_task");
+    expect(classifyContextMode("don't forget to call the plumber")).toBe("full_task");
+    // A genuine check-in request (with a time signal) still routes to full_task too.
+    expect(classifyContextMode("remind me at 5pm to look at my week")).toBe("full_task");
+  });
+
+  it("recognizes 'switch/set/swap my focus to X' as a SET_NOW_FOCUS request, matching coachActions' own intent pattern", () => {
+    expect(classifyContextMode("switch my focus to writing the quarterly tax report")).toBe("full_task");
+    expect(classifyContextMode("set my focus to the report")).toBe("full_task");
+    expect(classifyContextMode("swap my focus to the report")).toBe("full_task");
+    expect(classifyContextMode("make the report my focus")).toBe("full_task");
+  });
+
+  it("routes shame/failure language to emotional even with intensifiers or filler words", () => {
+    expect(classifyContextMode("i feel like a failure today, i wasted the whole day")).toBe("emotional");
+    expect(classifyContextMode("i feel like such a failure right now")).toBe("emotional");
+    expect(classifyContextMode("i feel like a total failure today")).toBe("emotional");
+    expect(classifyContextMode("i wasted the entire day")).toBe("emotional");
+    expect(classifyContextMode("i've wasted the whole freaking day")).toBe("emotional");
+  });
+
+  it("normalizes common texting shorthand before classification (real-world typos/broken English)", () => {
+    // These are the kinds of messy, real-world phrasings actual users type —
+    // dropped apostrophes, phonetic typos, and single-letter/number shorthand.
+    expect(classifyContextMode("wut shud i focus on rn")).toBe("full_task");
+    expect(classifyContextMode("wat should i do 2day")).toBe("full_task");
+    expect(classifyContextMode("wat tasks do i have 2day")).toBe("full_task");
+    expect(classifyContextMode("gimme my todo list")).toBe("full_task");
+    expect(classifyContextMode("wat r my todos")).toBe("full_task");
+    expect(classifyContextMode("im stuck idk what 2 start with")).toBe("emotional");
+    expect(classifyContextMode("yo remind me 2 call the plumber")).toBe("full_task");
+    // Dropped-apostrophe "im" must still route through all the existing
+    // "i(['']m| am) ..." emotional patterns, not just the apostrophe'd form.
+    expect(classifyContextMode("im overwhelmed")).toBe("emotional");
+    expect(classifyContextMode("im stressed about this")).toBe("emotional");
+  });
+
   it("routes action/mutation phrases to full_task", () => {
     expect(classifyContextMode("I finished the report")).toBe("full_task");
     expect(classifyContextMode("start timer for writing")).toBe("full_task");

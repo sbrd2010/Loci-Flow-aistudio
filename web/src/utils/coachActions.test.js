@@ -348,6 +348,19 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("START_FOCUS", "be my body double for 15 minutes", "Email client", [], "Write report")).toBe(false);
     expect(matchesUserIntent("START_FOCUS", "be my body double for 15 minutes", "Write report", [], null)).toBe(false);
   });
+
+  it("does not corroborate a title match on shared stopwords alone", () => {
+    // "the", "your", etc. appear in almost every title and almost every
+    // message — titleMentionedInMessage must ignore them, or a generic "I'm
+    // done with the task" (naming no task at all) would falsely corroborate
+    // completing whatever task happens to be Now Focus, purely because its
+    // title also contains "the".
+    const title = "Reply to the important message sitting in your inbox";
+    expect(matchesUserIntent("COMPLETE_TASK", "I'm done with the task", title, [], title)).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "I am done with the task", "Reach out to 2 people - clients, collaborators, or connections")).toBe(false);
+    // A message that genuinely names the task still matches.
+    expect(matchesUserIntent("COMPLETE_TASK", "I finished replying to the important message", title)).toBe(true);
+  });
 });
 
 describe("applyCoachActions", () => {

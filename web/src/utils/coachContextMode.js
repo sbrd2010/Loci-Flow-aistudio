@@ -8,7 +8,49 @@ const REMINDER_VERB_RE = /\b(remind me|check in|follow up|circle back|ask me aga
 const TIME_SIGNAL_RE = /\b(later|in \d+\s*min\w*|at \d{1,2}(:\d{2})?\s*(am|pm)?|tomorrow(?: morning)?)\b/i;
 const STANDALONE_TIME_RE = /\b(in \d+\s*min\w*|tomorrow morning)\b/i;
 
-const BROAD_TASK_QUERY_RE = /\b(what are my tasks|what['’]?s due|what is due|anything due|due date|what['’]?s my deadline|what is my deadline|show my tasks|what do i have today|what tasks do i have|list my tasks|my task list|show my list|what['’]?s on my list|what do i need to do today|check (?:my |the )?(?:today['’]?s|this week['’]?s?|week) (?:focus|horizon)|check (?:this|my) week horizon|check today['’]?s focus|today['’]?s?\s+focus|what['’]?s?\s+my\s+focus\b|my\s+focus\s+for\s+today|today['’]?s?\s+priorit(?:y|ies)|(?:what are|tell me|show me|check|what about) my(?:\s+(?:this\s+|(?:\d+|six)\s+)?(?:career|work|health|personal|month|quarter)s?['’]?s?(?:\s*(?:and|&|\/|,)\s*(?:this\s+|(?:\d+|six)\s+)?(?:career|work|health|personal|month|quarter)s?['’]?s?){0,2})?\s*priorit(?:y|ies)|what should be my priority|which priority should i focus on|can['’]?t you check|check my week)\b/i;
+const BROAD_TASK_QUERY_RE = /\b(what are my tasks|what['’]?s due|what is due|anything due|due date|what['’]?s my deadline|what is my deadline|show my tasks|what do i have today|what tasks do i have|list my tasks|my task list|show my list|what['’]?s on my list|what do i need to do today|check (?:my |the )?(?:today['’]?s|this week['’]?s?|week) (?:focus|horizon)|check (?:this|my) week horizon|check today['’]?s focus|today['’]?s?\s+focus|what['’]?s?\s+my\s+focus\b|my\s+focus\s+for\s+today|today['’]?s?\s+priorit(?:y|ies)|(?:what are|tell me|show me|check|what about) my(?:\s+(?:this\s+|(?:\d+|six)\s+)?(?:career|work|health|personal|month|quarter)s?['’]?s?(?:\s*(?:and|&|\/|,)\s*(?:this\s+|(?:\d+|six)\s+)?(?:career|work|health|personal|month|quarter)s?['’]?s?){0,2})?\s*priorit(?:y|ies)|what should be my priority|which priority should i focus on|can['’]?t you check|check my week|(?:what['’]?s|what is|anything)\s+(?:actually |really )?(?:urgent|pressing|critical|important)\b|(?:what['’]?s|what is)(?: next)? on my plate(?: today)?|(?:what['’]?s|what is) in my brain dump|check my brain dump|what do i even do|what['’]?s there to do|what to do (?:right now|today|now)\b)\b/i;
+
+// Real users type messy — texting shorthand, dropped apostrophes, common
+// abbreviations — and every regex above only recognizes clean English
+// phrasing. Rather than hand-tuning every regex for every possible typo
+// (a losing battle), normalize a small set of very common, low-risk
+// shorthand tokens to their canonical form before classification. This never
+// touches the message actually sent to the LLM or stored in chat history —
+// it only affects which context mode the classifier picks.
+const SHORTHAND_MAP = [
+  [/\bwut\b/gi, "what"],
+  [/\bwat\b/gi, "what"],
+  [/\bshud\b/gi, "should"],
+  [/\brn\b/gi, "right now"],
+  [/\bu\b/gi, "you"],
+  [/\bur\b/gi, "your"],
+  [/\br\b/gi, "are"],
+  [/\b2\b/gi, "to"],
+  [/\b4\b/gi, "for"],
+  [/\bb4\b/gi, "before"],
+  [/\bdis\b/gi, "this"],
+  [/\bdat\b/gi, "that"],
+  [/\bkno\b/gi, "know"],
+  [/\bsumthing\b/gi, "something"],
+  [/\bsumthin\b/gi, "something"],
+  [/\bgimme\b/gi, "give me"],
+  [/\bwanna\b/gi, "want to"],
+  [/\bgonna\b/gi, "going to"],
+  [/\bgotta\b/gi, "got to"],
+  [/\bidk\b/gi, "i do not know"],
+  [/\bive\b/gi, "i have"],
+  // Dropped-apostrophe "im" (extremely common when typing fast) doesn't match
+  // any of this file's many "i(['’]m| am) ..." patterns (overwhelmed, stuck,
+  // stressed, anxious, frustrated, etc.) — normalize it to "i am" so those
+  // patterns work exactly as they already do for "i'm"/"i am".
+  [/\bim\b/gi, "i am"],
+  [/\btodos\b/gi, "tasks"],
+  [/\btodo\b/gi, "task"],
+];
+
+function normalizeForClassification(text) {
+  return SHORTHAND_MAP.reduce((acc, [re, replacement]) => acc.replace(re, replacement), text);
+}
 
 function isCheckinRequest(text) {
   return (REMINDER_VERB_RE.test(text) && TIME_SIGNAL_RE.test(text)) || STANDALONE_TIME_RE.test(text);
@@ -16,13 +58,13 @@ function isCheckinRequest(text) {
 
 const TASK_RE = /\b(plan(?:ning)? (?:my|the|today)|prioriti[sz]e|deadline|schedule|agenda|now focus|set now focus|pin now focus|what should i do|what do i have to do|what are my tasks|what should i work on|help me choose|next step|add (?:this |that )?task|add (?:it )?to (?:my|the|today['’]?s) list|add\b.{1,50}\bto (?:my|the) list|create (?:a )?task|capture this|put (?:this|it) in (?:my|the) tasks|mark\b.{1,50}\bdone\b|mark (?:it |this )?done|completed|finished|complete this|i(['’]m| am) done with (?:this|that|it)?\s*task|i(['’]m| am) done with .{1,50}\btask|(?:done with|finished)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|delete (?:this|that) task|undo|park (?:this|that)|defer (?:this|that)|(?:park|defer)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|move (?:this|it) to (?:today|week|month|quarter|6 months|work)|start (?:a )?timer|start (?:a\s+|current\s+|now\s+)?focus|focus session|overdue|(?:what['’]?s|what is|anything) due|due (?:today|tomorrow|this week|date)|tasks?|my list|on my list|parked|what did i park|should i start|which task should i start)\b/i;
 
-const EMOTIONAL_RE = /\b(comfort me|i feel (?:terrible|awful|horrible|useless|down|bad|sad|low|hopeless)|i hate this|i failed|i wasted (?:the|my) day|i(['’]m| am) overwhelmed|too many things|don['’]?t know where to start|don['’]?t push (?:tasks|me)|i(['’]m| am) stuck|can['’]?t (?:start|focus)|i(['’]m| am) stressed|i(['’]m| am) anxious|fight with|my family is stressing me|i need rest|i just want to (?:play games|rest)|i did it|small win|i(['’]m| am) frustrated|i can['’]?t work|done with everything)\b/i;
+const EMOTIONAL_RE = /\b(comfort me|i feel (?:terrible|awful|horrible|useless|down|bad|sad|low|hopeless)|i feel like .{0,20}\bfailure\b|i hate this|i failed|i(?:['’]ve| have)? wasted (?:the|my)(?:\s+\w+){0,2}\s+day|i(['’]m| am) overwhelmed|too many things|don['’]?t know where to start|don['’]?t push (?:tasks|me)|i(['’]m| am) stuck|can['’]?t (?:start|focus)|i(['’]m| am) stressed|i(['’]m| am) anxious|fight with|my family is stressing me|i need rest|i just want to (?:play games|rest)|i did it|small win|i(['’]m| am) frustrated|i can['’]?t work|done with everything)\b/i;
 
 const FRESH_SCAN_RE = /\b(scan (everything|all|my list|all my tasks|my whole list) again|re-plan|look at (everything|all my tasks) again|fresh scan|full scan|check all my tasks|review my whole list|re-plan from my full list|look at all my tasks|scan all my tasks)\b/i;
 
 const COMPACT_FOLLOWUP_RE = /\b(key point|one sentence|10[-\s]?min(?:ute)?s?\s*version|make it smaller|shorter|how do i start|make this easier|concrete steps|turn (?:that|this|it) into .{0,30}steps|what should i do next|set that|do next|tell me more|what did you mean|how do i do that|which one|why\??|explain that|elaborate|clarify)\b/i;
 
-const EXPLICIT_ACTION_RE = /\b(add (?:this|that)?\s*task|add\b.{1,50}\bto (?:my |the )?(?:today['’]?s?\s+)?list|add\b.{1,50}\bto (?:today|week|month|quarter|work)|create (?:a )?task|capture this|put (?:this|it) in (?:my|the)?\s*tasks|mark\b.*\bdone|mark (?:it|this)? done|done with (?:this|that|it)?\s*task|done with .{1,50}\btask|(?:done with|finished)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|complete this|delete (?:this|that) task|park (?:this|that|it|task)\b|park\s+.{1,50}\btask|defer (?:this|that|it|task)\b|defer\s+.{1,50}\btask|(?:park|defer)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|move (?:this|it) to|start (?:a )?timer|start (?:a\s+|current\s+|now\s+)?focus|focus session)\b/i;
+const EXPLICIT_ACTION_RE = /\b(add (?:this|that)?\s*task|add\b.{1,50}\bto (?:my |the )?(?:today['’]?s?\s+)?list|add\b.{1,50}\bto (?:today|week|month|quarter|work)|create (?:a )?task|capture this|put (?:this|it) in (?:my|the)?\s*tasks|mark\b.*\bdone|mark (?:it|this)? done|done with (?:this|that|it)?\s*task|done with .{1,50}\btask|(?:done with|finished)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|complete this|delete (?:this|that) task|park (?:this|that|it|task)\b|park\s+.{1,50}\btask|defer (?:this|that|it|task)\b|defer\s+.{1,50}\btask|(?:park|defer)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|move (?:this|it) to|start (?:a )?timer|start (?:a\s+|current\s+|now\s+)?focus|focus session|(?:switch|set|swap)\s+(?:my\s+|the\s+)?focus\s+(?:to|on)|make\s+.{1,40}\s+my focus\b|remind me (?:to|that|i)\b|don['’]?t forget\b)\b/i;
 
 // Body-double session requests ("be my body double", "sit with me while I
 // work", "stay with me") read as task/focus requests even when they don't
@@ -36,7 +78,7 @@ const BODY_DOUBLE_RE = /\b(body[\s-]?double|sit with me|stay with me|work (?:alo
 // work-session request — route it to "emotional" instead of "full_task".
 const FEAR_DISTRESS_RE = /\b(i(['’]m| am) (?:scared|afraid|terrified|frightened)|don['’]?t leave me)\b/i;
 
-const TASK_ASK_RE = /\b(what should i (?:do|work on|start|focus on)|which (?:one|task) shall i focus|shall i focus|help me (?:choose|pick|prioritize|plan)|choose a task|pick a task|pick one (?:thing|task)|next step|prioritize my|plan my|plan today)\b/i;
+const TASK_ASK_RE = /\b(what should i (?:actually |really |just |honestly )?(?:do|work on|start|focus on)|which (?:one|task) shall i focus|shall i focus|help me (?:choose|pick|prioritize|plan)|choose a task|pick a task|pick one (?:thing|task)|next step|prioritize my|plan my|plan today)\b/i;
 
 // Low-energy asks need the full visible task list with estimates so the
 // coach can prefer the smallest task per the PRIORITY QUESTIONS rule — the
@@ -56,7 +98,7 @@ const PRIORITY_FILTER_RE = /\bwhich\s+(?:career|work|health|personal)\s+task\b|\
  * "profile_reflection".
  */
 export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan = false } = {}) {
-  const text = String(message || "");
+  const text = normalizeForClassification(String(message || ""));
 
   if (CRISIS_RE.test(text) || PANIC_RE.test(text)) return "emotional";
   if (PROFILE_RE.test(text)) return "profile_reflection";

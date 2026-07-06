@@ -99,14 +99,22 @@ const NON_SPECIFIC_COMPLETION_RE = /\b(done|finished?)\s+for\s+(today|now|the da
 // a different new task than the one the user just described).
 const TITLE_CHECK_TYPES = new Set(["SET_NOW_FOCUS", "START_FOCUS", "COMPLETE_TASK", "PARK_TASK", "ADD_TASK"]);
 
-// Checks that at least one "significant" word (length >= 3) from the tag's
-// title appears in the user's message. Titles with no significant words
-// (e.g. "it") are passed through — findTaskByTitle's own length guard
-// handles those.
+// Common English function words that are >=3 characters but carry no
+// task-identifying signal — without excluding these, a title like "Reply to
+// the important message sitting in your inbox" would count as "mentioned" by
+// any message containing "the" or "your" (virtually all of them), letting an
+// ambiguous message like "I'm done with the task" falsely corroborate
+// completing an unrelated task. See titleMentionedInMessage.
+const STOPWORDS_RE = /^(the|and|for|are|but|not|you|all|can|her|his|its|our|out|day|get|has|him|how|man|new|now|old|see|way|who|did|let|put|say|she|too|use|your|this|that|these|those|from|into|than|then|them|they|been|being|have|had|will|would|could|should|may|might|must|off|any|some|more|most|over|under|about|just|with|when|what|which|does|task|tasks)$/i;
+
+// Checks that at least one "significant" word (length >= 3, and not a common
+// stopword) from the tag's title appears in the user's message. Titles with
+// no significant words (e.g. "it") are passed through — findTaskByTitle's
+// own length guard handles those.
 function titleMentionedInMessage(title, message) {
   const words = normalizeTitle(title)
     .split(" ")
-    .filter(w => w.length >= 3 && !/^(pr\d+|task|tasks)$/i.test(w));
+    .filter(w => w.length >= 3 && !/^pr\d+$/i.test(w) && !STOPWORDS_RE.test(w));
   if (words.length === 0) return true;
   const normMessage = normalizeTitle(message);
   return words.some(w => normMessage.includes(w));
