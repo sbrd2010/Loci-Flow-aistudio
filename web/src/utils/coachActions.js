@@ -81,7 +81,11 @@ const INTENT_PATTERNS = {
   // pattern here, the model could emit a SET_NOW_FOCUS tag for these that
   // this gate then blocks, while its visible narration ("switched your
   // focus...") still shows since messageSeemsActionLike would also be false.
-  SET_NOW_FOCUS: /\b(focus on|switch.*focus|(?:set|swap)\s+(?:my\s+|the\s+)?focus\s+(?:to|on)|make\s+.{1,40}\s+my focus\b|prioriti[sz]e|now focus|pin( this| that)? task|pin\b|focus.*now)\b/i,
+  // The "make X my focus" branch excludes a preceding question word (what/
+  // how/why/would/could/should) within a short lookbehind window, so an
+  // analysis question like "what would make the report my focus easier?"
+  // doesn't register as an imperative SET_NOW_FOCUS request.
+  SET_NOW_FOCUS: /\b(focus on|switch.*focus|(?:set|swap)\s+(?:my\s+|the\s+)?focus\s+(?:to|on)|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})make\s+.{1,40}\s+my focus\b|prioriti[sz]e|now focus|pin( this| that)? task|pin\b|focus.*now)\b/i,
   // Second alternative covers body-double requests ("sit with me while I
   // work", "be my body double") — they ask for a focus session just as
   // clearly as "start a timer" does, without using start/begin/kick-off wording.
@@ -113,6 +117,19 @@ const TITLE_CHECK_TYPES = new Set(["SET_NOW_FOCUS", "START_FOCUS", "COMPLETE_TAS
 // completing an unrelated task. See titleMentionedInMessage.
 const STOPWORDS_RE = /^(the|and|for|are|but|not|you|all|can|her|his|its|our|out|day|get|has|him|how|man|new|now|old|see|way|who|did|let|put|say|she|too|use|your|this|that|these|those|from|into|than|then|them|they|been|being|have|had|will|would|could|should|may|might|must|off|any|some|more|most|over|under|about|just|with|when|what|which|does|task|tasks)$/i;
 
+// Checks whether `phrase`'s words appear as a contiguous, whole-word run
+// inside `message` (both already space-normalized). Unlike a raw substring
+// check, this doesn't let a longer word's prefix count as a match — e.g.
+// "get out" must not match inside "get output".
+function includesWholeWordPhrase(message, phrase) {
+  const messageWords = message.split(" ");
+  const phraseWords = phrase.split(" ");
+  for (let i = 0; i <= messageWords.length - phraseWords.length; i++) {
+    if (phraseWords.every((w, j) => messageWords[i + j] === w)) return true;
+  }
+  return false;
+}
+
 // Checks that at least one "significant" word (length >= 3, and not a common
 // stopword) from the tag's title appears in the user's message. Titles with
 // no words of length >= 3 at all (e.g. "it") are passed through —
@@ -131,10 +148,10 @@ function titleMentionedInMessage(title, message) {
     // (still-generic) words would recreate the exact false-corroboration bug
     // the stopword exclusion exists to close (e.g. "New Task" would match any
     // message mentioning "task"). No single word here reliably identifies
-    // this task over any other, so only accept a verbatim mention of the
-    // whole title — anything else must go through matchesUserIntent's
+    // this task over any other, so only accept a verbatim, whole-word mention
+    // of the whole title — anything else must go through matchesUserIntent's
     // separate pronoun/current-focus corroboration paths instead.
-    return normMessage.includes(normalizedTitle);
+    return includesWholeWordPhrase(normMessage, normalizedTitle);
   }
   return significant.some(w => normMessage.includes(w));
 }

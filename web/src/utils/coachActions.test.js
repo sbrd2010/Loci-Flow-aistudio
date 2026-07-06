@@ -268,6 +268,15 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("SET_NOW_FOCUS", "set my focus to the report", "the report")).toBe(true);
     expect(matchesUserIntent("SET_NOW_FOCUS", "swap my focus to the report", "the report")).toBe(true);
     expect(matchesUserIntent("SET_NOW_FOCUS", "make the report my focus", "the report")).toBe(true);
+    expect(matchesUserIntent("SET_NOW_FOCUS", "ok, make the report my focus now", "the report")).toBe(true);
+  });
+
+  it("does not treat a 'make X my focus' analysis question as an imperative request (Codex review finding)", () => {
+    // "what would make X my focus easier?" is asking for analysis, not
+    // commanding a focus change — the deterministic gate must not let this
+    // authorize a SET_NOW_FOCUS mutation just because the title is present.
+    expect(matchesUserIntent("SET_NOW_FOCUS", "what would make the report my focus easier?", "the report")).toBe(false);
+    expect(matchesUserIntent("SET_NOW_FOCUS", "how could I make the report my focus without stress?", "the report")).toBe(false);
   });
 
   it("normalizes shorthand before intent matching, same as coachContextMode's classifier (Codex review finding)", () => {
@@ -405,6 +414,16 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("COMPLETE_TASK", "I'm done with the task", "Day off", [], "Day off")).toBe(false);
     expect(matchesUserIntent("COMPLETE_TASK", "I'm done with the task", "Get out", [], "Get out")).toBe(false);
     expect(matchesUserIntent("COMPLETE_TASK", "finally finished my new task", "New task")).toBe(true);
+  });
+
+  it("requires whole-word boundaries for the all-stopword-title verbatim match (Codex review finding)", () => {
+    // A raw substring check would let "get out" match inside "get output",
+    // and "new task" match inside "new taskboard" — neither actually names
+    // the task.
+    expect(matchesUserIntent("COMPLETE_TASK", "I finished get output from the build", "Get out", [], "Get out")).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "finished the new taskboard setup", "New task", [], "New task")).toBe(false);
+    // A genuine whole-word mention still matches.
+    expect(matchesUserIntent("COMPLETE_TASK", "finished, time to get out of here", "Get out", [], "Get out")).toBe(true);
   });
 });
 
