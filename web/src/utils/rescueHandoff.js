@@ -64,3 +64,11 @@ export function buildRescueHandoffContext(summary, { now = new Date(), config = 
   if (summary.lociDay && summary.lociDay !== getLociDay(now, config)) return "";
   return `RECENT RESCUE MODE HANDOFF:\n${summary.text}\nUse this only as lightweight context. Do not claim you saw the Rescue chat transcript, and do not mention it unless it helps the user's current message.`;
 }
+
+// A Coach reply is built from a handoff summary that existed at prompt-build
+// time, but the config it eventually clears may have been rewritten (e.g. by
+// a newer Rescue session) while the AI call was in flight. Only clear if the
+// latest summary is still the same one that was actually used.
+export function shouldClearRescueHandoff(latestSummary, usedAt) {
+  return usedAt != null && latestSummary?.createdAt === usedAt;
+}

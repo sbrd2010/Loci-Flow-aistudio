@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRescueHandoffContext, buildRescueHandoffSummary } from "./rescueHandoff";
+import { buildRescueHandoffContext, buildRescueHandoffSummary, shouldClearRescueHandoff } from "./rescueHandoff";
 
 describe("rescueHandoff", () => {
   it("does not summarize non-chat rescue sessions", () => {
@@ -37,5 +37,23 @@ describe("rescueHandoff", () => {
     expect(buildRescueHandoffContext(summary, { now: new Date("2026-07-06T12:00:00Z"), config: {} })).toContain("RECENT RESCUE MODE HANDOFF");
     expect(buildRescueHandoffContext({ ...summary, consumedAt: Date.now() }, { now: new Date("2026-07-06T12:00:00Z"), config: {} })).toBe("");
     expect(buildRescueHandoffContext(summary, { now: new Date("2026-07-07T12:00:00Z"), config: {} })).toBe("");
+  });
+
+  describe("shouldClearRescueHandoff", () => {
+    it("clears when the latest summary is still the one that was used", () => {
+      expect(shouldClearRescueHandoff({ createdAt: 100 }, 100)).toBe(true);
+    });
+
+    it("does not clear a newer summary saved while a reply was in flight", () => {
+      expect(shouldClearRescueHandoff({ createdAt: 200 }, 100)).toBe(false);
+    });
+
+    it("does not clear when no summary was used to build the prompt", () => {
+      expect(shouldClearRescueHandoff({ createdAt: 100 }, null)).toBe(false);
+    });
+
+    it("does not clear when the summary has since been removed entirely", () => {
+      expect(shouldClearRescueHandoff(null, 100)).toBe(false);
+    });
   });
 });

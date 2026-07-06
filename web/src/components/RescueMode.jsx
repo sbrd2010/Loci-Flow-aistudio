@@ -83,6 +83,11 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
 
   const saveHandoff = (outcome = "dismissed") => {
     if (handoffSavedRef.current) return;
+    // Writing config while cloud sync hasn't confirmed the first RTDB
+    // snapshot yet would stamp a stale cached config as the "winner" once
+    // that snapshot arrives, silently overwriting newer remote config from
+    // another device — matching the same guard used for Coach's memory writes.
+    if (cloudSyncUnconfirmed) return;
     const summary = buildRescueHandoffSummary({
       reason,
       task,

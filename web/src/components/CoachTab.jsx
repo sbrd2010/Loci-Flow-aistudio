@@ -17,7 +17,7 @@ import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFrom
 import { stripReasoningTag } from "../utils/coachReasoning";
 import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM } from "../utils/coachContextMode";
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
-import { buildRescueHandoffContext } from "../utils/rescueHandoff";
+import { buildRescueHandoffContext, shouldClearRescueHandoff } from "../utils/rescueHandoff";
 import { safeCopyToClipboard } from "../utils/clipboard";
 import LinkifyText from "./LinkifyText";
 import ReactMarkdown from "react-markdown";
@@ -373,7 +373,17 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     // stays available even when AI-written memory is disabled.
     const profileContext = buildProfileContext(config);
     const personaInstruction = buildPersonaInstruction(config, firstName);
-    const rescueHandoffContext = buildRescueHandoffContext(config.rescueHandoffSummary, { now, config });
+    // Same cloud-sync gate as memorySectionEnabled above: cached/pre-sync
+    // config.rescueHandoffSummary may already be stale/consumed on another
+    // device, so don't send it to the AI until sync is confirmed.
+    const rescueHandoffContext = cloudSyncUnconfirmed
+      ? ""
+      : buildRescueHandoffContext(config.rescueHandoffSummary, { now, config });
+    // Captured now so the eventual clear (after the AI call resolves) can be
+    // checked against the latest config instead of blindly nulling — a newer
+    // Rescue session started while this reply was in flight would have saved
+    // a different summary that must not be clobbered.
+    const rescueHandoffSummaryUsedAt = rescueHandoffContext ? (config.rescueHandoffSummary?.createdAt ?? null) : null;
 
     const userMessageCount = withUser.filter(m => m.isUser).length;
     const isEarlyConversation = userMessageCount <= 1;
@@ -453,9 +463,14 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       // deterministic parse of that request rather than dropping it silently.
       const checkinMinutes = minutes ?? parseCheckinRequestFromMessage(userText);
 
-      let configPatch = rescueHandoffContext
-        ? { rescueHandoffSummary: null }
-        : null;
+      let configPatch = null;
+      // Only clears rescueHandoffSummary if it's still the same summary that
+      // was actually used to build this prompt (see rescueHandoffSummaryUsedAt
+      // above) — otherwise a newer handoff saved mid-flight would be lost.
+      const clearRescueHandoffIfUnchanged = (latestConfig) =>
+        shouldClearRescueHandoff(latestConfig.rescueHandoffSummary, rescueHandoffSummaryUsedAt)
+          ? { rescueHandoffSummary: null }
+          : {};
       if (checkinMinutes != null) {
         // Exact-title-only match (no fuzzy/partial matching) against the
         // user's own message, so the check-in never silently attaches to an
@@ -579,6 +594,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           const xpMemoryPatch = memoryPatch;
           saveConfigPatch((latestConfig) => ({
             ...xpConfigPatch,
+            ...clearRescueHandoffIfUnchanged(latestConfig),
             totalXp: (Number(latestConfig.totalXp) || 0) + xpDelta,
             ...(xpMemoryPatch ? { coachMemory: xpMemoryPatch(latestConfig) } : {}),
           }));
@@ -681,15 +697,17 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         }
       }
 
-      if (configPatch || memoryPatch) {
+      if (configPatch || memoryPatch || rescueHandoffSummaryUsedAt !== null) {
         // saveConfigPatch merges onto the latest known config and writes only
         // these keys — safe even if this tab unmounted and configRef.current
         // is now stale (e.g. the user changed Coach Memory settings elsewhere
-        // while this reply was in flight). memoryPatch is itself resolved
-        // against the latest config (see above).
-        saveConfigPatch(memoryPatch
-          ? (latestConfig) => ({ ...configPatch, coachMemory: memoryPatch(latestConfig) })
-          : configPatch);
+        // while this reply was in flight). memoryPatch and the rescue-handoff
+        // clear are both resolved against the latest config (see above).
+        saveConfigPatch((latestConfig) => ({
+          ...configPatch,
+          ...clearRescueHandoffIfUnchanged(latestConfig),
+          ...(memoryPatch ? { coachMemory: memoryPatch(latestConfig) } : {}),
+        }));
       }
 
       const currentHistory = chatHistoryRef.current || [];
