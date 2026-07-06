@@ -191,6 +191,14 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     e.preventDefault();
     if (!title.trim()) return;
 
+    // Flush an in-progress sub-step edit that never hit its row-level ✓/Enter
+    // (e.g. the user clicked this dialog's Save/Add Task button instead) so
+    // it isn't silently dropped in favor of the stale subSteps state.
+    const editedSubStepText = editingSubStepId ? editingSubStepText.trim() : "";
+    const effectiveSubSteps = editedSubStepText
+      ? subSteps.map(step => step.id === editingSubStepId ? { ...step, text: editedSubStepText } : step)
+      : subSteps;
+
     // Evening Guard window block logic
     const now = new Date();
     const hour = now.getHours();
@@ -238,7 +246,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
         timeEstimateMinutes: newEstimate,
         ...(estimateChanged ? { dayMapDurationMinutes: newEstimate } : {}),
         reminderAt,
-        subSteps,
+        subSteps: effectiveSubSteps,
         lastUpdated: Date.now()
       };
       if (reminderAt && reminderAt !== editTask.reminderAt) scheduleReminder(updatedTask);
@@ -268,7 +276,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       dateCompletedString: null,
       isDeleted: false,
       lastUpdated: Date.now(),
-      subSteps,
+      subSteps: effectiveSubSteps,
     };
 
     if (reminderAt) scheduleReminder(freshTask);
