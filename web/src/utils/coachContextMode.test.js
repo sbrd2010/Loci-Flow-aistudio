@@ -93,6 +93,24 @@ describe("classifyContextMode", () => {
     expect(classifyContextMode("I feel like the failure rate on our tests is too high, can you add a task to investigate?")).not.toBe("emotional");
   });
 
+  it("routes 'idk where to start' to emotional, matching its unabbreviated form (Codex review finding)", () => {
+    // idk normalizes to "i dont know" (not "i do not know") specifically so
+    // it still matches EMOTIONAL_RE's existing don['']?t know where to start
+    // clause — "idk where to start" is a very common real-world way of
+    // saying the exact same thing.
+    expect(classifyContextMode("idk where to start")).toBe("emotional");
+    expect(classifyContextMode("I dont know where to start")).toBe("emotional");
+  });
+
+  it("escapes distressed broad-task-query phrasings to full_task, matching TASK_ASK_RE's existing behavior (Codex review finding)", () => {
+    // "I'm overwhelmed, what should I do" already escapes to full_task via
+    // TASK_ASK_RE — the newer broad-task synonyms ("what do I even do",
+    // "what's on my plate") must get the same treatment instead of dropping
+    // to "emotional" with zero task context.
+    expect(classifyContextMode("I'm overwhelmed, what do I even do?")).toBe("full_task");
+    expect(classifyContextMode("I'm stuck, what's on my plate?")).toBe("full_task");
+  });
+
   it("normalizes common texting shorthand before classification (real-world typos/broken English)", () => {
     // These are the kinds of messy, real-world phrasings actual users type —
     // dropped apostrophes, phonetic typos, and single-letter/number shorthand.
@@ -123,6 +141,14 @@ describe("classifyContextMode", () => {
     expect(classifyContextMode("in 2 minutes")).toBe("full_task");
     // Non-time "2"/"4" usage still normalizes as intended.
     expect(classifyContextMode("yo remind me 2 call the plumber")).toBe("full_task");
+  });
+
+  it("does not let '2'/'4' shorthand normalization corrupt digit-scoped priority queries (Codex review finding)", () => {
+    // BROAD_TASK_QUERY_RE's category-priority branch requires a literal
+    // digit before the category word ("2 work priorities") — the shorthand
+    // substitution must not eat that digit too.
+    expect(classifyContextMode("What are my 2 work priorities?")).toBe("full_task");
+    expect(classifyContextMode("What are my 4 month priorities?")).toBe("full_task");
   });
 
   it("routes action/mutation phrases to full_task", () => {

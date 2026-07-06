@@ -25,12 +25,14 @@ const SHORTHAND_MAP = [
   [/\bu\b/gi, "you"],
   [/\bur\b/gi, "your"],
   [/\br\b/gi, "are"],
-  // Never rewrite a digit that's actually a clock time or duration (e.g.
-  // "in 2 minutes", "at 2 pm", "call me at 4") — TIME_SIGNAL_RE/STANDALONE_TIME_RE
-  // elsewhere in this file need the literal digit to recognize those. The
-  // lookbehind guards "at N", the lookahead guards "N <unit>"/"N am|pm".
-  [/(?<!\bat\s)\b2\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm)\b)/gi, "to"],
-  [/(?<!\bat\s)\b4\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm)\b)/gi, "for"],
+  // Never rewrite a digit that's actually a clock time, duration, or a
+  // priority-scope count (e.g. "in 2 minutes", "at 2 pm", "my 2 work
+  // priorities") — TIME_SIGNAL_RE/STANDALONE_TIME_RE and BROAD_TASK_QUERY_RE's
+  // "(?:\d+|six)\s+(?:career|work|...)" branch elsewhere in this file need the
+  // literal digit. The lookbehind guards "at N", the lookahead guards
+  // "N <unit>"/"N am|pm"/"N <category>".
+  [/(?<!\bat\s)\b2\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|career|work|health|personal|months?|quarters?)\b)/gi, "to"],
+  [/(?<!\bat\s)\b4\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|career|work|health|personal|months?|quarters?)\b)/gi, "for"],
   [/\bb4\b/gi, "before"],
   [/\bdis\b/gi, "this"],
   [/\bdat\b/gi, "that"],
@@ -41,7 +43,11 @@ const SHORTHAND_MAP = [
   [/\bwanna\b/gi, "want to"],
   [/\bgonna\b/gi, "going to"],
   [/\bgotta\b/gi, "got to"],
-  [/\bidk\b/gi, "i do not know"],
+  // "i dont know" (not "i do not know") so this still matches EMOTIONAL_RE's
+  // existing don['’]?t know where to start pattern — "idk where to start" is
+  // a very common real-world distress phrasing that should route the same
+  // way its unabbreviated form already does.
+  [/\bidk\b/gi, "i dont know"],
   [/\bive\b/gi, "i have"],
   // Dropped-apostrophe "im" (extremely common when typing fast) doesn't match
   // any of this file's many "i(['’]m| am) ..." patterns (overwhelmed, stuck,
@@ -73,7 +79,7 @@ const FRESH_SCAN_RE = /\b(scan (everything|all|my list|all my tasks|my whole lis
 
 const COMPACT_FOLLOWUP_RE = /\b(key point|one sentence|10[-\s]?min(?:ute)?s?\s*version|make it smaller|shorter|how do i start|make this easier|concrete steps|turn (?:that|this|it) into .{0,30}steps|what should i do next|set that|do next|tell me more|what did you mean|how do i do that|which one|why\??|explain that|elaborate|clarify)\b/i;
 
-const EXPLICIT_ACTION_RE = /\b(add (?:this|that)?\s*task|add\b.{1,50}\bto (?:my |the )?(?:today['’]?s?\s+)?list|add\b.{1,50}\bto (?:today|week|month|quarter|work)|create (?:a )?task|capture this|put (?:this|it) in (?:my|the)?\s*tasks|mark\b.*\bdone|mark (?:it|this)? done|done with (?:this|that|it)?\s*task|done with .{1,50}\btask|(?:done with|finished)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|complete this|delete (?:this|that) task|park (?:this|that|it|task)\b|park\s+.{1,50}\btask|defer (?:this|that|it|task)\b|defer\s+.{1,50}\btask|(?:park|defer)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|move (?:this|it) to|start (?:a )?timer|start (?:a\s+|current\s+|now\s+)?focus|focus session|(?:switch|set|swap)\s+(?:my\s+|the\s+)?focus\s+(?:to|on)|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})make\s+.{1,40}\s+my focus\b|remind me (?:to|that|i)\b|don['’]?t forget\b)\b/i;
+const EXPLICIT_ACTION_RE = /\b(add (?:this|that)?\s*task|add\b.{1,50}\bto (?:my |the )?(?:today['’]?s?\s+)?list|add\b.{1,50}\bto (?:today|week|month|quarter|work)|create (?:a )?task|capture this|put (?:this|it) in (?:my|the)?\s*tasks|mark\b.*\bdone|mark (?:it|this)? done|done with (?:this|that|it)?\s*task|done with .{1,50}\btask|(?:done with|finished)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|complete this|delete (?:this|that) task|park (?:this|that|it|task)\b|park\s+.{1,50}\btask|defer (?:this|that|it|task)\b|defer\s+.{1,50}\btask|(?:park|defer)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|move (?:this|it) to|start (?:a )?timer|start (?:a\s+|current\s+|now\s+)?focus|focus session|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})(?:switch|set|swap)\s+(?:my\s+|the\s+)?focus\s+(?:to|on)|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})make\s+.{1,40}\s+my focus\b|remind me (?:to|that|i)\b|don['’]?t forget\b)\b/i;
 
 // Body-double session requests ("be my body double", "sit with me while I
 // work", "stay with me") read as task/focus requests even when they don't
@@ -141,7 +147,13 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
   // and body-double requests — "I'm overwhelmed, stay with me" is distress
   // first, not a session to start.
   if (EMOTIONAL_RE.test(text)) {
-    if (TASK_ASK_RE.test(text)) {
+    // isBroadQuery covers newer direct task/data asks ("what do I even do",
+    // "what's on my plate") the same way TASK_ASK_RE already does for older
+    // phrasings ("what should I do") — without it, "I'm overwhelmed, what do
+    // I even do?" would drop to "emotional" while the equivalent
+    // TASK_ASK_RE-covered phrasing already escapes to full_task, which is an
+    // inconsistency rather than a deliberate distinction.
+    if (TASK_ASK_RE.test(text) || isBroadQuery) {
       return "full_task";
     }
     return "emotional";

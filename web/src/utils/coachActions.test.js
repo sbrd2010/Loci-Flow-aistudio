@@ -279,6 +279,16 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("SET_NOW_FOCUS", "how could I make the report my focus without stress?", "the report")).toBe(false);
   });
 
+  it("does not treat a 'set/swap my focus' question as an imperative request (Codex review finding)", () => {
+    // Same class of gap as the "make X my focus" case above, but for the
+    // set/swap alternatives — "should I set my focus to X?" is asking for
+    // advice, not commanding a change.
+    expect(matchesUserIntent("SET_NOW_FOCUS", "should I set my focus to the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("SET_NOW_FOCUS", "how can I swap my focus to the report?", "the report")).toBe(false);
+    // Imperative phrasing still works.
+    expect(matchesUserIntent("SET_NOW_FOCUS", "set my focus to the report", "the report")).toBe(true);
+  });
+
   it("normalizes shorthand before intent matching, same as coachContextMode's classifier (Codex review finding)", () => {
     // "remind me 2 call the plumber" reaches full_task via coachContextMode's
     // normalizer, but without the same normalization here, this gate would
@@ -334,6 +344,14 @@ describe("matchesUserIntent", () => {
 
   it("still matches ADD_TASK on 'don't forget' phrasing", () => {
     expect(matchesUserIntent("ADD_TASK", "Don't forget to call mom")).toBe(true);
+  });
+
+  it("matches ADD_TASK on 'don't forget' with a curly/smart apostrophe (Codex review finding)", () => {
+    // coachContextMode.js's classifier already accepted both apostrophe
+    // forms for this phrase — this gate didn't, so a curly apostrophe
+    // (common on mobile keyboards) reached full_task but had its resulting
+    // tag silently blocked here.
+    expect(matchesUserIntent("ADD_TASK", "don’t forget to call the plumber", "Call the plumber")).toBe(true);
   });
 
   it("does not match ADD_TASK on a plain 'I need to' statement with no add/remind request", () => {

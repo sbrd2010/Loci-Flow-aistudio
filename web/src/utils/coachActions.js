@@ -85,12 +85,15 @@ const INTENT_PATTERNS = {
   // how/why/would/could/should) within a short lookbehind window, so an
   // analysis question like "what would make the report my focus easier?"
   // doesn't register as an imperative SET_NOW_FOCUS request.
-  SET_NOW_FOCUS: /\b(focus on|switch.*focus|(?:set|swap)\s+(?:my\s+|the\s+)?focus\s+(?:to|on)|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})make\s+.{1,40}\s+my focus\b|prioriti[sz]e|now focus|pin( this| that)? task|pin\b|focus.*now)\b/i,
+  SET_NOW_FOCUS: /\b(focus on|switch.*focus|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})(?:set|swap)\s+(?:my\s+|the\s+)?focus\s+(?:to|on)|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})make\s+.{1,40}\s+my focus\b|prioriti[sz]e|now focus|pin( this| that)? task|pin\b|focus.*now)\b/i,
   // Second alternative covers body-double requests ("sit with me while I
   // work", "be my body double") — they ask for a focus session just as
   // clearly as "start a timer" does, without using start/begin/kick-off wording.
   START_FOCUS: new RegExp(`\\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\\b|${BODY_DOUBLE_REF_RE.source}`, "i"),
-  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don'?t forget|add .+ to (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b)/i,
+  // don['’]?t (not don'?t) so a curly/smart apostrophe (common on mobile
+  // keyboards) still matches — coachContextMode.js's EXPLICIT_ACTION_RE
+  // already accepts both forms for this same phrase.
+  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don['’]?t forget|add .+ to (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b)/i,
   PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|skip)\b/i,
 };
 
