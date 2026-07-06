@@ -107,6 +107,31 @@ const LOW_ENERGY_RE = /\b(low energy|no energy|low on energy|out of energy|exhau
 // full_task prompt carries — never compact these, even on the paced path.
 const PRIORITY_FILTER_RE = /\bwhich\s+(?:career|work|health|personal)\s+task\b|\b(?:career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b|\bfocus on this\s+(?:month|quarter|week)\b|\b(?:focus on|priorit\w*)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(?:career|work|health|personal)\b/i;
 
+const CATEGORY_LABELS = { career: "Career", work: "Work", health: "Health", personal: "Personal" };
+
+// Mirrors PRIORITY_FILTER_RE's category-question shapes (not its horizon
+// shape — "focus on this month" isn't a {Category} filter) but captures
+// which specific category was named, instead of just testing for a match.
+// Used to build a deterministic "no visible tasks in that category" context
+// note (see buildLociCategoryFilterContext) — the system prompt's own
+// PRIORITY QUESTIONS rule already tells the model to disclose a category
+// mismatch, but relying on the model to notice via the {Category} tags alone
+// isn't reliable enough on its own; see issue #338.
+const CATEGORY_FILTER_PATTERNS = [
+  /\bwhich\s+(career|work|health|personal)\s+task\b/i,
+  /\b(career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b/i,
+  /\b(?:focus on|priorit\w*)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(career|work|health|personal)\b/i,
+];
+
+export function detectRequestedCategory(message) {
+  const text = normalizeForClassification(String(message || ""));
+  for (const re of CATEGORY_FILTER_PATTERNS) {
+    const match = text.match(re);
+    if (match) return CATEGORY_LABELS[match[1].toLowerCase()];
+  }
+  return null;
+}
+
 /**
  * Classifies a Coach chat message into the smallest context mode that
  * still serves it well: "light", "emotional", "full_task", "compact_task", or

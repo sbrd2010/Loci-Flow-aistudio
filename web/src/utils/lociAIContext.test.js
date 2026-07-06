@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLociCoreInstruction, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
+import { buildLociCoreInstruction, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
 import { getFocusWindows } from "./focusWindows";
 
 describe("lociAIContext", () => {
@@ -341,6 +341,42 @@ describe("buildLociLowEnergyContext", () => {
 
   it("flags Low Energy Mode when on", () => {
     expect(buildLociLowEnergyContext({ isLowEnergyMode: true })).toContain("LOW ENERGY MODE: ON");
+  });
+});
+
+describe("buildLociCategoryFilterContext", () => {
+  it("returns an empty string when no category was requested", () => {
+    expect(buildLociCategoryFilterContext([{ title: "Task", category: "Personal" }], null)).toBe("");
+  });
+
+  it("returns an empty string when a visible active task matches the requested category", () => {
+    const tasks = [
+      { title: "Fix resume", category: "Career" },
+      { title: "Buy groceries", category: "Personal" },
+    ];
+    expect(buildLociCategoryFilterContext(tasks, "Career")).toBe("");
+  });
+
+  it("flags a category mismatch when no visible active task carries that category", () => {
+    const tasks = [{ title: "Buy groceries", category: "Personal" }];
+    const context = buildLociCategoryFilterContext(tasks, "Work");
+    expect(context).toContain("CATEGORY NOTE");
+    expect(context).toContain("{Work}");
+  });
+
+  it("treats an untagged task as Personal, matching buildLociTaskContext's own default", () => {
+    const tasks = [{ title: "Untagged task" }];
+    expect(buildLociCategoryFilterContext(tasks, "Personal")).toBe("");
+    expect(buildLociCategoryFilterContext(tasks, "Work")).toContain("CATEGORY NOTE");
+  });
+
+  it("ignores deleted, completed, and parked tasks when checking for a category match", () => {
+    const tasks = [
+      { title: "Old work task", category: "Work", isDeleted: true },
+      { title: "Done work task", category: "Work", isCompleted: true },
+      { title: "Parked work task", category: "Work", isParked: true },
+    ];
+    expect(buildLociCategoryFilterContext(tasks, "Work")).toContain("CATEGORY NOTE");
   });
 });
 

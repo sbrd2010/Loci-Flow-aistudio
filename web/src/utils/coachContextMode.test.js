@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM } from "./coachContextMode";
+import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM, detectRequestedCategory } from "./coachContextMode";
 
 describe("classifyContextMode", () => {
   it("defaults casual/light messages to light", () => {
@@ -498,5 +498,33 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("start a timer for this work task, which work task should I do first", pacedOpts)).toBe("full_task");
       expect(classifyContextMode("I have low energy, start a timer for this", pacedOpts)).toBe("full_task");
     });
+  });
+});
+
+describe("detectRequestedCategory", () => {
+  it("detects the category from 'which X task' phrasing", () => {
+    expect(detectRequestedCategory("which work task should I do first?")).toBe("Work");
+    expect(detectRequestedCategory("which career task should I do first?")).toBe("Career");
+    expect(detectRequestedCategory("which health task should I do first?")).toBe("Health");
+    expect(detectRequestedCategory("which personal task should I do first?")).toBe("Personal");
+  });
+
+  it("detects the category from '<category> task/priority should/to' phrasing", () => {
+    expect(detectRequestedCategory("work task should be next")).toBe("Work");
+    expect(detectRequestedCategory("career priority to focus on")).toBe("Career");
+  });
+
+  it("detects the category from 'focus on/prioritize ... for <category>' phrasing", () => {
+    expect(detectRequestedCategory("what should I focus on for work?")).toBe("Work");
+    expect(detectRequestedCategory("what should I prioritize for my career?")).toBe("Career");
+  });
+
+  it("returns null for messages that don't name a category", () => {
+    expect(detectRequestedCategory("what should I do today?")).toBeNull();
+    expect(detectRequestedCategory("what should I focus on this month?")).toBeNull();
+  });
+
+  it("normalizes shorthand before detecting, consistent with the classifier", () => {
+    expect(detectRequestedCategory("wat work task should i do first")).toBe("Work");
   });
 });

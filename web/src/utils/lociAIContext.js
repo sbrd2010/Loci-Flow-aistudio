@@ -303,6 +303,19 @@ export function buildLociLowEnergyContext(config = {}) {
   return "LOW ENERGY MODE: ON — keep suggestions small, simple, and low-pressure right now.";
 }
 
+// Deterministic check backing the PRIORITY QUESTIONS rule's category-mismatch
+// disclosure ("if none are visible, say so rather than picking an unrelated
+// task") — live testing showed the model doesn't reliably notice a category
+// mismatch from the {Category} tags alone (see issue #338). requestedCategory
+// comes from coachContextMode.js's detectRequestedCategory; null/no visible
+// mismatch both return "" so this is silent unless there's something to flag.
+export function buildLociCategoryFilterContext(tasks = [], requestedCategory) {
+  if (!requestedCategory) return "";
+  const hasMatch = (tasks || []).some(t => isActiveLociTask(t) && (t.category || "Personal") === requestedCategory);
+  if (hasMatch) return "";
+  return `CATEGORY NOTE: No visible tasks are currently tagged {${requestedCategory}} — if asked about ${requestedCategory} priorities, say so plainly rather than picking an unrelated task.`;
+}
+
 const RECENT_PARK_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 // Tasks parked in roughly the last 24 hours — lets the coach acknowledge a
