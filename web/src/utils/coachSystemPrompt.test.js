@@ -151,6 +151,13 @@ describe("buildCoachSystemPrompt", () => {
     expect(compactOut).toContain("MULTIPLE TASKS RULE");
   });
 
+  it("compact_task mode never denies access to Loci task data and gives the context-issue line instead", () => {
+    const out = buildCoachSystemPrompt("compact_task", baseCtx());
+    expect(out).not.toContain("no direct access to Loci app data");
+    expect(out).not.toContain("I have no access");
+    expect(out).toContain("I'm missing the task snapshot for this request — that looks like a Loci context issue.");
+  });
+
   it("compact_task mode conditionally carries the CURRENT NOW FOCUS line", () => {
     // Case 1: focus task exists
     const ctxWithFocus = { ...baseCtx(), currentFocusTitle: "My Focus Task" };
