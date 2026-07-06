@@ -203,6 +203,73 @@ describe("rescueCoachPrompt", () => {
     });
   });
 
+  describe("rescue scenario regression coverage", () => {
+    it("keeps tired + Low Energy Mode focused on low-energy framing and small tasks", () => {
+      const prompt = buildRescuePrompt({
+        reason: "tired",
+        firstName: "Rohan",
+        allTasks: [
+          { uuid: "tiny", title: "Send short reply", horizonLevel: "today", timeEstimateMinutes: 5, concreteStep: "open inbox" },
+          { uuid: "large", title: "Write full proposal", horizonLevel: "today", timeEstimateMinutes: 90 },
+        ],
+        config: { isLowEnergyMode: true },
+      });
+
+      expect(prompt).toContain("Low Energy Mode enabled");
+      expect(prompt).toContain("Validate that low-energy mode is real");
+      expect(prompt).toContain("Prefer tasks with small time estimates or concrete first steps");
+      expect(prompt).toContain("Send short reply");
+      expect(prompt).toContain("5 min");
+      expect(prompt).toContain("first step: open inbox");
+    });
+
+    it("blocks overclaiming in Today distracted rescue but allows active-task wording in Deep Focus", () => {
+      const todayPrompt = buildRescuePrompt({
+        reason: "distracted",
+        firstName: "Rohan",
+        task: tasks[0],
+        allTasks: tasks,
+        entryPoint: "today",
+      });
+      expect(todayPrompt).toContain('never say "you were working on..."');
+      expect(todayPrompt).toContain("do not claim they were working on the selected task");
+      expect(todayPrompt).toContain("ask if it is still the right task");
+
+      const deepFocusPrompt = buildRescuePrompt({
+        reason: "distracted",
+        firstName: "Rohan",
+        task: tasks[0],
+        allTasks: tasks,
+        entryPoint: "deep_focus",
+      });
+      expect(deepFocusPrompt).toContain("The user was focusing on");
+      expect(deepFocusPrompt).toContain("you may speak as if they were working on that task");
+      expect(deepFocusPrompt).toContain("re-anchor them to the active task");
+    });
+
+    it("grounds first instead of inventing a task when overwhelmed with no reliable context", () => {
+      const prompt = buildRescuePrompt({
+        reason: "overwhelmed",
+        firstName: "Rohan",
+        task: null,
+        allTasks: [],
+        entryPoint: "today",
+      });
+
+      expect(prompt).toContain("no active visible task");
+      expect(prompt).toContain("Start with grounding or clarification, not task certainty");
+      expect(prompt).toContain("If there is no reliable task, ground first and ask what feels most urgent");
+      expect(prompt).toContain("Do not solve the whole list");
+    });
+
+    it("does not fire local safety fallback for ordinary anxious avoidance", () => {
+      expect(buildLocalSafetyReply("I don't want to start this", "Rohan")).toBeNull();
+      expect(buildLocalSafetyReply("I feel anxious and frozen", "Rohan")).toBeNull();
+      expect(buildLocalSafetyReply("I might hurt myself", "Rohan")).toContain("emergency services");
+      expect(buildLocalSafetyReply("I have chest pain and can't breathe", "Rohan")).toContain("medical help");
+    });
+  });
+
   it("uses local safety fallback before productivity-oriented offline replies", () => {
     expect(buildLocalSafetyReply("I might hurt myself", "Rohan")).toContain("emergency services");
     expect(buildLocalSafetyReply("I have chest pain and can't breathe", "Rohan")).toContain("medical help");
