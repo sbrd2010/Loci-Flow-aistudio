@@ -259,6 +259,43 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("SET_NOW_FOCUS", "What should I do next?")).toBe(false);
   });
 
+  it("matches SET_NOW_FOCUS on set/swap/make-my-focus phrasing (Codex review finding)", () => {
+    // coachContextMode.js's EXPLICIT_ACTION_RE routes "set/swap my focus to
+    // X" and "make X my focus" to full_task, so this gate must recognize the
+    // same phrasings — otherwise the model could emit a SET_NOW_FOCUS tag for
+    // these that gets silently blocked here while its visible narration
+    // ("switched your focus...") still shows.
+    expect(matchesUserIntent("SET_NOW_FOCUS", "set my focus to the report", "the report")).toBe(true);
+    expect(matchesUserIntent("SET_NOW_FOCUS", "swap my focus to the report", "the report")).toBe(true);
+    expect(matchesUserIntent("SET_NOW_FOCUS", "make the report my focus", "the report")).toBe(true);
+    expect(matchesUserIntent("SET_NOW_FOCUS", "ok, make the report my focus now", "the report")).toBe(true);
+  });
+
+  it("does not treat a 'make X my focus' analysis question as an imperative request (Codex review finding)", () => {
+    // "what would make X my focus easier?" is asking for analysis, not
+    // commanding a focus change — the deterministic gate must not let this
+    // authorize a SET_NOW_FOCUS mutation just because the title is present.
+    expect(matchesUserIntent("SET_NOW_FOCUS", "what would make the report my focus easier?", "the report")).toBe(false);
+    expect(matchesUserIntent("SET_NOW_FOCUS", "how could I make the report my focus without stress?", "the report")).toBe(false);
+  });
+
+  it("does not treat a 'set/swap my focus' question as an imperative request (Codex review finding)", () => {
+    // Same class of gap as the "make X my focus" case above, but for the
+    // set/swap alternatives — "should I set my focus to X?" is asking for
+    // advice, not commanding a change.
+    expect(matchesUserIntent("SET_NOW_FOCUS", "should I set my focus to the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("SET_NOW_FOCUS", "how can I swap my focus to the report?", "the report")).toBe(false);
+    // Imperative phrasing still works.
+    expect(matchesUserIntent("SET_NOW_FOCUS", "set my focus to the report", "the report")).toBe(true);
+  });
+
+  it("normalizes shorthand before intent matching, same as coachContextMode's classifier (Codex review finding)", () => {
+    // "remind me 2 call the plumber" reaches full_task via coachContextMode's
+    // normalizer, but without the same normalization here, this gate would
+    // see the raw "2" (not "to") and block the resulting ADD_TASK tag.
+    expect(matchesUserIntent("ADD_TASK", "yo remind me 2 call the plumber", "Call the plumber")).toBe(true);
+  });
+
   it("matches START_FOCUS on body-double language without start/focus wording", () => {
     expect(matchesUserIntent("START_FOCUS", "can you sit with me while I work on Write report", "Write report")).toBe(true);
     expect(matchesUserIntent("START_FOCUS", "be my body double for Write report", "Write report")).toBe(true);
@@ -309,6 +346,14 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("ADD_TASK", "Don't forget to call mom")).toBe(true);
   });
 
+  it("matches ADD_TASK on 'don't forget' with a curly/smart apostrophe (Codex review finding)", () => {
+    // coachContextMode.js's classifier already accepted both apostrophe
+    // forms for this phrase — this gate didn't, so a curly apostrophe
+    // (common on mobile keyboards) reached full_task but had its resulting
+    // tag silently blocked here.
+    expect(matchesUserIntent("ADD_TASK", "don’t forget to call the plumber", "Call the plumber")).toBe(true);
+  });
+
   it("does not match ADD_TASK on a plain 'I need to' statement with no add/remind request", () => {
     expect(matchesUserIntent("ADD_TASK", "I need to call the dentist at some point")).toBe(false);
   });
@@ -347,6 +392,56 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("START_FOCUS", "be my body double for 15 minutes", "Write report", [], "Write report")).toBe(true);
     expect(matchesUserIntent("START_FOCUS", "be my body double for 15 minutes", "Email client", [], "Write report")).toBe(false);
     expect(matchesUserIntent("START_FOCUS", "be my body double for 15 minutes", "Write report", [], null)).toBe(false);
+  });
+
+  it("does not corroborate a title match on shared stopwords alone", () => {
+    // "the", "your", etc. appear in almost every title and almost every
+    // message — titleMentionedInMessage must ignore them, or a generic "I'm
+    // done with the task" (naming no task at all) would falsely corroborate
+    // completing whatever task happens to be Now Focus, purely because its
+    // title also contains "the".
+    const title = "Reply to the important message sitting in your inbox";
+    expect(matchesUserIntent("COMPLETE_TASK", "I'm done with the task", title, [], title)).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "I am done with the task", "Reach out to 2 people - clients, collaborators, or connections")).toBe(false);
+    // A message that genuinely names the task still matches.
+    expect(matchesUserIntent("COMPLETE_TASK", "I finished replying to the important message", title)).toBe(true);
+  });
+
+  it("does not let a title made entirely of stopwords bypass the corroboration gate unconditionally", () => {
+    // Excluding stopwords from the "significant word" check must not regress
+    // into the opposite bug: a title whose only length->=3 word(s) are ALL
+    // stopwords (e.g. "Just Do It" -> only "just" survives length filtering,
+    // and "just" is itself a stopword) would otherwise leave zero significant
+    // words, and titleMentionedInMessage treats "zero significant words" as
+    // an unconditional pass — letting ANY message satisfying the bare intent
+    // pattern corroborate this task regardless of what was actually said.
+    const title = "Just Do It";
+    expect(matchesUserIntent("COMPLETE_TASK", "I'm done with the laundry", title, [], title)).toBe(false);
+    // A verbatim mention of the whole title still corroborates.
+    expect(matchesUserIntent("COMPLETE_TASK", "I finished Just Do It", title)).toBe(true);
+  });
+
+  it("does not let a fallback to the title's own generic words reopen the same loophole (Codex review finding)", () => {
+    // My first fix fell back to the title's unfiltered words when every
+    // significant word was a stopword — but a title like "New Task" then
+    // falls back to ["new","task"], and "task" is common enough that ANY
+    // generic completion message ("I'm done with the task") would still
+    // falsely corroborate it. Only a verbatim whole-title mention should
+    // count for these all-stopword titles.
+    expect(matchesUserIntent("COMPLETE_TASK", "I'm done with the task", "New task", [], "New task")).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "I'm done with the task", "Day off", [], "Day off")).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "I'm done with the task", "Get out", [], "Get out")).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "finally finished my new task", "New task")).toBe(true);
+  });
+
+  it("requires whole-word boundaries for the all-stopword-title verbatim match (Codex review finding)", () => {
+    // A raw substring check would let "get out" match inside "get output",
+    // and "new task" match inside "new taskboard" — neither actually names
+    // the task.
+    expect(matchesUserIntent("COMPLETE_TASK", "I finished get output from the build", "Get out", [], "Get out")).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "finished the new taskboard setup", "New task", [], "New task")).toBe(false);
+    // A genuine whole-word mention still matches.
+    expect(matchesUserIntent("COMPLETE_TASK", "finished, time to get out of here", "Get out", [], "Get out")).toBe(true);
   });
 });
 

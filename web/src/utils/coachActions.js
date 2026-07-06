@@ -23,6 +23,7 @@
 import { buildToggleCompletedTasks } from "./taskOps";
 import { isActiveLociTask } from "./lociAIContext";
 import { safeUUID } from "./uuid";
+import { normalizeForClassification } from "./coachContextMode";
 
 const ACTION_TAG_RE = /\s*\[\[(SET_NOW_FOCUS|COMPLETE_TASK|ADD_TASK|PARK_TASK|START_FOCUS):\s*((?:[^\]]|\](?!\]))+?)\s*\]\]/gi;
 
@@ -75,12 +76,24 @@ const BODY_DOUBLE_REF_RE = /\b(body[\s-]?double|sit with me|stay with me|work (?
 
 const INTENT_PATTERNS = {
   COMPLETE_TASK: /\b(done|finish(ed|ing)?|complet(e|ed|ing)|wrapped? up|knocked out)\b/i,
-  SET_NOW_FOCUS: /\b(focus on|switch.*focus|prioriti[sz]e|now focus|pin( this| that)? task|pin\b|focus.*now)\b/i,
+  // "set"/"swap" and "make X my focus" mirror the phrasings coachContextMode.js's
+  // EXPLICIT_ACTION_RE now routes to full_task — without a matching intent
+  // pattern here, the model could emit a SET_NOW_FOCUS tag for these that
+  // this gate then blocks, while its visible narration ("switched your
+  // focus...") still shows since messageSeemsActionLike would also be false.
+  // The "make X my focus" branch excludes a preceding question word (what/
+  // how/why/would/could/should) within a short lookbehind window, so an
+  // analysis question like "what would make the report my focus easier?"
+  // doesn't register as an imperative SET_NOW_FOCUS request.
+  SET_NOW_FOCUS: /\b(focus on|switch.*focus|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})(?:set|swap)\s+(?:my\s+|the\s+)?focus\s+(?:to|on)|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})make\s+.{1,40}\s+my focus\b|prioriti[sz]e|now focus|pin( this| that)? task|pin\b|focus.*now)\b/i,
   // Second alternative covers body-double requests ("sit with me while I
   // work", "be my body double") — they ask for a focus session just as
   // clearly as "start a timer" does, without using start/begin/kick-off wording.
   START_FOCUS: new RegExp(`\\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\\b|${BODY_DOUBLE_REF_RE.source}`, "i"),
-  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don'?t forget|add .+ to (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b)/i,
+  // don['’]?t (not don'?t) so a curly/smart apostrophe (common on mobile
+  // keyboards) still matches — coachContextMode.js's EXPLICIT_ACTION_RE
+  // already accepts both forms for this same phrase.
+  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don['’]?t forget|add .+ to (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b)/i,
   PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|skip)\b/i,
 };
 
@@ -99,17 +112,51 @@ const NON_SPECIFIC_COMPLETION_RE = /\b(done|finished?)\s+for\s+(today|now|the da
 // a different new task than the one the user just described).
 const TITLE_CHECK_TYPES = new Set(["SET_NOW_FOCUS", "START_FOCUS", "COMPLETE_TASK", "PARK_TASK", "ADD_TASK"]);
 
-// Checks that at least one "significant" word (length >= 3) from the tag's
-// title appears in the user's message. Titles with no significant words
-// (e.g. "it") are passed through — findTaskByTitle's own length guard
-// handles those.
+// Common English function words that are >=3 characters but carry no
+// task-identifying signal — without excluding these, a title like "Reply to
+// the important message sitting in your inbox" would count as "mentioned" by
+// any message containing "the" or "your" (virtually all of them), letting an
+// ambiguous message like "I'm done with the task" falsely corroborate
+// completing an unrelated task. See titleMentionedInMessage.
+const STOPWORDS_RE = /^(the|and|for|are|but|not|you|all|can|her|his|its|our|out|day|get|has|him|how|man|new|now|old|see|way|who|did|let|put|say|she|too|use|your|this|that|these|those|from|into|than|then|them|they|been|being|have|had|will|would|could|should|may|might|must|off|any|some|more|most|over|under|about|just|with|when|what|which|does|task|tasks)$/i;
+
+// Checks whether `phrase`'s words appear as a contiguous, whole-word run
+// inside `message` (both already space-normalized). Unlike a raw substring
+// check, this doesn't let a longer word's prefix count as a match — e.g.
+// "get out" must not match inside "get output".
+function includesWholeWordPhrase(message, phrase) {
+  const messageWords = message.split(" ");
+  const phraseWords = phrase.split(" ");
+  for (let i = 0; i <= messageWords.length - phraseWords.length; i++) {
+    if (phraseWords.every((w, j) => messageWords[i + j] === w)) return true;
+  }
+  return false;
+}
+
+// Checks that at least one "significant" word (length >= 3, and not a common
+// stopword) from the tag's title appears in the user's message. Titles with
+// no words of length >= 3 at all (e.g. "it") are passed through —
+// findTaskByTitle's own length guard handles those at resolution time.
 function titleMentionedInMessage(title, message) {
-  const words = normalizeTitle(title)
+  const normalizedTitle = normalizeTitle(title);
+  const lengthFiltered = normalizedTitle
     .split(" ")
-    .filter(w => w.length >= 3 && !/^(pr\d+|task|tasks)$/i.test(w));
-  if (words.length === 0) return true;
+    .filter(w => w.length >= 3 && !/^pr\d+$/i.test(w));
+  if (lengthFiltered.length === 0) return true;
+  const significant = lengthFiltered.filter(w => !STOPWORDS_RE.test(w));
   const normMessage = normalizeTitle(message);
-  return words.some(w => normMessage.includes(w));
+  if (significant.length === 0) {
+    // Every length->=3 word in this title is itself a common stopword (e.g.
+    // "New Task", "Day Off", "Just Do It") — falling back to the title's own
+    // (still-generic) words would recreate the exact false-corroboration bug
+    // the stopword exclusion exists to close (e.g. "New Task" would match any
+    // message mentioning "task"). No single word here reliably identifies
+    // this task over any other, so only accept a verbatim, whole-word mention
+    // of the whole title — anything else must go through matchesUserIntent's
+    // separate pronoun/current-focus corroboration paths instead.
+    return includesWholeWordPhrase(normMessage, normalizedTitle);
+  }
+  return significant.some(w => normMessage.includes(w));
 }
 
 // Loosely tests whether the user's message itself uses language associated
@@ -121,7 +168,12 @@ function titleMentionedInMessage(title, message) {
 export function messageSeemsActionLike(actionType, message = "") {
   const pattern = INTENT_PATTERNS[actionType];
   if (!pattern) return false;
-  const msg = String(message || "");
+  // Same shorthand normalization coachContextMode.js applies before deciding
+  // whether this message even reaches a mode with COACH ACTIONS instructions
+  // — without it, a message like "remind me 2 call the plumber" can reach
+  // full_task (via the normalized text) but then have its ADD_TASK tag
+  // blocked here (seeing the raw, un-normalized "2" instead of "to").
+  const msg = normalizeForClassification(String(message || ""));
   if (actionType === "COMPLETE_TASK" && NON_SPECIFIC_COMPLETION_RE.test(msg)) return false;
 
   // Scan every match of the intent pattern, not just the first — an earlier
