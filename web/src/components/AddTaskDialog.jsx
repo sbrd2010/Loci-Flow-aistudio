@@ -556,7 +556,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
                               onClick={() => { setEditingSubStepId(s.id); setEditingSubStepText(s.text); }}
                               style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "12px", lineHeight: 1, padding: "0 2px" }}
                             >
-                              ✎
+                              <span style={{ display: "inline-block", transform: "scaleX(-1)" }}>✎</span>
                             </button>
                           </>
                         )}
