@@ -196,6 +196,12 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
     setStep("chat");
     if (chatStarted.current) return;
     chatStarted.current = true;
+    // The synthetic opener below ("I'm stuck and need help.") is sent as a
+    // real Rescue Coach turn but is never added to `messages` with role
+    // "user", so without this the handoff summary would be skipped for
+    // anyone who opens chat and reads the reply/acts on it without typing
+    // their own follow-up message.
+    userChattedRef.current = true;
     if (!hasKey) {
       setMessages([{ role: "ai", text: buildOfflineRescueReply(r, firstName) }]);
       return;
