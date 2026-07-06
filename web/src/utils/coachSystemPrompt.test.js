@@ -25,6 +25,7 @@ function baseCtx() {
     velocityContext: "",
     lowEnergyContext: "",
     recentlyParkedContext: "",
+    rescueHandoffContext: "",
     isEarlyConversation: false,
     nowLabel: "Tue, Jun 17, 10:00 AM",
     timeOfDay: "morning",
@@ -87,6 +88,16 @@ describe("buildCoachSystemPrompt", () => {
     ["light", "emotional", "profile_reflection", "compact_task", "full_task"].forEach(mode => {
       const out = buildCoachSystemPrompt(mode, ctx);
       expect(out).toContain('CURRENT CHECK-IN: A Coach check-in is pending, firing in about 10 minute(s), about "Write report".');
+    });
+  });
+
+
+  it("every mode can include a same-day Rescue Mode handoff summary", () => {
+    const ctx = { ...baseCtx(), rescueHandoffContext: 'RECENT RESCUE MODE HANDOFF:\nUsed Rescue Mode from Home/Today earlier today (anxious while stuck on "Write grant draft") and left without resolving it.' };
+    ["light", "emotional", "profile_reflection", "compact_task", "full_task"].forEach(mode => {
+      const out = buildCoachSystemPrompt(mode, ctx);
+      expect(out).toContain("RECENT RESCUE MODE HANDOFF");
+      expect(out).toContain("Write grant draft");
     });
   });
 

@@ -59,7 +59,7 @@ function SortableTaskItem({ id, interactionStyle, children }) {
 }
 
 export default function TodayTab({
-  payload, savePayload, saveSubPath, onOpenDayMap, onOpenMindBox, onOpenCoach,
+  payload, savePayload, saveSubPath, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenCoach,
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft, setTimerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
@@ -1867,6 +1867,7 @@ export default function TodayTab({
           isSyncingFromCache={isSyncingFromCache}
           syncWarning={syncWarning}
           onDismiss={() => setRescueActive(false)}
+          onHandoffSummary={(summary) => saveConfigPatch?.({ rescueHandoffSummary: summary })}
           onSetNowFocus={() => setRescueTaskAsNowFocus()}
           onParkTask={parkRescueTask}
           onAccept={() => setRescueTaskAsNowFocus({ close: true })}

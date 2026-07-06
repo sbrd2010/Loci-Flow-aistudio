@@ -17,6 +17,7 @@ import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFrom
 import { stripReasoningTag } from "../utils/coachReasoning";
 import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM } from "../utils/coachContextMode";
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
+import { buildRescueHandoffContext } from "../utils/rescueHandoff";
 import { safeCopyToClipboard } from "../utils/clipboard";
 import LinkifyText from "./LinkifyText";
 import ReactMarkdown from "react-markdown";
@@ -372,6 +373,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     // stays available even when AI-written memory is disabled.
     const profileContext = buildProfileContext(config);
     const personaInstruction = buildPersonaInstruction(config, firstName);
+    const rescueHandoffContext = buildRescueHandoffContext(config.rescueHandoffSummary, { now, config });
 
     const userMessageCount = withUser.filter(m => m.isUser).length;
     const isEarlyConversation = userMessageCount <= 1;
@@ -401,6 +403,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       velocityContext,
       lowEnergyContext,
       recentlyParkedContext,
+      rescueHandoffContext,
       isEarlyConversation,
       nowLabel,
       timeOfDay,
@@ -450,7 +453,9 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       // deterministic parse of that request rather than dropping it silently.
       const checkinMinutes = minutes ?? parseCheckinRequestFromMessage(userText);
 
-      let configPatch = null;
+      let configPatch = rescueHandoffContext
+        ? { rescueHandoffSummary: null }
+        : null;
       if (checkinMinutes != null) {
         // Exact-title-only match (no fuzzy/partial matching) against the
         // user's own message, so the check-in never silently attaches to an

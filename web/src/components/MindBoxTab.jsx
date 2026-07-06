@@ -75,7 +75,7 @@ function IconChevronRight() {
   );
 }
 
-export default function MindBoxTab({ payload, savePayload, saveSubPath, userProfile, initialPanel, onOpenRoadmapInbox, isSyncingFromCache = false, syncWarning = null }) {
+export default function MindBoxTab({ payload, savePayload, saveSubPath, saveConfigPatch, userProfile, initialPanel, onOpenRoadmapInbox, isSyncingFromCache = false, syncWarning = null }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -1005,6 +1005,7 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
           syncWarning={syncWarning}
           apiKey={getAIKeys().geminiKey}
           onDismiss={() => setRescueActive(false)}
+          onHandoffSummary={(summary) => saveConfigPatch?.({ rescueHandoffSummary: summary })}
           onSetNowFocus={() => setRescueTaskAsNowFocus()}
           onParkTask={parkRescueTask}
           onAccept={() => setRescueTaskAsNowFocus({ close: true })}
