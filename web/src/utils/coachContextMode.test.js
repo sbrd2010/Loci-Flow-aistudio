@@ -274,6 +274,18 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("check my boss's priorities")).not.toBe("full_task");
     });
 
+    it("loopcheck follow-up — routes reordered/bare focus and priority phrasings to full_task, not light", () => {
+      expect(classifyContextMode("todays priorities")).toBe("full_task");
+      expect(classifyContextMode("today's priorities")).toBe("full_task");
+      expect(classifyContextMode("my focus for today")).toBe("full_task");
+      expect(classifyContextMode("whats my focus")).toBe("full_task");
+      expect(classifyContextMode("what's my focus")).toBe("full_task");
+      expect(classifyContextMode("whats my focus today")).toBe("full_task");
+
+      // Still must not treat a third party's focus as a task request.
+      expect(classifyContextMode("whats my boss's focus")).not.toBe("full_task");
+    });
+
     it("PR276 - widens compact follow-up detection for '10-min version' and 'turn that into N steps'", () => {
       const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
       expect(classifyContextMode("give me the 10-min version", pacedOpts)).toBe("compact_task");
