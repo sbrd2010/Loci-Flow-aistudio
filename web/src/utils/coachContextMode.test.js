@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM } from "./coachContextMode";
+import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM, detectRequestedCategories } from "./coachContextMode";
 
 describe("classifyContextMode", () => {
   it("defaults casual/light messages to light", () => {
@@ -492,11 +492,127 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("What should I prioritize for my career?", pacedOpts)).toBe("full_task");
     });
 
+    it("never compacts category-scoped task-list asks, even on the paced path (Codex review finding)", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("Show me my work tasks", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("What are my health tasks?", pacedOpts)).toBe("full_task");
+    });
+
+    it("never compacts common 'do/start for <category>' or plain 'what <category> tasks' asks, even on the paced path (Codex review finding)", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("What should I do for work?", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("Which task should I start for health?", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("What work tasks do I have?", pacedOpts)).toBe("full_task");
+    });
+
     it("never compacts body-double/priority-filter/low-energy phrasing even when it co-occurs with an explicit-mutation targeted reference", () => {
       const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
       expect(classifyContextMode("be my body double for this and start a focus session", pacedOpts)).toBe("full_task");
       expect(classifyContextMode("start a timer for this work task, which work task should I do first", pacedOpts)).toBe("full_task");
       expect(classifyContextMode("I have low energy, start a timer for this", pacedOpts)).toBe("full_task");
     });
+  });
+});
+
+describe("detectRequestedCategories", () => {
+  it("detects the category from 'which X task' phrasing", () => {
+    expect(detectRequestedCategories("which work task should I do first?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("which career task should I do first?")).toEqual(["Career"]);
+    expect(detectRequestedCategories("which health task should I do first?")).toEqual(["Health"]);
+    expect(detectRequestedCategories("which personal task should I do first?")).toEqual(["Personal"]);
+  });
+
+  it("detects the category from '<category> task/priority should/to' phrasing", () => {
+    expect(detectRequestedCategories("work task should be next")).toEqual(["Work"]);
+    expect(detectRequestedCategories("career priority to focus on")).toEqual(["Career"]);
+  });
+
+  it("detects the category from 'focus on/prioritize ... for <category>' phrasing", () => {
+    expect(detectRequestedCategories("what should I focus on for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what should I prioritize for my career?")).toEqual(["Career"]);
+  });
+
+  it("returns an empty array for messages that don't name a category", () => {
+    expect(detectRequestedCategories("what should I do today?")).toEqual([]);
+    expect(detectRequestedCategories("what should I focus on this month?")).toEqual([]);
+  });
+
+  it("normalizes shorthand before detecting, consistent with the classifier", () => {
+    expect(detectRequestedCategories("wat work task should i do first")).toEqual(["Work"]);
+  });
+
+  it("detects 'what are/tell me/show me my <category> priorities' phrasing without should/to (Codex review finding)", () => {
+    // These already route to full_task via BROAD_TASK_QUERY_RE's own
+    // category-priority branch — detectRequestedCategories needs the same
+    // coverage or the CATEGORY NOTE silently never fires for them.
+    expect(detectRequestedCategories("What are my work priorities?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("Tell me my health priorities")).toEqual(["Health"]);
+    expect(detectRequestedCategories("Show me my work priorities")).toEqual(["Work"]);
+    expect(detectRequestedCategories("Check my career priorities")).toEqual(["Career"]);
+  });
+
+  it("detects multiple categories from compound 'my X and Y priorities' / 'my X/Y priorities' phrasing (Codex review finding)", () => {
+    expect(detectRequestedCategories("What are my health and work priorities?")).toEqual(["Health", "Work"]);
+    expect(detectRequestedCategories("What are my health/work priorities?")).toEqual(["Health", "Work"]);
+  });
+
+  it("detects counted category-priority asks (Codex review finding)", () => {
+    expect(detectRequestedCategories("What are my 2 work priorities?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("What are my six work priorities?")).toEqual(["Work"]);
+  });
+
+  it("detects plural 'which (of my) X tasks' phrasing (Codex review finding)", () => {
+    expect(detectRequestedCategories("Which work tasks should I start?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("Which of my work tasks should I do first?")).toEqual(["Work"]);
+  });
+
+  it("requires a whole-word category match, not a substring (Codex review finding)", () => {
+    expect(detectRequestedCategories("What are my paperwork priorities and tasks?")).toEqual([]);
+    expect(detectRequestedCategories("What are my homework priorities?")).toEqual([]);
+  });
+
+  it("ignores third-party priority clauses like \"my boss's work priorities\" (Codex review finding)", () => {
+    expect(detectRequestedCategories("What are my boss's work priorities and tasks?")).toEqual([]);
+    expect(detectRequestedCategories("What are my manager's career priorities?")).toEqual([]);
+  });
+
+  it("captures every category in 'focus/prioritize for X and Y' phrasing (Codex review finding)", () => {
+    expect(detectRequestedCategories("What should I prioritize for health and work?")).toEqual(["Health", "Work"]);
+    // Existing single-category shapes still resolve correctly.
+    expect(detectRequestedCategories("what should I focus on for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what should I prioritize for my career?")).toEqual(["Career"]);
+  });
+
+  it("detects category-scoped task-list asks like 'show me my work tasks' (Codex review finding)", () => {
+    expect(detectRequestedCategories("Show me my work tasks")).toEqual(["Work"]);
+    expect(detectRequestedCategories("What are my health tasks?")).toEqual(["Health"]);
+    expect(detectRequestedCategories("List my career tasks")).toEqual(["Career"]);
+  });
+
+  it("does not classify add-task wording as a category filter (Codex review finding)", () => {
+    expect(detectRequestedCategories("Add a work task to call Bob to my list")).toEqual([]);
+    expect(detectRequestedCategories("create a health task to book a checkup")).toEqual([]);
+    // Longer filler between the verb and the category still gets excluded.
+    expect(detectRequestedCategories("Add a high priority work task to call Bob to my list")).toEqual([]);
+    // The genuine category-filtered ask still works.
+    expect(detectRequestedCategories("work task should be next")).toEqual(["Work"]);
+    expect(detectRequestedCategories("career priority to focus on")).toEqual(["Career"]);
+  });
+
+  it("scans both categories in compound 'which X task and Y task' asks (Codex review finding)", () => {
+    expect(detectRequestedCategories("Which work task and health task should I do first?")).toEqual(["Work", "Health"]);
+    // Existing single-category "which" shapes still resolve correctly.
+    expect(detectRequestedCategories("which work task should I do first?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("Which of my work tasks should I do first?")).toEqual(["Work"]);
+  });
+
+  it("ignores explicitly excluded categories like 'for work, not personal' (Codex review finding)", () => {
+    expect(detectRequestedCategories("What should I prioritize for work, not personal?")).toEqual(["Work"]);
+  });
+
+  it("detects common category-scoped asks using 'do/start' verbs and plain 'what <category> tasks' phrasing (Codex review finding)", () => {
+    expect(detectRequestedCategories("What should I do for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("Which task should I start for health?")).toEqual(["Health"]);
+    expect(detectRequestedCategories("What work tasks do I have?")).toEqual(["Work"]);
   });
 });

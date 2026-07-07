@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLociCoreInstruction, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
+import { buildLociCoreInstruction, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
 import { getFocusWindows } from "./focusWindows";
 
 describe("lociAIContext", () => {
@@ -341,6 +341,97 @@ describe("buildLociLowEnergyContext", () => {
 
   it("flags Low Energy Mode when on", () => {
     expect(buildLociLowEnergyContext({ isLowEnergyMode: true })).toContain("LOW ENERGY MODE: ON");
+  });
+});
+
+describe("buildLociCategoryFilterContext", () => {
+  it("returns an empty string when no category was requested", () => {
+    expect(buildLociCategoryFilterContext([{ title: "Task", category: "Personal" }], [])).toBe("");
+    expect(buildLociCategoryFilterContext([{ title: "Task", category: "Personal" }], null)).toBe("");
+  });
+
+  it("returns an empty string when a visible active task matches the requested category", () => {
+    const tasks = [
+      { title: "Fix resume", category: "Career", horizonLevel: "today" },
+      { title: "Buy groceries", category: "Personal", horizonLevel: "today" },
+    ];
+    expect(buildLociCategoryFilterContext(tasks, ["Career"])).toBe("");
+  });
+
+  it("flags a category mismatch when no visible active task carries that category", () => {
+    const tasks = [{ title: "Buy groceries", category: "Personal", horizonLevel: "today" }];
+    const context = buildLociCategoryFilterContext(tasks, ["Work"]);
+    expect(context).toContain("CATEGORY NOTE");
+    expect(context).toContain("{Work}");
+  });
+
+  it("treats an untagged task as Personal, matching buildLociTaskContext's own default", () => {
+    const tasks = [{ title: "Untagged task", horizonLevel: "today" }];
+    expect(buildLociCategoryFilterContext(tasks, ["Personal"])).toBe("");
+    expect(buildLociCategoryFilterContext(tasks, ["Work"])).toContain("CATEGORY NOTE");
+  });
+
+  it("does not count a matching task hidden beyond its horizon's visibility cap (Codex review finding)", () => {
+    // HORIZON_CAPS caps "today" at 10 — an 11th Today task only ever shows up
+    // as "+1 more" in the actual prompt, so it's just as invisible to the
+    // model as if it didn't exist.
+    const tasks = [
+      ...Array.from({ length: 10 }, (_, i) => ({ title: `Personal ${i}`, category: "Personal", horizonLevel: "today" })),
+      { title: "Hidden work task", category: "Work", horizonLevel: "today" },
+    ];
+    expect(buildLociCategoryFilterContext(tasks, ["Work"])).toContain("CATEGORY NOTE");
+  });
+
+  it("ignores deleted, completed, and parked tasks when checking for a category match", () => {
+    const tasks = [
+      { title: "Old work task", category: "Work", horizonLevel: "today", isDeleted: true },
+      { title: "Done work task", category: "Work", horizonLevel: "today", isCompleted: true },
+      { title: "Parked work task", category: "Work", horizonLevel: "today", isParked: true },
+    ];
+    expect(buildLociCategoryFilterContext(tasks, ["Work"])).toContain("CATEGORY NOTE");
+  });
+
+  it("matches case-insensitively against a task's own category string (Codex review finding)", () => {
+    // A task could carry a lowercase category ("work" instead of "Work") —
+    // an exact === comparison would falsely flag a visible task as missing.
+    const tasks = [{ title: "Fix bug", category: "work", horizonLevel: "today" }];
+    expect(buildLociCategoryFilterContext(tasks, ["Work"])).toBe("");
+  });
+
+  it("flags only the requested categories that have no visible match, when multiple were named (Codex review finding)", () => {
+    const tasks = [
+      { title: "Fix resume", category: "Career", horizonLevel: "today" },
+      { title: "Buy groceries", category: "Personal", horizonLevel: "today" },
+    ];
+    // Career has a visible match, Work doesn't — only Work should be flagged.
+    const context = buildLociCategoryFilterContext(tasks, ["Career", "Work"]);
+    expect(context).toContain("CATEGORY NOTE");
+    expect(context).toContain("{Work}");
+    expect(context).not.toContain("{Career}");
+    // Neither has a match — both flagged.
+    const bothMissing = buildLociCategoryFilterContext(tasks, ["Work", "Health"]);
+    expect(bothMissing).toContain("{Work}");
+    expect(bothMissing).toContain("{Health}");
+  });
+
+  it("treats a task under the WORK horizon as satisfying a Work category ask, even if its own tag differs (Codex review finding)", () => {
+    // The office horizon prints as "WORK (...)" in the prompt (HORIZON_LABELS.office),
+    // so a task there reads as a work priority to the model regardless of its
+    // {Category} tag — a false CATEGORY NOTE here would contradict what the
+    // model can plainly see.
+    const tasks = [{ title: "Ship report", category: "Personal", horizonLevel: "office" }];
+    expect(buildLociCategoryFilterContext(tasks, ["Work"])).toBe("");
+    // The horizon match is specific to Work — an unrelated category is still flagged.
+    expect(buildLociCategoryFilterContext(tasks, ["Career"])).toContain("{Career}");
+  });
+
+  it("coerces a non-string task category instead of throwing (Codex review finding)", () => {
+    // A synced legacy/corrupt task could carry a non-string category —
+    // buildLociTaskContext renders it safely via string interpolation, so
+    // this check shouldn't abort prompt construction either.
+    const tasks = [{ title: "Weird task", category: 123, horizonLevel: "today" }];
+    expect(() => buildLociCategoryFilterContext(tasks, ["Work"])).not.toThrow();
+    expect(buildLociCategoryFilterContext(tasks, ["Work"])).toContain("{Work}");
   });
 });
 

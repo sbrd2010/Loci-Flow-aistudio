@@ -3,7 +3,7 @@ import { track, auth } from "../firebase";
 import { callAI, describeAIError, getAIKeys, hasAIKey } from "../utils/aiCall";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
-import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, getLocalDateString, isActiveLociTask } from "../utils/lociAIContext";
+import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "../utils/lociAIContext";
 import { getTodayCheckedIds, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
 import { requestNotifPermission } from "../utils/focusNotifications";
@@ -15,7 +15,7 @@ import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
 import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFromMemory, isMemoryEnabled, parseMemoryTags } from "../utils/coachMemory";
 import { stripReasoningTag } from "../utils/coachReasoning";
-import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM } from "../utils/coachContextMode";
+import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM, detectRequestedCategories } from "../utils/coachContextMode";
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
 import { buildRescueHandoffContext, shouldClearRescueHandoff } from "../utils/rescueHandoff";
 import { safeCopyToClipboard } from "../utils/clipboard";
@@ -358,6 +358,8 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const pendingCheckinContext = buildCoachCheckinContext(config.coachCheckin, now.getTime());
     const lowEnergyContext = buildLociLowEnergyContext(config);
     const recentlyParkedContext = buildLociRecentlyParkedContext(tasks, now);
+    const requestedCategories = detectRequestedCategories(userText);
+    const categoryFilterContext = buildLociCategoryFilterContext(tasks, requestedCategories);
     const lociCoreInstruction = buildLociCoreInstruction({ firstName });
     const memoryEnabled = isMemoryEnabled(config);
     // Don't send memory facts/notes to the AI — or the MEMORY instructions
@@ -413,6 +415,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       velocityContext,
       lowEnergyContext,
       recentlyParkedContext,
+      categoryFilterContext,
       rescueHandoffContext,
       isEarlyConversation,
       nowLabel,

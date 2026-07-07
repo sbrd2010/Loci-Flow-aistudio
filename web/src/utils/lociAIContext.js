@@ -26,6 +26,25 @@ export function isActiveLociTask(task) {
   return !!task && !task.isDeleted && !task.isCompleted && !task.isParked;
 }
 
+// Returns the flat list of tasks that will actually appear in the prompt's
+// CURRENT CAPPED TASK CONTEXT block (see buildLociTaskContext) — i.e. active
+// tasks within each horizon's HORIZON_CAPS limit. A task beyond its
+// horizon's cap only ever shows up as "+X more", never as itself, so
+// anything checking "is this actually visible to the model" (e.g.
+// buildLociCategoryFilterContext) must use this instead of the full active
+// list, or it can miss a mismatch the model genuinely can't see either.
+export function getVisibleLociTasks(allTasks = []) {
+  const active = (allTasks || []).filter(isActiveLociTask);
+  const visible = [];
+  for (const horizon of HORIZON_ORDER) {
+    const horizonTasks = active.filter(task => task.horizonLevel === horizon);
+    if (horizonTasks.length === 0) continue;
+    const cap = HORIZON_CAPS[horizon] || 8;
+    visible.push(...horizonTasks.slice(0, cap));
+  }
+  return visible;
+}
+
 export function getLocalDateString(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -301,6 +320,40 @@ export function buildLociRemindersContext(tasks = [], date = new Date()) {
 export function buildLociLowEnergyContext(config = {}) {
   if (!config.isLowEnergyMode) return "";
   return "LOW ENERGY MODE: ON — keep suggestions small, simple, and low-pressure right now.";
+}
+
+// Deterministic check backing the PRIORITY QUESTIONS rule's category-mismatch
+// disclosure ("if none are visible, say so rather than picking an unrelated
+// task") — live testing showed the model doesn't reliably notice a category
+// mismatch from the {Category} tags alone (see issue #338). requestedCategories
+// comes from coachContextMode.js's detectRequestedCategories (an array —
+// "my health and work priorities" can name more than one); [] means this is
+// silent unless there's something to flag.
+export function buildLociCategoryFilterContext(tasks = [], requestedCategories = []) {
+  if (!requestedCategories || requestedCategories.length === 0) return "";
+  // Uses the capped visible set, not the full active list — a matching task
+  // that exists but falls beyond its horizon's cap (shown only as "+X more")
+  // is just as invisible to the model as one that doesn't exist at all.
+  const visible = getVisibleLociTasks(tasks);
+  // Case-insensitive: a task's own category string isn't guaranteed to match
+  // the canonical Title Case labels detectRequestedCategories returns (e.g.
+  // an older/imported task could carry "work" instead of "Work") — an exact
+  // === comparison would falsely report a visible task's category as missing.
+  // "Work" is ambiguous with the WORK horizon label (HORIZON_LABELS.office) —
+  // a task the model sees printed under "WORK (...)" reads as a work priority
+  // even when its own {Category} tag is something else (e.g. the default
+  // Personal), so that horizon match also counts as visible.
+  const missing = requestedCategories.filter(
+    cat => !visible.some(t => {
+      if (String(t.category || "Personal").toLowerCase() === cat.toLowerCase()) return true;
+      const horizonLabel = HORIZON_LABELS[t.horizonLevel];
+      return !!horizonLabel && horizonLabel.toLowerCase() === cat.toLowerCase();
+    })
+  );
+  if (missing.length === 0) return "";
+  const missingLabel = missing.map(c => `{${c}}`).join(" or ");
+  const phrase = missing.length > 1 ? "those priorities" : `${missing[0]} priorities`;
+  return `CATEGORY NOTE: No visible tasks are currently tagged ${missingLabel} — if asked about ${phrase}, say so plainly rather than picking an unrelated task.`;
 }
 
 const RECENT_PARK_WINDOW_MS = 24 * 60 * 60 * 1000;

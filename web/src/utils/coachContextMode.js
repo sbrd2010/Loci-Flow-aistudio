@@ -105,7 +105,114 @@ const LOW_ENERGY_RE = /\b(low energy|no energy|low on energy|out of energy|exhau
 // horizon-filtered ("what should I focus on this month?") priority questions
 // need the PRIORITY QUESTIONS framework and {Category} tags that only the
 // full_task prompt carries — never compact these, even on the paced path.
-const PRIORITY_FILTER_RE = /\bwhich\s+(?:career|work|health|personal)\s+task\b|\b(?:career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b|\bfocus on this\s+(?:month|quarter|week)\b|\b(?:focus on|priorit\w*)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(?:career|work|health|personal)\b/i;
+const PRIORITY_FILTER_RE = /\bwhich\s+(?:of\s+my\s+)?(?:career|work|health|personal)\s+tasks?\b|\b(?:career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b|\bfocus on this\s+(?:month|quarter|week)\b|\b(?:focus on|priorit\w*|do|work on|start)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(?:career|work|health|personal)\b|\b(?:show me|what are|list|check|tell me)\s+my\s+(?:career|work|health|personal)\s+tasks?\b|\bwhat\s+(?:career|work|health|personal)\s+tasks?\b/i;
+
+const CATEGORY_LABELS = { career: "Career", work: "Work", health: "Health", personal: "Personal" };
+
+// Mirrors PRIORITY_FILTER_RE's category-question shapes (not its horizon
+// shape — "focus on this month" isn't a {Category} filter) but captures
+// which specific category was named, instead of just testing for a match.
+// Used to build a deterministic "no visible tasks in that category" context
+// note (see buildLociCategoryFilterContext) — the system prompt's own
+// PRIORITY QUESTIONS rule already tells the model to disclose a category
+// mismatch, but relying on the model to notice via the {Category} tags alone
+// isn't reliable enough on its own; see issue #338.
+// These shapes only ever name a single category.
+const SINGLE_CATEGORY_PATTERNS = [
+  // Excludes "add a work task to ...", "create a high priority health task
+  // to ..." — those are ADD_TASK commands, not a category-filtered priority
+  // ask, even though they share the "<category> task ... to" shape. The
+  // window is wide enough to span a few filler words between the verb and
+  // the category.
+  /(?<!\b(?:add|create|make)\b.{0,40})\b(career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b/i,
+  // "Show me/what are/list my <category> tasks" — a category-scoped
+  // task-list ask, distinct from the "priorities" clause below.
+  /\b(?:show me|what are|list|check|tell me)\s+my\s+(career|work|health|personal)\s+tasks?\b/i,
+  // "What work tasks do I have?" — category named directly before "task(s)",
+  // without "are/my" the pattern above requires.
+  /\bwhat\s+(career|work|health|personal)\s+tasks?\b/i,
+];
+
+// Mirrors the "which <category> task(s)" shape, but — like the other clauses
+// below — captures the whole trailing clause instead of a single category,
+// so "which work task and health task should I do first?" finds both
+// instead of stopping at the first "task".
+const WHICH_TASK_CLAUSE_RE = /\bwhich\s+(?:of\s+my\s+)?([a-z0-9\s&/,'’]{1,60}?)\b(?=\s+(?:should|shall|is|are|do|does|can|will|to)\b|[.?!]|$)/i;
+
+// Mirrors BROAD_TASK_QUERY_RE's own "what are/tell me/show me my <category>
+// priorities" shape, but — unlike BROAD_TASK_QUERY_RE, which only needs to
+// know THAT a category was named — this needs to know WHICH one(s), and that
+// shape can name up to three ("my health and work priorities", "my health/
+// work priorities") or include a leading count/scope qualifier ("my 2 work
+// priorities", "my six work priorities"). Rather than replicate that exact
+// compound grammar, capture the whole "my ... priorities" clause (bounded to
+// a sane length so it can't run across an unrelated later "priorities" in a
+// long message) and scan it for every category word inside.
+const CATEGORY_PRIORITY_CLAUSE_RE = /(?:what are|tell me|show me|check|what about)\s+my\s+([a-z0-9\s&/,'’]{1,60}?)\s*priorit(?:y|ies)\b/i;
+// Mirrors the "focus on/prioritize ... for <category>" shape, but — like
+// CATEGORY_PRIORITY_CLAUSE_RE above — captures the whole trailing clause
+// instead of a single category, so "prioritize for health and work" finds
+// both instead of only the first.
+const FOCUS_FOR_CLAUSE_RE = /\b(?:focus on|priorit\w*|do|work on|start)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?([a-z0-9\s&/,'’]{1,40})/i;
+const CATEGORY_WORD_RE = /\b(?:career|work|health|personal)\b/gi;
+// A possessive like "boss's" or "manager's" inside the captured clause means
+// the "my" in "my boss's work priorities" scopes to the boss, not the user —
+// these are someone else's priorities, not a category the user is asking
+// about for themselves.
+const THIRD_PARTY_POSSESSIVE_RE = /\w['’]s\b/;
+// "for work, not personal" names Personal only to exclude it, not to ask
+// about it — strip any category immediately preceded by "not" before
+// treating the rest of the clause as requested categories.
+const NEGATED_CATEGORY_RE = /\bnot\s+(career|work|health|personal)\b/gi;
+
+// Scans a captured clause (e.g. "health and work", "boss's work") for every
+// category word inside, in the order first mentioned, deduped, excluding
+// any explicitly negated with "not <category>".
+function extractCategoryLabels(clause) {
+  const excluded = new Set();
+  let negatedMatch;
+  NEGATED_CATEGORY_RE.lastIndex = 0;
+  while ((negatedMatch = NEGATED_CATEGORY_RE.exec(clause))) {
+    excluded.add(negatedMatch[1].toLowerCase());
+  }
+  const words = (clause.match(CATEGORY_WORD_RE) || []).filter(w => !excluded.has(w.toLowerCase()));
+  return [...new Set(words.map(w => CATEGORY_LABELS[w.toLowerCase()]))];
+}
+
+// Returns every category (Career/Work/Health/Personal) a message named, in
+// the order first mentioned, deduped — or [] if none. Used to build a
+// deterministic "no visible tasks in that category" context note (see
+// buildLociCategoryFilterContext) — the system prompt's own PRIORITY
+// QUESTIONS rule already tells the model to disclose a category mismatch,
+// but relying on the model to notice via the {Category} tags alone isn't
+// reliable enough on its own; see issue #338.
+export function detectRequestedCategories(message) {
+  const text = normalizeForClassification(String(message || ""));
+  // Checked before SINGLE_CATEGORY_PATTERNS: a compound "which work task and
+  // health task should..." also matches the "<category> task should" shape
+  // below for its second half alone, which would return early with only one
+  // category instead of scanning the whole "which" clause for both.
+  const whichTaskMatch = text.match(WHICH_TASK_CLAUSE_RE);
+  if (whichTaskMatch) {
+    const labels = extractCategoryLabels(whichTaskMatch[1]);
+    if (labels.length > 0) return labels;
+  }
+  for (const re of SINGLE_CATEGORY_PATTERNS) {
+    const match = text.match(re);
+    if (match) return [CATEGORY_LABELS[match[1].toLowerCase()]];
+  }
+  const clauseMatch = text.match(CATEGORY_PRIORITY_CLAUSE_RE);
+  if (clauseMatch && !THIRD_PARTY_POSSESSIVE_RE.test(clauseMatch[1])) {
+    const labels = extractCategoryLabels(clauseMatch[1]);
+    if (labels.length > 0) return labels;
+  }
+  const focusForMatch = text.match(FOCUS_FOR_CLAUSE_RE);
+  if (focusForMatch) {
+    const labels = extractCategoryLabels(focusForMatch[1]);
+    if (labels.length > 0) return labels;
+  }
+  return [];
+}
 
 /**
  * Classifies a Coach chat message into the smallest context mode that
