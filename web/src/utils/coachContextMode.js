@@ -280,7 +280,7 @@ const PRIORITY_SYNONYM_RE = /\bwhat(?:['’]?s|\s+is) (?:my |the )?(?:most )?(?:
 // final "not due soon/going to hurt if I skip it" alternative also needs the
 // same end-of-clause guard as its siblings — without one, "what's not due
 // soon in JavaScript?" false-positived into full_task (Codex review finding).
-const NEGATION_PRIORITY_RE = /\bwhat should i not do(?=\s*(?:today|now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat can wait(?=\s*(?:today|for now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat can i (?:skip|ignore|put off)(?=\s*(?:today|for now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) (?:not |the least |least |lowest |low )(?:important|urgent|pressing|critical|priority)(?=\s*(?:thing|priority|task|focus)?\s*(?:(?:today|right now)?\s*(?:[.?!]|$)|for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b))|\bwhat don['’]?t i need to worry about(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) optional(?=\s*(?:today)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat has the lowest priority(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat am i free to skip(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat shouldn['’]?t i worry about(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) not (?:due soon|going to hurt if i skip it)(?=\s*(?:[.?!]|$))\b/i;
+const NEGATION_PRIORITY_RE = /\bwhat should i not do(?=\s*(?:today|now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat can wait(?=\s*(?:today|for now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat can i (?:skip|ignore|put off)(?=\s*(?:today|for now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\banything\s+(?:low\s+priority\s+)?i can (?:skip|ignore|put off)(?=\s*(?:today|for now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat shouldn['’]?t i bother with(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) (?:not |the least |least |lowest |low )(?:important|urgent|pressing|critical|priority)(?=\s*(?:thing|priority|task|focus)?\s*(?:(?:today|right now)?\s*(?:[.?!]|$)|for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b))|\bwhat don['’]?t i need to worry about(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) optional(?=\s*(?:today)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat has the lowest priority(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat am i free to skip(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat shouldn['’]?t i worry about(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) not (?:due soon|going to hurt if i skip it)(?=\s*(?:[.?!]|$))\b/i;
 
 // Low-energy asks need the full visible task list with estimates so the
 // coach can prefer the smallest task per the PRIORITY QUESTIONS rule — the
@@ -303,7 +303,21 @@ const LOW_ENERGY_RE = /\b(low energy|no energy|low on energy|out of energy|exhau
 // the last plan/current focus, not the full task list) instead of
 // "full_task" for these category/horizon-filtered priority questions
 // (Codex review finding).
-const PRIORITY_FILTER_RE = /\bwhich\s+(?:of\s+my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+tasks?\b|\b(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+(?:task|priorit\w*)\s+(?:should|to)\b|\b(?:focus on|tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on)\s+this\s+(?:month|quarter|week)\b|\b(?:focus on|priorit\w*|do|work on|start|tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on|needs my attention|on (?:my |the )?(?:deck|radar|plate|agenda|horizon)|(?:the )?game plan)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b|\b(?:show me|what are|list|check|tell me)\s+my\s+(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+tasks?\b|\bwhat\s+(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+tasks?\b/i;
+// The trailing noun after a category word ("what job stuff do I have
+// today?") isn't always literally "task(s)" — "stuff"/"things"/"items"/
+// "to-dos" are equally natural ways to ask the same question, and without
+// accepting them the message never reaches full_task at all (live-testing
+// round 4), unlike "what job tasks do I have?" which already worked.
+const CATEGORY_TRAILING_NOUN_RE = "(?:tasks?|stuff|things|items|to-?dos?)";
+const PRIORITY_FILTER_RE = new RegExp(
+  `\\bwhich\\s+(?:of\\s+my\\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\\s+${CATEGORY_TRAILING_NOUN_RE}\\b|` +
+  `\\b(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\\s+(?:task|priorit\\w*)\\s+(?:should|to)\\b|` +
+  `\\b(?:focus on|tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on)\\s+this\\s+(?:month|quarter|week)\\b|` +
+  `\\b(?:focus on|priorit\\w*|do|work on|start|tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on|needs my attention|on (?:my |the )?(?:deck|radar|plate|agenda|horizon)|(?:the )?game plan)\\b[^.?!]{0,30}\\bfor\\s+(?:my\\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\\b|` +
+  `\\b(?:show me|what are|list|check|tell me)\\s+my\\s+(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\\s+${CATEGORY_TRAILING_NOUN_RE}\\b|` +
+  `\\bwhat\\s+(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\\s+${CATEGORY_TRAILING_NOUN_RE}\\b`,
+  "i"
+);
 
 // job/office -> Work, fitness/wellness/gym -> Health, home/family -> Personal:
 // common synonyms for the app's four category tags, so a message naming one
@@ -340,11 +354,13 @@ const SINGLE_CATEGORY_PATTERNS = [
   // the category.
   /(?<!\b(?:add|create|make)\b.{0,40})\b(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+(?:task|priorit\w*)\s+(?:should|to)\b/i,
   // "Show me/what are/list my <category> tasks" — a category-scoped
-  // task-list ask, distinct from the "priorities" clause below.
-  /\b(?:show me|what are|list|check|tell me)\s+my\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+tasks?\b/i,
+  // task-list ask, distinct from the "priorities" clause below. Accepts
+  // "stuff"/"things"/"items"/"to-dos" alongside "task(s)" — mirrors
+  // PRIORITY_FILTER_RE's CATEGORY_TRAILING_NOUN_RE (live-testing round 4).
+  /\b(?:show me|what are|list|check|tell me)\s+my\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+(?:tasks?|stuff|things|items|to-?dos?)\b/i,
   // "What work tasks do I have?" — category named directly before "task(s)",
   // without "are/my" the pattern above requires.
-  /\bwhat\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+tasks?\b/i,
+  /\bwhat\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+(?:tasks?|stuff|things|items|to-?dos?)\b/i,
 ];
 
 // Mirrors the "which <category> task(s)" shape, but — like the other clauses

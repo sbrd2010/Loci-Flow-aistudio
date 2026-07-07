@@ -1110,4 +1110,22 @@ describe("detectRequestedCategories", () => {
     expect(detectRequestedCategories("show me my job tasks")).toEqual(["Work"]);
     expect(detectRequestedCategories("show me my fitness tasks")).toEqual(["Health"]);
   });
+
+  // Found via live-testing round 4 against the merged #340-#343 main: these
+  // natural phrasings stayed at "light" and got the coach's honest
+  // "missing the task snapshot" fallback, while near-identical phrasings
+  // (e.g. "what can I skip today?") correctly reached full_task.
+  it("routes 'anything ... I can ignore/skip' and 'bother with' framings to full_task (live-testing round 4)", () => {
+    expect(classifyContextMode("anything low priority I can ignore today?")).toBe("full_task");
+    expect(classifyContextMode("anything I can skip today?")).toBe("full_task");
+    expect(classifyContextMode("what shouldn't I bother with today?")).toBe("full_task");
+  });
+
+  it("routes '<category> stuff/things/items' phrasing to full_task, not just '<category> task(s)' (live-testing round 4)", () => {
+    expect(classifyContextMode("what job stuff do I have today?")).toBe("full_task");
+    expect(classifyContextMode("what home things do I need to handle?")).toBe("full_task");
+    expect(classifyContextMode("show me my fitness items")).toBe("full_task");
+    expect(detectRequestedCategories("what job stuff do I have today?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what home things do I need to handle?")).toEqual(["Personal"]);
+  });
 });
