@@ -30,6 +30,17 @@ jobs:
       - name: Run unit tests
         run: npm test
 
+      - name: Remove unrelated apt sources that can break CI (Microsoft package signing)
+        # GitHub's ubuntu-latest runner image ships azure-cli and
+        # microsoft-prod apt sources by default, unrelated to Playwright.
+        # `apt-get update` (run internally by `playwright install --with-deps`)
+        # fails outright if any configured repo is unreachable, even ones
+        # nothing here needs — and packages.microsoft.com has intermittently
+        # served an invalid/unsigned InRelease file ("Clearsigned file isn't
+        # valid, got 'NOSPLIT'"), failing this job for reasons that have
+        # nothing to do with this repo's code.
+        run: sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
+
       - name: Install Playwright browsers (with system deps)
         run: npx playwright install --with-deps chromium
 

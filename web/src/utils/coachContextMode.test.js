@@ -1110,4 +1110,125 @@ describe("detectRequestedCategories", () => {
     expect(detectRequestedCategories("show me my job tasks")).toEqual(["Work"]);
     expect(detectRequestedCategories("show me my fitness tasks")).toEqual(["Health"]);
   });
+
+  // Found via live-testing round 4 against the merged #340-#343 main: these
+  // natural phrasings stayed at "light" and got the coach's honest
+  // "missing the task snapshot" fallback, while near-identical phrasings
+  // (e.g. "what can I skip today?") correctly reached full_task.
+  it("routes 'anything ... I can ignore/skip' and 'bother with' framings to full_task (live-testing round 4)", () => {
+    expect(classifyContextMode("anything low priority I can ignore today?")).toBe("full_task");
+    expect(classifyContextMode("anything I can skip today?")).toBe("full_task");
+    expect(classifyContextMode("what shouldn't I bother with today?")).toBe("full_task");
+  });
+
+  it("routes '<category> stuff/things/items' phrasing to full_task, not just '<category> task(s)' (live-testing round 4)", () => {
+    expect(classifyContextMode("what job stuff do I have today?")).toBe("full_task");
+    expect(classifyContextMode("what home things do I need to handle?")).toBe("full_task");
+    expect(classifyContextMode("show me my fitness items")).toBe("full_task");
+    expect(detectRequestedCategories("what job stuff do I have today?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what home things do I need to handle?")).toEqual(["Personal"]);
+  });
+
+  it("doesn't route general-knowledge '<category> stuff/things/items' questions to full_task (Codex review finding, PR #344)", () => {
+    // Unlike "task(s)" (inherently task-related), the generic nouns only
+    // count as a task-list ask when followed by a task-list continuation
+    // or the clause ends there — not when the sentence keeps going into an
+    // unrelated general-knowledge question that happens to share the noun.
+    expect(classifyContextMode("what health things should I know about pregnancy?")).not.toBe("full_task");
+    expect(classifyContextMode("what work items can I deduct on taxes?")).not.toBe("full_task");
+    expect(classifyContextMode("tell me my health things I should know about pregnancy")).not.toBe("full_task");
+  });
+
+  it("doesn't treat bare 'do I need' as a task-list continuation for generic nouns (Codex review finding, PR #344 round 2)", () => {
+    // A bare "do i need" let arbitrary text follow it; it now only counts
+    // as the end of the clause or immediately followed by a task verb.
+    expect(classifyContextMode("what health things do I need to know about pregnancy?")).not.toBe("full_task");
+    expect(classifyContextMode("what work items do I need for taxes?")).not.toBe("full_task");
+    // Genuine task-list asks with "do I need" still work.
+    expect(classifyContextMode("what home things do I need to handle?")).toBe("full_task");
+  });
+
+  it("accepts the expanded 'what should I not bother with' phrasing (Codex review finding, PR #344 round 2)", () => {
+    expect(classifyContextMode("what should I not bother with today?")).toBe("full_task");
+    expect(classifyContextMode("what should I not bother with for work?")).toBe("full_task");
+    expect(classifyContextMode("what shouldn't I bother with today?")).toBe("full_task");
+  });
+
+  it("routes 'which <category> stuff/items should I do/handle first' to full_task (Codex review finding, PR #344 round 2)", () => {
+    // "which" questions naturally continue with "should I do/handle first"
+    // or "can I skip", distinct from "what <category> <noun> do I have".
+    expect(classifyContextMode("which work items should I do first?")).toBe("full_task");
+    expect(classifyContextMode("which job stuff should I handle first?")).toBe("full_task");
+    // The pre-existing "task(s)" form still works.
+    expect(classifyContextMode("which work tasks should I do first?")).toBe("full_task");
+  });
+
+  it("accepts hyphenated 'low-priority' spelling for the ignore/skip ask (Codex review finding, PR #344 round 3)", () => {
+    expect(classifyContextMode("anything low-priority I can ignore today?")).toBe("full_task");
+    expect(classifyContextMode("anything low priority I can ignore today?")).toBe("full_task");
+  });
+
+  it("accepts singular generic nouns 'item'/'thing' alongside the plural forms (Codex review finding, PR #344 round 3)", () => {
+    expect(classifyContextMode("which work item should I do first?")).toBe("full_task");
+    expect(classifyContextMode("what home thing do I need to handle?")).toBe("full_task");
+  });
+
+  it("accepts 'next' and 'ignore'/'put off' continuations for generic-noun 'which' asks (Codex review finding, PR #344 round 3)", () => {
+    // These already worked for the unguarded "task(s)" form; the generic
+    // nouns now accept the same set of priority continuations.
+    expect(classifyContextMode("which work items should I do next?")).toBe("full_task");
+    expect(classifyContextMode("which work items can I ignore?")).toBe("full_task");
+    expect(classifyContextMode("which work items can I put off?")).toBe("full_task");
+  });
+
+  it("accepts 'now'/'right now' endings and 'should I skip/ignore' for generic nouns (Codex review finding, PR #344 round 4)", () => {
+    expect(classifyContextMode("which work items should I do right now?")).toBe("full_task");
+    expect(classifyContextMode("which work items can I skip now?")).toBe("full_task");
+    expect(classifyContextMode("which work items should I skip?")).toBe("full_task");
+    expect(classifyContextMode("which work items should I ignore?")).toBe("full_task");
+  });
+
+  it("accepts 'now'/'for now' endings for the bother-with ask (Codex review finding, PR #344 round 4)", () => {
+    expect(classifyContextMode("what should I not bother with now?")).toBe("full_task");
+    expect(classifyContextMode("what shouldn't I bother with for now?")).toBe("full_task");
+  });
+
+  it("detects categories for the new negative-priority synonyms and pre-existing skip/put-off (Codex review finding, PR #344 round 4)", () => {
+    // "bother with" and "anything...can I skip" are new this round; plain
+    // "skip"/"put off" for "for <category>" was a pre-existing gap from
+    // #340 that shares the same underlying fix.
+    expect(detectRequestedCategories("what should I not bother with for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("anything I can skip for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what can I skip for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what can i put off for work?")).toEqual(["Work"]);
+  });
+
+  it("detects categories for generic-noun 'on my list' asks with 'is/are' in between (Codex review finding, PR #344 round 4)", () => {
+    // "what job items are on my list?" has "are" between the noun and the
+    // continuation phrase, unlike the unguarded "task(s)" form which has no
+    // such requirement at all.
+    expect(detectRequestedCategories("what job items are on my list?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what job tasks are on my list?")).toEqual(["Work"]);
+  });
+
+  it("doesn't treat '<category> reason(s)' as a category filter (Codex review finding, PR #344 round 5)", () => {
+    // "what can I skip for health reasons?" names "health" as the cause of
+    // skipping something, not the category being asked about — a real
+    // regression introduced by the round-4 FOCUS_FOR_CLAUSE_RE broadening.
+    expect(detectRequestedCategories("what can I skip for health reasons?")).toEqual([]);
+    expect(detectRequestedCategories("what should I not bother with for work reasons?")).toEqual([]);
+    // A genuine category ask for the same category word still works.
+    expect(detectRequestedCategories("what can I skip for health?")).toEqual(["Health"]);
+  });
+
+  it("accepts 'should' alongside 'can' for the 'anything ... skip/ignore' ask (Codex review finding, PR #344 round 5)", () => {
+    expect(classifyContextMode("anything I should skip today?")).toBe("full_task");
+    expect(classifyContextMode("anything low priority I should ignore today?")).toBe("full_task");
+  });
+
+  it("accepts 'for now' endings and urgent/can-wait continuations for generic-noun which asks (Codex review finding, PR #344 round 5)", () => {
+    expect(classifyContextMode("which work items can I skip for now?")).toBe("full_task");
+    expect(classifyContextMode("which work items are urgent?")).toBe("full_task");
+    expect(classifyContextMode("which work items can wait?")).toBe("full_task");
+  });
 });
