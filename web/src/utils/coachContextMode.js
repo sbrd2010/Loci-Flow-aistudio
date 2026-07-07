@@ -280,7 +280,7 @@ const PRIORITY_SYNONYM_RE = /\bwhat(?:['’]?s|\s+is) (?:my |the )?(?:most )?(?:
 // final "not due soon/going to hurt if I skip it" alternative also needs the
 // same end-of-clause guard as its siblings — without one, "what's not due
 // soon in JavaScript?" false-positived into full_task (Codex review finding).
-const NEGATION_PRIORITY_RE = /\bwhat should i not do(?=\s*(?:today|now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat can wait(?=\s*(?:today|for now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat can i (?:skip|ignore|put off)(?=\s*(?:today|for now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\banything\s+(?:low\s+priority\s+)?i can (?:skip|ignore|put off)(?=\s*(?:today|for now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat shouldn['’]?t i bother with(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) (?:not |the least |least |lowest |low )(?:important|urgent|pressing|critical|priority)(?=\s*(?:thing|priority|task|focus)?\s*(?:(?:today|right now)?\s*(?:[.?!]|$)|for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b))|\bwhat don['’]?t i need to worry about(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) optional(?=\s*(?:today)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat has the lowest priority(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat am i free to skip(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat shouldn['’]?t i worry about(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) not (?:due soon|going to hurt if i skip it)(?=\s*(?:[.?!]|$))\b/i;
+const NEGATION_PRIORITY_RE = /\bwhat should i not do(?=\s*(?:today|now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat can wait(?=\s*(?:today|for now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat can i (?:skip|ignore|put off)(?=\s*(?:today|for now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\banything\s+(?:low\s+priority\s+)?i can (?:skip|ignore|put off)(?=\s*(?:today|for now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat should(?:n['’]?t\s+i|\s+i\s+not)\s+bother\s+with(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) (?:not |the least |least |lowest |low )(?:important|urgent|pressing|critical|priority)(?=\s*(?:thing|priority|task|focus)?\s*(?:(?:today|right now)?\s*(?:[.?!]|$)|for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b))|\bwhat don['’]?t i need to worry about(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) optional(?=\s*(?:today)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat has the lowest priority(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat am i free to skip(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat shouldn['’]?t i worry about(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) not (?:due soon|going to hurt if i skip it)(?=\s*(?:[.?!]|$))\b/i;
 
 // Low-energy asks need the full visible task list with estimates so the
 // coach can prefer the smallest task per the PRIORITY QUESTIONS rule — the
@@ -314,8 +314,22 @@ const LOW_ENERGY_RE = /\b(low energy|no energy|low on energy|out of energy|exhau
 // should I know about pregnancy?"/"what work items can I deduct on taxes?"
 // (general-knowledge questions that happen to share the same noun) would
 // also match and wrongly expose the task snapshot (Codex review finding).
+// Every continuation phrase itself requires an end-of-clause right after it
+// (not just a bare word boundary) — a bare "do i need" alone let arbitrary
+// text follow, so "what health things do I need to know about pregnancy?"
+// still slipped through; "do i need" now only counts if it's the end of the
+// clause or immediately followed by a task verb (to do/handle/tackle/deal
+// with/worry about) (Codex review finding). Also covers the "should I do/
+// handle (first)" and "can I skip" continuations "which <category> <noun>"
+// questions naturally use, distinct from "what <category> <noun> do I
+// have" phrasing — without them "which work items should I do first?"
+// stayed unguarded-noun-shaped but never matched at all (Codex review
+// finding).
+const CATEGORY_GENERIC_NOUN_END_RE = "(?:\\s*(?:today)?\\s*(?:[.?!]|$))";
+const CATEGORY_GENERIC_NOUN_CONTINUATION_RE =
+  "(?:do i have|do i need(?:\\s+to\\s+(?:do|handle|tackle|deal with|worry about))?|to handle|to do|on my list|for today|should i (?:do|handle|tackle|deal with|start)(?:\\s+first)?|can i skip)";
 const CATEGORY_TRAILING_NOUN_RE =
-  "(?:tasks?|(?:stuff|things|items|to-?dos?)(?=\\s*(?:today)?\\s*(?:[.?!]|$)|\\s+(?:do i have|do i need|to handle|to do|on my list|for today)\\b))";
+  `(?:tasks?|(?:stuff|things|items|to-?dos?)(?=${CATEGORY_GENERIC_NOUN_END_RE}|\\s+${CATEGORY_GENERIC_NOUN_CONTINUATION_RE}${CATEGORY_GENERIC_NOUN_END_RE}))`;
 const PRIORITY_FILTER_RE = new RegExp(
   `\\bwhich\\s+(?:of\\s+my\\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\\s+${CATEGORY_TRAILING_NOUN_RE}\\b|` +
   `\\b(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\\s+(?:task|priorit\\w*)\\s+(?:should|to)\\b|` +
@@ -363,14 +377,14 @@ const SINGLE_CATEGORY_PATTERNS = [
   // "Show me/what are/list my <category> tasks" — a category-scoped
   // task-list ask, distinct from the "priorities" clause below. Accepts
   // "stuff"/"things"/"items"/"to-dos" alongside "task(s)" — mirrors
-  // PRIORITY_FILTER_RE's CATEGORY_TRAILING_NOUN_RE (live-testing round 4).
-  // The generic nouns require a task-list continuation or end-of-clause
-  // right after — otherwise "tell me my health things I should know about
-  // pregnancy" would also match (Codex review finding).
-  /\b(?:show me|what are|list|check|tell me)\s+my\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+(?:tasks?|(?:stuff|things|items|to-?dos?)(?=\s*(?:today)?\s*(?:[.?!]|$)|\s+(?:do i have|do i need|to handle|to do|on my list|for today)\b))\b/i,
+  // PRIORITY_FILTER_RE's CATEGORY_TRAILING_NOUN_RE (live-testing round 4),
+  // including its end-of-clause-per-continuation guard (Codex review
+  // finding) — built from the same shared constants to avoid the two
+  // copies drifting apart.
+  new RegExp(`\\b(?:show me|what are|list|check|tell me)\\s+my\\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\\s+${CATEGORY_TRAILING_NOUN_RE}\\b`, "i"),
   // "What work tasks do I have?" — category named directly before "task(s)",
   // without "are/my" the pattern above requires.
-  /\bwhat\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+(?:tasks?|(?:stuff|things|items|to-?dos?)(?=\s*(?:today)?\s*(?:[.?!]|$)|\s+(?:do i have|do i need|to handle|to do|on my list|for today)\b))\b/i,
+  new RegExp(`\\bwhat\\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\\s+${CATEGORY_TRAILING_NOUN_RE}\\b`, "i"),
 ];
 
 // Mirrors the "which <category> task(s)" shape, but — like the other clauses

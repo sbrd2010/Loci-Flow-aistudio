@@ -1138,4 +1138,28 @@ describe("detectRequestedCategories", () => {
     expect(classifyContextMode("what work items can I deduct on taxes?")).not.toBe("full_task");
     expect(classifyContextMode("tell me my health things I should know about pregnancy")).not.toBe("full_task");
   });
+
+  it("doesn't treat bare 'do I need' as a task-list continuation for generic nouns (Codex review finding, PR #344 round 2)", () => {
+    // A bare "do i need" let arbitrary text follow it; it now only counts
+    // as the end of the clause or immediately followed by a task verb.
+    expect(classifyContextMode("what health things do I need to know about pregnancy?")).not.toBe("full_task");
+    expect(classifyContextMode("what work items do I need for taxes?")).not.toBe("full_task");
+    // Genuine task-list asks with "do I need" still work.
+    expect(classifyContextMode("what home things do I need to handle?")).toBe("full_task");
+  });
+
+  it("accepts the expanded 'what should I not bother with' phrasing (Codex review finding, PR #344 round 2)", () => {
+    expect(classifyContextMode("what should I not bother with today?")).toBe("full_task");
+    expect(classifyContextMode("what should I not bother with for work?")).toBe("full_task");
+    expect(classifyContextMode("what shouldn't I bother with today?")).toBe("full_task");
+  });
+
+  it("routes 'which <category> stuff/items should I do/handle first' to full_task (Codex review finding, PR #344 round 2)", () => {
+    // "which" questions naturally continue with "should I do/handle first"
+    // or "can I skip", distinct from "what <category> <noun> do I have".
+    expect(classifyContextMode("which work items should I do first?")).toBe("full_task");
+    expect(classifyContextMode("which job stuff should I handle first?")).toBe("full_task");
+    // The pre-existing "task(s)" form still works.
+    expect(classifyContextMode("which work tasks should I do first?")).toBe("full_task");
+  });
 });
