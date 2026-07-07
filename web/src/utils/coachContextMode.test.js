@@ -512,6 +512,81 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("I have low energy, start a timer for this", pacedOpts)).toBe("full_task");
     });
   });
+
+  // Found via a 170-message live-testing round (round 3): 94/170 (55%) of
+  // natural, real-world phrasings of "what should I do"/"what are my
+  // priorities" fell through to "light" mode, meaning the coach never
+  // received real task data for them at all — not a wording bug, a data
+  // bug. This block covers the highest-value fixes from that round: broader
+  // verb coverage, noun-phrase priority synonyms, antonym/negation asks, and
+  // common typo/shorthand normalization. Category-word synonyms (job/
+  // fitness/wellness/etc.) and action-verb synonyms (wrapped up/knocked out/
+  // shelve/etc.) are deliberately left for separate follow-up PRs.
+  describe("broader priority/task-ask synonym and antonym coverage (live-testing round 3)", () => {
+    it("recognizes additional 'what should I <verb>' synonyms", () => {
+      expect(classifyContextMode("what should i tackle first")).toBe("full_task");
+      expect(classifyContextMode("what should i knock out")).toBe("full_task");
+      expect(classifyContextMode("what should i handle first")).toBe("full_task");
+      expect(classifyContextMode("what should i be doing")).toBe("full_task");
+      expect(classifyContextMode("which task should i start with")).toBe("full_task");
+    });
+
+    it("recognizes noun-phrase priority asks without 'what should I' phrasing", () => {
+      expect(classifyContextMode("what's most important right now")).toBe("full_task");
+      expect(classifyContextMode("what needs my attention")).toBe("full_task");
+      expect(classifyContextMode("what's on deck")).toBe("full_task");
+      expect(classifyContextMode("what's pending")).toBe("full_task");
+      expect(classifyContextMode("what's my top priority")).toBe("full_task");
+      expect(classifyContextMode("what's my main focus")).toBe("full_task");
+      expect(classifyContextMode("what deserves my attention")).toBe("full_task");
+      expect(classifyContextMode("what's on my radar")).toBe("full_task");
+      expect(classifyContextMode("what's the biggest priority")).toBe("full_task");
+      expect(classifyContextMode("give me the game plan")).toBe("full_task");
+      expect(classifyContextMode("give me my priorities")).toBe("full_task");
+      expect(classifyContextMode("long term priorities")).toBe("full_task");
+      expect(classifyContextMode("short term priorities")).toBe("full_task");
+      expect(classifyContextMode("immediate priorities")).toBe("full_task");
+      expect(classifyContextMode("this weeks focus")).toBe("full_task");
+      expect(classifyContextMode("this months focus")).toBe("full_task");
+      expect(classifyContextMode("priorities for the quarter")).toBe("full_task");
+      expect(classifyContextMode("what's the smart move")).toBe("full_task");
+      expect(classifyContextMode("what's my north star")).toBe("full_task");
+      expect(classifyContextMode("point me in the right direction")).toBe("full_task");
+      expect(classifyContextMode("steer me toward something useful")).toBe("full_task");
+      expect(classifyContextMode("orient me for the day")).toBe("full_task");
+      expect(classifyContextMode("what's the one thing i should nail today")).toBe("full_task");
+    });
+
+    it("recognizes the same noun-phrase asks with uncontracted 'what is'", () => {
+      expect(classifyContextMode("what is my top priority")).toBe("full_task");
+      expect(classifyContextMode("what is on my plate")).toBe("full_task");
+    });
+
+    it("recognizes antonym/negation priority asks", () => {
+      expect(classifyContextMode("what should i NOT do today")).toBe("full_task");
+      expect(classifyContextMode("what's not important")).toBe("full_task");
+      expect(classifyContextMode("what can wait")).toBe("full_task");
+      expect(classifyContextMode("what's the least important thing")).toBe("full_task");
+      expect(classifyContextMode("what can i skip today")).toBe("full_task");
+      expect(classifyContextMode("what's low priority")).toBe("full_task");
+      expect(classifyContextMode("what don't i need to worry about")).toBe("full_task");
+      expect(classifyContextMode("what's not urgent")).toBe("full_task");
+      expect(classifyContextMode("what can i ignore for now")).toBe("full_task");
+      expect(classifyContextMode("what's optional today")).toBe("full_task");
+      expect(classifyContextMode("what has the lowest priority")).toBe("full_task");
+      expect(classifyContextMode("what can i put off")).toBe("full_task");
+      expect(classifyContextMode("what am i free to skip")).toBe("full_task");
+      expect(classifyContextMode("what shouldn't i worry about today")).toBe("full_task");
+    });
+
+    it("normalizes common typos/shorthand that previously fell through to light", () => {
+      expect(classifyContextMode("wat r my priorites")).toBe("full_task");
+      expect(classifyContextMode("help me priortize")).toBe("full_task");
+      expect(classifyContextMode("wat shud i focus on rn")).toBe("full_task");
+      expect(classifyContextMode("wat health task shud i do fst")).toBe("full_task");
+      expect(classifyContextMode("wich task shud i strt with")).toBe("full_task");
+    });
+  });
 });
 
 describe("detectRequestedCategories", () => {

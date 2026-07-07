@@ -56,6 +56,32 @@ const SHORTHAND_MAP = [
   [/\bim\b/gi, "i am"],
   [/\btodos\b/gi, "tasks"],
   [/\btodo\b/gi, "task"],
+  // Common misspellings of "what" (with the contraction still attached) and
+  // "which" — "wat"/"wut" alone are already covered above, but "wats"/"wuts"
+  // is a distinct token that needs its own rule.
+  [/\bwats\b/gi, "what's"],
+  [/\bwuts\b/gi, "what's"],
+  [/\bwich\b/gi, "which"],
+  // Common misspellings of "priority"/"priorities"/"prioritize" — these were
+  // silently falling through BROAD_TASK_QUERY_RE's exact "priorit(y|ies)"
+  // spelling requirement. The stem-only rule (no trailing \b) lets the real
+  // suffix (e/ing/ed) survive untouched, e.g. "priortize" -> "prioritize".
+  [/\bpriorites\b/gi, "priorities"],
+  [/\bpriorty\b/gi, "priority"],
+  [/\bpriortiz/gi, "prioritiz"],
+  [/\bimportent\b/gi, "important"],
+  [/\bdoin\b/gi, "doing"],
+  [/\bconfuzed\b/gi, "confused"],
+  [/\bnxt\b/gi, "next"],
+  [/\bstrt\b/gi, "start"],
+  [/\bfst\b/gi, "first"],
+  [/\bhlp\b/gi, "help"],
+  [/\bsum\b/gi, "some"],
+  [/\bcn\b/gi, "can"],
+  [/\bb\b/gi, "be"],
+  [/\b2day\b/gi, "today"],
+  [/\b2nite\b/gi, "tonight"],
+  [/\b2moro(?:w)?\b/gi, "tomorrow"],
 ];
 
 // Exported so coachActions.js's intent-pattern matching (messageSeemsActionLike)
@@ -93,7 +119,18 @@ const BODY_DOUBLE_RE = /\b(body[\s-]?double|sit with me|stay with me|work (?:alo
 // work-session request — route it to "emotional" instead of "full_task".
 const FEAR_DISTRESS_RE = /\b(i(['’]m| am) (?:scared|afraid|terrified|frightened)|don['’]?t leave me)\b/i;
 
-const TASK_ASK_RE = /\b(what should i (?:actually |really |just |honestly )?(?:do|work on|start|focus on)|which (?:one|task) shall i focus|shall i focus|help me (?:choose|pick|prioritize|plan)|choose a task|pick a task|pick one (?:thing|task)|next step|prioritize my|plan my|plan today)\b/i;
+const TASK_ASK_RE = /\b(what should i (?:actually |really |just |honestly )?(?:do|work on|start|focus on|tackle|handle|knock out|deal with|get to|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on|nail)|which (?:one|task) (?:shall i focus|should i (?:start|do|tackle|handle))|shall i focus|help me (?:choose|pick|prioritize|plan)|choose a task|pick a task|pick one (?:thing|task)|next step|prioritize my|plan my|plan today)\b/i;
+
+// Broader "what's my priority/focus" noun-phrase asks — these name a
+// priority without any of TASK_ASK_RE's "what should I <verb>" phrasing at
+// all, so a purely verb-based pattern can never catch them.
+const PRIORITY_SYNONYM_RE = /\bwhat(?:['’]?s|\s+is) (?:my |the )?(?:most )?(?:important|urgent|pressing|critical|top|main|biggest)(?: (?:thing|priority|task|focus))?\b|\bwhat needs (?:my attention|doing|to be done)\b|\bwhat deserves my (?:attention|energy)\b|\bwhat(?:['’]?s|\s+is) (?:on (?:my |the )?(?:deck|radar|plate|agenda|horizon)|next|pending|coming up)\b|\bwhat do i have going on\b|\bgive me (?:some |a bit of )?(?:my priorities|the game plan|clarity|direction)\b|\b(?:long|short) term priorities\b|\b(?:immediate|future) priorities\b|\bpriorit(?:y|ies) for the (?:day|week|month|quarter|year)\b|\bthis (?:week|month|quarter|year)['’]?s? focus\b|\bwhat(?:['’]?s|\s+is) the smart move\b|\bwhat(?:['’]?s|\s+is) my north star\b|\bwhat(?:['’]?s|\s+is) the one thing i should (?:nail|do|focus on)\b|\bnumber one (?:focus|priority|thing)\b|\bpoint me (?:in the right direction|toward|to)\b|\bsteer me (?:toward|to)\b|\borient me\b|\bwalk me through what matters\b/i;
+
+// Antonym/negation priority asks ("what can wait", "what's not urgent") —
+// these are just as much a priority question as their positive-phrased
+// counterparts, but neither TASK_ASK_RE nor PRIORITY_SYNONYM_RE's
+// affirmative wording matches a negated one.
+const NEGATION_PRIORITY_RE = /\bwhat should i not do\b|\bwhat can wait\b|\bwhat can i (?:skip|ignore|put off)\b|\bwhat(?:['’]?s|\s+is) (?:not |the least |least |lowest |low )(?:important|urgent|pressing|critical|priority)\b|\bwhat don['’]?t i need to worry about\b|\bwhat(?:['’]?s|\s+is) optional\b|\bwhat has the lowest priority\b|\bwhat am i free to skip\b|\bwhat shouldn['’]?t i worry about\b|\bwhat(?:['’]?s|\s+is) not (?:due soon|going to hurt if i skip it)\b/i;
 
 // Low-energy asks need the full visible task list with estimates so the
 // coach can prefer the smallest task per the PRIORITY QUESTIONS rule — the
@@ -228,7 +265,7 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
   // Check full-task pacing (10 minutes)
   const isPaced = lastFullTaskTime > 0 && (Date.now() - lastFullTaskTime < 10 * 60 * 1000);
   const isFreshScanRequested = FRESH_SCAN_RE.test(text);
-  const isBroadQuery = BROAD_TASK_QUERY_RE.test(text);
+  const isBroadQuery = BROAD_TASK_QUERY_RE.test(text) || PRIORITY_SYNONYM_RE.test(text) || NEGATION_PRIORITY_RE.test(text);
   const isCheckin = isCheckinRequest(text);
   const isLowEnergy = LOW_ENERGY_RE.test(text);
   const isPriorityFiltered = PRIORITY_FILTER_RE.test(text);
