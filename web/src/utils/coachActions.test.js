@@ -457,6 +457,53 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("COMPLETE_TASK", "I knocked out the report", "the report")).toBe(true);
   });
 
+  it("blocks a 'do I need to remember' advice question from adding a task (Codex review finding, PR #342 round 3)", () => {
+    expect(matchesUserIntent("ADD_TASK", "do I need to remember to call the plumber?", "call the plumber")).toBe(false);
+    // Genuine statement/request still works.
+    expect(matchesUserIntent("ADD_TASK", "need to remember to call the plumber", "call the plumber")).toBe(true);
+  });
+
+  it("blocks a 'do I have time' availability question from starting a focus session (Codex review finding, PR #342 round 3)", () => {
+    expect(matchesUserIntent("START_FOCUS", "do I have time to work on the report?", "the report")).toBe(false);
+  });
+
+  it("guards 'shelve' the same as skip/postpone/put off against advice questions (Codex review finding, PR #342 round 3)", () => {
+    // "shelve" was previously in the unguarded group.
+    expect(matchesUserIntent("PARK_TASK", "can I shelve the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "is it okay to shelve the report?", "the report")).toBe(false);
+    // Genuine imperative phrasing still works.
+    expect(matchesUserIntent("PARK_TASK", "shelve the report", "the report")).toBe(true);
+    expect(matchesUserIntent("PARK_TASK", "can you shelve the report for now?", "the report")).toBe(true);
+  });
+
+  it("excludes passive/idiomatic wrapped-up-in/knocked-out-by/crossed-my-mind/put-off-by phrases (Codex review finding, PR #342 round 3)", () => {
+    // These idioms mean busy/exhausted/an idea occurring/feeling discouraged
+    // — not a task completion or park request.
+    expect(matchesUserIntent("COMPLETE_TASK", "I'm wrapped up in the report", "the report")).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "I'm knocked out by the report", "the report")).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "it crossed my mind to take Friday off", "Friday")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "I'm put off by the report", "the report")).toBe(false);
+  });
+
+  it("blocks unqualified past-tense 'I jotted/noted down' statements from adding a task (Codex review finding, PR #342 round 3)", () => {
+    // The user is reporting they captured it elsewhere already, not asking
+    // the coach to add it.
+    expect(matchesUserIntent("ADD_TASK", "I jotted down call the plumber", "call the plumber")).toBe(false);
+    expect(matchesUserIntent("ADD_TASK", "I noted down call the plumber", "call the plumber")).toBe(false);
+    // The imperative form (no subject, or addressed to the coach) still works.
+    expect(matchesUserIntent("ADD_TASK", "jot down call the plumber", "call the plumber")).toBe(true);
+    expect(matchesUserIntent("ADD_TASK", "can you jot down call the plumber?", "call the plumber")).toBe(true);
+  });
+
+  it("preserves 'could/would you' polite requests for the new verb synonyms (Codex review finding, PR #342 round 3)", () => {
+    // The loose question-word window previously blocked "could you"/"would
+    // you" the same as "could I"/"would I" — these words also form a polite
+    // command when followed by "you", so the guard needs immediate "I"
+    // adjacency instead of a loose window.
+    expect(matchesUserIntent("START_FOCUS", "could you dive into the report?", "the report")).toBe(true);
+    expect(matchesUserIntent("PARK_TASK", "could you postpone the report?", "the report")).toBe(true);
+  });
+
   it("normalizes shorthand before intent matching, same as coachContextMode's classifier (Codex review finding)", () => {
     // "remind me 2 call the plumber" reaches full_task via coachContextMode's
     // normalizer, but without the same normalization here, this gate would

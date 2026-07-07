@@ -138,6 +138,33 @@ describe("classifyContextMode", () => {
     expect(classifyContextMode("I knocked out the report")).toBe("full_task");
   });
 
+  it("preserves 'could/would you' polite requests for the new verb synonyms at the routing level too (Codex review finding, PR #342 round 3)", () => {
+    // The loose question-word window previously blocked "could you"/"would
+    // you" from ever reaching full_task at all, the same as "could I"/
+    // "would I" — these words also form a polite command when followed by
+    // "you", so the guard needs immediate "I" adjacency instead of a loose
+    // window.
+    expect(classifyContextMode("could you jot down call the plumber?")).toBe("full_task");
+    expect(classifyContextMode("would you note down call the plumber?")).toBe("full_task");
+    expect(classifyContextMode("could you postpone the report?")).toBe("full_task");
+    expect(classifyContextMode("could you dive into the report?")).toBe("full_task");
+    expect(classifyContextMode("could you shelve the report?")).toBe("full_task");
+    // The advice-question forms still stay light.
+    expect(classifyContextMode("what does postpone mean?")).not.toBe("full_task");
+    expect(classifyContextMode("how do I jot down notes better?")).not.toBe("full_task");
+  });
+
+  it("routes 'do I have time'/'is now a good time' availability questions away from full_task (Codex review finding, PR #342 round 3)", () => {
+    expect(classifyContextMode("do I have time to work on the report?")).not.toBe("full_task");
+    expect(classifyContextMode("is now a good time to work on the report?")).not.toBe("full_task");
+  });
+
+  it("guards 'need to remember' against a 'do I need to' advice question (Codex review finding, PR #342 round 3)", () => {
+    expect(classifyContextMode("do I need to remember to call the plumber?")).not.toBe("full_task");
+    // The genuine statement/request still works.
+    expect(classifyContextMode("I need to remember to call the plumber")).toBe("full_task");
+  });
+
   it("excludes a preceding question word from the 'dive into'/'jump into'/'time to work on'/'want to focus on' synonyms (merge regression)", () => {
     // Merging #340's TASK_ASK_RE bounding work (which requires "what should
     // I dive into" to end in a short, task-shaped continuation) with #342's
