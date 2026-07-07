@@ -498,6 +498,13 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("What are my health tasks?", pacedOpts)).toBe("full_task");
     });
 
+    it("never compacts common 'do/start for <category>' or plain 'what <category> tasks' asks, even on the paced path (Codex review finding)", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("What should I do for work?", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("Which task should I start for health?", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("What work tasks do I have?", pacedOpts)).toBe("full_task");
+    });
+
     it("never compacts body-double/priority-filter/low-energy phrasing even when it co-occurs with an explicit-mutation targeted reference", () => {
       const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
       expect(classifyContextMode("be my body double for this and start a focus session", pacedOpts)).toBe("full_task");
@@ -601,5 +608,11 @@ describe("detectRequestedCategories", () => {
 
   it("ignores explicitly excluded categories like 'for work, not personal' (Codex review finding)", () => {
     expect(detectRequestedCategories("What should I prioritize for work, not personal?")).toEqual(["Work"]);
+  });
+
+  it("detects common category-scoped asks using 'do/start' verbs and plain 'what <category> tasks' phrasing (Codex review finding)", () => {
+    expect(detectRequestedCategories("What should I do for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("Which task should I start for health?")).toEqual(["Health"]);
+    expect(detectRequestedCategories("What work tasks do I have?")).toEqual(["Work"]);
   });
 });

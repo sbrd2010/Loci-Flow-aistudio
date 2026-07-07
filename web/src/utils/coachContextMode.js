@@ -105,7 +105,7 @@ const LOW_ENERGY_RE = /\b(low energy|no energy|low on energy|out of energy|exhau
 // horizon-filtered ("what should I focus on this month?") priority questions
 // need the PRIORITY QUESTIONS framework and {Category} tags that only the
 // full_task prompt carries — never compact these, even on the paced path.
-const PRIORITY_FILTER_RE = /\bwhich\s+(?:of\s+my\s+)?(?:career|work|health|personal)\s+tasks?\b|\b(?:career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b|\bfocus on this\s+(?:month|quarter|week)\b|\b(?:focus on|priorit\w*)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(?:career|work|health|personal)\b|\b(?:show me|what are|list|check|tell me)\s+my\s+(?:career|work|health|personal)\s+tasks?\b/i;
+const PRIORITY_FILTER_RE = /\bwhich\s+(?:of\s+my\s+)?(?:career|work|health|personal)\s+tasks?\b|\b(?:career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b|\bfocus on this\s+(?:month|quarter|week)\b|\b(?:focus on|priorit\w*|do|work on|start)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(?:career|work|health|personal)\b|\b(?:show me|what are|list|check|tell me)\s+my\s+(?:career|work|health|personal)\s+tasks?\b|\bwhat\s+(?:career|work|health|personal)\s+tasks?\b/i;
 
 const CATEGORY_LABELS = { career: "Career", work: "Work", health: "Health", personal: "Personal" };
 
@@ -128,6 +128,9 @@ const SINGLE_CATEGORY_PATTERNS = [
   // "Show me/what are/list my <category> tasks" — a category-scoped
   // task-list ask, distinct from the "priorities" clause below.
   /\b(?:show me|what are|list|check|tell me)\s+my\s+(career|work|health|personal)\s+tasks?\b/i,
+  // "What work tasks do I have?" — category named directly before "task(s)",
+  // without "are/my" the pattern above requires.
+  /\bwhat\s+(career|work|health|personal)\s+tasks?\b/i,
 ];
 
 // Mirrors the "which <category> task(s)" shape, but — like the other clauses
@@ -150,7 +153,7 @@ const CATEGORY_PRIORITY_CLAUSE_RE = /(?:what are|tell me|show me|check|what abou
 // CATEGORY_PRIORITY_CLAUSE_RE above — captures the whole trailing clause
 // instead of a single category, so "prioritize for health and work" finds
 // both instead of only the first.
-const FOCUS_FOR_CLAUSE_RE = /\b(?:focus on|priorit\w*)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?([a-z0-9\s&/,'’]{1,40})/i;
+const FOCUS_FOR_CLAUSE_RE = /\b(?:focus on|priorit\w*|do|work on|start)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?([a-z0-9\s&/,'’]{1,40})/i;
 const CATEGORY_WORD_RE = /\b(?:career|work|health|personal)\b/gi;
 // A possessive like "boss's" or "manager's" inside the captured clause means
 // the "my" in "my boss's work priorities" scopes to the boss, not the user —
