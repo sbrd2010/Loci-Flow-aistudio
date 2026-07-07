@@ -100,14 +100,13 @@ const INTENT_PATTERNS = {
   // "need to remember to" mirror the same file's synonyms — live-testing round 3.
   ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don['’]?t forget|add .+ to (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|jot(?:ted)? down|note(?:d)? down|need to remember (?:to|that))/i,
   // "postpone"/"put off" mirror coachContextMode.js's EXPLICIT_ACTION_RE
-  // synonyms — see live-testing round 3. All three exclude a preceding
-  // question word within a short lookbehind window — coachContextMode.js's
-  // NEGATION_PRIORITY_RE routes advice questions like "what can I skip
-  // today?"/"what can i put off?" to full_task, and without this guard a
-  // bare verb here would let the gate treat the model's answer (which names
-  // the task being asked about) as authorizing an actual park mutation the
-  // user never requested (see PR #340's equivalent fix for "skip").
-  PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|(?<!\b(?:what|which|how|why|would|could|should|can)\b.{0,20})(?:skip|postpone|put off))\b/i,
+  // synonyms — see live-testing round 3. All three share the same
+  // advice-question exclusion PR #340 refined for "skip" alone (modal+I with
+  // an optional filler word, "am I free to", "not going to hurt if I") —
+  // without it, a bare verb here would let the gate treat the model's
+  // answer to "what can I postpone today?"/"what can I put off?" as
+  // authorizing an actual park mutation the user never requested.
+  PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|(?<!\b(?:(?:can|could|would|should|do)\s+i|am\s+i\s+free\s+to|not\s+going\s+to\s+hurt\s+if\s+i)\s+(?:just|maybe|really|actually|honestly)?\s*)(?:skip|postpone|put off))\b/i,
 };
 
 // Catches negated phrasing ("I'm not done", "don't park it") immediately

@@ -103,6 +103,19 @@ describe("classifyContextMode", () => {
     expect(classifyContextMode("time to work on the deep work block")).toBe("full_task");
   });
 
+  it("excludes a preceding question word from the 'dive into'/'jump into'/'time to work on'/'want to focus on' synonyms (merge regression)", () => {
+    // Merging #340's TASK_ASK_RE bounding work (which requires "what should
+    // I dive into" to end in a short, task-shaped continuation) with #342's
+    // unconstrained EXPLICIT_ACTION_RE additions of the same verbs caused
+    // "what should I dive into in Madrid?" to match EXPLICIT_ACTION_RE
+    // unconditionally and skip TASK_ASK_RE's lookahead entirely.
+    expect(classifyContextMode("what should I dive into in Madrid?")).toBe("light");
+    expect(classifyContextMode("what should I jump into next in this course?")).toBe("light");
+    // The imperative forms (no leading question word) still work.
+    expect(classifyContextMode("let's dive into the deep work block now")).toBe("full_task");
+    expect(classifyContextMode("time to work on the deep work block")).toBe("full_task");
+  });
+
   it("routes shame/failure language to emotional even with intensifiers or filler words", () => {
     expect(classifyContextMode("i feel like a failure today, i wasted the whole day")).toBe("emotional");
     expect(classifyContextMode("i feel like such a failure right now")).toBe("emotional");
@@ -534,6 +547,249 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("I have low energy, start a timer for this", pacedOpts)).toBe("full_task");
     });
   });
+
+  // Found via a 170-message live-testing round (round 3): 94/170 (55%) of
+  // natural, real-world phrasings of "what should I do"/"what are my
+  // priorities" fell through to "light" mode, meaning the coach never
+  // received real task data for them at all — not a wording bug, a data
+  // bug. This block covers the highest-value fixes from that round: broader
+  // verb coverage, noun-phrase priority synonyms, antonym/negation asks, and
+  // common typo/shorthand normalization. Category-word synonyms (job/
+  // fitness/wellness/etc.) and action-verb synonyms (wrapped up/knocked out/
+  // shelve/etc.) are deliberately left for separate follow-up PRs.
+  describe("broader priority/task-ask synonym and antonym coverage (live-testing round 3)", () => {
+    it("recognizes additional 'what should I <verb>' synonyms", () => {
+      expect(classifyContextMode("what should i tackle first")).toBe("full_task");
+      expect(classifyContextMode("what should i knock out")).toBe("full_task");
+      expect(classifyContextMode("what should i handle first")).toBe("full_task");
+      expect(classifyContextMode("what should i be doing")).toBe("full_task");
+      expect(classifyContextMode("which task should i start with")).toBe("full_task");
+    });
+
+    it("recognizes noun-phrase priority asks without 'what should I' phrasing", () => {
+      expect(classifyContextMode("what's most important right now")).toBe("full_task");
+      expect(classifyContextMode("what needs my attention")).toBe("full_task");
+      expect(classifyContextMode("what's on deck")).toBe("full_task");
+      expect(classifyContextMode("what's pending")).toBe("full_task");
+      expect(classifyContextMode("what's my top priority")).toBe("full_task");
+      expect(classifyContextMode("what's my main focus")).toBe("full_task");
+      expect(classifyContextMode("what deserves my attention")).toBe("full_task");
+      expect(classifyContextMode("what's on my radar")).toBe("full_task");
+      expect(classifyContextMode("what's the biggest priority")).toBe("full_task");
+      expect(classifyContextMode("give me the game plan")).toBe("full_task");
+      expect(classifyContextMode("give me my priorities")).toBe("full_task");
+      expect(classifyContextMode("long term priorities")).toBe("full_task");
+      expect(classifyContextMode("short term priorities")).toBe("full_task");
+      expect(classifyContextMode("immediate priorities")).toBe("full_task");
+      expect(classifyContextMode("this weeks focus")).toBe("full_task");
+      expect(classifyContextMode("this months focus")).toBe("full_task");
+      expect(classifyContextMode("priorities for the quarter")).toBe("full_task");
+      expect(classifyContextMode("what's the smart move")).toBe("full_task");
+      expect(classifyContextMode("what's my north star")).toBe("full_task");
+      expect(classifyContextMode("point me in the right direction")).toBe("full_task");
+      expect(classifyContextMode("steer me toward something useful")).toBe("full_task");
+      expect(classifyContextMode("orient me for the day")).toBe("full_task");
+      expect(classifyContextMode("what's the one thing i should nail today")).toBe("full_task");
+    });
+
+    it("recognizes the same noun-phrase asks with uncontracted 'what is'", () => {
+      expect(classifyContextMode("what is my top priority")).toBe("full_task");
+      expect(classifyContextMode("what is on my plate")).toBe("full_task");
+    });
+
+    it("recognizes antonym/negation priority asks", () => {
+      expect(classifyContextMode("what should i NOT do today")).toBe("full_task");
+      expect(classifyContextMode("what's not important")).toBe("full_task");
+      expect(classifyContextMode("what can wait")).toBe("full_task");
+      expect(classifyContextMode("what's the least important thing")).toBe("full_task");
+      expect(classifyContextMode("what can i skip today")).toBe("full_task");
+      expect(classifyContextMode("what's low priority")).toBe("full_task");
+      expect(classifyContextMode("what don't i need to worry about")).toBe("full_task");
+      expect(classifyContextMode("what's not urgent")).toBe("full_task");
+      expect(classifyContextMode("what can i ignore for now")).toBe("full_task");
+      expect(classifyContextMode("what's optional today")).toBe("full_task");
+      expect(classifyContextMode("what has the lowest priority")).toBe("full_task");
+      expect(classifyContextMode("what can i put off")).toBe("full_task");
+      expect(classifyContextMode("what am i free to skip")).toBe("full_task");
+      expect(classifyContextMode("what shouldn't i worry about today")).toBe("full_task");
+    });
+
+    it("normalizes common typos/shorthand that previously fell through to light", () => {
+      expect(classifyContextMode("wat r my priorites")).toBe("full_task");
+      expect(classifyContextMode("help me priortize")).toBe("full_task");
+      expect(classifyContextMode("wat shud i focus on rn")).toBe("full_task");
+      expect(classifyContextMode("wat health task shud i do fst")).toBe("full_task");
+      expect(classifyContextMode("wich task shud i strt with")).toBe("full_task");
+    });
+
+    it("does not treat unrelated 'what should I handle/deal with/nail' questions as task asks (Codex review finding)", () => {
+      // "get to" was removed entirely — too generic/ambiguous to safely
+      // pattern-match ("get to eat", "get to know").
+      expect(classifyContextMode("what should I get to eat?")).toBe("light");
+      expect(classifyContextMode("what should I handle carefully in this recipe?")).toBe("light");
+      expect(classifyContextMode("what should I nail to the wall?")).toBe("light");
+      // The legitimate bare/short-continuation phrasings still work.
+      expect(classifyContextMode("what should i handle first")).toBe("full_task");
+      expect(classifyContextMode("what should i handle")).toBe("full_task");
+      expect(classifyContextMode("what should i deal with today")).toBe("full_task");
+      expect(classifyContextMode("what should i nail today")).toBe("full_task");
+    });
+
+    it("requires a priority noun after 'top/main/biggest' but not after 'important/urgent' (Codex review finding)", () => {
+      expect(classifyContextMode("what's the top speed of a cheetah?")).toBe("light");
+      expect(classifyContextMode("what's the main idea here?")).toBe("light");
+      // The legitimate phrasings (with a priority noun) still work.
+      expect(classifyContextMode("what's my top priority")).toBe("full_task");
+      expect(classifyContextMode("what's my main focus")).toBe("full_task");
+      expect(classifyContextMode("what's the biggest priority")).toBe("full_task");
+      // "important"/"urgent"/"pressing"/"critical" still stand alone.
+      expect(classifyContextMode("what's most important right now")).toBe("full_task");
+    });
+
+    it("anchors bare 'next/pending/coming up' before an unrelated trailing clause (Codex review finding)", () => {
+      expect(classifyContextMode("what's next in this recipe?")).toBe("light");
+      expect(classifyContextMode("what is coming up in the book?")).toBe("light");
+      // The legitimate phrasings still work.
+      expect(classifyContextMode("what's next")).toBe("full_task");
+      expect(classifyContextMode("what's pending")).toBe("full_task");
+      expect(classifyContextMode("whats coming up this week")).toBe("full_task");
+    });
+
+    it("anchors negation priority asks before an unrelated trailing clause (Codex review finding)", () => {
+      expect(classifyContextMode("what should I not do if I see a bear?")).toBe("light");
+      expect(classifyContextMode("what can I ignore in this recipe?")).toBe("light");
+      // The legitimate phrasings still work.
+      expect(classifyContextMode("what should I NOT do today")).toBe("full_task");
+      expect(classifyContextMode("what can i ignore for now")).toBe("full_task");
+      expect(classifyContextMode("what can i skip today")).toBe("full_task");
+      expect(classifyContextMode("what can i put off")).toBe("full_task");
+    });
+
+    it("constrains 'one thing I should' and requires 'my' for 'number one <noun>' (Codex review finding)", () => {
+      expect(classifyContextMode("what's the one thing I should do before taking aspirin?")).toBe("light");
+      expect(classifyContextMode("what is the number one thing to see in Rome?")).toBe("light");
+      // The legitimate phrasings still work.
+      expect(classifyContextMode("what's the one thing i should nail today")).toBe("full_task");
+      expect(classifyContextMode("what should be my number one focus")).toBe("full_task");
+    });
+
+    it("bounds every newly-added TASK_ASK_RE verb, not just handle/deal with/nail (Codex review finding)", () => {
+      expect(classifyContextMode("what should I be doing about this rash?")).toBe("light");
+      expect(classifyContextMode("what should I dive into in Madrid?")).toBe("light");
+      // The legitimate bare/short-continuation phrasings still work.
+      expect(classifyContextMode("what should i be doing")).toBe("full_task");
+      expect(classifyContextMode("what should i tackle first")).toBe("full_task");
+      expect(classifyContextMode("what should i knock out")).toBe("full_task");
+    });
+
+    it("scopes direction-seeking phrases to known-safe complete phrasings (Codex review finding)", () => {
+      expect(classifyContextMode("point me to the settings page")).toBe("light");
+      expect(classifyContextMode("steer me toward the nearest clinic")).toBe("light");
+      expect(classifyContextMode("orient me to this codebase")).toBe("light");
+      // The legitimate phrasings still work.
+      expect(classifyContextMode("point me in the right direction")).toBe("full_task");
+      expect(classifyContextMode("steer me toward something useful")).toBe("full_task");
+      expect(classifyContextMode("orient me for the day")).toBe("full_task");
+    });
+
+    it("still allows a category or horizon cue after the bounded task verbs (Codex review finding)", () => {
+      // The end-of-clause lookahead from the previous round was too strict —
+      // it didn't recognize "for <category>" or "this week/month/quarter" as
+      // legitimate continuations, so these fell back to light along with the
+      // genuinely unrelated questions it was meant to filter.
+      expect(classifyContextMode("what should I tackle for work?")).toBe("full_task");
+      expect(classifyContextMode("what should I deal with for health?")).toBe("full_task");
+      expect(classifyContextMode("what should I knock out this week?")).toBe("full_task");
+      // The unrelated questions the lookahead is meant to filter still do.
+      expect(classifyContextMode("what should I be doing about this rash?")).toBe("light");
+      expect(classifyContextMode("what should I dive into in Madrid?")).toBe("light");
+    });
+
+    it("anchors the remaining negation aliases before an unrelated trailing clause (Codex review finding)", () => {
+      expect(classifyContextMode("what can wait in JavaScript?")).toBe("light");
+      expect(classifyContextMode("what's optional chaining?")).toBe("light");
+      expect(classifyContextMode("what don't I need to worry about during pregnancy?")).toBe("light");
+      // The legitimate phrasings still work.
+      expect(classifyContextMode("what can wait")).toBe("full_task");
+      expect(classifyContextMode("what's optional today")).toBe("full_task");
+      expect(classifyContextMode("what don't i need to worry about")).toBe("full_task");
+      expect(classifyContextMode("what shouldn't i worry about today")).toBe("full_task");
+    });
+
+    it("anchors 'give me clarity/direction' and 'the smart move'/'needs doing' before an unrelated trailing clause (Codex review finding)", () => {
+      expect(classifyContextMode("give me clarity on this regex")).toBe("light");
+      expect(classifyContextMode("what's the smart move in chess?")).toBe("light");
+      expect(classifyContextMode("what needs doing to this cake?")).toBe("light");
+      // The legitimate phrasings still work.
+      expect(classifyContextMode("give me clarity")).toBe("full_task");
+      expect(classifyContextMode("give me direction")).toBe("full_task");
+      expect(classifyContextMode("what's the smart move")).toBe("full_task");
+      expect(classifyContextMode("what needs my attention")).toBe("full_task");
+      expect(classifyContextMode("what needs doing")).toBe("full_task");
+    });
+
+    it("bounds 'which one/task should I handle/tackle' before an unrelated trailing clause (Codex review finding)", () => {
+      expect(classifyContextMode("which one should I handle carefully in this recipe?")).toBe("light");
+      expect(classifyContextMode("which task should I tackle?")).toBe("full_task");
+      expect(classifyContextMode("which one should I handle for work?")).toBe("full_task");
+      expect(classifyContextMode("which task should I start?")).toBe("full_task");
+    });
+
+    it("anchors the remaining negation aliases before an unrelated trailing clause (Codex review finding, round 2)", () => {
+      expect(classifyContextMode("what's not important in JavaScript?")).toBe("light");
+      expect(classifyContextMode("what's the least important thing about this movie?")).toBe("light");
+      expect(classifyContextMode("what has the lowest priority in CSS?")).toBe("light");
+      expect(classifyContextMode("what am i free to skip in this recipe?")).toBe("light");
+      expect(classifyContextMode("what's not important today")).toBe("full_task");
+      expect(classifyContextMode("what's the least important thing")).toBe("full_task");
+      expect(classifyContextMode("what has the lowest priority")).toBe("full_task");
+      expect(classifyContextMode("what am i free to skip today")).toBe("full_task");
+    });
+
+    it("anchors the remaining open-ended priority aliases before an unrelated trailing clause (Codex review finding)", () => {
+      expect(classifyContextMode("what needs my attention in this recipe?")).toBe("light");
+      expect(classifyContextMode("what's on my radar in chess?")).toBe("light");
+      expect(classifyContextMode("walk me through what matters in this codebase")).toBe("light");
+      expect(classifyContextMode("what needs my attention")).toBe("full_task");
+      expect(classifyContextMode("what's on my radar")).toBe("full_task");
+      expect(classifyContextMode("walk me through what matters")).toBe("full_task");
+      expect(classifyContextMode("what needs my attention for work?")).toBe("full_task");
+      expect(classifyContextMode("what's on my radar for health?")).toBe("full_task");
+    });
+
+    it("keeps category/horizon-filtered new task verbs out of compact mode on the paced path (Codex review finding, round 5)", () => {
+      const paced = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("what should I tackle for work?", paced)).toBe("full_task");
+      expect(classifyContextMode("what should I dive into this quarter?", paced)).toBe("full_task");
+      expect(classifyContextMode("what should I deal with for health?", paced)).toBe("full_task");
+    });
+
+    it("bounds the remaining open-ended priority aliases and 'which one should I do' (Codex review finding, round 5)", () => {
+      expect(classifyContextMode("what deserves my attention in this recipe?")).toBe("light");
+      expect(classifyContextMode("what do i have going on in my stomach?")).toBe("light");
+      expect(classifyContextMode("what is the important thing about CSS?")).toBe("light");
+      expect(classifyContextMode("which one should I do in this recipe?")).toBe("light");
+      expect(classifyContextMode("what deserves my attention?")).toBe("full_task");
+      expect(classifyContextMode("what do i have going on?")).toBe("full_task");
+      expect(classifyContextMode("what is the important thing?")).toBe("full_task");
+      expect(classifyContextMode("what's most important right now")).toBe("full_task");
+      expect(classifyContextMode("which one should I do?")).toBe("full_task");
+    });
+
+    it("bounds the due-soon negation alias and lets number-one asks take a day cue (Codex review finding, round 5)", () => {
+      expect(classifyContextMode("what's not due soon in JavaScript?")).toBe("light");
+      expect(classifyContextMode("what is not going to hurt if I skip it during pregnancy?")).toBe("light");
+      expect(classifyContextMode("what's not due soon?")).toBe("full_task");
+      expect(classifyContextMode("what's my number one priority today?")).toBe("full_task");
+      expect(classifyContextMode("what's my number one focus right now?")).toBe("full_task");
+    });
+
+    it("carries a category/horizon cue through the remaining negation aliases (Codex review finding, round 5)", () => {
+      expect(classifyContextMode("what can wait for work?")).toBe("full_task");
+      expect(classifyContextMode("what's not urgent for health?")).toBe("full_task");
+      expect(classifyContextMode("what's the least important thing for work?")).toBe("full_task");
+    });
+  });
 });
 
 describe("detectRequestedCategories", () => {
@@ -603,6 +859,31 @@ describe("detectRequestedCategories", () => {
     // Existing single-category shapes still resolve correctly.
     expect(detectRequestedCategories("what should I focus on for work?")).toEqual(["Work"]);
     expect(detectRequestedCategories("what should I prioritize for my career?")).toEqual(["Career"]);
+  });
+
+  it("detects a category cue on PRIORITY_SYNONYM_RE's newer alias lead-ins (Codex review finding)", () => {
+    // These alias phrasings ("needs my attention", "on my radar", "the game
+    // plan") already route to full_task on their own, but without a
+    // matching category-detection shape, a missing-category mismatch note
+    // (issue #338) never fires when one of these is combined with "for
+    // <category>".
+    expect(detectRequestedCategories("what needs my attention for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what's on my radar for health?")).toEqual(["Health"]);
+    expect(detectRequestedCategories("give me the game plan for work")).toEqual(["Work"]);
+  });
+
+  it("detects a category cue on TASK_ASK_RE's newer verb lead-ins (Codex review finding)", () => {
+    // "tackle"/"deal with"/etc. route to full_task on their own via "for
+    // <category>", but without a matching category-detection lead-in here, a
+    // missing-category mismatch note (issue #338) never fires.
+    expect(detectRequestedCategories("what should I tackle for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what should I deal with for health?")).toEqual(["Health"]);
+  });
+
+  it("detects a category cue on PRIORITY_SYNONYM_RE's priority-noun lead-ins (Codex review finding, round 5)", () => {
+    expect(detectRequestedCategories("what's my main focus for health?")).toEqual(["Health"]);
+    expect(detectRequestedCategories("what's the top thing for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what deserves my attention for work?")).toEqual(["Work"]);
   });
 
   it("detects category-scoped task-list asks like 'show me my work tasks' (Codex review finding)", () => {
