@@ -346,6 +346,7 @@ describe("buildLociLowEnergyContext", () => {
 
 describe("buildLociCategoryFilterContext", () => {
   it("returns an empty string when no category was requested", () => {
+    expect(buildLociCategoryFilterContext([{ title: "Task", category: "Personal" }], [])).toBe("");
     expect(buildLociCategoryFilterContext([{ title: "Task", category: "Personal" }], null)).toBe("");
   });
 
@@ -354,20 +355,20 @@ describe("buildLociCategoryFilterContext", () => {
       { title: "Fix resume", category: "Career", horizonLevel: "today" },
       { title: "Buy groceries", category: "Personal", horizonLevel: "today" },
     ];
-    expect(buildLociCategoryFilterContext(tasks, "Career")).toBe("");
+    expect(buildLociCategoryFilterContext(tasks, ["Career"])).toBe("");
   });
 
   it("flags a category mismatch when no visible active task carries that category", () => {
-    const tasks = [{ title: "Buy groceries", category: "Personal" }];
-    const context = buildLociCategoryFilterContext(tasks, "Work");
+    const tasks = [{ title: "Buy groceries", category: "Personal", horizonLevel: "today" }];
+    const context = buildLociCategoryFilterContext(tasks, ["Work"]);
     expect(context).toContain("CATEGORY NOTE");
     expect(context).toContain("{Work}");
   });
 
   it("treats an untagged task as Personal, matching buildLociTaskContext's own default", () => {
     const tasks = [{ title: "Untagged task", horizonLevel: "today" }];
-    expect(buildLociCategoryFilterContext(tasks, "Personal")).toBe("");
-    expect(buildLociCategoryFilterContext(tasks, "Work")).toContain("CATEGORY NOTE");
+    expect(buildLociCategoryFilterContext(tasks, ["Personal"])).toBe("");
+    expect(buildLociCategoryFilterContext(tasks, ["Work"])).toContain("CATEGORY NOTE");
   });
 
   it("does not count a matching task hidden beyond its horizon's visibility cap (Codex review finding)", () => {
@@ -378,7 +379,7 @@ describe("buildLociCategoryFilterContext", () => {
       ...Array.from({ length: 10 }, (_, i) => ({ title: `Personal ${i}`, category: "Personal", horizonLevel: "today" })),
       { title: "Hidden work task", category: "Work", horizonLevel: "today" },
     ];
-    expect(buildLociCategoryFilterContext(tasks, "Work")).toContain("CATEGORY NOTE");
+    expect(buildLociCategoryFilterContext(tasks, ["Work"])).toContain("CATEGORY NOTE");
   });
 
   it("ignores deleted, completed, and parked tasks when checking for a category match", () => {
@@ -387,7 +388,30 @@ describe("buildLociCategoryFilterContext", () => {
       { title: "Done work task", category: "Work", horizonLevel: "today", isCompleted: true },
       { title: "Parked work task", category: "Work", horizonLevel: "today", isParked: true },
     ];
-    expect(buildLociCategoryFilterContext(tasks, "Work")).toContain("CATEGORY NOTE");
+    expect(buildLociCategoryFilterContext(tasks, ["Work"])).toContain("CATEGORY NOTE");
+  });
+
+  it("matches case-insensitively against a task's own category string (Codex review finding)", () => {
+    // A task could carry a lowercase category ("work" instead of "Work") —
+    // an exact === comparison would falsely flag a visible task as missing.
+    const tasks = [{ title: "Fix bug", category: "work", horizonLevel: "today" }];
+    expect(buildLociCategoryFilterContext(tasks, ["Work"])).toBe("");
+  });
+
+  it("flags only the requested categories that have no visible match, when multiple were named (Codex review finding)", () => {
+    const tasks = [
+      { title: "Fix resume", category: "Career", horizonLevel: "today" },
+      { title: "Buy groceries", category: "Personal", horizonLevel: "today" },
+    ];
+    // Career has a visible match, Work doesn't — only Work should be flagged.
+    const context = buildLociCategoryFilterContext(tasks, ["Career", "Work"]);
+    expect(context).toContain("CATEGORY NOTE");
+    expect(context).toContain("{Work}");
+    expect(context).not.toContain("{Career}");
+    // Neither has a match — both flagged.
+    const bothMissing = buildLociCategoryFilterContext(tasks, ["Work", "Health"]);
+    expect(bothMissing).toContain("{Work}");
+    expect(bothMissing).toContain("{Health}");
   });
 });
 

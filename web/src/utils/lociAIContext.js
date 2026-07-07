@@ -325,17 +325,27 @@ export function buildLociLowEnergyContext(config = {}) {
 // Deterministic check backing the PRIORITY QUESTIONS rule's category-mismatch
 // disclosure ("if none are visible, say so rather than picking an unrelated
 // task") — live testing showed the model doesn't reliably notice a category
-// mismatch from the {Category} tags alone (see issue #338). requestedCategory
-// comes from coachContextMode.js's detectRequestedCategory; null/no visible
-// mismatch both return "" so this is silent unless there's something to flag.
-export function buildLociCategoryFilterContext(tasks = [], requestedCategory) {
-  if (!requestedCategory) return "";
+// mismatch from the {Category} tags alone (see issue #338). requestedCategories
+// comes from coachContextMode.js's detectRequestedCategories (an array —
+// "my health and work priorities" can name more than one); [] means this is
+// silent unless there's something to flag.
+export function buildLociCategoryFilterContext(tasks = [], requestedCategories = []) {
+  if (!requestedCategories || requestedCategories.length === 0) return "";
   // Uses the capped visible set, not the full active list — a matching task
   // that exists but falls beyond its horizon's cap (shown only as "+X more")
   // is just as invisible to the model as one that doesn't exist at all.
-  const hasMatch = getVisibleLociTasks(tasks).some(t => (t.category || "Personal") === requestedCategory);
-  if (hasMatch) return "";
-  return `CATEGORY NOTE: No visible tasks are currently tagged {${requestedCategory}} — if asked about ${requestedCategory} priorities, say so plainly rather than picking an unrelated task.`;
+  const visible = getVisibleLociTasks(tasks);
+  // Case-insensitive: a task's own category string isn't guaranteed to match
+  // the canonical Title Case labels detectRequestedCategories returns (e.g.
+  // an older/imported task could carry "work" instead of "Work") — an exact
+  // === comparison would falsely report a visible task's category as missing.
+  const missing = requestedCategories.filter(
+    cat => !visible.some(t => (t.category || "Personal").toLowerCase() === cat.toLowerCase())
+  );
+  if (missing.length === 0) return "";
+  const missingLabel = missing.map(c => `{${c}}`).join(" or ");
+  const phrase = missing.length > 1 ? "those priorities" : `${missing[0]} priorities`;
+  return `CATEGORY NOTE: No visible tasks are currently tagged ${missingLabel} — if asked about ${phrase}, say so plainly rather than picking an unrelated task.`;
 }
 
 const RECENT_PARK_WINDOW_MS = 24 * 60 * 60 * 1000;

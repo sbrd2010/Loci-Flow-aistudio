@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM, detectRequestedCategory } from "./coachContextMode";
+import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM, detectRequestedCategories } from "./coachContextMode";
 
 describe("classifyContextMode", () => {
   it("defaults casual/light messages to light", () => {
@@ -501,40 +501,50 @@ describe("classifyContextMode", () => {
   });
 });
 
-describe("detectRequestedCategory", () => {
+describe("detectRequestedCategories", () => {
   it("detects the category from 'which X task' phrasing", () => {
-    expect(detectRequestedCategory("which work task should I do first?")).toBe("Work");
-    expect(detectRequestedCategory("which career task should I do first?")).toBe("Career");
-    expect(detectRequestedCategory("which health task should I do first?")).toBe("Health");
-    expect(detectRequestedCategory("which personal task should I do first?")).toBe("Personal");
+    expect(detectRequestedCategories("which work task should I do first?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("which career task should I do first?")).toEqual(["Career"]);
+    expect(detectRequestedCategories("which health task should I do first?")).toEqual(["Health"]);
+    expect(detectRequestedCategories("which personal task should I do first?")).toEqual(["Personal"]);
   });
 
   it("detects the category from '<category> task/priority should/to' phrasing", () => {
-    expect(detectRequestedCategory("work task should be next")).toBe("Work");
-    expect(detectRequestedCategory("career priority to focus on")).toBe("Career");
+    expect(detectRequestedCategories("work task should be next")).toEqual(["Work"]);
+    expect(detectRequestedCategories("career priority to focus on")).toEqual(["Career"]);
   });
 
   it("detects the category from 'focus on/prioritize ... for <category>' phrasing", () => {
-    expect(detectRequestedCategory("what should I focus on for work?")).toBe("Work");
-    expect(detectRequestedCategory("what should I prioritize for my career?")).toBe("Career");
+    expect(detectRequestedCategories("what should I focus on for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what should I prioritize for my career?")).toEqual(["Career"]);
   });
 
-  it("returns null for messages that don't name a category", () => {
-    expect(detectRequestedCategory("what should I do today?")).toBeNull();
-    expect(detectRequestedCategory("what should I focus on this month?")).toBeNull();
+  it("returns an empty array for messages that don't name a category", () => {
+    expect(detectRequestedCategories("what should I do today?")).toEqual([]);
+    expect(detectRequestedCategories("what should I focus on this month?")).toEqual([]);
   });
 
   it("normalizes shorthand before detecting, consistent with the classifier", () => {
-    expect(detectRequestedCategory("wat work task should i do first")).toBe("Work");
+    expect(detectRequestedCategories("wat work task should i do first")).toEqual(["Work"]);
   });
 
   it("detects 'what are/tell me/show me my <category> priorities' phrasing without should/to (Codex review finding)", () => {
     // These already route to full_task via BROAD_TASK_QUERY_RE's own
-    // category-priority branch — detectRequestedCategory needs the same
+    // category-priority branch — detectRequestedCategories needs the same
     // coverage or the CATEGORY NOTE silently never fires for them.
-    expect(detectRequestedCategory("What are my work priorities?")).toBe("Work");
-    expect(detectRequestedCategory("Tell me my health priorities")).toBe("Health");
-    expect(detectRequestedCategory("Show me my work priorities")).toBe("Work");
-    expect(detectRequestedCategory("Check my career priorities")).toBe("Career");
+    expect(detectRequestedCategories("What are my work priorities?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("Tell me my health priorities")).toEqual(["Health"]);
+    expect(detectRequestedCategories("Show me my work priorities")).toEqual(["Work"]);
+    expect(detectRequestedCategories("Check my career priorities")).toEqual(["Career"]);
+  });
+
+  it("detects multiple categories from compound 'my X and Y priorities' / 'my X/Y priorities' phrasing (Codex review finding)", () => {
+    expect(detectRequestedCategories("What are my health and work priorities?")).toEqual(["Health", "Work"]);
+    expect(detectRequestedCategories("What are my health/work priorities?")).toEqual(["Health", "Work"]);
+  });
+
+  it("detects counted category-priority asks (Codex review finding)", () => {
+    expect(detectRequestedCategories("What are my 2 work priorities?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("What are my six work priorities?")).toEqual(["Work"]);
   });
 });

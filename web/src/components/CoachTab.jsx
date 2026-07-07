@@ -15,7 +15,7 @@ import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
 import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFromMemory, isMemoryEnabled, parseMemoryTags } from "../utils/coachMemory";
 import { stripReasoningTag } from "../utils/coachReasoning";
-import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM, detectRequestedCategory } from "../utils/coachContextMode";
+import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM, detectRequestedCategories } from "../utils/coachContextMode";
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
 import { buildRescueHandoffContext, shouldClearRescueHandoff } from "../utils/rescueHandoff";
 import { safeCopyToClipboard } from "../utils/clipboard";
@@ -358,8 +358,8 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const pendingCheckinContext = buildCoachCheckinContext(config.coachCheckin, now.getTime());
     const lowEnergyContext = buildLociLowEnergyContext(config);
     const recentlyParkedContext = buildLociRecentlyParkedContext(tasks, now);
-    const requestedCategory = detectRequestedCategory(userText);
-    const categoryFilterContext = buildLociCategoryFilterContext(tasks, requestedCategory);
+    const requestedCategories = detectRequestedCategories(userText);
+    const categoryFilterContext = buildLociCategoryFilterContext(tasks, requestedCategories);
     const lociCoreInstruction = buildLociCoreInstruction({ firstName });
     const memoryEnabled = isMemoryEnabled(config);
     // Don't send memory facts/notes to the AI — or the MEMORY instructions

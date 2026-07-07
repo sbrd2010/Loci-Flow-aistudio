@@ -117,25 +117,45 @@ const CATEGORY_LABELS = { career: "Career", work: "Work", health: "Health", pers
 // PRIORITY QUESTIONS rule already tells the model to disclose a category
 // mismatch, but relying on the model to notice via the {Category} tags alone
 // isn't reliable enough on its own; see issue #338.
-const CATEGORY_FILTER_PATTERNS = [
+// These three shapes only ever name a single category.
+const SINGLE_CATEGORY_PATTERNS = [
   /\bwhich\s+(career|work|health|personal)\s+task\b/i,
   /\b(career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b/i,
   /\b(?:focus on|priorit\w*)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(career|work|health|personal)\b/i,
-  // Also mirrors BROAD_TASK_QUERY_RE's own "what are/tell me/show me my
-  // <category> priorities" shape (no should/to needed) — that shape already
-  // routes to full_task via BROAD_TASK_QUERY_RE, but detectRequestedCategory
-  // didn't recognize it as naming a category, so no CATEGORY NOTE was added
-  // for e.g. "What are my work priorities?".
-  /(?:what are|tell me|show me|check|what about)\s+my\s+(career|work|health|personal)s?\s*priorit(?:y|ies)\b/i,
 ];
 
-export function detectRequestedCategory(message) {
+// Mirrors BROAD_TASK_QUERY_RE's own "what are/tell me/show me my <category>
+// priorities" shape, but — unlike BROAD_TASK_QUERY_RE, which only needs to
+// know THAT a category was named — this needs to know WHICH one(s), and that
+// shape can name up to three ("my health and work priorities", "my health/
+// work priorities") or include a leading count/scope qualifier ("my 2 work
+// priorities", "my six work priorities"). Rather than replicate that exact
+// compound grammar, capture the whole "my ... priorities" clause (bounded to
+// a sane length so it can't run across an unrelated later "priorities" in a
+// long message) and scan it for every category word inside.
+const CATEGORY_PRIORITY_CLAUSE_RE = /(?:what are|tell me|show me|check|what about)\s+my\s+([a-z0-9\s&/,'’]{1,60}?)\s*priorit(?:y|ies)\b/i;
+const CATEGORY_WORD_RE = /career|work|health|personal/gi;
+
+// Returns every category (Career/Work/Health/Personal) a message named, in
+// the order first mentioned, deduped — or [] if none. Used to build a
+// deterministic "no visible tasks in that category" context note (see
+// buildLociCategoryFilterContext) — the system prompt's own PRIORITY
+// QUESTIONS rule already tells the model to disclose a category mismatch,
+// but relying on the model to notice via the {Category} tags alone isn't
+// reliable enough on its own; see issue #338.
+export function detectRequestedCategories(message) {
   const text = normalizeForClassification(String(message || ""));
-  for (const re of CATEGORY_FILTER_PATTERNS) {
+  for (const re of SINGLE_CATEGORY_PATTERNS) {
     const match = text.match(re);
-    if (match) return CATEGORY_LABELS[match[1].toLowerCase()];
+    if (match) return [CATEGORY_LABELS[match[1].toLowerCase()]];
   }
-  return null;
+  const clauseMatch = text.match(CATEGORY_PRIORITY_CLAUSE_RE);
+  if (clauseMatch) {
+    const words = clauseMatch[1].match(CATEGORY_WORD_RE) || [];
+    const labels = [...new Set(words.map(w => CATEGORY_LABELS[w.toLowerCase()]))];
+    if (labels.length > 0) return labels;
+  }
+  return [];
 }
 
 /**
