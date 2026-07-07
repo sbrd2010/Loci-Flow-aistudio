@@ -610,6 +610,52 @@ describe("classifyContextMode", () => {
       // "important"/"urgent"/"pressing"/"critical" still stand alone.
       expect(classifyContextMode("what's most important right now")).toBe("full_task");
     });
+
+    it("anchors bare 'next/pending/coming up' before an unrelated trailing clause (Codex review finding)", () => {
+      expect(classifyContextMode("what's next in this recipe?")).toBe("light");
+      expect(classifyContextMode("what is coming up in the book?")).toBe("light");
+      // The legitimate phrasings still work.
+      expect(classifyContextMode("what's next")).toBe("full_task");
+      expect(classifyContextMode("what's pending")).toBe("full_task");
+      expect(classifyContextMode("whats coming up this week")).toBe("full_task");
+    });
+
+    it("anchors negation priority asks before an unrelated trailing clause (Codex review finding)", () => {
+      expect(classifyContextMode("what should I not do if I see a bear?")).toBe("light");
+      expect(classifyContextMode("what can I ignore in this recipe?")).toBe("light");
+      // The legitimate phrasings still work.
+      expect(classifyContextMode("what should I NOT do today")).toBe("full_task");
+      expect(classifyContextMode("what can i ignore for now")).toBe("full_task");
+      expect(classifyContextMode("what can i skip today")).toBe("full_task");
+      expect(classifyContextMode("what can i put off")).toBe("full_task");
+    });
+
+    it("constrains 'one thing I should' and requires 'my' for 'number one <noun>' (Codex review finding)", () => {
+      expect(classifyContextMode("what's the one thing I should do before taking aspirin?")).toBe("light");
+      expect(classifyContextMode("what is the number one thing to see in Rome?")).toBe("light");
+      // The legitimate phrasings still work.
+      expect(classifyContextMode("what's the one thing i should nail today")).toBe("full_task");
+      expect(classifyContextMode("what should be my number one focus")).toBe("full_task");
+    });
+
+    it("bounds every newly-added TASK_ASK_RE verb, not just handle/deal with/nail (Codex review finding)", () => {
+      expect(classifyContextMode("what should I be doing about this rash?")).toBe("light");
+      expect(classifyContextMode("what should I dive into in Madrid?")).toBe("light");
+      // The legitimate bare/short-continuation phrasings still work.
+      expect(classifyContextMode("what should i be doing")).toBe("full_task");
+      expect(classifyContextMode("what should i tackle first")).toBe("full_task");
+      expect(classifyContextMode("what should i knock out")).toBe("full_task");
+    });
+
+    it("scopes direction-seeking phrases to known-safe complete phrasings (Codex review finding)", () => {
+      expect(classifyContextMode("point me to the settings page")).toBe("light");
+      expect(classifyContextMode("steer me toward the nearest clinic")).toBe("light");
+      expect(classifyContextMode("orient me to this codebase")).toBe("light");
+      // The legitimate phrasings still work.
+      expect(classifyContextMode("point me in the right direction")).toBe("full_task");
+      expect(classifyContextMode("steer me toward something useful")).toBe("full_task");
+      expect(classifyContextMode("orient me for the day")).toBe("full_task");
+    });
   });
 });
 

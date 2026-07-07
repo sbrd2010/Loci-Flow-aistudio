@@ -271,6 +271,16 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("PARK_TASK", "skip the report for now", "the report")).toBe(true);
   });
 
+  it("still treats a polite 'can/could you skip X' imperative as a PARK_TASK request (Codex review finding)", () => {
+    // The advice-question guard above must be scoped to a first-person modal
+    // ("can/could/should/would/do I") specifically — a blanket lookbehind on
+    // any preceding "can"/"could" would also block a polite command
+    // addressed to the coach ("can you skip the report for now?"), which is
+    // a genuine mutation request, not advice-seeking.
+    expect(matchesUserIntent("PARK_TASK", "can you skip the report for now?", "the report")).toBe(true);
+    expect(matchesUserIntent("PARK_TASK", "could you skip the report?", "the report")).toBe(true);
+  });
+
   it("matches SET_NOW_FOCUS on set/swap/make-my-focus phrasing (Codex review finding)", () => {
     // coachContextMode.js's EXPLICIT_ACTION_RE routes "set/swap my focus to
     // X" and "make X my focus" to full_task, so this gate must recognize the
