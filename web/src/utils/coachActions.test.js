@@ -504,6 +504,50 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("PARK_TASK", "could you postpone the report?", "the report")).toBe(true);
   });
 
+  it("blocks 'can I afford to' advice questions from parking a task (Codex review finding, PR #342 round 4)", () => {
+    // "afford to" sat between the modal+I opener and the verb, longer than
+    // the single-filler-word gap the guard previously allowed.
+    expect(matchesUserIntent("PARK_TASK", "can I afford to postpone the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "can I afford to put off the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "can I afford to shelve the report?", "the report")).toBe(false);
+    // Legitimate imperatives without "afford to" still work.
+    expect(matchesUserIntent("PARK_TASK", "postpone the report", "the report")).toBe(true);
+  });
+
+  it("blocks embedded 'if/whether I' status checks from completing a task (Codex review finding, PR #342 round 4)", () => {
+    // The have/has/did/was/were guard alone didn't catch these — the actual
+    // status-question verb ("tell me", "check") sits outside that word list.
+    expect(matchesUserIntent("COMPLETE_TASK", "can you tell me if I wrapped up the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "can you check whether I crossed the report off my list?", "the report")).toBe(false);
+    // Legitimate imperatives still work.
+    expect(matchesUserIntent("COMPLETE_TASK", "I wrapped up the report", "the report")).toBe(true);
+  });
+
+  it("blocks declarative 'need/scheduled more time' statements from starting a focus session (Codex review finding, PR #342 round 4)", () => {
+    // These state a future need, not a request to start now, and the
+    // interrogative/modal guards alone don't cover declarative statements.
+    expect(matchesUserIntent("START_FOCUS", "I need more time to work on the report", "the report")).toBe(false);
+    expect(matchesUserIntent("START_FOCUS", "I scheduled time to work on the report tomorrow", "the report")).toBe(false);
+    // Bare imperative "time to work on" still works.
+    expect(matchesUserIntent("START_FOCUS", "time to work on the report", "the report")).toBe(true);
+  });
+
+  it("blocks 'where is a good place to jot down' advice questions from adding a task (Codex review finding, PR #342 round 4)", () => {
+    // The where/when/did/have/has/already guard window was too narrow (15
+    // chars) to reach across "is a good place to".
+    expect(matchesUserIntent("ADD_TASK", "where is a good place to jot down call the plumber?", "call the plumber")).toBe(false);
+  });
+
+  it("recognizes separated 'jot/note ... down' and 'put ... off' object forms (Codex review finding, PR #342 round 4)", () => {
+    // The previous adjacent-only "jot down"/"note down"/"put off" never
+    // recognized this equally common separable phrasing at all.
+    expect(matchesUserIntent("ADD_TASK", "jot this down: call the plumber", "call the plumber")).toBe(true);
+    expect(matchesUserIntent("ADD_TASK", "note this down: call the plumber", "call the plumber")).toBe(true);
+    expect(matchesUserIntent("PARK_TASK", "put the report off until tomorrow", "the report")).toBe(true);
+    // Still blocked from advice questions in the separated form too.
+    expect(matchesUserIntent("PARK_TASK", "is it okay to put the report off?", "the report")).toBe(false);
+  });
+
   it("normalizes shorthand before intent matching, same as coachContextMode's classifier (Codex review finding)", () => {
     // "remind me 2 call the plumber" reaches full_task via coachContextMode's
     // normalizer, but without the same normalization here, this gate would

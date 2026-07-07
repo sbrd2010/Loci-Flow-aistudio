@@ -165,6 +165,15 @@ describe("classifyContextMode", () => {
     expect(classifyContextMode("I need to remember to call the plumber")).toBe("full_task");
   });
 
+  it("routes separated 'jot/note ... down' and 'put ... off' object forms to full_task (Codex review finding, PR #342 round 4)", () => {
+    // The previous adjacent-only "jot down"/"note down"/"put off" never
+    // recognized this equally common separable phrasing, so the message
+    // stayed at "light" and never reached the COACH ACTIONS instructions.
+    expect(classifyContextMode("jot this down: call the plumber")).toBe("full_task");
+    expect(classifyContextMode("note this down: call the plumber")).toBe("full_task");
+    expect(classifyContextMode("put the report off until tomorrow")).toBe("full_task");
+  });
+
   it("excludes a preceding question word from the 'dive into'/'jump into'/'time to work on'/'want to focus on' synonyms (merge regression)", () => {
     // Merging #340's TASK_ASK_RE bounding work (which requires "what should
     // I dive into" to end in a short, task-shaped continuation) with #342's
