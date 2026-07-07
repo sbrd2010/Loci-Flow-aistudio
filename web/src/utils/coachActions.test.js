@@ -289,6 +289,25 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("SET_NOW_FOCUS", "set my focus to the report", "the report")).toBe(true);
   });
 
+  // Found via live-testing round 3: mirrors the synonym verbs added to
+  // coachContextMode.js's EXPLICIT_ACTION_RE — a message needs to pass both
+  // that classification check (to reach full_task) and this intent gate (for
+  // the resulting tag to actually be applied), so both files needed the
+  // same synonyms or a real user's phrasing could still end up silently
+  // blocked after successfully reaching full_task.
+  it("matches additional completion/add/park/focus action-verb synonyms (live-testing round 3)", () => {
+    expect(matchesUserIntent("COMPLETE_TASK", "I wrapped up the report", "the report")).toBe(true);
+    expect(matchesUserIntent("COMPLETE_TASK", "I knocked out the report", "the report")).toBe(true);
+    expect(matchesUserIntent("COMPLETE_TASK", "I crossed the report off my list", "the report")).toBe(true);
+    expect(matchesUserIntent("ADD_TASK", "jot down call the plumber")).toBe(true);
+    expect(matchesUserIntent("ADD_TASK", "note down call the plumber")).toBe(true);
+    expect(matchesUserIntent("ADD_TASK", "I need to remember to call the plumber")).toBe(true);
+    expect(matchesUserIntent("PARK_TASK", "put off the report", "the report")).toBe(true);
+    expect(matchesUserIntent("PARK_TASK", "postpone the report", "the report")).toBe(true);
+    expect(matchesUserIntent("START_FOCUS", "let's dive into the report", "the report")).toBe(true);
+    expect(matchesUserIntent("START_FOCUS", "time to work on the report", "the report")).toBe(true);
+  });
+
   it("normalizes shorthand before intent matching, same as coachContextMode's classifier (Codex review finding)", () => {
     // "remind me 2 call the plumber" reaches full_task via coachContextMode's
     // normalizer, but without the same normalization here, this gate would

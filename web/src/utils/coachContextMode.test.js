@@ -81,6 +81,28 @@ describe("classifyContextMode", () => {
     expect(classifyContextMode("make the report my focus")).toBe("full_task");
   });
 
+  // Found via live-testing round 3: real users describe finishing, adding,
+  // deferring, or starting a task with far more verbs than the ones already
+  // covered — each of these previously fell through to "light" (no task
+  // data at all), matching coachActions.js's own INTENT_PATTERNS synonyms
+  // added alongside this so a resulting action tag isn't then blocked by
+  // the gate once the message does reach full_task.
+  it("recognizes additional completion/add/park/focus action-verb synonyms (live-testing round 3)", () => {
+    expect(classifyContextMode("i wrapped up the inbox message")).toBe("full_task");
+    expect(classifyContextMode("i knocked out the important message")).toBe("full_task");
+    expect(classifyContextMode("i crossed the message off my list")).toBe("full_task");
+    expect(classifyContextMode("i'm done replying to that important message")).toBe("full_task");
+    expect(classifyContextMode("jot down call the plumber")).toBe("full_task");
+    expect(classifyContextMode("note down call the plumber")).toBe("full_task");
+    expect(classifyContextMode("i need to remember to call the plumber")).toBe("full_task");
+    expect(classifyContextMode("put off clearing my desk")).toBe("full_task");
+    expect(classifyContextMode("postpone clearing my desk")).toBe("full_task");
+    expect(classifyContextMode("shelve the desk cleaning for now")).toBe("full_task");
+    expect(classifyContextMode("i want to focus on the deep work block now")).toBe("full_task");
+    expect(classifyContextMode("let's dive into the deep work block now")).toBe("full_task");
+    expect(classifyContextMode("time to work on the deep work block")).toBe("full_task");
+  });
+
   it("routes shame/failure language to emotional even with intensifiers or filler words", () => {
     expect(classifyContextMode("i feel like a failure today, i wasted the whole day")).toBe("emotional");
     expect(classifyContextMode("i feel like such a failure right now")).toBe("emotional");

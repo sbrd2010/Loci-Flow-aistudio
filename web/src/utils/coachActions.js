@@ -75,7 +75,9 @@ function normalizeStopWords(str = "") {
 const BODY_DOUBLE_REF_RE = /\b(body[\s-]?double|sit with me|stay with me|work (?:alongside|next to) me|keep me company while i work)\b/i;
 
 const INTENT_PATTERNS = {
-  COMPLETE_TASK: /\b(done|finish(ed|ing)?|complet(e|ed|ing)|wrapped? up|knocked out)\b/i,
+  // "crossed ... off" mirrors coachContextMode.js's EXPLICIT_ACTION_RE
+  // completion synonyms — see live-testing round 3.
+  COMPLETE_TASK: /\b(done|finish(ed|ing)?|complet(e|ed|ing)|wrapped? up|knocked out|crossed\s+.{1,50}\boff\b)\b/i,
   // "set"/"swap" and "make X my focus" mirror the phrasings coachContextMode.js's
   // EXPLICIT_ACTION_RE now routes to full_task — without a matching intent
   // pattern here, the model could emit a SET_NOW_FOCUS tag for these that
@@ -88,13 +90,18 @@ const INTENT_PATTERNS = {
   SET_NOW_FOCUS: /\b(focus on|switch.*focus|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})(?:set|swap)\s+(?:my\s+|the\s+)?focus\s+(?:to|on)|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})make\s+.{1,40}\s+my focus\b|prioriti[sz]e|now focus|pin( this| that)? task|pin\b|focus.*now)\b/i,
   // Second alternative covers body-double requests ("sit with me while I
   // work", "be my body double") — they ask for a focus session just as
-  // clearly as "start a timer" does, without using start/begin/kick-off wording.
-  START_FOCUS: new RegExp(`\\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\\b|${BODY_DOUBLE_REF_RE.source}`, "i"),
+  // clearly as "start a timer" does, without using start/begin/kick-off
+  // wording. "dive into"/"jump into"/"time to work on" mirror
+  // coachContextMode.js's EXPLICIT_ACTION_RE synonyms — see live-testing round 3.
+  START_FOCUS: new RegExp(`\\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\\b|dive into|jump into|time to work on|${BODY_DOUBLE_REF_RE.source}`, "i"),
   // don['’]?t (not don'?t) so a curly/smart apostrophe (common on mobile
   // keyboards) still matches — coachContextMode.js's EXPLICIT_ACTION_RE
-  // already accepts both forms for this same phrase.
-  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don['’]?t forget|add .+ to (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b)/i,
-  PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|skip)\b/i,
+  // already accepts both forms for this same phrase. "jot/note down" and
+  // "need to remember to" mirror the same file's synonyms — live-testing round 3.
+  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don['’]?t forget|add .+ to (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|jot(?:ted)? down|note(?:d)? down|need to remember (?:to|that))/i,
+  // "postpone"/"put off" mirror coachContextMode.js's EXPLICIT_ACTION_RE
+  // synonyms — see live-testing round 3.
+  PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|skip|postpone|put off)\b/i,
 };
 
 // Catches negated phrasing ("I'm not done", "don't park it") immediately
