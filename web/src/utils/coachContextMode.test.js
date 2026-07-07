@@ -103,6 +103,18 @@ describe("classifyContextMode", () => {
     expect(classifyContextMode("time to work on the deep work block")).toBe("full_task");
   });
 
+  it("does not route non-task 'done <gerund>' phrasing to full_task (Codex review finding, PR #342 round 1)", () => {
+    // "I'm done stressing/thinking about X" is emotional/reflective language,
+    // not a task completion — without this exclusion, it removed the
+    // previous barrier keeping such phrasing away from coachActions.js's
+    // COMPLETE_TASK gate, which could then accept a hallucinated completion
+    // tag for the mentioned task.
+    expect(classifyContextMode("I'm done stressing about the report")).not.toBe("full_task");
+    expect(classifyContextMode("I'm done thinking about the report")).not.toBe("full_task");
+    // The genuine completion-gerund phrasing still works.
+    expect(classifyContextMode("I'm done replying to that important message")).toBe("full_task");
+  });
+
   it("excludes a preceding question word from the 'dive into'/'jump into'/'time to work on'/'want to focus on' synonyms (merge regression)", () => {
     // Merging #340's TASK_ASK_RE bounding work (which requires "what should
     // I dive into" to end in a short, task-shaped continuation) with #342's

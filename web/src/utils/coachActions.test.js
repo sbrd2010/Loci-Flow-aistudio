@@ -387,6 +387,37 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("PARK_TASK", "can you postpone the report for now?", "the report")).toBe(true);
   });
 
+  it("blocks subject-first and hypothetical postpone/put-off advice framings (Codex review finding, PR #342 round 1)", () => {
+    // The original guard only covered interrogative-inversion order
+    // ("<modal> I <verb>", e.g. "should I postpone?"). Subject-first order
+    // ("I should postpone...") and hypothetical framing ("if I put off...")
+    // slipped through.
+    expect(matchesUserIntent("PARK_TASK", "do you think I should postpone the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "what would happen if I put off the report?", "the report")).toBe(false);
+    // Genuine imperative phrasing still works.
+    expect(matchesUserIntent("PARK_TASK", "postpone the report", "the report")).toBe(true);
+  });
+
+  it("blocks a 'crossed off' status question from completing a task (Codex review finding, PR #342 round 1)", () => {
+    expect(matchesUserIntent("COMPLETE_TASK", "have I crossed the report off my list?", "the report")).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "did I cross the report off my list?", "the report")).toBe(false);
+    // The genuine statement still works.
+    expect(matchesUserIntent("COMPLETE_TASK", "I crossed the report off my list", "the report")).toBe(true);
+  });
+
+  it("blocks past-tense/status-question 'jot down'/'note down' phrasing from adding a task (Codex review finding, PR #342 round 1)", () => {
+    expect(matchesUserIntent("ADD_TASK", "I already jotted down call the plumber", "call the plumber")).toBe(false);
+    expect(matchesUserIntent("ADD_TASK", "where did I note down call the plumber?", "call the plumber")).toBe(false);
+    // The genuine imperative phrasing still works.
+    expect(matchesUserIntent("ADD_TASK", "jot down call the plumber", "call the plumber")).toBe(true);
+  });
+
+  it("blocks a dive-into advice question from starting a focus session (Codex review finding, PR #342 round 1)", () => {
+    expect(matchesUserIntent("START_FOCUS", "what should I dive into for work, Write report?", "Write report")).toBe(false);
+    // The genuine imperative phrasing still works.
+    expect(matchesUserIntent("START_FOCUS", "let's dive into Write report now", "Write report")).toBe(true);
+  });
+
   it("normalizes shorthand before intent matching, same as coachContextMode's classifier (Codex review finding)", () => {
     // "remind me 2 call the plumber" reaches full_task via coachContextMode's
     // normalizer, but without the same normalization here, this gate would
