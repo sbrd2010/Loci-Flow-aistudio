@@ -94,7 +94,24 @@ const INTENT_PATTERNS = {
   // keyboards) still matches — coachContextMode.js's EXPLICIT_ACTION_RE
   // already accepts both forms for this same phrase.
   ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don['’]?t forget|add .+ to (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b)/i,
-  PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|skip)\b/i,
+  // "skip" excludes a directly preceding first-person modal ("can/could/
+  // should/would/do I") — coachContextMode.js's NEGATION_PRIORITY_RE now
+  // routes advice questions like "what can I skip today?" to full_task, and
+  // without this guard a bare "skip" here would let the gate treat the
+  // model's answer (which names the task being asked about) as authorizing
+  // an actual PARK_TASK mutation the user never requested (Codex review
+  // finding). Scoped to "<modal> I" specifically (not a blanket "can"/
+  // "could" lookbehind) so a polite imperative addressed to the coach —
+  // "can you skip the report for now?" — still authorizes the mutation
+  // (Codex review finding).
+  // Tolerates a small filler word between the modal+I and "skip" ("can I
+  // just skip...", "should I maybe skip...") — the previous round only
+  // excluded an immediately-adjacent "<modal> i skip" (Codex review finding).
+  // Also excludes "am I free to skip" and "not going to hurt if I skip it" —
+  // coachContextMode.js's NEGATION_PRIORITY_RE routes both advice questions
+  // to full_task too, and neither fits the "<modal> I" shape above (Codex
+  // review finding).
+  PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|(?<!\b(?:(?:can|could|would|should|do)\s+i|am\s+i\s+free\s+to|not\s+going\s+to\s+hurt\s+if\s+i)\s+(?:just|maybe|really|actually|honestly)?\s*)skip)\b/i,
 };
 
 // Catches negated phrasing ("I'm not done", "don't park it") immediately

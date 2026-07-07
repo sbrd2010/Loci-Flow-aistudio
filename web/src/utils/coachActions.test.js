@@ -259,6 +259,59 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("SET_NOW_FOCUS", "What should I do next?")).toBe(false);
   });
 
+  it("does not treat a 'what can I skip' advice question as a PARK_TASK request (Codex review finding)", () => {
+    // coachContextMode.js's NEGATION_PRIORITY_RE now routes "what can I skip"
+    // advice questions to full_task — without this guard, a bare "skip" here
+    // would let the gate treat the model's answer (which names the task
+    // being asked about) as authorizing a real park mutation the user never
+    // requested.
+    expect(matchesUserIntent("PARK_TASK", "what can I skip for the report today?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "should I skip the report?", "the report")).toBe(false);
+    // Genuine imperative phrasing still works.
+    expect(matchesUserIntent("PARK_TASK", "skip the report for now", "the report")).toBe(true);
+  });
+
+  it("still treats a polite 'can/could you skip X' imperative as a PARK_TASK request (Codex review finding)", () => {
+    // The advice-question guard above must be scoped to a first-person modal
+    // ("can/could/should/would/do I") specifically — a blanket lookbehind on
+    // any preceding "can"/"could" would also block a polite command
+    // addressed to the coach ("can you skip the report for now?"), which is
+    // a genuine mutation request, not advice-seeking.
+    expect(matchesUserIntent("PARK_TASK", "can you skip the report for now?", "the report")).toBe(true);
+    expect(matchesUserIntent("PARK_TASK", "could you skip the report?", "the report")).toBe(true);
+  });
+
+  it("still blocks a first-person skip advice question with a small filler word (Codex review finding)", () => {
+    // The previous round's guard only excluded an immediately-adjacent
+    // "<modal> I skip" — "can I just skip..." / "should I maybe skip..."
+    // have a filler word between "I" and "skip" that the guard didn't
+    // tolerate, so these advice questions could still authorize a park
+    // mutation.
+    expect(matchesUserIntent("PARK_TASK", "can I just skip the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "should I maybe skip the report?", "the report")).toBe(false);
+    // The polite imperative (addressed to the coach, not advice-seeking) still works.
+    expect(matchesUserIntent("PARK_TASK", "can you skip the report for now?", "the report")).toBe(true);
+  });
+
+  it("blocks a 'what am I free to skip' advice question from parking a task (Codex review finding)", () => {
+    // coachContextMode.js's NEGATION_PRIORITY_RE routes "what am I free to
+    // skip" advice questions to full_task, but that phrasing doesn't fit the
+    // "<modal> I skip" shape the earlier guard checked for, so a corroborated
+    // model reply could still park the named task.
+    expect(matchesUserIntent("PARK_TASK", "what am I free to skip, the report?", "the report")).toBe(false);
+    // The imperative form still works.
+    expect(matchesUserIntent("PARK_TASK", "skip the report, I'm free today", "the report")).toBe(true);
+  });
+
+  it("blocks a 'not going to hurt if I skip it' advice question from parking a task (Codex review finding, round 5)", () => {
+    // coachContextMode.js's NEGATION_PRIORITY_RE routes "what's not going to
+    // hurt if I skip it" advice questions to full_task too, and that phrasing
+    // doesn't fit any of the earlier guard shapes.
+    expect(matchesUserIntent("PARK_TASK", "what's not going to hurt if I skip it, the report?", "the report")).toBe(false);
+    // The imperative form still works.
+    expect(matchesUserIntent("PARK_TASK", "skip the report, it's not going to hurt", "the report")).toBe(true);
+  });
+
   it("matches SET_NOW_FOCUS on set/swap/make-my-focus phrasing (Codex review finding)", () => {
     // coachContextMode.js's EXPLICIT_ACTION_RE routes "set/swap my focus to
     // X" and "make X my focus" to full_task, so this gate must recognize the
