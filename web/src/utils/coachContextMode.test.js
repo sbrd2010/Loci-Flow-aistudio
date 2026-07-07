@@ -562,4 +562,25 @@ describe("detectRequestedCategories", () => {
     expect(detectRequestedCategories("What are my boss's work priorities and tasks?")).toEqual([]);
     expect(detectRequestedCategories("What are my manager's career priorities?")).toEqual([]);
   });
+
+  it("captures every category in 'focus/prioritize for X and Y' phrasing (Codex review finding)", () => {
+    expect(detectRequestedCategories("What should I prioritize for health and work?")).toEqual(["Health", "Work"]);
+    // Existing single-category shapes still resolve correctly.
+    expect(detectRequestedCategories("what should I focus on for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what should I prioritize for my career?")).toEqual(["Career"]);
+  });
+
+  it("detects category-scoped task-list asks like 'show me my work tasks' (Codex review finding)", () => {
+    expect(detectRequestedCategories("Show me my work tasks")).toEqual(["Work"]);
+    expect(detectRequestedCategories("What are my health tasks?")).toEqual(["Health"]);
+    expect(detectRequestedCategories("List my career tasks")).toEqual(["Career"]);
+  });
+
+  it("does not classify add-task wording as a category filter (Codex review finding)", () => {
+    expect(detectRequestedCategories("Add a work task to call Bob to my list")).toEqual([]);
+    expect(detectRequestedCategories("create a health task to book a checkup")).toEqual([]);
+    // The genuine category-filtered ask still works.
+    expect(detectRequestedCategories("work task should be next")).toEqual(["Work"]);
+    expect(detectRequestedCategories("career priority to focus on")).toEqual(["Career"]);
+  });
 });

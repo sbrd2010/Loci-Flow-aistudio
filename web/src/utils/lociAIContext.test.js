@@ -424,6 +424,15 @@ describe("buildLociCategoryFilterContext", () => {
     // The horizon match is specific to Work — an unrelated category is still flagged.
     expect(buildLociCategoryFilterContext(tasks, ["Career"])).toContain("{Career}");
   });
+
+  it("coerces a non-string task category instead of throwing (Codex review finding)", () => {
+    // A synced legacy/corrupt task could carry a non-string category —
+    // buildLociTaskContext renders it safely via string interpolation, so
+    // this check shouldn't abort prompt construction either.
+    const tasks = [{ title: "Weird task", category: 123, horizonLevel: "today" }];
+    expect(() => buildLociCategoryFilterContext(tasks, ["Work"])).not.toThrow();
+    expect(buildLociCategoryFilterContext(tasks, ["Work"])).toContain("{Work}");
+  });
 });
 
 describe("buildLociRecentlyParkedContext", () => {

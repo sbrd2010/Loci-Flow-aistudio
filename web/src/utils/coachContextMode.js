@@ -117,11 +117,16 @@ const CATEGORY_LABELS = { career: "Career", work: "Work", health: "Health", pers
 // PRIORITY QUESTIONS rule already tells the model to disclose a category
 // mismatch, but relying on the model to notice via the {Category} tags alone
 // isn't reliable enough on its own; see issue #338.
-// These three shapes only ever name a single category.
+// These shapes only ever name a single category.
 const SINGLE_CATEGORY_PATTERNS = [
   /\bwhich\s+(?:of\s+my\s+)?(career|work|health|personal)\s+tasks?\b/i,
-  /\b(career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b/i,
-  /\b(?:focus on|priorit\w*)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(career|work|health|personal)\b/i,
+  // Excludes "add a work task to ...", "create a health task to ..." — those
+  // are ADD_TASK commands, not a category-filtered priority ask, even though
+  // they share the "<category> task ... to" shape.
+  /(?<!\b(?:add|create|make)\b.{0,15})\b(career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b/i,
+  // "Show me/what are/list my <category> tasks" — a category-scoped
+  // task-list ask, distinct from the "priorities" clause below.
+  /\b(?:show me|what are|list|check|tell me)\s+my\s+(career|work|health|personal)\s+tasks?\b/i,
 ];
 
 // Mirrors BROAD_TASK_QUERY_RE's own "what are/tell me/show me my <category>
@@ -134,12 +139,24 @@ const SINGLE_CATEGORY_PATTERNS = [
 // a sane length so it can't run across an unrelated later "priorities" in a
 // long message) and scan it for every category word inside.
 const CATEGORY_PRIORITY_CLAUSE_RE = /(?:what are|tell me|show me|check|what about)\s+my\s+([a-z0-9\s&/,'’]{1,60}?)\s*priorit(?:y|ies)\b/i;
+// Mirrors the "focus on/prioritize ... for <category>" shape, but — like
+// CATEGORY_PRIORITY_CLAUSE_RE above — captures the whole trailing clause
+// instead of a single category, so "prioritize for health and work" finds
+// both instead of only the first.
+const FOCUS_FOR_CLAUSE_RE = /\b(?:focus on|priorit\w*)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?([a-z0-9\s&/,'’]{1,40})/i;
 const CATEGORY_WORD_RE = /\b(?:career|work|health|personal)\b/gi;
 // A possessive like "boss's" or "manager's" inside the captured clause means
 // the "my" in "my boss's work priorities" scopes to the boss, not the user —
 // these are someone else's priorities, not a category the user is asking
 // about for themselves.
 const THIRD_PARTY_POSSESSIVE_RE = /\w['’]s\b/;
+
+// Scans a captured clause (e.g. "health and work", "boss's work") for every
+// category word inside, in the order first mentioned, deduped.
+function extractCategoryLabels(clause) {
+  const words = clause.match(CATEGORY_WORD_RE) || [];
+  return [...new Set(words.map(w => CATEGORY_LABELS[w.toLowerCase()]))];
+}
 
 // Returns every category (Career/Work/Health/Personal) a message named, in
 // the order first mentioned, deduped — or [] if none. Used to build a
@@ -156,8 +173,12 @@ export function detectRequestedCategories(message) {
   }
   const clauseMatch = text.match(CATEGORY_PRIORITY_CLAUSE_RE);
   if (clauseMatch && !THIRD_PARTY_POSSESSIVE_RE.test(clauseMatch[1])) {
-    const words = clauseMatch[1].match(CATEGORY_WORD_RE) || [];
-    const labels = [...new Set(words.map(w => CATEGORY_LABELS[w.toLowerCase()]))];
+    const labels = extractCategoryLabels(clauseMatch[1]);
+    if (labels.length > 0) return labels;
+  }
+  const focusForMatch = text.match(FOCUS_FOR_CLAUSE_RE);
+  if (focusForMatch) {
+    const labels = extractCategoryLabels(focusForMatch[1]);
     if (labels.length > 0) return labels;
   }
   return [];

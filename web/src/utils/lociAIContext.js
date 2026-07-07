@@ -345,7 +345,7 @@ export function buildLociCategoryFilterContext(tasks = [], requestedCategories =
   // Personal), so that horizon match also counts as visible.
   const missing = requestedCategories.filter(
     cat => !visible.some(t => {
-      if ((t.category || "Personal").toLowerCase() === cat.toLowerCase()) return true;
+      if (String(t.category || "Personal").toLowerCase() === cat.toLowerCase()) return true;
       const horizonLabel = HORIZON_LABELS[t.horizonLevel];
       return !!horizonLabel && horizonLabel.toLowerCase() === cat.toLowerCase();
     })
