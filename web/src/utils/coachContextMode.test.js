@@ -1162,4 +1162,22 @@ describe("detectRequestedCategories", () => {
     // The pre-existing "task(s)" form still works.
     expect(classifyContextMode("which work tasks should I do first?")).toBe("full_task");
   });
+
+  it("accepts hyphenated 'low-priority' spelling for the ignore/skip ask (Codex review finding, PR #344 round 3)", () => {
+    expect(classifyContextMode("anything low-priority I can ignore today?")).toBe("full_task");
+    expect(classifyContextMode("anything low priority I can ignore today?")).toBe("full_task");
+  });
+
+  it("accepts singular generic nouns 'item'/'thing' alongside the plural forms (Codex review finding, PR #344 round 3)", () => {
+    expect(classifyContextMode("which work item should I do first?")).toBe("full_task");
+    expect(classifyContextMode("what home thing do I need to handle?")).toBe("full_task");
+  });
+
+  it("accepts 'next' and 'ignore'/'put off' continuations for generic-noun 'which' asks (Codex review finding, PR #344 round 3)", () => {
+    // These already worked for the unguarded "task(s)" form; the generic
+    // nouns now accept the same set of priority continuations.
+    expect(classifyContextMode("which work items should I do next?")).toBe("full_task");
+    expect(classifyContextMode("which work items can I ignore?")).toBe("full_task");
+    expect(classifyContextMode("which work items can I put off?")).toBe("full_task");
+  });
 });
