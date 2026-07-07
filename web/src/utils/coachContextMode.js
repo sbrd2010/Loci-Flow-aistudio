@@ -56,6 +56,32 @@ const SHORTHAND_MAP = [
   [/\bim\b/gi, "i am"],
   [/\btodos\b/gi, "tasks"],
   [/\btodo\b/gi, "task"],
+  // Common misspellings of "what" (with the contraction still attached) and
+  // "which" — "wat"/"wut" alone are already covered above, but "wats"/"wuts"
+  // is a distinct token that needs its own rule.
+  [/\bwats\b/gi, "what's"],
+  [/\bwuts\b/gi, "what's"],
+  [/\bwich\b/gi, "which"],
+  // Common misspellings of "priority"/"priorities"/"prioritize" — these were
+  // silently falling through BROAD_TASK_QUERY_RE's exact "priorit(y|ies)"
+  // spelling requirement. The stem-only rule (no trailing \b) lets the real
+  // suffix (e/ing/ed) survive untouched, e.g. "priortize" -> "prioritize".
+  [/\bpriorites\b/gi, "priorities"],
+  [/\bpriorty\b/gi, "priority"],
+  [/\bpriortiz/gi, "prioritiz"],
+  [/\bimportent\b/gi, "important"],
+  [/\bdoin\b/gi, "doing"],
+  [/\bconfuzed\b/gi, "confused"],
+  [/\bnxt\b/gi, "next"],
+  [/\bstrt\b/gi, "start"],
+  [/\bfst\b/gi, "first"],
+  [/\bhlp\b/gi, "help"],
+  [/\bsum\b/gi, "some"],
+  [/\bcn\b/gi, "can"],
+  [/\bb\b/gi, "be"],
+  [/\b2day\b/gi, "today"],
+  [/\b2nite\b/gi, "tonight"],
+  [/\b2moro(?:w)?\b/gi, "tomorrow"],
 ];
 
 // Exported so coachActions.js's intent-pattern matching (messageSeemsActionLike)
@@ -93,7 +119,94 @@ const BODY_DOUBLE_RE = /\b(body[\s-]?double|sit with me|stay with me|work (?:alo
 // work-session request — route it to "emotional" instead of "full_task".
 const FEAR_DISTRESS_RE = /\b(i(['’]m| am) (?:scared|afraid|terrified|frightened)|don['’]?t leave me)\b/i;
 
-const TASK_ASK_RE = /\b(what should i (?:actually |really |just |honestly )?(?:do|work on|start|focus on)|which (?:one|task) shall i focus|shall i focus|help me (?:choose|pick|prioritize|plan)|choose a task|pick a task|pick one (?:thing|task)|next step|prioritize my|plan my|plan today)\b/i;
+// "handle"/"deal with"/"nail" are common task verbs but also ordinary verbs
+// in unrelated domains ("what should I handle carefully in this recipe?",
+// "what should I nail to the wall?") — require the verb to be followed only
+// by a short, task-shaped continuation (or nothing) rather than matching
+// regardless of trailing content, so an unrelated question with substantial
+// text after the verb doesn't false-positive into full_task. "get to" was
+// removed entirely — too generic/ambiguous ("get to eat", "get to know") to
+// safely pattern-match at all (Codex review finding).
+// "do"/"work on"/"start"/"focus on" are the original, long-standing verb set
+// here and stay unconstrained (pre-existing accepted risk, not part of this
+// PR's changes). Every verb added by this PR — including "handle"/"deal
+// with"/"nail" from the previous review round — requires being followed
+// only by a short task-shaped continuation (or nothing), since Codex found
+// the fix only covered three of the newly-added verbs: "what should I be
+// doing about this rash?" and "what should I dive into in Madrid?" still
+// false-positived into full_task via the unconstrained ones.
+// "which one/task should I do/tackle/handle" mirrors the "what should I
+// <verb>" shape above and needs the same end-of-clause/task-scope
+// lookahead — without it, "which one should I handle carefully in this
+// recipe?" and "which one should I do in this recipe?" false-positive into
+// full_task on their unrelated trailing clause (Codex review finding,
+// two rounds — the "do" alternative was still unconstrained even after
+// "tackle"/"handle" were bounded).
+const TASK_ASK_RE = /\b(what should i (?:actually |really |just |honestly )?(?:do|work on|start|focus on)|what should i (?:actually |really |just |honestly )?(?:tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on)(?=\s*(?:first|next|today|now|right now|this (?:week|month|quarter))?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|which (?:one|task) shall i focus|which (?:one|task) should i (?:start|do|tackle|handle)(?=\s*(?:first|next|today|now|right now|this (?:week|month|quarter))?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|shall i focus|help me (?:choose|pick|prioritize|plan)|choose a task|pick a task|pick one (?:thing|task)|next step|prioritize my|plan my|plan today)\b/i;
+
+// Broader "what's my priority/focus" noun-phrase asks — these name a
+// priority without any of TASK_ASK_RE's "what should I <verb>" phrasing at
+// all, so a purely verb-based pattern can never catch them.
+// "important"/"urgent"/"pressing"/"critical" stand alone as priority
+// descriptors even without a following noun ("what's important" is already
+// a priority question). "top"/"main"/"biggest" don't — they're relative
+// modifiers that need an object to mean anything task-related, so without
+// requiring the noun, "what's the top speed of a cheetah?" or "what's the
+// main idea here?" would false-positive into full_task (Codex review finding).
+// Bare "next"/"pending"/"coming up" (unlike the "on my/the <noun>" shapes,
+// which are already scoped by the possessive framing) need an end-of-clause
+// lookahead — otherwise "what's next in this recipe?" false-positives
+// (Codex review finding). "one thing I should <verb>" needs the same
+// treatment ("what's the one thing I should do before taking aspirin?"),
+// and "number one <noun>" additionally needs a leading "my" — otherwise it
+// matches ANY mention of "number one thing" regardless of whose priority is
+// being discussed, e.g. "the number one thing to see in Rome" (Codex review
+// finding). Direction-seeking catch-alls ("point me to", "steer me toward",
+// "orient me to") are scoped to known-safe complete phrasings only — the
+// open-ended "toward/to <anything>" forms matched ordinary navigation
+// requests like "point me to the settings page" or "steer me toward the
+// nearest clinic" (Codex review finding).
+// "what needs my attention"/"what's on my radar/deck/plate/agenda/horizon"/
+// "walk me through what matters" need an end-of-clause-or-category lookahead
+// — without one, "what needs my attention in this recipe?", "what's on my
+// radar in chess?", and "walk me through what matters in this codebase"
+// false-positive into full_task on their unrelated trailing clause. The
+// lookahead also accepts "for <category>" so FOCUS_FOR_CLAUSE_RE's matching
+// lead-ins ("needs my attention for work") keep working (Codex review finding).
+// "what's important/urgent/pressing/critical...", "what deserves my
+// attention/energy", and "what do I have going on" need the same
+// end-of-clause-or-category lookahead as the other aliases here — without
+// one, "what is the important thing about CSS?", "what deserves my
+// attention in this recipe?", and "what do I have going on in my stomach?"
+// false-positive into full_task on their unrelated trailing clause. "my
+// number one <noun>" also needs to accept a trailing "today"/"right now",
+// like its neighboring priority phrases — without it, "what's my number one
+// priority today?" fell back to "light" instead of "full_task" (Codex
+// review finding).
+const PRIORITY_SYNONYM_RE = /\bwhat(?:['’]?s|\s+is) (?:my |the )?(?:most )?(?:important|urgent|pressing|critical)(?: (?:thing|priority|task|focus))?(?=\s*(?:(?:today|right now)?\s*(?:[.?!]|$)|for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b))|\bwhat(?:['’]?s|\s+is) (?:my |the )?(?:top|main|biggest) (?:thing|priority|task|focus)\b|\bwhat needs my attention(?=\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat needs (?:doing|to be done)(?=\s*(?:today|now)?\s*(?:[.?!]|$))|\bwhat deserves my (?:attention|energy)(?=\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) (?:on (?:my |the )?(?:deck|radar|plate|agenda|horizon))(?=\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) (?:next|pending|coming up)(?=\s*(?:today|this week|this month)?\s*(?:[.?!]|$))|\bwhat do i have going on(?=\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bgive me (?:some |a bit of )?(?:my priorities|the game plan)\b|\bgive me (?:some |a bit of )?(?:clarity|direction)(?=\s*(?:[.?!]|$))|\b(?:long|short) term priorities\b|\b(?:immediate|future) priorities\b|\bpriorit(?:y|ies) for the (?:day|week|month|quarter|year)\b|\bthis (?:week|month|quarter|year)['’]?s? focus\b|\bwhat(?:['’]?s|\s+is) the smart move(?=\s*(?:today|right now)?\s*(?:[.?!]|$))|\bwhat(?:['’]?s|\s+is) my north star\b|\bwhat(?:['’]?s|\s+is) the one thing i should (?:nail|do|focus on)(?=\s*(?:today|now)?\s*(?:[.?!]|$))|\bmy number one (?:focus|priority|thing)(?=\s*(?:today|right now)?\s*(?:[.?!]|$))|\bpoint me in the right direction\b|\bsteer me toward (?:something useful|what matters|the right (?:thing|direction|task))\b|\borient me\b(?=\s*(?:for the day)?\s*(?:[.?!]|$))|\bwalk me through what matters(?=\s*(?:[.?!]|$))\b/i;
+
+// Antonym/negation priority asks ("what can wait", "what's not urgent") —
+// these are just as much a priority question as their positive-phrased
+// counterparts, but neither TASK_ASK_RE nor PRIORITY_SYNONYM_RE's
+// affirmative wording matches a negated one.
+// "what should i not do" and "what can i skip/ignore/put off" need an
+// end-of-clause lookahead — without one, "what should I not do if I see a
+// bear?" and "what can I ignore in this recipe?" false-positive into
+// full_task on their unrelated trailing clause (Codex review finding).
+// "what's not/the least/lowest/low important..." and "what has the lowest
+// priority" need the same end-of-clause lookahead as the other aliases here
+// — without one, "what's not important in JavaScript?", "what's the least
+// important thing about this movie?", and "what has the lowest priority in
+// CSS?" false-positive into full_task on their unrelated trailing clause
+// (Codex review finding).
+// Several aliases here are category/horizon-filtered priority questions in
+// their own right ("what can wait for work?", "what's not urgent for
+// health?"), so their lookaheads also accept "for <category>" — without it,
+// these stayed "light" instead of "full_task" (Codex review finding). The
+// final "not due soon/going to hurt if I skip it" alternative also needs the
+// same end-of-clause guard as its siblings — without one, "what's not due
+// soon in JavaScript?" false-positived into full_task (Codex review finding).
+const NEGATION_PRIORITY_RE = /\bwhat should i not do(?=\s*(?:today|now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat can wait(?=\s*(?:today|for now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat can i (?:skip|ignore|put off)(?=\s*(?:today|for now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) (?:not |the least |least |lowest |low )(?:important|urgent|pressing|critical|priority)(?=\s*(?:thing|priority|task|focus)?\s*(?:(?:today|right now)?\s*(?:[.?!]|$)|for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b))|\bwhat don['’]?t i need to worry about(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) optional(?=\s*(?:today)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat has the lowest priority(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat am i free to skip(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat shouldn['’]?t i worry about(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) not (?:due soon|going to hurt if i skip it)(?=\s*(?:[.?!]|$))\b/i;
 
 // Low-energy asks need the full visible task list with estimates so the
 // coach can prefer the smallest task per the PRIORITY QUESTIONS rule — the
@@ -105,7 +218,18 @@ const LOW_ENERGY_RE = /\b(low energy|no energy|low on energy|out of energy|exhau
 // horizon-filtered ("what should I focus on this month?") priority questions
 // need the PRIORITY QUESTIONS framework and {Category} tags that only the
 // full_task prompt carries — never compact these, even on the paced path.
-const PRIORITY_FILTER_RE = /\bwhich\s+(?:of\s+my\s+)?(?:career|work|health|personal)\s+tasks?\b|\b(?:career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b|\bfocus on this\s+(?:month|quarter|week)\b|\b(?:focus on|priorit\w*|do|work on|start)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(?:career|work|health|personal)\b|\b(?:show me|what are|list|check|tell me)\s+my\s+(?:career|work|health|personal)\s+tasks?\b|\bwhat\s+(?:career|work|health|personal)\s+tasks?\b/i;
+// Extended to include TASK_ASK_RE's newer verb set (tackle, handle, knock
+// out, deal with, nail, dive into, jump into, be doing, be working on, be
+// spending time on, spend time on) and PRIORITY_SYNONYM_RE's newer alias
+// lead-ins, both for the "for <category>" shape and the "this
+// week/month/quarter" horizon shape — without this, "what should I tackle
+// for work?" or "what should I dive into this quarter?" matched TASK_ASK_RE
+// but not PRIORITY_FILTER_RE, so on the paced/compact-follow-up path
+// classifyContextMode() returned "compact_task" (whose prompt only carries
+// the last plan/current focus, not the full task list) instead of
+// "full_task" for these category/horizon-filtered priority questions
+// (Codex review finding).
+const PRIORITY_FILTER_RE = /\bwhich\s+(?:of\s+my\s+)?(?:career|work|health|personal)\s+tasks?\b|\b(?:career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b|\b(?:focus on|tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on)\s+this\s+(?:month|quarter|week)\b|\b(?:focus on|priorit\w*|do|work on|start|tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on|needs my attention|on (?:my |the )?(?:deck|radar|plate|agenda|horizon)|(?:the )?game plan)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(?:career|work|health|personal)\b|\b(?:show me|what are|list|check|tell me)\s+my\s+(?:career|work|health|personal)\s+tasks?\b|\bwhat\s+(?:career|work|health|personal)\s+tasks?\b/i;
 
 const CATEGORY_LABELS = { career: "Career", work: "Work", health: "Health", personal: "Personal" };
 
@@ -152,8 +276,25 @@ const CATEGORY_PRIORITY_CLAUSE_RE = /(?:what are|tell me|show me|check|what abou
 // Mirrors the "focus on/prioritize ... for <category>" shape, but — like
 // CATEGORY_PRIORITY_CLAUSE_RE above — captures the whole trailing clause
 // instead of a single category, so "prioritize for health and work" finds
-// both instead of only the first.
-const FOCUS_FOR_CLAUSE_RE = /\b(?:focus on|priorit\w*|do|work on|start)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?([a-z0-9\s&/,'’]{1,40})/i;
+// both instead of only the first. Also covers PRIORITY_SYNONYM_RE's newer
+// alias lead-ins ("needs my attention for work", "on my radar for health",
+// "the game plan for work") — those route to full_task fine on their own,
+// but without a matching category-detection shape, a missing-category
+// mismatch note never fires for them (Codex review finding).
+// Also covers TASK_ASK_RE's newer verb set ("tackle", "handle", "knock out",
+// "deal with", "nail", "dive into", "jump into", "be doing", "be working
+// on", "be spending time on", "spend time on") — those route to full_task
+// fine on their own via "for <category>", but without a matching
+// category-detection lead-in here, a missing-category mismatch note never
+// fires for "what should I tackle for work?" (Codex review finding).
+// Also covers PRIORITY_SYNONYM_RE's priority-noun/adjective lead-ins ("top",
+// "main", "biggest", "important", "urgent", "pressing", "critical",
+// "deserves my attention") — those route to full_task fine on their own via
+// "for <category>", but without a matching lead-in here, "what's my main
+// focus for health?", "what's the top thing for work?", and "what deserves
+// my attention for work?" never got a missing-category mismatch note
+// (Codex review finding).
+const FOCUS_FOR_CLAUSE_RE = /\b(?:focus on|priorit\w*|do|work on|start|tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on|needs my attention|deserves my (?:attention|energy)|on (?:my |the )?(?:deck|radar|plate|agenda|horizon)|(?:the )?game plan|top|main|biggest|important|urgent|pressing|critical)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?([a-z0-9\s&/,'’]{1,40})/i;
 const CATEGORY_WORD_RE = /\b(?:career|work|health|personal)\b/gi;
 // A possessive like "boss's" or "manager's" inside the captured clause means
 // the "my" in "my boss's work priorities" scopes to the boss, not the user —
@@ -228,7 +369,7 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
   // Check full-task pacing (10 minutes)
   const isPaced = lastFullTaskTime > 0 && (Date.now() - lastFullTaskTime < 10 * 60 * 1000);
   const isFreshScanRequested = FRESH_SCAN_RE.test(text);
-  const isBroadQuery = BROAD_TASK_QUERY_RE.test(text);
+  const isBroadQuery = BROAD_TASK_QUERY_RE.test(text) || PRIORITY_SYNONYM_RE.test(text) || NEGATION_PRIORITY_RE.test(text);
   const isCheckin = isCheckinRequest(text);
   const isLowEnergy = LOW_ENERGY_RE.test(text);
   const isPriorityFiltered = PRIORITY_FILTER_RE.test(text);
