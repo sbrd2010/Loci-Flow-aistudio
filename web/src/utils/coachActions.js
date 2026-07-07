@@ -75,7 +75,26 @@ function normalizeStopWords(str = "") {
 const BODY_DOUBLE_REF_RE = /\b(body[\s-]?double|sit with me|stay with me|work (?:alongside|next to) me|keep me company while i work)\b/i;
 
 const INTENT_PATTERNS = {
-  COMPLETE_TASK: /\b(done|finish(ed|ing)?|complet(e|ed|ing)|wrapped? up|knocked out)\b/i,
+  // "crossed ... off" mirrors coachContextMode.js's EXPLICIT_ACTION_RE
+  // completion synonyms — see live-testing round 3. Excludes a preceding
+  // status-question word ("have/has/did I crossed the report off my list?")
+  // within a short lookbehind window — without it, asking whether a task was
+  // already done could let the gate treat the model's answer as authorizing
+  // an actual completion the user never requested (Codex review finding).
+  // "wrapped up"/"knocked out" share the same guard — without it, "have I
+  // wrapped up the report already?"/"was the report knocked out yesterday?"
+  // had the same false-authorization risk (Codex review finding). Also
+  // excludes the passive/idiomatic "wrapped up IN"/"knocked out BY" ("I'm
+  // wrapped up in the report", "I'm knocked out by the report" — busy/
+  // exhausted, not completed), and "crossed ... off" excludes "crossed my
+  // mind" ("it crossed my mind to take Friday off" is an unrelated idiom,
+  // not marking a task done) (Codex review finding). Also excludes an
+  // embedded status question introduced by "if"/"whether" regardless of the
+  // outer verb — "can you tell me if I wrapped up the report?"/"can you
+  // check whether I crossed the report off my list?" weren't caught by the
+  // have/has/did/was/were guard alone, since the actual status-question verb
+  // ("tell me", "check") sits outside that word list (Codex review finding).
+  COMPLETE_TASK: /\b(done|finish(ed|ing)?|complet(e|ed|ing)|(?<!\b(?:have|has|did|was|were)\b.{0,20})(?<!\b(?:if|whether)\s+i\s+)wrapped? up(?!\s+in\b)|(?<!\b(?:have|has|did|was|were)\b.{0,20})(?<!\b(?:if|whether)\s+i\s+)knocked out(?!\s+by\b)|(?<!\b(?:have|has|did|was|were)\b.{0,20})(?<!\b(?:if|whether)\s+i\s+)crossed(?!\s+my\s+mind\b)\s+.{1,50}\boff\b)\b/i,
   // "set"/"swap" and "make X my focus" mirror the phrasings coachContextMode.js's
   // EXPLICIT_ACTION_RE now routes to full_task — without a matching intent
   // pattern here, the model could emit a SET_NOW_FOCUS tag for these that
@@ -88,30 +107,91 @@ const INTENT_PATTERNS = {
   SET_NOW_FOCUS: /\b(focus on|switch.*focus|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})(?:set|swap)\s+(?:my\s+|the\s+)?focus\s+(?:to|on)|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})make\s+.{1,40}\s+my focus\b|prioriti[sz]e|now focus|pin( this| that)? task|pin\b|focus.*now)\b/i,
   // Second alternative covers body-double requests ("sit with me while I
   // work", "be my body double") — they ask for a focus session just as
-  // clearly as "start a timer" does, without using start/begin/kick-off wording.
-  START_FOCUS: new RegExp(`\\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\\b|${BODY_DOUBLE_REF_RE.source}`, "i"),
+  // clearly as "start a timer" does, without using start/begin/kick-off
+  // wording. "dive into"/"jump into"/"time to work on" mirror
+  // coachContextMode.js's EXPLICIT_ACTION_RE synonyms — see live-testing
+  // round 3 — and share that same question-word lookbehind guard, so "what
+  // should I dive into for work, Write report?" doesn't register as an
+  // imperative START_FOCUS request (Codex review finding). Also excludes
+  // "is"/"when"/"where"/"do"/"have" — "is now a good time to work on...",
+  // "when is it time to work on...", "do I have time to work on..." slipped
+  // through the original narrower list (Codex review finding). "would"/
+  // "could"/"should"/"can" require immediate "I" adjacency rather than a
+  // loose window — those words also form a polite command when followed by
+  // "you" ("could you dive into the report?"), which the loose window
+  // incorrectly blocked too (Codex review finding).
+  // "time to work on" also excludes a preceding declarative "need/scheduled/
+  // planned/want (more/some) time" -- "I need more time to work on the
+  // report"/"I scheduled time to work on the report tomorrow" state a future
+  // need, not a request to start now, and the interrogative/modal guards
+  // above don't cover declarative statements (Codex review finding). Scoped
+  // to "time to work on" only, not "dive into"/"jump into" -- "I need to
+  // dive into the report" still reads as a genuine now-request.
+  START_FOCUS: new RegExp(`\\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\\b|(?<!\\b(?:what|which|how|why|is|when|where|do|have)\\b.{0,20})(?<!\\b(?:would|could|should|can)\\s+i\\s+)(?:dive into|jump into)|(?<!\\b(?:what|which|how|why|is|when|where|do|have)\\b.{0,20})(?<!\\b(?:would|could|should|can)\\s+i\\s+)(?<!\\b(?:need(?:s|ed)?|schedul(?:e|ed)|plan(?:s|ned)?|want(?:s|ed)?)\\s+(?:more\\s+|some\\s+|a\\s+little\\s+)?)time to work on|${BODY_DOUBLE_REF_RE.source}`, "i"),
   // don['’]?t (not don'?t) so a curly/smart apostrophe (common on mobile
   // keyboards) still matches — coachContextMode.js's EXPLICIT_ACTION_RE
-  // already accepts both forms for this same phrase.
-  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don['’]?t forget|add .+ to (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b)/i,
-  // "skip" excludes a directly preceding first-person modal ("can/could/
-  // should/would/do I") — coachContextMode.js's NEGATION_PRIORITY_RE now
-  // routes advice questions like "what can I skip today?" to full_task, and
-  // without this guard a bare "skip" here would let the gate treat the
-  // model's answer (which names the task being asked about) as authorizing
-  // an actual PARK_TASK mutation the user never requested (Codex review
-  // finding). Scoped to "<modal> I" specifically (not a blanket "can"/
-  // "could" lookbehind) so a polite imperative addressed to the coach —
-  // "can you skip the report for now?" — still authorizes the mutation
-  // (Codex review finding).
-  // Tolerates a small filler word between the modal+I and "skip" ("can I
-  // just skip...", "should I maybe skip...") — the previous round only
-  // excluded an immediately-adjacent "<modal> i skip" (Codex review finding).
-  // Also excludes "am I free to skip" and "not going to hurt if I skip it" —
-  // coachContextMode.js's NEGATION_PRIORITY_RE routes both advice questions
-  // to full_task too, and neither fits the "<modal> I" shape above (Codex
-  // review finding).
-  PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|(?<!\b(?:(?:can|could|would|should|do)\s+i|am\s+i\s+free\s+to|not\s+going\s+to\s+hurt\s+if\s+i)\s+(?:just|maybe|really|actually|honestly)?\s*)skip)\b/i,
+  // already accepts both forms for this same phrase. "jot/note down" and
+  // "need to remember to" mirror the same file's synonyms — live-testing
+  // round 3. "jot/note down" exclude a preceding "already"/status-question
+  // word within a short lookbehind window — without it, "I already jotted
+  // down call the plumber" or "where did I note down call the plumber?"
+  // (already-done statements/questions, not requests) could let the gate
+  // treat the model's answer as authorizing an actual add the user never
+  // requested (Codex review finding). Also excludes permission/advice
+  // framings ("should I jot down...", "can I note down...", "do I need to
+  // jot down...", "would it help to note down...") — these are advice
+  // questions, not requests (Codex review finding). Also excludes an
+  // immediately preceding first-person "I" — "I jotted down call the
+  // plumber"/"I noted down call the plumber" (no modal/question at all) is
+  // the user reporting they captured it elsewhere already, not asking the
+  // coach to add it — only the imperative form (no subject, or "can/could
+  // you") authorizes (Codex review finding). "need to remember" excludes
+  // "do I"/"should I" immediately before it for the same permission-question
+  // reason ("do I need to remember to call the plumber?") (Codex review
+  // finding).
+  // The "where/when/did/have/has/already" status-question window was
+  // widened from 15 to 40 chars -- "where is a good place to jot down call
+  // the plumber?" put more than 15 chars between "where" and the verb,
+  // slipping past the guard (Codex review finding). "jot/note ... down" now
+  // also accepts a separated pronoun object ("jot this down: call the
+  // plumber") -- the previous adjacent-only "jot down"/"note down" match
+  // never recognized this equally common separable phrasing at all, so it
+  // never even reached this gate (Codex review finding; mirrored in
+  // coachContextMode.js's EXPLICIT_ACTION_RE so the message reaches
+  // full_task in the first place).
+  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don['’]?t forget|add .+ to (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|(?<!\b(?:where|when|did|have|has|already)\b.{0,40})(?<!\b(?:should|can|could)\s+i\s+|do\s+i\s+need\s+to\s+|would\s+it\s+help\s+to\s+|is\s+it\s+worth\s+)(?<!\bi\s+)(?:jot(?:ted)?(?:\s+(?:this|that|it|these|those))?\s+down|note(?:d)?(?:\s+(?:this|that|it|these|those))?\s+down)|(?<!\b(?:do|should)\s+i\s+)need to remember (?:to|that))/i,
+  // "postpone"/"put off" mirror coachContextMode.js's EXPLICIT_ACTION_RE
+  // synonyms — see live-testing round 3. All three share the same
+  // advice-question exclusion PR #340 refined for "skip" alone (modal+I with
+  // an optional filler word, "am I free to", "not going to hurt if I") —
+  // without it, a bare verb here would let the gate treat the model's
+  // answer to "what can I postpone today?"/"what can I put off?" as
+  // authorizing an actual park mutation the user never requested. Also
+  // excludes the subject-first "I <modal> <verb>" order ("I should
+  // postpone...") and the hypothetical "if I <verb>" framing ("what would
+  // happen if I put off...") — the original guard only covered the
+  // interrogative-inversion "<modal> I <verb>" order (Codex review finding).
+  // Also excludes impersonal advice framings ("is it okay to...", "would it
+  // be bad to...", "does it make sense to...", "what happens when I...",
+  // "when is it okay to...") — these don't have a first-person "I <verb>"
+  // shape at all, so the modal+I guards above never matched them (Codex
+  // review finding). "shelve" now shares the same advice-question guard as
+  // skip/postpone/put off — it was previously in the unguarded group, so
+  // "can I shelve the report?"/"is it okay to shelve the report?" could
+  // still authorize a park mutation (Codex review finding). "put off" also
+  // excludes a following "by" — "I'm put off by the report" means annoyed/
+  // discouraged, not a request to defer it (Codex review finding).
+  // The filler-word list now also accepts "afford (the time) to" -- "can I
+  // afford to postpone/put off/shelve the report?" slipped past the guard
+  // because "afford to" sat between the modal+I opener and the verb, longer
+  // than the single-filler-word gap the guard previously allowed (Codex
+  // review finding). "put off" now also accepts a separated object ("put
+  // the report off until tomorrow") -- the previous adjacent-only "put off"
+  // never recognized this equally common separable phrasing at all, so it
+  // never even reached this gate (Codex review finding; mirrored in
+  // coachContextMode.js's EXPLICIT_ACTION_RE so the message reaches
+  // full_task in the first place).
+  PARK_TASK: /\b(park|defer|set aside|save .* for later|not (today|now|right now)|(?<!\b(?:(?:can|could|would|should|do)\s+i|i\s+(?:can|could|would|should)|if\s+i|am\s+i\s+free\s+to|not\s+going\s+to\s+hurt\s+if\s+i|what\s+happens\s+(?:if|when)\s+i|is\s+it\s+(?:okay|ok|fine|wise|smart|sensible|reasonable|worth\s+it|a\s+good\s+idea|bad|risky)\s+to|would\s+it\s+be\s+(?:okay|ok|fine|wise|smart|sensible|reasonable|bad|risky|better|worse)\s+to|does\s+it\s+make\s+sense\s+to|when\s+(?:is\s+it|should\s+it\s+be|would\s+it\s+be)\s+(?:okay|ok|fine|wise|smart)\s+to)\s+(?:just|maybe|really|actually|honestly|afford(?:\s+the\s+time)?\s+to)?\s*)(?:skip|postpone|put(?:\s+.{1,40})?\s+off(?!\s+by\b)|shelve))\b/i,
 };
 
 // Catches negated phrasing ("I'm not done", "don't park it") immediately

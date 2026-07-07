@@ -342,6 +342,212 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("SET_NOW_FOCUS", "set my focus to the report", "the report")).toBe(true);
   });
 
+  // Found via live-testing round 3: mirrors the synonym verbs added to
+  // coachContextMode.js's EXPLICIT_ACTION_RE — a message needs to pass both
+  // that classification check (to reach full_task) and this intent gate (for
+  // the resulting tag to actually be applied), so both files needed the
+  // same synonyms or a real user's phrasing could still end up silently
+  // blocked after successfully reaching full_task.
+  it("matches additional completion/add/park/focus action-verb synonyms (live-testing round 3)", () => {
+    expect(matchesUserIntent("COMPLETE_TASK", "I wrapped up the report", "the report")).toBe(true);
+    expect(matchesUserIntent("COMPLETE_TASK", "I knocked out the report", "the report")).toBe(true);
+    expect(matchesUserIntent("COMPLETE_TASK", "I crossed the report off my list", "the report")).toBe(true);
+    expect(matchesUserIntent("ADD_TASK", "jot down call the plumber")).toBe(true);
+    expect(matchesUserIntent("ADD_TASK", "note down call the plumber")).toBe(true);
+    expect(matchesUserIntent("ADD_TASK", "I need to remember to call the plumber")).toBe(true);
+    expect(matchesUserIntent("PARK_TASK", "put off the report", "the report")).toBe(true);
+    expect(matchesUserIntent("PARK_TASK", "postpone the report", "the report")).toBe(true);
+    expect(matchesUserIntent("START_FOCUS", "let's dive into the report", "the report")).toBe(true);
+    expect(matchesUserIntent("START_FOCUS", "time to work on the report", "the report")).toBe(true);
+  });
+
+  it("does not treat 'what can I put off/postpone' advice questions as PARK_TASK requests (mirrors PR #340's 'skip' fix)", () => {
+    // Once combined with coachContextMode.js's NEGATION_PRIORITY_RE (which
+    // routes "what can I put off?" advice questions to full_task), a bare
+    // "put off"/"postpone" here would have the same false-authorization risk
+    // Codex found for "skip" on PR #340 — fixed proactively with the same
+    // question-word lookbehind guard.
+    expect(matchesUserIntent("PARK_TASK", "what can i put off?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "should i postpone the report?", "the report")).toBe(false);
+    // Genuine imperative phrasing still works.
+    expect(matchesUserIntent("PARK_TASK", "put off the report", "the report")).toBe(true);
+    expect(matchesUserIntent("PARK_TASK", "postpone the report", "the report")).toBe(true);
+  });
+
+  it("shares PR #340's fully-refined skip-advice guard (filler words, 'am I free to', 'not going to hurt') with 'postpone'/'put off' (merge reconciliation)", () => {
+    // Reconciles a latent inconsistency: this branch previously used its own
+    // narrower question-word lookbehind while #340 iterated its "skip" guard
+    // through several more rounds (filler-word tolerance, "am I free to",
+    // "not going to hurt if I") — merging #340 and #342 together is the
+    // point where "postpone"/"put off" now share the exact same refined
+    // guard as "skip" instead of drifting further apart.
+    expect(matchesUserIntent("PARK_TASK", "can I just postpone the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "what am I free to put off, the report?", "the report")).toBe(false);
+    // Genuine imperative phrasing still works.
+    expect(matchesUserIntent("PARK_TASK", "can you postpone the report for now?", "the report")).toBe(true);
+  });
+
+  it("blocks subject-first and hypothetical postpone/put-off advice framings (Codex review finding, PR #342 round 1)", () => {
+    // The original guard only covered interrogative-inversion order
+    // ("<modal> I <verb>", e.g. "should I postpone?"). Subject-first order
+    // ("I should postpone...") and hypothetical framing ("if I put off...")
+    // slipped through.
+    expect(matchesUserIntent("PARK_TASK", "do you think I should postpone the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "what would happen if I put off the report?", "the report")).toBe(false);
+    // Genuine imperative phrasing still works.
+    expect(matchesUserIntent("PARK_TASK", "postpone the report", "the report")).toBe(true);
+  });
+
+  it("blocks a 'crossed off' status question from completing a task (Codex review finding, PR #342 round 1)", () => {
+    expect(matchesUserIntent("COMPLETE_TASK", "have I crossed the report off my list?", "the report")).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "did I cross the report off my list?", "the report")).toBe(false);
+    // The genuine statement still works.
+    expect(matchesUserIntent("COMPLETE_TASK", "I crossed the report off my list", "the report")).toBe(true);
+  });
+
+  it("blocks past-tense/status-question 'jot down'/'note down' phrasing from adding a task (Codex review finding, PR #342 round 1)", () => {
+    expect(matchesUserIntent("ADD_TASK", "I already jotted down call the plumber", "call the plumber")).toBe(false);
+    expect(matchesUserIntent("ADD_TASK", "where did I note down call the plumber?", "call the plumber")).toBe(false);
+    // The genuine imperative phrasing still works.
+    expect(matchesUserIntent("ADD_TASK", "jot down call the plumber", "call the plumber")).toBe(true);
+  });
+
+  it("blocks a dive-into advice question from starting a focus session (Codex review finding, PR #342 round 1)", () => {
+    expect(matchesUserIntent("START_FOCUS", "what should I dive into for work, Write report?", "Write report")).toBe(false);
+    // The genuine imperative phrasing still works.
+    expect(matchesUserIntent("START_FOCUS", "let's dive into Write report now", "Write report")).toBe(true);
+  });
+
+  it("blocks impersonal advice framings ('is it okay to...', 'what happens when I...') from parking a task (Codex review finding, PR #342 round 2)", () => {
+    // These don't have a first-person "I <verb>" shape at all, so the
+    // modal+I guards from round 1 never matched them.
+    expect(matchesUserIntent("PARK_TASK", "what happens when I postpone the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "is it okay to postpone the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "would it be bad to put off the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "does it make sense to postpone the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "when is it okay to put off the report?", "the report")).toBe(false);
+    // Genuine imperative phrasing still works.
+    expect(matchesUserIntent("PARK_TASK", "postpone the report", "the report")).toBe(true);
+  });
+
+  it("blocks permission/advice questions from adding a task via jot/note down (Codex review finding, PR #342 round 2)", () => {
+    expect(matchesUserIntent("ADD_TASK", "should I jot down call the plumber?", "call the plumber")).toBe(false);
+    expect(matchesUserIntent("ADD_TASK", "can I note down call the plumber somewhere?", "call the plumber")).toBe(false);
+    expect(matchesUserIntent("ADD_TASK", "do I need to jot down call the plumber?", "call the plumber")).toBe(false);
+    expect(matchesUserIntent("ADD_TASK", "would it help to note down call the plumber?", "call the plumber")).toBe(false);
+    // Genuine imperative phrasing still works.
+    expect(matchesUserIntent("ADD_TASK", "jot down call the plumber", "call the plumber")).toBe(true);
+    // A polite imperative addressed to the coach still works too.
+    expect(matchesUserIntent("ADD_TASK", "can you jot down call the plumber?", "call the plumber")).toBe(true);
+  });
+
+  it("blocks more question framings ('can I dive into...', 'is now a good time to...') from starting a focus session (Codex review finding, PR #342 round 2)", () => {
+    expect(matchesUserIntent("START_FOCUS", "can I dive into the report tomorrow?", "the report")).toBe(false);
+    expect(matchesUserIntent("START_FOCUS", "is now a good time to work on the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("START_FOCUS", "when is it time to work on the report?", "the report")).toBe(false);
+    // Genuine imperative phrasing still works.
+    expect(matchesUserIntent("START_FOCUS", "let's dive into the report now", "the report")).toBe(true);
+  });
+
+  it("blocks status questions from completing a task via wrapped-up/knocked-out (Codex review finding, PR #342 round 2)", () => {
+    expect(matchesUserIntent("COMPLETE_TASK", "have I wrapped up the report already?", "the report")).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "was the report knocked out yesterday?", "the report")).toBe(false);
+    // Genuine statements still work.
+    expect(matchesUserIntent("COMPLETE_TASK", "I wrapped up the report", "the report")).toBe(true);
+    expect(matchesUserIntent("COMPLETE_TASK", "I knocked out the report", "the report")).toBe(true);
+  });
+
+  it("blocks a 'do I need to remember' advice question from adding a task (Codex review finding, PR #342 round 3)", () => {
+    expect(matchesUserIntent("ADD_TASK", "do I need to remember to call the plumber?", "call the plumber")).toBe(false);
+    // Genuine statement/request still works.
+    expect(matchesUserIntent("ADD_TASK", "need to remember to call the plumber", "call the plumber")).toBe(true);
+  });
+
+  it("blocks a 'do I have time' availability question from starting a focus session (Codex review finding, PR #342 round 3)", () => {
+    expect(matchesUserIntent("START_FOCUS", "do I have time to work on the report?", "the report")).toBe(false);
+  });
+
+  it("guards 'shelve' the same as skip/postpone/put off against advice questions (Codex review finding, PR #342 round 3)", () => {
+    // "shelve" was previously in the unguarded group.
+    expect(matchesUserIntent("PARK_TASK", "can I shelve the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "is it okay to shelve the report?", "the report")).toBe(false);
+    // Genuine imperative phrasing still works.
+    expect(matchesUserIntent("PARK_TASK", "shelve the report", "the report")).toBe(true);
+    expect(matchesUserIntent("PARK_TASK", "can you shelve the report for now?", "the report")).toBe(true);
+  });
+
+  it("excludes passive/idiomatic wrapped-up-in/knocked-out-by/crossed-my-mind/put-off-by phrases (Codex review finding, PR #342 round 3)", () => {
+    // These idioms mean busy/exhausted/an idea occurring/feeling discouraged
+    // — not a task completion or park request.
+    expect(matchesUserIntent("COMPLETE_TASK", "I'm wrapped up in the report", "the report")).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "I'm knocked out by the report", "the report")).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "it crossed my mind to take Friday off", "Friday")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "I'm put off by the report", "the report")).toBe(false);
+  });
+
+  it("blocks unqualified past-tense 'I jotted/noted down' statements from adding a task (Codex review finding, PR #342 round 3)", () => {
+    // The user is reporting they captured it elsewhere already, not asking
+    // the coach to add it.
+    expect(matchesUserIntent("ADD_TASK", "I jotted down call the plumber", "call the plumber")).toBe(false);
+    expect(matchesUserIntent("ADD_TASK", "I noted down call the plumber", "call the plumber")).toBe(false);
+    // The imperative form (no subject, or addressed to the coach) still works.
+    expect(matchesUserIntent("ADD_TASK", "jot down call the plumber", "call the plumber")).toBe(true);
+    expect(matchesUserIntent("ADD_TASK", "can you jot down call the plumber?", "call the plumber")).toBe(true);
+  });
+
+  it("preserves 'could/would you' polite requests for the new verb synonyms (Codex review finding, PR #342 round 3)", () => {
+    // The loose question-word window previously blocked "could you"/"would
+    // you" the same as "could I"/"would I" — these words also form a polite
+    // command when followed by "you", so the guard needs immediate "I"
+    // adjacency instead of a loose window.
+    expect(matchesUserIntent("START_FOCUS", "could you dive into the report?", "the report")).toBe(true);
+    expect(matchesUserIntent("PARK_TASK", "could you postpone the report?", "the report")).toBe(true);
+  });
+
+  it("blocks 'can I afford to' advice questions from parking a task (Codex review finding, PR #342 round 4)", () => {
+    // "afford to" sat between the modal+I opener and the verb, longer than
+    // the single-filler-word gap the guard previously allowed.
+    expect(matchesUserIntent("PARK_TASK", "can I afford to postpone the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "can I afford to put off the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "can I afford to shelve the report?", "the report")).toBe(false);
+    // Legitimate imperatives without "afford to" still work.
+    expect(matchesUserIntent("PARK_TASK", "postpone the report", "the report")).toBe(true);
+  });
+
+  it("blocks embedded 'if/whether I' status checks from completing a task (Codex review finding, PR #342 round 4)", () => {
+    // The have/has/did/was/were guard alone didn't catch these — the actual
+    // status-question verb ("tell me", "check") sits outside that word list.
+    expect(matchesUserIntent("COMPLETE_TASK", "can you tell me if I wrapped up the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "can you check whether I crossed the report off my list?", "the report")).toBe(false);
+    // Legitimate imperatives still work.
+    expect(matchesUserIntent("COMPLETE_TASK", "I wrapped up the report", "the report")).toBe(true);
+  });
+
+  it("blocks declarative 'need/scheduled more time' statements from starting a focus session (Codex review finding, PR #342 round 4)", () => {
+    // These state a future need, not a request to start now, and the
+    // interrogative/modal guards alone don't cover declarative statements.
+    expect(matchesUserIntent("START_FOCUS", "I need more time to work on the report", "the report")).toBe(false);
+    expect(matchesUserIntent("START_FOCUS", "I scheduled time to work on the report tomorrow", "the report")).toBe(false);
+    // Bare imperative "time to work on" still works.
+    expect(matchesUserIntent("START_FOCUS", "time to work on the report", "the report")).toBe(true);
+  });
+
+  it("blocks 'where is a good place to jot down' advice questions from adding a task (Codex review finding, PR #342 round 4)", () => {
+    // The where/when/did/have/has/already guard window was too narrow (15
+    // chars) to reach across "is a good place to".
+    expect(matchesUserIntent("ADD_TASK", "where is a good place to jot down call the plumber?", "call the plumber")).toBe(false);
+  });
+
+  it("recognizes separated 'jot/note ... down' and 'put ... off' object forms (Codex review finding, PR #342 round 4)", () => {
+    // The previous adjacent-only "jot down"/"note down"/"put off" never
+    // recognized this equally common separable phrasing at all.
+    expect(matchesUserIntent("ADD_TASK", "jot this down: call the plumber", "call the plumber")).toBe(true);
+    expect(matchesUserIntent("ADD_TASK", "note this down: call the plumber", "call the plumber")).toBe(true);
+    expect(matchesUserIntent("PARK_TASK", "put the report off until tomorrow", "the report")).toBe(true);
+    // Still blocked from advice questions in the separated form too.
+    expect(matchesUserIntent("PARK_TASK", "is it okay to put the report off?", "the report")).toBe(false);
+  });
+
   it("normalizes shorthand before intent matching, same as coachContextMode's classifier (Codex review finding)", () => {
     // "remind me 2 call the plumber" reaches full_task via coachContextMode's
     // normalizer, but without the same normalization here, this gate would

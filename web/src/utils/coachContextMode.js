@@ -140,7 +140,46 @@ const FRESH_SCAN_RE = /\b(scan (everything|all|my list|all my tasks|my whole lis
 
 const COMPACT_FOLLOWUP_RE = /\b(key point|one sentence|10[-\s]?min(?:ute)?s?\s*version|make it smaller|shorter|how do i start|make this easier|concrete steps|turn (?:that|this|it) into .{0,30}steps|what should i do next|set that|do next|tell me more|what did you mean|how do i do that|which one|why\??|explain that|elaborate|clarify)\b/i;
 
-const EXPLICIT_ACTION_RE = /\b(add (?:this|that)?\s*task|add\b.{1,50}\bto (?:my |the )?(?:today['’]?s?\s+)?list|add\b.{1,50}\bto (?:today|week|month|quarter|work)|create (?:a )?task|capture this|put (?:this|it) in (?:my|the)?\s*tasks|mark\b.*\bdone|mark (?:it|this)? done|done with (?:this|that|it)?\s*task|done with .{1,50}\btask|(?:done with|finished)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|complete this|delete (?:this|that) task|park (?:this|that|it|task)\b|park\s+.{1,50}\btask|defer (?:this|that|it|task)\b|defer\s+.{1,50}\btask|(?:park|defer)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|move (?:this|it) to|start (?:a )?timer|start (?:a\s+|current\s+|now\s+)?focus|focus session|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})(?:switch|set|swap)\s+(?:my\s+|the\s+)?focus\s+(?:to|on)|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})make\s+.{1,40}\s+my focus\b|remind me (?:to|that|i)\b|don['’]?t forget\b)\b/i;
+// "want to focus on"/"dive into"/"jump into"/"time to work on" exclude a
+// preceding question word, mirroring the "switch/set/swap focus" guard
+// above — without it, "what should I dive into in Madrid?" (an unrelated
+// travel question sharing TASK_ASK_RE's already-bounded "dive into" verb)
+// unconditionally matched here and skipped TASK_ASK_RE's lookahead entirely,
+// a regression introduced when merging #340's TASK_ASK_RE bounding work with
+// #342's unconstrained EXPLICIT_ACTION_RE synonym additions.
+// "i'm done <gerund>" excludes a small denylist of non-task gerunds
+// (stressing/thinking/worrying/talking/dealing/freaking/panicking/arguing/
+// waiting/pretending/obsessing/avoiding about something) — without it, "I'm
+// done stressing about the report" or "I'm done thinking about the report"
+// routed to full_task and removed the previous barrier that kept such
+// emotional/reflective phrasing away from coachActions.js's COMPLETE_TASK
+// gate, which could then accept a hallucinated completion tag for "report"
+// (Codex review finding). Not exhaustive — a known, accepted residual gap
+// for gerunds outside this list.
+// "wrapped up"/"knocked out"/"jot/note down"/"put off"/"postpone"/"shelve"
+// share the same question-word lookbehind guard as "dive into" above —
+// without it, "what does postpone mean?", "how do I jot down notes
+// better?", and "why do people put off chores?" routed to full_task for
+// ordinary definition/how-to/general-knowledge questions, exposing the
+// user's full task snapshot and action instructions unnecessarily even
+// though coachActions.js's gate would still block any resulting mutation
+// (Codex review finding). The "would/could/should" part of the guard
+// requires immediate "I" adjacency rather than a loose window — those
+// words also form a polite command when followed by "you" ("could you jot
+// down call the plumber?"), which the original loose window incorrectly
+// blocked from ever reaching full_task at all (Codex review finding).
+// "wrapped up"/"knocked out"/"put off" also exclude their passive/idiomatic
+// forms ("wrapped up IN", "knocked out BY", "put off BY"), and "crossed
+// off" excludes "crossed my mind" — none of these mean what the synonym
+// list intends (Codex review finding).
+// "jot/note ... down" and "put ... off" now also accept a separated object
+// ("jot this down: call the plumber", "put the report off until tomorrow")
+// — the previous adjacent-only "jot down"/"note down"/"put off" never
+// recognized this equally common separable phrasing, so the message stayed
+// at "light" and never reached the COACH ACTIONS instructions at all
+// (Codex review finding; mirrored in coachActions.js's ADD_TASK/PARK_TASK
+// gate so the resulting tag is also recognized once it gets there).
+const EXPLICIT_ACTION_RE = /\b(add (?:this|that)?\s*task|add\b.{1,50}\bto (?:my |the )?(?:today['’]?s?\s+)?list|add\b.{1,50}\bto (?:today|week|month|quarter|work)|create (?:a )?task|capture this|put (?:this|it) in (?:my|the)?\s*tasks|mark\b.*\bdone|mark (?:it|this)? done|done with (?:this|that|it)?\s*task|done with .{1,50}\btask|(?:done with|finished)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|complete this|delete (?:this|that) task|park (?:this|that|it|task)\b|park\s+.{1,50}\btask|defer (?:this|that|it|task)\b|defer\s+.{1,50}\btask|(?:park|defer)\s+(?!life\b|everything\b)[a-z0-9\s'’\"_-]{2,50}|move (?:this|it) to|start (?:a )?timer|start (?:a\s+|current\s+|now\s+)?focus|focus session|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})(?:switch|set|swap)\s+(?:my\s+|the\s+)?focus\s+(?:to|on)|(?<!\b(?:what|how|why|would|could|should)\b.{0,20})make\s+.{1,40}\s+my focus\b|remind me (?:to|that|i)\b|don['’]?t forget\b|(?<!\b(?:what|which|how|why)\b.{0,20})(?<!\b(?:would|could|should)\s+i\s+)wrapped? up(?!\s+in\b)|(?<!\b(?:what|which|how|why)\b.{0,20})(?<!\b(?:would|could|should)\s+i\s+)knocked out(?!\s+by\b)|crossed(?!\s+my\s+mind\b)\s+.{1,50}\boff\b|(?<!\b(?:what|which|how|why)\b.{0,20})(?<!\b(?:would|could|should)\s+i\s+)jot(?:ted)?(?:\s+(?:this|that|it|these|those))?\s+down|(?<!\b(?:what|which|how|why)\b.{0,20})(?<!\b(?:would|could|should)\s+i\s+)note(?:d)?(?:\s+(?:this|that|it|these|those))?\s+down|(?<!\b(?:do|should)\s+i\s+)need to remember (?:to|that)|(?<!\b(?:what|which|how|why|is|when|where|do|have)\b.{0,20})(?<!\b(?:would|could|should)\s+i\s+)(?:want to focus on|dive into|jump into|time to work on)|(?<!\b(?:what|which|how|why)\b.{0,20})(?<!\b(?:would|could|should)\s+i\s+)put(?:\s+.{1,40})?\s+off(?!\s+by\b)|(?<!\b(?:what|which|how|why)\b.{0,20})(?<!\b(?:would|could|should)\s+i\s+)postpone|(?<!\b(?:what|which|how|why)\b.{0,20})(?<!\b(?:would|could|should)\s+i\s+)shelve|i(?:['’]m| am) done (?!stressing|thinking|worrying|talking|dealing|freaking|panicking|arguing|waiting|pretending|obsessing|avoiding)\w+ing\b)\b/i;
 
 // Body-double session requests ("be my body double", "sit with me while I
 // work", "stay with me") read as task/focus requests even when they don't
