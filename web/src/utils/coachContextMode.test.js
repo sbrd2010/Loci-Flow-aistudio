@@ -1180,4 +1180,34 @@ describe("detectRequestedCategories", () => {
     expect(classifyContextMode("which work items can I ignore?")).toBe("full_task");
     expect(classifyContextMode("which work items can I put off?")).toBe("full_task");
   });
+
+  it("accepts 'now'/'right now' endings and 'should I skip/ignore' for generic nouns (Codex review finding, PR #344 round 4)", () => {
+    expect(classifyContextMode("which work items should I do right now?")).toBe("full_task");
+    expect(classifyContextMode("which work items can I skip now?")).toBe("full_task");
+    expect(classifyContextMode("which work items should I skip?")).toBe("full_task");
+    expect(classifyContextMode("which work items should I ignore?")).toBe("full_task");
+  });
+
+  it("accepts 'now'/'for now' endings for the bother-with ask (Codex review finding, PR #344 round 4)", () => {
+    expect(classifyContextMode("what should I not bother with now?")).toBe("full_task");
+    expect(classifyContextMode("what shouldn't I bother with for now?")).toBe("full_task");
+  });
+
+  it("detects categories for the new negative-priority synonyms and pre-existing skip/put-off (Codex review finding, PR #344 round 4)", () => {
+    // "bother with" and "anything...can I skip" are new this round; plain
+    // "skip"/"put off" for "for <category>" was a pre-existing gap from
+    // #340 that shares the same underlying fix.
+    expect(detectRequestedCategories("what should I not bother with for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("anything I can skip for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what can I skip for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what can i put off for work?")).toEqual(["Work"]);
+  });
+
+  it("detects categories for generic-noun 'on my list' asks with 'is/are' in between (Codex review finding, PR #344 round 4)", () => {
+    // "what job items are on my list?" has "are" between the noun and the
+    // continuation phrase, unlike the unguarded "task(s)" form which has no
+    // such requirement at all.
+    expect(detectRequestedCategories("what job items are on my list?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what job tasks are on my list?")).toEqual(["Work"]);
+  });
 });
