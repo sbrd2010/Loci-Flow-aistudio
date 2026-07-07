@@ -413,6 +413,17 @@ describe("buildLociCategoryFilterContext", () => {
     expect(bothMissing).toContain("{Work}");
     expect(bothMissing).toContain("{Health}");
   });
+
+  it("treats a task under the WORK horizon as satisfying a Work category ask, even if its own tag differs (Codex review finding)", () => {
+    // The office horizon prints as "WORK (...)" in the prompt (HORIZON_LABELS.office),
+    // so a task there reads as a work priority to the model regardless of its
+    // {Category} tag — a false CATEGORY NOTE here would contradict what the
+    // model can plainly see.
+    const tasks = [{ title: "Ship report", category: "Personal", horizonLevel: "office" }];
+    expect(buildLociCategoryFilterContext(tasks, ["Work"])).toBe("");
+    // The horizon match is specific to Work — an unrelated category is still flagged.
+    expect(buildLociCategoryFilterContext(tasks, ["Career"])).toContain("{Career}");
+  });
 });
 
 describe("buildLociRecentlyParkedContext", () => {

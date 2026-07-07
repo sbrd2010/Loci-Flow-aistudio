@@ -339,8 +339,16 @@ export function buildLociCategoryFilterContext(tasks = [], requestedCategories =
   // the canonical Title Case labels detectRequestedCategories returns (e.g.
   // an older/imported task could carry "work" instead of "Work") — an exact
   // === comparison would falsely report a visible task's category as missing.
+  // "Work" is ambiguous with the WORK horizon label (HORIZON_LABELS.office) —
+  // a task the model sees printed under "WORK (...)" reads as a work priority
+  // even when its own {Category} tag is something else (e.g. the default
+  // Personal), so that horizon match also counts as visible.
   const missing = requestedCategories.filter(
-    cat => !visible.some(t => (t.category || "Personal").toLowerCase() === cat.toLowerCase())
+    cat => !visible.some(t => {
+      if ((t.category || "Personal").toLowerCase() === cat.toLowerCase()) return true;
+      const horizonLabel = HORIZON_LABELS[t.horizonLevel];
+      return !!horizonLabel && horizonLabel.toLowerCase() === cat.toLowerCase();
+    })
   );
   if (missing.length === 0) return "";
   const missingLabel = missing.map(c => `{${c}}`).join(" or ");

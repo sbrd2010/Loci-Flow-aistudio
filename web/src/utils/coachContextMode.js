@@ -119,7 +119,7 @@ const CATEGORY_LABELS = { career: "Career", work: "Work", health: "Health", pers
 // isn't reliable enough on its own; see issue #338.
 // These three shapes only ever name a single category.
 const SINGLE_CATEGORY_PATTERNS = [
-  /\bwhich\s+(career|work|health|personal)\s+task\b/i,
+  /\bwhich\s+(?:of\s+my\s+)?(career|work|health|personal)\s+tasks?\b/i,
   /\b(career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b/i,
   /\b(?:focus on|priorit\w*)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(career|work|health|personal)\b/i,
 ];
@@ -134,7 +134,12 @@ const SINGLE_CATEGORY_PATTERNS = [
 // a sane length so it can't run across an unrelated later "priorities" in a
 // long message) and scan it for every category word inside.
 const CATEGORY_PRIORITY_CLAUSE_RE = /(?:what are|tell me|show me|check|what about)\s+my\s+([a-z0-9\s&/,'’]{1,60}?)\s*priorit(?:y|ies)\b/i;
-const CATEGORY_WORD_RE = /career|work|health|personal/gi;
+const CATEGORY_WORD_RE = /\b(?:career|work|health|personal)\b/gi;
+// A possessive like "boss's" or "manager's" inside the captured clause means
+// the "my" in "my boss's work priorities" scopes to the boss, not the user —
+// these are someone else's priorities, not a category the user is asking
+// about for themselves.
+const THIRD_PARTY_POSSESSIVE_RE = /\w['’]s\b/;
 
 // Returns every category (Career/Work/Health/Personal) a message named, in
 // the order first mentioned, deduped — or [] if none. Used to build a
@@ -150,7 +155,7 @@ export function detectRequestedCategories(message) {
     if (match) return [CATEGORY_LABELS[match[1].toLowerCase()]];
   }
   const clauseMatch = text.match(CATEGORY_PRIORITY_CLAUSE_RE);
-  if (clauseMatch) {
+  if (clauseMatch && !THIRD_PARTY_POSSESSIVE_RE.test(clauseMatch[1])) {
     const words = clauseMatch[1].match(CATEGORY_WORD_RE) || [];
     const labels = [...new Set(words.map(w => CATEGORY_LABELS[w.toLowerCase()]))];
     if (labels.length > 0) return labels;

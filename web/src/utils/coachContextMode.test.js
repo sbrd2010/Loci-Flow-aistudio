@@ -547,4 +547,19 @@ describe("detectRequestedCategories", () => {
     expect(detectRequestedCategories("What are my 2 work priorities?")).toEqual(["Work"]);
     expect(detectRequestedCategories("What are my six work priorities?")).toEqual(["Work"]);
   });
+
+  it("detects plural 'which (of my) X tasks' phrasing (Codex review finding)", () => {
+    expect(detectRequestedCategories("Which work tasks should I start?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("Which of my work tasks should I do first?")).toEqual(["Work"]);
+  });
+
+  it("requires a whole-word category match, not a substring (Codex review finding)", () => {
+    expect(detectRequestedCategories("What are my paperwork priorities and tasks?")).toEqual([]);
+    expect(detectRequestedCategories("What are my homework priorities?")).toEqual([]);
+  });
+
+  it("ignores third-party priority clauses like \"my boss's work priorities\" (Codex review finding)", () => {
+    expect(detectRequestedCategories("What are my boss's work priorities and tasks?")).toEqual([]);
+    expect(detectRequestedCategories("What are my manager's career priorities?")).toEqual([]);
+  });
 });
