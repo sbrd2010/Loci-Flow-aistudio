@@ -1128,4 +1128,14 @@ describe("detectRequestedCategories", () => {
     expect(detectRequestedCategories("what job stuff do I have today?")).toEqual(["Work"]);
     expect(detectRequestedCategories("what home things do I need to handle?")).toEqual(["Personal"]);
   });
+
+  it("doesn't route general-knowledge '<category> stuff/things/items' questions to full_task (Codex review finding, PR #344)", () => {
+    // Unlike "task(s)" (inherently task-related), the generic nouns only
+    // count as a task-list ask when followed by a task-list continuation
+    // or the clause ends there — not when the sentence keeps going into an
+    // unrelated general-knowledge question that happens to share the noun.
+    expect(classifyContextMode("what health things should I know about pregnancy?")).not.toBe("full_task");
+    expect(classifyContextMode("what work items can I deduct on taxes?")).not.toBe("full_task");
+    expect(classifyContextMode("tell me my health things I should know about pregnancy")).not.toBe("full_task");
+  });
 });

@@ -308,7 +308,14 @@ const LOW_ENERGY_RE = /\b(low energy|no energy|low on energy|out of energy|exhau
 // "to-dos" are equally natural ways to ask the same question, and without
 // accepting them the message never reaches full_task at all (live-testing
 // round 4), unlike "what job tasks do I have?" which already worked.
-const CATEGORY_TRAILING_NOUN_RE = "(?:tasks?|stuff|things|items|to-?dos?)";
+// Unlike "task(s)" (inherently task-related on its own), the generic nouns
+// only count as a task-list ask when followed by an explicit task-list
+// continuation or the clause ends there — otherwise "what health things
+// should I know about pregnancy?"/"what work items can I deduct on taxes?"
+// (general-knowledge questions that happen to share the same noun) would
+// also match and wrongly expose the task snapshot (Codex review finding).
+const CATEGORY_TRAILING_NOUN_RE =
+  "(?:tasks?|(?:stuff|things|items|to-?dos?)(?=\\s*(?:today)?\\s*(?:[.?!]|$)|\\s+(?:do i have|do i need|to handle|to do|on my list|for today)\\b))";
 const PRIORITY_FILTER_RE = new RegExp(
   `\\bwhich\\s+(?:of\\s+my\\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\\s+${CATEGORY_TRAILING_NOUN_RE}\\b|` +
   `\\b(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\\s+(?:task|priorit\\w*)\\s+(?:should|to)\\b|` +
@@ -357,10 +364,13 @@ const SINGLE_CATEGORY_PATTERNS = [
   // task-list ask, distinct from the "priorities" clause below. Accepts
   // "stuff"/"things"/"items"/"to-dos" alongside "task(s)" — mirrors
   // PRIORITY_FILTER_RE's CATEGORY_TRAILING_NOUN_RE (live-testing round 4).
-  /\b(?:show me|what are|list|check|tell me)\s+my\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+(?:tasks?|stuff|things|items|to-?dos?)\b/i,
+  // The generic nouns require a task-list continuation or end-of-clause
+  // right after — otherwise "tell me my health things I should know about
+  // pregnancy" would also match (Codex review finding).
+  /\b(?:show me|what are|list|check|tell me)\s+my\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+(?:tasks?|(?:stuff|things|items|to-?dos?)(?=\s*(?:today)?\s*(?:[.?!]|$)|\s+(?:do i have|do i need|to handle|to do|on my list|for today)\b))\b/i,
   // "What work tasks do I have?" — category named directly before "task(s)",
   // without "are/my" the pattern above requires.
-  /\bwhat\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+(?:tasks?|stuff|things|items|to-?dos?)\b/i,
+  /\bwhat\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+(?:tasks?|(?:stuff|things|items|to-?dos?)(?=\s*(?:today)?\s*(?:[.?!]|$)|\s+(?:do i have|do i need|to handle|to do|on my list|for today)\b))\b/i,
 ];
 
 // Mirrors the "which <category> task(s)" shape, but — like the other clauses
