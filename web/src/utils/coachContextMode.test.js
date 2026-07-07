@@ -1210,4 +1210,25 @@ describe("detectRequestedCategories", () => {
     expect(detectRequestedCategories("what job items are on my list?")).toEqual(["Work"]);
     expect(detectRequestedCategories("what job tasks are on my list?")).toEqual(["Work"]);
   });
+
+  it("doesn't treat '<category> reason(s)' as a category filter (Codex review finding, PR #344 round 5)", () => {
+    // "what can I skip for health reasons?" names "health" as the cause of
+    // skipping something, not the category being asked about — a real
+    // regression introduced by the round-4 FOCUS_FOR_CLAUSE_RE broadening.
+    expect(detectRequestedCategories("what can I skip for health reasons?")).toEqual([]);
+    expect(detectRequestedCategories("what should I not bother with for work reasons?")).toEqual([]);
+    // A genuine category ask for the same category word still works.
+    expect(detectRequestedCategories("what can I skip for health?")).toEqual(["Health"]);
+  });
+
+  it("accepts 'should' alongside 'can' for the 'anything ... skip/ignore' ask (Codex review finding, PR #344 round 5)", () => {
+    expect(classifyContextMode("anything I should skip today?")).toBe("full_task");
+    expect(classifyContextMode("anything low priority I should ignore today?")).toBe("full_task");
+  });
+
+  it("accepts 'for now' endings and urgent/can-wait continuations for generic-noun which asks (Codex review finding, PR #344 round 5)", () => {
+    expect(classifyContextMode("which work items can I skip for now?")).toBe("full_task");
+    expect(classifyContextMode("which work items are urgent?")).toBe("full_task");
+    expect(classifyContextMode("which work items can wait?")).toBe("full_task");
+  });
 });

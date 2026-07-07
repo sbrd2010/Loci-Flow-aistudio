@@ -280,7 +280,7 @@ const PRIORITY_SYNONYM_RE = /\bwhat(?:['’]?s|\s+is) (?:my |the )?(?:most )?(?:
 // final "not due soon/going to hurt if I skip it" alternative also needs the
 // same end-of-clause guard as its siblings — without one, "what's not due
 // soon in JavaScript?" false-positived into full_task (Codex review finding).
-const NEGATION_PRIORITY_RE = /\bwhat should i not do(?=\s*(?:today|now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat can wait(?=\s*(?:today|for now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat can i (?:skip|ignore|put off)(?=\s*(?:today|for now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\banything\s+(?:low[-\s]+priority\s+)?i can (?:skip|ignore|put off)(?=\s*(?:today|for now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat should(?:n['’]?t\s+i|\s+i\s+not)\s+bother\s+with(?=\s*(?:today|now|right now|for now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) (?:not |the least |least |lowest |low )(?:important|urgent|pressing|critical|priority)(?=\s*(?:thing|priority|task|focus)?\s*(?:(?:today|right now)?\s*(?:[.?!]|$)|for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b))|\bwhat don['’]?t i need to worry about(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) optional(?=\s*(?:today)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat has the lowest priority(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat am i free to skip(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat shouldn['’]?t i worry about(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) not (?:due soon|going to hurt if i skip it)(?=\s*(?:[.?!]|$))\b/i;
+const NEGATION_PRIORITY_RE = /\bwhat should i not do(?=\s*(?:today|now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat can wait(?=\s*(?:today|for now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat can i (?:skip|ignore|put off)(?=\s*(?:today|for now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\banything\s+(?:low[-\s]+priority\s+)?i (?:can|should) (?:skip|ignore|put off)(?=\s*(?:today|for now|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat should(?:n['’]?t\s+i|\s+i\s+not)\s+bother\s+with(?=\s*(?:today|now|right now|for now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) (?:not |the least |least |lowest |low )(?:important|urgent|pressing|critical|priority)(?=\s*(?:thing|priority|task|focus)?\s*(?:(?:today|right now)?\s*(?:[.?!]|$)|for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b))|\bwhat don['’]?t i need to worry about(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) optional(?=\s*(?:today)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat has the lowest priority(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat am i free to skip(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat shouldn['’]?t i worry about(?=\s*(?:today|right now)?\s*(?:[.?!]|$)|\s+for\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\bwhat(?:['’]?s|\s+is) not (?:due soon|going to hurt if i skip it)(?=\s*(?:[.?!]|$))\b/i;
 
 // Low-energy asks need the full visible task list with estimates so the
 // coach can prefer the smallest task per the PRIORITY QUESTIONS rule — the
@@ -336,9 +336,9 @@ const LOW_ENERGY_RE = /\b(low energy|no energy|low on energy|out of energy|exhau
 // review finding). "on my list" tolerates an optional "is/are" before it —
 // "what job items are on my list?" has "are" between the noun and the
 // continuation phrase, which the bare literal missed (Codex review finding).
-const CATEGORY_GENERIC_NOUN_END_RE = "(?:\\s*(?:today|now|right now)?\\s*(?:[.?!]|$))";
+const CATEGORY_GENERIC_NOUN_END_RE = "(?:\\s*(?:today|now|right now|for now)?\\s*(?:[.?!]|$))";
 const CATEGORY_GENERIC_NOUN_CONTINUATION_RE =
-  "(?:do i have|do i need(?:\\s+to\\s+(?:do|handle|tackle|deal with|worry about))?|to handle|to do|(?:(?:is|are)\\s+)?on my list|for today|should i (?:do|handle|tackle|deal with|start)(?:\\s+(?:first|next))?|should i (?:skip|ignore|put off)|can i (?:skip|ignore|put off))";
+  "(?:do i have|do i need(?:\\s+to\\s+(?:do|handle|tackle|deal with|worry about))?|to handle|to do|(?:(?:is|are)\\s+)?on my list|for today|should i (?:do|handle|tackle|deal with|start)(?:\\s+(?:first|next))?|should i (?:skip|ignore|put off)|can i (?:skip|ignore|put off)|(?:is|are) (?:urgent|important|pressing|critical)|can wait|should wait)";
 const CATEGORY_TRAILING_NOUN_RE =
   `(?:tasks?|(?:stuff|things?|items?|to-?dos?)(?=${CATEGORY_GENERIC_NOUN_END_RE}|\\s+${CATEGORY_GENERIC_NOUN_CONTINUATION_RE}${CATEGORY_GENERIC_NOUN_END_RE}))`;
 const PRIORITY_FILTER_RE = new RegExp(
@@ -452,6 +452,15 @@ const THIRD_PARTY_POSSESSIVE_RE = /\w['’]s\b/;
 // about it — strip any category immediately preceded by "not" before
 // treating the rest of the clause as requested categories.
 const NEGATED_CATEGORY_RE = /\bnot\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b/gi;
+// "what can I skip for health reasons?" names "health" as the cause of
+// skipping something, not the category being asked about — FOCUS_FOR_CLAUSE_RE's
+// generic "<verb> ... for <category>" shape can't distinguish this from a
+// real category ask on its own, so a category word immediately followed by
+// "reason(s)" is excluded the same way a negated one is (Codex review
+// finding) — without it, "for health reasons" wrongly injected a
+// no-visible-Health-tasks note that could suppress unrelated Work/Personal
+// tasks the user actually asked about.
+const CATEGORY_REASON_RE = /\b(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+reasons?\b/gi;
 
 // Compound phrases where a bare category-word synonym inside them means a
 // different category than it does on its own — "job search"/"job
@@ -488,6 +497,11 @@ function extractCategoryLabels(clause) {
   NEGATED_CATEGORY_RE.lastIndex = 0;
   while ((negatedMatch = NEGATED_CATEGORY_RE.exec(clause))) {
     excluded.add(negatedMatch[1].toLowerCase());
+  }
+  let reasonMatch;
+  CATEGORY_REASON_RE.lastIndex = 0;
+  while ((reasonMatch = CATEGORY_REASON_RE.exec(clause))) {
+    excluded.add(reasonMatch[1].toLowerCase());
   }
   const words = (clause.match(CATEGORY_WORD_RE) || []).filter(w => !excluded.has(w.toLowerCase()));
   return [...new Set(words.map(w => CATEGORY_LABELS[w.toLowerCase()]))];
