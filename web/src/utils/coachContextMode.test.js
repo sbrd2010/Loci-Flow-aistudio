@@ -721,6 +721,39 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("what needs my attention for work?")).toBe("full_task");
       expect(classifyContextMode("what's on my radar for health?")).toBe("full_task");
     });
+
+    it("keeps category/horizon-filtered new task verbs out of compact mode on the paced path (Codex review finding, round 5)", () => {
+      const paced = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("what should I tackle for work?", paced)).toBe("full_task");
+      expect(classifyContextMode("what should I dive into this quarter?", paced)).toBe("full_task");
+      expect(classifyContextMode("what should I deal with for health?", paced)).toBe("full_task");
+    });
+
+    it("bounds the remaining open-ended priority aliases and 'which one should I do' (Codex review finding, round 5)", () => {
+      expect(classifyContextMode("what deserves my attention in this recipe?")).toBe("light");
+      expect(classifyContextMode("what do i have going on in my stomach?")).toBe("light");
+      expect(classifyContextMode("what is the important thing about CSS?")).toBe("light");
+      expect(classifyContextMode("which one should I do in this recipe?")).toBe("light");
+      expect(classifyContextMode("what deserves my attention?")).toBe("full_task");
+      expect(classifyContextMode("what do i have going on?")).toBe("full_task");
+      expect(classifyContextMode("what is the important thing?")).toBe("full_task");
+      expect(classifyContextMode("what's most important right now")).toBe("full_task");
+      expect(classifyContextMode("which one should I do?")).toBe("full_task");
+    });
+
+    it("bounds the due-soon negation alias and lets number-one asks take a day cue (Codex review finding, round 5)", () => {
+      expect(classifyContextMode("what's not due soon in JavaScript?")).toBe("light");
+      expect(classifyContextMode("what is not going to hurt if I skip it during pregnancy?")).toBe("light");
+      expect(classifyContextMode("what's not due soon?")).toBe("full_task");
+      expect(classifyContextMode("what's my number one priority today?")).toBe("full_task");
+      expect(classifyContextMode("what's my number one focus right now?")).toBe("full_task");
+    });
+
+    it("carries a category/horizon cue through the remaining negation aliases (Codex review finding, round 5)", () => {
+      expect(classifyContextMode("what can wait for work?")).toBe("full_task");
+      expect(classifyContextMode("what's not urgent for health?")).toBe("full_task");
+      expect(classifyContextMode("what's the least important thing for work?")).toBe("full_task");
+    });
   });
 });
 
@@ -810,6 +843,12 @@ describe("detectRequestedCategories", () => {
     // missing-category mismatch note (issue #338) never fires.
     expect(detectRequestedCategories("what should I tackle for work?")).toEqual(["Work"]);
     expect(detectRequestedCategories("what should I deal with for health?")).toEqual(["Health"]);
+  });
+
+  it("detects a category cue on PRIORITY_SYNONYM_RE's priority-noun lead-ins (Codex review finding, round 5)", () => {
+    expect(detectRequestedCategories("what's my main focus for health?")).toEqual(["Health"]);
+    expect(detectRequestedCategories("what's the top thing for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what deserves my attention for work?")).toEqual(["Work"]);
   });
 
   it("detects category-scoped task-list asks like 'show me my work tasks' (Codex review finding)", () => {

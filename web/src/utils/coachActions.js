@@ -107,10 +107,11 @@ const INTENT_PATTERNS = {
   // Tolerates a small filler word between the modal+I and "skip" ("can I
   // just skip...", "should I maybe skip...") — the previous round only
   // excluded an immediately-adjacent "<modal> i skip" (Codex review finding).
-  // Also excludes "am I free to skip" — coachContextMode.js's
-  // NEGATION_PRIORITY_RE routes that advice question to full_task too, and
-  // it doesn't fit the "<modal> I" shape above (Codex review finding).
-  PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|(?<!\b(?:(?:can|could|would|should|do)\s+i|am\s+i\s+free\s+to)\s+(?:just|maybe|really|actually|honestly)?\s*)skip)\b/i,
+  // Also excludes "am I free to skip" and "not going to hurt if I skip it" —
+  // coachContextMode.js's NEGATION_PRIORITY_RE routes both advice questions
+  // to full_task too, and neither fits the "<modal> I" shape above (Codex
+  // review finding).
+  PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|(?<!\b(?:(?:can|could|would|should|do)\s+i|am\s+i\s+free\s+to|not\s+going\s+to\s+hurt\s+if\s+i)\s+(?:just|maybe|really|actually|honestly)?\s*)skip)\b/i,
 };
 
 // Catches negated phrasing ("I'm not done", "don't park it") immediately
