@@ -293,6 +293,16 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("PARK_TASK", "can you skip the report for now?", "the report")).toBe(true);
   });
 
+  it("blocks a 'what am I free to skip' advice question from parking a task (Codex review finding)", () => {
+    // coachContextMode.js's NEGATION_PRIORITY_RE routes "what am I free to
+    // skip" advice questions to full_task, but that phrasing doesn't fit the
+    // "<modal> I skip" shape the earlier guard checked for, so a corroborated
+    // model reply could still park the named task.
+    expect(matchesUserIntent("PARK_TASK", "what am I free to skip, the report?", "the report")).toBe(false);
+    // The imperative form still works.
+    expect(matchesUserIntent("PARK_TASK", "skip the report, I'm free today", "the report")).toBe(true);
+  });
+
   it("matches SET_NOW_FOCUS on set/swap/make-my-focus phrasing (Codex review finding)", () => {
     // coachContextMode.js's EXPLICIT_ACTION_RE routes "set/swap my focus to
     // X" and "make X my focus" to full_task, so this gate must recognize the

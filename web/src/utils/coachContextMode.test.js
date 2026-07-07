@@ -692,6 +692,35 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("what needs my attention")).toBe("full_task");
       expect(classifyContextMode("what needs doing")).toBe("full_task");
     });
+
+    it("bounds 'which one/task should I handle/tackle' before an unrelated trailing clause (Codex review finding)", () => {
+      expect(classifyContextMode("which one should I handle carefully in this recipe?")).toBe("light");
+      expect(classifyContextMode("which task should I tackle?")).toBe("full_task");
+      expect(classifyContextMode("which one should I handle for work?")).toBe("full_task");
+      expect(classifyContextMode("which task should I start?")).toBe("full_task");
+    });
+
+    it("anchors the remaining negation aliases before an unrelated trailing clause (Codex review finding, round 2)", () => {
+      expect(classifyContextMode("what's not important in JavaScript?")).toBe("light");
+      expect(classifyContextMode("what's the least important thing about this movie?")).toBe("light");
+      expect(classifyContextMode("what has the lowest priority in CSS?")).toBe("light");
+      expect(classifyContextMode("what am i free to skip in this recipe?")).toBe("light");
+      expect(classifyContextMode("what's not important today")).toBe("full_task");
+      expect(classifyContextMode("what's the least important thing")).toBe("full_task");
+      expect(classifyContextMode("what has the lowest priority")).toBe("full_task");
+      expect(classifyContextMode("what am i free to skip today")).toBe("full_task");
+    });
+
+    it("anchors the remaining open-ended priority aliases before an unrelated trailing clause (Codex review finding)", () => {
+      expect(classifyContextMode("what needs my attention in this recipe?")).toBe("light");
+      expect(classifyContextMode("what's on my radar in chess?")).toBe("light");
+      expect(classifyContextMode("walk me through what matters in this codebase")).toBe("light");
+      expect(classifyContextMode("what needs my attention")).toBe("full_task");
+      expect(classifyContextMode("what's on my radar")).toBe("full_task");
+      expect(classifyContextMode("walk me through what matters")).toBe("full_task");
+      expect(classifyContextMode("what needs my attention for work?")).toBe("full_task");
+      expect(classifyContextMode("what's on my radar for health?")).toBe("full_task");
+    });
   });
 });
 
@@ -773,6 +802,14 @@ describe("detectRequestedCategories", () => {
     expect(detectRequestedCategories("what needs my attention for work?")).toEqual(["Work"]);
     expect(detectRequestedCategories("what's on my radar for health?")).toEqual(["Health"]);
     expect(detectRequestedCategories("give me the game plan for work")).toEqual(["Work"]);
+  });
+
+  it("detects a category cue on TASK_ASK_RE's newer verb lead-ins (Codex review finding)", () => {
+    // "tackle"/"deal with"/etc. route to full_task on their own via "for
+    // <category>", but without a matching category-detection lead-in here, a
+    // missing-category mismatch note (issue #338) never fires.
+    expect(detectRequestedCategories("what should I tackle for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what should I deal with for health?")).toEqual(["Health"]);
   });
 
   it("detects category-scoped task-list asks like 'show me my work tasks' (Codex review finding)", () => {
