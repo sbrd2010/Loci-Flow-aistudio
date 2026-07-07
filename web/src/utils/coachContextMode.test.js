@@ -492,6 +492,12 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("What should I prioritize for my career?", pacedOpts)).toBe("full_task");
     });
 
+    it("never compacts category-scoped task-list asks, even on the paced path (Codex review finding)", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("Show me my work tasks", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("What are my health tasks?", pacedOpts)).toBe("full_task");
+    });
+
     it("never compacts body-double/priority-filter/low-energy phrasing even when it co-occurs with an explicit-mutation targeted reference", () => {
       const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
       expect(classifyContextMode("be my body double for this and start a focus session", pacedOpts)).toBe("full_task");
@@ -579,8 +585,21 @@ describe("detectRequestedCategories", () => {
   it("does not classify add-task wording as a category filter (Codex review finding)", () => {
     expect(detectRequestedCategories("Add a work task to call Bob to my list")).toEqual([]);
     expect(detectRequestedCategories("create a health task to book a checkup")).toEqual([]);
+    // Longer filler between the verb and the category still gets excluded.
+    expect(detectRequestedCategories("Add a high priority work task to call Bob to my list")).toEqual([]);
     // The genuine category-filtered ask still works.
     expect(detectRequestedCategories("work task should be next")).toEqual(["Work"]);
     expect(detectRequestedCategories("career priority to focus on")).toEqual(["Career"]);
+  });
+
+  it("scans both categories in compound 'which X task and Y task' asks (Codex review finding)", () => {
+    expect(detectRequestedCategories("Which work task and health task should I do first?")).toEqual(["Work", "Health"]);
+    // Existing single-category "which" shapes still resolve correctly.
+    expect(detectRequestedCategories("which work task should I do first?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("Which of my work tasks should I do first?")).toEqual(["Work"]);
+  });
+
+  it("ignores explicitly excluded categories like 'for work, not personal' (Codex review finding)", () => {
+    expect(detectRequestedCategories("What should I prioritize for work, not personal?")).toEqual(["Work"]);
   });
 });
