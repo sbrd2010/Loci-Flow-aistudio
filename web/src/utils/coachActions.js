@@ -104,7 +104,10 @@ const INTENT_PATTERNS = {
   // "could" lookbehind) so a polite imperative addressed to the coach —
   // "can you skip the report for now?" — still authorizes the mutation
   // (Codex review finding).
-  PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|(?<!\b(?:can|could|would|should|do)\s+i\s+)skip)\b/i,
+  // Tolerates a small filler word between the modal+I and "skip" ("can I
+  // just skip...", "should I maybe skip...") — the previous round only
+  // excluded an immediately-adjacent "<modal> i skip" (Codex review finding).
+  PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|(?<!\b(?:can|could|would|should|do)\s+i\s+(?:just|maybe|really|actually|honestly)?\s*)skip)\b/i,
 };
 
 // Catches negated phrasing ("I'm not done", "don't park it") immediately

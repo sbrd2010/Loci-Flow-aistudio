@@ -281,6 +281,18 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("PARK_TASK", "could you skip the report?", "the report")).toBe(true);
   });
 
+  it("still blocks a first-person skip advice question with a small filler word (Codex review finding)", () => {
+    // The previous round's guard only excluded an immediately-adjacent
+    // "<modal> I skip" — "can I just skip..." / "should I maybe skip..."
+    // have a filler word between "I" and "skip" that the guard didn't
+    // tolerate, so these advice questions could still authorize a park
+    // mutation.
+    expect(matchesUserIntent("PARK_TASK", "can I just skip the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "should I maybe skip the report?", "the report")).toBe(false);
+    // The polite imperative (addressed to the coach, not advice-seeking) still works.
+    expect(matchesUserIntent("PARK_TASK", "can you skip the report for now?", "the report")).toBe(true);
+  });
+
   it("matches SET_NOW_FOCUS on set/swap/make-my-focus phrasing (Codex review finding)", () => {
     // coachContextMode.js's EXPLICIT_ACTION_RE routes "set/swap my focus to
     // X" and "make X my focus" to full_task, so this gate must recognize the

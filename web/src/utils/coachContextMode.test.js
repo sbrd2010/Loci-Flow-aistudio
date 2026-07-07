@@ -656,6 +656,42 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("steer me toward something useful")).toBe("full_task");
       expect(classifyContextMode("orient me for the day")).toBe("full_task");
     });
+
+    it("still allows a category or horizon cue after the bounded task verbs (Codex review finding)", () => {
+      // The end-of-clause lookahead from the previous round was too strict —
+      // it didn't recognize "for <category>" or "this week/month/quarter" as
+      // legitimate continuations, so these fell back to light along with the
+      // genuinely unrelated questions it was meant to filter.
+      expect(classifyContextMode("what should I tackle for work?")).toBe("full_task");
+      expect(classifyContextMode("what should I deal with for health?")).toBe("full_task");
+      expect(classifyContextMode("what should I knock out this week?")).toBe("full_task");
+      // The unrelated questions the lookahead is meant to filter still do.
+      expect(classifyContextMode("what should I be doing about this rash?")).toBe("light");
+      expect(classifyContextMode("what should I dive into in Madrid?")).toBe("light");
+    });
+
+    it("anchors the remaining negation aliases before an unrelated trailing clause (Codex review finding)", () => {
+      expect(classifyContextMode("what can wait in JavaScript?")).toBe("light");
+      expect(classifyContextMode("what's optional chaining?")).toBe("light");
+      expect(classifyContextMode("what don't I need to worry about during pregnancy?")).toBe("light");
+      // The legitimate phrasings still work.
+      expect(classifyContextMode("what can wait")).toBe("full_task");
+      expect(classifyContextMode("what's optional today")).toBe("full_task");
+      expect(classifyContextMode("what don't i need to worry about")).toBe("full_task");
+      expect(classifyContextMode("what shouldn't i worry about today")).toBe("full_task");
+    });
+
+    it("anchors 'give me clarity/direction' and 'the smart move'/'needs doing' before an unrelated trailing clause (Codex review finding)", () => {
+      expect(classifyContextMode("give me clarity on this regex")).toBe("light");
+      expect(classifyContextMode("what's the smart move in chess?")).toBe("light");
+      expect(classifyContextMode("what needs doing to this cake?")).toBe("light");
+      // The legitimate phrasings still work.
+      expect(classifyContextMode("give me clarity")).toBe("full_task");
+      expect(classifyContextMode("give me direction")).toBe("full_task");
+      expect(classifyContextMode("what's the smart move")).toBe("full_task");
+      expect(classifyContextMode("what needs my attention")).toBe("full_task");
+      expect(classifyContextMode("what needs doing")).toBe("full_task");
+    });
   });
 });
 
@@ -726,6 +762,17 @@ describe("detectRequestedCategories", () => {
     // Existing single-category shapes still resolve correctly.
     expect(detectRequestedCategories("what should I focus on for work?")).toEqual(["Work"]);
     expect(detectRequestedCategories("what should I prioritize for my career?")).toEqual(["Career"]);
+  });
+
+  it("detects a category cue on PRIORITY_SYNONYM_RE's newer alias lead-ins (Codex review finding)", () => {
+    // These alias phrasings ("needs my attention", "on my radar", "the game
+    // plan") already route to full_task on their own, but without a
+    // matching category-detection shape, a missing-category mismatch note
+    // (issue #338) never fires when one of these is combined with "for
+    // <category>".
+    expect(detectRequestedCategories("what needs my attention for work?")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what's on my radar for health?")).toEqual(["Health"]);
+    expect(detectRequestedCategories("give me the game plan for work")).toEqual(["Work"]);
   });
 
   it("detects category-scoped task-list asks like 'show me my work tasks' (Codex review finding)", () => {
