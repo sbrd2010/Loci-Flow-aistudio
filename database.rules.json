@@ -38,9 +38,10 @@
         },
         "chatHistory": {
           "$msgIdx": {
-            "text":   { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 5000)" },
-            "isUser": { ".validate": "!newData.exists() || newData.isBoolean()" },
-            "$other": { ".validate": false }
+            "text":    { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 5000)" },
+            "isUser":  { ".validate": "!newData.exists() || newData.isBoolean()" },
+            "actions": { ".validate": true },
+            "$other":  { ".validate": false }
           }
         },
         "contributions": { ".validate": true },
