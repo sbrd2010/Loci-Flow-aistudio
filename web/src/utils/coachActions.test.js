@@ -308,6 +308,19 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("START_FOCUS", "time to work on the report", "the report")).toBe(true);
   });
 
+  it("does not treat 'what can I put off/postpone' advice questions as PARK_TASK requests (mirrors PR #340's 'skip' fix)", () => {
+    // Once combined with coachContextMode.js's NEGATION_PRIORITY_RE (which
+    // routes "what can I put off?" advice questions to full_task), a bare
+    // "put off"/"postpone" here would have the same false-authorization risk
+    // Codex found for "skip" on PR #340 — fixed proactively with the same
+    // question-word lookbehind guard.
+    expect(matchesUserIntent("PARK_TASK", "what can i put off?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "should i postpone the report?", "the report")).toBe(false);
+    // Genuine imperative phrasing still works.
+    expect(matchesUserIntent("PARK_TASK", "put off the report", "the report")).toBe(true);
+    expect(matchesUserIntent("PARK_TASK", "postpone the report", "the report")).toBe(true);
+  });
+
   it("normalizes shorthand before intent matching, same as coachContextMode's classifier (Codex review finding)", () => {
     // "remind me 2 call the plumber" reaches full_task via coachContextMode's
     // normalizer, but without the same normalization here, this gate would
