@@ -8,7 +8,16 @@ const REMINDER_VERB_RE = /\b(remind me|check in|follow up|circle back|ask me aga
 const TIME_SIGNAL_RE = /\b(later|in \d+\s*min\w*|at \d{1,2}(:\d{2})?\s*(am|pm)?|tomorrow(?: morning)?)\b/i;
 const STANDALONE_TIME_RE = /\b(in \d+\s*min\w*|tomorrow morning)\b/i;
 
-const BROAD_TASK_QUERY_RE = /\b(what are my tasks|what['’]?s due|what is due|anything due|due date|what['’]?s my deadline|what is my deadline|show my tasks|what do i have today|what tasks do i have|list my tasks|my task list|show my list|what['’]?s on my list|what do i need to do today|check (?:my |the )?(?:today['’]?s|this week['’]?s?|week) (?:focus|horizon)|check (?:this|my) week horizon|check today['’]?s focus|today['’]?s?\s+focus|what['’]?s?\s+my\s+focus\b|my\s+focus\s+for\s+today|today['’]?s?\s+priorit(?:y|ies)|(?:what are|tell me|show me|check|what about) my(?:\s+(?:this\s+|(?:\d+|six)\s+)?(?:career|work|health|personal|month|quarter)s?['’]?s?(?:\s*(?:and|&|\/|,)\s*(?:this\s+|(?:\d+|six)\s+)?(?:career|work|health|personal|month|quarter)s?['’]?s?){0,2})?\s*priorit(?:y|ies)|what should be my priority|which priority should i focus on|can['’]?t you check|check my week|(?:what['’]?s|what is|anything)\s+(?:actually |really )?(?:urgent|pressing|critical|important)\b|(?:what['’]?s|what is)(?: next)? on my plate(?: today)?|(?:what['’]?s|what is) in my brain dump|check my brain dump|what do i even do|what['’]?s there to do|what to do (?:right now|today|now)\b)\b/i;
+// "family" excludes a directly-following possessive apostrophe ("family's
+// priorities") — unlike "career's"/"work's" (awkward, rarely said), "my
+// family's priorities" is a very natural phrase, but it's asking about the
+// family's priorities, not the user's own tasks. Without this exclusion,
+// the message routes to full_task (the user's visible tasks, no category
+// filter, since detectRequestedCategories separately excludes third-party
+// possessives and returns [] here) and can get answered from the user's own
+// Loci tasks instead of being treated as a non-task/third-party ask (Codex
+// review finding).
+const BROAD_TASK_QUERY_RE = /\b(what are my tasks|what['’]?s due|what is due|anything due|due date|what['’]?s my deadline|what is my deadline|show my tasks|what do i have today|what tasks do i have|list my tasks|my task list|show my list|what['’]?s on my list|what do i need to do today|check (?:my |the )?(?:today['’]?s|this week['’]?s?|week) (?:focus|horizon)|check (?:this|my) week horizon|check today['’]?s focus|today['’]?s?\s+focus|what['’]?s?\s+my\s+focus\b|my\s+focus\s+for\s+today|today['’]?s?\s+priorit(?:y|ies)|(?:what are|tell me|show me|check|what about) my(?:\s+(?:this\s+|(?:\d+|six)\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family(?!['’]s)|month|quarter)s?['’]?s?(?:\s*(?:and|&|\/|,)\s*(?:this\s+|(?:\d+|six)\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family(?!['’]s)|month|quarter)s?['’]?s?){0,2})?\s*priorit(?:y|ies)|what should be my priority|which priority should i focus on|can['’]?t you check|check my week|(?:what['’]?s|what is|anything)\s+(?:actually |really )?(?:urgent|pressing|critical|important)\b|(?:what['’]?s|what is)(?: next)? on my plate(?: today)?|(?:what['’]?s|what is) in my brain dump|check my brain dump|what do i even do|what['’]?s there to do|what to do (?:right now|today|now)\b)\b/i;
 
 // Real users type messy — texting shorthand, dropped apostrophes, common
 // abbreviations — and every regex above only recognizes clean English
@@ -31,8 +40,26 @@ const SHORTHAND_MAP = [
   // "(?:\d+|six)\s+(?:career|work|...)" branch elsewhere in this file need the
   // literal digit. The lookbehind guards "at N", the lookahead guards
   // "N <unit>"/"N am|pm"/"N <category>".
-  [/(?<!\bat\s)\b2\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|career|work|health|personal|months?|quarters?)\b)/gi, "to"],
-  [/(?<!\bat\s)\b4\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|career|work|health|personal|months?|quarters?)\b)/gi, "for"],
+  // The category-word exclusion is only a real "count" (not "2" meaning
+  // "to") when it follows "my" ("my 2 work priorities") — without requiring
+  // that, adding job/office/fitness/wellness/gym/home/family to this list
+  // broke ordinary "to <verb>" shorthand before those words ("remind me 2
+  // job hunt"/"remind me 2 fitness class" never normalized to "remind me to
+  // ...", so with no time signal the message fell to "light" instead of
+  // reaching the ADD_TASK path). Duration/time-unit words stay
+  // unconditionally excluded regardless of a preceding "my" (Codex review
+  // finding, mirrors the equivalent "4"->"for" fix below).
+  [/(?<!\bat\s)(?:(?<!\bmy\s)\b2\b(?=\s*(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\b2\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|months?|quarters?|career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b))/gi, "to"],
+  // The category-word exclusion here is only a real "count" (not "4" meaning
+  // "for") when it follows "my" ("my 4 work priorities") — without requiring
+  // that, adding job/office/fitness/wellness/gym/home/family to this list
+  // broke ordinary "for <category>" shorthand ("what should i tackle 4
+  // fitness" never normalized to "...for fitness", so the category-filter
+  // regexes elsewhere in this file — which only recognize the literal word
+  // "for" — never fired). Duration/time-unit words stay unconditionally
+  // excluded regardless of a preceding "my" ("in 4 months" must not become
+  // "in for months") (Codex review finding).
+  [/(?<!\bat\s)(?:(?<!\bmy\s)\b4\b(?=\s*(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\b4\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|months?|quarters?|career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b))/gi, "for"],
   [/\bb4\b/gi, "before"],
   [/\bdis\b/gi, "this"],
   [/\bdat\b/gi, "that"],
@@ -89,8 +116,16 @@ const SHORTHAND_MAP = [
 // via this normalization (e.g. "remind me 2 call the plumber") could still
 // have its resulting action tag blocked by the gate, which would otherwise
 // see the raw, un-normalized text ("2" instead of "to").
+// Also applies the compound-category rewrite (see COMPOUND_CATEGORY_PHRASES
+// below) — it previously only ran inside detectRequestedCategories, so
+// classifyContextMode still evaluated the raw "job search"/"work from home"
+// text and BROAD_TASK_QUERY_RE (which requires a single bare category word
+// immediately before "priorities", not an extra word like "search"/"from
+// home" in between) never matched, leaving broad asks like "what are my job
+// search priorities" at "light" even though detectRequestedCategories
+// separately resolved a category for them (Codex review finding).
 export function normalizeForClassification(text) {
-  return SHORTHAND_MAP.reduce((acc, [re, replacement]) => acc.replace(re, replacement), text);
+  return rewriteCompoundCategoryPhrases(SHORTHAND_MAP.reduce((acc, [re, replacement]) => acc.replace(re, replacement), text));
 }
 
 function isCheckinRequest(text) {
@@ -236,9 +271,25 @@ const LOW_ENERGY_RE = /\b(low energy|no energy|low on energy|out of energy|exhau
 // the last plan/current focus, not the full task list) instead of
 // "full_task" for these category/horizon-filtered priority questions
 // (Codex review finding).
-const PRIORITY_FILTER_RE = /\bwhich\s+(?:of\s+my\s+)?(?:career|work|health|personal)\s+tasks?\b|\b(?:career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b|\b(?:focus on|tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on)\s+this\s+(?:month|quarter|week)\b|\b(?:focus on|priorit\w*|do|work on|start|tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on|needs my attention|on (?:my |the )?(?:deck|radar|plate|agenda|horizon)|(?:the )?game plan)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(?:career|work|health|personal)\b|\b(?:show me|what are|list|check|tell me)\s+my\s+(?:career|work|health|personal)\s+tasks?\b|\bwhat\s+(?:career|work|health|personal)\s+tasks?\b/i;
+const PRIORITY_FILTER_RE = /\bwhich\s+(?:of\s+my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+tasks?\b|\b(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+(?:task|priorit\w*)\s+(?:should|to)\b|\b(?:focus on|tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on)\s+this\s+(?:month|quarter|week)\b|\b(?:focus on|priorit\w*|do|work on|start|tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on|needs my attention|on (?:my |the )?(?:deck|radar|plate|agenda|horizon)|(?:the )?game plan)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b|\b(?:show me|what are|list|check|tell me)\s+my\s+(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+tasks?\b|\bwhat\s+(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+tasks?\b/i;
 
-const CATEGORY_LABELS = { career: "Career", work: "Work", health: "Health", personal: "Personal" };
+// job/office -> Work, fitness/wellness/gym -> Health, home/family -> Personal:
+// common synonyms for the app's four category tags, so a message naming one
+// of these (e.g. "what are my job priorities") still resolves to the actual
+// tag a task would carry, instead of being invisible to category detection.
+const CATEGORY_LABELS = {
+  career: "Career",
+  work: "Work",
+  health: "Health",
+  personal: "Personal",
+  job: "Work",
+  office: "Work",
+  fitness: "Health",
+  wellness: "Health",
+  gym: "Health",
+  home: "Personal",
+  family: "Personal",
+};
 
 // Mirrors PRIORITY_FILTER_RE's category-question shapes (not its horizon
 // shape — "focus on this month" isn't a {Category} filter) but captures
@@ -255,13 +306,13 @@ const SINGLE_CATEGORY_PATTERNS = [
   // ask, even though they share the "<category> task ... to" shape. The
   // window is wide enough to span a few filler words between the verb and
   // the category.
-  /(?<!\b(?:add|create|make)\b.{0,40})\b(career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b/i,
+  /(?<!\b(?:add|create|make)\b.{0,40})\b(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+(?:task|priorit\w*)\s+(?:should|to)\b/i,
   // "Show me/what are/list my <category> tasks" — a category-scoped
   // task-list ask, distinct from the "priorities" clause below.
-  /\b(?:show me|what are|list|check|tell me)\s+my\s+(career|work|health|personal)\s+tasks?\b/i,
+  /\b(?:show me|what are|list|check|tell me)\s+my\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+tasks?\b/i,
   // "What work tasks do I have?" — category named directly before "task(s)",
   // without "are/my" the pattern above requires.
-  /\bwhat\s+(career|work|health|personal)\s+tasks?\b/i,
+  /\bwhat\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+tasks?\b/i,
 ];
 
 // Mirrors the "which <category> task(s)" shape, but — like the other clauses
@@ -302,7 +353,7 @@ const CATEGORY_PRIORITY_CLAUSE_RE = /(?:what are|tell me|show me|check|what abou
 // my attention for work?" never got a missing-category mismatch note
 // (Codex review finding).
 const FOCUS_FOR_CLAUSE_RE = /\b(?:focus on|priorit\w*|do|work on|start|tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on|needs my attention|deserves my (?:attention|energy)|on (?:my |the )?(?:deck|radar|plate|agenda|horizon)|(?:the )?game plan|top|main|biggest|important|urgent|pressing|critical)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?([a-z0-9\s&/,'’]{1,40})/i;
-const CATEGORY_WORD_RE = /\b(?:career|work|health|personal)\b/gi;
+const CATEGORY_WORD_RE = /\b(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b/gi;
 // A possessive like "boss's" or "manager's" inside the captured clause means
 // the "my" in "my boss's work priorities" scopes to the boss, not the user —
 // these are someone else's priorities, not a category the user is asking
@@ -311,7 +362,33 @@ const THIRD_PARTY_POSSESSIVE_RE = /\w['’]s\b/;
 // "for work, not personal" names Personal only to exclude it, not to ask
 // about it — strip any category immediately preceded by "not" before
 // treating the rest of the clause as requested categories.
-const NEGATED_CATEGORY_RE = /\bnot\s+(career|work|health|personal)\b/gi;
+const NEGATED_CATEGORY_RE = /\bnot\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b/gi;
+
+// Compound phrases where a bare category-word synonym inside them means a
+// different category than it does on its own — "job search"/"job
+// application(s)" is Career, not Work (the app's own category guidance puts
+// job-hunting under Career; see MindBoxTab.jsx), "family doctor"/"doctor's
+// office" is Health, not Personal/Work (medical admin), and "home" in "work
+// from home" is part of a Work phrase, not a separate Personal category
+// request. Rewritten to a single canonical category word before any
+// category-detection pattern runs, so every detection path (not just the
+// clause-scanning one) sees the phrase's true category and its component
+// word isn't also separately counted (Codex review finding).
+const COMPOUND_CATEGORY_PHRASES = [
+  [/\bjob\s+search(?:ing)?\b/gi, "career"],
+  [/\bjob\s+application(?:s)?\b/gi, "career"],
+  [/\bjob\s+interview(?:s)?\b/gi, "career"],
+  [/\bfamily\s+doctor\b/gi, "health"],
+  [/\bdoctor[’']?s?\s+office\b/gi, "health"],
+  [/\bdentist[’']?s?\s+office\b/gi, "health"],
+  [/\bhome\s+workout(?:s)?\b/gi, "health"],
+  [/\bpost\s+office\b/gi, "personal"],
+  [/\bwork(?:ing)?\s+from\s+home\b/gi, "work"],
+];
+
+function rewriteCompoundCategoryPhrases(text) {
+  return COMPOUND_CATEGORY_PHRASES.reduce((acc, [re, replacement]) => acc.replace(re, replacement), text);
+}
 
 // Scans a captured clause (e.g. "health and work", "boss's work") for every
 // category word inside, in the order first mentioned, deduped, excluding
@@ -335,6 +412,12 @@ function extractCategoryLabels(clause) {
 // but relying on the model to notice via the {Category} tags alone isn't
 // reliable enough on its own; see issue #338.
 export function detectRequestedCategories(message) {
+  // The compound-phrase rewrite happens inside normalizeForClassification
+  // now, so it runs before every pattern below (not just the clause-scanning
+  // ones) — SINGLE_CATEGORY_PATTERNS matches a raw category word directly
+  // against the full text, so "what work from home task should I do
+  // first?" needs "home" already rewritten to "work" before it ever reaches
+  // this function's own pattern matching (Codex review finding).
   const text = normalizeForClassification(String(message || ""));
   // Checked before SINGLE_CATEGORY_PATTERNS: a compound "which work task and
   // health task should..." also matches the "<category> task should" shape
