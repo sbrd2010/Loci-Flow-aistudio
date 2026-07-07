@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM, detectRequestedCategories } from "./coachContextMode";
+import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM, detectRequestedCategories, normalizeForClassification } from "./coachContextMode";
 
 describe("classifyContextMode", () => {
   it("defaults casual/light messages to light", () => {
@@ -149,6 +149,19 @@ describe("classifyContextMode", () => {
     // substitution must not eat that digit too.
     expect(classifyContextMode("What are my 2 work priorities?")).toBe("full_task");
     expect(classifyContextMode("What are my 4 month priorities?")).toBe("full_task");
+  });
+
+  it("still normalizes '4' shorthand to 'for' before a category-word synonym, unless it follows 'my' (Codex review finding, PR #341 round 1)", () => {
+    // Adding job/office/fitness/wellness/gym/home/family to the digit-guard's
+    // exclusion list broke the far more common "4" == "for" shorthand before
+    // these words, since the guard didn't distinguish a genuine count ("my 4
+    // work priorities") from "for" ("what should i tackle 4 fitness").
+    expect(normalizeForClassification("what should i tackle 4 fitness")).toBe("what should i tackle for fitness");
+    expect(normalizeForClassification("my 4 work priorities")).toBe("my 4 work priorities");
+    // Duration/time-unit words stay unconditionally excluded regardless of a
+    // preceding "my".
+    expect(normalizeForClassification("remind me in 4 months")).toBe("remind me in 4 months");
+    expect(normalizeForClassification("call the plumber at 4pm")).toBe("call the plumber at 4pm");
   });
 
   it("routes action/mutation phrases to full_task", () => {
@@ -856,6 +869,23 @@ describe("detectRequestedCategories", () => {
     expect(detectRequestedCategories("what's my main focus for health?")).toEqual(["Health"]);
     expect(detectRequestedCategories("what's the top thing for work?")).toEqual(["Work"]);
     expect(detectRequestedCategories("what deserves my attention for work?")).toEqual(["Work"]);
+  });
+
+  it("resolves compound category phrases to their true category, not their component word's default (Codex review finding, PR #341 round 1)", () => {
+    // "job search" is Career (job-hunting), not Work — the app's own
+    // category guidance classifies it that way (MindBoxTab.jsx), even
+    // though bare "job" is a Work synonym.
+    expect(detectRequestedCategories("what are my job search priorities")).toEqual(["Career"]);
+    expect(detectRequestedCategories("what are my job priorities")).toEqual(["Work"]);
+    // "family doctor" is Health (medical admin), not Personal, even though
+    // bare "family" is a Personal synonym.
+    expect(detectRequestedCategories("what should I prioritize for family doctor?")).toEqual(["Health"]);
+    expect(detectRequestedCategories("which family doctor task should I do first?")).toEqual(["Health"]);
+    expect(detectRequestedCategories("what are my family priorities")).toEqual(["Personal"]);
+    // "home" in "work from home" is part of a Work phrase, not a separate
+    // Personal category request.
+    expect(detectRequestedCategories("what are my work from home priorities")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what should I focus on for work from home")).toEqual(["Work"]);
   });
 
   it("detects category-scoped task-list asks like 'show me my work tasks' (Codex review finding)", () => {

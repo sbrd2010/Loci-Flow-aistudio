@@ -32,7 +32,16 @@ const SHORTHAND_MAP = [
   // literal digit. The lookbehind guards "at N", the lookahead guards
   // "N <unit>"/"N am|pm"/"N <category>".
   [/(?<!\bat\s)\b2\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|career|work|health|personal|job|office|fitness|wellness|gym|home|family|months?|quarters?)\b)/gi, "to"],
-  [/(?<!\bat\s)\b4\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|career|work|health|personal|job|office|fitness|wellness|gym|home|family|months?|quarters?)\b)/gi, "for"],
+  // The category-word exclusion here is only a real "count" (not "4" meaning
+  // "for") when it follows "my" ("my 4 work priorities") — without requiring
+  // that, adding job/office/fitness/wellness/gym/home/family to this list
+  // broke ordinary "for <category>" shorthand ("what should i tackle 4
+  // fitness" never normalized to "...for fitness", so the category-filter
+  // regexes elsewhere in this file — which only recognize the literal word
+  // "for" — never fired). Duration/time-unit words stay unconditionally
+  // excluded regardless of a preceding "my" ("in 4 months" must not become
+  // "in for months") (Codex review finding).
+  [/(?<!\bat\s)(?:(?<!\bmy\s)\b4\b(?=\s*(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\b4\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|months?|quarters?|career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b))/gi, "for"],
   [/\bb4\b/gi, "before"],
   [/\bdis\b/gi, "this"],
   [/\bdat\b/gi, "that"],
@@ -322,17 +331,33 @@ const THIRD_PARTY_POSSESSIVE_RE = /\w['’]s\b/;
 // treating the rest of the clause as requested categories.
 const NEGATED_CATEGORY_RE = /\bnot\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b/gi;
 
+// Compound phrases where a bare category-word synonym inside them means a
+// different category than it does on its own — "job search" is Career, not
+// Work (the app's own category guidance puts job-hunting under Career; see
+// MindBoxTab.jsx), "family doctor" is Health, not Personal (medical admin),
+// and "home" in "work from home" is part of a Work phrase, not a separate
+// Personal category request. Rewritten to a single canonical category word
+// before the generic word scan below, so the phrase resolves to its true
+// category and its component word isn't also separately counted (Codex
+// review finding).
+const COMPOUND_CATEGORY_PHRASES = [
+  [/\bjob\s+search(?:ing)?\b/gi, "career"],
+  [/\bfamily\s+doctor\b/gi, "health"],
+  [/\bwork(?:ing)?\s+from\s+home\b/gi, "work"],
+];
+
 // Scans a captured clause (e.g. "health and work", "boss's work") for every
 // category word inside, in the order first mentioned, deduped, excluding
 // any explicitly negated with "not <category>".
 function extractCategoryLabels(clause) {
+  const rewritten = COMPOUND_CATEGORY_PHRASES.reduce((acc, [re, replacement]) => acc.replace(re, replacement), clause);
   const excluded = new Set();
   let negatedMatch;
   NEGATED_CATEGORY_RE.lastIndex = 0;
-  while ((negatedMatch = NEGATED_CATEGORY_RE.exec(clause))) {
+  while ((negatedMatch = NEGATED_CATEGORY_RE.exec(rewritten))) {
     excluded.add(negatedMatch[1].toLowerCase());
   }
-  const words = (clause.match(CATEGORY_WORD_RE) || []).filter(w => !excluded.has(w.toLowerCase()));
+  const words = (rewritten.match(CATEGORY_WORD_RE) || []).filter(w => !excluded.has(w.toLowerCase()));
   return [...new Set(words.map(w => CATEGORY_LABELS[w.toLowerCase()]))];
 }
 
