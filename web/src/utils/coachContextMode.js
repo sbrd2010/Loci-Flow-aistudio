@@ -8,7 +8,7 @@ const REMINDER_VERB_RE = /\b(remind me|check in|follow up|circle back|ask me aga
 const TIME_SIGNAL_RE = /\b(later|in \d+\s*min\w*|at \d{1,2}(:\d{2})?\s*(am|pm)?|tomorrow(?: morning)?)\b/i;
 const STANDALONE_TIME_RE = /\b(in \d+\s*min\w*|tomorrow morning)\b/i;
 
-const BROAD_TASK_QUERY_RE = /\b(what are my tasks|what['’]?s due|what is due|anything due|due date|what['’]?s my deadline|what is my deadline|show my tasks|what do i have today|what tasks do i have|list my tasks|my task list|show my list|what['’]?s on my list|what do i need to do today|check (?:my |the )?(?:today['’]?s|this week['’]?s?|week) (?:focus|horizon)|check (?:this|my) week horizon|check today['’]?s focus|today['’]?s?\s+focus|what['’]?s?\s+my\s+focus\b|my\s+focus\s+for\s+today|today['’]?s?\s+priorit(?:y|ies)|(?:what are|tell me|show me|check|what about) my(?:\s+(?:this\s+|(?:\d+|six)\s+)?(?:career|work|health|personal|month|quarter)s?['’]?s?(?:\s*(?:and|&|\/|,)\s*(?:this\s+|(?:\d+|six)\s+)?(?:career|work|health|personal|month|quarter)s?['’]?s?){0,2})?\s*priorit(?:y|ies)|what should be my priority|which priority should i focus on|can['’]?t you check|check my week|(?:what['’]?s|what is|anything)\s+(?:actually |really )?(?:urgent|pressing|critical|important)\b|(?:what['’]?s|what is)(?: next)? on my plate(?: today)?|(?:what['’]?s|what is) in my brain dump|check my brain dump|what do i even do|what['’]?s there to do|what to do (?:right now|today|now)\b)\b/i;
+const BROAD_TASK_QUERY_RE = /\b(what are my tasks|what['’]?s due|what is due|anything due|due date|what['’]?s my deadline|what is my deadline|show my tasks|what do i have today|what tasks do i have|list my tasks|my task list|show my list|what['’]?s on my list|what do i need to do today|check (?:my |the )?(?:today['’]?s|this week['’]?s?|week) (?:focus|horizon)|check (?:this|my) week horizon|check today['’]?s focus|today['’]?s?\s+focus|what['’]?s?\s+my\s+focus\b|my\s+focus\s+for\s+today|today['’]?s?\s+priorit(?:y|ies)|(?:what are|tell me|show me|check|what about) my(?:\s+(?:this\s+|(?:\d+|six)\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family|month|quarter)s?['’]?s?(?:\s*(?:and|&|\/|,)\s*(?:this\s+|(?:\d+|six)\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family|month|quarter)s?['’]?s?){0,2})?\s*priorit(?:y|ies)|what should be my priority|which priority should i focus on|can['’]?t you check|check my week|(?:what['’]?s|what is|anything)\s+(?:actually |really )?(?:urgent|pressing|critical|important)\b|(?:what['’]?s|what is)(?: next)? on my plate(?: today)?|(?:what['’]?s|what is) in my brain dump|check my brain dump|what do i even do|what['’]?s there to do|what to do (?:right now|today|now)\b)\b/i;
 
 // Real users type messy — texting shorthand, dropped apostrophes, common
 // abbreviations — and every regex above only recognizes clean English
@@ -31,8 +31,8 @@ const SHORTHAND_MAP = [
   // "(?:\d+|six)\s+(?:career|work|...)" branch elsewhere in this file need the
   // literal digit. The lookbehind guards "at N", the lookahead guards
   // "N <unit>"/"N am|pm"/"N <category>".
-  [/(?<!\bat\s)\b2\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|career|work|health|personal|months?|quarters?)\b)/gi, "to"],
-  [/(?<!\bat\s)\b4\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|career|work|health|personal|months?|quarters?)\b)/gi, "for"],
+  [/(?<!\bat\s)\b2\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|career|work|health|personal|job|office|fitness|wellness|gym|home|family|months?|quarters?)\b)/gi, "to"],
+  [/(?<!\bat\s)\b4\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|career|work|health|personal|job|office|fitness|wellness|gym|home|family|months?|quarters?)\b)/gi, "for"],
   [/\bb4\b/gi, "before"],
   [/\bdis\b/gi, "this"],
   [/\bdat\b/gi, "that"],
@@ -105,9 +105,25 @@ const LOW_ENERGY_RE = /\b(low energy|no energy|low on energy|out of energy|exhau
 // horizon-filtered ("what should I focus on this month?") priority questions
 // need the PRIORITY QUESTIONS framework and {Category} tags that only the
 // full_task prompt carries — never compact these, even on the paced path.
-const PRIORITY_FILTER_RE = /\bwhich\s+(?:of\s+my\s+)?(?:career|work|health|personal)\s+tasks?\b|\b(?:career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b|\bfocus on this\s+(?:month|quarter|week)\b|\b(?:focus on|priorit\w*|do|work on|start)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(?:career|work|health|personal)\b|\b(?:show me|what are|list|check|tell me)\s+my\s+(?:career|work|health|personal)\s+tasks?\b|\bwhat\s+(?:career|work|health|personal)\s+tasks?\b/i;
+const PRIORITY_FILTER_RE = /\bwhich\s+(?:of\s+my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+tasks?\b|\b(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+(?:task|priorit\w*)\s+(?:should|to)\b|\bfocus on this\s+(?:month|quarter|week)\b|\b(?:focus on|priorit\w*|do|work on|start)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b|\b(?:show me|what are|list|check|tell me)\s+my\s+(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+tasks?\b|\bwhat\s+(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+tasks?\b/i;
 
-const CATEGORY_LABELS = { career: "Career", work: "Work", health: "Health", personal: "Personal" };
+// job/office -> Work, fitness/wellness/gym -> Health, home/family -> Personal:
+// common synonyms for the app's four category tags, so a message naming one
+// of these (e.g. "what are my job priorities") still resolves to the actual
+// tag a task would carry, instead of being invisible to category detection.
+const CATEGORY_LABELS = {
+  career: "Career",
+  work: "Work",
+  health: "Health",
+  personal: "Personal",
+  job: "Work",
+  office: "Work",
+  fitness: "Health",
+  wellness: "Health",
+  gym: "Health",
+  home: "Personal",
+  family: "Personal",
+};
 
 // Mirrors PRIORITY_FILTER_RE's category-question shapes (not its horizon
 // shape — "focus on this month" isn't a {Category} filter) but captures
@@ -124,13 +140,13 @@ const SINGLE_CATEGORY_PATTERNS = [
   // ask, even though they share the "<category> task ... to" shape. The
   // window is wide enough to span a few filler words between the verb and
   // the category.
-  /(?<!\b(?:add|create|make)\b.{0,40})\b(career|work|health|personal)\s+(?:task|priorit\w*)\s+(?:should|to)\b/i,
+  /(?<!\b(?:add|create|make)\b.{0,40})\b(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+(?:task|priorit\w*)\s+(?:should|to)\b/i,
   // "Show me/what are/list my <category> tasks" — a category-scoped
   // task-list ask, distinct from the "priorities" clause below.
-  /\b(?:show me|what are|list|check|tell me)\s+my\s+(career|work|health|personal)\s+tasks?\b/i,
+  /\b(?:show me|what are|list|check|tell me)\s+my\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+tasks?\b/i,
   // "What work tasks do I have?" — category named directly before "task(s)",
   // without "are/my" the pattern above requires.
-  /\bwhat\s+(career|work|health|personal)\s+tasks?\b/i,
+  /\bwhat\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\s+tasks?\b/i,
 ];
 
 // Mirrors the "which <category> task(s)" shape, but — like the other clauses
@@ -154,7 +170,7 @@ const CATEGORY_PRIORITY_CLAUSE_RE = /(?:what are|tell me|show me|check|what abou
 // instead of a single category, so "prioritize for health and work" finds
 // both instead of only the first.
 const FOCUS_FOR_CLAUSE_RE = /\b(?:focus on|priorit\w*|do|work on|start)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?([a-z0-9\s&/,'’]{1,40})/i;
-const CATEGORY_WORD_RE = /\b(?:career|work|health|personal)\b/gi;
+const CATEGORY_WORD_RE = /\b(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b/gi;
 // A possessive like "boss's" or "manager's" inside the captured clause means
 // the "my" in "my boss's work priorities" scopes to the boss, not the user —
 // these are someone else's priorities, not a category the user is asking
@@ -163,7 +179,7 @@ const THIRD_PARTY_POSSESSIVE_RE = /\w['’]s\b/;
 // "for work, not personal" names Personal only to exclude it, not to ask
 // about it — strip any category immediately preceded by "not" before
 // treating the rest of the clause as requested categories.
-const NEGATED_CATEGORY_RE = /\bnot\s+(career|work|health|personal)\b/gi;
+const NEGATED_CATEGORY_RE = /\bnot\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b/gi;
 
 // Scans a captured clause (e.g. "health and work", "boss's work") for every
 // category word inside, in the order first mentioned, deduped, excluding

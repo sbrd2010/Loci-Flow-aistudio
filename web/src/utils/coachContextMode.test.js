@@ -511,6 +511,13 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("start a timer for this work task, which work task should I do first", pacedOpts)).toBe("full_task");
       expect(classifyContextMode("I have low energy, start a timer for this", pacedOpts)).toBe("full_task");
     });
+
+    it("never compacts category-synonym-scoped priority asks, even on the paced path (live-testing round 3)", () => {
+      const pacedOpts = { lastFullTaskTime: Date.now(), hasLastPlan: true };
+      expect(classifyContextMode("which job task should i do first", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("what are my fitness priorities", pacedOpts)).toBe("full_task");
+      expect(classifyContextMode("show me my wellness tasks", pacedOpts)).toBe("full_task");
+    });
   });
 });
 
@@ -614,5 +621,25 @@ describe("detectRequestedCategories", () => {
     expect(detectRequestedCategories("What should I do for work?")).toEqual(["Work"]);
     expect(detectRequestedCategories("Which task should I start for health?")).toEqual(["Health"]);
     expect(detectRequestedCategories("What work tasks do I have?")).toEqual(["Work"]);
+  });
+
+  // Found via live-testing round 3: real users name a category by a common
+  // synonym ("job", "fitness") far more often than by the app's exact tag
+  // word ("Work", "Health") — none of these resolved to anything before,
+  // silencing the category-mismatch honesty check for the majority of
+  // real-world phrasings.
+  it("maps common category synonyms to their canonical tag (live-testing round 3)", () => {
+    expect(detectRequestedCategories("which job task should i do first")).toEqual(["Work"]);
+    expect(detectRequestedCategories("which office task should i do first")).toEqual(["Work"]);
+    expect(detectRequestedCategories("which fitness task should i do first")).toEqual(["Health"]);
+    expect(detectRequestedCategories("which wellness task should i do first")).toEqual(["Health"]);
+    expect(detectRequestedCategories("which gym task should i do first")).toEqual(["Health"]);
+    expect(detectRequestedCategories("which home task should i do first")).toEqual(["Personal"]);
+    expect(detectRequestedCategories("which family task should i do first")).toEqual(["Personal"]);
+    expect(detectRequestedCategories("what are my job priorities")).toEqual(["Work"]);
+    expect(detectRequestedCategories("what are my fitness priorities")).toEqual(["Health"]);
+    expect(detectRequestedCategories("what are my home priorities")).toEqual(["Personal"]);
+    expect(detectRequestedCategories("show me my job tasks")).toEqual(["Work"]);
+    expect(detectRequestedCategories("show me my fitness tasks")).toEqual(["Health"]);
   });
 });
