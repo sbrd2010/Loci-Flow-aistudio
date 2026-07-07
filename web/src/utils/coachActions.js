@@ -81,7 +81,10 @@ const INTENT_PATTERNS = {
   // within a short lookbehind window — without it, asking whether a task was
   // already done could let the gate treat the model's answer as authorizing
   // an actual completion the user never requested (Codex review finding).
-  COMPLETE_TASK: /\b(done|finish(ed|ing)?|complet(e|ed|ing)|wrapped? up|knocked out|(?<!\b(?:have|has|did)\b.{0,20})crossed\s+.{1,50}\boff\b)\b/i,
+  // "wrapped up"/"knocked out" share the same guard — without it, "have I
+  // wrapped up the report already?"/"was the report knocked out yesterday?"
+  // had the same false-authorization risk (Codex review finding).
+  COMPLETE_TASK: /\b(done|finish(ed|ing)?|complet(e|ed|ing)|(?<!\b(?:have|has|did|was|were)\b.{0,20})wrapped? up|(?<!\b(?:have|has|did|was|were)\b.{0,20})knocked out|(?<!\b(?:have|has|did|was|were)\b.{0,20})crossed\s+.{1,50}\boff\b)\b/i,
   // "set"/"swap" and "make X my focus" mirror the phrasings coachContextMode.js's
   // EXPLICIT_ACTION_RE now routes to full_task — without a matching intent
   // pattern here, the model could emit a SET_NOW_FOCUS tag for these that
@@ -99,8 +102,11 @@ const INTENT_PATTERNS = {
   // coachContextMode.js's EXPLICIT_ACTION_RE synonyms — see live-testing
   // round 3 — and share that same question-word lookbehind guard, so "what
   // should I dive into for work, Write report?" doesn't register as an
-  // imperative START_FOCUS request (Codex review finding).
-  START_FOCUS: new RegExp(`\\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\\b|(?<!\\b(?:what|which|how|why|would|could|should)\\b.{0,20})(?:dive into|jump into|time to work on)|${BODY_DOUBLE_REF_RE.source}`, "i"),
+  // imperative START_FOCUS request (Codex review finding). Also excludes
+  // "can"/"is"/"when"/"where" — "can I dive into...", "is now a good time to
+  // work on...", "when is it time to work on..." slipped through the
+  // original narrower list (Codex review finding).
+  START_FOCUS: new RegExp(`\\b(start|begin|kick off|let'?s (start|go)).*(focus|timer|session|working)\\b|(?<!\\b(?:what|which|how|why|would|could|should|can|is|when|where)\\b.{0,20})(?:dive into|jump into|time to work on)|${BODY_DOUBLE_REF_RE.source}`, "i"),
   // don['’]?t (not don'?t) so a curly/smart apostrophe (common on mobile
   // keyboards) still matches — coachContextMode.js's EXPLICIT_ACTION_RE
   // already accepts both forms for this same phrase. "jot/note down" and
@@ -110,8 +116,11 @@ const INTENT_PATTERNS = {
   // down call the plumber" or "where did I note down call the plumber?"
   // (already-done statements/questions, not requests) could let the gate
   // treat the model's answer as authorizing an actual add the user never
-  // requested (Codex review finding).
-  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don['’]?t forget|add .+ to (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|(?<!\b(?:where|when|did|have|has|already)\b.{0,15})(?:jot(?:ted)? down|note(?:d)? down)|need to remember (?:to|that))/i,
+  // requested (Codex review finding). Also excludes permission/advice
+  // framings ("should I jot down...", "can I note down...", "do I need to
+  // jot down...", "would it help to note down...") — these are advice
+  // questions, not requests (Codex review finding).
+  ADD_TASK: /\b(add( a| an)? task|create a task|new task|remind me (to|that|i)|don['’]?t forget|add .+ to (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|put .+ (on|in) (my |the )?(today'?s?(\s+(list|tasks?))?|list|tasks?)\b|(?<!\b(?:where|when|did|have|has|already)\b.{0,15})(?<!\b(?:should|can|could)\s+i\s+|do\s+i\s+need\s+to\s+|would\s+it\s+help\s+to\s+|is\s+it\s+worth\s+)(?:jot(?:ted)? down|note(?:d)? down)|need to remember (?:to|that))/i,
   // "postpone"/"put off" mirror coachContextMode.js's EXPLICIT_ACTION_RE
   // synonyms — see live-testing round 3. All three share the same
   // advice-question exclusion PR #340 refined for "skip" alone (modal+I with
@@ -123,7 +132,12 @@ const INTENT_PATTERNS = {
   // postpone...") and the hypothetical "if I <verb>" framing ("what would
   // happen if I put off...") — the original guard only covered the
   // interrogative-inversion "<modal> I <verb>" order (Codex review finding).
-  PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|(?<!\b(?:(?:can|could|would|should|do)\s+i|i\s+(?:can|could|would|should)|if\s+i|am\s+i\s+free\s+to|not\s+going\s+to\s+hurt\s+if\s+i)\s+(?:just|maybe|really|actually|honestly)?\s*)(?:skip|postpone|put off))\b/i,
+  // Also excludes impersonal advice framings ("is it okay to...", "would it
+  // be bad to...", "does it make sense to...", "what happens when I...",
+  // "when is it okay to...") — these don't have a first-person "I <verb>"
+  // shape at all, so the modal+I guards above never matched them (Codex
+  // review finding).
+  PARK_TASK: /\b(park|defer|set aside|shelve|save .* for later|not (today|now|right now)|(?<!\b(?:(?:can|could|would|should|do)\s+i|i\s+(?:can|could|would|should)|if\s+i|am\s+i\s+free\s+to|not\s+going\s+to\s+hurt\s+if\s+i|what\s+happens\s+(?:if|when)\s+i|is\s+it\s+(?:okay|ok|fine|wise|smart|sensible|reasonable|worth\s+it|a\s+good\s+idea|bad|risky)\s+to|would\s+it\s+be\s+(?:okay|ok|fine|wise|smart|sensible|reasonable|bad|risky|better|worse)\s+to|does\s+it\s+make\s+sense\s+to|when\s+(?:is\s+it|should\s+it\s+be|would\s+it\s+be)\s+(?:okay|ok|fine|wise|smart)\s+to)\s+(?:just|maybe|really|actually|honestly)?\s*)(?:skip|postpone|put off))\b/i,
 };
 
 // Catches negated phrasing ("I'm not done", "don't park it") immediately

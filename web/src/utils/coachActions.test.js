@@ -418,6 +418,45 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("START_FOCUS", "let's dive into Write report now", "Write report")).toBe(true);
   });
 
+  it("blocks impersonal advice framings ('is it okay to...', 'what happens when I...') from parking a task (Codex review finding, PR #342 round 2)", () => {
+    // These don't have a first-person "I <verb>" shape at all, so the
+    // modal+I guards from round 1 never matched them.
+    expect(matchesUserIntent("PARK_TASK", "what happens when I postpone the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "is it okay to postpone the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "would it be bad to put off the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "does it make sense to postpone the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "when is it okay to put off the report?", "the report")).toBe(false);
+    // Genuine imperative phrasing still works.
+    expect(matchesUserIntent("PARK_TASK", "postpone the report", "the report")).toBe(true);
+  });
+
+  it("blocks permission/advice questions from adding a task via jot/note down (Codex review finding, PR #342 round 2)", () => {
+    expect(matchesUserIntent("ADD_TASK", "should I jot down call the plumber?", "call the plumber")).toBe(false);
+    expect(matchesUserIntent("ADD_TASK", "can I note down call the plumber somewhere?", "call the plumber")).toBe(false);
+    expect(matchesUserIntent("ADD_TASK", "do I need to jot down call the plumber?", "call the plumber")).toBe(false);
+    expect(matchesUserIntent("ADD_TASK", "would it help to note down call the plumber?", "call the plumber")).toBe(false);
+    // Genuine imperative phrasing still works.
+    expect(matchesUserIntent("ADD_TASK", "jot down call the plumber", "call the plumber")).toBe(true);
+    // A polite imperative addressed to the coach still works too.
+    expect(matchesUserIntent("ADD_TASK", "can you jot down call the plumber?", "call the plumber")).toBe(true);
+  });
+
+  it("blocks more question framings ('can I dive into...', 'is now a good time to...') from starting a focus session (Codex review finding, PR #342 round 2)", () => {
+    expect(matchesUserIntent("START_FOCUS", "can I dive into the report tomorrow?", "the report")).toBe(false);
+    expect(matchesUserIntent("START_FOCUS", "is now a good time to work on the report?", "the report")).toBe(false);
+    expect(matchesUserIntent("START_FOCUS", "when is it time to work on the report?", "the report")).toBe(false);
+    // Genuine imperative phrasing still works.
+    expect(matchesUserIntent("START_FOCUS", "let's dive into the report now", "the report")).toBe(true);
+  });
+
+  it("blocks status questions from completing a task via wrapped-up/knocked-out (Codex review finding, PR #342 round 2)", () => {
+    expect(matchesUserIntent("COMPLETE_TASK", "have I wrapped up the report already?", "the report")).toBe(false);
+    expect(matchesUserIntent("COMPLETE_TASK", "was the report knocked out yesterday?", "the report")).toBe(false);
+    // Genuine statements still work.
+    expect(matchesUserIntent("COMPLETE_TASK", "I wrapped up the report", "the report")).toBe(true);
+    expect(matchesUserIntent("COMPLETE_TASK", "I knocked out the report", "the report")).toBe(true);
+  });
+
   it("normalizes shorthand before intent matching, same as coachContextMode's classifier (Codex review finding)", () => {
     // "remind me 2 call the plumber" reaches full_task via coachContextMode's
     // normalizer, but without the same normalization here, this gate would

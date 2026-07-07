@@ -115,6 +115,29 @@ describe("classifyContextMode", () => {
     expect(classifyContextMode("I'm done replying to that important message")).toBe("full_task");
   });
 
+  it("excludes more non-task gerunds from 'done <gerund>' (Codex review finding, PR #342 round 2)", () => {
+    expect(classifyContextMode("I'm done arguing about the report")).not.toBe("full_task");
+    expect(classifyContextMode("I'm done waiting on the report")).not.toBe("full_task");
+    expect(classifyContextMode("I'm done pretending this report matters")).not.toBe("full_task");
+    expect(classifyContextMode("I'm done obsessing over the report")).not.toBe("full_task");
+    expect(classifyContextMode("I'm done avoiding the report")).not.toBe("full_task");
+  });
+
+  it("guards the routing regex for wrapped-up/knocked-out/jot-down/put-off/postpone/shelve with the same question-word exclusion as 'dive into' (Codex review finding, PR #342 round 2)", () => {
+    // Even though coachActions.js's gate would still block any resulting
+    // mutation, unguarded routing still sent ordinary definition/how-to/
+    // general-knowledge questions into full_task, exposing the user's task
+    // snapshot and action instructions unnecessarily.
+    expect(classifyContextMode("what does postpone mean?")).not.toBe("full_task");
+    expect(classifyContextMode("how do I jot down notes better?")).not.toBe("full_task");
+    expect(classifyContextMode("why do people put off chores?")).not.toBe("full_task");
+    // The genuine imperative/statement phrasings still work.
+    expect(classifyContextMode("postpone the report")).toBe("full_task");
+    expect(classifyContextMode("jot down call the plumber")).toBe("full_task");
+    expect(classifyContextMode("I wrapped up the report")).toBe("full_task");
+    expect(classifyContextMode("I knocked out the report")).toBe("full_task");
+  });
+
   it("excludes a preceding question word from the 'dive into'/'jump into'/'time to work on'/'want to focus on' synonyms (merge regression)", () => {
     // Merging #340's TASK_ASK_RE bounding work (which requires "what should
     // I dive into" to end in a short, task-shaped continuation) with #342's
