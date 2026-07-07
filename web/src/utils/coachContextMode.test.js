@@ -927,6 +927,31 @@ describe("detectRequestedCategories", () => {
     expect(detectRequestedCategories("what are my family priorities?")).toEqual(["Personal"]);
   });
 
+  it("applies the compound-category rewrite to classifyContextMode's routing too, not just detectRequestedCategories (Codex review finding, PR #341 round 3)", () => {
+    // The rewrite previously only ran inside detectRequestedCategories, so
+    // classifyContextMode still evaluated the raw "job search"/"work from
+    // home" text and BROAD_TASK_QUERY_RE (which requires the category word
+    // immediately before "priorities", not an extra word like "search" or
+    // "from home" in between) never matched, leaving these at "light" even
+    // though detectRequestedCategories separately resolved a category.
+    expect(classifyContextMode("what are my job search priorities")).toBe("full_task");
+    expect(classifyContextMode("what are my work from home priorities")).toBe("full_task");
+  });
+
+  it("resolves job-interview and home-workout compound phrases, and non-Work 'office' compounds (Codex review finding, PR #341 round 3)", () => {
+    // "job interview(s)" is Career, mirroring "job search"/"job application".
+    expect(detectRequestedCategories("what should I prioritize for job interviews?")).toEqual(["Career"]);
+    expect(detectRequestedCategories("which job interview task should I do first?")).toEqual(["Career"]);
+    // "home workout" is Health (exercise), not Personal (bare "home").
+    expect(detectRequestedCategories("which home workout task should I do first?")).toEqual(["Health"]);
+    // "post office" is Personal (errand), "dentist office" is Health
+    // (medical admin) — neither is Work despite the bare "office" synonym.
+    expect(detectRequestedCategories("what should I prioritize for post office?")).toEqual(["Personal"]);
+    expect(detectRequestedCategories("what should I prioritize for dentist office?")).toEqual(["Health"]);
+    // Bare "office" (no compound) still correctly means Work.
+    expect(detectRequestedCategories("what should I prioritize for office?")).toEqual(["Work"]);
+  });
+
   it("detects category-scoped task-list asks like 'show me my work tasks' (Codex review finding)", () => {
     expect(detectRequestedCategories("Show me my work tasks")).toEqual(["Work"]);
     expect(detectRequestedCategories("What are my health tasks?")).toEqual(["Health"]);

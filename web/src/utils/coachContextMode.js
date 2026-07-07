@@ -116,8 +116,16 @@ const SHORTHAND_MAP = [
 // via this normalization (e.g. "remind me 2 call the plumber") could still
 // have its resulting action tag blocked by the gate, which would otherwise
 // see the raw, un-normalized text ("2" instead of "to").
+// Also applies the compound-category rewrite (see COMPOUND_CATEGORY_PHRASES
+// below) — it previously only ran inside detectRequestedCategories, so
+// classifyContextMode still evaluated the raw "job search"/"work from home"
+// text and BROAD_TASK_QUERY_RE (which requires a single bare category word
+// immediately before "priorities", not an extra word like "search"/"from
+// home" in between) never matched, leaving broad asks like "what are my job
+// search priorities" at "light" even though detectRequestedCategories
+// separately resolved a category for them (Codex review finding).
 export function normalizeForClassification(text) {
-  return SHORTHAND_MAP.reduce((acc, [re, replacement]) => acc.replace(re, replacement), text);
+  return rewriteCompoundCategoryPhrases(SHORTHAND_MAP.reduce((acc, [re, replacement]) => acc.replace(re, replacement), text));
 }
 
 function isCheckinRequest(text) {
@@ -362,8 +370,12 @@ const NEGATED_CATEGORY_RE = /\bnot\s+(career|work|health|personal|job|office|fit
 const COMPOUND_CATEGORY_PHRASES = [
   [/\bjob\s+search(?:ing)?\b/gi, "career"],
   [/\bjob\s+application(?:s)?\b/gi, "career"],
+  [/\bjob\s+interview(?:s)?\b/gi, "career"],
   [/\bfamily\s+doctor\b/gi, "health"],
   [/\bdoctor[’']?s?\s+office\b/gi, "health"],
+  [/\bdentist[’']?s?\s+office\b/gi, "health"],
+  [/\bhome\s+workout(?:s)?\b/gi, "health"],
+  [/\bpost\s+office\b/gi, "personal"],
   [/\bwork(?:ing)?\s+from\s+home\b/gi, "work"],
 ];
 
@@ -393,13 +405,13 @@ function extractCategoryLabels(clause) {
 // but relying on the model to notice via the {Category} tags alone isn't
 // reliable enough on its own; see issue #338.
 export function detectRequestedCategories(message) {
-  // Rewritten before any pattern below runs (not just the clause-scanning
+  // The compound-phrase rewrite happens inside normalizeForClassification
+  // now, so it runs before every pattern below (not just the clause-scanning
   // ones) — SINGLE_CATEGORY_PATTERNS matches a raw category word directly
   // against the full text, so "what work from home task should I do
-  // first?" satisfied its "<category> task should" shape on the bare "home"
-  // synonym before the compound-phrase rewrite ever ran, returning Personal
-  // instead of Work (Codex review finding).
-  const text = rewriteCompoundCategoryPhrases(normalizeForClassification(String(message || "")));
+  // first?" needs "home" already rewritten to "work" before it ever reaches
+  // this function's own pattern matching (Codex review finding).
+  const text = normalizeForClassification(String(message || ""));
   // Checked before SINGLE_CATEGORY_PATTERNS: a compound "which work task and
   // health task should..." also matches the "<category> task should" shape
   // below for its second half alone, which would return early with only one
