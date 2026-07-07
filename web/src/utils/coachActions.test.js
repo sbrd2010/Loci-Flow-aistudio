@@ -259,6 +259,18 @@ describe("matchesUserIntent", () => {
     expect(matchesUserIntent("SET_NOW_FOCUS", "What should I do next?")).toBe(false);
   });
 
+  it("does not treat a 'what can I skip' advice question as a PARK_TASK request (Codex review finding)", () => {
+    // coachContextMode.js's NEGATION_PRIORITY_RE now routes "what can I skip"
+    // advice questions to full_task — without this guard, a bare "skip" here
+    // would let the gate treat the model's answer (which names the task
+    // being asked about) as authorizing a real park mutation the user never
+    // requested.
+    expect(matchesUserIntent("PARK_TASK", "what can I skip for the report today?", "the report")).toBe(false);
+    expect(matchesUserIntent("PARK_TASK", "should I skip the report?", "the report")).toBe(false);
+    // Genuine imperative phrasing still works.
+    expect(matchesUserIntent("PARK_TASK", "skip the report for now", "the report")).toBe(true);
+  });
+
   it("matches SET_NOW_FOCUS on set/swap/make-my-focus phrasing (Codex review finding)", () => {
     // coachContextMode.js's EXPLICIT_ACTION_RE routes "set/swap my focus to
     // X" and "make X my focus" to full_task, so this gate must recognize the

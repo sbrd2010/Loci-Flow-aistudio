@@ -119,12 +119,26 @@ const BODY_DOUBLE_RE = /\b(body[\s-]?double|sit with me|stay with me|work (?:alo
 // work-session request — route it to "emotional" instead of "full_task".
 const FEAR_DISTRESS_RE = /\b(i(['’]m| am) (?:scared|afraid|terrified|frightened)|don['’]?t leave me)\b/i;
 
-const TASK_ASK_RE = /\b(what should i (?:actually |really |just |honestly )?(?:do|work on|start|focus on|tackle|handle|knock out|deal with|get to|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on|nail)|which (?:one|task) (?:shall i focus|should i (?:start|do|tackle|handle))|shall i focus|help me (?:choose|pick|prioritize|plan)|choose a task|pick a task|pick one (?:thing|task)|next step|prioritize my|plan my|plan today)\b/i;
+// "handle"/"deal with"/"nail" are common task verbs but also ordinary verbs
+// in unrelated domains ("what should I handle carefully in this recipe?",
+// "what should I nail to the wall?") — require the verb to be followed only
+// by a short, task-shaped continuation (or nothing) rather than matching
+// regardless of trailing content, so an unrelated question with substantial
+// text after the verb doesn't false-positive into full_task. "get to" was
+// removed entirely — too generic/ambiguous ("get to eat", "get to know") to
+// safely pattern-match at all (Codex review finding).
+const TASK_ASK_RE = /\b(what should i (?:actually |really |just |honestly )?(?:do|work on|start|focus on|tackle|knock out|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on)|what should i (?:actually |really |just |honestly )?(?:handle|deal with|nail)(?=\s*(?:first|next|today|now|right now)?\s*(?:[.?!]|$))|which (?:one|task) (?:shall i focus|should i (?:start|do|tackle|handle))|shall i focus|help me (?:choose|pick|prioritize|plan)|choose a task|pick a task|pick one (?:thing|task)|next step|prioritize my|plan my|plan today)\b/i;
 
 // Broader "what's my priority/focus" noun-phrase asks — these name a
 // priority without any of TASK_ASK_RE's "what should I <verb>" phrasing at
 // all, so a purely verb-based pattern can never catch them.
-const PRIORITY_SYNONYM_RE = /\bwhat(?:['’]?s|\s+is) (?:my |the )?(?:most )?(?:important|urgent|pressing|critical|top|main|biggest)(?: (?:thing|priority|task|focus))?\b|\bwhat needs (?:my attention|doing|to be done)\b|\bwhat deserves my (?:attention|energy)\b|\bwhat(?:['’]?s|\s+is) (?:on (?:my |the )?(?:deck|radar|plate|agenda|horizon)|next|pending|coming up)\b|\bwhat do i have going on\b|\bgive me (?:some |a bit of )?(?:my priorities|the game plan|clarity|direction)\b|\b(?:long|short) term priorities\b|\b(?:immediate|future) priorities\b|\bpriorit(?:y|ies) for the (?:day|week|month|quarter|year)\b|\bthis (?:week|month|quarter|year)['’]?s? focus\b|\bwhat(?:['’]?s|\s+is) the smart move\b|\bwhat(?:['’]?s|\s+is) my north star\b|\bwhat(?:['’]?s|\s+is) the one thing i should (?:nail|do|focus on)\b|\bnumber one (?:focus|priority|thing)\b|\bpoint me (?:in the right direction|toward|to)\b|\bsteer me (?:toward|to)\b|\borient me\b|\bwalk me through what matters\b/i;
+// "important"/"urgent"/"pressing"/"critical" stand alone as priority
+// descriptors even without a following noun ("what's important" is already
+// a priority question). "top"/"main"/"biggest" don't — they're relative
+// modifiers that need an object to mean anything task-related, so without
+// requiring the noun, "what's the top speed of a cheetah?" or "what's the
+// main idea here?" would false-positive into full_task (Codex review finding).
+const PRIORITY_SYNONYM_RE = /\bwhat(?:['’]?s|\s+is) (?:my |the )?(?:most )?(?:important|urgent|pressing|critical)(?: (?:thing|priority|task|focus))?\b|\bwhat(?:['’]?s|\s+is) (?:my |the )?(?:top|main|biggest) (?:thing|priority|task|focus)\b|\bwhat needs (?:my attention|doing|to be done)\b|\bwhat deserves my (?:attention|energy)\b|\bwhat(?:['’]?s|\s+is) (?:on (?:my |the )?(?:deck|radar|plate|agenda|horizon)|next|pending|coming up)\b|\bwhat do i have going on\b|\bgive me (?:some |a bit of )?(?:my priorities|the game plan|clarity|direction)\b|\b(?:long|short) term priorities\b|\b(?:immediate|future) priorities\b|\bpriorit(?:y|ies) for the (?:day|week|month|quarter|year)\b|\bthis (?:week|month|quarter|year)['’]?s? focus\b|\bwhat(?:['’]?s|\s+is) the smart move\b|\bwhat(?:['’]?s|\s+is) my north star\b|\bwhat(?:['’]?s|\s+is) the one thing i should (?:nail|do|focus on)\b|\bnumber one (?:focus|priority|thing)\b|\bpoint me (?:in the right direction|toward|to)\b|\bsteer me (?:toward|to)\b|\borient me\b|\bwalk me through what matters\b/i;
 
 // Antonym/negation priority asks ("what can wait", "what's not urgent") —
 // these are just as much a priority question as their positive-phrased

@@ -586,6 +586,30 @@ describe("classifyContextMode", () => {
       expect(classifyContextMode("wat health task shud i do fst")).toBe("full_task");
       expect(classifyContextMode("wich task shud i strt with")).toBe("full_task");
     });
+
+    it("does not treat unrelated 'what should I handle/deal with/nail' questions as task asks (Codex review finding)", () => {
+      // "get to" was removed entirely — too generic/ambiguous to safely
+      // pattern-match ("get to eat", "get to know").
+      expect(classifyContextMode("what should I get to eat?")).toBe("light");
+      expect(classifyContextMode("what should I handle carefully in this recipe?")).toBe("light");
+      expect(classifyContextMode("what should I nail to the wall?")).toBe("light");
+      // The legitimate bare/short-continuation phrasings still work.
+      expect(classifyContextMode("what should i handle first")).toBe("full_task");
+      expect(classifyContextMode("what should i handle")).toBe("full_task");
+      expect(classifyContextMode("what should i deal with today")).toBe("full_task");
+      expect(classifyContextMode("what should i nail today")).toBe("full_task");
+    });
+
+    it("requires a priority noun after 'top/main/biggest' but not after 'important/urgent' (Codex review finding)", () => {
+      expect(classifyContextMode("what's the top speed of a cheetah?")).toBe("light");
+      expect(classifyContextMode("what's the main idea here?")).toBe("light");
+      // The legitimate phrasings (with a priority noun) still work.
+      expect(classifyContextMode("what's my top priority")).toBe("full_task");
+      expect(classifyContextMode("what's my main focus")).toBe("full_task");
+      expect(classifyContextMode("what's the biggest priority")).toBe("full_task");
+      // "important"/"urgent"/"pressing"/"critical" still stand alone.
+      expect(classifyContextMode("what's most important right now")).toBe("full_task");
+    });
   });
 });
 
