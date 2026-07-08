@@ -301,5 +301,11 @@ describe("buildCoachSystemPrompt", () => {
         expect(out).not.toContain("[[SESSION_SUMMARY:");
       });
     });
+
+    it("profile_reflection explicitly distinguishes the session summary from durable memory, so a 'what do you know about me' answer can't blur this-conversation-only context into pinned facts/recent notes (Codex review finding, PR #347)", () => {
+      const out = buildCoachSystemPrompt("profile_reflection", baseCtx());
+      expect(out).toContain("NOT durable memory");
+      expect(out).toMatch(/summary of THIS chat session only/);
+    });
   });
 });

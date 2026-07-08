@@ -50,9 +50,16 @@ describe("parseSessionSummaryTag", () => {
     expect(summary).toBeNull();
   });
 
-  it("caps content at SESSION_SUMMARY_MAX_CHARS", () => {
+  it("rejects (rather than silently truncates) a well-formed summary over SESSION_SUMMARY_MAX_CHARS, so the caller retries instead of advancing the cursor past a cut-off rewrite (Codex review finding, PR #347)", () => {
     const long = "x".repeat(SESSION_SUMMARY_MAX_CHARS + 500);
-    const { summary } = parseSessionSummaryTag(`[[SESSION_SUMMARY: ${long}]]`);
+    const { summary, cleanText } = parseSessionSummaryTag(`Noted.\n[[SESSION_SUMMARY: ${long}]]`);
+    expect(summary).toBeNull();
+    expect(cleanText).toBe("Noted.");
+  });
+
+  it("accepts a well-formed summary exactly at SESSION_SUMMARY_MAX_CHARS", () => {
+    const atLimit = "x".repeat(SESSION_SUMMARY_MAX_CHARS);
+    const { summary } = parseSessionSummaryTag(`[[SESSION_SUMMARY: ${atLimit}]]`);
     expect(summary.length).toBe(SESSION_SUMMARY_MAX_CHARS);
   });
 
@@ -157,7 +164,22 @@ describe("buildPendingSummaryContext", () => {
   it("caps an individual message's length (Codex review finding, PR #347)", () => {
     const out = buildPendingSummaryContext([{ text: "x".repeat(1000), isUser: true }]);
     const line = out.split("\n").find(l => l.startsWith("User:"));
-    expect(line.length).toBeLessThan(320); // "User: " prefix + 300-char cap
+    expect(line.length).toBeLessThan(320); // "User: " prefix + 300-char cap + marker
+  });
+
+  it("marks a clipped message as truncated rather than presenting the prefix as complete, and does not mark a short message that way (Codex review finding, PR #347)", () => {
+    const out = buildPendingSummaryContext([
+      { text: "x".repeat(1000), isUser: true },
+      { text: "short message", isUser: false },
+    ]);
+    expect(out).toContain("[truncated]");
+    const shortLine = out.split("\n").find(l => l.startsWith("Coach:"));
+    expect(shortLine).not.toContain("[truncated]");
+  });
+
+  it("still counts a clipped message as included (advancing the cursor past it, not stalling on it forever)", () => {
+    const long = { text: "x".repeat(1000), isUser: true };
+    expect(pendingSummaryIncludedCount([long])).toBe(1);
   });
 
   it("keeps a contiguous OLDEST prefix (not the most recent) when the whole block would exceed the total budget — the cursor can only advance past what's actually shown (Codex review finding, PR #347)", () => {
