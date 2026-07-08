@@ -1,0 +1,216 @@
+import { describe, expect, it } from "vitest";
+import {
+  SESSION_SUMMARY_MAX_CHARS,
+  parseSessionSummaryTag,
+  needsSummaryUpdate,
+  pendingSummaryMessages,
+  buildPendingSummaryContext,
+  buildSessionSummaryWritingInstruction,
+  buildSessionSummaryContext,
+  trimChatHistoryWithCursor,
+  shouldIncludeSessionSummaryContext,
+} from "./coachSessionSummary";
+import { historyLimitForMode, trimHistoryForLLM } from "./coachContextMode";
+
+describe("parseSessionSummaryTag", () => {
+  it("extracts and strips a well-formed tag", () => {
+    const { cleanText, summary } = parseSessionSummaryTag(
+      "Sounds good.\n[[SESSION_SUMMARY: Current objective: ship PR2.]]"
+    );
+    expect(cleanText).toBe("Sounds good.");
+    expect(summary).toBe("Current objective: ship PR2.");
+  });
+
+  it("returns summary: null and the original text when the tag is absent", () => {
+    const { cleanText, summary } = parseSessionSummaryTag("Just a normal reply.");
+    expect(cleanText).toBe("Just a normal reply.");
+    expect(summary).toBeNull();
+  });
+
+  it("returns summary: null for an unclosed tag, leaving it as plain text (never crashes)", () => {
+    const { cleanText, summary } = parseSessionSummaryTag("Noted.\n[[SESSION_SUMMARY: this never closes");
+    expect(cleanText).toContain("[[SESSION_SUMMARY: this never closes");
+    expect(summary).toBeNull();
+  });
+
+  it("returns summary: null for a whitespace-only tag body (never an empty stored summary)", () => {
+    const { cleanText, summary } = parseSessionSummaryTag("Noted.\n[[SESSION_SUMMARY:   ]]");
+    expect(cleanText).toBe("Noted.");
+    expect(summary).toBeNull();
+  });
+
+  it("caps content at SESSION_SUMMARY_MAX_CHARS", () => {
+    const long = "x".repeat(SESSION_SUMMARY_MAX_CHARS + 500);
+    const { summary } = parseSessionSummaryTag(`[[SESSION_SUMMARY: ${long}]]`);
+    expect(summary.length).toBe(SESSION_SUMMARY_MAX_CHARS);
+  });
+
+  it("collapses newlines/control characters inside the tag", () => {
+    const { summary } = parseSessionSummaryTag("[[SESSION_SUMMARY: line one\nline two\ttabbed]]");
+    expect(summary).toBe("line one line two tabbed");
+  });
+});
+
+describe("needsSummaryUpdate", () => {
+  it("true when the raw window has moved past the cursor", () => {
+    expect(needsSummaryUpdate(6, 0)).toBe(true);
+  });
+
+  it("false when the cursor has already caught up to the window start", () => {
+    expect(needsSummaryUpdate(6, 6)).toBe(false);
+  });
+
+  it("false for a fresh conversation (cursor and window both at 0)", () => {
+    expect(needsSummaryUpdate(0, 0)).toBe(false);
+  });
+
+  it("treats a missing cursor as 0", () => {
+    expect(needsSummaryUpdate(1, undefined)).toBe(true);
+  });
+});
+
+describe("pendingSummaryMessages", () => {
+  const withUser = Array.from({ length: 12 }, (_, i) => ({ text: `m${i}`, isUser: i % 2 === 0 }));
+
+  it("returns exactly the slice between the cursor and the window start", () => {
+    const pending = pendingSummaryMessages(withUser, 6, 0);
+    expect(pending.map(m => m.text)).toEqual(["m0", "m1", "m2", "m3", "m4", "m5"]);
+  });
+
+  it("returns an empty array when the cursor has already caught up", () => {
+    expect(pendingSummaryMessages(withUser, 6, 6)).toEqual([]);
+  });
+
+  it("returns an empty array when the cursor is past the window start (nothing pending)", () => {
+    expect(pendingSummaryMessages(withUser, 6, 9)).toEqual([]);
+  });
+
+  it("never duplicates a message across two consecutive calls once the cursor advances", () => {
+    const firstBatch = pendingSummaryMessages(withUser, 6, 0);
+    // Simulate the cursor advancing to where the first batch ended, then a
+    // later turn moving the window further.
+    const secondBatch = pendingSummaryMessages(withUser, 9, 6);
+    const overlap = firstBatch.filter(a => secondBatch.some(b => b.text === a.text));
+    expect(overlap).toEqual([]);
+    expect(secondBatch.map(m => m.text)).toEqual(["m6", "m7", "m8"]);
+  });
+});
+
+describe("buildPendingSummaryContext", () => {
+  it("renders each message with a User/Coach label", () => {
+    const out = buildPendingSummaryContext([{ text: "hi", isUser: true }, { text: "hello", isUser: false }]);
+    expect(out).toContain("User: hi");
+    expect(out).toContain("Coach: hello");
+    expect(out).toContain("OLDER MESSAGES LEAVING THE ACTIVE WINDOW");
+  });
+
+  it("returns an empty string for no pending messages", () => {
+    expect(buildPendingSummaryContext([])).toBe("");
+    expect(buildPendingSummaryContext(undefined)).toBe("");
+  });
+
+  it("collapses internal whitespace so one message can't fake a second line", () => {
+    const out = buildPendingSummaryContext([{ text: "line one\nline two", isUser: true }]);
+    expect(out).toBe("OLDER MESSAGES LEAVING THE ACTIVE WINDOW (fold these into your summary now — after this turn they will not be shown again):\nUser: line one line two");
+  });
+});
+
+describe("shouldIncludeSessionSummaryContext", () => {
+  it("always true outside light mode, regardless of isReference/update state", () => {
+    expect(shouldIncludeSessionSummaryContext("full_task", false, false)).toBe(true);
+    expect(shouldIncludeSessionSummaryContext("emotional", false, false)).toBe(true);
+    expect(shouldIncludeSessionSummaryContext("compact_task", false, false)).toBe(true);
+    expect(shouldIncludeSessionSummaryContext("profile_reflection", false, false)).toBe(true);
+  });
+
+  it("light mode with neither isReference nor a pending update: excluded (stays cheap)", () => {
+    expect(shouldIncludeSessionSummaryContext("light", false, false)).toBe(false);
+  });
+
+  it("light mode is included when isReference is true", () => {
+    expect(shouldIncludeSessionSummaryContext("light", true, false)).toBe(true);
+  });
+
+  it("light mode is included when a summary update is needed this turn, even without isReference", () => {
+    // Otherwise the model would rewrite the summary without ever having
+    // seen the previous one, discarding everything captured so far.
+    expect(shouldIncludeSessionSummaryContext("light", false, true)).toBe(true);
+  });
+});
+
+describe("40-message display cap vs. the 5-pair raw LLM window (PR2 core requirement)", () => {
+  it("trimHistoryForLLM still returns only the last 10 messages (5 pairs) even from a 40-message history", () => {
+    const history = Array.from({ length: 40 }, (_, i) => ({ text: `m${i}`, isUser: i % 2 === 0 }));
+    const trimmed = trimHistoryForLLM(history, "full_task", false);
+    expect(trimmed.length).toBe(10);
+    expect(trimmed[0].text).toBe("m30");
+    expect(trimmed[trimmed.length - 1].text).toBe("m39");
+  });
+
+  it("historyLimitForMode and trimHistoryForLLM agree on the raw window size (no drift between the two)", () => {
+    const history = Array.from({ length: 40 }, (_, i) => ({ text: `m${i}`, isUser: i % 2 === 0 }));
+    const limit = historyLimitForMode("full_task", false);
+    expect(trimHistoryForLLM(history, "full_task", false).length).toBe(limit);
+  });
+});
+
+describe("buildSessionSummaryWritingInstruction", () => {
+  it("names the tag, target length, and the required shape", () => {
+    const out = buildSessionSummaryWritingInstruction("Rohan");
+    expect(out).toContain("[[SESSION_SUMMARY:");
+    expect(out).toContain("Current objective:");
+    expect(out).toContain("Unresolved questions:");
+    expect(out).toContain("REPLACES the old summary, it does not append to it");
+    expect(out).toContain("Rohan");
+  });
+});
+
+describe("buildSessionSummaryContext", () => {
+  it("returns an empty string when there is no summary yet", () => {
+    expect(buildSessionSummaryContext(null)).toBe("");
+    expect(buildSessionSummaryContext({})).toBe("");
+  });
+
+  it("formats the stored summary for the prompt", () => {
+    const out = buildSessionSummaryContext({ sessionSummary: "Current objective: ship PR2." });
+    expect(out).toContain("CONVERSATION SO FAR");
+    expect(out).toContain("Current objective: ship PR2.");
+  });
+});
+
+describe("trimChatHistoryWithCursor", () => {
+  const history = Array.from({ length: 45 }, (_, i) => ({ text: `m${i}`, isUser: i % 2 === 0 }));
+
+  it("trims to maxDbHistory and decrements the cursor by exactly the removed count", () => {
+    const { history: trimmed, coachSessionSummary, trimmed: didTrim } = trimChatHistoryWithCursor(
+      history, 40, { sessionSummary: "s", summarizedThroughIndex: 10 }
+    );
+    expect(trimmed.length).toBe(40);
+    expect(trimmed[0].text).toBe("m5"); // 45 - 40 = 5 removed from the front
+    expect(coachSessionSummary.summarizedThroughIndex).toBe(5); // 10 - 5
+    expect(didTrim).toBe(true);
+  });
+
+  it("never lets the cursor go negative when more was removed than the cursor's value", () => {
+    const { coachSessionSummary } = trimChatHistoryWithCursor(
+      history, 40, { sessionSummary: "s", summarizedThroughIndex: 2 }
+    );
+    expect(coachSessionSummary.summarizedThroughIndex).toBe(0);
+  });
+
+  it("is a no-op (and reports trimmed: false) when under the cap", () => {
+    const short = history.slice(0, 10);
+    const { history: out, coachSessionSummary, trimmed } = trimChatHistoryWithCursor(
+      short, 40, { sessionSummary: "s", summarizedThroughIndex: 3 }
+    );
+    expect(out).toBe(short);
+    expect(coachSessionSummary.summarizedThroughIndex).toBe(3);
+    expect(trimmed).toBe(false);
+  });
+
+  it("handles a null/missing coachSessionSummary gracefully", () => {
+    const { coachSessionSummary, trimmed } = trimChatHistoryWithCursor(history, 40, null);
+    expect(trimmed).toBe(true);
+    expect(coachSessionSummary.summarizedThroughIndex).toBe(0);
+  });
+});

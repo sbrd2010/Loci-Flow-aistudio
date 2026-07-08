@@ -714,7 +714,15 @@ export function trimHistoryForDb(history, userText, maxDbHistory = 20) {
   return withUser.length > maxDbHistory ? withUser.slice(withUser.length - maxDbHistory) : withUser;
 }
 
+// Exported separately from trimHistoryForLLM (not just inlined there) so the
+// session-summary cursor math in coachSessionSummary.js can compute the same
+// raw-window start index without duplicating the 3/10 constants and risking
+// drift between the two.
+export function historyLimitForMode(contextMode, isReference) {
+  return (contextMode === "light" && !isReference) ? 3 : 10;
+}
+
 export function trimHistoryForLLM(withUser, contextMode, isReference) {
-  const historyLimit = (contextMode === "light" && !isReference) ? 3 : 10;
+  const historyLimit = historyLimitForMode(contextMode, isReference);
   return (withUser || []).length > historyLimit ? withUser.slice(withUser.length - historyLimit) : withUser;
 }
