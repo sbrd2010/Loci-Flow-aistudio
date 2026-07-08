@@ -19,8 +19,8 @@ import { classifyContextMode, needsConversationContext, trimHistoryForLLM, histo
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
 import {
   needsSummaryUpdate, pendingSummaryMessages, buildPendingSummaryContext,
-  buildSessionSummaryContext, parseSessionSummaryTag, trimChatHistoryWithCursor,
-  shouldIncludeSessionSummaryContext,
+  pendingSummaryIncludedCount, buildSessionSummaryContext, parseSessionSummaryTag,
+  trimChatHistoryWithCursor, shouldIncludeSessionSummaryContext,
 } from "../utils/coachSessionSummary";
 import { buildRescueHandoffContext, shouldClearRescueHandoff } from "../utils/rescueHandoff";
 import { safeCopyToClipboard } from "../utils/clipboard";
@@ -488,9 +488,22 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     // — even though the resulting write is separately never persisted
     // while unconfirmed (Codex review finding, PR #347).
     const sessionSummarySectionEnabled = !cloudSyncUnconfirmed;
-    const pendingSummaryContext = sessionSummarySectionEnabled && summaryUpdateNeeded
-      ? buildPendingSummaryContext(pendingSummaryMessages(savedHistory, rawWindowStart, summarizedThroughIndex))
-      : "";
+    const pendingBatch = sessionSummarySectionEnabled && summaryUpdateNeeded
+      ? pendingSummaryMessages(savedHistory, rawWindowStart, summarizedThroughIndex)
+      : [];
+    const pendingSummaryContext = buildPendingSummaryContext(pendingBatch);
+    // How far the cursor may actually advance if this turn's summary write
+    // succeeds — summarizedThroughIndex + however many of pendingBatch
+    // buildPendingSummaryContext actually included, NOT blindly
+    // rawWindowStart. buildPendingSummaryContext truncates an oversized
+    // batch to a budget (see PENDING_SUMMARY_TOTAL_MAX_CHARS), and the
+    // cursor may only advance past messages the model actually saw —
+    // advancing all the way to rawWindowStart regardless would mark
+    // truncated-out messages as "summarized" when they were never shown to
+    // the model, permanently losing them from both raw history and the
+    // summary (Codex review finding, PR #347). Equals rawWindowStart
+    // exactly whenever nothing was truncated.
+    const summaryCoveredThroughIndex = summarizedThroughIndex + pendingSummaryIncludedCount(pendingBatch);
     const sessionSummaryContext = sessionSummarySectionEnabled && shouldIncludeSessionSummaryContext(contextMode, isReference, summaryUpdateNeeded)
       ? buildSessionSummaryContext(coachSessionSummary)
       : "";
@@ -915,7 +928,11 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         ? {
             ...(coachSessionSummary || {}),
             sessionSummary: newSessionSummary,
-            summarizedThroughIndex: rawWindowStart,
+            // summaryCoveredThroughIndex, not rawWindowStart — see its
+            // declaration above. Equal unless this turn's pending batch was
+            // truncated for length, in which case a later turn's
+            // needsSummaryUpdate naturally picks up the remainder.
+            summarizedThroughIndex: summaryCoveredThroughIndex,
             summaryUpdatedAt: Date.now(),
             summaryVersion: (coachSessionSummary?.summaryVersion || 0) + 1,
           }

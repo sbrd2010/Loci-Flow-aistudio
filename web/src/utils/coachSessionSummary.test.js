@@ -5,6 +5,7 @@ import {
   needsSummaryUpdate,
   pendingSummaryMessages,
   buildPendingSummaryContext,
+  pendingSummaryIncludedCount,
   buildSessionSummaryWritingInstruction,
   buildSessionSummaryContext,
   trimChatHistoryWithCursor,
@@ -159,17 +160,43 @@ describe("buildPendingSummaryContext", () => {
     expect(line.length).toBeLessThan(320); // "User: " prefix + 300-char cap
   });
 
-  it("drops the oldest messages (not the most recent) when the whole block would exceed the total budget", () => {
+  it("keeps a contiguous OLDEST prefix (not the most recent) when the whole block would exceed the total budget — the cursor can only advance past what's actually shown (Codex review finding, PR #347)", () => {
     const pending = Array.from({ length: 20 }, (_, i) => ({ text: `message-${i} `.repeat(20), isUser: i % 2 === 0 }));
     const out = buildPendingSummaryContext(pending);
-    expect(out).toContain("message-19"); // most recent, kept
-    expect(out).not.toContain("message-0 "); // oldest, dropped
-    expect(out).toMatch(/omitted for length/);
+    expect(out).toContain("message-0 "); // oldest, kept — cursor advances past exactly this
+    expect(out).not.toContain("message-19"); // most recent, deferred to a later turn
+    expect(out).toMatch(/continuing in a later turn/);
   });
 
   it("does not add an omission note when everything fits within budget", () => {
     const out = buildPendingSummaryContext([{ text: "hi", isUser: true }, { text: "hello", isUser: false }]);
     expect(out).not.toContain("omitted for length");
+  });
+});
+
+describe("pendingSummaryIncludedCount", () => {
+  it("equals the full batch length when nothing needs truncating", () => {
+    const pending = [{ text: "hi", isUser: true }, { text: "hello", isUser: false }];
+    expect(pendingSummaryIncludedCount(pending)).toBe(2);
+  });
+
+  it("returns 0 for an empty/undefined batch", () => {
+    expect(pendingSummaryIncludedCount([])).toBe(0);
+    expect(pendingSummaryIncludedCount(undefined)).toBe(0);
+  });
+
+  it("matches exactly how many messages buildPendingSummaryContext actually included, so the cursor never advances past a truncated-out message (Codex review finding, PR #347)", () => {
+    const pending = Array.from({ length: 20 }, (_, i) => ({ text: `message-${i} `.repeat(20), isUser: i % 2 === 0 }));
+    const includedCount = pendingSummaryIncludedCount(pending);
+    expect(includedCount).toBeGreaterThan(0);
+    expect(includedCount).toBeLessThan(pending.length);
+
+    const out = buildPendingSummaryContext(pending);
+    // Every included message is present, and the very next one (the first
+    // deferred one) is absent — proving the count lines up with the actual
+    // render, not just an independent approximation.
+    for (let i = 0; i < includedCount; i++) expect(out).toContain(`message-${i} `);
+    expect(out).not.toContain(`message-${includedCount} `);
   });
 });
 
