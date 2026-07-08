@@ -13,7 +13,7 @@ import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSet
 import { isPendingCoachNudgeStale, shouldDeliverPendingCoachNudge } from "../utils/coachNudge";
 import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
-import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFromMemory, isMemoryEnabled, parseMemoryTags } from "../utils/coachMemory";
+import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFromMemory, isMemoryEnabled, parseMemoryTags, wasMemoryEntryRemoved } from "../utils/coachMemory";
 import { stripReasoningTag } from "../utils/coachReasoning";
 import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM, detectRequestedCategories } from "../utils/coachContextMode";
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
@@ -361,6 +361,12 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     // empty) while still being instructed to behave as if memory is live.
     const memorySectionEnabled = memoryEnabled && !cloudSyncUnconfirmed;
     const memoryContext = memorySectionEnabled ? buildLociMemoryContext(config.coachMemory) : "";
+    // Captured now (mirrors rescueHandoffSummaryUsedAt below) so a late-
+    // resolving reply's memoryPatch can detect whether the user deleted a
+    // fact or cleared memory from Settings while this reply was in flight,
+    // and skip re-adding its now-stale REMEMBER/NOTE on top of that
+    // intentional deletion (Codex review finding, PR #346).
+    const coachMemoryAtSendTime = config.coachMemory || {};
     // Independent of Coach Memory — the user's own Coach Profile (Settings)
     // stays available even when AI-written memory is disabled.
     const profileContext = buildProfileContext(config);
@@ -526,15 +532,23 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         // — so a Settings-tab edit made while this reply was in flight isn't
         // reverted by this whole-coachMemory write.
         memoryPatch = (latestConfig) => {
-          let memory = latestConfig.coachMemory || {};
+          const latestMemory = latestConfig.coachMemory || {};
+          // Detect a Settings-tab deletion/clear that happened after this
+          // reply's REMEMBER/NOTE were captured but before this patch lands
+          // — checked against the pre-forget latestMemory so this reply's
+          // own FORGET (applied below) never counts as "someone else's
+          // deletion" against itself.
+          const editedSinceSend = wasMemoryEntryRemoved(coachMemoryAtSendTime, latestMemory);
+          let memory = latestMemory;
           if (willForget) forgets.forEach(text => { memory = forgetFromMemory(memory, text); });
           // Re-check Coach Memory's enabled flag against the latest config —
           // willAddMemory may have been computed pre-unmount (paired with a
           // willForget exemption), so the user could have turned memory off
           // in Settings before this reply resolves. The forget above is still
           // applied (it's a deletion the user already asked for), but a new
-          // addition shouldn't be written after an explicit opt-out.
-          if (willAddMemory && isMemoryEnabled(latestConfig)) {
+          // addition shouldn't be written after an explicit opt-out, and
+          // shouldn't resurrect an entry the user just deleted elsewhere.
+          if (willAddMemory && isMemoryEnabled(latestConfig) && !editedSinceSend) {
             pinnedFacts.forEach(fact => { memory = addPinnedFact(memory, fact); });
             observations.forEach(note => { memory = addRecentObservation(memory, note, todayStr); });
           }

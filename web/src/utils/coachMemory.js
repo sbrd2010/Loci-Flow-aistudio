@@ -108,6 +108,21 @@ export function clearAllMemory(coachMemory = {}) {
   return { ...coachMemory, pinnedFacts: [], recentObservations: [] };
 }
 
+// True when something present in `before` (a snapshot taken when a Coach
+// reply started generating) is no longer present in `after` (the latest
+// stored memory at save time) — i.e. the user deleted a fact or cleared
+// memory from Settings while that reply was in flight. Callers use this to
+// skip re-adding a late-resolving reply's REMEMBER/NOTE on top of an
+// intentional deletion, rather than silently undoing it (Codex review
+// finding, PR #346). Only checks for removals, not additions — an addition
+// from another device/tab in the meantime isn't the race being guarded
+// against here.
+export function wasMemoryEntryRemoved(before = {}, after = {}) {
+  const afterTexts = new Set([...(after.pinnedFacts || []), ...(after.recentObservations || [])].map(e => e.text));
+  const beforeEntries = [...(before.pinnedFacts || []), ...(before.recentObservations || [])];
+  return beforeEntries.some(e => !afterTexts.has(e.text));
+}
+
 // AI-driven removal via [[FORGET: ...]]. Matches by normalized text so the
 // model can retract a fact/note by copying it (verbatim or a close
 // paraphrase) from the memory shown in its own prompt.

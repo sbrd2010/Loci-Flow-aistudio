@@ -12,6 +12,7 @@ import {
   parseMemoryTags,
   buildLociMemoryContext,
   buildMemoryWritingRules,
+  wasMemoryEntryRemoved,
 } from "./coachMemory";
 
 describe("addPinnedFact / removePinnedFact", () => {
@@ -225,6 +226,36 @@ describe("clearAllMemory", () => {
     memory = clearAllMemory(memory);
     expect(memory.pinnedFacts).toEqual([]);
     expect(memory.recentObservations).toEqual([]);
+  });
+});
+
+describe("wasMemoryEntryRemoved (Codex review finding, PR #346)", () => {
+  it("returns false when nothing changed", () => {
+    const before = addPinnedFact({}, "fact A");
+    expect(wasMemoryEntryRemoved(before, before)).toBe(false);
+  });
+
+  it("returns true when a pinned fact was deleted", () => {
+    const before = addPinnedFact(addPinnedFact({}, "fact A"), "fact B");
+    const after = removePinnedFact(before, 0); // removes "fact A"
+    expect(wasMemoryEntryRemoved(before, after)).toBe(true);
+  });
+
+  it("returns true when memory was cleared entirely", () => {
+    const before = addPinnedFact({}, "fact A");
+    const after = clearAllMemory(before);
+    expect(wasMemoryEntryRemoved(before, after)).toBe(true);
+  });
+
+  it("returns false for a pure addition (not the deletion race this guards against)", () => {
+    const before = addPinnedFact({}, "fact A");
+    const after = addPinnedFact(before, "fact B");
+    expect(wasMemoryEntryRemoved(before, after)).toBe(false);
+  });
+
+  it("returns false when comparing against an empty/missing snapshot", () => {
+    expect(wasMemoryEntryRemoved({}, addPinnedFact({}, "fact A"))).toBe(false);
+    expect(wasMemoryEntryRemoved(undefined, undefined)).toBe(false);
   });
 });
 
