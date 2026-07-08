@@ -1308,4 +1308,23 @@ describe("detectRequestedCategories", () => {
     // category still works.
     expect(detectRequestedCategories("what should I prioritize for errands and health?")).toEqual(["Personal", "Health"]);
   });
+
+  it("accepts 'of my' before bare errands and bare list requests (Codex review finding, PR #345 round 4)", () => {
+    expect(classifyContextMode("which of my errands should I do first?")).toBe("full_task");
+    expect(classifyContextMode("which of my errands can I skip?")).toBe("full_task");
+    expect(classifyContextMode("show me my errands")).toBe("full_task");
+    expect(classifyContextMode("list my errands")).toBe("full_task");
+    expect(classifyContextMode("what are my errands?")).toBe("full_task");
+  });
+
+  it("preserves errands in unspaced compound-category separators (Codex review finding, PR #345 round 4)", () => {
+    expect(detectRequestedCategories("what should I prioritize for errands/health?")).toEqual(["Personal", "Health"]);
+    expect(detectRequestedCategories("what should I prioritize for errands&health?")).toEqual(["Personal", "Health"]);
+  });
+
+  it("recognizes singular 'errand' alongside 'errands' (Codex review finding, PR #345 round 4)", () => {
+    expect(classifyContextMode("what are my errand priorities?")).toBe("full_task");
+    expect(classifyContextMode("which errand should I do first?")).toBe("full_task");
+    expect(detectRequestedCategories("which errand task should I do first?")).toEqual(["Personal"]);
+  });
 });
