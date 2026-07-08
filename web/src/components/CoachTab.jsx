@@ -167,6 +167,25 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
   const cloudSyncUnconfirmedRef = useRef(cloudSyncUnconfirmed);
   cloudSyncUnconfirmedRef.current = cloudSyncUnconfirmed;
 
+  // If the user clears chat while sync is unconfirmed, the coachSessionSummary
+  // reset itself is skipped (see isClear/the Clear button below) — writing it
+  // then risks the same stale-cache-wins-the-merge race as every other
+  // coachSessionSummary write. Without retrying it, the old summary would
+  // sit in config forever, unlike chatHistory (which the clear already
+  // reset via the ungated saveSubPath) — the next non-light/reference or
+  // summary-update turn would then inject that stale "CONVERSATION SO FAR"
+  // into a supposedly fresh chat, even once sync legitimately confirms
+  // (Codex review finding, PR #347). Nothing else can have written a new
+  // coachSessionSummary in the meantime either, since those writes are
+  // gated the same way — so applying the deferred clear once sync confirms
+  // can't clobber a legitimate newer value.
+  const pendingSessionSummaryClearRef = useRef(false);
+  useEffect(() => {
+    if (cloudSyncUnconfirmed || !pendingSessionSummaryClearRef.current) return;
+    pendingSessionSummaryClearRef.current = false;
+    saveConfigPatch({ coachSessionSummary: null });
+  }, [cloudSyncUnconfirmed]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Coach tab unmounts on tab switch (see App.jsx), so an in-flight AI reply
   // can resolve after the user has navigated to Settings and changed
   // coachMemory/coachMemoryEnabled there. Rather than dropping the reply's
@@ -294,14 +313,20 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         saveSubPath("chatHistory", null);
         // Session summary is conversation-scoped (unlike coachMemory, which
         // stays untouched here) — reset it alongside the history it
-        // summarizes. Skipped while sync is unconfirmed: saveConfigPatch
-        // always stamps config.lastUpdated, and mergeConfig
+        // summarizes. Deferred (not skipped) while sync is unconfirmed —
+        // saveConfigPatch always stamps config.lastUpdated, and mergeConfig
         // (normalizePayload.js) picks the newer-lastUpdated config as a
-        // WHOLE object — so writing this before the first RTDB snapshot
+        // WHOLE object, so writing this before the first RTDB snapshot
         // arrives could make a stale cached config beat fresh remote data
-        // on the first merge (Codex review finding, PR #347). The stale
-        // summary self-corrects on the next turn once sync confirms.
-        if (!cloudSyncUnconfirmed) saveConfigPatch({ coachSessionSummary: null });
+        // on the first merge (Codex review finding, PR #347) —
+        // pendingSessionSummaryClearRef's effect above retries this once
+        // sync confirms, rather than leaving the stale summary in config
+        // forever.
+        if (cloudSyncUnconfirmed) {
+          pendingSessionSummaryClearRef.current = true;
+        } else {
+          saveConfigPatch({ coachSessionSummary: null });
+        }
         const userId = auth?.currentUser?.uid || "signed-out";
         localStorage.removeItem(`loci_last_coach_plan_${userId}`);
         localStorage.removeItem(`loci_last_full_task_time_${userId}`);
@@ -454,7 +479,16 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const pendingSummaryContext = summaryUpdateNeeded
       ? buildPendingSummaryContext(pendingSummaryMessages(savedHistory, rawWindowStart, summarizedThroughIndex))
       : "";
-    const sessionSummaryContext = shouldIncludeSessionSummaryContext(contextMode, isReference, summaryUpdateNeeded)
+    // Same cloud-sync gate as memorySectionEnabled/rescueHandoffContext
+    // below: config.coachSessionSummary can still be the stale cached
+    // value here (this whole section is computed from summaryAfterEarlyTrim,
+    // itself sourced from config.coachSessionSummary before the first RTDB
+    // snapshot). If another device cleared or updated the conversation
+    // during that window, showing "CONVERSATION SO FAR" from the cache
+    // could resurface a supposedly cleared old chat (Codex review finding,
+    // PR #347).
+    const sessionSummarySectionEnabled = !cloudSyncUnconfirmed;
+    const sessionSummaryContext = sessionSummarySectionEnabled && shouldIncludeSessionSummaryContext(contextMode, isReference, summaryUpdateNeeded)
       ? buildSessionSummaryContext(coachSessionSummary)
       : "";
 
@@ -1160,7 +1194,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
           </div>
           {payload.chatHistory && payload.chatHistory.length > 0 && (
             <button
-              onClick={() => setConfirmDialog({ message: "Clear all chat history?", confirmLabel: "Clear", danger: true, onConfirm: () => { saveSubPath("chatHistory", null); if (!cloudSyncUnconfirmed) saveConfigPatch({ coachSessionSummary: null }); const uId = auth?.currentUser?.uid || "signed-out"; localStorage.removeItem(`loci_last_coach_plan_${uId}`); localStorage.removeItem(`loci_last_full_task_time_${uId}`); localStorage.removeItem("loci_last_coach_plan"); localStorage.removeItem("loci_last_full_task_time"); setConfirmDialog(null); }, onCancel: () => setConfirmDialog(null) })}
+              onClick={() => setConfirmDialog({ message: "Clear all chat history?", confirmLabel: "Clear", danger: true, onConfirm: () => { saveSubPath("chatHistory", null); if (cloudSyncUnconfirmed) { pendingSessionSummaryClearRef.current = true; } else { saveConfigPatch({ coachSessionSummary: null }); } const uId = auth?.currentUser?.uid || "signed-out"; localStorage.removeItem(`loci_last_coach_plan_${uId}`); localStorage.removeItem(`loci_last_full_task_time_${uId}`); localStorage.removeItem("loci_last_coach_plan"); localStorage.removeItem("loci_last_full_task_time"); setConfirmDialog(null); }, onCancel: () => setConfirmDialog(null) })}
               style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "11px", fontWeight: "700", cursor: "pointer", padding: "4px 8px", flexShrink: 0 }}
             >
               Clear

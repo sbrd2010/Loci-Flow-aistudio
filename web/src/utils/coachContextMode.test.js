@@ -390,6 +390,15 @@ describe("classifyContextMode", () => {
       expect(needsConversationContext("What should I do?")).toBe(false);
     });
 
+    it("needsConversationContext catches explicit conversation-recall questions (Codex review finding, PR #347)", () => {
+      expect(needsConversationContext("what were we talking about?")).toBe(true);
+      expect(needsConversationContext("What did I say earlier?")).toBe(true);
+      expect(needsConversationContext("what did we discuss")).toBe(true);
+      expect(needsConversationContext("can you remind me what we were originally talking about?")).toBe(true);
+
+      expect(needsConversationContext("What should I do today?")).toBe(false);
+    });
+
     it("Amendment 3 — trimHistoryForDb and trimHistoryForLLM helpers preserve/trim history correctly", () => {
       // Create 15 existing messages
       const history = Array.from({ length: 15 }, (_, i) => ({
