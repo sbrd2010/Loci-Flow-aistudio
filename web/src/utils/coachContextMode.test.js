@@ -1231,4 +1231,100 @@ describe("detectRequestedCategories", () => {
     expect(classifyContextMode("which work items are urgent?")).toBe("full_task");
     expect(classifyContextMode("which work items can wait?")).toBe("full_task");
   });
+
+  it("recognizes 'errands' as a Personal-category synonym (live-testing round 5)", () => {
+    // "errands" is itself a natural plural noun, unlike "job"/"work"/etc.,
+    // which are category adjectives that need a separate trailing noun
+    // ("job stuff", "job tasks") — "what errands do I have today?" has no
+    // such separate noun, so it needs its own routing shape.
+    expect(classifyContextMode("what errands do I have today?")).toBe("full_task");
+    expect(detectRequestedCategories("what errands do I have today?")).toEqual(["Personal"]);
+    expect(detectRequestedCategories("which errands should I do first?")).toEqual(["Personal"]);
+  });
+
+  it("still excludes possessive 'family's' after adding 'errands' to the category word list", () => {
+    // Regression check: adding "errands" as a new alternative must not
+    // disturb the existing family(?!['’]s) negative lookahead that
+    // excludes "my family's priorities" from being treated as the user's
+    // own Personal-category ask.
+    expect(classifyContextMode("what are my family's priorities?")).not.toBe("full_task");
+    expect(detectRequestedCategories("what are my family's priorities?")).toEqual([]);
+    expect(classifyContextMode("what are my family priorities?")).toBe("full_task");
+  });
+
+  it("detects categories for 'can/should wait for <category>' negation asks (Codex review finding, PR #345)", () => {
+    // "wait" wasn't in FOCUS_FOR_CLAUSE_RE's verb list at all — a
+    // pre-existing gap from #340, not specific to errands, that this fix
+    // also resolves for every category.
+    expect(detectRequestedCategories("what can wait for errands?")).toEqual(["Personal"]);
+    expect(detectRequestedCategories("what can wait for work?")).toEqual(["Work"]);
+  });
+
+  it("routes 'which errands ...' to full_task (Codex review finding, PR #345)", () => {
+    expect(classifyContextMode("which errands should I do first?")).toBe("full_task");
+    expect(classifyContextMode("which errands can I skip?")).toBe("full_task");
+  });
+
+  it("doesn't corrupt literal 'N errands' counts (Codex review finding, PR #345)", () => {
+    // Unlike the adjective-like category words ("2 job"/"2 fitness" are
+    // never literal counts), "errands" is a genuine countable noun, so
+    // "what 2 errands do I have?" must not become "what to errands do I
+    // have?" the way "remind me 2 job hunt" -> "remind me to job hunt" does.
+    expect(normalizeForClassification("what 2 errands do I have?")).toBe("what 2 errands do I have?");
+    expect(normalizeForClassification("I have 2 errands")).toBe("I have 2 errands");
+    // The "my"-prefixed case (already protected before this fix) still works.
+    expect(normalizeForClassification("what are my 2 errands?")).toBe("what are my 2 errands?");
+    // Unrelated category shorthand normalization is untouched.
+    expect(normalizeForClassification("remind me 2 job hunt")).toBe("remind me to job hunt");
+  });
+
+  it("routes bare 'what errands should I do first/can I skip' to full_task (Codex review finding, PR #345 round 3)", () => {
+    expect(classifyContextMode("what errands should I do first?")).toBe("full_task");
+    expect(classifyContextMode("what errands can I skip?")).toBe("full_task");
+    expect(detectRequestedCategories("what errands should I do first?")).toEqual(["Personal"]);
+  });
+
+  it("doesn't treat temporal 'wait for <noun>' clauses as category filters (Codex review finding, PR #345 round 3)", () => {
+    // "do" alone already matched these exact examples before "wait" was
+    // ever added — narrowing "wait" to "(?:can|should) wait" wasn't
+    // sufficient on its own; the shared verb-to-"for" gap now also excludes
+    // "wait" as an interrupter for every verb in the list.
+    expect(detectRequestedCategories("what should I do while I wait for health insurance?")).toEqual([]);
+    expect(detectRequestedCategories("what should I do while I wait for work to start?")).toEqual([]);
+    // The genuine "can/should wait for <category>" ask still works.
+    expect(detectRequestedCategories("what can wait for errands?")).toEqual(["Personal"]);
+    expect(detectRequestedCategories("what can wait for work?")).toEqual(["Work"]);
+  });
+
+  it("only counts 'errands' as the requested category when it ends the clause (Codex review finding, PR #345 round 3)", () => {
+    // Unlike the adjective-like category words, "errands" is a plain noun
+    // that can appear as a compound-noun modifier ("errands app design")
+    // without naming the category being asked about. "work" has the
+    // identical pre-existing issue ("what is important for work app
+    // design?" also over-matches) — out of scope here, since it wasn't
+    // introduced by this PR.
+    expect(detectRequestedCategories("what is important for errands app design?")).toEqual([]);
+    // A genuine compound-category ask naming errands alongside another
+    // category still works.
+    expect(detectRequestedCategories("what should I prioritize for errands and health?")).toEqual(["Personal", "Health"]);
+  });
+
+  it("accepts 'of my' before bare errands and bare list requests (Codex review finding, PR #345 round 4)", () => {
+    expect(classifyContextMode("which of my errands should I do first?")).toBe("full_task");
+    expect(classifyContextMode("which of my errands can I skip?")).toBe("full_task");
+    expect(classifyContextMode("show me my errands")).toBe("full_task");
+    expect(classifyContextMode("list my errands")).toBe("full_task");
+    expect(classifyContextMode("what are my errands?")).toBe("full_task");
+  });
+
+  it("preserves errands in unspaced compound-category separators (Codex review finding, PR #345 round 4)", () => {
+    expect(detectRequestedCategories("what should I prioritize for errands/health?")).toEqual(["Personal", "Health"]);
+    expect(detectRequestedCategories("what should I prioritize for errands&health?")).toEqual(["Personal", "Health"]);
+  });
+
+  it("recognizes singular 'errand' alongside 'errands' (Codex review finding, PR #345 round 4)", () => {
+    expect(classifyContextMode("what are my errand priorities?")).toBe("full_task");
+    expect(classifyContextMode("which errand should I do first?")).toBe("full_task");
+    expect(detectRequestedCategories("which errand task should I do first?")).toEqual(["Personal"]);
+  });
 });
