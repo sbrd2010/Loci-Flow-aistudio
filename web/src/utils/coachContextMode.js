@@ -360,11 +360,12 @@ const PRIORITY_FILTER_RE = new RegExp(
   // not just a category adjective — "what errands do I have today?" has no
   // separate trailing noun for CATEGORY_TRAILING_NOUN_RE to match against,
   // so it needs its own shape (live-testing round 5). Same for "which
-  // errands should I do first?" — reuses the generic-noun continuation/end
-  // guard rather than CATEGORY_TRAILING_NOUN_RE, since there's no separate
-  // noun after "errands" either (Codex review finding).
+  // errands should I do first?" and bare "what errands should I do
+  // first?"/"what errands can I skip?" — all reuse the generic-noun
+  // continuation/end guard rather than CATEGORY_TRAILING_NOUN_RE, since
+  // there's no separate noun after "errands" either (Codex review finding).
   `\\bwhat\\s+errands\\s+do\\s+i\\s+have\\b|` +
-  `\\bwhich\\s+errands\\b(?=${CATEGORY_GENERIC_NOUN_END_RE}|\\s+${CATEGORY_GENERIC_NOUN_CONTINUATION_RE}${CATEGORY_GENERIC_NOUN_END_RE})`,
+  `\\b(?:which|what)\\s+errands\\b(?=${CATEGORY_GENERIC_NOUN_END_RE}|\\s+${CATEGORY_GENERIC_NOUN_CONTINUATION_RE}${CATEGORY_GENERIC_NOUN_END_RE})`,
   "i"
 );
 
@@ -415,8 +416,12 @@ const SINGLE_CATEGORY_PATTERNS = [
   // without "are/my" the pattern above requires.
   new RegExp(`\\bwhat\\s+(career|work|health|personal|job|office|fitness|wellness|gym|home|family|errands)\\s+${CATEGORY_TRAILING_NOUN_RE}\\b`, "i"),
   // "What errands do I have today?" — mirrors PRIORITY_FILTER_RE's dedicated
-  // "errands" shape (live-testing round 5).
+  // "errands" shape (live-testing round 5). "What errands should I do
+  // first?"/"can I skip?" mirror the "which errands" continuation/end guard
+  // — WHICH_TASK_CLAUSE_RE below only handles "which", not "what" (Codex
+  // review finding).
   /\bwhat\s+(errands)\s+do\s+i\s+have\b/i,
+  new RegExp(`\\bwhat\\s+(errands)\\b(?=${CATEGORY_GENERIC_NOUN_END_RE}|\\s+${CATEGORY_GENERIC_NOUN_CONTINUATION_RE}${CATEGORY_GENERIC_NOUN_END_RE})`, "i"),
 ];
 
 // Mirrors the "which <category> task(s)" shape, but — like the other clauses
@@ -465,8 +470,16 @@ const CATEGORY_PRIORITY_CLAUSE_RE = /(?:what are|tell me|show me|check|what abou
 // Also covers "can/should wait" — "what can wait for errands?" (and every
 // other category, a pre-existing gap from #340) routed to full_task fine on
 // its own, but without a matching lead-in here never got a missing-category
-// mismatch note either (Codex review finding).
-const FOCUS_FOR_CLAUSE_RE = /\b(?:focus on|priorit\w*|do|work on|start|tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on|needs my attention|deserves my (?:attention|energy)|on (?:my |the )?(?:deck|radar|plate|agenda|horizon)|(?:the )?game plan|top|main|biggest|important|urgent|pressing|critical|bother with|skip|ignore|put off|wait)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?([a-z0-9\s&/,'’]{1,40})/i;
+// mismatch note either (Codex review finding). Scoped to "(?:can|should)
+// wait" specifically, not bare "wait" — the loose form matched unrelated
+// temporal clauses like "what should I do while I wait for health
+// insurance?", wrongly extracting Health as the requested category (Codex
+// review finding). The other verbs' gap ([^.?!]{0,30}) also excludes "wait"
+// as an interrupter now — "do" alone already matched that same temporal
+// example ("do ... for health insurance", with "while I wait" sitting in
+// the gap) even before "wait" was added as its own alternative, so
+// narrowing "wait" alone wasn't sufficient to fix the cited example.
+const FOCUS_FOR_CLAUSE_RE = /\b(?:focus on|priorit\w*|do|work on|start|tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on|needs my attention|deserves my (?:attention|energy)|on (?:my |the )?(?:deck|radar|plate|agenda|horizon)|(?:the )?game plan|top|main|biggest|important|urgent|pressing|critical|bother with|skip|ignore|put off|(?:can|should) wait)\b(?:(?!\bwait\b)[^.?!]){0,30}\bfor\s+(?:my\s+)?([a-z0-9\s&/,'’]{1,40})/i;
 const CATEGORY_WORD_RE = /\b(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family|errands)\b/gi;
 // A possessive like "boss's" or "manager's" inside the captured clause means
 // the "my" in "my boss's work priorities" scopes to the boss, not the user —
@@ -528,7 +541,26 @@ function extractCategoryLabels(clause) {
   while ((reasonMatch = CATEGORY_REASON_RE.exec(clause))) {
     excluded.add(reasonMatch[1].toLowerCase());
   }
-  const words = (clause.match(CATEGORY_WORD_RE) || []).filter(w => !excluded.has(w.toLowerCase()));
+  const words = [];
+  let wordMatch;
+  CATEGORY_WORD_RE.lastIndex = 0;
+  while ((wordMatch = CATEGORY_WORD_RE.exec(clause))) {
+    const word = wordMatch[0];
+    const lower = word.toLowerCase();
+    if (excluded.has(lower)) continue;
+    // "errands" is a plain noun, unlike the adjective-like category words
+    // ("work"/"job"/etc.), so it can appear as a compound-noun modifier mid
+    // clause ("errands app design") without naming the category being asked
+    // about — only counts when it ends the clause, is followed by
+    // punctuation/end, or continues into a legitimate compound-category
+    // list separator ("errands and health", "errands/health", "errands,
+    // health") (Codex review finding).
+    if (lower === "errands") {
+      const rest = clause.slice(wordMatch.index + word.length);
+      if (!/^\s*(?:[.?!,;]|$|(?:and|&|\/)\s)/i.test(rest)) continue;
+    }
+    words.push(word);
+  }
   return [...new Set(words.map(w => CATEGORY_LABELS[w.toLowerCase()]))];
 }
 

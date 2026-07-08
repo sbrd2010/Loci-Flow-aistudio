@@ -1277,4 +1277,35 @@ describe("detectRequestedCategories", () => {
     // Unrelated category shorthand normalization is untouched.
     expect(normalizeForClassification("remind me 2 job hunt")).toBe("remind me to job hunt");
   });
+
+  it("routes bare 'what errands should I do first/can I skip' to full_task (Codex review finding, PR #345 round 3)", () => {
+    expect(classifyContextMode("what errands should I do first?")).toBe("full_task");
+    expect(classifyContextMode("what errands can I skip?")).toBe("full_task");
+    expect(detectRequestedCategories("what errands should I do first?")).toEqual(["Personal"]);
+  });
+
+  it("doesn't treat temporal 'wait for <noun>' clauses as category filters (Codex review finding, PR #345 round 3)", () => {
+    // "do" alone already matched these exact examples before "wait" was
+    // ever added — narrowing "wait" to "(?:can|should) wait" wasn't
+    // sufficient on its own; the shared verb-to-"for" gap now also excludes
+    // "wait" as an interrupter for every verb in the list.
+    expect(detectRequestedCategories("what should I do while I wait for health insurance?")).toEqual([]);
+    expect(detectRequestedCategories("what should I do while I wait for work to start?")).toEqual([]);
+    // The genuine "can/should wait for <category>" ask still works.
+    expect(detectRequestedCategories("what can wait for errands?")).toEqual(["Personal"]);
+    expect(detectRequestedCategories("what can wait for work?")).toEqual(["Work"]);
+  });
+
+  it("only counts 'errands' as the requested category when it ends the clause (Codex review finding, PR #345 round 3)", () => {
+    // Unlike the adjective-like category words, "errands" is a plain noun
+    // that can appear as a compound-noun modifier ("errands app design")
+    // without naming the category being asked about. "work" has the
+    // identical pre-existing issue ("what is important for work app
+    // design?" also over-matches) — out of scope here, since it wasn't
+    // introduced by this PR.
+    expect(detectRequestedCategories("what is important for errands app design?")).toEqual([]);
+    // A genuine compound-category ask naming errands alongside another
+    // category still works.
+    expect(detectRequestedCategories("what should I prioritize for errands and health?")).toEqual(["Personal", "Health"]);
+  });
 });
