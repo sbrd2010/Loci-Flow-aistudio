@@ -1231,4 +1231,24 @@ describe("detectRequestedCategories", () => {
     expect(classifyContextMode("which work items are urgent?")).toBe("full_task");
     expect(classifyContextMode("which work items can wait?")).toBe("full_task");
   });
+
+  it("recognizes 'errands' as a Personal-category synonym (live-testing round 5)", () => {
+    // "errands" is itself a natural plural noun, unlike "job"/"work"/etc.,
+    // which are category adjectives that need a separate trailing noun
+    // ("job stuff", "job tasks") — "what errands do I have today?" has no
+    // such separate noun, so it needs its own routing shape.
+    expect(classifyContextMode("what errands do I have today?")).toBe("full_task");
+    expect(detectRequestedCategories("what errands do I have today?")).toEqual(["Personal"]);
+    expect(detectRequestedCategories("which errands should I do first?")).toEqual(["Personal"]);
+  });
+
+  it("still excludes possessive 'family's' after adding 'errands' to the category word list", () => {
+    // Regression check: adding "errands" as a new alternative must not
+    // disturb the existing family(?!['’]s) negative lookahead that
+    // excludes "my family's priorities" from being treated as the user's
+    // own Personal-category ask.
+    expect(classifyContextMode("what are my family's priorities?")).not.toBe("full_task");
+    expect(detectRequestedCategories("what are my family's priorities?")).toEqual([]);
+    expect(classifyContextMode("what are my family priorities?")).toBe("full_task");
+  });
 });
