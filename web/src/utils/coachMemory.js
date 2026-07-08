@@ -108,6 +108,27 @@ export function clearAllMemory(coachMemory = {}) {
   return { ...coachMemory, pinnedFacts: [], recentObservations: [] };
 }
 
+// True when `text` (a candidate REMEMBER/NOTE a Coach reply is about to add)
+// matches an entry that was present in `before` (a coachMemory snapshot
+// taken when that reply started generating) but is missing from `after`
+// (the latest stored memory at save time) — i.e. the user deleted or
+// corrected exactly this fact from Settings while the reply was in flight,
+// and a late-resolving reply is trying to add the same content back.
+// Scoped to the one candidate being added, not "did anything change
+// anywhere" — an unrelated deletion elsewhere, or the FIFO cap evicting an
+// old entry, must never block a legitimate, unrelated new memory (loopcheck
+// + Codex review findings, PR #346: an earlier whole-store version of this
+// check silently dropped unrelated additions, and also broke the
+// FORGET+REMEMBER "correction" pattern buildMemoryWritingRules() asks for).
+export function isResurrectedMemoryEntry(before = {}, after = {}, text) {
+  const normalized = normalizeMemoryText(text);
+  if (!normalized) return false;
+  const afterTexts = new Set([...(after.pinnedFacts || []), ...(after.recentObservations || [])].map(e => normalizeMemoryText(e.text)));
+  if (afterTexts.has(normalized)) return false;
+  const beforeTexts = new Set([...(before.pinnedFacts || []), ...(before.recentObservations || [])].map(e => normalizeMemoryText(e.text)));
+  return beforeTexts.has(normalized);
+}
+
 // AI-driven removal via [[FORGET: ...]]. Matches by normalized text so the
 // model can retract a fact/note by copying it (verbatim or a close
 // paraphrase) from the memory shown in its own prompt.
@@ -205,7 +226,7 @@ export function buildMemoryWritingRules(firstName = "friend") {
 - Never store secrets, passwords, API keys, account numbers, or exact financial figures — broad context only (e.g. "User is under financial pressure", not amounts).
 - Use neutral, respectful, non-shaming language. Store short coaching-relevant summaries, not raw quotes or long paragraphs. If you're unsure whether something belongs in memory, don't store it.
 - If ${firstName} shares something durable worth remembering in every future conversation (a goal, a real deadline, a recurring pattern, a coaching preference), end your reply with [[REMEMBER: <one short neutral sentence>]] on its own line. Use sparingly.
-- If something notable happened this conversation worth recalling for the next few sessions but isn't permanent (how today went, a one-off struggle or win), end your reply with [[NOTE: <one short sentence>]] on its own line.
+- If something notable happened this conversation worth recalling for the next few sessions but isn't permanent (how today went, a one-off struggle or win), end your reply with [[NOTE: <one short sentence>]] on its own line — but be conservative: this may be a raw, in-the-moment message, so only write REMEMBER/NOTE for a recurring pattern, a stable preference, an explicit "remember this" request, or a durable fact ${firstName} shares — never for a passing feeling in the moment (e.g. do not store "User felt useless today" or "User is having a bad morning"). When in doubt, don't write anything.
 - If ${firstName} asks you to forget, delete, or stop remembering something, or if something in "WHAT YOU KNOW ABOUT THEM" / "RECENT NOTES" above is now outdated or contradicted by what they just told you, end your reply with [[FORGET: <copy the exact text of that fact/note from memory above>]] on its own line — and if it's outdated rather than just wrong, also add a [[REMEMBER: <corrected fact>]] for the update.
 - REMEMBER, NOTE, and FORGET tags are invisible and stripped automatically, like CHECKIN_IN — never mention or explain them to ${firstName}.
 - Memory is for coaching adaptation only — never medical, legal, or financial advice.`;

@@ -169,7 +169,7 @@ Active Tasks Today: ${todayActiveCount} active tasks today.`;
 }
 
 function buildEmotionalPrompt(ctx) {
-  const { lociCoreInstruction, firstName, profileContext, memoryContext, personaInstruction, nowLabel, pendingCheckinContext, rescueHandoffContext } = ctx;
+  const { lociCoreInstruction, firstName, profileContext, memoryContext, memorySectionEnabled, personaInstruction, nowLabel, pendingCheckinContext, rescueHandoffContext } = ctx;
 
   const staticPrefix = `${lociCoreInstruction}
 
@@ -194,6 +194,8 @@ CHECK-IN: If ${firstName} explicitly asks you to check in, follow up, circle bac
 
 LANGUAGE: Avoid "ADHD", "disorder", "diagnosis", "therapy", "mental health app", generic motivational slogans, and "holding space" unless it genuinely fits. No emoji when ${firstName} is emotional, venting, or distressed. Do not use clinical or diagnostic language unless ${firstName} uses that framing first.
 
+${memorySectionEnabled ? `\n${buildMemoryWritingRules(firstName)}\n` : ""}
+
 ${buildReasoningInstruction(firstName)}`;
 
   const dynamicSuffix = `
@@ -208,7 +210,7 @@ Current Time: ${nowLabel}`;
 }
 
 function buildProfileReflectionPrompt(ctx) {
-  const { lociCoreInstruction, firstName, profileContext, memoryContext, personaInstruction, profileBlock, nowLabel, timeOfDay, pendingCheckinContext, rescueHandoffContext } = ctx;
+  const { lociCoreInstruction, firstName, profileContext, memoryContext, memorySectionEnabled, personaInstruction, profileBlock, nowLabel, timeOfDay, pendingCheckinContext, rescueHandoffContext } = ctx;
 
   const staticPrefix = `${lociCoreInstruction}
 
@@ -225,6 +227,8 @@ IF ${firstName.toUpperCase()} ASKS "WHAT DO YOU KNOW ABOUT ME?" (or similar), di
 If memory is off or has nothing stored, say so plainly rather than guessing — don't claim pinned facts or recent notes that aren't stored.
 
 Never reveal internal labels, scratchpad content, or raw app metrics even though the behavioural profile data may include them — translate the data into human insight: what ${firstName} is carrying, what pattern Loci notices, what support makes sense next. Lead with the person, not the data.
+
+${memorySectionEnabled ? `\n${buildMemoryWritingRules(firstName)}\n` : ""}
 
 ${buildReasoningInstruction(firstName)}`;
 
@@ -275,7 +279,7 @@ Current Time: ${nowLabel} (${timeOfDay})`;
 function buildCompactTaskPrompt(ctx) {
   const {
     lociCoreInstruction, mentorName, firstName, challengeLabel,
-    profileContext, memoryContext, personaInstruction,
+    profileContext, memoryContext, memorySectionEnabled, personaInstruction,
     nowFocusContext, lastCoachPlan, nowLabel, currentFocusTitle, pendingCheckinContext, rescueHandoffContext
   } = ctx;
 
@@ -311,6 +315,8 @@ COACH ACTIONS (Use only if explicitly requested by ${firstName}):
 - MULTIPLE TASKS RULE: If their message names more than one distinct task, never silently act on only the last one. Acknowledge each one named and act on each where asked, or if asked to choose among them, name all and recommend one with a reason.
 - Narration rule: Never write a sentence claiming an action already happened unless you are also emitting the corresponding tag in this same reply.
 - If they ask a general question, explain, or check in, do not emit any action tags.
+
+${memorySectionEnabled ? `\n${buildMemoryWritingRules(firstName)}\n` : ""}
 
 ${buildReasoningInstruction(firstName)}`;
 

@@ -220,4 +220,46 @@ describe("buildCoachSystemPrompt", () => {
       expect(out).not.toContain("BODY-DOUBLE SESSIONS");
     });
   });
+
+  describe("memory-writing rules (PR1: fix durable Coach memory gaps)", () => {
+    it("full_task, emotional, profile_reflection, and compact_task modes can write memory when enabled", () => {
+      ["full_task", "emotional", "profile_reflection", "compact_task"].forEach(mode => {
+        const out = buildCoachSystemPrompt(mode, { ...baseCtx(), memorySectionEnabled: true });
+        expect(out).toContain("MEMORY — building a picture of");
+        expect(out).toContain("[[REMEMBER:");
+        expect(out).toContain("[[NOTE:");
+      });
+    });
+
+    it("light mode never carries memory-writing rules, even when memory is enabled", () => {
+      const out = buildCoachSystemPrompt("light", { ...baseCtx(), memorySectionEnabled: true });
+      expect(out).not.toContain("MEMORY — building a picture of");
+      expect(out).not.toContain("[[REMEMBER:");
+    });
+
+    it("no mode carries memory-writing rules when memorySectionEnabled is false", () => {
+      ["light", "full_task", "emotional", "profile_reflection", "compact_task"].forEach(mode => {
+        const out = buildCoachSystemPrompt(mode, { ...baseCtx(), memorySectionEnabled: false });
+        expect(out).not.toContain("MEMORY — building a picture of");
+      });
+    });
+
+    it("all four memory-capable modes carry the conservative rule against storing passing feelings (loopcheck finding, PR #346)", () => {
+      // Folded directly into buildMemoryWritingRules() rather than a
+      // separate per-mode addendum, specifically so full_task and
+      // compact_task get it too: classifyContextMode() routes plenty of
+      // genuinely emotional messages there before ever reaching the
+      // emotional/profile_reflection checks — e.g. "I feel overwhelmed,
+      // what should I do?" escapes to full_task via the TASK_ASK_RE/
+      // isBroadQuery check at line 669, and "I feel like such a failure,
+      // mark this done" can route to compact_task via EXPLICIT_ACTION_RE
+      // taking priority at line 647. A per-mode addendum that only covered
+      // emotional/profile_reflection would miss both of these.
+      ["full_task", "emotional", "profile_reflection", "compact_task"].forEach(mode => {
+        const out = buildCoachSystemPrompt(mode, { ...baseCtx(), memorySectionEnabled: true });
+        expect(out).toContain("recurring pattern, a stable preference, an explicit \"remember this\" request, or a durable fact");
+        expect(out).toContain("never for a passing feeling in the moment");
+      });
+    });
+  });
 });

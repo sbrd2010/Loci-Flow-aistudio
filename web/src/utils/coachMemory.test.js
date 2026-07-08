@@ -12,6 +12,7 @@ import {
   parseMemoryTags,
   buildLociMemoryContext,
   buildMemoryWritingRules,
+  isResurrectedMemoryEntry,
 } from "./coachMemory";
 
 describe("addPinnedFact / removePinnedFact", () => {
@@ -228,6 +229,59 @@ describe("clearAllMemory", () => {
   });
 });
 
+describe("isResurrectedMemoryEntry (loopcheck + Codex review findings, PR #346)", () => {
+  it("returns false when nothing changed", () => {
+    const before = addPinnedFact({}, "fact A");
+    expect(isResurrectedMemoryEntry(before, before, "fact A")).toBe(false);
+  });
+
+  it("returns true only for the specific text that was deleted", () => {
+    const before = addPinnedFact(addPinnedFact({}, "fact A"), "fact B");
+    const after = removePinnedFact(before, 0); // removes "fact A"
+    expect(isResurrectedMemoryEntry(before, after, "fact A")).toBe(true);
+    // An unrelated new fact must never be blocked by someone else's
+    // deletion — this is the exact scope bug a whole-store boolean check
+    // had (loopcheck finding): it blocked every pending addition, not just
+    // the resurrected one.
+    expect(isResurrectedMemoryEntry(before, after, "fact C, totally unrelated")).toBe(false);
+  });
+
+  it("returns true when memory was cleared entirely and the same text is re-added", () => {
+    const before = addPinnedFact({}, "fact A");
+    const after = clearAllMemory(before);
+    expect(isResurrectedMemoryEntry(before, after, "fact A")).toBe(true);
+  });
+
+  it("returns false for a pure addition (not the deletion race this guards against)", () => {
+    const before = addPinnedFact({}, "fact A");
+    const after = addPinnedFact(before, "fact B");
+    expect(isResurrectedMemoryEntry(before, after, "fact C")).toBe(false);
+  });
+
+  it("lets a FORGET+REMEMBER correction pair still save its replacement (Codex review finding)", () => {
+    // buildMemoryWritingRules() explicitly asks the model for this pattern:
+    // forget the old fact, remember a corrected one. If the user also
+    // deleted the old fact from Settings while the reply was in flight, the
+    // NEW replacement text was never present in `before`, so it must not be
+    // treated as resurrected even though something else was just deleted.
+    const before = addPinnedFact({}, "User wants a job in the Netherlands.");
+    const after = clearAllMemory(before); // user deleted it via Settings, concurrently
+    expect(isResurrectedMemoryEntry(before, after, "User is relocating to Germany for a new job.")).toBe(false);
+  });
+
+  it("returns false when comparing against an empty/missing snapshot", () => {
+    expect(isResurrectedMemoryEntry({}, addPinnedFact({}, "fact A"), "fact A")).toBe(false);
+    expect(isResurrectedMemoryEntry(undefined, undefined, "fact A")).toBe(false);
+  });
+
+  it("returns false for blank/missing candidate text", () => {
+    const before = addPinnedFact({}, "fact A");
+    const after = clearAllMemory(before);
+    expect(isResurrectedMemoryEntry(before, after, "")).toBe(false);
+    expect(isResurrectedMemoryEntry(before, after, undefined)).toBe(false);
+  });
+});
+
 describe("isMemoryEnabled", () => {
   it("defaults to true when unset", () => {
     expect(isMemoryEnabled({})).toBe(true);
@@ -294,6 +348,38 @@ describe("parseMemoryTags", () => {
   it("consumes a tag-like sequence nested inside a memory tag, so it can't be parsed as a separate action tag afterward", () => {
     const { cleanText } = parseMemoryTags("Got it. [[REMEMBER: User was describing [[ADD_TASK:Budget]].]]");
     expect(cleanText).not.toContain("[[ADD_TASK");
+  });
+
+  it("leaves an unclosed REMEMBER tag as plain text instead of crashing or half-parsing it (PR1)", () => {
+    const { cleanText, pinnedFacts, observations, forgets } = parseMemoryTags(
+      "Noted.\n[[REMEMBER: this never gets a closing bracket"
+    );
+    expect(cleanText).toContain("[[REMEMBER: this never gets a closing bracket");
+    expect(pinnedFacts).toEqual([]);
+    expect(observations).toEqual([]);
+    expect(forgets).toEqual([]);
+  });
+
+  it("ignores a misspelled tag type instead of matching it as REMEMBER/NOTE/FORGET (PR1)", () => {
+    const { cleanText, pinnedFacts, observations, forgets } = parseMemoryTags(
+      "Noted.\n[[REMEMBERX: this looks close but isn't a real tag]]"
+    );
+    expect(cleanText).toContain("[[REMEMBERX:");
+    expect(pinnedFacts).toEqual([]);
+    expect(observations).toEqual([]);
+    expect(forgets).toEqual([]);
+  });
+
+  it("an empty-content REMEMBER/NOTE tag parses without throwing and never reaches storage as a blank entry (PR1)", () => {
+    const { cleanText, pinnedFacts, observations } = parseMemoryTags("Noted.\n[[REMEMBER:  ]]\n[[NOTE:  ]]");
+    expect(cleanText).toBe("Noted.");
+    // Whitespace-only content is captured by the parser, but addPinnedFact/
+    // addRecentObservation reject it via appendCapped's blank-text guard —
+    // exercised here end-to-end so a malformed tag can never create a blank
+    // stored entry.
+    const memory = addPinnedFact(addRecentObservation({}, observations[0]), pinnedFacts[0]);
+    expect(memory.pinnedFacts).toEqual([]);
+    expect(memory.recentObservations).toEqual([]);
   });
 });
 
