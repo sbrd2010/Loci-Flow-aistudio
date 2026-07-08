@@ -702,7 +702,14 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
   return "light";
 }
 
-const REFERENCE_RE = /\b(what did you mean|how do i do that|tell me more|which one|what was the first option|why\??|can you explain that|explain that|elaborate|clarify|key point|one sentence|10-minute version|make it smaller|shorter|how do i start|make this easier|concrete steps|what should i do next|set that|do next)\b/i;
+// Explicit conversation-recall phrasing ("what were we talking about?",
+// "what did I say earlier?") is included here too, not just genuine
+// follow-ups — it's the same signal needsConversationContext already
+// exists to catch (widen the raw window / surface the rolling summary),
+// and without it these questions land in light mode's narrow 3-message
+// window with no summary, unable to answer the exact recall use case the
+// session summary was built for (Codex review finding, PR #347).
+const REFERENCE_RE = /\b(what did you mean|how do i do that|tell me more|which one|what was the first option|why\??|can you explain that|explain that|elaborate|clarify|key point|one sentence|10-minute version|make it smaller|shorter|how do i start|make this easier|concrete steps|what should i do next|set that|do next|what were we talking about|what were we discussing|what did we talk about|what did we discuss|what did i say|what did i tell you|remind me what we|what was i saying|what was we saying)\b/i;
 
 export function needsConversationContext(message) {
   const text = String(message || "");
@@ -714,7 +721,15 @@ export function trimHistoryForDb(history, userText, maxDbHistory = 20) {
   return withUser.length > maxDbHistory ? withUser.slice(withUser.length - maxDbHistory) : withUser;
 }
 
+// Exported separately from trimHistoryForLLM (not just inlined there) so the
+// session-summary cursor math in coachSessionSummary.js can compute the same
+// raw-window start index without duplicating the 3/10 constants and risking
+// drift between the two.
+export function historyLimitForMode(contextMode, isReference) {
+  return (contextMode === "light" && !isReference) ? 3 : 10;
+}
+
 export function trimHistoryForLLM(withUser, contextMode, isReference) {
-  const historyLimit = (contextMode === "light" && !isReference) ? 3 : 10;
+  const historyLimit = historyLimitForMode(contextMode, isReference);
   return (withUser || []).length > historyLimit ? withUser.slice(withUser.length - historyLimit) : withUser;
 }

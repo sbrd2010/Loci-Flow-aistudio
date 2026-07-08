@@ -262,4 +262,50 @@ describe("buildCoachSystemPrompt", () => {
       });
     });
   });
+
+  describe("session summary (PR2: rolling summary for the raw-history window)", () => {
+    const ALL_MODES = ["light", "full_task", "emotional", "profile_reflection", "compact_task"];
+
+    it("every mode, including light, surfaces an existing session summary when present", () => {
+      const ctx = { ...baseCtx(), sessionSummaryContext: "CONVERSATION SO FAR:\nCurrent objective: ship PR2." };
+      ALL_MODES.forEach(mode => {
+        const out = buildCoachSystemPrompt(mode, ctx);
+        expect(out).toContain("Current objective: ship PR2.");
+      });
+    });
+
+    it("no mode fabricates a session summary when none exists", () => {
+      ALL_MODES.forEach(mode => {
+        const out = buildCoachSystemPrompt(mode, baseCtx());
+        expect(out).not.toContain("CONVERSATION SO FAR");
+      });
+    });
+
+    it("every mode, including light, can receive the pending-summarization trigger and its writing instruction", () => {
+      // Light mode must be able to update the summary even on a plain
+      // "hi"/no-reference turn — its raw window is only 3 messages, so it
+      // reaches the summarization boundary sooner than other modes, not
+      // less often.
+      const ctx = { ...baseCtx(), pendingSummaryContext: "OLDER MESSAGES LEAVING THE ACTIVE WINDOW (fold these into your summary now — after this turn they will not be shown again):\nUser: hi\nCoach: hey" };
+      ALL_MODES.forEach(mode => {
+        const out = buildCoachSystemPrompt(mode, ctx);
+        expect(out).toContain("OLDER MESSAGES LEAVING THE ACTIVE WINDOW");
+        expect(out).toContain("[[SESSION_SUMMARY:");
+        expect(out).toContain("REPLACES the old summary, it does not append to it");
+      });
+    });
+
+    it("no mode carries the writing instruction when no update is pending", () => {
+      ALL_MODES.forEach(mode => {
+        const out = buildCoachSystemPrompt(mode, baseCtx());
+        expect(out).not.toContain("[[SESSION_SUMMARY:");
+      });
+    });
+
+    it("profile_reflection explicitly distinguishes the session summary from durable memory, so a 'what do you know about me' answer can't blur this-conversation-only context into pinned facts/recent notes (Codex review finding, PR #347)", () => {
+      const out = buildCoachSystemPrompt("profile_reflection", baseCtx());
+      expect(out).toContain("NOT durable memory");
+      expect(out).toMatch(/summary of THIS chat session only/);
+    });
+  });
 });
