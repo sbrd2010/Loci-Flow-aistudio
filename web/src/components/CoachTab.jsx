@@ -15,7 +15,7 @@ import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
 import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFromMemory, isMemoryEnabled, parseMemoryTags, isResurrectedMemoryEntry } from "../utils/coachMemory";
 import { stripReasoningTag } from "../utils/coachReasoning";
-import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM, historyLimitForMode, detectRequestedCategories } from "../utils/coachContextMode";
+import { classifyContextMode, needsConversationContext, trimHistoryForLLM, historyLimitForMode, detectRequestedCategories } from "../utils/coachContextMode";
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
 import {
   needsSummaryUpdate, pendingSummaryMessages, buildPendingSummaryContext,
@@ -207,14 +207,24 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
 
     const deliver = (text, voiced) => {
       const withReply = [...chatHistoryRef.current, { text, isUser: false }];
-      const { history: savedWithReply, coachSessionSummary: adjustedSummary, trimmed } =
+      const { history: savedWithReply, trimmed, removedCount } =
         trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, configRef.current.coachSessionSummary);
       saveSubPath("chatHistory", savedWithReply);
       // The 40-cap can trim old messages off the front even on this
       // no-AI-call nudge path — keep summarizedThroughIndex in sync so it
       // doesn't drift relative to the now-shorter array (see
-      // trimChatHistoryWithCursor's doc comment).
-      if (trimmed) saveConfigPatch({ coachSessionSummary: adjustedSummary });
+      // trimChatHistoryWithCursor's doc comment). Recomputed against
+      // latestConfig rather than a pre-built value, so this doesn't clobber
+      // a same-session chat-send's own cursor write if the two land close
+      // together (loopcheck finding, PR #347).
+      if (trimmed) {
+        saveConfigPatch((latestConfig) => ({
+          coachSessionSummary: {
+            ...(latestConfig.coachSessionSummary || {}),
+            summarizedThroughIndex: Math.max(0, (latestConfig.coachSessionSummary?.summarizedThroughIndex || 0) - removedCount),
+          },
+        }));
+      }
       track("coach_nudge_delivered", { reason: nudge.reason, voiced });
     };
 
@@ -283,7 +293,22 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         localStorage.removeItem("loci_last_full_task_time");
         return;
       }
-      const savedHistory = trimHistoryForDb(chatHistory, userText, MAX_DB_HISTORY);
+      // Same two-step early+late cursor chaining as the main path below:
+      // the early trim (adding userText) must adjust the cursor via
+      // trimChatHistoryWithCursor before the reply's own trim reads it,
+      // or the second trim clobbers/misreads a stale cursor (identical
+      // bug class to the main path's loopcheck finding, PR #347).
+      const withUserForLocalReply = [...chatHistory, { text: userText, isUser: true }];
+      const { history: savedHistory, coachSessionSummary: summaryAfterLocalEarlyTrim, trimmed: localEarlyTrimmed, removedCount: localEarlyRemovedCount } =
+        trimChatHistoryWithCursor(withUserForLocalReply, MAX_DB_HISTORY, config.coachSessionSummary);
+      if (localEarlyTrimmed) {
+        saveConfigPatch((latestConfig) => ({
+          coachSessionSummary: {
+            ...(latestConfig.coachSessionSummary || {}),
+            summarizedThroughIndex: Math.max(0, (latestConfig.coachSessionSummary?.summarizedThroughIndex || 0) - localEarlyRemovedCount),
+          },
+        }));
+      }
       let localReplyText = "";
       if (isHi) {
         localReplyText = `Hey ${firstName}! I'm here. Want to ease in gently, or are you trying to decide what to do next?`;
@@ -304,26 +329,68 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       }
       const replyMsg = { text: localReplyText, isUser: false };
       const withReply = [...savedHistory, replyMsg];
-      const { history: savedWithReply, coachSessionSummary: adjustedSummary, trimmed } =
-        trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, config.coachSessionSummary);
+      const { history: savedWithReply, trimmed, removedCount } =
+        trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, summaryAfterLocalEarlyTrim);
       saveSubPath("chatHistory", savedWithReply);
-      if (trimmed) saveConfigPatch({ coachSessionSummary: adjustedSummary });
+      if (trimmed) {
+        saveConfigPatch((latestConfig) => ({
+          coachSessionSummary: {
+            ...(latestConfig.coachSessionSummary || {}),
+            summarizedThroughIndex: Math.max(0, (latestConfig.coachSessionSummary?.summarizedThroughIndex || 0) - removedCount),
+          },
+        }));
+      }
       return;
     }
 
     if (!pendingChip) setChatInput("");
 
-    const withUser = [...chatHistory, { text: userText, isUser: true }];
-    const savedHistory = trimHistoryForDb(chatHistory, userText, MAX_DB_HISTORY);
+    // savedHistory (not the untrimmed chatHistory+userText) is the basis for
+    // everything below that indexes into "the array as actually stored" —
+    // this can trim a message off the front here if chatHistory was at the
+    // 40-cap. Using the untrimmed version for the raw-window/cursor math
+    // further down would silently compute rawWindowStart in the wrong
+    // coordinate system once the cap is reached, since front-trimming
+    // shifts every index by however much was removed (loopcheck finding,
+    // PR #347). Safe for trimHistoryForLLM too — trimming from the front
+    // never changes which messages end up in the last-N tail.
+    //
+    // Routed through trimChatHistoryWithCursor (not the plain
+    // trimHistoryForDb) specifically so summaryAfterEarlyTrim is adjusted
+    // for this trim before anything below reads a cursor value — otherwise
+    // the cursor stays relative to the pre-trim array while rawWindowStart
+    // is relative to the post-trim one, silently skipping whichever
+    // messages fall in the gap between the two coordinate systems (second,
+    // deeper loopcheck finding — confirmed by simulation to permanently and
+    // silently drop every coach reply once the 40-cap trim starts firing
+    // regularly, not just an edge case).
+    const withUserForTrim = [...chatHistory, { text: userText, isUser: true }];
+    const { history: savedHistory, coachSessionSummary: summaryAfterEarlyTrim, trimmed: earlyTrimmed, removedCount: earlyRemovedCount } =
+      trimChatHistoryWithCursor(withUserForTrim, MAX_DB_HISTORY, config.coachSessionSummary);
     saveSubPath("chatHistory", savedHistory);
+    if (earlyTrimmed) {
+      saveConfigPatch((latestConfig) => ({
+        coachSessionSummary: {
+          ...(latestConfig.coachSessionSummary || {}),
+          summarizedThroughIndex: Math.max(0, (latestConfig.coachSessionSummary?.summarizedThroughIndex || 0) - earlyRemovedCount),
+        },
+      }));
+    }
 
     if (!hasAnyKey) {
       const replyMsg = { text: "🔑 Add an AI key in **Settings → AI Keys** to enable chat.", isUser: false };
       const withReply = [...savedHistory, replyMsg];
-      const { history: savedWithReply, coachSessionSummary: adjustedSummary, trimmed } =
-        trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, config.coachSessionSummary);
+      const { history: savedWithReply, trimmed, removedCount } =
+        trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, summaryAfterEarlyTrim);
       saveSubPath("chatHistory", savedWithReply);
-      if (trimmed) saveConfigPatch({ coachSessionSummary: adjustedSummary });
+      if (trimmed) {
+        saveConfigPatch((latestConfig) => ({
+          coachSessionSummary: {
+            ...(latestConfig.coachSessionSummary || {}),
+            summarizedThroughIndex: Math.max(0, (latestConfig.coachSessionSummary?.summarizedThroughIndex || 0) - removedCount),
+          },
+        }));
+      }
       return;
     }
 
@@ -339,7 +406,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const lastFullTaskTime = getLastFullTaskTime(userId);
     const contextMode = classifyContextMode(userText, { lastFullTaskTime, hasLastPlan: !!lastPlan });
     const isReference = needsConversationContext(userText);
-    const trimmedForLLM = trimHistoryForLLM(withUser, contextMode, isReference);
+    const trimmedForLLM = trimHistoryForLLM(savedHistory, contextMode, isReference);
     setChatLoading(true);
 
     // Session summary: same raw-window boundary trimHistoryForLLM just used,
@@ -348,12 +415,12 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     // are about to leave the raw window for good — include them one final
     // time (as plain-text context, not chat-role messages) so the model can
     // fold them into an updated summary before they're gone.
-    const coachSessionSummary = config.coachSessionSummary || null;
-    const rawWindowStart = Math.max(0, withUser.length - historyLimitForMode(contextMode, isReference));
+    const coachSessionSummary = summaryAfterEarlyTrim;
+    const rawWindowStart = Math.max(0, savedHistory.length - historyLimitForMode(contextMode, isReference));
     const summarizedThroughIndex = coachSessionSummary?.summarizedThroughIndex || 0;
     const summaryUpdateNeeded = needsSummaryUpdate(rawWindowStart, summarizedThroughIndex);
     const pendingSummaryContext = summaryUpdateNeeded
-      ? buildPendingSummaryContext(pendingSummaryMessages(withUser, rawWindowStart, summarizedThroughIndex))
+      ? buildPendingSummaryContext(pendingSummaryMessages(savedHistory, rawWindowStart, summarizedThroughIndex))
       : "";
     const sessionSummaryContext = shouldIncludeSessionSummaryContext(contextMode, isReference, summaryUpdateNeeded)
       ? buildSessionSummaryContext(coachSessionSummary)
@@ -416,7 +483,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     // a different summary that must not be clobbered.
     const rescueHandoffSummaryUsedAt = rescueHandoffContext ? (config.rescueHandoffSummary?.createdAt ?? null) : null;
 
-    const userMessageCount = withUser.filter(m => m.isUser).length;
+    const userMessageCount = savedHistory.filter(m => m.isUser).length;
     const isEarlyConversation = userMessageCount <= 1;
 
     const profileBlock = profileToCoachContext(userProfile);
@@ -791,11 +858,20 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         ...(actionResults.some(r => r.matched) && { actions: actionResults.filter(r => r.matched) }),
       };
       const withReply = [...baseHistory, replyMsg];
-      const { history: savedWithReply, coachSessionSummary: finalSessionSummary, trimmed: historyTrimmed } =
+      const { history: savedWithReply, coachSessionSummary: finalSessionSummary, trimmed: historyTrimmed, removedCount: historyRemovedCount } =
         trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, preTrimSessionSummary);
       saveSubPath("chatHistory", savedWithReply);
 
-      const sessionSummaryChanged = (summaryUpdateNeeded && newSessionSummary) || historyTrimmed;
+      // A fresh summary written this turn keeps using the locally-computed
+      // value (rawWindowStart-relative — see preTrimSessionSummary's comment
+      // on the accepted concurrent-write limitation). But when nothing new
+      // was written this turn and only the 40-cap trim applies, the cursor
+      // decrement is recomputed against latestConfig below instead of a
+      // stale local snapshot, so it can't clobber a same-session
+      // proactive-nudge save that also trimmed around the same time
+      // (loopcheck finding, PR #347).
+      const freshSummaryWrittenThisTurn = summaryUpdateNeeded && !!newSessionSummary;
+      const sessionSummaryChanged = freshSummaryWrittenThisTurn || historyTrimmed;
       if (configPatch || memoryPatch || rescueHandoffSummaryUsedAt !== null || sessionSummaryChanged) {
         // saveConfigPatch merges onto the latest known config and writes only
         // these keys — safe even if this tab unmounted and configRef.current
@@ -806,7 +882,14 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           ...configPatch,
           ...clearRescueHandoffIfUnchanged(latestConfig),
           ...(memoryPatch ? { coachMemory: memoryPatch(latestConfig) } : {}),
-          ...(sessionSummaryChanged ? { coachSessionSummary: finalSessionSummary } : {}),
+          ...(sessionSummaryChanged ? {
+            coachSessionSummary: freshSummaryWrittenThisTurn
+              ? finalSessionSummary
+              : {
+                  ...(latestConfig.coachSessionSummary || {}),
+                  summarizedThroughIndex: Math.max(0, (latestConfig.coachSessionSummary?.summarizedThroughIndex || 0) - historyRemovedCount),
+                },
+          } : {}),
         }));
       }
     } catch (err) {
@@ -822,10 +905,17 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       const withError = [...baseHistory, { text: hint, isUser: false }];
       // No reply was generated this turn, so there's nothing to fold into
       // the summary — only the 40-cap trim (if any) can still apply.
-      const { history: savedWithError, coachSessionSummary: adjustedSummary, trimmed } =
+      const { history: savedWithError, trimmed, removedCount } =
         trimChatHistoryWithCursor(withError, MAX_DB_HISTORY, coachSessionSummary);
       saveSubPath("chatHistory", savedWithError);
-      if (trimmed) saveConfigPatch({ coachSessionSummary: adjustedSummary });
+      if (trimmed) {
+        saveConfigPatch((latestConfig) => ({
+          coachSessionSummary: {
+            ...(latestConfig.coachSessionSummary || {}),
+            summarizedThroughIndex: Math.max(0, (latestConfig.coachSessionSummary?.summarizedThroughIndex || 0) - removedCount),
+          },
+        }));
+      }
     } finally {
       setChatLoading(false);
     }
