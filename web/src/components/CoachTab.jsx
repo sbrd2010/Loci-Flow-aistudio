@@ -158,24 +158,14 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
 
   // Coach tab unmounts on tab switch (see App.jsx), so an in-flight AI reply
   // can resolve after the user has navigated to Settings and changed
-  // coachMemory/coachMemoryEnabled there. configRef would then be frozen on a
-  // stale config — guard writing NEW memory entries with this so a late
-  // reply doesn't add memory based on a stale opt-out/config snapshot. A
-  // [[FORGET: ...]] is exempt from this guard: the user explicitly asked to
-  // delete something, and applying it late (even against a slightly stale
-  // memory snapshot) is strictly better than silently dropping it and
-  // re-injecting the "forgotten" entry into every future prompt. (The final
-  // config save below stays unconditional so other patches, like a coach
-  // check-in, are never lost.)
-  const isMountedRef = useRef(true);
-  useEffect(() => {
-    // Reset on setup, not just cleanup — under StrictMode's dev-only
-    // mount/cleanup/remount cycle, the cleanup below runs once before this
-    // effect re-fires, which would otherwise leave isMountedRef permanently
-    // false even though the component is still mounted.
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
+  // coachMemory/coachMemoryEnabled there. Rather than dropping the reply's
+  // memory writes based on mount state, memoryPatch below re-checks
+  // isMemoryEnabled against the latest config at save time — so a late
+  // REMEMBER/NOTE is still saved unless the user explicitly opted out before
+  // it resolved, and a [[FORGET: ...]] is always applied (the user already
+  // asked to delete something; applying it late is strictly better than
+  // silently dropping it and re-injecting the "forgotten" entry into every
+  // future prompt).
 
   // Deliver a Proactive Coach Nudge (see utils/coachNudge.js) handed off from
   // the Today tab — voiced by the AI when a key is available, falling back to
@@ -524,13 +514,11 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
 
       const memoryWriteAllowed = isMemoryEnabled(configRef.current) && !cloudSyncUnconfirmed;
       const willForget = memoryWriteAllowed && forgets.length > 0;
-      // A REMEMBER/NOTE alongside a FORGET in the same reply is usually a
-      // correction — "forget the old fact, remember this instead" (see the
-      // FORGET instruction above). If willForget is already exempt from
-      // isMountedRef (a late reply after unmount still applies it), dropping
-      // its paired REMEMBER/NOTE here would delete the old fact and never
-      // save its replacement — a net loss, worse than skipping both.
-      const willAddMemory = memoryWriteAllowed && (pinnedFacts.length > 0 || observations.length > 0) && (isMountedRef.current || willForget);
+      // Applied regardless of isMountedRef — saveConfigPatch below is safe to
+      // call after unmount (see its own comment), so a REMEMBER/NOTE from a
+      // reply that resolves after the user left the Coach tab is still saved
+      // rather than silently dropped.
+      const willAddMemory = memoryWriteAllowed && (pinnedFacts.length > 0 || observations.length > 0);
       let memoryPatch = null;
       if (willForget || willAddMemory) {
         // Computed against the latest config at save time (via saveConfigPatch's

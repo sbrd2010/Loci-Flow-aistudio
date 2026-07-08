@@ -295,6 +295,38 @@ describe("parseMemoryTags", () => {
     const { cleanText } = parseMemoryTags("Got it. [[REMEMBER: User was describing [[ADD_TASK:Budget]].]]");
     expect(cleanText).not.toContain("[[ADD_TASK");
   });
+
+  it("leaves an unclosed REMEMBER tag as plain text instead of crashing or half-parsing it (PR1)", () => {
+    const { cleanText, pinnedFacts, observations, forgets } = parseMemoryTags(
+      "Noted.\n[[REMEMBER: this never gets a closing bracket"
+    );
+    expect(cleanText).toContain("[[REMEMBER: this never gets a closing bracket");
+    expect(pinnedFacts).toEqual([]);
+    expect(observations).toEqual([]);
+    expect(forgets).toEqual([]);
+  });
+
+  it("ignores a misspelled tag type instead of matching it as REMEMBER/NOTE/FORGET (PR1)", () => {
+    const { cleanText, pinnedFacts, observations, forgets } = parseMemoryTags(
+      "Noted.\n[[REMEMBERX: this looks close but isn't a real tag]]"
+    );
+    expect(cleanText).toContain("[[REMEMBERX:");
+    expect(pinnedFacts).toEqual([]);
+    expect(observations).toEqual([]);
+    expect(forgets).toEqual([]);
+  });
+
+  it("an empty-content REMEMBER/NOTE tag parses without throwing and never reaches storage as a blank entry (PR1)", () => {
+    const { cleanText, pinnedFacts, observations } = parseMemoryTags("Noted.\n[[REMEMBER:  ]]\n[[NOTE:  ]]");
+    expect(cleanText).toBe("Noted.");
+    // Whitespace-only content is captured by the parser, but addPinnedFact/
+    // addRecentObservation reject it via appendCapped's blank-text guard —
+    // exercised here end-to-end so a malformed tag can never create a blank
+    // stored entry.
+    const memory = addPinnedFact(addRecentObservation({}, observations[0]), pinnedFacts[0]);
+    expect(memory.pinnedFacts).toEqual([]);
+    expect(memory.recentObservations).toEqual([]);
+  });
 });
 
 describe("buildLociMemoryContext", () => {

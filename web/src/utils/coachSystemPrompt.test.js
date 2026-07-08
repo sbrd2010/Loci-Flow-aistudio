@@ -220,4 +220,42 @@ describe("buildCoachSystemPrompt", () => {
       expect(out).not.toContain("BODY-DOUBLE SESSIONS");
     });
   });
+
+  describe("memory-writing rules (PR1: fix durable Coach memory gaps)", () => {
+    it("full_task, emotional, profile_reflection, and compact_task modes can write memory when enabled", () => {
+      ["full_task", "emotional", "profile_reflection", "compact_task"].forEach(mode => {
+        const out = buildCoachSystemPrompt(mode, { ...baseCtx(), memorySectionEnabled: true });
+        expect(out).toContain("MEMORY — building a picture of");
+        expect(out).toContain("[[REMEMBER:");
+        expect(out).toContain("[[NOTE:");
+      });
+    });
+
+    it("light mode never carries memory-writing rules, even when memory is enabled", () => {
+      const out = buildCoachSystemPrompt("light", { ...baseCtx(), memorySectionEnabled: true });
+      expect(out).not.toContain("MEMORY — building a picture of");
+      expect(out).not.toContain("[[REMEMBER:");
+    });
+
+    it("no mode carries memory-writing rules when memorySectionEnabled is false", () => {
+      ["light", "full_task", "emotional", "profile_reflection", "compact_task"].forEach(mode => {
+        const out = buildCoachSystemPrompt(mode, { ...baseCtx(), memorySectionEnabled: false });
+        expect(out).not.toContain("MEMORY — building a picture of");
+      });
+    });
+
+    it("emotional mode adds an extra conservative-writing rule against storing passing feelings", () => {
+      const out = buildCoachSystemPrompt("emotional", { ...baseCtx(), memorySectionEnabled: true });
+      expect(out).toContain("EMOTIONAL MEMORY");
+      expect(out).toContain("recurring pattern, a stable preference, an explicit \"remember this\" request, or a durable fact");
+      expect(out).toContain("never for a passing feeling in the moment");
+    });
+
+    it("full_task, profile_reflection, and compact_task modes do not carry the emotional-specific conservative rule", () => {
+      ["full_task", "profile_reflection", "compact_task"].forEach(mode => {
+        const out = buildCoachSystemPrompt(mode, { ...baseCtx(), memorySectionEnabled: true });
+        expect(out).not.toContain("EMOTIONAL MEMORY");
+      });
+    });
+  });
 });
