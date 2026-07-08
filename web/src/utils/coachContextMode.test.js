@@ -1251,4 +1251,30 @@ describe("detectRequestedCategories", () => {
     expect(detectRequestedCategories("what are my family's priorities?")).toEqual([]);
     expect(classifyContextMode("what are my family priorities?")).toBe("full_task");
   });
+
+  it("detects categories for 'can/should wait for <category>' negation asks (Codex review finding, PR #345)", () => {
+    // "wait" wasn't in FOCUS_FOR_CLAUSE_RE's verb list at all — a
+    // pre-existing gap from #340, not specific to errands, that this fix
+    // also resolves for every category.
+    expect(detectRequestedCategories("what can wait for errands?")).toEqual(["Personal"]);
+    expect(detectRequestedCategories("what can wait for work?")).toEqual(["Work"]);
+  });
+
+  it("routes 'which errands ...' to full_task (Codex review finding, PR #345)", () => {
+    expect(classifyContextMode("which errands should I do first?")).toBe("full_task");
+    expect(classifyContextMode("which errands can I skip?")).toBe("full_task");
+  });
+
+  it("doesn't corrupt literal 'N errands' counts (Codex review finding, PR #345)", () => {
+    // Unlike the adjective-like category words ("2 job"/"2 fitness" are
+    // never literal counts), "errands" is a genuine countable noun, so
+    // "what 2 errands do I have?" must not become "what to errands do I
+    // have?" the way "remind me 2 job hunt" -> "remind me to job hunt" does.
+    expect(normalizeForClassification("what 2 errands do I have?")).toBe("what 2 errands do I have?");
+    expect(normalizeForClassification("I have 2 errands")).toBe("I have 2 errands");
+    // The "my"-prefixed case (already protected before this fix) still works.
+    expect(normalizeForClassification("what are my 2 errands?")).toBe("what are my 2 errands?");
+    // Unrelated category shorthand normalization is untouched.
+    expect(normalizeForClassification("remind me 2 job hunt")).toBe("remind me to job hunt");
+  });
 });

@@ -49,7 +49,13 @@ const SHORTHAND_MAP = [
   // reaching the ADD_TASK path). Duration/time-unit words stay
   // unconditionally excluded regardless of a preceding "my" (Codex review
   // finding, mirrors the equivalent "4"->"for" fix below).
-  [/(?<!\bat\s)(?:(?<!\bmy\s)\b2\b(?=\s*(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family|errands)\b)|\b2\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|months?|quarters?|career|work|health|personal|job|office|fitness|wellness|gym|home|family|errands)\b))/gi, "to"],
+  // "errands" is deliberately absent from the first alternative's lookahead
+  // (though still excluded in the second) — unlike the adjective-like
+  // category words ("2 job"/"2 fitness" are never literal counts), "errands"
+  // is a genuine countable noun ("what 2 errands do I have?", "I have 2
+  // errands"), so treating unprefixed "2 errands" as "to errands" corrupted
+  // real counts (Codex review finding).
+  [/(?<!\bat\s)(?:(?<!\bmy\s)\b2\b(?=\s*(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\b2\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|months?|quarters?|career|work|health|personal|job|office|fitness|wellness|gym|home|family|errands)\b))/gi, "to"],
   // The category-word exclusion here is only a real "count" (not "4" meaning
   // "for") when it follows "my" ("my 4 work priorities") — without requiring
   // that, adding job/office/fitness/wellness/gym/home/family to this list
@@ -58,8 +64,10 @@ const SHORTHAND_MAP = [
   // regexes elsewhere in this file — which only recognize the literal word
   // "for" — never fired). Duration/time-unit words stay unconditionally
   // excluded regardless of a preceding "my" ("in 4 months" must not become
-  // "in for months") (Codex review finding).
-  [/(?<!\bat\s)(?:(?<!\bmy\s)\b4\b(?=\s*(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family|errands)\b)|\b4\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|months?|quarters?|career|work|health|personal|job|office|fitness|wellness|gym|home|family|errands)\b))/gi, "for"],
+  // "in for months") (Codex review finding). "errands" is likewise absent
+  // from the first alternative's lookahead only — "4 errands" is a real
+  // count, unlike "4 job"/"4 fitness" (Codex review finding).
+  [/(?<!\bat\s)(?:(?<!\bmy\s)\b4\b(?=\s*(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\b4\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|months?|quarters?|career|work|health|personal|job|office|fitness|wellness|gym|home|family|errands)\b))/gi, "for"],
   [/\bb4\b/gi, "before"],
   [/\bdis\b/gi, "this"],
   [/\bdat\b/gi, "that"],
@@ -351,8 +359,12 @@ const PRIORITY_FILTER_RE = new RegExp(
   // "errands" (unlike "job"/"work"/etc.) is itself a natural plural noun,
   // not just a category adjective — "what errands do I have today?" has no
   // separate trailing noun for CATEGORY_TRAILING_NOUN_RE to match against,
-  // so it needs its own shape (live-testing round 5).
-  `\\bwhat\\s+errands\\s+do\\s+i\\s+have\\b`,
+  // so it needs its own shape (live-testing round 5). Same for "which
+  // errands should I do first?" — reuses the generic-noun continuation/end
+  // guard rather than CATEGORY_TRAILING_NOUN_RE, since there's no separate
+  // noun after "errands" either (Codex review finding).
+  `\\bwhat\\s+errands\\s+do\\s+i\\s+have\\b|` +
+  `\\bwhich\\s+errands\\b(?=${CATEGORY_GENERIC_NOUN_END_RE}|\\s+${CATEGORY_GENERIC_NOUN_CONTINUATION_RE}${CATEGORY_GENERIC_NOUN_END_RE})`,
   "i"
 );
 
@@ -450,7 +462,11 @@ const CATEGORY_PRIORITY_CLAUSE_RE = /(?:what are|tell me|show me|check|what abou
 // bother with for work?" and "anything I can skip for work?" (plus the
 // pre-existing "what can I skip for work?"/"what can I put off for work?")
 // never got a missing-category mismatch note (Codex review finding).
-const FOCUS_FOR_CLAUSE_RE = /\b(?:focus on|priorit\w*|do|work on|start|tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on|needs my attention|deserves my (?:attention|energy)|on (?:my |the )?(?:deck|radar|plate|agenda|horizon)|(?:the )?game plan|top|main|biggest|important|urgent|pressing|critical|bother with|skip|ignore|put off)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?([a-z0-9\s&/,'’]{1,40})/i;
+// Also covers "can/should wait" — "what can wait for errands?" (and every
+// other category, a pre-existing gap from #340) routed to full_task fine on
+// its own, but without a matching lead-in here never got a missing-category
+// mismatch note either (Codex review finding).
+const FOCUS_FOR_CLAUSE_RE = /\b(?:focus on|priorit\w*|do|work on|start|tackle|handle|knock out|deal with|nail|dive into|jump into|be doing|be working on|be spending(?: my)? time on|spend(?: my)? time on|needs my attention|deserves my (?:attention|energy)|on (?:my |the )?(?:deck|radar|plate|agenda|horizon)|(?:the )?game plan|top|main|biggest|important|urgent|pressing|critical|bother with|skip|ignore|put off|wait)\b[^.?!]{0,30}\bfor\s+(?:my\s+)?([a-z0-9\s&/,'’]{1,40})/i;
 const CATEGORY_WORD_RE = /\b(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family|errands)\b/gi;
 // A possessive like "boss's" or "manager's" inside the captured clause means
 // the "my" in "my boss's work priorities" scopes to the boss, not the user —
