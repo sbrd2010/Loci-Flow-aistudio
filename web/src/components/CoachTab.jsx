@@ -216,6 +216,26 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
     }));
   };
 
+  // Shared by the typed "clear chat" command and the Clear button below —
+  // previously duplicated inline at both sites (code-review finding,
+  // PR #347). Always reads cloudSyncUnconfirmedRef.current, not the plain
+  // closure value: the Clear button's version of this logic used to run
+  // inside a ConfirmDialog's onConfirm closure, created when the dialog
+  // opens but not invoked until the user clicks Confirm — a real gap for
+  // cloudSyncUnconfirmed to change in, e.g. sync confirming while the
+  // dialog sits open (code-review finding, PR #347). The typed-command
+  // call site is fully synchronous, so the ref and the closure value are
+  // always equal there — using the ref uniformly is still correct and
+  // keeps this one function safe to call from both places without callers
+  // needing to know which case applies.
+  const clearSessionSummaryDeferredIfNeeded = () => {
+    if (cloudSyncUnconfirmedRef.current) {
+      localStorage.setItem(pendingSummaryClearKey(), "1");
+    } else {
+      saveConfigPatch({ coachSessionSummary: null });
+    }
+  };
+
   useEffect(() => {
     if (cloudSyncUnconfirmed) return;
     const clearKey = pendingSummaryClearKey();
@@ -351,19 +371,10 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         saveSubPath("chatHistory", null);
         // Session summary is conversation-scoped (unlike coachMemory, which
         // stays untouched here) — reset it alongside the history it
-        // summarizes. Deferred (not skipped) while sync is unconfirmed —
-        // saveConfigPatch always stamps config.lastUpdated, and mergeConfig
-        // (normalizePayload.js) picks the newer-lastUpdated config as a
-        // WHOLE object, so writing this before the first RTDB snapshot
-        // arrives could make a stale cached config beat fresh remote data
-        // on the first merge (Codex review finding, PR #347) — the
-        // localStorage-backed effect above retries this once sync confirms,
-        // even if the user switches away from the Coach tab in the meantime.
-        if (cloudSyncUnconfirmed) {
-          localStorage.setItem(pendingSummaryClearKey(), "1");
-        } else {
-          saveConfigPatch({ coachSessionSummary: null });
-        }
+        // summarizes. See clearSessionSummaryDeferredIfNeeded's declaration
+        // above for why this is deferred (not skipped) while sync is
+        // unconfirmed.
+        clearSessionSummaryDeferredIfNeeded();
         const userId = auth?.currentUser?.uid || "signed-out";
         localStorage.removeItem(`loci_last_coach_plan_${userId}`);
         localStorage.removeItem(`loci_last_full_task_time_${userId}`);
@@ -377,11 +388,16 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       // or the second trim clobbers/misreads a stale cursor (identical
       // bug class to the main path's loopcheck finding, PR #347).
       const withUserForLocalReply = [...chatHistory, { text: userText, isUser: true }];
-      const { history: savedHistory, coachSessionSummary: summaryAfterLocalEarlyTrim, trimmed: localEarlyTrimmed, removedCount: localEarlyRemovedCount } =
+      const { history: savedHistory, coachSessionSummary: summaryAfterLocalEarlyTrim, removedCount: localEarlyRemovedCount } =
         trimChatHistoryWithCursor(withUserForLocalReply, MAX_DB_HISTORY, config.coachSessionSummary);
-      // Deferred (not skipped) while sync is unconfirmed — see the isClear
-      // reset above for why (Codex review finding, PR #347).
-      applyOrDeferCursorDecrement(localEarlyRemovedCount, cloudSyncUnconfirmed);
+      // Not persisted immediately — folded into the single decrement below
+      // instead, same reasoning as the main path's earlyRemovedCount: two
+      // independent saveConfigPatch calls close together can still race via
+      // RTDB's own retry/backoff (a delayed retry from the first call can
+      // land after the second succeeds and overwrite it), regardless of how
+      // close together they were issued locally — retry timing depends on
+      // network conditions, not local call spacing (code-review finding,
+      // PR #347).
       let localReplyText = "";
       if (isHi) {
         localReplyText = `Hey ${firstName}! I'm here. Want to ease in gently, or are you trying to decide what to do next?`;
@@ -402,12 +418,14 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       }
       const replyMsg = { text: localReplyText, isUser: false };
       const withReply = [...savedHistory, replyMsg];
-      const { history: savedWithReply, trimmed, removedCount } =
+      const { history: savedWithReply, removedCount } =
         trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, summaryAfterLocalEarlyTrim);
       saveSubPath("chatHistory", savedWithReply);
       // Deferred (not skipped) while sync is unconfirmed — see the isClear
-      // reset above for why (Codex review finding, PR #347).
-      applyOrDeferCursorDecrement(removedCount, cloudSyncUnconfirmed);
+      // reset above for why. Includes localEarlyRemovedCount so this single
+      // write correctly reflects BOTH trims relative to the still-
+      // unadjusted remote value (code-review finding, PR #347).
+      applyOrDeferCursorDecrement(removedCount + localEarlyRemovedCount, cloudSyncUnconfirmed);
       return;
     }
 
@@ -433,7 +451,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     // silently drop every coach reply once the 40-cap trim starts firing
     // regularly, not just an edge case).
     const withUserForTrim = [...chatHistory, { text: userText, isUser: true }];
-    const { history: savedHistory, coachSessionSummary: summaryAfterEarlyTrim, trimmed: earlyTrimmed, removedCount: earlyRemovedCount } =
+    const { history: savedHistory, coachSessionSummary: summaryAfterEarlyTrim, removedCount: earlyRemovedCount } =
       trimChatHistoryWithCursor(withUserForTrim, MAX_DB_HISTORY, config.coachSessionSummary);
     saveSubPath("chatHistory", savedHistory);
     // Not persisted immediately here — earlyRemovedCount is instead folded
@@ -636,7 +654,13 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     // Not a blind doubling — just enough headroom for the ~700-1000 char
     // (roughly 200-300 token) [[SESSION_SUMMARY:...]] tag on top of the
     // normal reply, so neither gets truncated on the turns that need it.
-    if (summaryUpdateNeeded) maxTokens += 300;
+    // Also requires sessionSummarySectionEnabled: summaryUpdateNeeded alone
+    // just means the raw window has moved past the cursor — while sync is
+    // unconfirmed, pendingBatch/pendingSummaryContext are already forced
+    // empty (see sessionSummarySectionEnabled above), so the model was
+    // never actually asked to write a tag; padding for one it can't emit
+    // wastes token headroom every such turn (code-review finding, PR #347).
+    if (summaryUpdateNeeded && sessionSummarySectionEnabled) maxTokens += 300;
 
     try {
       const reply = await callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey, systemPrompt: systemInstruction, messages, maxTokens, contextMode, reasoningEffort: "low" });
@@ -664,11 +688,16 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       const { cleanText: afterMemory, pinnedFacts, observations, forgets } = parseMemoryTags(afterSummaryTag);
       const { cleanText: afterCheckin, minutes } = parseCheckinTag(afterMemory);
       const { cleanText, actions } = parseCoachActionTags(afterCheckin);
-      if (summaryUpdateNeeded && !newSessionSummary) {
+      if (summaryUpdateNeeded && sessionSummarySectionEnabled && !newSessionSummary) {
         // Missing/malformed tag on a turn that needed one — keep whatever
         // summary was already stored (never overwrite a valid one with
         // nothing) and don't advance the cursor, so the same pending
         // messages are retried on a later turn rather than silently lost.
+        // Gated on sessionSummarySectionEnabled too, or this fires every
+        // turn while sync is unconfirmed — an update wasn't actually
+        // requested that turn (pendingSummaryContext was forced empty), so
+        // a missing tag isn't an anomaly worth warning about (code-review
+        // finding, PR #347).
         console.warn("[CoachTab] session summary update requested but [[SESSION_SUMMARY:...]] was missing or empty; keeping previous summary");
       }
 
@@ -970,18 +999,24 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       // value (rawWindowStart-relative — see preTrimSessionSummary's comment
       // on the accepted concurrent-write limitation).
       //
-      // Skipped outright (not deferred) while sync is unconfirmed — unlike
-      // a pure cursor decrement (see applyOrDeferCursorDecrement below),
-      // deferring a full fresh summary correctly would mean every read site
-      // also needs to see the pending localStorage-shadowed value instead
-      // of the stale config.coachSessionSummary it currently reads, which is
-      // a bigger change than warranted for how rarely this specific branch
-      // (an AI-authored update landing exactly while sync is unconfirmed)
+      // Uses the ref, not the mount-time cloudSyncUnconfirmed closure value:
+      // this whole try block resolves after `await callAI(...)`, which can
+      // take several seconds, so sync can confirm or drop mid-flight —
+      // exactly the staleness class cloudSyncUnconfirmedRef exists for
+      // elsewhere in this file (the nudge-delivery closure), missed here
+      // across every previous round (code-review finding, PR #347).
+      //
+      // A fresh summary that can't be persisted right now (sync unconfirmed)
+      // is skipped outright rather than deferred like a pure cursor
+      // decrement: deferring the full text correctly would mean every read
+      // site also needs to see a pending localStorage-shadowed value
+      // instead of the stale config.coachSessionSummary it currently reads,
+      // a bigger change than warranted for how rarely this exact branch
       // fires. It's naturally retried on a later turn that legitimately
       // needs an update once sync confirms and reads see the real config
-      // again (Codex review finding, PR #347).
+      // again.
       const freshSummaryWrittenThisTurn = summaryUpdateNeeded && !!newSessionSummary;
-      const sessionSummaryChanged = freshSummaryWrittenThisTurn && !cloudSyncUnconfirmed;
+      const sessionSummaryChanged = freshSummaryWrittenThisTurn && !cloudSyncUnconfirmedRef.current;
       if (configPatch || memoryPatch || rescueHandoffSummaryUsedAt !== null || sessionSummaryChanged) {
         // saveConfigPatch merges onto the latest known config and writes only
         // these keys — safe even if this tab unmounted and configRef.current
@@ -995,20 +1030,27 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           ...(sessionSummaryChanged ? { coachSessionSummary: finalSessionSummary } : {}),
         }));
       }
-      // When nothing new was written this turn and only the 40-cap trim
-      // applies, the decrement is deferred (not skipped) while sync is
-      // unconfirmed, and otherwise recomputed against latestConfig instead
-      // of a stale local snapshot, so it can't clobber a same-session
-      // proactive-nudge save that also trimmed around the same time
-      // (loopcheck finding, PR #347). Includes earlyRemovedCount (the early
-      // trim's own decrement, never separately persisted — see its
-      // declaration above) so this single write correctly reflects BOTH
-      // trims relative to the still-unadjusted remote value. Skipped
-      // entirely when a fresh summary WAS written this turn — that branch's
-      // finalSessionSummary is already computed from the in-memory,
-      // early-trim-adjusted cursor, so it's already fully self-contained.
-      if (!freshSummaryWrittenThisTurn) {
-        applyOrDeferCursorDecrement(historyRemovedCount + earlyRemovedCount, cloudSyncUnconfirmed);
+      // Deferred (not skipped) whenever the fresh-summary write above did
+      // NOT actually persist — either no fresh summary was computed this
+      // turn (pure cap-trim case), or one WAS computed but couldn't be
+      // written because sync was unconfirmed. historyRemovedCount is purely
+      // a function of withReply.length and MAX_DB_HISTORY (see
+      // trimChatHistoryWithCursor), identical either way — only the
+      // cursor's TEXT differs, not how much the trim itself removed.
+      // Without this check being `!sessionSummaryChanged` (rather than the
+      // narrower `!freshSummaryWrittenThisTurn` used previously), a fresh-
+      // summary-but-unconfirmed turn silently dropped BOTH the write and
+      // the decrement, permanently desyncing the cursor from chatHistory
+      // (which is trimmed unconditionally via saveSubPath above) — code-
+      // review finding, PR #347. Recomputed against latestConfig when
+      // applied immediately, so it can't clobber a same-session proactive-
+      // nudge save that also trimmed around the same time (loopcheck
+      // finding, PR #347). Includes earlyRemovedCount (the early trim's own
+      // decrement, never separately persisted — see its declaration above)
+      // so this single write/deferral correctly reflects BOTH trims
+      // relative to the still-unadjusted remote value.
+      if (!sessionSummaryChanged) {
+        applyOrDeferCursorDecrement(historyRemovedCount + earlyRemovedCount, cloudSyncUnconfirmedRef.current);
       }
     } catch (err) {
       console.error("[CoachTab] AI chat failed:", err);
@@ -1030,8 +1072,10 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       // applyOrDeferCursorDecrement's declaration above for why. Includes
       // earlyRemovedCount for the same reason as the main success path
       // above — the early trim's own decrement is never separately
-      // persisted (Codex review finding, PR #347).
-      applyOrDeferCursorDecrement(removedCount + earlyRemovedCount, cloudSyncUnconfirmed);
+      // persisted. Uses the ref, not the mount-time cloudSyncUnconfirmed
+      // closure value — this catch block also runs after `await
+      // callAI(...)` (code-review finding, PR #347).
+      applyOrDeferCursorDecrement(removedCount + earlyRemovedCount, cloudSyncUnconfirmedRef.current);
     } finally {
       setChatLoading(false);
     }
@@ -1225,7 +1269,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
           </div>
           {payload.chatHistory && payload.chatHistory.length > 0 && (
             <button
-              onClick={() => setConfirmDialog({ message: "Clear all chat history?", confirmLabel: "Clear", danger: true, onConfirm: () => { saveSubPath("chatHistory", null); if (cloudSyncUnconfirmed) { localStorage.setItem(pendingSummaryClearKey(), "1"); } else { saveConfigPatch({ coachSessionSummary: null }); } const uId = auth?.currentUser?.uid || "signed-out"; localStorage.removeItem(`loci_last_coach_plan_${uId}`); localStorage.removeItem(`loci_last_full_task_time_${uId}`); localStorage.removeItem("loci_last_coach_plan"); localStorage.removeItem("loci_last_full_task_time"); setConfirmDialog(null); }, onCancel: () => setConfirmDialog(null) })}
+              onClick={() => setConfirmDialog({ message: "Clear all chat history?", confirmLabel: "Clear", danger: true, onConfirm: () => { saveSubPath("chatHistory", null); clearSessionSummaryDeferredIfNeeded(); const uId = auth?.currentUser?.uid || "signed-out"; localStorage.removeItem(`loci_last_coach_plan_${uId}`); localStorage.removeItem(`loci_last_full_task_time_${uId}`); localStorage.removeItem("loci_last_coach_plan"); localStorage.removeItem("loci_last_full_task_time"); setConfirmDialog(null); }, onCancel: () => setConfirmDialog(null) })}
               style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "11px", fontWeight: "700", cursor: "pointer", padding: "4px 8px", flexShrink: 0 }}
             >
               Clear
