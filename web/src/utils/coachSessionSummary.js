@@ -21,17 +21,28 @@ export const SESSION_SUMMARY_TARGET_CHARS = 1000;
 export const SESSION_SUMMARY_MAX_CHARS = 1200;
 
 const SESSION_SUMMARY_TAG_RE = /\s*\[\[SESSION_SUMMARY:\s*((?:[^\]]|\](?!\]))+?)\s*\]\]/i;
+// Matches an unclosed "[[SESSION_SUMMARY:" through the end of the string —
+// the summary is appended last and targets ~1000-1200 chars, so a
+// token-cutoff truncation is a realistic way for the closing "]]" to never
+// arrive. Without this, the well-formed regex above simply fails to match
+// and the raw marker + partial summary text leaks straight into the
+// displayed reply (loopcheck finding, PR #347).
+const UNCLOSED_SESSION_SUMMARY_RE = /\s*\[\[SESSION_SUMMARY:[\s\S]*$/i;
 
 // Strips the hidden [[SESSION_SUMMARY: ...]] tag from a reply. Returns
-// summary: null when the tag is absent or its content is blank after
-// trimming — callers must treat that as "no update," keeping whatever
-// summary was already stored, never overwriting a valid one with nothing.
+// summary: null when the tag is absent, unclosed/truncated, or its content
+// is blank after trimming — callers must treat that as "no update,"
+// keeping whatever summary was already stored, never overwriting a valid
+// one with nothing.
 export function parseSessionSummaryTag(text = "") {
   const match = SESSION_SUMMARY_TAG_RE.exec(text);
-  const cleanText = text.replace(SESSION_SUMMARY_TAG_RE, "").trim();
-  if (!match) return { cleanText, summary: null };
-  const content = match[1].replace(/[\s\x00-\x1f\x7f]+/g, " ").trim().slice(0, SESSION_SUMMARY_MAX_CHARS);
-  return { cleanText, summary: content || null };
+  if (match) {
+    const cleanText = text.replace(SESSION_SUMMARY_TAG_RE, "").trim();
+    const content = match[1].replace(/[\s\x00-\x1f\x7f]+/g, " ").trim().slice(0, SESSION_SUMMARY_MAX_CHARS);
+    return { cleanText, summary: content || null };
+  }
+  const cleanText = text.replace(UNCLOSED_SESSION_SUMMARY_RE, "").trim();
+  return { cleanText, summary: null };
 }
 
 // Light mode normally skips the summary entirely to stay cheap (see

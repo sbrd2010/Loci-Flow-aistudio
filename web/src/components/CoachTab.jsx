@@ -553,16 +553,22 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       // start of the output, so it's stripped first, before any other tag
       // parsing.
       const afterReasoning = stripReasoningTag(reply.trim());
-      // Memory tags are parsed first so that if one ever contains a nested
+      // The session summary is stripped before memory-tag parsing, not
+      // after: its content can legitimately quote older raw conversation
+      // text (see buildPendingSummaryContext/pendingSummaryMessages), and if
+      // that quoted text happens to contain something that looks like
+      // "[[REMEMBER: ...]]" / "[[NOTE: ...]]" / "[[FORGET: ...]]" (e.g.
+      // because the user literally typed those characters in an earlier
+      // message), parsing memory tags first would treat quoted, stale text
+      // as a live durable-memory command instead of stripping it away with
+      // the rest of the summary block (loopcheck finding, PR #347).
+      const { cleanText: afterSummaryTag, summary: newSessionSummary } = parseSessionSummaryTag(afterReasoning);
+      // Memory tags are parsed next so that if one ever contains a nested
       // tag-like sequence (e.g. "[[REMEMBER: ...describing [[ADD_TASK:X]]...]]"),
       // the whole memory tag — including the nested text — is stripped before
       // the checkin/action parsers can see it as a tag of their own.
-      const { cleanText: afterMemory, pinnedFacts, observations, forgets } = parseMemoryTags(afterReasoning);
-      // Same reasoning as memory tags above — strip this before the
-      // checkin/action parsers see it, so a summary rewrite containing
-      // tag-like text can't be misparsed as one of theirs.
-      const { cleanText: afterSummaryTag, summary: newSessionSummary } = parseSessionSummaryTag(afterMemory);
-      const { cleanText: afterCheckin, minutes } = parseCheckinTag(afterSummaryTag);
+      const { cleanText: afterMemory, pinnedFacts, observations, forgets } = parseMemoryTags(afterSummaryTag);
+      const { cleanText: afterCheckin, minutes } = parseCheckinTag(afterMemory);
       const { cleanText, actions } = parseCoachActionTags(afterCheckin);
       if (summaryUpdateNeeded && !newSessionSummary) {
         // Missing/malformed tag on a turn that needed one — keep whatever

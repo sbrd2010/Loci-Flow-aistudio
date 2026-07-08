@@ -11,6 +11,7 @@ import {
   shouldIncludeSessionSummaryContext,
 } from "./coachSessionSummary";
 import { historyLimitForMode, trimHistoryForLLM } from "./coachContextMode";
+import { parseMemoryTags } from "./coachMemory";
 
 describe("parseSessionSummaryTag", () => {
   it("extracts and strips a well-formed tag", () => {
@@ -27,9 +28,18 @@ describe("parseSessionSummaryTag", () => {
     expect(summary).toBeNull();
   });
 
-  it("returns summary: null for an unclosed tag, leaving it as plain text (never crashes)", () => {
+  it("strips an unclosed/truncated tag rather than leaking it into the displayed reply (loopcheck finding, PR #347)", () => {
     const { cleanText, summary } = parseSessionSummaryTag("Noted.\n[[SESSION_SUMMARY: this never closes");
-    expect(cleanText).toContain("[[SESSION_SUMMARY: this never closes");
+    expect(cleanText).toBe("Noted.");
+    expect(cleanText).not.toContain("SESSION_SUMMARY");
+    expect(summary).toBeNull();
+  });
+
+  it("strips an unclosed tag even when it contains newlines before the cutoff", () => {
+    const { cleanText, summary } = parseSessionSummaryTag(
+      "All set.\n[[SESSION_SUMMARY: Current objective: ship PR2.\nImportant context: still going"
+    );
+    expect(cleanText).toBe("All set.");
     expect(summary).toBeNull();
   });
 
@@ -312,5 +322,32 @@ describe("full-conversation simulation across the 40-message boundary (loopcheck
     // Sanity: this run should have actually exercised summarization at all
     // (otherwise the assertions above would be vacuously true).
     expect(summarizedIds.length).toBeGreaterThan(20);
+  });
+});
+
+describe("tag-parsing order: session summary must be stripped before memory tags (loopcheck finding, PR #347)", () => {
+  // buildPendingSummaryContext quotes raw older messages — including raw
+  // user text — into the system prompt so the model can fold them into an
+  // updated [[SESSION_SUMMARY:...]] tag. If a user ever literally typed
+  // something that looks like a memory tag, the model can end up quoting it
+  // back inside its own SESSION_SUMMARY content. CoachTab.jsx must strip
+  // that summary block before memory tags are parsed, or the quoted, stale
+  // text gets treated as a live REMEMBER command.
+  const replyWithNestedMemoryTag =
+    "Sounds good.\n[[SESSION_SUMMARY: Earlier the user wrote [[REMEMBER: fake stale fact]] while venting.]]";
+
+  it("does not create a memory entry from a tag-like sequence quoted inside the summary, when stripped first (the fix)", () => {
+    const { cleanText: afterSummary } = parseSessionSummaryTag(replyWithNestedMemoryTag);
+    const { pinnedFacts } = parseMemoryTags(afterSummary);
+    expect(pinnedFacts).toEqual([]);
+  });
+
+  it("would have wrongly captured the quoted text as a live memory command under the old, memory-first order", () => {
+    // Documents the bug this ordering fix addresses: parsing memory tags
+    // before the summary wrapper is removed lets MEMORY_TAG_RE match the
+    // nested "[[REMEMBER: ...]]" regardless of the surrounding
+    // "[[SESSION_SUMMARY: ...]]" it's quoted inside of.
+    const { pinnedFacts } = parseMemoryTags(replyWithNestedMemoryTag);
+    expect(pinnedFacts).toEqual(["fake stale fact"]);
   });
 });
