@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   SESSION_SUMMARY_MAX_CHARS,
   parseSessionSummaryTag,
@@ -58,6 +58,29 @@ describe("parseSessionSummaryTag", () => {
   it("collapses newlines/control characters inside the tag", () => {
     const { summary } = parseSessionSummaryTag("[[SESSION_SUMMARY: line one\nline two\ttabbed]]");
     expect(summary).toBe("line one line two tabbed");
+  });
+
+  it("does not swallow a legitimate tag that follows it in the same reply (Codex review finding, PR #347)", () => {
+    // CHECKIN_IN and the action tags are each independently instructed to
+    // end the reply "on its own line" too, so SESSION_SUMMARY is not
+    // guaranteed to be the literal last substring when more than one tag
+    // fires in the same turn. An end-anchored regex would fail to match
+    // here at all and fall through to the unclosed-tag stripper, deleting
+    // the trailing CHECKIN_IN tag along with it — this locks in the
+    // non-greedy, non-anchored choice instead.
+    const { cleanText, summary } = parseSessionSummaryTag(
+      "Got it.\n[[SESSION_SUMMARY: Current objective: ship PR2.]]\n[[CHECKIN_IN:20]]"
+    );
+    expect(summary).toBe("Current objective: ship PR2.");
+    expect(cleanText).toContain("[[CHECKIN_IN:20]]");
+  });
+
+  it("stops at the first nested closing bracket when the summary quotes a tag-like sequence, leaving the tail as plain text (accepted, matches coachMemory.js's MEMORY_TAG_RE limitation)", () => {
+    const { cleanText, summary } = parseSessionSummaryTag(
+      "Sounds good.\n[[SESSION_SUMMARY: Earlier user wrote [[REMEMBER: fake]] while venting.]]"
+    );
+    expect(summary).toBe("Earlier user wrote [[REMEMBER: fake");
+    expect(cleanText).toContain("while venting.]]");
   });
 });
 
@@ -214,11 +237,22 @@ describe("trimChatHistoryWithCursor", () => {
     expect(removedCount).toBe(0);
   });
 
-  it("never lets the cursor go negative when more was removed than the cursor's value", () => {
+  it("never lets the cursor go negative when more was removed than the cursor's value, and warns about the unsummarized loss (Codex review finding, PR #347)", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { coachSessionSummary } = trimChatHistoryWithCursor(
       history, 40, { sessionSummary: "s", summarizedThroughIndex: 2 }
     );
     expect(coachSessionSummary.summarizedThroughIndex).toBe(0);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][0]).toContain("unsummarized message(s) were evicted");
+    warnSpy.mockRestore();
+  });
+
+  it("does not warn when the trim stays within what's already been summarized", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    trimChatHistoryWithCursor(history, 40, { sessionSummary: "s", summarizedThroughIndex: 10 });
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it("is a no-op (and reports trimmed: false) when under the cap", () => {

@@ -217,7 +217,17 @@ export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPat
       // latestConfig rather than a pre-built value, so this doesn't clobber
       // a same-session chat-send's own cursor write if the two land close
       // together (loopcheck finding, PR #347).
-      if (trimmed) {
+      //
+      // Uses the ref (not the mount-time cloudSyncUnconfirmed closure
+      // value) since deliver() can run from the async IIFE below, well
+      // after this effect's own cloudSyncUnconfirmedRef check at the top —
+      // sync could still be unconfirmed, or have become unconfirmed again,
+      // by the time the AI reply resolves. Skipped for the same reason as
+      // every other coachSessionSummary write in this file: saveConfigPatch
+      // always stamps config.lastUpdated, which mergeConfig
+      // (normalizePayload.js) uses to pick the newer config as a WHOLE
+      // object (Codex review finding, PR #347).
+      if (trimmed && !cloudSyncUnconfirmedRef.current) {
         saveConfigPatch((latestConfig) => ({
           coachSessionSummary: {
             ...(latestConfig.coachSessionSummary || {}),
@@ -284,8 +294,14 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         saveSubPath("chatHistory", null);
         // Session summary is conversation-scoped (unlike coachMemory, which
         // stays untouched here) — reset it alongside the history it
-        // summarizes.
-        saveConfigPatch({ coachSessionSummary: null });
+        // summarizes. Skipped while sync is unconfirmed: saveConfigPatch
+        // always stamps config.lastUpdated, and mergeConfig
+        // (normalizePayload.js) picks the newer-lastUpdated config as a
+        // WHOLE object — so writing this before the first RTDB snapshot
+        // arrives could make a stale cached config beat fresh remote data
+        // on the first merge (Codex review finding, PR #347). The stale
+        // summary self-corrects on the next turn once sync confirms.
+        if (!cloudSyncUnconfirmed) saveConfigPatch({ coachSessionSummary: null });
         const userId = auth?.currentUser?.uid || "signed-out";
         localStorage.removeItem(`loci_last_coach_plan_${userId}`);
         localStorage.removeItem(`loci_last_full_task_time_${userId}`);
@@ -301,7 +317,9 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       const withUserForLocalReply = [...chatHistory, { text: userText, isUser: true }];
       const { history: savedHistory, coachSessionSummary: summaryAfterLocalEarlyTrim, trimmed: localEarlyTrimmed, removedCount: localEarlyRemovedCount } =
         trimChatHistoryWithCursor(withUserForLocalReply, MAX_DB_HISTORY, config.coachSessionSummary);
-      if (localEarlyTrimmed) {
+      // Skipped while sync is unconfirmed — see the isClear reset above for
+      // why (Codex review finding, PR #347).
+      if (localEarlyTrimmed && !cloudSyncUnconfirmed) {
         saveConfigPatch((latestConfig) => ({
           coachSessionSummary: {
             ...(latestConfig.coachSessionSummary || {}),
@@ -332,7 +350,9 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       const { history: savedWithReply, trimmed, removedCount } =
         trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, summaryAfterLocalEarlyTrim);
       saveSubPath("chatHistory", savedWithReply);
-      if (trimmed) {
+      // Skipped while sync is unconfirmed — see the isClear reset above for
+      // why (Codex review finding, PR #347).
+      if (trimmed && !cloudSyncUnconfirmed) {
         saveConfigPatch((latestConfig) => ({
           coachSessionSummary: {
             ...(latestConfig.coachSessionSummary || {}),
@@ -368,7 +388,18 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const { history: savedHistory, coachSessionSummary: summaryAfterEarlyTrim, trimmed: earlyTrimmed, removedCount: earlyRemovedCount } =
       trimChatHistoryWithCursor(withUserForTrim, MAX_DB_HISTORY, config.coachSessionSummary);
     saveSubPath("chatHistory", savedHistory);
-    if (earlyTrimmed) {
+    // Skipped while sync is unconfirmed: saveConfigPatch always stamps
+    // config.lastUpdated, and mergeConfig (normalizePayload.js) picks the
+    // newer-lastUpdated config as a WHOLE object — writing this before the
+    // first RTDB snapshot arrives could make a stale cached config beat
+    // fresh remote data on the first merge (Codex review finding, PR #347).
+    // The cursor self-corrects on a later turn once sync confirms; the
+    // small residual drift risk (chatHistory can still trim via the
+    // ungated saveSubPath above while this decrement is deferred) is
+    // accepted the same way the cross-device concurrent-write model below
+    // is — this window is brief (startup/reconnect only, since a genuine
+    // network outage would fail the AI call itself before reaching here).
+    if (earlyTrimmed && !cloudSyncUnconfirmed) {
       saveConfigPatch((latestConfig) => ({
         coachSessionSummary: {
           ...(latestConfig.coachSessionSummary || {}),
@@ -383,7 +414,8 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       const { history: savedWithReply, trimmed, removedCount } =
         trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, summaryAfterEarlyTrim);
       saveSubPath("chatHistory", savedWithReply);
-      if (trimmed) {
+      // Skipped while sync is unconfirmed — see above for why.
+      if (trimmed && !cloudSyncUnconfirmed) {
         saveConfigPatch((latestConfig) => ({
           coachSessionSummary: {
             ...(latestConfig.coachSessionSummary || {}),
@@ -876,8 +908,19 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       // stale local snapshot, so it can't clobber a same-session
       // proactive-nudge save that also trimmed around the same time
       // (loopcheck finding, PR #347).
+      //
+      // Also false while sync is unconfirmed: saveConfigPatch always stamps
+      // config.lastUpdated, and mergeConfig (normalizePayload.js) picks the
+      // newer-lastUpdated config as a WHOLE object, so writing this before
+      // the first RTDB snapshot arrives could make a stale cached config
+      // beat fresh remote data on the first merge (Codex review finding,
+      // PR #347) — folding the gate into this flag (rather than only
+      // guarding the coachSessionSummary key below) also prevents an
+      // otherwise-empty saveConfigPatch call from firing for this reason
+      // alone, since any call still stamps lastUpdated regardless of what's
+      // in the patch.
       const freshSummaryWrittenThisTurn = summaryUpdateNeeded && !!newSessionSummary;
-      const sessionSummaryChanged = freshSummaryWrittenThisTurn || historyTrimmed;
+      const sessionSummaryChanged = (freshSummaryWrittenThisTurn || historyTrimmed) && !cloudSyncUnconfirmed;
       if (configPatch || memoryPatch || rescueHandoffSummaryUsedAt !== null || sessionSummaryChanged) {
         // saveConfigPatch merges onto the latest known config and writes only
         // these keys — safe even if this tab unmounted and configRef.current
@@ -914,7 +957,9 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       const { history: savedWithError, trimmed, removedCount } =
         trimChatHistoryWithCursor(withError, MAX_DB_HISTORY, coachSessionSummary);
       saveSubPath("chatHistory", savedWithError);
-      if (trimmed) {
+      // Skipped while sync is unconfirmed — see the main success path above
+      // for why (Codex review finding, PR #347).
+      if (trimmed && !cloudSyncUnconfirmed) {
         saveConfigPatch((latestConfig) => ({
           coachSessionSummary: {
             ...(latestConfig.coachSessionSummary || {}),
@@ -1115,7 +1160,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
           </div>
           {payload.chatHistory && payload.chatHistory.length > 0 && (
             <button
-              onClick={() => setConfirmDialog({ message: "Clear all chat history?", confirmLabel: "Clear", danger: true, onConfirm: () => { saveSubPath("chatHistory", null); const uId = auth?.currentUser?.uid || "signed-out"; localStorage.removeItem(`loci_last_coach_plan_${uId}`); localStorage.removeItem(`loci_last_full_task_time_${uId}`); localStorage.removeItem("loci_last_coach_plan"); localStorage.removeItem("loci_last_full_task_time"); setConfirmDialog(null); }, onCancel: () => setConfirmDialog(null) })}
+              onClick={() => setConfirmDialog({ message: "Clear all chat history?", confirmLabel: "Clear", danger: true, onConfirm: () => { saveSubPath("chatHistory", null); if (!cloudSyncUnconfirmed) saveConfigPatch({ coachSessionSummary: null }); const uId = auth?.currentUser?.uid || "signed-out"; localStorage.removeItem(`loci_last_coach_plan_${uId}`); localStorage.removeItem(`loci_last_full_task_time_${uId}`); localStorage.removeItem("loci_last_coach_plan"); localStorage.removeItem("loci_last_full_task_time"); setConfirmDialog(null); }, onCancel: () => setConfirmDialog(null) })}
               style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "11px", fontWeight: "700", cursor: "pointer", padding: "4px 8px", flexShrink: 0 }}
             >
               Clear

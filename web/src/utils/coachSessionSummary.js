@@ -20,6 +20,26 @@
 export const SESSION_SUMMARY_TARGET_CHARS = 1000;
 export const SESSION_SUMMARY_MAX_CHARS = 1200;
 
+// Deliberately non-greedy, stopping at the FIRST "]]" rather than requiring
+// this to be the last tag in the reply: CHECKIN_IN and the action tags
+// (SET_NOW_FOCUS, COMPLETE_TASK, ADD_TASK, PARK_TASK, START_FOCUS) are each
+// independently instructed to end the reply "on its own line" too, so on a
+// turn where more than one fires, SESSION_SUMMARY is not guaranteed to be
+// the literal last substring — an end-anchored regex would then fail to
+// match this tag at all and fall through to the unclosed-tag fallback
+// below, which strips through end-of-string and would delete a legitimate
+// trailing CHECKIN_IN/action tag along with it (verified by tracing the
+// real tag-ordering instructions in coachSystemPrompt.js before choosing
+// this over an anchored alternative, Codex review finding, PR #347).
+//
+// The tradeoff: if the summary's own content quotes an older message
+// containing a full nested tag (e.g. "[[REMEMBER: fake]] while venting."),
+// this stops at the nested tag's own "]]", so the tail after it leaks into
+// cleanText and the stored summary is truncated at that point. Accepted,
+// matching the identical, already-accepted limitation in coachMemory.js's
+// MEMORY_TAG_RE — fixing it here without also fixing MEMORY_TAG_RE would be
+// inconsistent, and a real fix requires resolving the tag-ordering
+// ambiguity above first, not just a regex change.
 const SESSION_SUMMARY_TAG_RE = /\s*\[\[SESSION_SUMMARY:\s*((?:[^\]]|\](?!\]))+?)\s*\]\]/i;
 // Matches an unclosed "[[SESSION_SUMMARY:" through the end of the string —
 // the summary is appended last and targets ~1000-1200 chars, so a
@@ -126,9 +146,30 @@ export function trimChatHistoryWithCursor(history, maxDbHistory, coachSessionSum
   const removedCount = Math.max(0, list.length - maxDbHistory);
   const trimmedHistory = removedCount > 0 ? list.slice(removedCount) : list;
   if (removedCount === 0) return { history: trimmedHistory, coachSessionSummary: coachSessionSummary || null, trimmed: false, removedCount: 0 };
+  const priorCursor = coachSessionSummary?.summarizedThroughIndex || 0;
+  // Normally removedCount <= priorCursor, since the cursor only trails the
+  // cap-trim boundary when a summary update is genuinely still pending (see
+  // needsSummaryUpdate). If the model has repeatedly omitted or malformed
+  // [[SESSION_SUMMARY:...]] across several turns while the conversation
+  // kept growing (see the retry-on-failure comment where newSessionSummary
+  // is missing), the cap-trim here can outrun the cursor — the Math.max(0,
+  // ...) floor below then silently discards messages that were never
+  // folded into any summary, rather than skipping/duplicating already-
+  // tracked ones. Surfaced via console.warn so this genuinely rare
+  // compounding-failure mode is at least observable instead of fully
+  // silent (Codex review finding, PR #347) — not prevented outright, since
+  // doing so would mean letting chatHistory grow past maxDbHistory
+  // whenever a fresh conversation hasn't had its first successful summary
+  // yet, which is the common case, not the failure one.
+  if (removedCount > priorCursor) {
+    console.warn(
+      `[coachSessionSummary] trimmed ${removedCount} message(s) but only ${priorCursor} were already summarized — ` +
+      `${removedCount - priorCursor} unsummarized message(s) were evicted from chatHistory without ever being folded into the rolling summary.`
+    );
+  }
   const adjusted = {
     ...(coachSessionSummary || {}),
-    summarizedThroughIndex: Math.max(0, (coachSessionSummary?.summarizedThroughIndex || 0) - removedCount),
+    summarizedThroughIndex: Math.max(0, priorCursor - removedCount),
   };
   return { history: trimmedHistory, coachSessionSummary: adjusted, trimmed: true, removedCount };
 }
