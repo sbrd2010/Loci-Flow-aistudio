@@ -436,18 +436,30 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const { history: savedHistory, coachSessionSummary: summaryAfterEarlyTrim, trimmed: earlyTrimmed, removedCount: earlyRemovedCount } =
       trimChatHistoryWithCursor(withUserForTrim, MAX_DB_HISTORY, config.coachSessionSummary);
     saveSubPath("chatHistory", savedHistory);
-    // Deferred (not skipped) while sync is unconfirmed via
-    // applyOrDeferCursorDecrement — see its declaration above for why
-    // (Codex review finding, PR #347).
-    applyOrDeferCursorDecrement(earlyRemovedCount, cloudSyncUnconfirmed);
-
+    // Not persisted immediately here — earlyRemovedCount is instead folded
+    // into whichever later write actually happens (the !hasAnyKey branch
+    // just below, the main success path, or the error-catch path), so
+    // there is only ever ONE saveConfigPatch call touching
+    // coachSessionSummary per turn instead of two. saveConfigPatch issues
+    // an independent RTDB update() with its own retry/backoff per call; an
+    // earlier call whose write is delayed by a retry can still land AFTER
+    // a later call's write completes, silently overwriting a fresher value
+    // with a stale one — a real risk here specifically because the gap
+    // between this early trim and the main success path's write spans the
+    // full AI network call (seconds), a much wider window for a transient
+    // retry to land out of order than the near-zero gap between two
+    // synchronous calls elsewhere in this file (Codex review finding,
+    // PR #347). summaryAfterEarlyTrim (used as coachSessionSummary/
+    // preTrimSessionSummary's base below) already reflects this trim
+    // in-memory regardless — only the immediate, separate persistence is
+    // removed.
     if (!hasAnyKey) {
       const replyMsg = { text: "🔑 Add an AI key in **Settings → AI Keys** to enable chat.", isUser: false };
       const withReply = [...savedHistory, replyMsg];
       const { history: savedWithReply, removedCount } =
         trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, summaryAfterEarlyTrim);
       saveSubPath("chatHistory", savedWithReply);
-      applyOrDeferCursorDecrement(removedCount, cloudSyncUnconfirmed);
+      applyOrDeferCursorDecrement(removedCount + earlyRemovedCount, cloudSyncUnconfirmed);
       return;
     }
 
@@ -988,12 +1000,15 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       // unconfirmed, and otherwise recomputed against latestConfig instead
       // of a stale local snapshot, so it can't clobber a same-session
       // proactive-nudge save that also trimmed around the same time
-      // (loopcheck finding, PR #347). Skipped entirely when a fresh summary
-      // WAS written this turn — that branch already folds the equivalent
-      // decrement into finalSessionSummary above, so there's nothing left
-      // to apply here.
+      // (loopcheck finding, PR #347). Includes earlyRemovedCount (the early
+      // trim's own decrement, never separately persisted — see its
+      // declaration above) so this single write correctly reflects BOTH
+      // trims relative to the still-unadjusted remote value. Skipped
+      // entirely when a fresh summary WAS written this turn — that branch's
+      // finalSessionSummary is already computed from the in-memory,
+      // early-trim-adjusted cursor, so it's already fully self-contained.
       if (!freshSummaryWrittenThisTurn) {
-        applyOrDeferCursorDecrement(historyRemovedCount, cloudSyncUnconfirmed);
+        applyOrDeferCursorDecrement(historyRemovedCount + earlyRemovedCount, cloudSyncUnconfirmed);
       }
     } catch (err) {
       console.error("[CoachTab] AI chat failed:", err);
@@ -1012,9 +1027,11 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         trimChatHistoryWithCursor(withError, MAX_DB_HISTORY, coachSessionSummary);
       saveSubPath("chatHistory", savedWithError);
       // Deferred (not skipped) while sync is unconfirmed — see
-      // applyOrDeferCursorDecrement's declaration above for why (Codex
-      // review finding, PR #347).
-      applyOrDeferCursorDecrement(removedCount, cloudSyncUnconfirmed);
+      // applyOrDeferCursorDecrement's declaration above for why. Includes
+      // earlyRemovedCount for the same reason as the main success path
+      // above — the early trim's own decrement is never separately
+      // persisted (Codex review finding, PR #347).
+      applyOrDeferCursorDecrement(removedCount + earlyRemovedCount, cloudSyncUnconfirmed);
     } finally {
       setChatLoading(false);
     }
