@@ -13,7 +13,7 @@ import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSet
 import { isPendingCoachNudgeStale, shouldDeliverPendingCoachNudge } from "../utils/coachNudge";
 import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
-import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFromMemory, isMemoryEnabled, parseMemoryTags, wasMemoryEntryRemoved } from "../utils/coachMemory";
+import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFromMemory, isMemoryEnabled, parseMemoryTags, isResurrectedMemoryEntry } from "../utils/coachMemory";
 import { stripReasoningTag } from "../utils/coachReasoning";
 import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM, detectRequestedCategories } from "../utils/coachContextMode";
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
@@ -532,13 +532,10 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         // — so a Settings-tab edit made while this reply was in flight isn't
         // reverted by this whole-coachMemory write.
         memoryPatch = (latestConfig) => {
+          // latestMemory (pre-forget) is the "after" snapshot for resurrection
+          // checks below, so this reply's own FORGET (applied next) never
+          // counts as "someone else's deletion" against itself.
           const latestMemory = latestConfig.coachMemory || {};
-          // Detect a Settings-tab deletion/clear that happened after this
-          // reply's REMEMBER/NOTE were captured but before this patch lands
-          // — checked against the pre-forget latestMemory so this reply's
-          // own FORGET (applied below) never counts as "someone else's
-          // deletion" against itself.
-          const editedSinceSend = wasMemoryEntryRemoved(coachMemoryAtSendTime, latestMemory);
           let memory = latestMemory;
           if (willForget) forgets.forEach(text => { memory = forgetFromMemory(memory, text); });
           // Re-check Coach Memory's enabled flag against the latest config —
@@ -546,11 +543,20 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           // willForget exemption), so the user could have turned memory off
           // in Settings before this reply resolves. The forget above is still
           // applied (it's a deletion the user already asked for), but a new
-          // addition shouldn't be written after an explicit opt-out, and
-          // shouldn't resurrect an entry the user just deleted elsewhere.
-          if (willAddMemory && isMemoryEnabled(latestConfig) && !editedSinceSend) {
-            pinnedFacts.forEach(fact => { memory = addPinnedFact(memory, fact); });
-            observations.forEach(note => { memory = addRecentObservation(memory, note, todayStr); });
+          // addition shouldn't be written after an explicit opt-out. Each
+          // candidate is also checked individually against
+          // isResurrectedMemoryEntry — skip only the specific fact/note the
+          // user just deleted/corrected from Settings while this reply was
+          // in flight, not the whole batch (loopcheck + Codex review
+          // findings, PR #346), so an unrelated new memory or a paired
+          // FORGET+REMEMBER correction still saves normally.
+          if (willAddMemory && isMemoryEnabled(latestConfig)) {
+            pinnedFacts.forEach(fact => {
+              if (!isResurrectedMemoryEntry(coachMemoryAtSendTime, latestMemory, fact)) memory = addPinnedFact(memory, fact);
+            });
+            observations.forEach(note => {
+              if (!isResurrectedMemoryEntry(coachMemoryAtSendTime, latestMemory, note)) memory = addRecentObservation(memory, note, todayStr);
+            });
           }
           return memory;
         };

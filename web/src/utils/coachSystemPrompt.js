@@ -26,19 +26,6 @@ export function buildLociVoiceCapsule(firstName) {
 REMINDER HONESTY: A Coach check-in is primarily an in-app Coach message that resumes this conversation later. If browser notifications are enabled and supported, Loci may also show a browser notification, but this is not a guaranteed phone push notification, calendar alarm, or external reminder. Never say "I added a task reminder" or claim you're monitoring ${firstName} in the background. If ${firstName} asks whether you've set a reminder: say so honestly only if a CURRENT CHECK-IN line appears below — otherwise say you haven't set one yet and offer to set a Coach check-in.`;
 }
 
-// Extra rule layered on top of buildMemoryWritingRules() for any mode where
-// the user's message is likely to be a raw, in-the-moment emotional or
-// self-critical statement rather than a settled reflection — "emotional"
-// mode obviously, but also "profile_reflection", since classifyContextMode()
-// checks PROFILE_RE before EMOTIONAL_RE and a message like "why am I like
-// this, I feel useless today" matches PROFILE_RE's literal "why am i like
-// this" and never reaches the emotional check at all (Codex review finding,
-// PR #346). Without this, the generic NOTE rule could store a passing
-// distress/shame moment as if it were durable.
-function buildConservativeMemoryAddendum(firstName) {
-  return `EMOTIONAL MEMORY — an extra rule on top of the above: this may be a raw emotional moment, so be conservative. Only write [[REMEMBER:...]] or [[NOTE:...]] for a recurring pattern, a stable preference, an explicit "remember this" request, or a durable fact ${firstName} shares — never for a passing feeling in the moment (e.g. do not store "User felt useless today" or "User is having a bad morning"). When in doubt, don't write anything.`;
-}
-
 function buildIdentityBlock(ctx) {
   const { mentorName, firstName, challengeLabel } = ctx;
   return `You are ${mentorName}, an expert productivity mentor and motivating friend inside Loci Focus — an app that helps people cut through overwhelm and actually start working.
@@ -207,7 +194,7 @@ CHECK-IN: If ${firstName} explicitly asks you to check in, follow up, circle bac
 
 LANGUAGE: Avoid "ADHD", "disorder", "diagnosis", "therapy", "mental health app", generic motivational slogans, and "holding space" unless it genuinely fits. No emoji when ${firstName} is emotional, venting, or distressed. Do not use clinical or diagnostic language unless ${firstName} uses that framing first.
 
-${memorySectionEnabled ? `\n${buildMemoryWritingRules(firstName)}\n\n${buildConservativeMemoryAddendum(firstName)}\n` : ""}
+${memorySectionEnabled ? `\n${buildMemoryWritingRules(firstName)}\n` : ""}
 
 ${buildReasoningInstruction(firstName)}`;
 
@@ -241,7 +228,7 @@ If memory is off or has nothing stored, say so plainly rather than guessing — 
 
 Never reveal internal labels, scratchpad content, or raw app metrics even though the behavioural profile data may include them — translate the data into human insight: what ${firstName} is carrying, what pattern Loci notices, what support makes sense next. Lead with the person, not the data.
 
-${memorySectionEnabled ? `\n${buildMemoryWritingRules(firstName)}\n\n${buildConservativeMemoryAddendum(firstName)}\n` : ""}
+${memorySectionEnabled ? `\n${buildMemoryWritingRules(firstName)}\n` : ""}
 
 ${buildReasoningInstruction(firstName)}`;
 

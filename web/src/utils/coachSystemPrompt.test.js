@@ -244,25 +244,21 @@ describe("buildCoachSystemPrompt", () => {
       });
     });
 
-    it("emotional and profile_reflection modes add an extra conservative-writing rule against storing passing feelings (Codex review finding, PR #346)", () => {
-      // profile_reflection needs this too: classifyContextMode() checks
-      // PROFILE_RE before EMOTIONAL_RE, so a message like "why am I like
-      // this, I feel useless today" matches PROFILE_RE's literal "why am i
-      // like this" and routes to profile_reflection, never reaching the
-      // emotional check — without this rule here too, the generic NOTE rule
-      // could store that raw distress moment as if it were durable.
-      ["emotional", "profile_reflection"].forEach(mode => {
+    it("all four memory-capable modes carry the conservative rule against storing passing feelings (loopcheck finding, PR #346)", () => {
+      // Folded directly into buildMemoryWritingRules() rather than a
+      // separate per-mode addendum, specifically so full_task and
+      // compact_task get it too: classifyContextMode() routes plenty of
+      // genuinely emotional messages there before ever reaching the
+      // emotional/profile_reflection checks — e.g. "I feel overwhelmed,
+      // what should I do?" escapes to full_task via the TASK_ASK_RE/
+      // isBroadQuery check at line 669, and "I feel like such a failure,
+      // mark this done" can route to compact_task via EXPLICIT_ACTION_RE
+      // taking priority at line 647. A per-mode addendum that only covered
+      // emotional/profile_reflection would miss both of these.
+      ["full_task", "emotional", "profile_reflection", "compact_task"].forEach(mode => {
         const out = buildCoachSystemPrompt(mode, { ...baseCtx(), memorySectionEnabled: true });
-        expect(out).toContain("EMOTIONAL MEMORY");
         expect(out).toContain("recurring pattern, a stable preference, an explicit \"remember this\" request, or a durable fact");
         expect(out).toContain("never for a passing feeling in the moment");
-      });
-    });
-
-    it("full_task and compact_task modes do not carry the conservative-writing rule", () => {
-      ["full_task", "compact_task"].forEach(mode => {
-        const out = buildCoachSystemPrompt(mode, { ...baseCtx(), memorySectionEnabled: true });
-        expect(out).not.toContain("EMOTIONAL MEMORY");
       });
     });
   });
