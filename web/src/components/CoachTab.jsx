@@ -1158,8 +1158,19 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
   // -- Focus Briefing (AI task analysis across all horizons) -----------------
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [briefingResult, setBriefingResult] = useState("");
-  const [briefOpen, setBriefOpen] = useState(false);
-  const [parkedOpen, setParkedOpen] = useState(false);
+  const coachSectionOpenKey = (section) => `loci_coach_${section}_open_${auth?.currentUser?.uid || "signed-out"}`;
+  const [briefOpen, setBriefOpen] = useState(() => localStorage.getItem(coachSectionOpenKey("brief")) === "1");
+  const [parkedOpen, setParkedOpen] = useState(() => localStorage.getItem(coachSectionOpenKey("parked")) === "1");
+  const toggleBriefOpen = () => setBriefOpen(o => {
+    const next = !o;
+    localStorage.setItem(coachSectionOpenKey("brief"), next ? "1" : "0");
+    return next;
+  });
+  const toggleParkedOpen = () => setParkedOpen(o => {
+    const next = !o;
+    localStorage.setItem(coachSectionOpenKey("parked"), next ? "1" : "0");
+    return next;
+  });
 
   const handleFocusBriefing = async () => {
     if (!hasAnyKey) return;
@@ -1413,19 +1424,21 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
 
       {/* 2 -- Focus Briefing */}
       <section className="card">
-        <button type="button" onClick={() => setBriefOpen(o => !o)} aria-expanded={briefOpen} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: briefOpen ? "4px" : 0 }}>
-          <div>
-            <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
-              ⚡ AI Focus Brief
-            </h2>
-            {!briefOpen && (
-              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                Task snapshot & AI briefing
-              </div>
-            )}
-          </div>
-          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: briefOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
-        </button>
+        <h2 style={{ margin: 0 }}>
+          <button type="button" onClick={toggleBriefOpen} aria-expanded={briefOpen} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: briefOpen ? "4px" : 0 }}>
+            <div>
+              <span style={{ display: "block", fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
+                ⚡ AI Focus Brief
+              </span>
+              {!briefOpen && (
+                <div style={{ fontSize: "12px", fontWeight: "400", color: "var(--text-secondary)", marginTop: "2px" }}>
+                  Task snapshot & AI briefing
+                </div>
+              )}
+            </div>
+            <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: briefOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginInlineStart: "8px" }}>▼</span>
+          </button>
+        </h2>
 
         {briefOpen && (
         <>
@@ -1544,19 +1557,21 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
       {/* 3 -- Parked Archive */}
       {parkedTasks.length > 0 && (
         <section className="card">
-          <button type="button" onClick={() => setParkedOpen(o => !o)} aria-expanded={parkedOpen} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: parkedOpen ? "4px" : 0 }}>
-            <div>
-              <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
-                📦 Parked Tasks ({parkedTasks.length})
-              </h2>
-              {!parkedOpen && (
-                <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                  Tap to restore parked tasks
-                </div>
-              )}
-            </div>
-            <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: parkedOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
-          </button>
+          <h2 style={{ margin: 0 }}>
+            <button type="button" onClick={toggleParkedOpen} aria-expanded={parkedOpen} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: parkedOpen ? "4px" : 0 }}>
+              <div>
+                <span style={{ display: "block", fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
+                  📦 Parked Tasks ({parkedTasks.length})
+                </span>
+                {!parkedOpen && (
+                  <div style={{ fontSize: "12px", fontWeight: "400", color: "var(--text-secondary)", marginTop: "2px" }}>
+                    Tap to restore parked tasks
+                  </div>
+                )}
+              </div>
+              <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: parkedOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginInlineStart: "8px" }}>▼</span>
+            </button>
+          </h2>
 
           {parkedOpen && (
           <>
