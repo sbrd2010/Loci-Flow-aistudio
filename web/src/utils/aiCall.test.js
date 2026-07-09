@@ -286,6 +286,7 @@ describe("AI call resilience", () => {
   });
 
   it("falls back to Cerebras when Groq stays empty after a length retry", async () => {
+    storage.setItem("loci_provider_pref", "groq");
     fetch
       .mockResolvedValueOnce(groqEmpty("length"))   // Groq first attempt: length, empty
       .mockResolvedValueOnce(groqEmpty("length"))   // Groq retry: still empty
@@ -298,6 +299,7 @@ describe("AI call resilience", () => {
   });
 
   it("does not log prompt/message content when Groq returns an empty reply", async () => {
+    storage.setItem("loci_provider_pref", "groq");
     fetch
       .mockResolvedValueOnce(groqEmpty("stop"))
       .mockResolvedValueOnce(cerebrasOk("Cerebras saved it."));

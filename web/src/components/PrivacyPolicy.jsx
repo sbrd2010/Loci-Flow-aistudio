@@ -15,7 +15,7 @@ export default function PrivacyPolicy({ onClose }) {
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "var(--text-secondary)", lineHeight: 1 }}>✕</button>
         </div>
 
-        <p style={{ fontSize: "11px", color: "var(--text-muted)" }}>Last updated: May 2026 · Loci Focus (loci-flow.web.app)</p>
+        <p style={{ fontSize: "11px", color: "var(--text-muted)" }}>Last updated: July 2026 · Loci Focus (loci-flow.web.app)</p>
 
         {[
           {
@@ -28,7 +28,7 @@ export default function PrivacyPolicy({ onClose }) {
           },
           {
             title: "AI features (Coach, breakdown)",
-            body: "When you use AI coaching or task breakdown, the text of your task or message — plus, if Coach Memory is enabled, any pinned facts and recent notes your coach has saved — is sent to Groq (groq.com) or Google Gemini for processing. These services have their own privacy policies. We do not store your AI conversations on our servers beyond what Firebase RTDB syncs for your account. You can review, delete, or turn off Coach Memory anytime in Settings."
+            body: "When you use AI coaching or task breakdown, the text of your task or message — plus, if Coach Memory is enabled, any pinned facts and recent notes your coach has saved — is sent to one of our AI providers for processing: Groq (groq.com), Cerebras (cerebras.ai), Google Gemini, Z.ai, or NVIDIA, depending on which provider is active for your account. These services have their own privacy policies. We do not store your AI conversations on our servers beyond what Firebase RTDB syncs for your account. You can review, delete, or turn off Coach Memory anytime in Settings."
           },
           {
             title: "Analytics",
@@ -40,7 +40,7 @@ export default function PrivacyPolicy({ onClose }) {
           },
           {
             title: "Data sharing",
-            body: "We do not sell, rent, or share your data with any third party beyond the services listed above (Firebase/Google, Groq). We have no advertising partners."
+            body: "We do not sell, rent, or share your data with any third party beyond the services listed above (Firebase/Google, and whichever AI provider is active — Groq, Cerebras, Gemini, Z.ai, or NVIDIA). We have no advertising partners."
           },
           {
             title: "Deleting your data",
