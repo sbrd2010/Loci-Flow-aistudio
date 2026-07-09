@@ -593,8 +593,10 @@ export function buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGemi
   // via the explicit "nvidia" preference only. Z.ai is an emergency-only
   // fallback (free tier, concurrency limit 1) — placed after Cerebras and
   // before Gemini in every chain except the explicit Gemini/Z.ai preferences.
+  // "auto" leads with Cerebras (matches the "cerebras" preset) rather than
+  // Groq, since Cerebras has proven the stronger default for this app.
   const orders = {
-    auto:     ["groq", "cerebras", "zai", "gemini"],
+    auto:     ["cerebras", "groq", "zai", "gemini"],
     groq:     ["groq", "cerebras", "zai", "gemini"],
     cerebras: ["cerebras", "groq", "zai", "gemini"],
     zai:      ["zai", "groq", "cerebras", "gemini"],

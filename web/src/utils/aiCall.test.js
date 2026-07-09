@@ -272,6 +272,7 @@ describe("AI call resilience", () => {
   });
 
   it("does not retry Groq when the initial budget already equals the retry cap", async () => {
+    storage.setItem("loci_provider_pref", "groq");
     fetch
       .mockResolvedValueOnce(groqEmpty("length"))   // Groq at the cap, still empty
       .mockResolvedValueOnce(cerebrasOk("Cerebras saved it after Groq at cap."));
@@ -285,6 +286,7 @@ describe("AI call resilience", () => {
   });
 
   it("falls back to Cerebras when Groq stays empty after a length retry", async () => {
+    storage.setItem("loci_provider_pref", "groq");
     fetch
       .mockResolvedValueOnce(groqEmpty("length"))   // Groq first attempt: length, empty
       .mockResolvedValueOnce(groqEmpty("length"))   // Groq retry: still empty
@@ -297,6 +299,7 @@ describe("AI call resilience", () => {
   });
 
   it("does not log prompt/message content when Groq returns an empty reply", async () => {
+    storage.setItem("loci_provider_pref", "groq");
     fetch
       .mockResolvedValueOnce(groqEmpty("stop"))
       .mockResolvedValueOnce(cerebrasOk("Cerebras saved it."));
@@ -365,10 +368,10 @@ describe("AI call resilience", () => {
     expect(String(fetch.mock.calls[2][0])).toContain("generativelanguage.googleapis.com");
   });
 
-  it("falls back through Cerebras to Gemini when Groq fails in auto mode", async () => {
+  it("falls back through Groq to Gemini when Cerebras fails in auto mode", async () => {
     fetch
-      .mockResolvedValueOnce(providerError(429))   // Groq fails
-      .mockResolvedValueOnce(providerError(503))   // Cerebras fails
+      .mockResolvedValueOnce(providerError(429))   // Cerebras fails
+      .mockResolvedValueOnce(providerError(503))   // Groq fails
       .mockResolvedValueOnce(geminiOk("Gemini here."));
 
     const reply = await callAI(baseRequest({
@@ -378,8 +381,8 @@ describe("AI call resilience", () => {
 
     expect(reply).toBe("Gemini here.");
     expect(fetch).toHaveBeenCalledTimes(3);
-    expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
-    expect(fetch.mock.calls[1][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
+    expect(fetch.mock.calls[0][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
+    expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
     expect(String(fetch.mock.calls[2][0])).toContain("generativelanguage.googleapis.com");
   });
 
@@ -779,10 +782,10 @@ describe("Z.ai emergency fallback", () => {
     expect(fetch.mock.calls[0][0]).toBe("https://api.z.ai/api/paas/v4/chat/completions");
   });
 
-  it("auto order is Groq -> Cerebras -> Z.ai -> Gemini", async () => {
+  it("auto order is Cerebras -> Groq -> Z.ai -> Gemini", async () => {
     fetch
-      .mockResolvedValueOnce(providerError(503))   // Groq fails
       .mockResolvedValueOnce(providerError(503))   // Cerebras fails
+      .mockResolvedValueOnce(providerError(503))   // Groq fails
       .mockResolvedValueOnce(zaiOk("Z.ai picked up the slack."));
 
     const reply = await callAI(baseRequest({
@@ -793,8 +796,8 @@ describe("Z.ai emergency fallback", () => {
 
     expect(reply).toBe("Z.ai picked up the slack.");
     expect(fetch).toHaveBeenCalledTimes(3);
-    expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
-    expect(fetch.mock.calls[1][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
+    expect(fetch.mock.calls[0][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
+    expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
     expect(fetch.mock.calls[2][0]).toBe("https://api.z.ai/api/paas/v4/chat/completions");
   });
 
@@ -1250,6 +1253,7 @@ describe("AI provider cooldown and fallback", () => {
   });
 
   it("falls through to Cerebras when Groq returns 429, with no 429 thrown", async () => {
+    storage.setItem("loci_provider_pref", "groq");
     fetch
       .mockResolvedValueOnce(providerError(429))
       .mockResolvedValueOnce(cerebrasOk("Cerebras saved it."));

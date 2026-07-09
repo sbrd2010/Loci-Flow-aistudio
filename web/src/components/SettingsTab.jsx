@@ -298,7 +298,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const effectiveCerebrasKey = cerebrasPersonalKey || cerebrasBuiltinKey;
   const effectiveZaiKey      = zaiPersonalKey      || zaiBuiltinKey;
   const prefOrders = {
-    auto:     ["groq", "cerebras", "zai", "gemini"],
+    auto:     ["cerebras", "groq", "zai", "gemini"],
     groq:     ["groq", "cerebras", "zai", "gemini"],
     cerebras: ["cerebras", "groq", "zai", "gemini"],
     zai:      ["zai", "groq", "cerebras", "gemini"],
@@ -847,7 +847,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
               </span>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 {[
-                  { key: "auto",     label: "Auto",     chain: "Groq → Cerebras → Z.ai → Gemini" },
+                  { key: "auto",     label: "Auto",     chain: "Cerebras → Groq → Z.ai → Gemini" },
                   { key: "groq",     label: "Groq",     chain: "Groq → Cerebras → Z.ai → Gemini" },
                   { key: "cerebras", label: "Cerebras", chain: "Cerebras → Groq → Z.ai → Gemini" },
                   { key: "zai",      label: "Z.ai",     chain: "Z.ai → Groq → Cerebras → Gemini" },
@@ -884,37 +884,37 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
               </div>
             </div>
 
-            {/* Groq — recommended */}
+            {/* Cerebras — recommended (first in the Auto chain) */}
             <div style={{ marginBottom: "14px", paddingBottom: "14px", borderBottom: "1px solid var(--border)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                 <span style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-primary)" }}>
-                  🚀 Groq
+                  Cerebras
                   <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--success)", background: "rgba(52,211,153,0.12)", padding: "2px 6px", borderRadius: "4px", marginLeft: "6px" }}>RECOMMENDED</span>
                 </span>
-                <a href="https://console.groq.com" target="_blank" rel="noreferrer" style={{ fontSize: "11.5px", color: "var(--accent)", fontWeight: "600" }}>Get key ↗</a>
-              </div>
-              <form onSubmit={handleSaveGroq} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <input className="text-input" type="password"
-                  value={groqInput} onChange={e => setGroqInput(e.target.value)}
-                  placeholder="gsk_..." />
-                <button className="btn" type="submit" style={{ width: "100%" }}>
-                  {savedGroq ? "✓ Saved" : "Save Groq Key"}
-                </button>
-              </form>
-            </div>
-
-            {/* Cerebras */}
-            <div style={{ marginBottom: "14px", paddingBottom: "14px", borderBottom: "1px solid var(--border)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>Cerebras</span>
                 <a href="https://cloud.cerebras.ai" target="_blank" rel="noreferrer" style={{ fontSize: "11.5px", color: "var(--accent)", fontWeight: "600" }}>Get key ↗</a>
               </div>
               <form onSubmit={handleSaveCerebras} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <input className="text-input" type="password"
                   value={cerebrasInput} onChange={e => setCerebrasInput(e.target.value)}
                   placeholder="csk-..." />
-                <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
+                <button className="btn" type="submit" style={{ width: "100%" }}>
                   {savedCerebras ? "✓ Saved" : "Save Cerebras Key"}
+                </button>
+              </form>
+            </div>
+
+            {/* Groq */}
+            <div style={{ marginBottom: "14px", paddingBottom: "14px", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>🚀 Groq</span>
+                <a href="https://console.groq.com" target="_blank" rel="noreferrer" style={{ fontSize: "11.5px", color: "var(--accent)", fontWeight: "600" }}>Get key ↗</a>
+              </div>
+              <form onSubmit={handleSaveGroq} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <input className="text-input" type="password"
+                  value={groqInput} onChange={e => setGroqInput(e.target.value)}
+                  placeholder="gsk_..." />
+                <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
+                  {savedGroq ? "✓ Saved" : "Save Groq Key"}
                 </button>
               </form>
             </div>
