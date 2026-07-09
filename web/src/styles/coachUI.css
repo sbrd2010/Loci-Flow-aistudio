@@ -376,10 +376,21 @@
    verified this reduces how far off-screen the Send button ends up
    relative to both the unfixed version of this diff and pre-existing
    main, even though it doesn't fully solve reachability on this
-   specific, very short viewport. */
+   specific, very short viewport.
+   The section's own max-height must also be unset here, not just its
+   min-height: the base rule's max-height is a viewport-relative calc
+   that, on a viewport this short, computes smaller than what the header
+   + chat-window + input form + card padding actually need. With the
+   section itself not clipping overflow, leaving that cap in place lets
+   the next card's layout box start before the chat controls actually
+   end, painting over the input/Send button instead of just leaving them
+   visually cramped. chat-window's own max-height (110px) below already
+   keeps the message list bounded, so the section is free to size to its
+   natural (small) content height here. */
 @media (max-height: 480px) {
   .coach-section-chat {
     min-height: 0;
+    max-height: none;
   }
   .coach-section-chat .chat-window {
     min-height: 90px;
