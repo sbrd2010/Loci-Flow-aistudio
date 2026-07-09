@@ -1413,7 +1413,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
 
       {/* 2 -- Focus Briefing */}
       <section className="card">
-        <button type="button" onClick={() => setBriefOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: briefOpen ? "4px" : 0 }}>
+        <button type="button" onClick={() => setBriefOpen(o => !o)} aria-expanded={briefOpen} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: briefOpen ? "4px" : 0 }}>
           <div>
             <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
               ⚡ AI Focus Brief
@@ -1544,7 +1544,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
       {/* 3 -- Parked Archive */}
       {parkedTasks.length > 0 && (
         <section className="card">
-          <button type="button" onClick={() => setParkedOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: parkedOpen ? "4px" : 0 }}>
+          <button type="button" onClick={() => setParkedOpen(o => !o)} aria-expanded={parkedOpen} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: parkedOpen ? "4px" : 0 }}>
             <div>
               <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
                 📦 Parked Tasks ({parkedTasks.length})

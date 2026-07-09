@@ -333,6 +333,12 @@
    area minus the sticky header (~60px), the fixed bottom nav (~72px plus
    the iOS home-indicator safe area), and a small buffer for
    screen-content's own top padding.
+   It is ALSO given a matching max-height. Without a real ceiling here,
+   .chat-window's flex:1 below has nothing bounded to fill — once message
+   content exceeds the min-height floor, the whole card (and page) grows
+   unboundedly instead of scrolling internally. The max-height gives the
+   section a fixed box so flex:1 + overflow-y:auto on .chat-window actually
+   clips and scrolls, regardless of conversation length.
    The .chat-window inside flexes to fill whatever space remains after
    the section header and the chat input form.
 */
@@ -340,13 +346,16 @@
   display: flex;
   flex-direction: column;
   min-height: calc(100dvh - 196px - env(safe-area-inset-bottom, 0px));
+  max-height: calc(100dvh - 196px - env(safe-area-inset-bottom, 0px));
 }
 
 .coach-section-chat .chat-window {
   flex: 1;
   min-height: 200px;
-  /* Remove the viewport cap so the window can grow into the full section */
+  /* Bounded by the section's max-height above; this just lets flex:1 do
+     the sizing instead of the chat-window's own intrinsic content height. */
   max-height: none;
+  overflow-y: auto;
 }
 
 /* On short viewports (landscape phone) the section's own natural minimum
