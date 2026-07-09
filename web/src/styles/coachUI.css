@@ -326,3 +326,54 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ── Coach chat section: owns the initial viewport on every device ── */
+/*
+   The chat card (section 1) is given a min-height equal to the visible
+   area minus the sticky header (~60px), the fixed bottom nav (~72px plus
+   the iOS home-indicator safe area), and a small buffer for
+   screen-content's own top padding.
+   The .chat-window inside flexes to fill whatever space remains after
+   the section header and the chat input form.
+*/
+.coach-section-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 196px - env(safe-area-inset-bottom, 0px));
+}
+
+.coach-section-chat .chat-window {
+  flex: 1;
+  min-height: 200px;
+  /* Remove the viewport cap so the window can grow into the full section */
+  max-height: none;
+}
+
+/* On short viewports (landscape phone) the section's own natural minimum
+   (header + chat-window's 200px floor + input form + card padding) can
+   already exceed the available space on its own. Forcing a tall
+   viewport-relative floor on top of that has nowhere to shrink and pushes
+   the input/Send button off-screen behind the fixed bottom nav.
+   Below this threshold, drop the forced floor (min-height: 0) AND cap
+   chat-window's height (not just its floor — the base rule above sets
+   max-height: none, which without an override here lets the message list
+   grow unbounded off the natural content, not actually shrinking at all)
+   so the whole card — header, message list, input row — has a real
+   chance of fitting.
+   This exact 780x390 case is already broken on production main today
+   (Send button ends up well below the viewport there too, independent of
+   this feature) — a full fix belongs to that pre-existing chat-height
+   assumption, not this change. What matters here is not making it worse:
+   verified this reduces how far off-screen the Send button ends up
+   relative to both the unfixed version of this diff and pre-existing
+   main, even though it doesn't fully solve reachability on this
+   specific, very short viewport. */
+@media (max-height: 480px) {
+  .coach-section-chat {
+    min-height: 0;
+  }
+  .coach-section-chat .chat-window {
+    min-height: 90px;
+    max-height: 110px;
+  }
+}
