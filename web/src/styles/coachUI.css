@@ -329,71 +329,69 @@
 
 /* ── Coach chat section: owns the initial viewport on every device ── */
 /*
-   The chat card (section 1) is given a min-height equal to the visible
-   area minus the sticky header (~60px), the fixed bottom nav (~72px plus
-   the iOS home-indicator safe area), and a small buffer for
-   screen-content's own top padding.
-   It is ALSO given a matching max-height. Without a real ceiling here,
-   .chat-window's flex:1 below has nothing bounded to fill — once message
-   content exceeds the min-height floor, the whole card (and page) grows
-   unboundedly instead of scrolling internally. The max-height gives the
-   section a fixed box so flex:1 + overflow-y:auto on .chat-window actually
-   clips and scrolls, regardless of conversation length.
-   The .chat-window inside flexes to fill whatever space remains after
-   the section header and the chat input form.
+   The chat card (section 1) is given a min-height/max-height equal to the
+   visible area minus the sticky header (~60px), the fixed bottom nav
+   (~72px plus the iOS home-indicator safe area), and a small buffer for
+   screen-content's own top padding — --coach-chat-available below.
+   Without a real ceiling here, .chat-window's flex:1 has nothing bounded
+   to fill: once message content exceeds the floor, the whole card (and
+   page) grows unboundedly instead of scrolling internally. Min == max
+   gives the section a fixed box so flex:1 + overflow-y:auto on
+   .chat-window actually clips and scrolls, regardless of conversation
+   length.
+
+   That fixed box is itself viewport-relative, which creates a second
+   problem on short viewports: the section's own chrome — its header row,
+   the input textarea/Send row, and card padding, everything in the
+   section OTHER than .chat-window — takes a roughly constant ~210px
+   (measured empirically) regardless of viewport height. .chat-window
+   used to have a flat 200px min-height floor on top of that. On any
+   viewport short enough that --coach-chat-available < ~210px + 200px
+   (~410px of available room, i.e. viewport height under ~600px), that
+   flat floor demanded more room than the fixed box actually has. Since
+   the section itself doesn't clip overflow, the next card's layout box
+   started before the chat controls actually ended and painted over the
+   input/Send row instead of just looking cramped.
+   A single hardcoded breakpoint here is exactly what caused that: an
+   earlier version of this fix only kicked in below 480px, which covered
+   the worst case but left a silent overlap window from ~481-600px
+   (e.g. a short laptop/split-screen window) uncovered. Using clamp() to
+   shrink the floor continuously as available room shrinks removes the
+   breakpoint entirely, so there's no viewport-height band left where the
+   floor can outgrow the box.
+
+   On extremely short viewports (landscape phone, ~390px tall) the floor
+   bottoms out at 60px and the section's own content still doesn't fully
+   fit — the Send button needs a little scroll there. That's a
+   pre-existing limitation on production main today too (verified against
+   unmodified main at the same viewport), not something this change
+   introduces; this formula meaningfully reduces how far off-screen it
+   ends up without claiming to fully solve reachability on that specific,
+   very short viewport.
 */
 .coach-section-chat {
+  --coach-chat-available: calc(100dvh - 196px - env(safe-area-inset-bottom, 0px));
+  /* Hard floor: chrome (~210px) + chat-window's own hard floor (60px)
+     below. The section's box must never be forced smaller than this —
+     on an extremely short viewport where --coach-chat-available itself
+     dips under this floor, capping the section to --coach-chat-available
+     would force its own content to overflow the box, and (since the
+     section doesn't clip overflow) the next card would start before the
+     overflowing content actually ends, painting over the Send button
+     instead of just needing a little scroll to reach it. */
+  --coach-chat-floor: 270px;
+  --coach-chat-height: max(var(--coach-chat-floor), var(--coach-chat-available));
   display: flex;
   flex-direction: column;
-  min-height: calc(100dvh - 196px - env(safe-area-inset-bottom, 0px));
-  max-height: calc(100dvh - 196px - env(safe-area-inset-bottom, 0px));
+  min-height: var(--coach-chat-height);
+  max-height: var(--coach-chat-height);
 }
 
 .coach-section-chat .chat-window {
   flex: 1;
-  min-height: 200px;
+  min-height: clamp(60px, calc(var(--coach-chat-height) - 210px), 200px);
   /* Bounded by the section's max-height above; this just lets flex:1 do
      the sizing instead of the chat-window's own intrinsic content height. */
   max-height: none;
   overflow-y: auto;
-}
-
-/* On short viewports (landscape phone) the section's own natural minimum
-   (header + chat-window's 200px floor + input form + card padding) can
-   already exceed the available space on its own. Forcing a tall
-   viewport-relative floor on top of that has nowhere to shrink and pushes
-   the input/Send button off-screen behind the fixed bottom nav.
-   Below this threshold, drop the forced floor (min-height: 0) AND cap
-   chat-window's height (not just its floor — the base rule above sets
-   max-height: none, which without an override here lets the message list
-   grow unbounded off the natural content, not actually shrinking at all)
-   so the whole card — header, message list, input row — has a real
-   chance of fitting.
-   This exact 780x390 case is already broken on production main today
-   (Send button ends up well below the viewport there too, independent of
-   this feature) — a full fix belongs to that pre-existing chat-height
-   assumption, not this change. What matters here is not making it worse:
-   verified this reduces how far off-screen the Send button ends up
-   relative to both the unfixed version of this diff and pre-existing
-   main, even though it doesn't fully solve reachability on this
-   specific, very short viewport.
-   The section's own max-height must also be unset here, not just its
-   min-height: the base rule's max-height is a viewport-relative calc
-   that, on a viewport this short, computes smaller than what the header
-   + chat-window + input form + card padding actually need. With the
-   section itself not clipping overflow, leaving that cap in place lets
-   the next card's layout box start before the chat controls actually
-   end, painting over the input/Send button instead of just leaving them
-   visually cramped. chat-window's own max-height (110px) below already
-   keeps the message list bounded, so the section is free to size to its
-   natural (small) content height here. */
-@media (max-height: 480px) {
-  .coach-section-chat {
-    min-height: 0;
-    max-height: none;
-  }
-  .coach-section-chat .chat-window {
-    min-height: 90px;
-    max-height: 110px;
-  }
 }
