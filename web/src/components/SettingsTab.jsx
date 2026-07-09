@@ -298,7 +298,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const effectiveCerebrasKey = cerebrasPersonalKey || cerebrasBuiltinKey;
   const effectiveZaiKey      = zaiPersonalKey      || zaiBuiltinKey;
   const prefOrders = {
-    auto:     ["groq", "cerebras", "zai", "gemini"],
+    auto:     ["cerebras", "groq", "zai", "gemini"],
     groq:     ["groq", "cerebras", "zai", "gemini"],
     cerebras: ["cerebras", "groq", "zai", "gemini"],
     zai:      ["zai", "groq", "cerebras", "gemini"],
@@ -847,7 +847,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
               </span>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 {[
-                  { key: "auto",     label: "Auto",     chain: "Groq → Cerebras → Z.ai → Gemini" },
+                  { key: "auto",     label: "Auto",     chain: "Cerebras → Groq → Z.ai → Gemini" },
                   { key: "groq",     label: "Groq",     chain: "Groq → Cerebras → Z.ai → Gemini" },
                   { key: "cerebras", label: "Cerebras", chain: "Cerebras → Groq → Z.ai → Gemini" },
                   { key: "zai",      label: "Z.ai",     chain: "Z.ai → Groq → Cerebras → Gemini" },
