@@ -75,6 +75,15 @@ export default function TodayTab({
   const taskRowInteractionStyle = config.taskRowInteractionStyle === "dragAnywhere" ? "dragAnywhere" : "classic";
   const windows = getFocusWindows(config);
 
+  // Live (non-stale) read of focusSessionId for async callbacks (e.g.
+  // startFocusAndLog's pinPromise handlers below) — the `focusSessionId`
+  // PROP is a snapshot from whichever render the callback's closure was
+  // created in; startFocusSession()'s setFocusSessionId() call doesn't
+  // reach that closure until a LATER render, which a callback firing after
+  // an async wait (a rejected pin write) would otherwise miss entirely.
+  const focusSessionIdRef = useRef(focusSessionId);
+  focusSessionIdRef.current = focusSessionId;
+
   // Starts a focus session on `task` and writes its focus_started event —
   // if startFocusSession() had to auto-close a still-open prior session to
   // make room for this one (e.g. Day Map's "Start Focus" while another
@@ -115,8 +124,12 @@ export default function TodayTab({
         // session start rather than leaving a focusSessionId open with no
         // focus_started event, which would otherwise surface later as an
         // orphaned terminal event with nothing to match. Only end it if
-        // nothing else has already started a newer session in the meantime.
-        if (focusSessionId === session.focusSessionId) {
+        // nothing else has already started a newer session in the meantime
+        // — compare against focusSessionIdRef.current (live), not the
+        // `focusSessionId` prop this closure captured at call time, which
+        // stays stale until a later render and would make this check
+        // silently never trigger.
+        if (focusSessionIdRef.current === session.focusSessionId) {
           endFocusSession("user_abandoned");
           setIsTimerRunning(false);
           setIsFocusMode(false);

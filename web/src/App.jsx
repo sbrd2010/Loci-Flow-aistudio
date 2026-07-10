@@ -402,22 +402,29 @@ export default function App() {
       if (attempted && attempted.uid === user.uid && attempted.lociDay === lociDay) return;
       if (snapshotAttemptInFlightRef.current) return;
       snapshotAttemptInFlightRef.current = true;
-      captureTodaySnapshotIfNeeded(payload.tasks || [], windows).then((result) => {
+      // Read tasks from payloadRef.current (live), not the `payload` this
+      // effect closed over — payload?.tasks is deliberately NOT a dependency
+      // below, so a task edit can never itself trigger this capture (see
+      // note below); this still needs the CURRENT list whenever the
+      // interval/day-boundary tick actually fires, not a stale one.
+      captureTodaySnapshotIfNeeded(payloadRef.current?.tasks || [], windows).then((result) => {
         snapshotAttemptInFlightRef.current = false;
         if (result?.ok) attemptedSnapshotRef.current = { uid: user.uid, lociDay };
       });
     };
     attemptCapture();
-    // Also re-check periodically — if the app stays mounted across the Loci
-    // day's actual start (e.g. left open overnight) with no other payload/
-    // config change, none of this effect's dependencies would otherwise
-    // change to re-trigger the capture, and the first later unrelated
-    // change (completing or moving a task) would capture the POST-change
-    // Today list instead of the set present at day start. Mirrors
-    // useTodayStr's periodic-recheck pattern for the same class of problem.
-    const id = setInterval(attemptCapture, 60_000);
+    // Re-check periodically — if the app stays mounted across the Loci day's
+    // actual start (e.g. left open overnight), no other payload/config
+    // change would otherwise re-trigger the capture. Deliberately NOT keyed
+    // to payload?.tasks (a prior version of this effect was) — a task edit
+    // arriving right after the boundary but before this interval's next
+    // tick would otherwise itself trigger the first capture for the new
+    // day, snapshotting the POST-edit Today list instead of the set present
+    // at day start, which the write-once transaction could never correct
+    // afterward. 15s (not 60s) keeps that remaining race window small.
+    const id = setInterval(attemptCapture, 15_000);
     return () => clearInterval(id);
-  }, [payload?.config, user?.uid, demoMode, isSyncingFromCache, syncWarning, payload?.tasks]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [payload?.config, user?.uid, demoMode, isSyncingFromCache, syncWarning]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Firebase auth state listener
   useEffect(() => {
@@ -457,6 +464,13 @@ export default function App() {
   // constructed after useFocusTimer and isn't available yet at this point.
   const reshuffleTrackRef = useRef(() => {});
   const focusTimer = useFocusTimer(payload?.tasks || [], payload?.config || {}, user?.uid || null, reshuffleTrackRef);
+  // Live (non-stale) read of focusTimer for effect/promise callbacks that
+  // run after an async wait (e.g. the pendingFocusOpen effect's pinPromise
+  // handlers below) — those closures capture `focusTimer` from whichever
+  // render scheduled them, which startFocusSession()'s own setFocusSessionId
+  // call doesn't reach until a LATER render.
+  const focusTimerRef = useRef(focusTimer);
+  focusTimerRef.current = focusTimer;
 
   // Focus Sounds audio also lives here so ambient sound keeps playing across
   // tab switches and after exiting the Deep Focus overlay.
@@ -521,7 +535,19 @@ export default function App() {
           });
           writeActivityEvents(eventPatch(activityUid, event));
         })
-        .catch(() => {});
+        .catch(() => {
+          // The Day Map pin write never confirmed — undo the optimistic
+          // session start above, or it's left open with no focus_started
+          // event for a later endFocusSession call to surface as an
+          // orphaned terminal event. Only if nothing newer has already
+          // started (live-ref check, not this closure's stale focusTimer).
+          if (focusTimerRef.current.focusSessionId === session.focusSessionId) {
+            focusTimerRef.current.endFocusSession?.("user_abandoned");
+            focusTimerRef.current.setIsTimerRunning?.(false);
+            focusTimerRef.current.setIsFocusMode?.(false);
+            focusTimerRef.current.setFocusSessionActive?.(false);
+          }
+        });
       setPendingFocusOpen(false);
     }
   }, [pendingFocusOpen, focusTimer.activeTask?.uuid]); // eslint-disable-line react-hooks/exhaustive-deps

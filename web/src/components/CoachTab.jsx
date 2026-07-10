@@ -903,6 +903,9 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           }
 
           const startFocus = results.find(r => r.type === "START_FOCUS" && r.matched);
+          // Captured so the saveSubPathsAsync(patch) rejection handler below
+          // can undo this exact session if the core pin write never confirms.
+          let startedFocusSession = null;
           if (startFocus) {
             const isSwitchingTask = focusTimerRef.current.activeTask?.uuid !== startFocus.task.uuid;
             if (!focusTimerRef.current.isTimerRunning || isSwitchingTask) {
@@ -923,6 +926,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
                 // only once the core pin write (saveSubPathsAsync(patch))
                 // actually confirms, instead of immediately.
                 const session = focusTimerRef.current.startFocusSession(startFocus.task, { enterFocusMode: false, plannedSeconds: mins * 60 });
+                startedFocusSession = session;
                 if (session.priorSession && session.priorSession.task) {
                   events.push(buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
                     ...session.priorSession, windows, now: now.getTime(),
@@ -942,7 +946,19 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
 
           saveSubPathsAsync(patch)
             .then(() => { if (events.length > 0) writeActivityEvents(eventsPatch(uid, events)); })
-            .catch(() => {});
+            .catch(() => {
+              // The core pin write never confirmed — undo the optimistic
+              // session start above, or it's left open with no focus_started
+              // event for a later endFocusSession call to surface as an
+              // orphaned terminal event. Only if nothing newer has already
+              // started (live-ref check, not a stale closure value).
+              if (startedFocusSession && focusTimerRef.current.focusSessionId === startedFocusSession.focusSessionId) {
+                focusTimerRef.current.endFocusSession?.("user_abandoned");
+                focusTimerRef.current.setIsTimerRunning?.(false);
+                focusTimerRef.current.setIsFocusMode?.(false);
+                focusTimerRef.current.setFocusSessionActive?.(false);
+              }
+            });
         }
 
         // Apply the XP change as a DELTA onto the latest known totalXp (via
