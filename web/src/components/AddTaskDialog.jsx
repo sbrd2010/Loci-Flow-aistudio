@@ -3,6 +3,8 @@ import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { safeUUID } from "../utils/uuid";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
 import { applyAiRewriteToTask, CATEGORY_ICONS } from "../utils/taskOps";
+import { getFocusWindows } from "../utils/focusWindows";
+import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 
 function defaultReminderDateTime() {
   const d = new Date();
@@ -20,7 +22,8 @@ function parseManualSubSteps(raw) {
 }
 
 
-export default function AddTaskDialog({ email, payload, savePayload, userProfile, defaultHorizon, onClose, editTask }) {
+export default function AddTaskDialog({ email, payload, savePayload, savePayloadAsync, userProfile, defaultHorizon, onClose, editTask, uid, writeActivityEvents }) {
+  const windows = getFocusWindows(payload.config || {});
   const isEditMode = !!editTask;
   const [title, setTitle] = useState(editTask?.title || "");
   const [concreteStep, setConcreteStep] = useState(editTask?.concreteStep || "");
@@ -282,10 +285,12 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     if (reminderAt) scheduleReminder(freshTask);
 
     const updatedTasks = [...(payload.tasks || []), freshTask];
-    savePayload({
+    savePayloadAsync({
       ...payload,
       tasks: updatedTasks
-    });
+    })
+      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_created", freshTask, { windows }))))
+      .catch(() => {});
 
     setSaved(true);
     setTimeout(onClose, 900);

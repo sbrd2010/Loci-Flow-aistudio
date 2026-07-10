@@ -36,6 +36,26 @@ export function activityMetaPath(uid, key) {
   return `activityLogs/${uid}/meta/${key}`;
 }
 
+// Wraps a single event as a fully-qualified {path: event} patch, ready to
+// pass straight to writeActivityEvents(). Every write-path call site uses
+// this (or eventsPatch below for a batch) instead of building the path by
+// hand, so the path shape only lives in one place.
+export function eventPatch(uid, event) {
+  return { [activityEventPath(uid, event.lociDateString, event.eventId)]: event };
+}
+
+// Same as eventPatch, but for several events written together in one
+// analytics-only update() call — e.g. a batch action like Bad Day Reset
+// where every affected task gets its own event, written together once the
+// core batch write confirms.
+export function eventsPatch(uid, events) {
+  const patch = {};
+  for (const event of events) {
+    patch[activityEventPath(uid, event.lociDateString, event.eventId)] = event;
+  }
+  return patch;
+}
+
 // Small-enum classification of a task, attached to events for future
 // analytics grouping — deliberately never titles/notes/free text (Firebase
 // Spark-plan storage efficiency, and this leaves the task's own record).

@@ -252,4 +252,87 @@ describe("useFocusTimer", () => {
     expect(result.current.timerSecondsLeft).toBe(0);
     expect(result.current.timerMaxSeconds).toBe(25 * 60);
   });
+
+  describe("startFocusSession / endFocusSession", () => {
+    it("mints a focusSessionId and starts the timer/focus mode", () => {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      const started = result.current.startFocusSession();
+      rerender([[task], {}, "u1"]);
+
+      expect(typeof started.focusSessionId).toBe("string");
+      expect(started.focusSessionId.length).toBeGreaterThan(0);
+      expect(started.focusInitialPlannedSeconds).toBe(25 * 60);
+      expect(typeof started.focusStartedAt).toBe("number");
+      expect(result.current.focusSessionId).toBe(started.focusSessionId);
+      expect(result.current.isFocusMode).toBe(true);
+      expect(result.current.isTimerRunning).toBe(true);
+    });
+
+    it("endFocusSession returns the session's data and clears focusSessionId, guaranteeing exactly one terminal consumption", () => {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      const started = result.current.startFocusSession();
+      rerender([[task], {}, "u1"]);
+
+      result.current.setTimerSecondsLeft(20 * 60); // 5 minutes elapsed
+      rerender([[task], {}, "u1"]);
+
+      const ended = result.current.endFocusSession("completed_task");
+      rerender([[task], {}, "u1"]);
+
+      expect(ended.focusSessionId).toBe(started.focusSessionId);
+      expect(ended.focusStartedAt).toBe(started.focusStartedAt);
+      expect(ended.focusInitialPlannedSeconds).toBe(started.focusInitialPlannedSeconds);
+      expect(ended.focusFinalPlannedSeconds).toBe(25 * 60);
+      expect(ended.focusElapsedSeconds).toBe(5 * 60);
+      expect(ended.focusEndReason).toBe("completed_task");
+
+      // The session is now consumed — a second call (e.g. a duplicate
+      // "End Session" click racing the "Done!" handler) must not produce a
+      // second terminal event for the same session.
+      const secondEnd = result.current.endFocusSession("user_abandoned");
+      expect(secondEnd).toBeNull();
+      expect(result.current.focusSessionId).toBeNull();
+    });
+
+    it("endFocusSession returns null when no session was ever started", () => {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      expect(result.current.endFocusSession("user_abandoned")).toBeNull();
+    });
+
+    it("reflects mid-session extensions (addTimeToSession) in focusFinalPlannedSeconds while focusInitialPlannedSeconds stays fixed", () => {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      const started = result.current.startFocusSession();
+      rerender([[task], {}, "u1"]);
+      expect(started.focusInitialPlannedSeconds).toBe(25 * 60);
+
+      result.current.addTimeToSession(10);
+      rerender([[task], {}, "u1"]);
+
+      const ended = result.current.endFocusSession("user_abandoned");
+      expect(ended.focusInitialPlannedSeconds).toBe(25 * 60);
+      expect(ended.focusFinalPlannedSeconds).toBe(35 * 60);
+    });
+
+    it("clears any in-flight session on an account switch (uid change) so a stale session can't leak into the next account", () => {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      result.current.startFocusSession();
+      rerender([[task], {}, "u1"]);
+      expect(result.current.focusSessionId).not.toBeNull();
+
+      // Switch accounts — the reset effect keys on uid.
+      rerender([[task], {}, "u2"]);
+
+      expect(result.current.focusSessionId).toBeNull();
+      expect(result.current.endFocusSession("user_abandoned")).toBeNull();
+    });
+  });
 });

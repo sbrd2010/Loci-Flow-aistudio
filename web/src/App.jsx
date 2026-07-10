@@ -27,6 +27,7 @@ import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCom
 import { celebrate } from "./utils/celebrations";
 import { safeUUID } from "./utils/uuid";
 import { submitOnEnter } from "./utils/formEvents";
+import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "./utils/activityLog";
 
 const EXTEND_DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
 
@@ -95,6 +96,23 @@ export default function App() {
       const resolvedPatch = typeof patch === "function" ? patch(prev.config || {}) : patch;
       return { ...prev, config: { ...prev.config, ...resolvedPatch, lastUpdated: Date.now() }, timestamp: Date.now() };
     });
+  };
+
+  // Async counterparts of the demo save functions above — Demo Mode never
+  // touches Firebase, so these just apply the same local state update and
+  // resolve immediately, giving write-path call sites a consistent awaitable
+  // interface regardless of demoMode.
+  const saveDemoPayloadAsync = (updated) => {
+    saveDemoPayload(updated);
+    return Promise.resolve();
+  };
+  const saveDemoSubPathAsync = (subPath, value) => {
+    saveDemoSubPath(subPath, value);
+    return Promise.resolve();
+  };
+  const saveDemoSubPathsAsync = (patch) => {
+    saveDemoSubPaths(patch);
+    return Promise.resolve();
   };
 
   // ── Service worker ─────────────────────────────────────────────────────────
@@ -253,17 +271,37 @@ export default function App() {
   };
 
   // Load the sync payload from RTDB (skipped in demo mode — uid is null)
-  const { payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning: rtdbSyncWarning, savePayload: rtdbSave, saveSubPath: rtdbSaveSub, saveSubPaths: rtdbSaveSubs, saveConfigPatch: rtdbSaveConfigPatch, flushNow: rtdbFlushNow, clearCache: rtdbClearCache } =
-    useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
+  const {
+    payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning: rtdbSyncWarning,
+    savePayload: rtdbSave, savePayloadAsync: rtdbSaveAsync,
+    saveSubPath: rtdbSaveSub, saveSubPathAsync: rtdbSaveSubAsync,
+    saveSubPaths: rtdbSaveSubs, saveSubPathsAsync: rtdbSaveSubsAsync,
+    saveConfigPatch: rtdbSaveConfigPatch,
+    writeActivityEvents: rtdbWriteActivityEvents, captureTodaySnapshotIfNeeded: rtdbCaptureTodaySnapshot,
+    flushNow: rtdbFlushNow, clearCache: rtdbClearCache,
+  } = useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
   const payload = demoMode ? demoPayload : rtdbPayload;
   const savePayload = demoMode ? saveDemoPayload : rtdbSave;
+  const savePayloadAsync = demoMode ? saveDemoPayloadAsync : rtdbSaveAsync;
   const saveSubPath = demoMode ? saveDemoSubPath : rtdbSaveSub;
+  const saveSubPathAsync = demoMode ? saveDemoSubPathAsync : rtdbSaveSubAsync;
   const saveSubPaths = demoMode ? saveDemoSubPaths : rtdbSaveSubs;
+  const saveSubPathsAsync = demoMode ? saveDemoSubPathsAsync : rtdbSaveSubsAsync;
   const saveConfigPatch = demoMode ? saveDemoConfigPatch : rtdbSaveConfigPatch;
   const flushNow = demoMode ? () => {} : (rtdbFlushNow || (() => {}));
   const clearCache = demoMode ? () => {} : (rtdbClearCache || (() => {}));
   const syncWarning = demoMode ? null : rtdbSyncWarning;
+  // These are already uid-scoped closures from useSync — when demoMode forces
+  // uid to null above, they safely no-op ({ok:false, reason:"no-uid"}) rather
+  // than needing a separate demo branch, so every write-path call site can
+  // call them unconditionally regardless of demoMode.
+  const writeActivityEvents = rtdbWriteActivityEvents;
+  const captureTodaySnapshotIfNeeded = rtdbCaptureTodaySnapshot;
+  // Ledger event paths are keyed by the real Firebase uid — never build one
+  // from a demo session (uid is null then, which is already the state
+  // writeActivityEvents checks for; keeping this explicit for clarity).
+  const activityUid = demoMode ? null : (user?.uid || null);
 
   // Live ref for the check-in poller below, which runs on an interval and
   // needs the latest chatHistory/config without restarting on every change.
@@ -323,6 +361,11 @@ export default function App() {
     const yesterdayStr = toLocalDateStr(yesterday);
     const newStreak = cfg.lastVisitDate === yesterdayStr ? (cfg.visitStreakCount || 0) + 1 : 1;
     saveSubPath("config", { ...cfg, visitStreakCount: newStreak, lastVisitDate: todayStr, lastUpdated: Date.now() });
+    // First confirmed-synced load of a new day — capture today's carryover
+    // snapshot alongside the existing once-per-day visit-streak bump (same
+    // trigger point, per the Insights plan). isSyncingFromCache already
+    // gates this whole effect above, so this never fires off a stale cache.
+    captureTodaySnapshotIfNeeded(payload.tasks || [], getFocusWindows(cfg));
   }, [payload?.config?.lastVisitDate, user?.uid, isSyncingFromCache, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Firebase auth state listener
@@ -401,8 +444,12 @@ export default function App() {
   // Auto-start the timer when arriving from Day Map's "Start Focus" action
   useEffect(() => {
     if (pendingFocusOpen && focusTimer.activeTask) {
-      focusTimer.setIsFocusMode(true);
-      focusTimer.setIsTimerRunning(true);
+      const session = focusTimer.startFocusSession();
+      const event = buildFocusStartedEvent(focusTimer.activeTask, session.focusSessionId, {
+        source: "day_map", focusInitialPlannedSeconds: session.focusInitialPlannedSeconds,
+        now: session.focusStartedAt, windows: getFocusWindows(payload?.config || {}),
+      });
+      writeActivityEvents(eventPatch(activityUid, event));
       setPendingFocusOpen(false);
     }
   }, [pendingFocusOpen, focusTimer.activeTask?.uuid]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -413,9 +460,17 @@ export default function App() {
   };
 
   const handleEndFocusSession = () => {
+    const task = focusTimer.activeTask;
+    const ended = focusTimer.endFocusSession("user_abandoned");
     focusTimer.setIsTimerRunning(false);
     focusTimer.setIsFocusMode(false);
     focusTimer.setFocusSessionActive(false);
+    if (ended && task) {
+      const event = buildFocusTerminalEvent("focus_abandoned", task, ended.focusSessionId, {
+        ...ended, windows: getFocusWindows(payload?.config || {}),
+      });
+      writeActivityEvents(eventPatch(activityUid, event));
+    }
   };
 
   // Global Focus completion prompt: "Done! +120 XP" — completes the task and
@@ -426,7 +481,15 @@ export default function App() {
     if (!task) return;
     celebrate();
     const now = new Date();
-    savePayload(buildFocusCompletionPayload(payload, task, toLocalDateStr(now), now));
+    const ended = focusTimer.endFocusSession("completed_task");
+    savePayloadAsync(buildFocusCompletionPayload(payload, task, toLocalDateStr(now), now))
+      .then(() => {
+        const windows = getFocusWindows(payload?.config || {});
+        const events = [buildTaskMutationEvent("task_completed", task, { windows, source: "focus_mode" })];
+        if (ended) events.push(buildFocusTerminalEvent("focus_completed", task, ended.focusSessionId, { ...ended, windows }));
+        writeActivityEvents(eventsPatch(activityUid, events));
+      })
+      .catch(() => {});
     focusTimer.setIsFocusMode(false);
     focusTimer.setFocusSessionActive(false);
   };
@@ -718,6 +781,7 @@ export default function App() {
           <TodayTab
             payload={payload}
             savePayload={savePayload}
+            savePayloadAsync={savePayloadAsync}
             saveSubPath={saveSubPath}
             isSyncingFromCache={isSyncingFromCache}
             syncWarning={syncWarning}
@@ -729,6 +793,8 @@ export default function App() {
             isAddTaskDialogOpen={showAddTask}
             pendingCheckinSlot={pendingCheckinSlot}
             setPendingCheckinSlot={setPendingCheckinSlot}
+            uid={activityUid}
+            writeActivityEvents={writeActivityEvents}
             {...focusTimer}
             {...focusAudio}
           />
@@ -747,13 +813,16 @@ export default function App() {
           <RoadmapTab
             payload={payload}
             savePayload={savePayload}
+            savePayloadAsync={savePayloadAsync}
             onOpenAddTask={openAddTask}
             onEditTask={(task) => { setEditingTask(task); setShowAddTask(true); }}
             initialExpandedCol={roadmapInitialCol}
+            uid={activityUid}
+            writeActivityEvents={writeActivityEvents}
           />
         )}
-        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onOpenRoadmapInbox={openRoadmapInbox} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} />}
-        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} />}
+        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onOpenRoadmapInbox={openRoadmapInbox} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} uid={activityUid} writeActivityEvents={writeActivityEvents} />}
+        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} />}
         {activeTab === "settings" && (
           <SettingsTab
             payload={payload}
@@ -954,10 +1023,13 @@ export default function App() {
           email={demoMode ? "demo@loci.app" : user?.email}
           payload={payload}
           savePayload={savePayload}
+          savePayloadAsync={savePayloadAsync}
           userProfile={userProfile}
           defaultHorizon={preselectedHorizon}
           editTask={editingTask}
           onClose={() => { setShowAddTask(false); setEditingTask(null); }}
+          uid={activityUid}
+          writeActivityEvents={writeActivityEvents}
         />
       )}
     </div>

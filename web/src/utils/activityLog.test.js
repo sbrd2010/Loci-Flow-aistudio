@@ -3,6 +3,8 @@ import {
   activityEventPath,
   activitySnapshotPath,
   activityMetaPath,
+  eventPatch,
+  eventsPatch,
   buildTaskMutationEvent,
   buildFocusStartedEvent,
   buildFocusTerminalEvent,
@@ -37,6 +39,28 @@ describe("path builders", () => {
     expect(activityMetaPath("uid1", "instrumentationStartedAt")).toBe(
       "activityLogs/uid1/meta/instrumentationStartedAt"
     );
+  });
+});
+
+describe("eventPatch / eventsPatch", () => {
+  it("wraps a single event as a {path: event} patch keyed by its own lociDateString/eventId", () => {
+    const ev = buildTaskMutationEvent("task_created", task, { now: dt(2026, 7, 10, 10), windows });
+    const patch = eventPatch("uid1", ev);
+    expect(Object.keys(patch)).toEqual([`activityLogs/uid1/events/2026-07-10/${ev.eventId}`]);
+    expect(patch[`activityLogs/uid1/events/2026-07-10/${ev.eventId}`]).toBe(ev);
+  });
+
+  it("wraps several events as one patch, one key per event, for a single analytics-only update() call", () => {
+    const evA = buildTaskMutationEvent("task_parked", { ...task, uuid: "a" }, { now: dt(2026, 7, 10, 10), windows });
+    const evB = buildTaskMutationEvent("task_parked", { ...task, uuid: "b" }, { now: dt(2026, 7, 10, 10), windows });
+    const patch = eventsPatch("uid1", [evA, evB]);
+    expect(Object.keys(patch)).toHaveLength(2);
+    expect(patch[`activityLogs/uid1/events/2026-07-10/${evA.eventId}`]).toBe(evA);
+    expect(patch[`activityLogs/uid1/events/2026-07-10/${evB.eventId}`]).toBe(evB);
+  });
+
+  it("returns an empty patch for an empty event list", () => {
+    expect(eventsPatch("uid1", [])).toEqual({});
   });
 });
 

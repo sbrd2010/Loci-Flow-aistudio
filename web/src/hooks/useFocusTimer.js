@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotifications";
 import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete } from "../utils/focusSession";
+import { safeUUID } from "../utils/uuid";
 
 // Lifts the Focus timer state to the App level so it survives tab switches
 // (TodayTab unmounts when the user navigates to another tab) and can be
@@ -40,6 +41,14 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   const timerIntervalRef = useRef(null);
   // Absolute deadline for the running timer — lets us snap to correct time on tab-show
   const deadlineRef = useRef(null);
+  // Correlates a focus_started activity-ledger event to its eventual terminal
+  // event. Minted by startFocusSession(), consumed exactly once by
+  // endFocusSession() — see both below for the exactly-one-terminal-event
+  // guarantee this pair provides.
+  const focusSessionIdRef = useRef(null);
+  const focusStartedAtRef = useRef(null);
+  const focusInitialPlannedSecondsRef = useRef(null);
+  const [focusSessionId, setFocusSessionId] = useState(null);
   // Lets the activeTask-sync effect tell "switched to a different task" apart
   // from "same task, duration edited mid-session" (the two need different responses).
   const prevActiveTaskRef = useRef({ uuid: null, timeEstimateMinutes: null });
@@ -267,9 +276,16 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       timerIntervalRef.current = null;
     }
     deadlineRef.current = null;
-    
+    // Drop any in-flight session reference on account switch — never fire a
+    // terminal event tagged with the new account's uid for a session that
+    // belonged to whoever was signed in before.
+    focusSessionIdRef.current = null;
+    focusStartedAtRef.current = null;
+    focusInitialPlannedSecondsRef.current = null;
+    setFocusSessionId(null);
+
     closePiP(); // Close pop-out on account switch
-    
+
     const reset = buildResetFocusState(config);
     setIsTimerRunning(reset.isTimerRunning);
     setTimerSecondsLeft(reset.timerSecondsLeft);
@@ -433,6 +449,47 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     if (deadlineRef.current != null) deadlineRef.current += addSecs * 1000;
   };
 
+  // Mints a fresh focusSessionId and records session-start metadata, then
+  // starts the timer — the single entry point every "start a focus session"
+  // call site should use (instead of setIsFocusMode/setIsTimerRunning
+  // directly) so a focus_started activity-ledger event can be built from the
+  // returned info without each call site duplicating session-start detection.
+  const startFocusSession = () => {
+    const sessionId = safeUUID();
+    const startedAt = Date.now();
+    const initialPlannedSeconds = timerMaxSeconds;
+    focusSessionIdRef.current = sessionId;
+    focusStartedAtRef.current = startedAt;
+    focusInitialPlannedSecondsRef.current = initialPlannedSeconds;
+    setFocusSessionId(sessionId);
+    setIsFocusMode(true);
+    setIsTimerRunning(true);
+    return { focusSessionId: sessionId, focusStartedAt: startedAt, focusInitialPlannedSeconds: initialPlannedSeconds };
+  };
+
+  // Consumes the active session (if any) and returns everything needed to
+  // build its terminal (focus_completed/focus_abandoned) event, or null if
+  // there's nothing to end — either no session was ever started, or an
+  // earlier call already consumed it. This is what guarantees at most one
+  // terminal event per focusSessionId no matter which UI path ends it.
+  const endFocusSession = (focusEndReason) => {
+    const sessionId = focusSessionIdRef.current;
+    if (!sessionId) return null;
+    const result = {
+      focusSessionId: sessionId,
+      focusStartedAt: focusStartedAtRef.current,
+      focusInitialPlannedSeconds: focusInitialPlannedSecondsRef.current,
+      focusFinalPlannedSeconds: timerMaxSeconds,
+      focusElapsedSeconds: Math.max(0, timerMaxSeconds - timerSecondsLeft),
+      focusEndReason,
+    };
+    focusSessionIdRef.current = null;
+    focusStartedAtRef.current = null;
+    focusInitialPlannedSecondsRef.current = null;
+    setFocusSessionId(null);
+    return result;
+  };
+
   return {
     activeTask,
     isTimerRunning, setIsTimerRunning,
@@ -446,5 +503,6 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     addTimeToSession,
     pipOpen,
     handleOpenPiP,
+    focusSessionId, startFocusSession, endFocusSession,
   };
 }

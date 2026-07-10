@@ -6,6 +6,8 @@ import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTaskSubSteps, CATEGORY_ICONS } from "../utils/taskOps";
 import { submitOnEnter } from "../utils/formEvents";
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
+import { getFocusWindows } from "../utils/focusWindows";
+import { buildTaskMutationEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 
 function IconTrendingUp() {
   return (
@@ -75,8 +77,9 @@ function IconChevronRight() {
   );
 }
 
-export default function MindBoxTab({ payload, savePayload, saveSubPath, saveConfigPatch, userProfile, initialPanel, onOpenRoadmapInbox, isSyncingFromCache = false, syncWarning = null }) {
+export default function MindBoxTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveConfigPatch, userProfile, initialPanel, onOpenRoadmapInbox, isSyncingFromCache = false, syncWarning = null, uid, writeActivityEvents }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
+  const windows = getFocusWindows(config);
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [toolPanel, setToolPanel] = useState(initialPanel || null);
@@ -225,11 +228,13 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, saveConf
   const parkRescueTask = () => {
     if (!rescueTask) return;
     const now = Date.now();
-    savePayload({ ...payload, tasks: tasks.map(t => (
+    savePayloadAsync({ ...payload, tasks: tasks.map(t => (
       t.uuid === rescueTask.uuid
         ? { ...t, isParked: true, isNowFocus: false, lastUpdated: now }
         : t
-    )) });
+    )) })
+      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_parked", rescueTask, { windows }))))
+      .catch(() => {});
   };
 
   const handleBadDayReset = () => {
@@ -237,7 +242,13 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, saveConf
       message: "Park all active tasks for today?\n\nThis is a restart without shame — everything moves to parked. You can restore tasks from the AI Coach tab whenever you're ready.",
       confirmLabel: "Yes, restart", cancelLabel: "Not now",
       onConfirm: () => {
-        savePayload({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, isNowFocus: false, lastUpdated: Date.now() } : t) });
+        const affected = tasks.filter(t => !t.isCompleted && !t.isDeleted);
+        savePayloadAsync({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, isNowFocus: false, lastUpdated: Date.now() } : t) })
+          .then(() => {
+            const events = affected.map((t) => buildTaskMutationEvent("task_parked", t, { windows }));
+            writeActivityEvents(eventsPatch(uid, events));
+          })
+          .catch(() => {});
         setConfirmDialog(null);
       },
       onCancel: () => setConfirmDialog(null)
@@ -249,10 +260,18 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, saveConf
       message: "Move today's unfinished tasks to this week?\n\nNothing is lost — you'll find them in Roadmap → This Week. Fresh start, no shame.",
       confirmLabel: "Fresh start", cancelLabel: "Keep today",
       onConfirm: () => {
-        savePayload({ ...payload, tasks: tasks.map(t =>
+        const affected = tasks.filter(t => !t.isCompleted && !t.isDeleted && t.horizonLevel === "today");
+        savePayloadAsync({ ...payload, tasks: tasks.map(t =>
           (!t.isCompleted && !t.isDeleted && t.horizonLevel === "today")
             ? { ...t, horizonLevel: "week", lastUpdated: Date.now() } : t
-        )});
+        )})
+          .then(() => {
+            const events = affected.map((t) => buildTaskMutationEvent("task_moved", t, {
+              fromState: { horizonLevel: "today" }, toState: { horizonLevel: "week" }, windows,
+            }));
+            writeActivityEvents(eventsPatch(uid, events));
+          })
+          .catch(() => {});
         setConfirmDialog(null);
       },
       onCancel: () => setConfirmDialog(null)
@@ -392,7 +411,12 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
     // Pass all suggestions (not just accepted) so a split entry's source is only
     // cleared once every suggestion generated from it has been accepted.
     const clearedDump = buildClearedBrainDump(payload.brainDump || [], toAdd, organizeResults, organizeDroppedSourceIds);
-    savePayload({ ...payload, tasks: [...(payload.tasks || []), ...newTasks], brainDump: clearedDump });
+    savePayloadAsync({ ...payload, tasks: [...(payload.tasks || []), ...newTasks], brainDump: clearedDump })
+      .then(() => {
+        const events = newTasks.map((t) => buildTaskMutationEvent("task_created", t, { windows, source: "coach_action" }));
+        writeActivityEvents(eventsPatch(uid, events));
+      })
+      .catch(() => {});
     setToolPanel(null);
     setOrganizeResults([]);
     setOrganizeDroppedSourceIds(new Set());

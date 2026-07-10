@@ -801,7 +801,7 @@ describe("applyCoachActions", () => {
       userId: "user-1",
     });
     expect(added.uuid).toBeTruthy();
-    expect(results).toEqual([{ type: "ADD_TASK", title: "Call the dentist", matched: true }]);
+    expect(results).toEqual([{ type: "ADD_TASK", title: "Call the dentist", matched: true, task: added }]);
   });
 
   it("PARK_TASK parks the matched task and unpins it", () => {

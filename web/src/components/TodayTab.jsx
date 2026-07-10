@@ -15,6 +15,7 @@ import { getCurrentFocusQuote } from "../utils/focusQuotes";
 import { formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
 import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows, getWindowState, getRemainingFocusMinutes, getNextWindowStart, getOverallSpan, getFocusProgress, hasConfiguredFocusWindow } from "../utils/focusWindows";
+import { buildTaskMutationEvent, buildFocusStartedEvent, eventPatch } from "../utils/activityLog";
 import { getMorningRitualVariant, shouldShowMorningRitual, buildMorningRitualDoneConfig, buildMorningRitualSnoozeConfig } from "../utils/morningRitual";
 import { getCoachNudge, buildCoachNudgeClearedConfig, buildPendingCoachNudge } from "../utils/coachNudge";
 import {
@@ -59,15 +60,16 @@ function SortableTaskItem({ id, interactionStyle, children }) {
 }
 
 export default function TodayTab({
-  payload, savePayload, saveSubPath, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenCoach,
+  payload, savePayload, savePayloadAsync, saveSubPath, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenCoach,
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft, setTimerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
-  pipOpen, handleOpenPiP, isAddTaskDialogOpen,
+  pipOpen, handleOpenPiP, isAddTaskDialogOpen, startFocusSession,
   selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
   isSyncingFromCache = false,
   pendingCheckinSlot, setPendingCheckinSlot,
   syncWarning = null,
+  uid, writeActivityEvents,
 }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
   const taskRowInteractionStyle = config.taskRowInteractionStyle === "dragAnywhere" ? "dragAnywhere" : "classic";
@@ -309,7 +311,12 @@ export default function TodayTab({
         nextContributions[contrIdx] = { ...nextContributions[contrIdx], count: nextContributions[contrIdx].count - 1, lastUpdated: Date.now() };
       }
     }
-    savePayload({ ...payload, tasks: updatedTasks, config: { ...config, totalXp: nextXp, lastUpdated: Date.now() }, contributions: nextContributions });
+    savePayloadAsync({ ...payload, tasks: updatedTasks, config: { ...config, totalXp: nextXp, lastUpdated: Date.now() }, contributions: nextContributions })
+      .then(() => {
+        const event = buildTaskMutationEvent(isCompleted ? "task_completed" : "task_reopened", task, { windows });
+        writeActivityEvents(eventPatch(uid, event));
+      })
+      .catch(() => {});
   };
 
   const handlePinTask = (task) => {
@@ -340,7 +347,9 @@ export default function TodayTab({
   };
 
   const handleDeleteTask = (task) => {
-    savePayload({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t) });
+    savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t) })
+      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_deleted", task, { windows }))))
+      .catch(() => {});
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
     setUndoTask(task);
     undoTimeoutRef.current = setTimeout(() => setUndoTask(null), 5000);
@@ -349,7 +358,9 @@ export default function TodayTab({
   const handleUndoDelete = () => {
     if (!undoTask) return;
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
-    savePayload({ ...payload, tasks: tasks.map((t) => t.uuid === undoTask.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t) });
+    savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === undoTask.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t) })
+      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_restored", undoTask, { windows }))))
+      .catch(() => {});
     setUndoTask(null);
   };
 
@@ -656,13 +667,22 @@ export default function TodayTab({
 
   const handleMoveToHorizon = (task, horizon) => {
     const count = tasks.filter(t => t.horizonLevel === horizon && !t.isDeleted).length;
-    savePayload({ ...payload, tasks: tasks.map(t =>
+    savePayloadAsync({ ...payload, tasks: tasks.map(t =>
       t.uuid === task.uuid ? { ...t, horizonLevel: horizon, isNowFocus: false, orderIndex: count, lastUpdated: Date.now() } : t
-    )});
+    )})
+      .then(() => {
+        const event = buildTaskMutationEvent("task_moved", task, {
+          fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: horizon }, windows,
+        });
+        writeActivityEvents(eventPatch(uid, event));
+      })
+      .catch(() => {});
   };
 
   const handleParkTask = (task) => {
-    savePayload({ ...payload, tasks: buildParkTaskTasks(tasks, task.uuid) });
+    savePayloadAsync({ ...payload, tasks: buildParkTaskTasks(tasks, task.uuid) })
+      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_parked", task, { windows }))))
+      .catch(() => {});
   };
 
   const handleMoveTask = (task, direction) => {
@@ -752,11 +772,13 @@ export default function TodayTab({
   const parkRescueTask = () => {
     if (!rescueTask) return;
     const now = Date.now();
-    savePayload({ ...payload, tasks: tasks.map(t => (
+    savePayloadAsync({ ...payload, tasks: tasks.map(t => (
       t.uuid === rescueTask.uuid
         ? { ...t, isParked: true, isNowFocus: false, lastUpdated: now }
         : t
-    )) });
+    )) })
+      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_parked", rescueTask, { windows }))))
+      .catch(() => {});
   };
 
   return (
@@ -1413,8 +1435,11 @@ export default function TodayTab({
                 className="pinned-focus-start-btn"
                 aria-label={`Start focus on ${pinnedFocusTask.title}`}
                 onClick={() => {
-                  setIsFocusMode(true);
-                  setIsTimerRunning(true);
+                  const session = startFocusSession();
+                  const event = buildFocusStartedEvent(pinnedFocusTask, session.focusSessionId, {
+                    focusInitialPlannedSeconds: session.focusInitialPlannedSeconds, now: session.focusStartedAt, windows,
+                  });
+                  writeActivityEvents(eventPatch(uid, event));
                 }}
               >
                 Focus →
@@ -1479,8 +1504,11 @@ export default function TodayTab({
                         if (!focusNowTask.isNowFocus) {
                           handlePinTask(focusNowTask);
                         }
-                        setIsFocusMode(true);
-                        setIsTimerRunning(true);
+                        const session = startFocusSession();
+                        const event = buildFocusStartedEvent(focusNowTask, session.focusSessionId, {
+                          focusInitialPlannedSeconds: session.focusInitialPlannedSeconds, now: session.focusStartedAt, windows,
+                        });
+                        writeActivityEvents(eventPatch(uid, event));
                       }}
                     >
                       ▶ Start Focus

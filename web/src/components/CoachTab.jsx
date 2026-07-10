@@ -24,6 +24,7 @@ import {
 } from "../utils/coachSessionSummary";
 import { buildRescueHandoffContext, shouldClearRescueHandoff } from "../utils/rescueHandoff";
 import { safeCopyToClipboard } from "../utils/clipboard";
+import { buildTaskMutationEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import LinkifyText from "./LinkifyText";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -85,8 +86,9 @@ function getLastFullTaskTime(userId) {
   return raw ? Number(raw) : 0;
 }
 
-export default function CoachTab({ payload, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {} }) {
+export default function CoachTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveSubPaths, saveSubPathsAsync, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {}, uid, writeActivityEvents }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
+  const windows = getFocusWindows(config);
   const { groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const hasAnyKey = hasAIKey();
 
@@ -831,7 +833,20 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         const patch = {};
         if (updatedPayload.tasks !== tasksRef.current) patch.tasks = updatedPayload.tasks;
         if (updatedPayload.contributions !== contributionsRef.current) patch.contributions = updatedPayload.contributions;
-        if (Object.keys(patch).length > 0) saveSubPaths(patch);
+        if (Object.keys(patch).length > 0) {
+          saveSubPathsAsync(patch)
+            .then(() => {
+              // Only ADD_TASK/COMPLETE_TASK/PARK_TASK map to a ledger event type —
+              // SET_NOW_FOCUS/START_FOCUS just pin a task, which isn't one of the
+              // tracked mutation types.
+              const eventTypeByAction = { ADD_TASK: "task_created", COMPLETE_TASK: "task_completed", PARK_TASK: "task_parked" };
+              const events = results
+                .filter(r => r.matched && r.task && eventTypeByAction[r.type])
+                .map(r => buildTaskMutationEvent(eventTypeByAction[r.type], r.task, { windows, source: "coach_action" }));
+              if (events.length > 0) writeActivityEvents(eventsPatch(uid, events));
+            })
+            .catch(() => {});
+        }
 
         // Apply the XP change as a DELTA onto the latest known totalXp (via
         // saveConfigPatch's function form) rather than writing the absolute
@@ -1140,20 +1155,36 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     } else if (action === 'focus+today') {
       const todayActive = current.filter(t => t.horizonLevel === 'today' && !t.isDeleted);
       const maxOrder = todayActive.reduce((m, t) => Math.max(m, t.orderIndex ?? 0), -1);
-      savePayload({ ...payload, tasks: current.map(t => {
+      savePayloadAsync({ ...payload, tasks: current.map(t => {
         if (t.uuid === taskUuid) return { ...t, horizonLevel: 'today', isNowFocus: true, isParked: false, orderIndex: maxOrder + 1, lastUpdated: now };
         return t.isNowFocus ? { ...t, isNowFocus: false, lastUpdated: now } : t;
-      })});
+      })})
+        .then(() => {
+          const event = buildTaskMutationEvent("task_moved", task, {
+            fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: "today" }, windows, source: "coach_action",
+          });
+          writeActivityEvents(eventPatch(uid, event));
+        })
+        .catch(() => {});
     } else if (action === 'today') {
       const todayActive = current.filter(t => t.horizonLevel === 'today' && !t.isDeleted);
       const maxOrder = todayActive.reduce((m, t) => Math.max(m, t.orderIndex ?? 0), -1);
-      savePayload({ ...payload, tasks: current.map(t =>
+      savePayloadAsync({ ...payload, tasks: current.map(t =>
         t.uuid === taskUuid
           ? { ...t, horizonLevel: 'today', isNowFocus: false, isParked: false, orderIndex: maxOrder + 1, lastUpdated: now }
           : t
-      )});
+      )})
+        .then(() => {
+          const event = buildTaskMutationEvent("task_moved", task, {
+            fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: "today" }, windows, source: "coach_action",
+          });
+          writeActivityEvents(eventPatch(uid, event));
+        })
+        .catch(() => {});
     } else if (action === 'park') {
-      savePayload({ ...payload, tasks: buildParkTaskTasks(current, taskUuid, now) });
+      savePayloadAsync({ ...payload, tasks: buildParkTaskTasks(current, taskUuid, now) })
+        .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_parked", task, { windows, source: "coach_action" }))))
+        .catch(() => {});
     }
   };
 
@@ -1594,9 +1625,11 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                   </div>
                 </div>
                 <button className="btn" style={{ flexShrink: 0, padding: "6px 12px", fontSize: "11px", background: "var(--success)" }}
-                  onClick={() => savePayload({ ...payload, tasks: tasks.map(t =>
+                  onClick={() => savePayloadAsync({ ...payload, tasks: tasks.map(t =>
                     t.uuid === task.uuid ? { ...t, isParked: false, lastUpdated: Date.now() } : t
-                  )})}>
+                  )})
+                    .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_unparked", task, { windows }))))
+                    .catch(() => {})}>
                   Restore ↑
                 </button>
               </div>
