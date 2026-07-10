@@ -409,7 +409,11 @@ export default function TodayTab({
       .then(() => {
         const events = [event];
         if (endedFocusSession) {
-          events.push(buildFocusTerminalEvent("focus_abandoned", task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
+          // Use endedFocusSession.task, not `task` — if the pin moved to
+          // `task` via a path that never ended the PREVIOUS session, this
+          // call actually closed out that older session, which may belong to
+          // a different task entirely (same fix as handleToggleComplete).
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
         }
         writeActivityEvents(eventsPatch(uid, events));
       })
@@ -753,7 +757,8 @@ export default function TodayTab({
       .then(() => {
         const events = [event];
         if (endedFocusSession) {
-          events.push(buildFocusTerminalEvent("focus_abandoned", task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
+          // Use endedFocusSession.task, not `task` — see handleToggleComplete.
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
         }
         writeActivityEvents(eventsPatch(uid, events));
       })
@@ -776,7 +781,8 @@ export default function TodayTab({
       .then(() => {
         const events = [event];
         if (endedFocusSession) {
-          events.push(buildFocusTerminalEvent("focus_abandoned", task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
+          // Use endedFocusSession.task, not `task` — see handleToggleComplete.
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
         }
         writeActivityEvents(eventsPatch(uid, events));
       })

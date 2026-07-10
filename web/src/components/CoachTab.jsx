@@ -835,11 +835,11 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         if (updatedPayload.contributions !== contributionsRef.current) patch.contributions = updatedPayload.contributions;
         if (Object.keys(patch).length > 0) {
           // Only ADD_TASK/COMPLETE_TASK/PARK_TASK map to a ledger event type —
-          // SET_NOW_FOCUS/START_FOCUS just pin a task, which isn't one of the
-          // tracked mutation types. Built now (synchronously), not inside the
-          // .then() below, so the event's lociDateString reflects when the
-          // action actually happened rather than whenever the debounced write
-          // eventually confirms.
+          // SET_NOW_FOCUS/START_FOCUS pin changes are handled separately below
+          // (focus session bookkeeping, not a tracked mutation type). Built now
+          // (synchronously), not inside the .then() below, so the event's
+          // lociDateString reflects when the action actually happened rather
+          // than whenever the debounced write eventually confirms.
           const eventTypeByAction = { ADD_TASK: "task_created", COMPLETE_TASK: "task_completed", PARK_TASK: "task_parked" };
           const events = results
             .filter(r => r.matched && r.task && eventTypeByAction[r.type])
@@ -863,6 +863,62 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
               ));
             }
           }
+
+          // SET_NOW_FOCUS retargets the pin (buildSetNowFocusTasks) the same
+          // way applyTaskChip's 'focus'/'focus+today' chips do — if a
+          // different task's session was open before this action ran, end it
+          // too. (START_FOCUS's own retargeting is handled below, since it
+          // also needs to mint a new session rather than just closing the old
+          // one.) focusTimer.activeTask here still reflects the PRE-action
+          // pin, since `tasks` hasn't re-rendered from this synchronous block yet.
+          const setNowFocusResult = results.find(r => r.type === "SET_NOW_FOCUS" && r.matched);
+          if (setNowFocusResult && focusTimer.activeTask && focusTimer.activeTask.uuid !== setNowFocusResult.task.uuid && typeof focusTimer.endFocusSession === "function") {
+            const retargetedFocusSession = focusTimer.endFocusSession("user_abandoned");
+            if (retargetedFocusSession) {
+              events.push(buildFocusTerminalEvent("focus_abandoned", retargetedFocusSession.task, retargetedFocusSession.focusSessionId, {
+                ...retargetedFocusSession, windows, now: now.getTime(),
+              }));
+            }
+          }
+
+          const startFocus = results.find(r => r.type === "START_FOCUS" && r.matched);
+          if (startFocus) {
+            const isSwitchingTask = focusTimer.activeTask?.uuid !== startFocus.task.uuid;
+            if (!focusTimer.isTimerRunning || isSwitchingTask) {
+              const mins = Number(startFocus.durationMinutes) > 0 ? Number(startFocus.durationMinutes)
+                : Number(startFocus.task.timeEstimateMinutes) > 0 ? Number(startFocus.task.timeEstimateMinutes) : 25;
+              // Also mint a session when the target is already pinned but no
+              // session is currently open (e.g. it was only ever pinned via
+              // SET_NOW_FOCUS, or a prior session already ended) — not just
+              // when switching to a different task, or this Coach-started
+              // session would still go unlogged.
+              const needsNewSession = isSwitchingTask || !focusTimer.focusSessionId;
+              if (needsNewSession && typeof focusTimer.startFocusSession === "function") {
+                // A genuinely new focused task — mint a real ledger session for
+                // it (enterFocusMode: false so the chat stays open instead of
+                // being replaced by the full-screen Focus overlay), auto-closing
+                // whatever session was previously open the same way Day Map's
+                // "Start Focus" does. Collected into `events` below and written
+                // only once the core pin write (saveSubPathsAsync(patch))
+                // actually confirms, instead of immediately.
+                const session = focusTimer.startFocusSession(startFocus.task, { enterFocusMode: false, plannedSeconds: mins * 60 });
+                if (session.priorSession && session.priorSession.task) {
+                  events.push(buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
+                    ...session.priorSession, windows, now: now.getTime(),
+                  }));
+                }
+                events.push(buildFocusStartedEvent(startFocus.task, session.focusSessionId, {
+                  focusInitialPlannedSeconds: session.focusInitialPlannedSeconds, now: session.focusStartedAt, windows, source: "coach_action",
+                }));
+              } else if (typeof focusTimer.extendTimer === "function") {
+                // Same task, just resuming/restarting from a paused state — any
+                // ledger session already open for it stays open under its own
+                // focusSessionId, so don't mint a new one here.
+                focusTimer.extendTimer(mins);
+              }
+            }
+          }
+
           saveSubPathsAsync(patch)
             .then(() => { if (events.length > 0) writeActivityEvents(eventsPatch(uid, events)); })
             .catch(() => {});
@@ -894,44 +950,6 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           }));
           configPatch = null;
           memoryPatch = null;
-        }
-
-        const startFocus = results.find(r => r.type === "START_FOCUS" && r.matched);
-        if (startFocus) {
-          const isSwitchingTask = focusTimer.activeTask?.uuid !== startFocus.task.uuid;
-          if (!focusTimer.isTimerRunning || isSwitchingTask) {
-            const mins = Number(startFocus.durationMinutes) > 0 ? Number(startFocus.durationMinutes)
-              : Number(startFocus.task.timeEstimateMinutes) > 0 ? Number(startFocus.task.timeEstimateMinutes) : 25;
-            // Also mint a session when the target is already pinned but no
-            // session is currently open (e.g. it was only ever pinned via
-            // SET_NOW_FOCUS, or a prior session already ended) — not just
-            // when switching to a different task, or this Coach-started
-            // session would still go unlogged.
-            const needsNewSession = isSwitchingTask || !focusTimer.focusSessionId;
-            if (needsNewSession && typeof focusTimer.startFocusSession === "function") {
-              // A genuinely new focused task — mint a real ledger session for
-              // it (enterFocusMode: false so the chat stays open instead of
-              // being replaced by the full-screen Focus overlay), auto-closing
-              // whatever session was previously open the same way Day Map's
-              // "Start Focus" does.
-              const session = focusTimer.startFocusSession(startFocus.task, { enterFocusMode: false, plannedSeconds: mins * 60 });
-              if (session.priorSession && session.priorSession.task) {
-                const abandonEvent = buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
-                  ...session.priorSession, windows, now: now.getTime(),
-                });
-                writeActivityEvents(eventPatch(uid, abandonEvent));
-              }
-              const startedEvent = buildFocusStartedEvent(startFocus.task, session.focusSessionId, {
-                focusInitialPlannedSeconds: session.focusInitialPlannedSeconds, now: session.focusStartedAt, windows, source: "coach_action",
-              });
-              writeActivityEvents(eventPatch(uid, startedEvent));
-            } else if (typeof focusTimer.extendTimer === "function") {
-              // Same task, just resuming/restarting from a paused state — any
-              // ledger session already open for it stays open under its own
-              // focusSessionId, so don't mint a new one here.
-              focusTimer.extendTimer(mins);
-            }
-          }
         }
 
         // Assembles success/failure narration from the action results — see
@@ -1206,7 +1224,20 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     if (!task) return;
     const now = Date.now();
     if (action === 'focus') {
-      savePayload({ ...payload, tasks: buildSetNowFocusTasks(current, taskUuid, now) });
+      // Same retargeting gap as 'focus+today' below — end whichever task's
+      // session was open before this pin takes over.
+      const previouslyFocused = current.find(t => t.uuid !== taskUuid && t.isNowFocus);
+      const endedFocusSession = previouslyFocused && typeof focusTimer.endFocusSession === "function"
+        ? focusTimer.endFocusSession("user_abandoned")
+        : null;
+      savePayloadAsync({ ...payload, tasks: buildSetNowFocusTasks(current, taskUuid, now) })
+        .then(() => {
+          if (endedFocusSession) {
+            const abandonEvent = buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now });
+            writeActivityEvents(eventPatch(uid, abandonEvent));
+          }
+        })
+        .catch(() => {});
     } else if (action === 'focus+today') {
       const todayActive = current.filter(t => t.horizonLevel === 'today' && !t.isDeleted);
       const maxOrder = todayActive.reduce((m, t) => Math.max(m, t.orderIndex ?? 0), -1);

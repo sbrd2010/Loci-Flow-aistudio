@@ -269,7 +269,9 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
           ? focusTimer.endFocusSession("user_abandoned")
           : null;
         if (endedFocusSession) {
-          events.push(buildFocusTerminalEvent("focus_abandoned", focusedTask, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
+          // Use endedFocusSession.task, not focusedTask — see the same fix
+          // in TodayTab/RoadmapTab for why these can diverge.
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
         }
         savePayloadAsync({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, isNowFocus: false, lastUpdated: Date.now() } : t) })
           .then(() => writeActivityEvents(eventsPatch(uid, events)))

@@ -305,7 +305,11 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
       .then(() => {
         const events = [event];
         if (endedFocusSession) {
-          events.push(buildFocusTerminalEvent("focus_completed", task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
+          // Use endedFocusSession.task, not `task` — if the pin moved to
+          // `task` via a path that never ended the PREVIOUS session, this
+          // call actually closed out that older session, which may belong to
+          // a different task entirely.
+          events.push(buildFocusTerminalEvent("focus_completed", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
         }
         writeActivityEvents(eventsPatch(uid, events));
       })

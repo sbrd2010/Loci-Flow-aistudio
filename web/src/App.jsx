@@ -64,6 +64,11 @@ export default function App() {
   const [demoMode, setDemoMode] = useState(false);
   const [demoPayload, setDemoPayload] = useState(null);
   const [pendingFocusOpen, setPendingFocusOpen] = useState(false);
+  // Day Map's pin-write promise, handed in by onStartFocus — lets the
+  // pendingFocusOpen effect below defer its focus_started/focus_abandoned
+  // ledger writes until that pin actually confirmed in RTDB, without
+  // delaying the (already-instant) navigation to Today itself.
+  const pendingFocusPinPromiseRef = useRef(null);
 
   const enterDemo = () => {
     setDemoPayload(createDemoPayload());
@@ -488,20 +493,31 @@ export default function App() {
     if (pendingFocusOpen && focusTimer.activeTask) {
       const windows = getFocusWindows(payload?.config || {});
       const session = focusTimer.startFocusSession(focusTimer.activeTask);
-      // startFocusSession() auto-closes a still-open prior session (e.g. one
-      // started from Today before navigating to Day Map) to make room for
-      // this one — write its terminal event too, or it's orphaned forever.
-      if (session.priorSession && session.priorSession.task) {
-        const abandonEvent = buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
-          ...session.priorSession, windows,
-        });
-        writeActivityEvents(eventPatch(activityUid, abandonEvent));
-      }
-      const event = buildFocusStartedEvent(focusTimer.activeTask, session.focusSessionId, {
-        source: "day_map", focusInitialPlannedSeconds: session.focusInitialPlannedSeconds,
-        now: session.focusStartedAt, windows,
-      });
-      writeActivityEvents(eventPatch(activityUid, event));
+      // Timer/session state starts immediately (optimistic, same as every
+      // other focus-start path) — but the ledger writes wait for Day Map's
+      // pin write to actually confirm in RTDB, so a rejected/failed pin
+      // doesn't leave a focus_started event for a session that never
+      // really began. pendingFocusPinPromiseRef is set by onStartFocus below.
+      const pinPromise = pendingFocusPinPromiseRef.current || Promise.resolve();
+      pendingFocusPinPromiseRef.current = null;
+      pinPromise
+        .then(() => {
+          // startFocusSession() auto-closes a still-open prior session (e.g. one
+          // started from Today before navigating to Day Map) to make room for
+          // this one — write its terminal event too, or it's orphaned forever.
+          if (session.priorSession && session.priorSession.task) {
+            const abandonEvent = buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
+              ...session.priorSession, windows,
+            });
+            writeActivityEvents(eventPatch(activityUid, abandonEvent));
+          }
+          const event = buildFocusStartedEvent(focusTimer.activeTask, session.focusSessionId, {
+            source: "day_map", focusInitialPlannedSeconds: session.focusInitialPlannedSeconds,
+            now: session.focusStartedAt, windows,
+          });
+          writeActivityEvents(eventPatch(activityUid, event));
+        })
+        .catch(() => {});
       setPendingFocusOpen(false);
     }
   }, [pendingFocusOpen, focusTimer.activeTask?.uuid]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -539,7 +555,9 @@ export default function App() {
     const ended = focusTimer.endFocusSession("completed_task");
     const windows = getFocusWindows(payload?.config || {});
     const events = [buildTaskMutationEvent("task_completed", task, { windows, source: "focus_mode", now })];
-    if (ended) events.push(buildFocusTerminalEvent("focus_completed", task, ended.focusSessionId, { ...ended, windows, now }));
+    // Use ended.task, not `task` — see handleEndFocusSession for why these
+    // can diverge (a pin change that never ended the prior session).
+    if (ended && ended.task) events.push(buildFocusTerminalEvent("focus_completed", ended.task, ended.focusSessionId, { ...ended, windows, now }));
     savePayloadAsync(buildFocusCompletionPayload(payload, task, toLocalDateStr(now), now))
       .then(() => writeActivityEvents(eventsPatch(activityUid, events)))
       .catch(() => {});
@@ -856,8 +874,9 @@ export default function App() {
           <DayMapPage
             payload={payload}
             savePayload={savePayload}
+            savePayloadAsync={savePayloadAsync}
             onClose={goToday}
-            onStartFocus={() => { setPendingFocusOpen(true); goToday(); }}
+            onStartFocus={(pinPromise) => { pendingFocusPinPromiseRef.current = pinPromise; setPendingFocusOpen(true); goToday(); }}
             onAddTask={() => openAddTask("today")}
             flushNow={flushNow}
           />
