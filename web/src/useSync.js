@@ -62,6 +62,10 @@ async function markInstrumentationStartedIfNeeded(uid) {
 // directly against mocked firebase/database calls.
 export async function writeActivityEvents(uid, pathsToValues, retries = 3) {
   if (!uid) return { ok: false, reason: "no-uid" };
+  // update({}) resolves as a successful no-op — a caller passing an empty
+  // patch (e.g. eventsPatch(uid, []) when a batch action found no affected
+  // tasks) must not mark instrumentation as started for zero actual writes.
+  if (!pathsToValues || Object.keys(pathsToValues).length === 0) return { ok: true, skipped: true };
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       await update(ref(db), pathsToValues);

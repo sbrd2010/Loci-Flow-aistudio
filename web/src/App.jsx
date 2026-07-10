@@ -427,7 +427,15 @@ export default function App() {
     // race window small.
     const id = setInterval(attemptCapture, 15_000);
     return () => clearInterval(id);
-  }, [user?.uid, demoMode, isSyncingFromCache, syncWarning]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Boolean(payload?.config), not payload?.config itself — a fresh/no-cache
+    // login has isSyncingFromCache staying false the whole session (it only
+    // ever flips true when a local cache exists to sync from), so without
+    // this the effect runs once while payload is still null, bails on the
+    // guard above, and then never re-runs once RTDB actually supplies the
+    // payload — permanently skipping that session's day-start snapshot. The
+    // boolean only flips once (false → true) so it doesn't reintroduce the
+    // payload-edit re-trigger race the plain object reference would.
+  }, [user?.uid, demoMode, isSyncingFromCache, syncWarning, Boolean(payload?.config)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Firebase auth state listener
   useEffect(() => {

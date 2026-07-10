@@ -95,6 +95,14 @@ describe("writeActivityEvents", () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
+  it("skips the write and the instrumentation marker for an empty patch, without calling update()", async () => {
+    const result = await writeActivityEvents("uid1", {});
+    expect(result).toEqual({ ok: true, skipped: true });
+    expect(updateMock).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(runTransactionMock).not.toHaveBeenCalled();
+  });
+
   it("resolves ok:true after a single successful update() call with the exact paths given", async () => {
     updateMock.mockResolvedValueOnce(undefined);
     const pathsToValues = { "activityLogs/uid1/events/2026-07-10/e1": { type: "task_created" } };
