@@ -509,6 +509,19 @@ export default function App() {
   // Auto-start the timer when arriving from Day Map's "Start Focus" action
   useEffect(() => {
     if (pendingFocusOpen && focusTimer.activeTask) {
+      // If activeTask already has an open session (e.g. Day Map's "Start
+      // Focus" tapped for the same task already running from Today), just
+      // reopen the overlay — same guard as TodayTab's startFocusAndLog.
+      // Treating this as a brand-new session would auto-close the
+      // in-progress one and fragment the ledger for what's really just a
+      // return-to-focus action.
+      if (focusTimer.focusSessionId) {
+        focusTimer.setIsFocusMode(true);
+        focusTimer.setIsTimerRunning(true);
+        pendingFocusPinPromiseRef.current = null;
+        setPendingFocusOpen(false);
+        return;
+      }
       const windows = getFocusWindows(payload?.config || {});
       const session = focusTimer.startFocusSession(focusTimer.activeTask);
       // Timer/session state starts immediately (optimistic, same as every
