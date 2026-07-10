@@ -25,6 +25,7 @@ function baseCtx() {
     velocityContext: "",
     lowEnergyContext: "",
     recentlyParkedContext: "",
+    recentlyCompletedContext: "",
     rescueHandoffContext: "",
     isEarlyConversation: false,
     nowLabel: "Tue, Jun 17, 10:00 AM",
@@ -156,6 +157,29 @@ describe("buildCoachSystemPrompt", () => {
     expect(out).not.toContain("no direct access to Loci app data");
     expect(out).not.toContain("I have no access");
     expect(out).toContain("I'm missing the task snapshot for this request — that looks like a Loci context issue.");
+  });
+
+  it("full_task and compact_task modes carry RECENTLY COMPLETED context when present", () => {
+    const ctx = { ...baseCtx(), recentlyCompletedContext: "RECENTLY COMPLETED (last 24h): 'Pay 308: Euros Water TAX'." };
+
+    const fullOut = buildCoachSystemPrompt("full_task", ctx);
+    expect(fullOut).toContain("RECENTLY COMPLETED (last 24h): 'Pay 308: Euros Water TAX'.");
+
+    const compactOut = buildCoachSystemPrompt("compact_task", ctx);
+    expect(compactOut).toContain("RECENTLY COMPLETED (last 24h): 'Pay 308: Euros Water TAX'.");
+  });
+
+  it("compact_task mode explains that a task in RECENTLY COMPLETED is relevant context, not something to treat as missing", () => {
+    const out = buildCoachSystemPrompt("compact_task", baseCtx());
+    expect(out).toContain("that is relevant context — acknowledge it directly, do not treat it as \"missing.\"");
+  });
+
+  it("full_task and compact_task modes omit the dynamic RECENTLY COMPLETED block when nothing was recently completed", () => {
+    const fullOut = buildCoachSystemPrompt("full_task", baseCtx());
+    expect(fullOut).not.toContain("RECENTLY COMPLETED (last 24h):");
+
+    const compactOut = buildCoachSystemPrompt("compact_task", baseCtx());
+    expect(compactOut).not.toContain("RECENTLY COMPLETED (last 24h):");
   });
 
   it("compact_task mode conditionally carries the CURRENT NOW FOCUS line", () => {

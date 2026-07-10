@@ -40,7 +40,7 @@ function buildFullTaskPrompt(ctx) {
     profileContext, memoryContext, personaInstruction, taskContext,
     focusSessionContext, nowFocusContext, dayMapContext, remindersContext,
     anchorContext, checkinContext, pendingCheckinContext, deadlineContext, brainDumpContext,
-    velocityContext, lowEnergyContext, recentlyParkedContext, categoryFilterContext, rescueHandoffContext,
+    velocityContext, lowEnergyContext, recentlyParkedContext, recentlyCompletedContext, categoryFilterContext, rescueHandoffContext,
     isEarlyConversation, memorySectionEnabled, nowLabel, timeOfDay,
     todayActiveCount, streakCount, profileBlock, sessionSummaryContext, pendingSummaryContext,
   } = ctx;
@@ -161,7 +161,7 @@ CURRENT CAPPED TASK CONTEXT:
 You can see the visible task cards below. Some horizons may show "+X more", meaning more tasks exist but are not included in this prompt. Use exact visible task titles for action tags. If the user refers to a task that is not visible, ask for clarification or a fresh scan rather than guessing:
 ${taskContext}
 
-${rescueHandoffContext ? `${rescueHandoffContext}\n` : ""}${focusSessionContext ? `${focusSessionContext}\n` : ""}${nowFocusContext ? `${nowFocusContext}\n` : ""}${dayMapContext ? `${dayMapContext}\n` : ""}${remindersContext ? `${remindersContext}\n` : ""}${anchorContext ? `${anchorContext}\n` : ""}${checkinContext ? `${checkinContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}${deadlineContext ? `${deadlineContext}\n` : ""}${brainDumpContext ? `${brainDumpContext}\n` : ""}${velocityContext ? `${velocityContext}\n` : ""}${lowEnergyContext ? `${lowEnergyContext}\n` : ""}${recentlyParkedContext ? `${recentlyParkedContext}\n` : ""}${categoryFilterContext ? `${categoryFilterContext}\n` : ""}
+${rescueHandoffContext ? `${rescueHandoffContext}\n` : ""}${focusSessionContext ? `${focusSessionContext}\n` : ""}${nowFocusContext ? `${nowFocusContext}\n` : ""}${dayMapContext ? `${dayMapContext}\n` : ""}${remindersContext ? `${remindersContext}\n` : ""}${anchorContext ? `${anchorContext}\n` : ""}${checkinContext ? `${checkinContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}${deadlineContext ? `${deadlineContext}\n` : ""}${brainDumpContext ? `${brainDumpContext}\n` : ""}${velocityContext ? `${velocityContext}\n` : ""}${lowEnergyContext ? `${lowEnergyContext}\n` : ""}${recentlyParkedContext ? `${recentlyParkedContext}\n` : ""}${recentlyCompletedContext ? `${recentlyCompletedContext}\n` : ""}${categoryFilterContext ? `${categoryFilterContext}\n` : ""}
 SESSION STATS:
 Current Time: ${nowLabel} (${timeOfDay})
 Streak: ${streakCount || 0}-day streak
@@ -288,7 +288,7 @@ function buildCompactTaskPrompt(ctx) {
     lociCoreInstruction, mentorName, firstName, challengeLabel,
     profileContext, memoryContext, memorySectionEnabled, personaInstruction,
     nowFocusContext, lastCoachPlan, nowLabel, currentFocusTitle, pendingCheckinContext, rescueHandoffContext,
-    sessionSummaryContext, pendingSummaryContext,
+    sessionSummaryContext, pendingSummaryContext, recentlyCompletedContext,
   } = ctx;
 
   const staticPrefix = `${lociCoreInstruction}
@@ -301,7 +301,7 @@ ${buildLociVoiceCapsule(firstName)}
 
 You are responding to a brief follow-up message about the last recommendation or the user's current focus. Keep your response brief, warm, task-aware, and direct (max 2-3 sentences) unless the FORMAT RULES below require a numbered list.
 
-TASK CONTEXT IN THIS PROMPT: This shortened follow-up prompt only carries the last plan recommendation and current focus task below (if either exists) — not ${firstName}'s full task list. The app DOES have their full task data even when neither is present here. NEVER say you have no access to Loci app data or imply the app can't see their tasks. If nothing below gives you anything relevant to what ${firstName} is actually asking — e.g. a broader "what are my tasks/priorities" question, or anything not covered by the plan/focus below — say exactly: "I'm missing the task snapshot for this request — that looks like a Loci context issue." Never invent or guess at a task that isn't named below.
+TASK CONTEXT IN THIS PROMPT: This shortened follow-up prompt only carries the last plan recommendation, current focus task, and any recently completed tasks below (if present) — not ${firstName}'s full task list. The app DOES have their full task data even when none of these are present here. NEVER say you have no access to Loci app data or imply the app can't see their tasks. If ${firstName} is confirming or asking about a task that appears in RECENTLY COMPLETED below, that is relevant context — acknowledge it directly, do not treat it as "missing." If nothing below gives you anything relevant to what ${firstName} is actually asking — e.g. a broader "what are my tasks/priorities" question, or anything not covered by the plan/focus/recently-completed context below — say exactly: "I'm missing the task snapshot for this request — that looks like a Loci context issue." Never invent or guess at a task that isn't named below.
 
 FORMAT RULES (for the visible reply text — these never affect whether you also emit a COACH ACTIONS tag below):
 - If asked for a specific number of concrete/actionable steps (e.g. "3 concrete steps", "turn that into N steps"), and N is 5 or less, the visible reply is exactly N numbered lines (1. 2. 3. ...) and nothing else, except a COACH ACTIONS tag from below if one is also explicitly requested — these tags are stripped automatically and are not part of the "nothing else" reply text.
@@ -347,7 +347,7 @@ CURRENT CLIENT & APP SESSION CONTEXT:
 ${profileContext ? `${profileContext}\n` : ""}${memoryContext ? `${memoryContext}\n` : ""}${sessionSummaryContext ? `${sessionSummaryContext}\n` : ""}${pendingSummaryContext ? `${pendingSummaryContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}
 ${rescueHandoffContext ? `${rescueHandoffContext}\n` : ""}${planSection}
 ${focusSection}
-${nowFocusContext ? `${nowFocusContext}\n` : ""}
+${nowFocusContext ? `${nowFocusContext}\n` : ""}${recentlyCompletedContext ? `${recentlyCompletedContext}\n` : ""}
 SESSION STATS:
 Current Time: ${nowLabel}`;
 

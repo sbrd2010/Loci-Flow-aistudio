@@ -3,7 +3,7 @@ import { track, auth } from "../firebase";
 import { callAI, describeAIError, getAIKeys, hasAIKey } from "../utils/aiCall";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
-import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "../utils/lociAIContext";
+import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "../utils/lociAIContext";
 import { getTodayCheckedIds, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
 import { requestNotifPermission } from "../utils/focusNotifications";
@@ -560,6 +560,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const pendingCheckinContext = buildCoachCheckinContext(config.coachCheckin, now.getTime());
     const lowEnergyContext = buildLociLowEnergyContext(config);
     const recentlyParkedContext = buildLociRecentlyParkedContext(tasks, now);
+    const recentlyCompletedContext = buildLociRecentlyCompletedContext(tasks, now);
     const requestedCategories = detectRequestedCategories(userText);
     const categoryFilterContext = buildLociCategoryFilterContext(tasks, requestedCategories);
     const lociCoreInstruction = buildLociCoreInstruction({ firstName });
@@ -623,6 +624,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       velocityContext,
       lowEnergyContext,
       recentlyParkedContext,
+      recentlyCompletedContext,
       categoryFilterContext,
       rescueHandoffContext,
       isEarlyConversation,

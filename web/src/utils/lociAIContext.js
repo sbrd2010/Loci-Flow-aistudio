@@ -377,6 +377,32 @@ export function buildLociRecentlyParkedContext(tasks = [], date = new Date()) {
   return `RECENTLY PARKED (last 24h): ${quoteTitles(displayed.map(t => t.title))} ... +${count - 2} more.`;
 }
 
+const RECENT_COMPLETE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+// Tasks completed in roughly the last 24 hours — lets the coach confirm a
+// task the user just finished by name, even though buildLociTaskContext's
+// main list only ever shows active tasks (a completed task disappears from
+// there entirely, collapsed into a bare "COMPLETED TODAY: N" count with no
+// titles). Without this, the coach has no way to know WHICH task a user is
+// referring to when they say "done" or "did you see I finished X", and
+// wrongly claims it can't find a task that's actually already complete.
+// Relies on lastUpdated being stamped whenever isCompleted flips to true.
+export function buildLociRecentlyCompletedContext(tasks = [], date = new Date()) {
+  const cutoff = date.getTime() - RECENT_COMPLETE_WINDOW_MS;
+  const recentlyCompleted = (tasks || []).filter(t =>
+    t.isCompleted && !t.isDeleted && t.lastUpdated && t.lastUpdated >= cutoff
+  );
+  if (recentlyCompleted.length === 0) return "";
+
+  const sortedCompleted = [...recentlyCompleted].sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
+  const displayed = sortedCompleted.slice(0, 3);
+  const count = sortedCompleted.length;
+  if (count <= 3) {
+    return `RECENTLY COMPLETED (last 24h): ${quoteTitles(displayed.map(t => t.title))}.`;
+  }
+  return `RECENTLY COMPLETED (last 24h): ${quoteTitles(displayed.map(t => t.title))} ... +${count - 3} more.`;
+}
+
 export function buildLociCoreInstruction({ firstName = "friend" } = {}) {
   return `LOCI AI BRAIN - NON-NEGOTIABLE RULES:
 - You are Loci's execution coach, not a generic chatbot.
@@ -388,7 +414,9 @@ export function buildLociCoreInstruction({ firstName = "friend" } = {}) {
 - Preserve the user's original meaning. Do not delete, overwrite, or replace user data without clear confirmation.
 - If asked for JSON, return valid JSON only.
 - Understand Loci horizons: Today, Week, Month, Quarter, 6 Months, Work.
-- Trust the "Current Time" given in this prompt as authoritative for the real date, day, time, and timezone — never compute, guess, or override it yourself.
+- Trust the "Current Time" given in this prompt as authoritative for the real date, day, time, and timezone — never compute, guess, or override it yourself. Reorient to it on every reply: if it implies a new day has started since earlier messages in this conversation, treat that as a fresh start (a brief "new day" acknowledgment is fine) rather than silently assuming yesterday's plan or task list still applies unchanged.
+- Read the day and time for what they actually mean for the client, not just as a label: on a weekend, or in the evening (roughly after 6pm), don't default to suggesting Work/Career-category tasks — most people don't do routine office work then. Only suggest a Work/Career task at that time if it's flagged urgent/P1, ${firstName} explicitly asks for a Work/Career task, or ${firstName} says they're working late or on the weekend. Personal, Health, and other non-Work tasks remain fine to suggest at any time.
+- If a task ${firstName} asks about appears in "RECENTLY COMPLETED" below, it is already done — confirm that warmly and specifically by name. Do not say you can't find it just because it no longer appears in the active task context (completed tasks are intentionally removed from that list), and do not emit a COMPLETE_TASK tag for it again.
 - Be warm, kind, and supportive, but do not fake progress.
 - Hold up a mirror only when useful: delayed tasks, repeated over-planning, missed daily moves, or priority overload.
 - When holding up the mirror, be direct without shame. Name the pattern, then give one small next move.

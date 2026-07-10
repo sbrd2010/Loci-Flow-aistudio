@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLociCoreInstruction, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
+import { buildLociCoreInstruction, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
 import { getFocusWindows } from "./focusWindows";
 
 describe("lociAIContext", () => {
@@ -64,6 +64,70 @@ describe("lociAIContext", () => {
     expect(instruction).toContain("Today, Week, Month, Quarter, 6 Months, Work");
     expect(instruction).toContain("Never use the word \"ADHD\" in user-facing responses");
     expect(instruction).toContain("Trust the \"Current Time\"");
+  });
+
+  it("instructs the coach to reorient to a new day and avoid defaulting to Work tasks on evenings/weekends", () => {
+    const instruction = buildLociCoreInstruction({ firstName: "Rohan" });
+
+    expect(instruction).toContain("if it implies a new day has started since earlier messages in this conversation");
+    expect(instruction).toContain("don't default to suggesting Work/Career-category tasks");
+    expect(instruction).toContain("urgent/P1");
+  });
+
+  it("instructs the coach to trust RECENTLY COMPLETED over the active task list", () => {
+    const instruction = buildLociCoreInstruction({ firstName: "Rohan" });
+
+    expect(instruction).toContain("RECENTLY COMPLETED");
+    expect(instruction).toContain("do not emit a COMPLETE_TASK tag for it again");
+  });
+});
+
+describe("buildLociRecentlyCompletedContext", () => {
+  const NOW = new Date(2026, 5, 12, 12, 0); // 2026-06-12 noon
+
+  it("returns an empty string when nothing was completed recently", () => {
+    expect(buildLociRecentlyCompletedContext([], NOW)).toBe("");
+    expect(buildLociRecentlyCompletedContext([
+      { title: "Old task", isCompleted: true, lastUpdated: NOW.getTime() - 25 * 60 * 60 * 1000 }
+    ], NOW)).toBe("");
+  });
+
+  it("excludes deleted tasks even if recently completed", () => {
+    expect(buildLociRecentlyCompletedContext([
+      { title: "Deleted", isCompleted: true, isDeleted: true, lastUpdated: NOW.getTime() },
+    ], NOW)).toBe("");
+  });
+
+  it("excludes active (not-yet-completed) tasks", () => {
+    expect(buildLociRecentlyCompletedContext([
+      { title: "Still active", isCompleted: false, lastUpdated: NOW.getTime() },
+    ], NOW)).toBe("");
+  });
+
+  it("lists tasks completed within the last 24 hours, by exact title", () => {
+    const context = buildLociRecentlyCompletedContext([
+      { title: "Pay 308: Euros Water TAX", isCompleted: true, lastUpdated: NOW.getTime() - 30 * 60 * 1000 },
+      { title: "Still active task", isCompleted: false, lastUpdated: NOW.getTime() },
+    ], NOW);
+
+    expect(context).toContain("RECENTLY COMPLETED (last 24h):");
+    expect(context).toContain("'Pay 308: Euros Water TAX'");
+    expect(context).not.toContain("Still active task");
+  });
+
+  it("shows up to 3 recently completed tasks before collapsing the rest into a count", () => {
+    const context = buildLociRecentlyCompletedContext([
+      { title: "Task A", isCompleted: true, lastUpdated: NOW.getTime() - 10 * 60 * 1000 },
+      { title: "Task B", isCompleted: true, lastUpdated: NOW.getTime() - 20 * 60 * 1000 },
+      { title: "Task C", isCompleted: true, lastUpdated: NOW.getTime() - 30 * 60 * 1000 },
+      { title: "Task D", isCompleted: true, lastUpdated: NOW.getTime() - 40 * 60 * 1000 },
+    ], NOW);
+
+    expect(context).toContain("'Task A'");
+    expect(context).toContain("'Task B'");
+    expect(context).toContain("'Task C'");
+    expect(context).not.toContain("'Task D'");
+    expect(context).toContain("+1 more");
   });
 });
 
