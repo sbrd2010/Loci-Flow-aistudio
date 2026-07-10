@@ -1271,12 +1271,24 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       const event2 = buildTaskMutationEvent("task_moved", task, {
         fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: "today" }, windows, source: "coach_action", now,
       });
+      // This clears `task`'s own isNowFocus (moving it to Today without
+      // pinning it as focus) — end its session here if it was the one
+      // actively focused, same as the 'park' branch below.
+      const endedFocusSession = task.isNowFocus && typeof focusTimer.endFocusSession === "function"
+        ? focusTimer.endFocusSession("user_abandoned")
+        : null;
       savePayloadAsync({ ...payload, tasks: current.map(t =>
         t.uuid === taskUuid
           ? { ...t, horizonLevel: 'today', isNowFocus: false, isParked: false, orderIndex: maxOrder + 1, lastUpdated: now }
           : t
       )})
-        .then(() => writeActivityEvents(eventPatch(uid, event2)))
+        .then(() => {
+          const events = [event2];
+          if (endedFocusSession) {
+            events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+          }
+          writeActivityEvents(eventsPatch(uid, events));
+        })
         .catch(() => {});
     } else if (action === 'park') {
       const event3 = buildTaskMutationEvent("task_parked", task, { windows, source: "coach_action", now });

@@ -210,7 +210,14 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
     if (close) setRescueActive(false);
     if (!rescueTask) return;
     const now = Date.now();
-    savePayload({ ...payload, tasks: tasks.map(t => {
+    // Retargeting focus to rescueTask clears isNowFocus on whichever task
+    // currently holds it — end that task's open session first, or it's left
+    // orphaned with no terminal event (same gap fixed for Coach's focus chips).
+    const previouslyFocused = tasks.find(t => t.uuid !== rescueTask.uuid && t.isNowFocus);
+    const endedFocusSession = previouslyFocused && typeof focusTimer.endFocusSession === "function"
+      ? focusTimer.endFocusSession("user_abandoned")
+      : null;
+    savePayloadAsync({ ...payload, tasks: tasks.map(t => {
       const newFocus = t.uuid === rescueTask.uuid;
       if (!newFocus) {
         if (!t.isNowFocus) return t;
@@ -222,7 +229,14 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
       // still treats any non-deleted, non-completed isNowFocus task as active.
       if (t.isNowFocus && !t.isParked) return t;
       return { ...t, isNowFocus: true, isParked: false, lastUpdated: now };
-    }) });
+    }) })
+      .then(() => {
+        if (endedFocusSession) {
+          const abandonEvent = buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now });
+          writeActivityEvents(eventPatch(uid, abandonEvent));
+        }
+      })
+      .catch(() => {});
   };
 
   const parkRescueTask = () => {
