@@ -259,18 +259,16 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
 
   const handleMoveToToday = (task) => {
     const todayTasksCount = tasks.filter((t) => t.horizonLevel === "today" && isVisibleRoadmapTask(t)).length;
+    const event = buildTaskMutationEvent("task_moved", task, {
+      fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: "today" }, windows,
+    });
     savePayloadAsync({
       ...payload,
       tasks: tasks.map((t) =>
         t.uuid === task.uuid ? { ...t, horizonLevel: "today", orderIndex: todayTasksCount, lastUpdated: Date.now() } : t
       )
     })
-      .then(() => {
-        const event = buildTaskMutationEvent("task_moved", task, {
-          fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: "today" }, windows,
-        });
-        writeActivityEvents(eventPatch(uid, event));
-      })
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
       .catch(() => {});
     setSelectedTask(null);
   };
@@ -289,6 +287,7 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
     celebrate();
     const todayDateStr = getTodayDateString();
     const lociTodayStr = getLociDayStr(new Date(), getFocusWindows(config));
+    const event = buildTaskMutationEvent("task_completed", task, { windows });
     savePayloadAsync({
       ...payload,
       tasks: tasks.map((t) =>
@@ -297,7 +296,7 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
       config: { ...config, totalXp: (Number(config.totalXp) || 0) + 100, lastUpdated: Date.now() },
       contributions: incrementContribution([...contributions], todayDateStr)
     })
-      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_completed", task, { windows }))))
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
       .catch(() => {});
     setSelectedTask(null);
   };
@@ -315,8 +314,9 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
       orderIndex: tasks.filter(t => t.horizonLevel === horizon && isVisibleRoadmapTask(t)).length,
       dateCompletedString: null, isDeleted: false, lastUpdated: Date.now()
     };
+    const event = buildTaskMutationEvent("task_created", freshTask, { windows });
     savePayloadAsync({ ...payload, tasks: [...tasks, freshTask], brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) })
-      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_created", freshTask, { windows }))))
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
       .catch(() => {});
     setLongDumpWarning(null);
     setAiBreakdownSuggestion(null);
@@ -418,11 +418,9 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
       orderIndex: baseOrderIndex + i,
       dateCompletedString: null, isDeleted: false, lastUpdated: Date.now()
     }));
+    const events = freshTasks.map((t) => buildTaskMutationEvent("task_created", t, { windows }));
     savePayloadAsync({ ...payload, tasks: [...tasks, ...freshTasks], brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) })
-      .then(() => {
-        const events = freshTasks.map((t) => buildTaskMutationEvent("task_created", t, { windows }));
-        writeActivityEvents(eventsPatch(uid, events));
-      })
+      .then(() => writeActivityEvents(eventsPatch(uid, events)))
       .catch(() => {});
     setLongDumpWarning(null);
     setAiBreakdownSuggestion(null);
@@ -434,8 +432,9 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
       message: `Delete "${task.title}"?\n\nYou can undo this for a few seconds after deleting.`,
       confirmLabel: "Delete", cancelLabel: "Cancel", danger: true,
       onConfirm: () => {
+        const event = buildTaskMutationEvent("task_deleted", task, { windows });
         savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t) })
-          .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_deleted", task, { windows }))))
+          .then(() => writeActivityEvents(eventPatch(uid, event)))
           .catch(() => {});
         if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
         setUndoTask(task);
@@ -450,8 +449,9 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
   const handleUndoDelete = () => {
     if (!undoTask) return;
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    const event = buildTaskMutationEvent("task_restored", undoTask, { windows });
     savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === undoTask.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t) })
-      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_restored", undoTask, { windows }))))
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
       .catch(() => {});
     setUndoTask(null);
   };

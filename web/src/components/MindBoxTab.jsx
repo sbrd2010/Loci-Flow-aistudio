@@ -228,12 +228,13 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
   const parkRescueTask = () => {
     if (!rescueTask) return;
     const now = Date.now();
+    const event = buildTaskMutationEvent("task_parked", rescueTask, { windows, now });
     savePayloadAsync({ ...payload, tasks: tasks.map(t => (
       t.uuid === rescueTask.uuid
         ? { ...t, isParked: true, isNowFocus: false, lastUpdated: now }
         : t
     )) })
-      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_parked", rescueTask, { windows }))))
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
       .catch(() => {});
   };
 
@@ -247,11 +248,9 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
         // isn't changed by it (the core write below is a harmless no-op for
         // it), so including it here would overcount parking actions.
         const affected = tasks.filter(t => !t.isCompleted && !t.isDeleted && !t.isParked);
+        const events = affected.map((t) => buildTaskMutationEvent("task_parked", t, { windows }));
         savePayloadAsync({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, isNowFocus: false, lastUpdated: Date.now() } : t) })
-          .then(() => {
-            const events = affected.map((t) => buildTaskMutationEvent("task_parked", t, { windows }));
-            writeActivityEvents(eventsPatch(uid, events));
-          })
+          .then(() => writeActivityEvents(eventsPatch(uid, events)))
           .catch(() => {});
         setConfirmDialog(null);
       },
@@ -265,16 +264,14 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
       confirmLabel: "Fresh start", cancelLabel: "Keep today",
       onConfirm: () => {
         const affected = tasks.filter(t => !t.isCompleted && !t.isDeleted && t.horizonLevel === "today");
+        const events = affected.map((t) => buildTaskMutationEvent("task_moved", t, {
+          fromState: { horizonLevel: "today" }, toState: { horizonLevel: "week" }, windows,
+        }));
         savePayloadAsync({ ...payload, tasks: tasks.map(t =>
           (!t.isCompleted && !t.isDeleted && t.horizonLevel === "today")
             ? { ...t, horizonLevel: "week", lastUpdated: Date.now() } : t
         )})
-          .then(() => {
-            const events = affected.map((t) => buildTaskMutationEvent("task_moved", t, {
-              fromState: { horizonLevel: "today" }, toState: { horizonLevel: "week" }, windows,
-            }));
-            writeActivityEvents(eventsPatch(uid, events));
-          })
+          .then(() => writeActivityEvents(eventsPatch(uid, events)))
           .catch(() => {});
         setConfirmDialog(null);
       },
@@ -415,11 +412,9 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
     // Pass all suggestions (not just accepted) so a split entry's source is only
     // cleared once every suggestion generated from it has been accepted.
     const clearedDump = buildClearedBrainDump(payload.brainDump || [], toAdd, organizeResults, organizeDroppedSourceIds);
+    const events = newTasks.map((t) => buildTaskMutationEvent("task_created", t, { windows, source: "coach_action" }));
     savePayloadAsync({ ...payload, tasks: [...(payload.tasks || []), ...newTasks], brainDump: clearedDump })
-      .then(() => {
-        const events = newTasks.map((t) => buildTaskMutationEvent("task_created", t, { windows, source: "coach_action" }));
-        writeActivityEvents(eventsPatch(uid, events));
-      })
+      .then(() => writeActivityEvents(eventsPatch(uid, events)))
       .catch(() => {});
     setToolPanel(null);
     setOrganizeResults([]);

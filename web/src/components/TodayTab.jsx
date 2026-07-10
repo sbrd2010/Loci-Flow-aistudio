@@ -64,7 +64,7 @@ export default function TodayTab({
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft, setTimerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
-  pipOpen, handleOpenPiP, isAddTaskDialogOpen, startFocusSession,
+  pipOpen, handleOpenPiP, isAddTaskDialogOpen, startFocusSession, endFocusSession,
   selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
   isSyncingFromCache = false,
   pendingCheckinSlot, setPendingCheckinSlot,
@@ -303,6 +303,12 @@ export default function TodayTab({
   };
 
   const handleToggleComplete = (task) => {
+    // Captured now, not inside the .then() below — that only runs once
+    // savePayloadAsync's debounced write actually confirms (up to 1500ms,
+    // more with retries), which could land the event's lociDateString on
+    // the wrong side of a Loci-day boundary if the action itself happened
+    // right before it.
+    const actionAt = Date.now();
     const todayDateStr = getTodayDateString();
     const isCompleted = !task.isCompleted;
     if (isCompleted && task.reminderAt) cancelReminder(task.uuid);
@@ -340,9 +346,9 @@ export default function TodayTab({
     }
     savePayloadAsync({ ...payload, tasks: updatedTasks, config: { ...config, totalXp: nextXp, lastUpdated: Date.now() }, contributions: nextContributions })
       .then(() => {
-        const events = [buildTaskMutationEvent(isCompleted ? "task_completed" : "task_reopened", task, { windows })];
+        const events = [buildTaskMutationEvent(isCompleted ? "task_completed" : "task_reopened", task, { windows, now: actionAt })];
         if (endedFocusSession) {
-          events.push(buildFocusTerminalEvent("focus_completed", task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows }));
+          events.push(buildFocusTerminalEvent("focus_completed", task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
         }
         writeActivityEvents(eventsPatch(uid, events));
       })
@@ -377,8 +383,14 @@ export default function TodayTab({
   };
 
   const handleDeleteTask = (task) => {
+    // Built now (synchronously, at the actual action moment) rather than
+    // inside the .then() below — that only runs once savePayloadAsync's
+    // debounced write confirms (up to 1500ms, more with retries), which
+    // could stamp the event's lociDateString on the wrong side of a
+    // Loci-day boundary if the action happened right before one.
+    const event = buildTaskMutationEvent("task_deleted", task, { windows });
     savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t) })
-      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_deleted", task, { windows }))))
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
       .catch(() => {});
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
     setUndoTask(task);
@@ -388,8 +400,9 @@ export default function TodayTab({
   const handleUndoDelete = () => {
     if (!undoTask) return;
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    const event = buildTaskMutationEvent("task_restored", undoTask, { windows });
     savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === undoTask.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t) })
-      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_restored", undoTask, { windows }))))
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
       .catch(() => {});
     setUndoTask(null);
   };
@@ -697,21 +710,20 @@ export default function TodayTab({
 
   const handleMoveToHorizon = (task, horizon) => {
     const count = tasks.filter(t => t.horizonLevel === horizon && !t.isDeleted).length;
+    const event = buildTaskMutationEvent("task_moved", task, {
+      fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: horizon }, windows,
+    });
     savePayloadAsync({ ...payload, tasks: tasks.map(t =>
       t.uuid === task.uuid ? { ...t, horizonLevel: horizon, isNowFocus: false, orderIndex: count, lastUpdated: Date.now() } : t
     )})
-      .then(() => {
-        const event = buildTaskMutationEvent("task_moved", task, {
-          fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: horizon }, windows,
-        });
-        writeActivityEvents(eventPatch(uid, event));
-      })
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
       .catch(() => {});
   };
 
   const handleParkTask = (task) => {
+    const event = buildTaskMutationEvent("task_parked", task, { windows });
     savePayloadAsync({ ...payload, tasks: buildParkTaskTasks(tasks, task.uuid) })
-      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_parked", task, { windows }))))
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
       .catch(() => {});
   };
 
@@ -802,12 +814,13 @@ export default function TodayTab({
   const parkRescueTask = () => {
     if (!rescueTask) return;
     const now = Date.now();
+    const event = buildTaskMutationEvent("task_parked", rescueTask, { windows, now });
     savePayloadAsync({ ...payload, tasks: tasks.map(t => (
       t.uuid === rescueTask.uuid
         ? { ...t, isParked: true, isNowFocus: false, lastUpdated: now }
         : t
     )) })
-      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_parked", rescueTask, { windows }))))
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
       .catch(() => {});
   };
 
@@ -1750,9 +1763,12 @@ export default function TodayTab({
           email={payload.config?.userId || ""}
           payload={payload}
           savePayload={savePayload}
+          savePayloadAsync={savePayloadAsync}
           defaultHorizon="today"
           editTask={editingTask}
           onClose={() => setEditingTask(null)}
+          uid={uid}
+          writeActivityEvents={writeActivityEvents}
         />
       )}
 

@@ -256,13 +256,11 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       if (!reminderAt && editTask.reminderAt) cancelReminder(editTask.uuid);
       const horizonChanged = horizonLevel !== editTask.horizonLevel;
       if (horizonChanged) {
+        const event = buildTaskMutationEvent("task_moved", updatedTask, {
+          fromState: { horizonLevel: editTask.horizonLevel }, toState: { horizonLevel }, windows,
+        });
         savePayloadAsync({ ...payload, tasks: (payload.tasks || []).map(t => t.uuid === editTask.uuid ? updatedTask : t) })
-          .then(() => {
-            const event = buildTaskMutationEvent("task_moved", updatedTask, {
-              fromState: { horizonLevel: editTask.horizonLevel }, toState: { horizonLevel }, windows,
-            });
-            writeActivityEvents(eventPatch(uid, event));
-          })
+          .then(() => writeActivityEvents(eventPatch(uid, event)))
           .catch(() => {});
       } else {
         savePayload({ ...payload, tasks: (payload.tasks || []).map(t => t.uuid === editTask.uuid ? updatedTask : t) });
@@ -297,11 +295,12 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     if (reminderAt) scheduleReminder(freshTask);
 
     const updatedTasks = [...(payload.tasks || []), freshTask];
+    const event = buildTaskMutationEvent("task_created", freshTask, { windows });
     savePayloadAsync({
       ...payload,
       tasks: updatedTasks
     })
-      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_created", freshTask, { windows }))))
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
       .catch(() => {});
 
     setSaved(true);

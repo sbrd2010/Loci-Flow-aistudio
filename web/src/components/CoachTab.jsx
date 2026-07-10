@@ -834,17 +834,18 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         if (updatedPayload.tasks !== tasksRef.current) patch.tasks = updatedPayload.tasks;
         if (updatedPayload.contributions !== contributionsRef.current) patch.contributions = updatedPayload.contributions;
         if (Object.keys(patch).length > 0) {
+          // Only ADD_TASK/COMPLETE_TASK/PARK_TASK map to a ledger event type —
+          // SET_NOW_FOCUS/START_FOCUS just pin a task, which isn't one of the
+          // tracked mutation types. Built now (synchronously), not inside the
+          // .then() below, so the event's lociDateString reflects when the
+          // action actually happened rather than whenever the debounced write
+          // eventually confirms.
+          const eventTypeByAction = { ADD_TASK: "task_created", COMPLETE_TASK: "task_completed", PARK_TASK: "task_parked" };
+          const events = results
+            .filter(r => r.matched && r.task && eventTypeByAction[r.type])
+            .map(r => buildTaskMutationEvent(eventTypeByAction[r.type], r.task, { windows, source: "coach_action" }));
           saveSubPathsAsync(patch)
-            .then(() => {
-              // Only ADD_TASK/COMPLETE_TASK/PARK_TASK map to a ledger event type —
-              // SET_NOW_FOCUS/START_FOCUS just pin a task, which isn't one of the
-              // tracked mutation types.
-              const eventTypeByAction = { ADD_TASK: "task_created", COMPLETE_TASK: "task_completed", PARK_TASK: "task_parked" };
-              const events = results
-                .filter(r => r.matched && r.task && eventTypeByAction[r.type])
-                .map(r => buildTaskMutationEvent(eventTypeByAction[r.type], r.task, { windows, source: "coach_action" }));
-              if (events.length > 0) writeActivityEvents(eventsPatch(uid, events));
-            })
+            .then(() => { if (events.length > 0) writeActivityEvents(eventsPatch(uid, events)); })
             .catch(() => {});
         }
 
@@ -1162,35 +1163,32 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     } else if (action === 'focus+today') {
       const todayActive = current.filter(t => t.horizonLevel === 'today' && !t.isDeleted);
       const maxOrder = todayActive.reduce((m, t) => Math.max(m, t.orderIndex ?? 0), -1);
+      const event1 = buildTaskMutationEvent("task_moved", task, {
+        fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: "today" }, windows, source: "coach_action", now,
+      });
       savePayloadAsync({ ...payload, tasks: current.map(t => {
         if (t.uuid === taskUuid) return { ...t, horizonLevel: 'today', isNowFocus: true, isParked: false, orderIndex: maxOrder + 1, lastUpdated: now };
         return t.isNowFocus ? { ...t, isNowFocus: false, lastUpdated: now } : t;
       })})
-        .then(() => {
-          const event = buildTaskMutationEvent("task_moved", task, {
-            fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: "today" }, windows, source: "coach_action",
-          });
-          writeActivityEvents(eventPatch(uid, event));
-        })
+        .then(() => writeActivityEvents(eventPatch(uid, event1)))
         .catch(() => {});
     } else if (action === 'today') {
       const todayActive = current.filter(t => t.horizonLevel === 'today' && !t.isDeleted);
       const maxOrder = todayActive.reduce((m, t) => Math.max(m, t.orderIndex ?? 0), -1);
+      const event2 = buildTaskMutationEvent("task_moved", task, {
+        fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: "today" }, windows, source: "coach_action", now,
+      });
       savePayloadAsync({ ...payload, tasks: current.map(t =>
         t.uuid === taskUuid
           ? { ...t, horizonLevel: 'today', isNowFocus: false, isParked: false, orderIndex: maxOrder + 1, lastUpdated: now }
           : t
       )})
-        .then(() => {
-          const event = buildTaskMutationEvent("task_moved", task, {
-            fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: "today" }, windows, source: "coach_action",
-          });
-          writeActivityEvents(eventPatch(uid, event));
-        })
+        .then(() => writeActivityEvents(eventPatch(uid, event2)))
         .catch(() => {});
     } else if (action === 'park') {
+      const event3 = buildTaskMutationEvent("task_parked", task, { windows, source: "coach_action", now });
       savePayloadAsync({ ...payload, tasks: buildParkTaskTasks(current, taskUuid, now) })
-        .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_parked", task, { windows, source: "coach_action" }))))
+        .then(() => writeActivityEvents(eventPatch(uid, event3)))
         .catch(() => {});
     }
   };
@@ -1632,11 +1630,14 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                   </div>
                 </div>
                 <button className="btn" style={{ flexShrink: 0, padding: "6px 12px", fontSize: "11px", background: "var(--success)" }}
-                  onClick={() => savePayloadAsync({ ...payload, tasks: tasks.map(t =>
-                    t.uuid === task.uuid ? { ...t, isParked: false, lastUpdated: Date.now() } : t
-                  )})
-                    .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_unparked", task, { windows }))))
-                    .catch(() => {})}>
+                  onClick={() => {
+                    const event = buildTaskMutationEvent("task_unparked", task, { windows });
+                    savePayloadAsync({ ...payload, tasks: tasks.map(t =>
+                      t.uuid === task.uuid ? { ...t, isParked: false, lastUpdated: Date.now() } : t
+                    )})
+                      .then(() => writeActivityEvents(eventPatch(uid, event)))
+                      .catch(() => {});
+                  }}>
                   Restore ↑
                 </button>
               </div>

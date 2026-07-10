@@ -386,16 +386,28 @@ export default function App() {
   const snapshotAttemptInFlightRef = useRef(false);
   useEffect(() => {
     if (!payload?.config || !user || demoMode || isSyncingFromCache) return;
-    const windows = getFocusWindows(payload.config);
-    const lociDay = getLociDayStr(new Date(), windows);
-    const attempted = attemptedSnapshotRef.current;
-    if (attempted && attempted.uid === user.uid && attempted.lociDay === lociDay) return;
-    if (snapshotAttemptInFlightRef.current) return;
-    snapshotAttemptInFlightRef.current = true;
-    captureTodaySnapshotIfNeeded(payload.tasks || [], windows).then((result) => {
-      snapshotAttemptInFlightRef.current = false;
-      if (result?.ok) attemptedSnapshotRef.current = { uid: user.uid, lociDay };
-    });
+    const attemptCapture = () => {
+      const windows = getFocusWindows(payload.config);
+      const lociDay = getLociDayStr(new Date(), windows);
+      const attempted = attemptedSnapshotRef.current;
+      if (attempted && attempted.uid === user.uid && attempted.lociDay === lociDay) return;
+      if (snapshotAttemptInFlightRef.current) return;
+      snapshotAttemptInFlightRef.current = true;
+      captureTodaySnapshotIfNeeded(payload.tasks || [], windows).then((result) => {
+        snapshotAttemptInFlightRef.current = false;
+        if (result?.ok) attemptedSnapshotRef.current = { uid: user.uid, lociDay };
+      });
+    };
+    attemptCapture();
+    // Also re-check periodically — if the app stays mounted across the Loci
+    // day's actual start (e.g. left open overnight) with no other payload/
+    // config change, none of this effect's dependencies would otherwise
+    // change to re-trigger the capture, and the first later unrelated
+    // change (completing or moving a task) would capture the POST-change
+    // Today list instead of the set present at day start. Mirrors
+    // useTodayStr's periodic-recheck pattern for the same class of problem.
+    const id = setInterval(attemptCapture, 60_000);
+    return () => clearInterval(id);
   }, [payload?.config, user?.uid, demoMode, isSyncingFromCache, payload?.tasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Firebase auth state listener
@@ -522,13 +534,11 @@ export default function App() {
     celebrate();
     const now = new Date();
     const ended = focusTimer.endFocusSession("completed_task");
+    const windows = getFocusWindows(payload?.config || {});
+    const events = [buildTaskMutationEvent("task_completed", task, { windows, source: "focus_mode", now })];
+    if (ended) events.push(buildFocusTerminalEvent("focus_completed", task, ended.focusSessionId, { ...ended, windows, now }));
     savePayloadAsync(buildFocusCompletionPayload(payload, task, toLocalDateStr(now), now))
-      .then(() => {
-        const windows = getFocusWindows(payload?.config || {});
-        const events = [buildTaskMutationEvent("task_completed", task, { windows, source: "focus_mode" })];
-        if (ended) events.push(buildFocusTerminalEvent("focus_completed", task, ended.focusSessionId, { ...ended, windows }));
-        writeActivityEvents(eventsPatch(activityUid, events));
-      })
+      .then(() => writeActivityEvents(eventsPatch(activityUid, events)))
       .catch(() => {});
     focusTimer.setIsFocusMode(false);
     focusTimer.setFocusSessionActive(false);
