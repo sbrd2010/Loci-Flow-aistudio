@@ -229,12 +229,23 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
     if (!rescueTask) return;
     const now = Date.now();
     const event = buildTaskMutationEvent("task_parked", rescueTask, { windows, now });
+    // Rescue often opens on the actively focused task — parking it clears
+    // isNowFocus below without ending its session, same gap fixed elsewhere.
+    const endedFocusSession = rescueTask.isNowFocus && typeof focusTimer.endFocusSession === "function"
+      ? focusTimer.endFocusSession("user_abandoned")
+      : null;
     savePayloadAsync({ ...payload, tasks: tasks.map(t => (
       t.uuid === rescueTask.uuid
         ? { ...t, isParked: true, isNowFocus: false, lastUpdated: now }
         : t
     )) })
-      .then(() => writeActivityEvents(eventPatch(uid, event)))
+      .then(() => {
+        const events = [event];
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+        }
+        writeActivityEvents(eventsPatch(uid, events));
+      })
       .catch(() => {});
   };
 

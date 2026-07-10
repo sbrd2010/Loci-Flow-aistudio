@@ -444,9 +444,23 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
       message: `Delete "${task.title}"?\n\nYou can undo this for a few seconds after deleting.`,
       confirmLabel: "Delete", cancelLabel: "Cancel", danger: true,
       onConfirm: () => {
-        const event = buildTaskMutationEvent("task_deleted", task, { windows });
+        const now = Date.now();
+        const event = buildTaskMutationEvent("task_deleted", task, { windows, now });
+        // Deleting the actively focused task (e.g. one started from Coach)
+        // drops it out of activeTask (isDeleted-filtered) without ever
+        // clearing isNowFocus itself — end its session here or it's left
+        // open with no terminal event.
+        const endedFocusSession = task.isNowFocus && typeof focusTimer.endFocusSession === "function"
+          ? focusTimer.endFocusSession("user_abandoned")
+          : null;
         savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t) })
-          .then(() => writeActivityEvents(eventPatch(uid, event)))
+          .then(() => {
+            const events = [event];
+            if (endedFocusSession) {
+              events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+            }
+            writeActivityEvents(eventsPatch(uid, events));
+          })
           .catch(() => {});
         if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
         setUndoTask(task);

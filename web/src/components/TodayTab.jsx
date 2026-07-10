@@ -348,7 +348,12 @@ export default function TodayTab({
       .then(() => {
         const events = [buildTaskMutationEvent(isCompleted ? "task_completed" : "task_reopened", task, { windows, now: actionAt })];
         if (endedFocusSession) {
-          events.push(buildFocusTerminalEvent("focus_completed", task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
+          // Use endedFocusSession.task (captured when that session started),
+          // not `task` — if the Now Focus pin moved to `task` via a path that
+          // never ended the PREVIOUS session (e.g. a raw pin-only action),
+          // endFocusSession() above actually closed out that older session,
+          // which may belong to a different task entirely.
+          events.push(buildFocusTerminalEvent("focus_completed", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
         }
         writeActivityEvents(eventsPatch(uid, events));
       })
@@ -866,12 +871,28 @@ export default function TodayTab({
     if (!rescueTask) return;
     const now = Date.now();
     const event = buildTaskMutationEvent("task_parked", rescueTask, { windows, now });
+    // Rescue is often opened on the actively focused task (rescueTask ===
+    // activeTask) — parking it clears isNowFocus below without ending its
+    // session, same gap fixed for the row-menu park action.
+    let endedFocusSession = null;
+    if (rescueTask.isNowFocus) {
+      endedFocusSession = endFocusSession("user_abandoned");
+      setIsTimerRunning(false);
+      setIsFocusMode(false);
+      setFocusSessionActive(false);
+    }
     savePayloadAsync({ ...payload, tasks: tasks.map(t => (
       t.uuid === rescueTask.uuid
         ? { ...t, isParked: true, isNowFocus: false, lastUpdated: now }
         : t
     )) })
-      .then(() => writeActivityEvents(eventPatch(uid, event)))
+      .then(() => {
+        const events = [event];
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+        }
+        writeActivityEvents(eventsPatch(uid, events));
+      })
       .catch(() => {});
   };
 

@@ -1213,11 +1213,26 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       const event1 = buildTaskMutationEvent("task_moved", task, {
         fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: "today" }, windows, source: "coach_action", now,
       });
+      // Retargeting focus to `task` clears isNowFocus on whichever task
+      // currently holds it — if a real session is open for that task, end it
+      // here or it's left orphaned with no terminal event when this new pin
+      // takes over. (The new pin itself doesn't start a timer, so it doesn't
+      // mint its own session, same as the chat SET_NOW_FOCUS tag.)
+      const previouslyFocused = current.find(t => t.uuid !== taskUuid && t.isNowFocus);
+      const endedFocusSession = previouslyFocused && typeof focusTimer.endFocusSession === "function"
+        ? focusTimer.endFocusSession("user_abandoned")
+        : null;
       savePayloadAsync({ ...payload, tasks: current.map(t => {
         if (t.uuid === taskUuid) return { ...t, horizonLevel: 'today', isNowFocus: true, isParked: false, orderIndex: maxOrder + 1, lastUpdated: now };
         return t.isNowFocus ? { ...t, isNowFocus: false, lastUpdated: now } : t;
       })})
-        .then(() => writeActivityEvents(eventPatch(uid, event1)))
+        .then(() => {
+          const events = [event1];
+          if (endedFocusSession) {
+            events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+          }
+          writeActivityEvents(eventsPatch(uid, events));
+        })
         .catch(() => {});
     } else if (action === 'today') {
       const todayActive = current.filter(t => t.horizonLevel === 'today' && !t.isDeleted);
@@ -1234,8 +1249,19 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         .catch(() => {});
     } else if (action === 'park') {
       const event3 = buildTaskMutationEvent("task_parked", task, { windows, source: "coach_action", now });
+      // buildParkTaskTasks clears isNowFocus on the parked task — end its
+      // session here if it was the one actively focused.
+      const endedFocusSession = task.isNowFocus && typeof focusTimer.endFocusSession === "function"
+        ? focusTimer.endFocusSession("user_abandoned")
+        : null;
       savePayloadAsync({ ...payload, tasks: buildParkTaskTasks(current, taskUuid, now) })
-        .then(() => writeActivityEvents(eventPatch(uid, event3)))
+        .then(() => {
+          const events = [event3];
+          if (endedFocusSession) {
+            events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+          }
+          writeActivityEvents(eventsPatch(uid, events));
+        })
         .catch(() => {});
     }
   };
