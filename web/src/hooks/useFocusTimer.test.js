@@ -271,6 +271,34 @@ describe("useFocusTimer", () => {
       expect(result.current.isTimerRunning).toBe(true);
     });
 
+    it("enterFocusMode: false mints a session and starts the timer without opening the full-screen Focus overlay", () => {
+      // Coach chat's START_FOCUS action uses this — starting a background
+      // session shouldn't yank the user out of the conversation.
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      const started = result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+
+      expect(typeof started.focusSessionId).toBe("string");
+      expect(result.current.isTimerRunning).toBe(true);
+      expect(result.current.isFocusMode).toBe(false);
+    });
+
+    it("plannedSeconds overrides the task-derived duration and is applied directly to the running timer", () => {
+      // Coach's START_FOCUS can carry its own explicit "|<minutes>" duration
+      // distinct from the task's own timeEstimateMinutes (25 here).
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      const started = result.current.startFocusSession(task, { enterFocusMode: false, plannedSeconds: 10 * 60 });
+      rerender([[task], {}, "u1"]);
+
+      expect(started.focusInitialPlannedSeconds).toBe(10 * 60);
+      expect(result.current.timerMaxSeconds).toBe(10 * 60);
+      expect(result.current.timerSecondsLeft).toBe(10 * 60);
+    });
+
     it("starting a second session while one is already open auto-closes the first and returns it as priorSession", () => {
       // Reproduces starting focus on Task A from Today, then — without
       // ending it — starting focus on Task B from Day Map. Without the

@@ -24,7 +24,7 @@ import {
 } from "../utils/coachSessionSummary";
 import { buildRescueHandoffContext, shouldClearRescueHandoff } from "../utils/rescueHandoff";
 import { safeCopyToClipboard } from "../utils/clipboard";
-import { buildTaskMutationEvent, eventPatch, eventsPatch } from "../utils/activityLog";
+import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import LinkifyText from "./LinkifyText";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -844,6 +844,25 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           const events = results
             .filter(r => r.matched && r.task && eventTypeByAction[r.type])
             .map(r => buildTaskMutationEvent(eventTypeByAction[r.type], r.task, { windows, source: "coach_action" }));
+          // COMPLETE_TASK/PARK_TASK clear isNowFocus on the matched task
+          // (buildToggleCompletedTasks/buildParkTaskTasks) — if that task was
+          // the one actively focused, end its session here so the ledger
+          // isn't left open with no terminal event (same bug class fixed for
+          // TodayTab's handleToggleComplete/handleMoveToHorizon).
+          const focusEndingResult = results.find(r =>
+            r.matched && r.task?.isNowFocus && (r.type === "COMPLETE_TASK" || r.type === "PARK_TASK")
+            && typeof focusTimer.endFocusSession === "function"
+          );
+          if (focusEndingResult) {
+            const endedFocusSession = focusTimer.endFocusSession(focusEndingResult.type === "COMPLETE_TASK" ? "completed_task" : "user_abandoned");
+            if (endedFocusSession) {
+              events.push(buildFocusTerminalEvent(
+                focusEndingResult.type === "COMPLETE_TASK" ? "focus_completed" : "focus_abandoned",
+                focusEndingResult.task, endedFocusSession.focusSessionId,
+                { ...endedFocusSession, windows, now: now.getTime() }
+              ));
+            }
+          }
           saveSubPathsAsync(patch)
             .then(() => { if (events.length > 0) writeActivityEvents(eventsPatch(uid, events)); })
             .catch(() => {});
@@ -878,12 +897,34 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         }
 
         const startFocus = results.find(r => r.type === "START_FOCUS" && r.matched);
-        if (startFocus && typeof focusTimer.extendTimer === "function") {
+        if (startFocus) {
           const isSwitchingTask = focusTimer.activeTask?.uuid !== startFocus.task.uuid;
           if (!focusTimer.isTimerRunning || isSwitchingTask) {
             const mins = Number(startFocus.durationMinutes) > 0 ? Number(startFocus.durationMinutes)
               : Number(startFocus.task.timeEstimateMinutes) > 0 ? Number(startFocus.task.timeEstimateMinutes) : 25;
-            focusTimer.extendTimer(mins);
+            if (isSwitchingTask && typeof focusTimer.startFocusSession === "function") {
+              // A genuinely new focused task — mint a real ledger session for
+              // it (enterFocusMode: false so the chat stays open instead of
+              // being replaced by the full-screen Focus overlay), auto-closing
+              // whatever session was previously open the same way Day Map's
+              // "Start Focus" does.
+              const session = focusTimer.startFocusSession(startFocus.task, { enterFocusMode: false, plannedSeconds: mins * 60 });
+              if (session.priorSession && session.priorSession.task) {
+                const abandonEvent = buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
+                  ...session.priorSession, windows, now: now.getTime(),
+                });
+                writeActivityEvents(eventPatch(uid, abandonEvent));
+              }
+              const startedEvent = buildFocusStartedEvent(startFocus.task, session.focusSessionId, {
+                focusInitialPlannedSeconds: session.focusInitialPlannedSeconds, now: session.focusStartedAt, windows, source: "coach_action",
+              });
+              writeActivityEvents(eventPatch(uid, startedEvent));
+            } else if (typeof focusTimer.extendTimer === "function") {
+              // Same task, just resuming/restarting from a paused state — any
+              // ledger session already open for it stays open under its own
+              // focusSessionId, so don't mint a new one here.
+              focusTimer.extendTimer(mins);
+            }
           }
         }
 

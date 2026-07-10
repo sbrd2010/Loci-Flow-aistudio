@@ -710,13 +710,31 @@ export default function TodayTab({
 
   const handleMoveToHorizon = (task, horizon) => {
     const count = tasks.filter(t => t.horizonLevel === horizon && !t.isDeleted).length;
+    const actionAt = Date.now();
     const event = buildTaskMutationEvent("task_moved", task, {
-      fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: horizon }, windows,
+      fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: horizon }, windows, now: actionAt,
     });
+    // Moving the focused task off Today clears its isNowFocus flag below —
+    // if left unhandled, that orphans the open focus session (no terminal
+    // event, later wrongly auto-closed as "abandoned" attributed to a later
+    // session). End it here, same as handleToggleComplete does for completion.
+    let endedFocusSession = null;
+    if (task.isNowFocus) {
+      endedFocusSession = endFocusSession("user_abandoned");
+      setIsTimerRunning(false);
+      setIsFocusMode(false);
+      setFocusSessionActive(false);
+    }
     savePayloadAsync({ ...payload, tasks: tasks.map(t =>
       t.uuid === task.uuid ? { ...t, horizonLevel: horizon, isNowFocus: false, orderIndex: count, lastUpdated: Date.now() } : t
     )})
-      .then(() => writeActivityEvents(eventPatch(uid, event)))
+      .then(() => {
+        const events = [event];
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_abandoned", task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
+        }
+        writeActivityEvents(eventsPatch(uid, events));
+      })
       .catch(() => {});
   };
 

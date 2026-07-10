@@ -487,7 +487,19 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // can be attributed to the task it actually belonged to, since by the time
   // a caller gets around to building that terminal event, `activeTask` may
   // have already moved on to the task being started here.
-  const startFocusSession = (task) => {
+  //
+  // `enterFocusMode` (default true) controls whether this also opens the
+  // full-screen Focus overlay. Coach-triggered sessions pass false — a chat
+  // action starting a background session shouldn't yank the user out of the
+  // conversation the way explicitly tapping "Focus" does.
+  // `plannedSeconds` (optional) overrides the derived task-estimate duration
+  // and is also applied directly to the running timer — used by Coach's
+  // START_FOCUS action tag, which can carry its own explicit "|<minutes>"
+  // duration distinct from the task's own timeEstimateMinutes. Existing
+  // callers that don't pass it are unaffected: timerMaxSeconds/timerSecondsLeft
+  // are left for the activeTask-sync effect to derive from the task, exactly
+  // as before.
+  const startFocusSession = (task, { enterFocusMode = true, plannedSeconds } = {}) => {
     // Auto-close any session that's still open when a new one starts. This
     // hook's state is lifted to App level specifically so it survives
     // navigating away without ending a session (e.g. Day Map's "Start Focus"
@@ -506,9 +518,10 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     // `tasks`/`activeTask` yet (React state updates are batched), so
     // `timerMaxSeconds` would still be whatever the PREVIOUS active task's
     // duration was, silently recording the wrong planned duration.
-    const initialPlannedSeconds = task
+    const derivedPlannedSeconds = task
       ? (Number(task.timeEstimateMinutes) > 0 ? Number(task.timeEstimateMinutes) : 25) * 60
       : timerMaxSeconds;
+    const initialPlannedSeconds = Number(plannedSeconds) > 0 ? Number(plannedSeconds) : derivedPlannedSeconds;
     focusSessionIdRef.current = sessionId;
     focusStartedAtRef.current = startedAt;
     focusInitialPlannedSecondsRef.current = initialPlannedSeconds;
@@ -516,8 +529,12 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusSessionAccumulatedElapsedRef.current = 0;
     focusSessionAccumulatedPlannedRef.current = 0;
     setFocusSessionId(sessionId);
-    setIsFocusMode(true);
+    if (enterFocusMode) setIsFocusMode(true);
     setIsTimerRunning(true);
+    if (Number(plannedSeconds) > 0) {
+      setTimerMaxSeconds(initialPlannedSeconds);
+      setTimerSecondsLeft(initialPlannedSeconds);
+    }
     return {
       focusSessionId: sessionId, focusStartedAt: startedAt, focusInitialPlannedSeconds: initialPlannedSeconds,
       // Non-null only if a still-open session had to be auto-closed to make
