@@ -373,14 +373,29 @@ export default function App() {
   // guard before the real Loci day starts, permanently skipping the actual
   // day's snapshot. captureTodaySnapshotIfNeeded's own transaction is
   // idempotent (write-only-if-null), so re-checking here is safe.
-  const attemptedSnapshotLociDayRef = useRef(null);
+  // { uid, lociDay } once a capture attempt for that uid+day is CONFIRMED
+  // successful — keyed on uid too (not just lociDay) so signing out and a
+  // different account signing in on the same browser during the same Loci
+  // day doesn't inherit the previous account's already-attempted marker and
+  // skip its own capture. Only committed on captureTodaySnapshotIfNeeded's
+  // own { ok: true } (write succeeded, or another device already captured
+  // it — both confirmed outcomes) — a failed attempt (e.g. RTDB unreachable
+  // at that moment) leaves it uncommitted so a later render retries instead
+  // of silently giving up on the day's snapshot for good.
+  const attemptedSnapshotRef = useRef(null);
+  const snapshotAttemptInFlightRef = useRef(false);
   useEffect(() => {
     if (!payload?.config || !user || demoMode || isSyncingFromCache) return;
     const windows = getFocusWindows(payload.config);
     const lociDay = getLociDayStr(new Date(), windows);
-    if (attemptedSnapshotLociDayRef.current === lociDay) return;
-    attemptedSnapshotLociDayRef.current = lociDay;
-    captureTodaySnapshotIfNeeded(payload.tasks || [], windows);
+    const attempted = attemptedSnapshotRef.current;
+    if (attempted && attempted.uid === user.uid && attempted.lociDay === lociDay) return;
+    if (snapshotAttemptInFlightRef.current) return;
+    snapshotAttemptInFlightRef.current = true;
+    captureTodaySnapshotIfNeeded(payload.tasks || [], windows).then((result) => {
+      snapshotAttemptInFlightRef.current = false;
+      if (result?.ok) attemptedSnapshotRef.current = { uid: user.uid, lociDay };
+    });
   }, [payload?.config, user?.uid, demoMode, isSyncingFromCache, payload?.tasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Firebase auth state listener

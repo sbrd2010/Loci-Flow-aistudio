@@ -254,7 +254,19 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       };
       if (reminderAt && reminderAt !== editTask.reminderAt) scheduleReminder(updatedTask);
       if (!reminderAt && editTask.reminderAt) cancelReminder(editTask.uuid);
-      savePayload({ ...payload, tasks: (payload.tasks || []).map(t => t.uuid === editTask.uuid ? updatedTask : t) });
+      const horizonChanged = horizonLevel !== editTask.horizonLevel;
+      if (horizonChanged) {
+        savePayloadAsync({ ...payload, tasks: (payload.tasks || []).map(t => t.uuid === editTask.uuid ? updatedTask : t) })
+          .then(() => {
+            const event = buildTaskMutationEvent("task_moved", updatedTask, {
+              fromState: { horizonLevel: editTask.horizonLevel }, toState: { horizonLevel }, windows,
+            });
+            writeActivityEvents(eventPatch(uid, event));
+          })
+          .catch(() => {});
+      } else {
+        savePayload({ ...payload, tasks: (payload.tasks || []).map(t => t.uuid === editTask.uuid ? updatedTask : t) });
+      }
       setSaved(true);
       setTimeout(onClose, 900);
       return;

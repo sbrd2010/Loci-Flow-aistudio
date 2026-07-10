@@ -15,7 +15,7 @@ import { getCurrentFocusQuote } from "../utils/focusQuotes";
 import { formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
 import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows, getWindowState, getRemainingFocusMinutes, getNextWindowStart, getOverallSpan, getFocusProgress, hasConfiguredFocusWindow } from "../utils/focusWindows";
-import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch } from "../utils/activityLog";
+import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import { getMorningRitualVariant, shouldShowMorningRitual, buildMorningRitualDoneConfig, buildMorningRitualSnoozeConfig } from "../utils/morningRitual";
 import { getCoachNudge, buildCoachNudgeClearedConfig, buildPendingCoachNudge } from "../utils/coachNudge";
 import {
@@ -308,7 +308,15 @@ export default function TodayTab({
     if (isCompleted && task.reminderAt) cancelReminder(task.uuid);
     // Synchronously stop timer/focus overlay when completing the active focused task,
     // so the UI clears in the same render cycle rather than waiting for effects.
+    // Also end the focus session itself (not just the UI) — completing the
+    // focused task via this checkbox is a real session-completion path,
+    // distinct from the "Done!" global prompt (App.jsx's handleFocusSessionDone),
+    // and was previously leaving focusSessionIdRef open with no terminal
+    // event, later either orphaned or wrongly auto-closed as "abandoned"
+    // when the next session started.
+    let endedFocusSession = null;
     if (shouldStopFocusOnComplete(task, isCompleted)) {
+      endedFocusSession = endFocusSession("completed_task");
       setIsTimerRunning(false);
       setIsFocusMode(false);
       setFocusSessionActive(false);
@@ -332,8 +340,11 @@ export default function TodayTab({
     }
     savePayloadAsync({ ...payload, tasks: updatedTasks, config: { ...config, totalXp: nextXp, lastUpdated: Date.now() }, contributions: nextContributions })
       .then(() => {
-        const event = buildTaskMutationEvent(isCompleted ? "task_completed" : "task_reopened", task, { windows });
-        writeActivityEvents(eventPatch(uid, event));
+        const events = [buildTaskMutationEvent(isCompleted ? "task_completed" : "task_reopened", task, { windows })];
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_completed", task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows }));
+        }
+        writeActivityEvents(eventsPatch(uid, events));
       })
       .catch(() => {});
   };

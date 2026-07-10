@@ -242,7 +242,11 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
       message: "Park all active tasks for today?\n\nThis is a restart without shame — everything moves to parked. You can restore tasks from the AI Coach tab whenever you're ready.",
       confirmLabel: "Yes, restart", cancelLabel: "Not now",
       onConfirm: () => {
-        const affected = tasks.filter(t => !t.isCompleted && !t.isDeleted);
+        // Only tasks that actually transition from unparked to parked count
+        // as a task_parked event — a task already parked before this reset
+        // isn't changed by it (the core write below is a harmless no-op for
+        // it), so including it here would overcount parking actions.
+        const affected = tasks.filter(t => !t.isCompleted && !t.isDeleted && !t.isParked);
         savePayloadAsync({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, isNowFocus: false, lastUpdated: Date.now() } : t) })
           .then(() => {
             const events = affected.map((t) => buildTaskMutationEvent("task_parked", t, { windows }));

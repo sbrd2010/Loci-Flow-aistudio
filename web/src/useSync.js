@@ -431,6 +431,14 @@ export function useSync(uid, email) {
             // and let RTDB win instead, the same as the !timeoutRef path above.
             clearTimeout(timeoutRef.current);
             timeoutRef.current = null;
+            // The debounced write this cancels never reached RTDB, and the
+            // local edit it carried may or may not survive the merge below
+            // (only re-persisted if mergeRemotePayloadWithMeta finds a real
+            // local contribution) — reject rather than resolve, so any
+            // savePayloadAsync() caller's .then() (which would fire an
+            // activity-ledger event claiming the write succeeded) correctly
+            // doesn't run for a write that was never confirmed.
+            takeWaiters().forEach(w => w.reject(new Error("savePayloadAsync: superseded by RTDB before first sync")));
             const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current);
             const toApply = hasLocalContribution ? { ...merged, timestamp: Date.now() } : merged;
             payloadUidRef.current = uid;
@@ -494,12 +502,15 @@ export function useSync(uid, email) {
       // necessarily closed — visibilitychange "hidden" fires on a simple
       // phone lock too) within the 1500ms window leaves their promise
       // hanging forever, silently dropping whatever .then() was waiting to
-      // fire an activity-ledger event. Resolve rather than reject: this path
-      // already treats delivery as best-effort (keepalive fetch + swallowed
-      // fallback failure below), and the point here is to unblock waiters,
-      // not to reintroduce that swallowed failure as a rejection.
+      // fire an activity-ledger event. Resolve on confirmed success, reject
+      // otherwise — fetch()'s promise only rejects on a network-level
+      // failure, not an HTTP error status (an expired token, a rules
+      // rejection), so a raw `.then(resolve)` would wrongly treat a 401/403
+      // as success and let ledger events fire for a write that was actually
+      // rejected by the server.
       const waiters = takeWaiters();
-      const settle = () => waiters.forEach(w => w.resolve());
+      const resolveAll = () => waiters.forEach(w => w.resolve());
+      const rejectAll = (err) => waiters.forEach(w => w.reject(err));
       // keepalive: true guarantees delivery even when iOS/Android kills the page
       // mid-write. Falls back to the Firebase SDK if no token is cached yet.
       if (tokenRef.current) {
@@ -510,9 +521,12 @@ export function useSync(uid, email) {
           body: JSON.stringify(data),
           keepalive: true,
           headers: { "Content-Type": "application/json" },
-        }).then(settle).catch(() => writeWithRetry(ref(db, dbRefPath), data).then(settle).catch(settle));
+        }).then((response) => {
+          if (response.ok) resolveAll();
+          else rejectAll(new Error(`keepalive PUT failed with status ${response.status}`));
+        }).catch(() => writeWithRetry(ref(db, dbRefPath), data).then(resolveAll).catch(rejectAll));
       } else {
-        writeWithRetry(ref(db, dbRefPath), data).then(settle).catch(settle);
+        writeWithRetry(ref(db, dbRefPath), data).then(resolveAll).catch(rejectAll);
       }
     };
     const handleVisibilityChange = () => {
@@ -701,16 +715,22 @@ export function useSync(uid, email) {
     const attempt = (n) =>
       update(ref(db), updates).catch(err => {
         if (n > 0) return new Promise(r => setTimeout(r, 500 * Math.pow(2, 3 - n))).then(() => attempt(n - 1));
+        // Set here (not just in the sync saveSubPath wrapper below) so the
+        // user-facing sync warning fires the same way regardless of which
+        // entry point failed — saveSubPathAsync's callers all swallow their
+        // own rejection (.catch(() => {})) to sequence an analytics write,
+        // which previously meant a real write failure via that path set no
+        // warning at all. Matches savePayload/savePayloadAsync's already-
+        // shared scheduleFlush failure handling.
+        console.error(`Sub-path write failed (${subPath}):`, err);
+        setSyncWarning("write-failed");
         throw err;
       });
     return attempt(3);
   };
 
   const saveSubPath = (subPath, value) => {
-    performSubPathWrite(subPath, value).catch(err => {
-      console.error(`Sub-path write failed (${subPath}):`, err);
-      setSyncWarning("write-failed");
-    });
+    performSubPathWrite(subPath, value).catch(() => {});
   };
 
   // Same as saveSubPath, but returns the write promise so a caller can await
@@ -738,16 +758,20 @@ export function useSync(uid, email) {
     const attempt = (n) =>
       update(ref(db), updates).catch(err => {
         if (n > 0) return new Promise(r => setTimeout(r, 500 * Math.pow(2, 3 - n))).then(() => attempt(n - 1));
+        // Set here, not just in the sync saveSubPaths wrapper below — see the
+        // matching comment on performSubPathWrite above. saveSubPathsAsync is
+        // used by CoachTab's chat-tag resolution, whose caller swallows its
+        // own rejection to sequence an analytics write; without this, a real
+        // multi-path write failure there set no user-facing warning at all.
+        console.error(`Sub-paths write failed (${Object.keys(patch).join(", ")}):`, err);
+        setSyncWarning("write-failed");
         throw err;
       });
     return attempt(3);
   };
 
   const saveSubPaths = (patch) => {
-    performSubPathsWrite(patch).catch(err => {
-      console.error(`Sub-paths write failed (${Object.keys(patch).join(", ")}):`, err);
-      setSyncWarning("write-failed");
-    });
+    performSubPathsWrite(patch).catch(() => {});
   };
 
   // Same as saveSubPaths, but returns the write promise. Never call this AND

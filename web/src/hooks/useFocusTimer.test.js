@@ -341,6 +341,34 @@ describe("useFocusTimer", () => {
       expect(result.current.focusSessionId).toBeNull();
     });
 
+    it("accumulates elapsed/planned time across a Keep Going (extendTimer) continuation instead of losing the earlier block", () => {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.timerMaxSeconds).toBe(25 * 60);
+
+      // The original 25-minute block runs all the way to 0:00.
+      result.current.setTimerSecondsLeft(0);
+      rerender([[task], {}, "u1"]);
+
+      // User picks "Keep going" for another 5 minutes.
+      result.current.extendTimer(5);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.timerMaxSeconds).toBe(5 * 60);
+
+      // The continuation block also runs to completion.
+      result.current.setTimerSecondsLeft(0);
+      rerender([[task], {}, "u1"]);
+
+      const ended = result.current.endFocusSession("completed_task");
+      // Must reflect BOTH blocks (25 + 5), not just the final 5-minute one.
+      expect(ended.focusElapsedSeconds).toBe(30 * 60);
+      expect(ended.focusFinalPlannedSeconds).toBe(30 * 60);
+      expect(ended.focusInitialPlannedSeconds).toBe(25 * 60);
+    });
+
     it("endFocusSession returns null when no session was ever started", () => {
       const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
       const { result } = renderHook(useFocusTimer, [[task], {}, "u1"]);

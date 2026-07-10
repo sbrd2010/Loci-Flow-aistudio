@@ -54,6 +54,17 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // without relying on `activeTask`, which may have already moved on to a
   // different task by the time the session actually ends.
   const focusSessionTaskRef = useRef(null);
+  // "Keep Going" (extendTimer) restarts timerMaxSeconds/timerSecondsLeft
+  // from scratch for a fresh block on the SAME still-open focusSessionId —
+  // without accumulating each finished block's numbers here first, the
+  // eventual terminal event's focusElapsedSeconds/focusFinalPlannedSeconds
+  // would only reflect the final block, silently losing every earlier one
+  // (e.g. a 25-min block + a 5-min "keep going" continuation would report
+  // only 5 minutes). addTimeToSession (the mid-block "+5" button) already
+  // extends timerMaxSeconds/timerSecondsLeft in place rather than resetting
+  // them, so it doesn't need this — only extendTimer does.
+  const focusSessionAccumulatedElapsedRef = useRef(0);
+  const focusSessionAccumulatedPlannedRef = useRef(0);
   const [focusSessionId, setFocusSessionId] = useState(null);
   // Lets the activeTask-sync effect tell "switched to a different task" apart
   // from "same task, duration edited mid-session" (the two need different responses).
@@ -289,6 +300,8 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusStartedAtRef.current = null;
     focusInitialPlannedSecondsRef.current = null;
     focusSessionTaskRef.current = null;
+    focusSessionAccumulatedElapsedRef.current = 0;
+    focusSessionAccumulatedPlannedRef.current = 0;
     setFocusSessionId(null);
 
     closePiP(); // Close pop-out on account switch
@@ -432,6 +445,14 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
 
   // Restart the timer for the same task with a fresh duration ("Keep going" extension)
   const extendTimer = (minutes) => {
+    // Accumulate the block that's ending before resetting timerMaxSeconds/
+    // timerSecondsLeft for the new one — the session (focusSessionId) stays
+    // the same across "Keep Going", so without this the eventual terminal
+    // event would only see the final block's numbers.
+    if (focusSessionIdRef.current) {
+      focusSessionAccumulatedElapsedRef.current += Math.max(0, timerMaxSeconds - timerSecondsLeft);
+      focusSessionAccumulatedPlannedRef.current += timerMaxSeconds;
+    }
     const next = buildExtendedTimerState(minutes);
     setTimerMaxSeconds(next.timerMaxSeconds);
     setTimerSecondsLeft(next.timerSecondsLeft);
@@ -478,11 +499,22 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
 
     const sessionId = safeUUID();
     const startedAt = Date.now();
-    const initialPlannedSeconds = timerMaxSeconds;
+    // Derived directly from `task` (same fallback formula as the
+    // activeTask-sync effect below), NOT read from `timerMaxSeconds` state —
+    // a caller that just pinned `task` (savePayload) and immediately calls
+    // this in the same synchronous handler hasn't seen that pin reflected in
+    // `tasks`/`activeTask` yet (React state updates are batched), so
+    // `timerMaxSeconds` would still be whatever the PREVIOUS active task's
+    // duration was, silently recording the wrong planned duration.
+    const initialPlannedSeconds = task
+      ? (Number(task.timeEstimateMinutes) > 0 ? Number(task.timeEstimateMinutes) : 25) * 60
+      : timerMaxSeconds;
     focusSessionIdRef.current = sessionId;
     focusStartedAtRef.current = startedAt;
     focusInitialPlannedSecondsRef.current = initialPlannedSeconds;
     focusSessionTaskRef.current = task;
+    focusSessionAccumulatedElapsedRef.current = 0;
+    focusSessionAccumulatedPlannedRef.current = 0;
     setFocusSessionId(sessionId);
     setIsFocusMode(true);
     setIsTimerRunning(true);
@@ -509,8 +541,10 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       focusSessionId: sessionId,
       focusStartedAt: focusStartedAtRef.current,
       focusInitialPlannedSeconds: focusInitialPlannedSecondsRef.current,
-      focusFinalPlannedSeconds: timerMaxSeconds,
-      focusElapsedSeconds: Math.max(0, timerMaxSeconds - timerSecondsLeft),
+      // Sum of every earlier "Keep Going" block's numbers plus the current
+      // (final) block's — see extendTimer's accumulation above.
+      focusFinalPlannedSeconds: focusSessionAccumulatedPlannedRef.current + timerMaxSeconds,
+      focusElapsedSeconds: focusSessionAccumulatedElapsedRef.current + Math.max(0, timerMaxSeconds - timerSecondsLeft),
       focusEndReason,
       task: focusSessionTaskRef.current,
     };
@@ -518,6 +552,8 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusStartedAtRef.current = null;
     focusInitialPlannedSecondsRef.current = null;
     focusSessionTaskRef.current = null;
+    focusSessionAccumulatedElapsedRef.current = 0;
+    focusSessionAccumulatedPlannedRef.current = 0;
     setFocusSessionId(null);
     return result;
   };
