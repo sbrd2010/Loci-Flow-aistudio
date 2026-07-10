@@ -390,7 +390,11 @@ export default function App() {
   const attemptedSnapshotRef = useRef(null);
   const snapshotAttemptInFlightRef = useRef(false);
   useEffect(() => {
-    if (!payload?.config || !user || demoMode || isSyncingFromCache) return;
+    // syncWarning === "offline" means isSyncingFromCache flipped false via a
+    // timeout fallback, not a confirmed sync — capturing off that stale cache
+    // would write a wrong carryover set that the transaction's write-once
+    // guard can never correct once a real sync lands later.
+    if (!payload?.config || !user || demoMode || isSyncingFromCache || syncWarning === "offline") return;
     const attemptCapture = () => {
       const windows = getFocusWindows(payload.config);
       const lociDay = getLociDayStr(new Date(), windows);
@@ -413,7 +417,7 @@ export default function App() {
     // useTodayStr's periodic-recheck pattern for the same class of problem.
     const id = setInterval(attemptCapture, 60_000);
     return () => clearInterval(id);
-  }, [payload?.config, user?.uid, demoMode, isSyncingFromCache, payload?.tasks]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [payload?.config, user?.uid, demoMode, isSyncingFromCache, syncWarning, payload?.tasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Firebase auth state listener
   useEffect(() => {

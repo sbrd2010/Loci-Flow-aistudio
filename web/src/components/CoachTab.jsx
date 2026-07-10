@@ -856,9 +856,13 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           if (focusEndingResult) {
             const endedFocusSession = focusTimer.endFocusSession(focusEndingResult.type === "COMPLETE_TASK" ? "completed_task" : "user_abandoned");
             if (endedFocusSession) {
+              // Use endedFocusSession.task, not focusEndingResult.task — if a
+              // pin-only path moved Now Focus while the open session still
+              // belonged to a previous task, this call actually closed out
+              // that older session, which may not be the matched task.
               events.push(buildFocusTerminalEvent(
                 focusEndingResult.type === "COMPLETE_TASK" ? "focus_completed" : "focus_abandoned",
-                focusEndingResult.task, endedFocusSession.focusSessionId,
+                endedFocusSession.task, endedFocusSession.focusSessionId,
                 { ...endedFocusSession, windows, now: now.getTime() }
               ));
             }

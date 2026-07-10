@@ -64,7 +64,7 @@ export default function TodayTab({
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft, setTimerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
-  pipOpen, handleOpenPiP, isAddTaskDialogOpen, startFocusSession, endFocusSession,
+  pipOpen, handleOpenPiP, isAddTaskDialogOpen, startFocusSession, endFocusSession, focusSessionId,
   selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
   isSyncingFromCache = false,
   pendingCheckinSlot, setPendingCheckinSlot,
@@ -80,18 +80,35 @@ export default function TodayTab({
   // make room for this one (e.g. Day Map's "Start Focus" while another
   // task's session is running), also writes that session's focus_abandoned
   // terminal event so it isn't silently orphaned.
-  const startFocusAndLog = (task) => {
-    const session = startFocusSession(task);
-    if (session.priorSession && session.priorSession.task) {
-      const abandonEvent = buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
-        ...session.priorSession, windows,
-      });
-      writeActivityEvents(eventPatch(uid, abandonEvent));
+  //
+  // `pinPromise` (optional) is a still-in-flight pin write (e.g. Focus Now's
+  // "pin then immediately start" button) — if given, ledger events wait for
+  // it to confirm instead of logging for a pin that might not have landed.
+  const startFocusAndLog = (task, pinPromise) => {
+    // If this task already has an open session (e.g. the user backed out of
+    // the full-screen overlay while the timer kept running, then taps Focus
+    // again on the same task), just reopen the overlay — treating this as a
+    // brand-new session would auto-close the in-progress one and fragment
+    // the ledger for what's really just a return-to-focus action.
+    if (activeTask?.uuid === task.uuid && focusSessionId) {
+      setIsFocusMode(true);
+      return;
     }
-    const startedEvent = buildFocusStartedEvent(task, session.focusSessionId, {
-      focusInitialPlannedSeconds: session.focusInitialPlannedSeconds, now: session.focusStartedAt, windows,
-    });
-    writeActivityEvents(eventPatch(uid, startedEvent));
+    const session = startFocusSession(task);
+    (pinPromise || Promise.resolve())
+      .then(() => {
+        if (session.priorSession && session.priorSession.task) {
+          const abandonEvent = buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
+            ...session.priorSession, windows,
+          });
+          writeActivityEvents(eventPatch(uid, abandonEvent));
+        }
+        const startedEvent = buildFocusStartedEvent(task, session.focusSessionId, {
+          focusInitialPlannedSeconds: session.focusInitialPlannedSeconds, now: session.focusStartedAt, windows,
+        });
+        writeActivityEvents(eventPatch(uid, startedEvent));
+      })
+      .catch(() => {});
   };
 
   const [headerExpanded, setHeaderExpanded] = useState(false);
@@ -363,11 +380,31 @@ export default function TodayTab({
   const handlePinTask = (task) => {
     const now = Date.now();
     const isPinning = !task.isNowFocus;
-    savePayload({ ...payload, tasks: tasks.map((t) => {
+    const newFocusUuid = isPinning ? task.uuid : null;
+    // Pinning/unpinning here clears isNowFocus on whichever task currently
+    // holds it — end that task's open session first, or it's left orphaned
+    // with no terminal event (same gap fixed for the Rescue/Coach pin paths).
+    // A raw pin (no timer start) never mints a new session itself, matching
+    // SET_NOW_FOCUS's convention elsewhere.
+    const previouslyFocused = tasks.find(t => t.isNowFocus && t.uuid !== newFocusUuid);
+    const endedFocusSession = previouslyFocused ? endFocusSession("user_abandoned") : null;
+    // Returned so callers (e.g. the Focus Now button, which pins then
+    // immediately starts a session) can wait for this pin to actually
+    // confirm before logging events of their own.
+    const pinPromise = savePayloadAsync({ ...payload, tasks: tasks.map((t) => {
       const newFocus = isPinning && t.uuid === task.uuid;
       if (t.isNowFocus === newFocus) return t;
       return { ...t, isNowFocus: newFocus, lastUpdated: now };
     })});
+    pinPromise
+      .then(() => {
+        if (endedFocusSession) {
+          const abandonEvent = buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now });
+          writeActivityEvents(eventPatch(uid, abandonEvent));
+        }
+      })
+      .catch(() => {});
+    return pinPromise;
   };
 
   const handleFocusBrainDump = (text) => {
@@ -1628,10 +1665,8 @@ export default function TodayTab({
                     <button
                       className="focus-now-btn focus-now-btn--primary"
                       onClick={() => {
-                        if (!focusNowTask.isNowFocus) {
-                          handlePinTask(focusNowTask);
-                        }
-                        startFocusAndLog(focusNowTask);
+                        const pinPromise = focusNowTask.isNowFocus ? null : handlePinTask(focusNowTask);
+                        startFocusAndLog(focusNowTask, pinPromise);
                       }}
                     >
                       ▶ Start Focus
