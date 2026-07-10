@@ -90,6 +90,20 @@ describe("lociAIContext", () => {
     expect(instruction).toContain("RECENTLY COMPLETED");
     expect(instruction).toContain("do not emit a COMPLETE_TASK tag for it again");
   });
+
+  it("instructs the coach not to conflate a completed task with a same-titled active task", () => {
+    const instruction = buildLociCoreInstruction({ firstName: "Rohan" });
+
+    expect(instruction).toContain("treat them as two different tasks");
+    expect(instruction).toContain("never imply or claim the active one is also done");
+  });
+
+  it("instructs the coach that COMPLETED TODAY and RECENTLY COMPLETED can differ without it being a contradiction", () => {
+    const instruction = buildLociCoreInstruction({ firstName: "Rohan" });
+
+    expect(instruction).toContain("can legitimately show different counts or tasks");
+    expect(instruction).toContain("not a contradiction to flag or explain");
+  });
 });
 
 describe("buildLociRecentlyCompletedContext", () => {
@@ -138,6 +152,23 @@ describe("buildLociRecentlyCompletedContext", () => {
     expect(context).toContain("'Task C'");
     expect(context).not.toContain("'Task D'");
     expect(context).toContain("+1 more");
+  });
+
+  it("flags a recently completed task whose title collides with a still-active task, so the model treats them as distinct", () => {
+    const context = buildLociRecentlyCompletedContext([
+      { title: "Pay rent", isCompleted: true, lastUpdated: NOW.getTime() - 10 * 60 * 1000 },
+      { title: "Pay rent", isCompleted: false, isDeleted: false, isParked: false, lastUpdated: NOW.getTime() },
+    ], NOW);
+
+    expect(context).toContain("'Pay rent' (a separate active task also has this exact title — they are different tasks)");
+  });
+
+  it("does not flag a recently completed task when no active task shares its title", () => {
+    const context = buildLociRecentlyCompletedContext([
+      { title: "Pay rent", isCompleted: true, lastUpdated: NOW.getTime() - 10 * 60 * 1000 },
+    ], NOW);
+
+    expect(context).toBe("RECENTLY COMPLETED (last 24h): 'Pay rent'.");
   });
 });
 

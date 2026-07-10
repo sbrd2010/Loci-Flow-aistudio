@@ -387,6 +387,14 @@ const RECENT_COMPLETE_WINDOW_MS = 24 * 60 * 60 * 1000;
 // referring to when they say "done" or "did you see I finished X", and
 // wrongly claims it can't find a task that's actually already complete.
 // Relies on lastUpdated being stamped whenever isCompleted flips to true.
+//
+// A completed task's title can collide with a still-active task of the same
+// name (common for recurring tasks like "Pay rent"). Since the model matches
+// on exact visible title, an unflagged collision risks it treating the two
+// as one — e.g. confirming completion in a way that reads as if the active
+// duplicate is done too, or (against instructions) resolving a COMPLETE_TASK
+// tag against the wrong one. Flag the collision inline so the model treats
+// them as distinct instead of silently assuming a match.
 export function buildLociRecentlyCompletedContext(tasks = [], date = new Date()) {
   const cutoff = date.getTime() - RECENT_COMPLETE_WINDOW_MS;
   const recentlyCompleted = (tasks || []).filter(t =>
@@ -394,13 +402,19 @@ export function buildLociRecentlyCompletedContext(tasks = [], date = new Date())
   );
   if (recentlyCompleted.length === 0) return "";
 
+  const activeTitles = new Set((tasks || []).filter(isActiveLociTask).map(t => t.title));
+  const labelFor = (t) => activeTitles.has(t.title)
+    ? `'${t.title}' (a separate active task also has this exact title — they are different tasks)`
+    : `'${t.title}'`;
+
   const sortedCompleted = [...recentlyCompleted].sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
   const displayed = sortedCompleted.slice(0, 3);
+  const titlesText = displayed.map(labelFor).join(", ");
   const count = sortedCompleted.length;
   if (count <= 3) {
-    return `RECENTLY COMPLETED (last 24h): ${quoteTitles(displayed.map(t => t.title))}.`;
+    return `RECENTLY COMPLETED (last 24h): ${titlesText}.`;
   }
-  return `RECENTLY COMPLETED (last 24h): ${quoteTitles(displayed.map(t => t.title))} ... +${count - 3} more.`;
+  return `RECENTLY COMPLETED (last 24h): ${titlesText} ... +${count - 3} more.`;
 }
 
 export function buildLociCoreInstruction({ firstName = "friend" } = {}) {
@@ -416,7 +430,8 @@ export function buildLociCoreInstruction({ firstName = "friend" } = {}) {
 - Understand Loci horizons: Today, Week, Month, Quarter, 6 Months, Work.
 - Trust the "Current Time" given in this prompt as authoritative for the real date, day, time, and timezone — never compute, guess, or override it yourself. Reorient to it on every reply: if it implies a new day has started since earlier messages in this conversation, treat that as a fresh start (a brief "new day" acknowledgment is fine) rather than silently assuming yesterday's plan or task list still applies unchanged.
 - Read the day and time for what they actually mean for the client, not just as a label: on a weekend, or in the evening (roughly after 6pm), don't default to suggesting Work/Career-category tasks — most people don't do routine office work then. Only suggest a Work/Career task at that time if it's flagged urgent/P1, it's the pinned [NOW FOCUS] task (${firstName} already chose to focus on it), ${firstName} explicitly asks for a Work/Career task, or ${firstName} says they're working late or on the weekend. Personal, Health, and other non-Work tasks remain fine to suggest at any time.
-- If a task ${firstName} asks about appears in "RECENTLY COMPLETED" below, it is already done — confirm that warmly and specifically by name. Do not say you can't find it just because it no longer appears in the active task context (completed tasks are intentionally removed from that list), and do not emit a COMPLETE_TASK tag for it again.
+- If a task ${firstName} asks about appears in "RECENTLY COMPLETED" below, it is already done — confirm that warmly and specifically by name. Do not say you can't find it just because it no longer appears in the active task context (completed tasks are intentionally removed from that list), and do not emit a COMPLETE_TASK tag for it again. If a "RECENTLY COMPLETED" title is flagged as also matching a separate active task with the same name, treat them as two different tasks — confirm only the completed one, and never imply or claim the active one is also done.
+- "COMPLETED TODAY" (in the task context above) and "RECENTLY COMPLETED" (below, if present) can legitimately show different counts or tasks — they use different day boundaries (Loci's own day-start vs. a rolling 24h window). This is not a contradiction to flag or explain to ${firstName}; use RECENTLY COMPLETED to confirm a specific task by name, and COMPLETED TODAY only for the day's overall count.
 - Be warm, kind, and supportive, but do not fake progress.
 - Hold up a mirror only when useful: delayed tasks, repeated over-planning, missed daily moves, or priority overload.
 - When holding up the mirror, be direct without shame. Name the pattern, then give one small next move.
