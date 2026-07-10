@@ -7,15 +7,21 @@ import { initializeTestEnvironment, assertSucceeds, assertFails } from "@firebas
 // Realtime Database Emulator actually *enforces* it — required before PR A
 // (Activity Ledger) merges, per the Insights plan.
 //
+// Deliberately lives in web/emulator-tests/, NOT web/e2e/ — it uses vitest's
+// test runner (beforeAll/describe/it from "vitest"), but Playwright's
+// testDir is "./e2e" and auto-discovers any *.test.js there and tries to run
+// it with its OWN runner, which crashes on vitest's globals. Keeping this
+// out of e2e/ avoids that collision with `npm run test:e2e`.
+//
 // Requires a running RTDB emulator (firebase.json already configures one on
-// port 9000). Run via:
-//   npx firebase emulators:exec --only database \
-//     "vitest run e2e/security-rules.emulator.test.js"
-// from the repo root, or start `firebase emulators:start --only database`
-// in one terminal and run `npx vitest run e2e/security-rules.emulator.test.js`
-// in another. Not part of the default `npx vitest run` sweep (this file
-// lives outside vitest.config.js's `src/**/*.test.{js,ts}` include glob) —
-// it needs a live emulator process, unlike every other test in this repo.
+// port 9000). Run via `npm run test:rules-emulator` from web/ (wraps
+// `firebase emulators:exec --only database "vitest run --config
+// vitest.rules-emulator.config.js"`), or start `firebase emulators:start
+// --only database` in one terminal and run `npx vitest run --config
+// vitest.rules-emulator.config.js` in another. Not part of the default
+// `npx vitest run` sweep (vitest.config.js's include glob is
+// src/**/*.test.{js,ts}) — it needs a live emulator process, unlike every
+// other test in this repo.
 //
 // NOTE: this file could not be executed in the sandboxed session that wrote
 // it — the emulator's own local rules-push (PUT http://127.0.0.1:<port>/.settings/rules.json)
