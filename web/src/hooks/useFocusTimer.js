@@ -48,6 +48,12 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   const focusSessionIdRef = useRef(null);
   const focusStartedAtRef = useRef(null);
   const focusInitialPlannedSecondsRef = useRef(null);
+  // The task the in-flight session belongs to, captured at start time — lets
+  // endFocusSession() (and startFocusSession()'s auto-close of a still-open
+  // prior session, see below) identify which task a terminal event is for
+  // without relying on `activeTask`, which may have already moved on to a
+  // different task by the time the session actually ends.
+  const focusSessionTaskRef = useRef(null);
   const [focusSessionId, setFocusSessionId] = useState(null);
   // Lets the activeTask-sync effect tell "switched to a different task" apart
   // from "same task, duration edited mid-session" (the two need different responses).
@@ -282,6 +288,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusSessionIdRef.current = null;
     focusStartedAtRef.current = null;
     focusInitialPlannedSecondsRef.current = null;
+    focusSessionTaskRef.current = null;
     setFocusSessionId(null);
 
     closePiP(); // Close pop-out on account switch
@@ -454,17 +461,40 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // call site should use (instead of setIsFocusMode/setIsTimerRunning
   // directly) so a focus_started activity-ledger event can be built from the
   // returned info without each call site duplicating session-start detection.
-  const startFocusSession = () => {
+  //
+  // `task` is required so a still-open prior session (see priorSession below)
+  // can be attributed to the task it actually belonged to, since by the time
+  // a caller gets around to building that terminal event, `activeTask` may
+  // have already moved on to the task being started here.
+  const startFocusSession = (task) => {
+    // Auto-close any session that's still open when a new one starts. This
+    // hook's state is lifted to App level specifically so it survives
+    // navigating away without ending a session (e.g. Day Map's "Start Focus"
+    // on a different task while another task's session is still running) —
+    // without this, the previous session's focusSessionId would be silently
+    // overwritten below, orphaned forever with no terminal event, violating
+    // the "every focus_started eventually gets a terminal event" guarantee.
+    const priorSession = endFocusSession("user_abandoned");
+
     const sessionId = safeUUID();
     const startedAt = Date.now();
     const initialPlannedSeconds = timerMaxSeconds;
     focusSessionIdRef.current = sessionId;
     focusStartedAtRef.current = startedAt;
     focusInitialPlannedSecondsRef.current = initialPlannedSeconds;
+    focusSessionTaskRef.current = task;
     setFocusSessionId(sessionId);
     setIsFocusMode(true);
     setIsTimerRunning(true);
-    return { focusSessionId: sessionId, focusStartedAt: startedAt, focusInitialPlannedSeconds: initialPlannedSeconds };
+    return {
+      focusSessionId: sessionId, focusStartedAt: startedAt, focusInitialPlannedSeconds: initialPlannedSeconds,
+      // Non-null only if a still-open session had to be auto-closed to make
+      // room for this one. Callers should build and write ITS terminal event
+      // too (priorSession.task, reason "user_abandoned") alongside the new
+      // focus_started — this hook can't write activity-ledger events itself
+      // (no access to uid/writeActivityEvents), so the caller must.
+      priorSession,
+    };
   };
 
   // Consumes the active session (if any) and returns everything needed to
@@ -482,10 +512,12 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       focusFinalPlannedSeconds: timerMaxSeconds,
       focusElapsedSeconds: Math.max(0, timerMaxSeconds - timerSecondsLeft),
       focusEndReason,
+      task: focusSessionTaskRef.current,
     };
     focusSessionIdRef.current = null;
     focusStartedAtRef.current = null;
     focusInitialPlannedSecondsRef.current = null;
+    focusSessionTaskRef.current = null;
     setFocusSessionId(null);
     return result;
   };

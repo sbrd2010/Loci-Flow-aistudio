@@ -15,7 +15,7 @@ import { getCurrentFocusQuote } from "../utils/focusQuotes";
 import { formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
 import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows, getWindowState, getRemainingFocusMinutes, getNextWindowStart, getOverallSpan, getFocusProgress, hasConfiguredFocusWindow } from "../utils/focusWindows";
-import { buildTaskMutationEvent, buildFocusStartedEvent, eventPatch } from "../utils/activityLog";
+import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch } from "../utils/activityLog";
 import { getMorningRitualVariant, shouldShowMorningRitual, buildMorningRitualDoneConfig, buildMorningRitualSnoozeConfig } from "../utils/morningRitual";
 import { getCoachNudge, buildCoachNudgeClearedConfig, buildPendingCoachNudge } from "../utils/coachNudge";
 import {
@@ -74,6 +74,25 @@ export default function TodayTab({
   const { tasks = [], config = {}, contributions = [] } = payload;
   const taskRowInteractionStyle = config.taskRowInteractionStyle === "dragAnywhere" ? "dragAnywhere" : "classic";
   const windows = getFocusWindows(config);
+
+  // Starts a focus session on `task` and writes its focus_started event —
+  // if startFocusSession() had to auto-close a still-open prior session to
+  // make room for this one (e.g. Day Map's "Start Focus" while another
+  // task's session is running), also writes that session's focus_abandoned
+  // terminal event so it isn't silently orphaned.
+  const startFocusAndLog = (task) => {
+    const session = startFocusSession(task);
+    if (session.priorSession && session.priorSession.task) {
+      const abandonEvent = buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
+        ...session.priorSession, windows,
+      });
+      writeActivityEvents(eventPatch(uid, abandonEvent));
+    }
+    const startedEvent = buildFocusStartedEvent(task, session.focusSessionId, {
+      focusInitialPlannedSeconds: session.focusInitialPlannedSeconds, now: session.focusStartedAt, windows,
+    });
+    writeActivityEvents(eventPatch(uid, startedEvent));
+  };
 
   const [headerExpanded, setHeaderExpanded] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -1434,13 +1453,7 @@ export default function TodayTab({
                 type="button"
                 className="pinned-focus-start-btn"
                 aria-label={`Start focus on ${pinnedFocusTask.title}`}
-                onClick={() => {
-                  const session = startFocusSession();
-                  const event = buildFocusStartedEvent(pinnedFocusTask, session.focusSessionId, {
-                    focusInitialPlannedSeconds: session.focusInitialPlannedSeconds, now: session.focusStartedAt, windows,
-                  });
-                  writeActivityEvents(eventPatch(uid, event));
-                }}
+                onClick={() => startFocusAndLog(pinnedFocusTask)}
               >
                 Focus →
               </button>
@@ -1504,11 +1517,7 @@ export default function TodayTab({
                         if (!focusNowTask.isNowFocus) {
                           handlePinTask(focusNowTask);
                         }
-                        const session = startFocusSession();
-                        const event = buildFocusStartedEvent(focusNowTask, session.focusSessionId, {
-                          focusInitialPlannedSeconds: session.focusInitialPlannedSeconds, now: session.focusStartedAt, windows,
-                        });
-                        writeActivityEvents(eventPatch(uid, event));
+                        startFocusAndLog(focusNowTask);
                       }}
                     >
                       ▶ Start Focus

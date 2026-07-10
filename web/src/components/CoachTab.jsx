@@ -1119,9 +1119,16 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     return chips.slice(0, 3);
   };
 
-  // Phase B: return a fresh task only when exactly one matched action has a uuid
+  // Phase B: return a fresh task only when exactly one matched action has a uuid.
+  // ADD_TASK is excluded deliberately: applyCoachActions attaches `.task` to
+  // ADD_TASK results too (so the activity-ledger write can find the created
+  // task without re-deriving it), but that's unrelated to Phase B — before
+  // that change ADD_TASK never had `.task` and so never reached here; without
+  // this exclusion an ADD_TASK-only reply would newly start showing "Set as
+  // Focus"/"Move to Today"/"Park" chips, a real UI behavior change this PR
+  // isn't meant to make.
   const taskChipsFor = (actions) => {
-    const matched = (actions || []).filter(a => a.matched && a.task?.uuid);
+    const matched = (actions || []).filter(a => a.matched && a.task?.uuid && a.type !== "ADD_TASK");
     if (matched.length !== 1) return null;
     const fresh = tasks.find(t => t.uuid === matched[0].task.uuid && !t.isDeleted);
     return fresh || null;

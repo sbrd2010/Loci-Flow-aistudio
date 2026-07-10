@@ -489,6 +489,17 @@ export function useSync(uid, email) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
       const data = payloadRef.current;
+      // Any savePayloadAsync() callers queued behind the debounce timer this
+      // is preempting must still settle — otherwise a tab backgrounded (not
+      // necessarily closed — visibilitychange "hidden" fires on a simple
+      // phone lock too) within the 1500ms window leaves their promise
+      // hanging forever, silently dropping whatever .then() was waiting to
+      // fire an activity-ledger event. Resolve rather than reject: this path
+      // already treats delivery as best-effort (keepalive fetch + swallowed
+      // fallback failure below), and the point here is to unblock waiters,
+      // not to reintroduce that swallowed failure as a rejection.
+      const waiters = takeWaiters();
+      const settle = () => waiters.forEach(w => w.resolve());
       // keepalive: true guarantees delivery even when iOS/Android kills the page
       // mid-write. Falls back to the Firebase SDK if no token is cached yet.
       if (tokenRef.current) {
@@ -499,9 +510,9 @@ export function useSync(uid, email) {
           body: JSON.stringify(data),
           keepalive: true,
           headers: { "Content-Type": "application/json" },
-        }).catch(() => writeWithRetry(ref(db, dbRefPath), data).catch(() => {}));
+        }).then(settle).catch(() => writeWithRetry(ref(db, dbRefPath), data).then(settle).catch(settle));
       } else {
-        writeWithRetry(ref(db, dbRefPath), data).catch(() => {});
+        writeWithRetry(ref(db, dbRefPath), data).then(settle).catch(settle);
       }
     };
     const handleVisibilityChange = () => {
@@ -592,6 +603,16 @@ export function useSync(uid, email) {
     return { blocked: false, nextPayload };
   };
 
+  // Detaches the current batch of savePayloadAsync waiters so whoever
+  // preempts the debounce timer (the timer firing normally, or an early
+  // flush/flushNow) can settle exactly the callers queued behind it, without
+  // a later scheduleFlush() call re-queuing into an already-settled batch.
+  const takeWaiters = () => {
+    const waiters = pendingWriteWaitersRef.current;
+    pendingWriteWaitersRef.current = [];
+    return waiters;
+  };
+
   // Shared debounced-flush scheduler for savePayload/savePayloadAsync. Every
   // call within the 1500ms window clears and reschedules the timer, so rapid
   // successive calls coalesce into a single RTDB write — identical to the
@@ -601,8 +622,7 @@ export function useSync(uid, email) {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
     timeoutRef.current = setTimeout(() => {
-      const waiters = pendingWriteWaitersRef.current;
-      pendingWriteWaitersRef.current = [];
+      const waiters = takeWaiters();
       if (dbRefPath && payloadRef.current) {
         writeWithRetry(ref(db, dbRefPath), payloadRef.current)
           .then(() => {
@@ -781,11 +801,18 @@ export function useSync(uid, email) {
   };
 
   // Write any pending debounced payload immediately (call before navigating away).
+  // Also settles any savePayloadAsync() callers queued behind the timer this
+  // preempts — otherwise their promise (and whatever .then() was waiting to
+  // fire an activity-ledger event) would hang forever, since this timer will
+  // never fire on its own now that it's been cleared.
   const flushNow = () => {
     if (timeoutRef.current && dbRefPath && payloadRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
-      writeWithRetry(ref(db, dbRefPath), payloadRef.current).catch(() => {});
+      const waiters = takeWaiters();
+      writeWithRetry(ref(db, dbRefPath), payloadRef.current)
+        .then(() => waiters.forEach(w => w.resolve()))
+        .catch((err) => waiters.forEach(w => w.reject(err)));
     }
   };
 

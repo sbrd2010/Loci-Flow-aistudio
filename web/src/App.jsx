@@ -3,7 +3,7 @@ import { auth, track, setAnalyticsUser } from "./firebase";
 import { computeUserProfile } from "./utils/userProfile";
 import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
 import { isCheckinDue, buildCheckinResumeMessage, isDuplicateCheckinResume } from "./utils/coachCheckin";
-import { getFocusWindows } from "./utils/focusWindows";
+import { getFocusWindows, getLociDayStr } from "./utils/focusWindows";
 import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { useSync, CONN } from "./useSync";
@@ -361,12 +361,27 @@ export default function App() {
     const yesterdayStr = toLocalDateStr(yesterday);
     const newStreak = cfg.lastVisitDate === yesterdayStr ? (cfg.visitStreakCount || 0) + 1 : 1;
     saveSubPath("config", { ...cfg, visitStreakCount: newStreak, lastVisitDate: todayStr, lastUpdated: Date.now() });
-    // First confirmed-synced load of a new day — capture today's carryover
-    // snapshot alongside the existing once-per-day visit-streak bump (same
-    // trigger point, per the Insights plan). isSyncingFromCache already
-    // gates this whole effect above, so this never fires off a stale cache.
-    captureTodaySnapshotIfNeeded(payload.tasks || [], getFocusWindows(cfg));
   }, [payload?.config?.lastVisitDate, user?.uid, isSyncingFromCache, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Capture today's carryover snapshot once per Loci day (not calendar day —
+  // deliberately a separate guard from the visit-streak effect above). The
+  // default focus window (7am-2am) means the Loci day can still be
+  // "yesterday" between midnight and 7am even though the calendar date has
+  // already rolled over; piggybacking on the calendar-day guard would both
+  // mis-key the snapshot (captureTodaySnapshotIfNeeded's own getLociDayStr
+  // call would correctly write it under yesterday's date) AND consume that
+  // guard before the real Loci day starts, permanently skipping the actual
+  // day's snapshot. captureTodaySnapshotIfNeeded's own transaction is
+  // idempotent (write-only-if-null), so re-checking here is safe.
+  const attemptedSnapshotLociDayRef = useRef(null);
+  useEffect(() => {
+    if (!payload?.config || !user || demoMode || isSyncingFromCache) return;
+    const windows = getFocusWindows(payload.config);
+    const lociDay = getLociDayStr(new Date(), windows);
+    if (attemptedSnapshotLociDayRef.current === lociDay) return;
+    attemptedSnapshotLociDayRef.current = lociDay;
+    captureTodaySnapshotIfNeeded(payload.tasks || [], windows);
+  }, [payload?.config, user?.uid, demoMode, isSyncingFromCache, payload?.tasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Firebase auth state listener
   useEffect(() => {
@@ -444,10 +459,20 @@ export default function App() {
   // Auto-start the timer when arriving from Day Map's "Start Focus" action
   useEffect(() => {
     if (pendingFocusOpen && focusTimer.activeTask) {
-      const session = focusTimer.startFocusSession();
+      const windows = getFocusWindows(payload?.config || {});
+      const session = focusTimer.startFocusSession(focusTimer.activeTask);
+      // startFocusSession() auto-closes a still-open prior session (e.g. one
+      // started from Today before navigating to Day Map) to make room for
+      // this one — write its terminal event too, or it's orphaned forever.
+      if (session.priorSession && session.priorSession.task) {
+        const abandonEvent = buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
+          ...session.priorSession, windows,
+        });
+        writeActivityEvents(eventPatch(activityUid, abandonEvent));
+      }
       const event = buildFocusStartedEvent(focusTimer.activeTask, session.focusSessionId, {
         source: "day_map", focusInitialPlannedSeconds: session.focusInitialPlannedSeconds,
-        now: session.focusStartedAt, windows: getFocusWindows(payload?.config || {}),
+        now: session.focusStartedAt, windows,
       });
       writeActivityEvents(eventPatch(activityUid, event));
       setPendingFocusOpen(false);
