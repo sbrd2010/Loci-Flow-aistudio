@@ -396,17 +396,19 @@ export default function App() {
     // guard can never correct once a real sync lands later.
     if (!payload?.config || !user || demoMode || isSyncingFromCache || syncWarning === "offline") return;
     const attemptCapture = () => {
-      const windows = getFocusWindows(payload.config);
+      // Read config from payloadRef.current (live), not the `payload` this
+      // effect closed over — payload?.config is deliberately NOT a
+      // dependency below, for the same reason payload?.tasks isn't (see
+      // note below): plenty of task actions (e.g. completing a task bumps
+      // config.totalXp) change `config` too, which would re-trigger this
+      // effect just as readily as a direct task edit did before.
+      const currentConfig = payloadRef.current?.config || payload.config;
+      const windows = getFocusWindows(currentConfig);
       const lociDay = getLociDayStr(new Date(), windows);
       const attempted = attemptedSnapshotRef.current;
       if (attempted && attempted.uid === user.uid && attempted.lociDay === lociDay) return;
       if (snapshotAttemptInFlightRef.current) return;
       snapshotAttemptInFlightRef.current = true;
-      // Read tasks from payloadRef.current (live), not the `payload` this
-      // effect closed over — payload?.tasks is deliberately NOT a dependency
-      // below, so a task edit can never itself trigger this capture (see
-      // note below); this still needs the CURRENT list whenever the
-      // interval/day-boundary tick actually fires, not a stale one.
       captureTodaySnapshotIfNeeded(payloadRef.current?.tasks || [], windows).then((result) => {
         snapshotAttemptInFlightRef.current = false;
         if (result?.ok) attemptedSnapshotRef.current = { uid: user.uid, lociDay };
@@ -414,17 +416,18 @@ export default function App() {
     };
     attemptCapture();
     // Re-check periodically — if the app stays mounted across the Loci day's
-    // actual start (e.g. left open overnight), no other payload/config
-    // change would otherwise re-trigger the capture. Deliberately NOT keyed
-    // to payload?.tasks (a prior version of this effect was) — a task edit
-    // arriving right after the boundary but before this interval's next
-    // tick would otherwise itself trigger the first capture for the new
-    // day, snapshotting the POST-edit Today list instead of the set present
-    // at day start, which the write-once transaction could never correct
-    // afterward. 15s (not 60s) keeps that remaining race window small.
+    // actual start (e.g. left open overnight), no other dependency below
+    // would otherwise re-trigger the capture. Deliberately NOT keyed to
+    // payload?.tasks or payload?.config (earlier versions of this effect
+    // were) — any task/config edit arriving right after the boundary but
+    // before this interval's next tick would otherwise itself trigger the
+    // first capture for the new day, snapshotting the POST-edit Today list
+    // instead of the set present at day start, which the write-once
+    // transaction could never correct afterward. 15s keeps that remaining
+    // race window small.
     const id = setInterval(attemptCapture, 15_000);
     return () => clearInterval(id);
-  }, [payload?.config, user?.uid, demoMode, isSyncingFromCache, syncWarning]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.uid, demoMode, isSyncingFromCache, syncWarning]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Firebase auth state listener
   useEffect(() => {
@@ -509,13 +512,15 @@ export default function App() {
   // Auto-start the timer when arriving from Day Map's "Start Focus" action
   useEffect(() => {
     if (pendingFocusOpen && focusTimer.activeTask) {
-      // If activeTask already has an open session (e.g. Day Map's "Start
-      // Focus" tapped for the same task already running from Today), just
-      // reopen the overlay — same guard as TodayTab's startFocusAndLog.
-      // Treating this as a brand-new session would auto-close the
-      // in-progress one and fragment the ledger for what's really just a
-      // return-to-focus action.
-      if (focusTimer.focusSessionId) {
+      // If activeTask ITSELF already has an open session (e.g. Day Map's
+      // "Start Focus" tapped for the same task already running from Today),
+      // just reopen the overlay — same guard as TodayTab's startFocusAndLog.
+      // Checking focusSessionId alone isn't enough: Day Map's own pin is a
+      // raw isNowFocus write (like TodayTab's handlePinTask), so retargeting
+      // to a DIFFERENT task (B) while another task's (A) session is still
+      // open would make activeTask B while focusSessionId still belongs to
+      // A — must also confirm the open session's own task matches.
+      if (focusTimer.focusSessionId && focusTimer.focusSessionTaskUuid === focusTimer.activeTask.uuid) {
         focusTimer.setIsFocusMode(true);
         focusTimer.setIsTimerRunning(true);
         pendingFocusPinPromiseRef.current = null;

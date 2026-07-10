@@ -610,5 +610,13 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     pipOpen,
     handleOpenPiP,
     focusSessionId, startFocusSession, endFocusSession,
+    // Which task the currently open session (if any) actually belongs to —
+    // NOT necessarily the same as `activeTask`, which reflects the current
+    // isNowFocus pin and can point at a different task than the still-open
+    // session when something retargeted the pin via a raw pin-only action
+    // instead of startFocusSession()/endFocusSession(). Callers deciding
+    // "reopen vs. start fresh" (e.g. Day Map's Start Focus) need this, not
+    // just whether focusSessionId is truthy.
+    focusSessionTaskUuid: focusSessionTaskRef.current?.uuid ?? null,
   };
 }
