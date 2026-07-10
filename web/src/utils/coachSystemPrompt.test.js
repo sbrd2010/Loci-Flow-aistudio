@@ -159,14 +159,18 @@ describe("buildCoachSystemPrompt", () => {
     expect(out).toContain("I'm missing the task snapshot for this request — that looks like a Loci context issue.");
   });
 
-  it("full_task and compact_task modes carry RECENTLY COMPLETED context when present", () => {
+  it("full_task, compact_task, emotional, and light modes all carry RECENTLY COMPLETED context when present", () => {
+    // classifyContextMode routes completion-celebration phrasing like "I did
+    // it" / "small win" to emotional, and bare "done"-style confirmations to
+    // light — both need to see a just-completed task too, not only full_task
+    // and compact_task (which only cover messages containing task-ish
+    // keywords like the literal word "completed").
     const ctx = { ...baseCtx(), recentlyCompletedContext: "RECENTLY COMPLETED (last 24h): 'Pay 308: Euros Water TAX'." };
 
-    const fullOut = buildCoachSystemPrompt("full_task", ctx);
-    expect(fullOut).toContain("RECENTLY COMPLETED (last 24h): 'Pay 308: Euros Water TAX'.");
-
-    const compactOut = buildCoachSystemPrompt("compact_task", ctx);
-    expect(compactOut).toContain("RECENTLY COMPLETED (last 24h): 'Pay 308: Euros Water TAX'.");
+    for (const mode of ["full_task", "compact_task", "emotional", "light"]) {
+      const out = buildCoachSystemPrompt(mode, ctx);
+      expect(out).toContain("RECENTLY COMPLETED (last 24h): 'Pay 308: Euros Water TAX'.");
+    }
   });
 
   it("compact_task mode explains that a task in RECENTLY COMPLETED is relevant context, not something to treat as missing", () => {
@@ -174,12 +178,16 @@ describe("buildCoachSystemPrompt", () => {
     expect(out).toContain("that is relevant context — acknowledge it directly, do not treat it as \"missing.\"");
   });
 
-  it("full_task and compact_task modes omit the dynamic RECENTLY COMPLETED block when nothing was recently completed", () => {
-    const fullOut = buildCoachSystemPrompt("full_task", baseCtx());
-    expect(fullOut).not.toContain("RECENTLY COMPLETED (last 24h):");
+  it("light mode's missing-task-snapshot refusal carves out RECENTLY COMPLETED confirmations, same as it already does for date/time questions", () => {
+    const out = buildCoachSystemPrompt("light", baseCtx());
+    expect(out).toContain("It also does NOT apply to confirming or acknowledging a task named in RECENTLY COMPLETED below");
+  });
 
-    const compactOut = buildCoachSystemPrompt("compact_task", baseCtx());
-    expect(compactOut).not.toContain("RECENTLY COMPLETED (last 24h):");
+  it("full_task, compact_task, emotional, and light modes omit the dynamic RECENTLY COMPLETED block when nothing was recently completed", () => {
+    for (const mode of ["full_task", "compact_task", "emotional", "light"]) {
+      const out = buildCoachSystemPrompt(mode, baseCtx());
+      expect(out).not.toContain("RECENTLY COMPLETED (last 24h):");
+    }
   });
 
   it("compact_task mode conditionally carries the CURRENT NOW FOCUS line", () => {

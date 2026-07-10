@@ -171,7 +171,7 @@ Active Tasks Today: ${todayActiveCount} active tasks today.`;
 }
 
 function buildEmotionalPrompt(ctx) {
-  const { lociCoreInstruction, firstName, profileContext, memoryContext, memorySectionEnabled, personaInstruction, nowLabel, pendingCheckinContext, rescueHandoffContext, sessionSummaryContext, pendingSummaryContext } = ctx;
+  const { lociCoreInstruction, firstName, profileContext, memoryContext, memorySectionEnabled, personaInstruction, nowLabel, pendingCheckinContext, rescueHandoffContext, sessionSummaryContext, pendingSummaryContext, recentlyCompletedContext } = ctx;
 
   const staticPrefix = `${lociCoreInstruction}
 
@@ -205,7 +205,7 @@ ${buildReasoningInstruction(firstName)}`;
 ========================================
 CURRENT CLIENT & APP SESSION CONTEXT:
 
-${profileContext ? `${profileContext}\n` : ""}${memoryContext ? `${memoryContext}\n` : ""}${sessionSummaryContext ? `${sessionSummaryContext}\n` : ""}${pendingSummaryContext ? `${pendingSummaryContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}${rescueHandoffContext ? `${rescueHandoffContext}\n` : ""}
+${profileContext ? `${profileContext}\n` : ""}${memoryContext ? `${memoryContext}\n` : ""}${sessionSummaryContext ? `${sessionSummaryContext}\n` : ""}${pendingSummaryContext ? `${pendingSummaryContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}${rescueHandoffContext ? `${rescueHandoffContext}\n` : ""}${recentlyCompletedContext ? `${recentlyCompletedContext}\n` : ""}
 SESSION STATS:
 Current Time: ${nowLabel}`;
 
@@ -250,7 +250,7 @@ Current Time: ${nowLabel} (${timeOfDay})`;
 }
 
 function buildLightPrompt(ctx) {
-  const { lociCoreInstruction, firstName, personaInstruction, nowLabel, timeOfDay, pendingCheckinContext, rescueHandoffContext, sessionSummaryContext, pendingSummaryContext } = ctx;
+  const { lociCoreInstruction, firstName, personaInstruction, nowLabel, timeOfDay, pendingCheckinContext, rescueHandoffContext, sessionSummaryContext, pendingSummaryContext, recentlyCompletedContext } = ctx;
 
   const staticPrefix = `${lociCoreInstruction}
 
@@ -262,7 +262,7 @@ ${buildLociVoiceCapsule(firstName)}
 
 This is a casual, low-stakes message — reply briefly and naturally (1-2 sentences), like a quick text from a sharp, warm friend, not a generic chatbot. Don't dump task lists, plans, or analysis unless ${firstName} actually asks for them.
 
-NO TASK SNAPSHOT IN THIS PROMPT: You were not given ${firstName}'s current tasks for this reply, but the app DOES have that data. NEVER say you have no access to Loci app data. If ${firstName} asks about their Today/Week task list, Now Focus, horizons, or priorities here, say exactly: "I'm missing the task snapshot for this request — that looks like a Loci context issue." This does NOT apply to plain date/day/time questions (e.g. "what's the date today") — answer those directly using the Current Time below, never with the context-issue line. Do not ask ${firstName} to manually retype their tasks unless that's truly the only way forward.
+NO TASK SNAPSHOT IN THIS PROMPT: You were not given ${firstName}'s current tasks for this reply, but the app DOES have that data. NEVER say you have no access to Loci app data. If ${firstName} asks about their Today/Week task list, Now Focus, horizons, or priorities here, say exactly: "I'm missing the task snapshot for this request — that looks like a Loci context issue." This does NOT apply to plain date/day/time questions (e.g. "what's the date today") — answer those directly using the Current Time below, never with the context-issue line. It also does NOT apply to confirming or acknowledging a task named in RECENTLY COMPLETED below, if present — answer those directly too. Do not ask ${firstName} to manually retype their tasks unless that's truly the only way forward.
 
 GUARD RAILS:
 - Off-topic (illegal, harmful, explicit, not related to productivity/wellbeing): "That's outside my scope, ${firstName}. What's one thing blocking you right now?" Do not elaborate.
@@ -276,7 +276,7 @@ ${buildReasoningInstruction(firstName)}`;
 ========================================
 CURRENT CLIENT & APP SESSION CONTEXT:
 
-${sessionSummaryContext ? `${sessionSummaryContext}\n` : ""}${pendingSummaryContext ? `${pendingSummaryContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}${rescueHandoffContext ? `${rescueHandoffContext}\n` : ""}
+${sessionSummaryContext ? `${sessionSummaryContext}\n` : ""}${pendingSummaryContext ? `${pendingSummaryContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}${rescueHandoffContext ? `${rescueHandoffContext}\n` : ""}${recentlyCompletedContext ? `${recentlyCompletedContext}\n` : ""}
 SESSION STATS:
 Current Time: ${nowLabel} (${timeOfDay})`;
 

@@ -74,6 +74,16 @@ describe("lociAIContext", () => {
     expect(instruction).toContain("urgent/P1");
   });
 
+  it("carves out the pinned NOW FOCUS task from the evening/weekend Work-avoidance rule", () => {
+    // Without this carve-out, the new time-awareness rule ("don't default to
+    // suggesting Work tasks in the evening") could contradict the pre-existing
+    // PRIORITY QUESTIONS rule ("look at [NOW FOCUS] first") whenever the
+    // client's pinned focus is a non-urgent Work-category task at night.
+    const instruction = buildLociCoreInstruction({ firstName: "Rohan" });
+
+    expect(instruction).toContain("it's the pinned [NOW FOCUS] task");
+  });
+
   it("instructs the coach to trust RECENTLY COMPLETED over the active task list", () => {
     const instruction = buildLociCoreInstruction({ firstName: "Rohan" });
 
