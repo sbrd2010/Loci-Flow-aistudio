@@ -92,6 +92,7 @@ export default function TodayTab({
     // the ledger for what's really just a return-to-focus action.
     if (activeTask?.uuid === task.uuid && focusSessionId) {
       setIsFocusMode(true);
+      setIsTimerRunning(true);
       return;
     }
     const session = startFocusSession(task);
@@ -108,7 +109,20 @@ export default function TodayTab({
         });
         writeActivityEvents(eventPatch(uid, startedEvent));
       })
-      .catch(() => {});
+      .catch(() => {
+        // The pin write that was supposed to back this session never
+        // confirmed (offline, drop-guard, etc.) — undo the optimistic
+        // session start rather than leaving a focusSessionId open with no
+        // focus_started event, which would otherwise surface later as an
+        // orphaned terminal event with nothing to match. Only end it if
+        // nothing else has already started a newer session in the meantime.
+        if (focusSessionId === session.focusSessionId) {
+          endFocusSession("user_abandoned");
+          setIsTimerRunning(false);
+          setIsFocusMode(false);
+          setFocusSessionActive(false);
+        }
+      });
   };
 
   const [headerExpanded, setHeaderExpanded] = useState(false);
@@ -388,6 +402,15 @@ export default function TodayTab({
     // SET_NOW_FOCUS's convention elsewhere.
     const previouslyFocused = tasks.find(t => t.isNowFocus && t.uuid !== newFocusUuid);
     const endedFocusSession = previouslyFocused ? endFocusSession("user_abandoned") : null;
+    // Retargeting to a DIFFERENT task doesn't make activeTask null (it just
+    // changes), so the hook's own "stop timer when activeTask disappears"
+    // effects never fire — without this, a real running timer would keep
+    // ticking, silently retargeted to the new task with no backing session.
+    if (endedFocusSession) {
+      setIsTimerRunning(false);
+      setIsFocusMode(false);
+      setFocusSessionActive(false);
+    }
     // Returned so callers (e.g. the Focus Now button, which pins then
     // immediately starts a session) can wait for this pin to actually
     // confirm before logging events of their own.
@@ -900,6 +923,17 @@ export default function TodayTab({
     // orphaned with no terminal event (same gap fixed for Coach's focus chips).
     const previouslyFocused = tasks.find(t => t.uuid !== rescueTask.uuid && t.isNowFocus);
     const endedFocusSession = previouslyFocused ? endFocusSession("user_abandoned") : null;
+    // Retargeting to a DIFFERENT task doesn't make activeTask null, so the
+    // hook's own "stop timer when activeTask disappears" effects never fire —
+    // without this, a real running timer would keep ticking, silently
+    // retargeted to rescueTask with no backing session.
+    if (endedFocusSession) {
+      setIsTimerRunning(false);
+      setIsFocusMode(false);
+      setFocusSessionActive(false);
+    }
+    // This can also unpark rescueTask (see below) — record that transition too.
+    const wasParked = !!rescueTask.isParked;
     savePayloadAsync({ ...payload, tasks: tasks.map(t => {
       const newFocus = t.uuid === rescueTask.uuid;
       if (!newFocus) {
@@ -914,10 +948,14 @@ export default function TodayTab({
       return { ...t, isNowFocus: true, isParked: false, lastUpdated: now };
     }) })
       .then(() => {
+        const events = [];
         if (endedFocusSession) {
-          const abandonEvent = buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now });
-          writeActivityEvents(eventPatch(uid, abandonEvent));
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
         }
+        if (wasParked) {
+          events.push(buildTaskMutationEvent("task_unparked", rescueTask, { windows, now }));
+        }
+        if (events.length > 0) writeActivityEvents(eventsPatch(uid, events));
       })
       .catch(() => {});
   };

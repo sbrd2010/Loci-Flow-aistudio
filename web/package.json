@@ -8,7 +8,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:rules-emulator": "npx --yes firebase-tools@^15 emulators:exec --only database --project demo-loci-flow-rules-test \"vitest run --config vitest.rules-emulator.config.js\""
+    "test:rules-emulator": "npx --yes firebase-tools@15.22.1 emulators:exec --only database --project demo-loci-flow-rules-test \"vitest run --config vitest.rules-emulator.config.js\""
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

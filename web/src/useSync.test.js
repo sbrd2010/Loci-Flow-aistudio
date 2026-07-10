@@ -86,6 +86,7 @@ describe("writeActivityEvents", () => {
   beforeEach(() => {
     refMock.mockClear();
     updateMock.mockReset();
+    runTransactionMock.mockReset();
   });
 
   it("returns ok:false without calling update() when uid is missing", async () => {
@@ -130,6 +131,37 @@ describe("writeActivityEvents", () => {
       err
     );
     errorSpy.mockRestore();
+  });
+
+  it("fires a write-once instrumentationStartedAt marker after a successful event write, without blocking or affecting the result", async () => {
+    updateMock.mockResolvedValueOnce(undefined);
+    let capturedPath, capturedUpdateFn;
+    runTransactionMock.mockImplementation(async (dbRef, updateFn) => {
+      capturedPath = dbRef.__path;
+      capturedUpdateFn = updateFn;
+      return { committed: true };
+    });
+
+    const result = await writeActivityEvents("uid1", { "activityLogs/uid1/events/2026-07-10/e1": {} });
+    expect(result).toEqual({ ok: true }); // unaffected by the fire-and-forget marker call
+
+    await Promise.resolve(); // flush the not-awaited markInstrumentationStartedIfNeeded microtask
+    expect(runTransactionMock).toHaveBeenCalledTimes(1);
+    expect(capturedPath).toBe("activityLogs/uid1/meta/instrumentationStartedAt");
+    // The write-once guard: abort (return undefined) if already set, only write if null.
+    expect(capturedUpdateFn(1700000000000)).toBeUndefined();
+    expect(typeof capturedUpdateFn(null)).toBe("number");
+  });
+
+  it("does not fire the instrumentationStartedAt marker when the event write ultimately fails", async () => {
+    updateMock.mockRejectedValue(new Error("permission-denied"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await writeActivityEvents("uid1", { "activityLogs/uid1/events/2026-07-10/e1": {} }, 1);
+    await Promise.resolve();
+
+    expect(runTransactionMock).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 });
 
@@ -188,5 +220,19 @@ describe("captureTodaySnapshotIfNeeded", () => {
 
     expect(result).toEqual({ ok: false, reason: "write-failed", error: err });
     errorSpy.mockRestore();
+  });
+
+  it("also fires the write-once instrumentationStartedAt marker after a successful snapshot capture", async () => {
+    const seenPaths = [];
+    runTransactionMock.mockImplementation(async (dbRef, updateFn) => {
+      seenPaths.push(dbRef.__path);
+      const next = updateFn(null);
+      return { committed: next !== undefined, snapshot: next };
+    });
+
+    await captureTodaySnapshotIfNeeded("uid1", tasks, windows);
+    await Promise.resolve(); // flush the not-awaited markInstrumentationStartedIfNeeded microtask
+
+    expect(seenPaths).toContain("activityLogs/uid1/meta/instrumentationStartedAt");
   });
 });

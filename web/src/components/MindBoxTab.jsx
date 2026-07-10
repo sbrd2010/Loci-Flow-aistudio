@@ -217,6 +217,15 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
     const endedFocusSession = previouslyFocused && typeof focusTimer.endFocusSession === "function"
       ? focusTimer.endFocusSession("user_abandoned")
       : null;
+    // Retargeting to a DIFFERENT task doesn't make activeTask null, so the
+    // hook's own "stop timer when activeTask disappears" effects never fire.
+    if (endedFocusSession) {
+      focusTimer.setIsTimerRunning?.(false);
+      focusTimer.setIsFocusMode?.(false);
+      focusTimer.setFocusSessionActive?.(false);
+    }
+    // This can also unpark rescueTask (see below) — record that transition too.
+    const wasParked = !!rescueTask.isParked;
     savePayloadAsync({ ...payload, tasks: tasks.map(t => {
       const newFocus = t.uuid === rescueTask.uuid;
       if (!newFocus) {
@@ -231,10 +240,14 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
       return { ...t, isNowFocus: true, isParked: false, lastUpdated: now };
     }) })
       .then(() => {
+        const events = [];
         if (endedFocusSession) {
-          const abandonEvent = buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now });
-          writeActivityEvents(eventPatch(uid, abandonEvent));
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
         }
+        if (wasParked) {
+          events.push(buildTaskMutationEvent("task_unparked", rescueTask, { windows, now }));
+        }
+        if (events.length > 0) writeActivityEvents(eventsPatch(uid, events));
       })
       .catch(() => {});
   };

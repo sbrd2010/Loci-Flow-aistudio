@@ -3,7 +3,7 @@ import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } f
 import { db, auth } from "./firebase";
 import { safeUUID } from "./utils/uuid";
 import { normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious } from "./utils/normalizePayload";
-import { activitySnapshotPath, buildTodaySnapshot } from "./utils/activityLog";
+import { activitySnapshotPath, activityMetaPath, buildTodaySnapshot } from "./utils/activityLog";
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
 // This lets the app show specific messages at each stage instead of just "loading".
@@ -30,6 +30,26 @@ async function writeWithRetry(dbRef, data, retries = 3) {
   }
 }
 
+// Best-effort, write-once "instrumentation started" marker — the first
+// timestamp at which any ledger event/snapshot was ever successfully
+// written for this user. Future UI/analytics reading the ledger must check
+// this (activityMetaPath(uid, "instrumentationStartedAt")) and never imply
+// ledger-derived detail exists before it. Uses the same runTransaction
+// "abort if already set" pattern as the daily snapshot below, so it's safe
+// to call after every successful write without ever overwriting an
+// existing marker — and it never throws, since a failure here must not
+// affect the write that already succeeded and triggered this call.
+async function markInstrumentationStartedIfNeeded(uid) {
+  try {
+    await runTransaction(ref(db, activityMetaPath(uid, "instrumentationStartedAt")), (current) => {
+      if (current !== null) return; // already set (this device or another) — abort
+      return Date.now();
+    });
+  } catch (err) {
+    console.error("[Loci activity ledger] Failed to set instrumentationStartedAt:", err);
+  }
+}
+
 // Analytics-only write: one or more explicit RTDB paths (already fully
 // qualified, e.g. via activityEventPath()/activitySnapshotPath()) written in
 // a single update() call under activityLogs/${uid}/... — entirely separate
@@ -45,6 +65,7 @@ export async function writeActivityEvents(uid, pathsToValues, retries = 3) {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       await update(ref(db), pathsToValues);
+      markInstrumentationStartedIfNeeded(uid); // fire-and-forget, never blocks/affects this result
       return { ok: true };
     } catch (err) {
       if (attempt === retries - 1) {
@@ -71,6 +92,7 @@ export async function captureTodaySnapshotIfNeeded(uid, tasks, windows) {
       if (current !== null) return; // already captured (this device or another) — abort
       return snapshot;
     });
+    markInstrumentationStartedIfNeeded(uid); // fire-and-forget, never blocks/affects this result
     return { ok: true, committed: result.committed };
   } catch (err) {
     console.error("[Loci activity ledger] Snapshot capture failed:", err);
@@ -632,6 +654,25 @@ export function useSync(uid, email) {
   // successive calls coalesce into a single RTDB write — identical to the
   // original savePayload behavior. Any savePayloadAsync callers queued in
   // pendingWriteWaitersRef settle together when that write lands.
+  //
+  // What this means for callers sequencing an activity-ledger event after
+  // the promise resolves (deliberate, accepted tradeoff — not a bug): if two
+  // savePayloadAsync calls land in the same debounce window (e.g. delete
+  // then undo within 1.5s, or rapid complete/reopen), only ONE RTDB write
+  // goes out, carrying whatever payloadRef.current holds at flush time — the
+  // LATEST call's cumulative state, which already incorporates every earlier
+  // queued call's changes (each call's optimistic update was applied to
+  // payloadRef.current synchronously in applyPayloadLocally before this
+  // timer fires). Every queued waiter resolves together off that single
+  // write's outcome, so each caller's .then() correctly represents "a write
+  // that includes my change eventually succeeded" — not "my own exact
+  // intermediate payload state was independently persisted as its own RTDB
+  // write." The resulting ledger sequence (e.g. task_deleted then
+  // task_restored) still accurately reflects the real order of user actions,
+  // and is consistent with the single persisted final state — it's a looser
+  // guarantee than a literal 1:1 write-per-call, but not a data-integrity
+  // bug, and was a deliberate call not to break debounce-coalescing to
+  // chase it (see PR #358 review discussion).
   const scheduleFlush = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 

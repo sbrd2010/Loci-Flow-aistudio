@@ -106,10 +106,16 @@ describe("buildTaskMutationEvent", () => {
     expect(ev.source).toBe("coach_action");
   });
 
-  it("falls back taskSnapshot fields when the task is missing them", () => {
+  it("omits taskSnapshot fields the task is missing, instead of inventing defaults", () => {
     const bareTask = { uuid: "task-2" };
     const ev = buildTaskMutationEvent("task_created", bareTask, { now: dt(2026, 7, 10, 10), windows });
-    expect(ev.taskSnapshot).toEqual({ category: "Personal", priority: "P3", horizonLevel: "today" });
+    expect(ev.taskSnapshot).toEqual({});
+  });
+
+  it("only includes taskSnapshot fields the task actually has, partial or full", () => {
+    const partialTask = { uuid: "task-3", category: "Career" };
+    const ev = buildTaskMutationEvent("task_created", partialTask, { now: dt(2026, 7, 10, 10), windows });
+    expect(ev.taskSnapshot).toEqual({ category: "Career" });
   });
 
   it("accepts now as an epoch-ms number (not just a Date) without crashing", () => {

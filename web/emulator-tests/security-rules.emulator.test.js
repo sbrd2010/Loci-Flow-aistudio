@@ -23,13 +23,18 @@ import { initializeTestEnvironment, assertSucceeds, assertFails } from "@firebas
 // src/**/*.test.{js,ts}) — it needs a live emulator process, unlike every
 // other test in this repo.
 //
-// NOTE: this file could not be executed in the sandboxed session that wrote
-// it — the emulator's own local rules-push (PUT http://127.0.0.1:<port>/.settings/rules.json)
-// was blocked by that session's outbound network policy even for loopback
-// traffic. It is believed correct (mirrors Firebase's own documented
-// RulesTestEnvironment usage) but is UNVERIFIED until it actually runs
-// against a live emulator. Do not treat this file's existence as evidence
-// the rules are enforced — run it for real before merging.
+// NOTE: this file could not be executed in the sandboxed sessions that wrote
+// and reviewed it — the emulator's own local rules-push (PUT
+// http://127.0.0.1:<port>/.settings/rules.json) is blocked by this
+// environment's outbound network policy even for loopback traffic (confirmed
+// again on a later pass: `npm run test:rules-emulator` starts the emulator
+// successfully but fails loading database.rules.json with a proxy-denial
+// message in place of the JSON body). It is believed correct (mirrors
+// Firebase's own documented RulesTestEnvironment usage) and is now wired
+// into .github/workflows/firebase-rules.yml so it runs for real on every
+// push/PR — but it remains unverified by hand in this sandbox. Check the
+// "Run activity-log rules emulator tests" CI job for the actual pass/fail
+// signal, don't just trust this file's existence.
 
 const rules = JSON.parse(readFileSync(new URL("../../database.rules.json", import.meta.url), "utf8"));
 

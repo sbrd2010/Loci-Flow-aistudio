@@ -162,6 +162,15 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   tasksRef.current = tasks;
   const contributionsRef = useRef(contributions);
   contributionsRef.current = contributions;
+  // The chat-action block below runs after `await callAI(...)`, which can
+  // take several real seconds — by then the `focusTimer` this closure
+  // captured at send-time is stale (isTimerRunning/activeTask/timerSecondsLeft
+  // etc. reflect however things were before the wait, not now). Read
+  // focusTimerRef.current instead of the closed-over `focusTimer` for that
+  // block's session-ending/session-starting decisions, same reason
+  // tasksRef/configRef/contributionsRef exist above.
+  const focusTimerRef = useRef(focusTimer);
+  focusTimerRef.current = focusTimer;
   // Live (non-stale) read of cloudSyncUnconfirmed for the mount-time effects
   // below — their saveConfigPatch calls run inside a closure (the checkDue
   // interval) or a one-time []-deps effect, neither of which re-captures
@@ -851,10 +860,10 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           // TodayTab's handleToggleComplete/handleMoveToHorizon).
           const focusEndingResult = results.find(r =>
             r.matched && r.task?.isNowFocus && (r.type === "COMPLETE_TASK" || r.type === "PARK_TASK")
-            && typeof focusTimer.endFocusSession === "function"
+            && typeof focusTimerRef.current.endFocusSession === "function"
           );
           if (focusEndingResult) {
-            const endedFocusSession = focusTimer.endFocusSession(focusEndingResult.type === "COMPLETE_TASK" ? "completed_task" : "user_abandoned");
+            const endedFocusSession = focusTimerRef.current.endFocusSession(focusEndingResult.type === "COMPLETE_TASK" ? "completed_task" : "user_abandoned");
             if (endedFocusSession) {
               // Use endedFocusSession.task, not focusEndingResult.task — if a
               // pin-only path moved Now Focus while the open session still
@@ -873,11 +882,19 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           // different task's session was open before this action ran, end it
           // too. (START_FOCUS's own retargeting is handled below, since it
           // also needs to mint a new session rather than just closing the old
-          // one.) focusTimer.activeTask here still reflects the PRE-action
+          // one.) focusTimerRef.current.activeTask here still reflects the PRE-action
           // pin, since `tasks` hasn't re-rendered from this synchronous block yet.
           const setNowFocusResult = results.find(r => r.type === "SET_NOW_FOCUS" && r.matched);
-          if (setNowFocusResult && focusTimer.activeTask && focusTimer.activeTask.uuid !== setNowFocusResult.task.uuid && typeof focusTimer.endFocusSession === "function") {
-            const retargetedFocusSession = focusTimer.endFocusSession("user_abandoned");
+          if (setNowFocusResult && focusTimerRef.current.activeTask && focusTimerRef.current.activeTask.uuid !== setNowFocusResult.task.uuid && typeof focusTimerRef.current.endFocusSession === "function") {
+            const retargetedFocusSession = focusTimerRef.current.endFocusSession("user_abandoned");
+            // Retargeting to a DIFFERENT task doesn't make activeTask null,
+            // so the hook's own "stop timer when activeTask disappears"
+            // effects never fire.
+            if (retargetedFocusSession) {
+              focusTimerRef.current.setIsTimerRunning?.(false);
+              focusTimerRef.current.setIsFocusMode?.(false);
+              focusTimerRef.current.setFocusSessionActive?.(false);
+            }
             if (retargetedFocusSession) {
               events.push(buildFocusTerminalEvent("focus_abandoned", retargetedFocusSession.task, retargetedFocusSession.focusSessionId, {
                 ...retargetedFocusSession, windows, now: now.getTime(),
@@ -887,8 +904,8 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
 
           const startFocus = results.find(r => r.type === "START_FOCUS" && r.matched);
           if (startFocus) {
-            const isSwitchingTask = focusTimer.activeTask?.uuid !== startFocus.task.uuid;
-            if (!focusTimer.isTimerRunning || isSwitchingTask) {
+            const isSwitchingTask = focusTimerRef.current.activeTask?.uuid !== startFocus.task.uuid;
+            if (!focusTimerRef.current.isTimerRunning || isSwitchingTask) {
               const mins = Number(startFocus.durationMinutes) > 0 ? Number(startFocus.durationMinutes)
                 : Number(startFocus.task.timeEstimateMinutes) > 0 ? Number(startFocus.task.timeEstimateMinutes) : 25;
               // Also mint a session when the target is already pinned but no
@@ -896,8 +913,8 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
               // SET_NOW_FOCUS, or a prior session already ended) — not just
               // when switching to a different task, or this Coach-started
               // session would still go unlogged.
-              const needsNewSession = isSwitchingTask || !focusTimer.focusSessionId;
-              if (needsNewSession && typeof focusTimer.startFocusSession === "function") {
+              const needsNewSession = isSwitchingTask || !focusTimerRef.current.focusSessionId;
+              if (needsNewSession && typeof focusTimerRef.current.startFocusSession === "function") {
                 // A genuinely new focused task — mint a real ledger session for
                 // it (enterFocusMode: false so the chat stays open instead of
                 // being replaced by the full-screen Focus overlay), auto-closing
@@ -905,7 +922,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
                 // "Start Focus" does. Collected into `events` below and written
                 // only once the core pin write (saveSubPathsAsync(patch))
                 // actually confirms, instead of immediately.
-                const session = focusTimer.startFocusSession(startFocus.task, { enterFocusMode: false, plannedSeconds: mins * 60 });
+                const session = focusTimerRef.current.startFocusSession(startFocus.task, { enterFocusMode: false, plannedSeconds: mins * 60 });
                 if (session.priorSession && session.priorSession.task) {
                   events.push(buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
                     ...session.priorSession, windows, now: now.getTime(),
@@ -914,11 +931,11 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
                 events.push(buildFocusStartedEvent(startFocus.task, session.focusSessionId, {
                   focusInitialPlannedSeconds: session.focusInitialPlannedSeconds, now: session.focusStartedAt, windows, source: "coach_action",
                 }));
-              } else if (typeof focusTimer.extendTimer === "function") {
+              } else if (typeof focusTimerRef.current.extendTimer === "function") {
                 // Same task, just resuming/restarting from a paused state — any
                 // ledger session already open for it stays open under its own
                 // focusSessionId, so don't mint a new one here.
-                focusTimer.extendTimer(mins);
+                focusTimerRef.current.extendTimer(mins);
               }
             }
           }
@@ -1234,6 +1251,13 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       const endedFocusSession = previouslyFocused && typeof focusTimer.endFocusSession === "function"
         ? focusTimer.endFocusSession("user_abandoned")
         : null;
+      // Retargeting to a DIFFERENT task doesn't make activeTask null, so the
+      // hook's own "stop timer when activeTask disappears" effects never fire.
+      if (endedFocusSession) {
+        focusTimer.setIsTimerRunning?.(false);
+        focusTimer.setIsFocusMode?.(false);
+        focusTimer.setFocusSessionActive?.(false);
+      }
       savePayloadAsync({ ...payload, tasks: buildSetNowFocusTasks(current, taskUuid, now) })
         .then(() => {
           if (endedFocusSession) {
@@ -1257,6 +1281,15 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       const endedFocusSession = previouslyFocused && typeof focusTimer.endFocusSession === "function"
         ? focusTimer.endFocusSession("user_abandoned")
         : null;
+      // Retargeting to a DIFFERENT task doesn't make activeTask null, so the
+      // hook's own "stop timer when activeTask disappears" effects never fire.
+      if (endedFocusSession) {
+        focusTimer.setIsTimerRunning?.(false);
+        focusTimer.setIsFocusMode?.(false);
+        focusTimer.setFocusSessionActive?.(false);
+      }
+      // This also unparks `task` if it was parked — record that transition too.
+      const wasParked = !!task.isParked;
       savePayloadAsync({ ...payload, tasks: current.map(t => {
         if (t.uuid === taskUuid) return { ...t, horizonLevel: 'today', isNowFocus: true, isParked: false, orderIndex: maxOrder + 1, lastUpdated: now };
         return t.isNowFocus ? { ...t, isNowFocus: false, lastUpdated: now } : t;
@@ -1265,6 +1298,9 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           const events = [event1];
           if (endedFocusSession) {
             events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+          }
+          if (wasParked) {
+            events.push(buildTaskMutationEvent("task_unparked", task, { windows, source: "coach_action", now }));
           }
           writeActivityEvents(eventsPatch(uid, events));
         })
@@ -1281,6 +1317,8 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       const endedFocusSession = task.isNowFocus && typeof focusTimer.endFocusSession === "function"
         ? focusTimer.endFocusSession("user_abandoned")
         : null;
+      // This also unparks `task` if it was parked — record that transition too.
+      const wasParked = !!task.isParked;
       savePayloadAsync({ ...payload, tasks: current.map(t =>
         t.uuid === taskUuid
           ? { ...t, horizonLevel: 'today', isNowFocus: false, isParked: false, orderIndex: maxOrder + 1, lastUpdated: now }
@@ -1290,6 +1328,9 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           const events = [event2];
           if (endedFocusSession) {
             events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+          }
+          if (wasParked) {
+            events.push(buildTaskMutationEvent("task_unparked", task, { windows, source: "coach_action", now }));
           }
           writeActivityEvents(eventsPatch(uid, events));
         })

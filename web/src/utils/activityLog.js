@@ -59,12 +59,17 @@ export function eventsPatch(uid, events) {
 // Small-enum classification of a task, attached to events for future
 // analytics grouping — deliberately never titles/notes/free text (Firebase
 // Spark-plan storage efficiency, and this leaves the task's own record).
+// A field missing on the task is simply omitted here, not fabricated as a
+// default — RTDB rejects `undefined` outright, and inventing "Personal"/
+// "P3"/"today" for a task that never actually had one would misrepresent
+// what's genuinely known, the same sparse-and-honest rule fromState/toState
+// already follow below.
 function taskSnapshotFrom(task) {
-  return {
-    category: task.category || "Personal",
-    priority: task.priority || "P3",
-    horizonLevel: task.horizonLevel || "today",
-  };
+  const snapshot = {};
+  if (task.category) snapshot.category = task.category;
+  if (task.priority) snapshot.priority = task.priority;
+  if (task.horizonLevel) snapshot.horizonLevel = task.horizonLevel;
+  return snapshot;
 }
 
 // Builds a sparse task-mutation event. Firebase RTDB rejects `undefined`
