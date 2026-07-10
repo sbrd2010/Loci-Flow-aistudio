@@ -902,7 +902,13 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           if (!focusTimer.isTimerRunning || isSwitchingTask) {
             const mins = Number(startFocus.durationMinutes) > 0 ? Number(startFocus.durationMinutes)
               : Number(startFocus.task.timeEstimateMinutes) > 0 ? Number(startFocus.task.timeEstimateMinutes) : 25;
-            if (isSwitchingTask && typeof focusTimer.startFocusSession === "function") {
+            // Also mint a session when the target is already pinned but no
+            // session is currently open (e.g. it was only ever pinned via
+            // SET_NOW_FOCUS, or a prior session already ended) — not just
+            // when switching to a different task, or this Coach-started
+            // session would still go unlogged.
+            const needsNewSession = isSwitchingTask || !focusTimer.focusSessionId;
+            if (needsNewSession && typeof focusTimer.startFocusSession === "function") {
               // A genuinely new focused task — mint a real ledger session for
               // it (enterFocusMode: false so the chat stays open instead of
               // being replaced by the full-screen Focus overlay), auto-closing

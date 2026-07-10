@@ -6,7 +6,7 @@ import { getAIKeys, callAI, hasAIKey, extractJsonArray } from "../utils/aiCall";
 import { sanitizeTaskField, CATEGORY_ICONS, byPriorityThenOrder } from "../utils/taskOps";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import { safeCopyToClipboard } from "../utils/clipboard";
-import { buildTaskMutationEvent, eventPatch, eventsPatch } from "../utils/activityLog";
+import { buildTaskMutationEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor,
   useSensor, useSensors, DragOverlay
@@ -179,7 +179,7 @@ function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, on
   );
 }
 
-export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, onEditTask, initialExpandedCol, uid, writeActivityEvents }) {
+export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, onEditTask, initialExpandedCol, uid, writeActivityEvents, focusTimer = {} }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
   const windows = getFocusWindows(config);
 
@@ -285,9 +285,15 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
 
   const handleMarkDone = (task) => {
     celebrate();
+    const actionAt = Date.now();
     const todayDateStr = getTodayDateString();
     const lociTodayStr = getLociDayStr(new Date(), getFocusWindows(config));
-    const event = buildTaskMutationEvent("task_completed", task, { windows });
+    const event = buildTaskMutationEvent("task_completed", task, { windows, now: actionAt });
+    // Marking the actively focused task done clears isNowFocus below without
+    // ending its session — end it here, same as Today's handleToggleComplete.
+    const endedFocusSession = task.isNowFocus && typeof focusTimer.endFocusSession === "function"
+      ? focusTimer.endFocusSession("completed_task")
+      : null;
     savePayloadAsync({
       ...payload,
       tasks: tasks.map((t) =>
@@ -296,7 +302,13 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
       config: { ...config, totalXp: (Number(config.totalXp) || 0) + 100, lastUpdated: Date.now() },
       contributions: incrementContribution([...contributions], todayDateStr)
     })
-      .then(() => writeActivityEvents(eventPatch(uid, event)))
+      .then(() => {
+        const events = [event];
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_completed", task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
+        }
+        writeActivityEvents(eventsPatch(uid, events));
+      })
       .catch(() => {});
     setSelectedTask(null);
   };

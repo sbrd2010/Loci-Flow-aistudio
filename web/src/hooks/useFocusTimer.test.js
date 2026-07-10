@@ -299,6 +299,29 @@ describe("useFocusTimer", () => {
       expect(result.current.timerSecondsLeft).toBe(10 * 60);
     });
 
+    it("plannedSeconds override survives the activeTask-sync effect once `tasks` catches up to the new pin", () => {
+      // Reproduces Coach's START_FOCUS with a custom duration: the pin
+      // (isNowFocus: true) hasn't landed in `tasks` yet when startFocusSession
+      // is called, so activeTask only picks up the new task on the NEXT
+      // render — without skipNextDurationSyncRef, that render's
+      // activeTask-sync effect would stomp the override back to the task's
+      // own 25-minute estimate.
+      const task = { uuid: "a", isNowFocus: false, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      const started = result.current.startFocusSession(task, { enterFocusMode: false, plannedSeconds: 10 * 60 });
+      expect(started.focusInitialPlannedSeconds).toBe(10 * 60);
+      expect(result.current.timerMaxSeconds).toBe(10 * 60);
+
+      // `tasks` now reflects the pin — activeTask becomes this task for the
+      // first time, which would normally trigger a duration re-derive.
+      const pinnedTask = { ...task, isNowFocus: true };
+      rerender([[pinnedTask], {}, "u1"]);
+
+      expect(result.current.timerMaxSeconds).toBe(10 * 60);
+      expect(result.current.timerSecondsLeft).toBe(10 * 60);
+    });
+
     it("starting a second session while one is already open auto-closes the first and returns it as priorSession", () => {
       // Reproduces starting focus on Task A from Today, then — without
       // ending it — starting focus on Task B from Day Map. Without the

@@ -69,6 +69,14 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // Lets the activeTask-sync effect tell "switched to a different task" apart
   // from "same task, duration edited mid-session" (the two need different responses).
   const prevActiveTaskRef = useRef({ uuid: null, timeEstimateMinutes: null });
+  // Set by startFocusSession when a caller supplies an explicit plannedSeconds
+  // override (Coach's one-off duration) — tells the activeTask-sync effect to
+  // skip its own task-estimate-derived reset the very next time it would
+  // otherwise fire for this task becoming active, so the override isn't
+  // immediately stomped the moment `tasks` syncs and activeTask updates.
+  // Consumed (cleared) after that single pass so later, unrelated syncs for
+  // the same task aren't permanently suppressed.
+  const skipNextDurationSyncRef = useRef(false);
 
   const activeTask = tasks.find((t) => t.isNowFocus && !t.isDeleted && !t.isCompleted) || null;
 
@@ -318,6 +326,15 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
 
   useEffect(() => {
     const prev = prevActiveTaskRef.current;
+    if (skipNextDurationSyncRef.current) {
+      // startFocusSession just applied an explicit plannedSeconds override for
+      // this exact task becoming active — leave timerMaxSeconds/timerSecondsLeft
+      // alone for this one pass instead of re-deriving them from the task's own
+      // estimate, or the override would be overwritten the instant `tasks` syncs.
+      skipNextDurationSyncRef.current = false;
+      prevActiveTaskRef.current = { uuid: activeTask?.uuid ?? null, timeEstimateMinutes: activeTask?.timeEstimateMinutes ?? null };
+      return;
+    }
     if (activeTask) {
       const rawMins = Number(activeTask.timeEstimateMinutes);
       const taskSecs = (rawMins > 0 ? rawMins : 25) * 60;
@@ -534,6 +551,10 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     if (Number(plannedSeconds) > 0) {
       setTimerMaxSeconds(initialPlannedSeconds);
       setTimerSecondsLeft(initialPlannedSeconds);
+      // `task` becoming `activeTask` (once `tasks` syncs) would otherwise
+      // trigger the activeTask-sync effect to immediately re-derive/overwrite
+      // this override from task.timeEstimateMinutes — suppress that one pass.
+      skipNextDurationSyncRef.current = true;
     }
     return {
       focusSessionId: sessionId, focusStartedAt: startedAt, focusInitialPlannedSeconds: initialPlannedSeconds,

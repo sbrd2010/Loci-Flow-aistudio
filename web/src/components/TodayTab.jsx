@@ -388,9 +388,26 @@ export default function TodayTab({
     // debounced write confirms (up to 1500ms, more with retries), which
     // could stamp the event's lociDateString on the wrong side of a
     // Loci-day boundary if the action happened right before one.
-    const event = buildTaskMutationEvent("task_deleted", task, { windows });
+    const actionAt = Date.now();
+    const event = buildTaskMutationEvent("task_deleted", task, { windows, now: actionAt });
+    // Deleting the actively focused task drops it out of activeTask
+    // (isDeleted-filtered) without ever clearing isNowFocus itself — end its
+    // session here or it's left open with no terminal event.
+    let endedFocusSession = null;
+    if (task.isNowFocus) {
+      endedFocusSession = endFocusSession("user_abandoned");
+      setIsTimerRunning(false);
+      setIsFocusMode(false);
+      setFocusSessionActive(false);
+    }
     savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t) })
-      .then(() => writeActivityEvents(eventPatch(uid, event)))
+      .then(() => {
+        const events = [event];
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_abandoned", task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
+        }
+        writeActivityEvents(eventsPatch(uid, events));
+      })
       .catch(() => {});
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
     setUndoTask(task);
@@ -739,9 +756,25 @@ export default function TodayTab({
   };
 
   const handleParkTask = (task) => {
-    const event = buildTaskMutationEvent("task_parked", task, { windows });
+    const actionAt = Date.now();
+    const event = buildTaskMutationEvent("task_parked", task, { windows, now: actionAt });
+    // buildParkTaskTasks clears isNowFocus on the parked task — end its
+    // session here if it was the one actively focused, same as delete/move.
+    let endedFocusSession = null;
+    if (task.isNowFocus) {
+      endedFocusSession = endFocusSession("user_abandoned");
+      setIsTimerRunning(false);
+      setIsFocusMode(false);
+      setFocusSessionActive(false);
+    }
     savePayloadAsync({ ...payload, tasks: buildParkTaskTasks(tasks, task.uuid) })
-      .then(() => writeActivityEvents(eventPatch(uid, event)))
+      .then(() => {
+        const events = [event];
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_abandoned", task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
+        }
+        writeActivityEvents(eventsPatch(uid, events));
+      })
       .catch(() => {});
   };
 

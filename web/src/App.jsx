@@ -512,13 +512,16 @@ export default function App() {
   };
 
   const handleEndFocusSession = () => {
-    const task = focusTimer.activeTask;
     const ended = focusTimer.endFocusSession("user_abandoned");
     focusTimer.setIsTimerRunning(false);
     focusTimer.setIsFocusMode(false);
     focusTimer.setFocusSessionActive(false);
-    if (ended && task) {
-      const event = buildFocusTerminalEvent("focus_abandoned", task, ended.focusSessionId, {
+    // Use ended.task (captured when the session started), not activeTask —
+    // if the Now Focus pin changed mid-session without ending it (e.g. the
+    // pin-only menu), activeTask would point at the NEW task and misattribute
+    // this abandonment to it instead of the task the session actually belonged to.
+    if (ended && ended.task) {
+      const event = buildFocusTerminalEvent("focus_abandoned", ended.task, ended.focusSessionId, {
         ...ended, windows: getFocusWindows(payload?.config || {}),
       });
       writeActivityEvents(eventPatch(activityUid, event));
@@ -869,9 +872,10 @@ export default function App() {
             initialExpandedCol={roadmapInitialCol}
             uid={activityUid}
             writeActivityEvents={writeActivityEvents}
+            focusTimer={focusTimer}
           />
         )}
-        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onOpenRoadmapInbox={openRoadmapInbox} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} uid={activityUid} writeActivityEvents={writeActivityEvents} />}
+        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onOpenRoadmapInbox={openRoadmapInbox} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} uid={activityUid} writeActivityEvents={writeActivityEvents} focusTimer={focusTimer} />}
         {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} />}
         {activeTab === "settings" && (
           <SettingsTab

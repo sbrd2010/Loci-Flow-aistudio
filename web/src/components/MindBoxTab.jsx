@@ -7,7 +7,7 @@ import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTa
 import { submitOnEnter } from "../utils/formEvents";
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
 import { getFocusWindows } from "../utils/focusWindows";
-import { buildTaskMutationEvent, eventPatch, eventsPatch } from "../utils/activityLog";
+import { buildTaskMutationEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 
 function IconTrendingUp() {
   return (
@@ -77,7 +77,7 @@ function IconChevronRight() {
   );
 }
 
-export default function MindBoxTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveConfigPatch, userProfile, initialPanel, onOpenRoadmapInbox, isSyncingFromCache = false, syncWarning = null, uid, writeActivityEvents }) {
+export default function MindBoxTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveConfigPatch, userProfile, initialPanel, onOpenRoadmapInbox, isSyncingFromCache = false, syncWarning = null, uid, writeActivityEvents, focusTimer = {} }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
   const windows = getFocusWindows(config);
 
@@ -247,8 +247,19 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
         // as a task_parked event — a task already parked before this reset
         // isn't changed by it (the core write below is a harmless no-op for
         // it), so including it here would overcount parking actions.
+        const actionAt = Date.now();
         const affected = tasks.filter(t => !t.isCompleted && !t.isDeleted && !t.isParked);
-        const events = affected.map((t) => buildTaskMutationEvent("task_parked", t, { windows }));
+        const events = affected.map((t) => buildTaskMutationEvent("task_parked", t, { windows, now: actionAt }));
+        // This batch parks every active task, including whichever one is
+        // actively focused — end its session or it's left open with no
+        // terminal event.
+        const focusedTask = affected.find(t => t.isNowFocus);
+        const endedFocusSession = focusedTask && typeof focusTimer.endFocusSession === "function"
+          ? focusTimer.endFocusSession("user_abandoned")
+          : null;
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_abandoned", focusedTask, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
+        }
         savePayloadAsync({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, isNowFocus: false, lastUpdated: Date.now() } : t) })
           .then(() => writeActivityEvents(eventsPatch(uid, events)))
           .catch(() => {});
