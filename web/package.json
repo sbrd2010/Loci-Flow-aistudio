@@ -8,7 +8,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:rules-emulator": "firebase emulators:exec --only database --project demo-loci-flow-rules-test \"vitest run --config vitest.rules-emulator.config.js\""
+    "test:rules-emulator": "npx --yes firebase-tools@^15 emulators:exec --only database --project demo-loci-flow-rules-test \"vitest run --config vitest.rules-emulator.config.js\""
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -25,7 +25,6 @@
     "@firebase/rules-unit-testing": "^3.0.4",
     "@playwright/test": "^1.60.0",
     "@vitejs/plugin-react": "^5.2.0",
-    "firebase-tools": "^15.23.0",
     "terser": "^5.48.0",
     "vite": "^6.4.2",
     "vitest": "^4.1.8"
