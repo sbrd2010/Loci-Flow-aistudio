@@ -75,3 +75,17 @@ When the user types `loopcheck` (optionally with a PR number, e.g. "loopcheck PR
 4. For each finding: fix it now if it's small and you're confident, otherwise surface it to the user and ask before changing anything.
 
 This is intentionally **one agent spawn only** — not the heavier multi-agent `code-review` skill — to keep cost low for routine per-PR use on a metered plan. Recommended cadence: once per PR, right before merge.
+
+## 6. AI Provider Rate Limits (for live Coach verification)
+
+When live-verifying Coach changes against the real API (not mocked `fetch`), the configured keys are low-tier/free and rate-limit fast under rapid successive test calls:
+
+| Provider | Model | RPM | RPD | TPM | TPD/TPH |
+|---|---|---|---|---|---|
+| Groq | `openai/gpt-oss-120b` | 30 | 1,000 | 8,000 | 200,000 TPD |
+| Cerebras | `gpt-oss-120b` | 5 | — | 30,000 | 1M TPH / 1M TPD |
+
+Cerebras's 5 RPM is the binding constraint — `callAI`'s auto-fallback chain tries Cerebras on every Groq failure too, so a burst of retries exhausts both quickly. When live-testing:
+- Space out real API calls (roughly 15-20s apart minimum) rather than firing several in quick succession.
+- Prefer one live call per scenario over loops of many small calls.
+- A `429`/`403` from the provider during testing is very likely this rate limit, not a real bug — wait it out (the error's `retryAfterMs` tells you how long) rather than treating it as a regression.
