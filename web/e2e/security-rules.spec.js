@@ -31,6 +31,22 @@ test("reliability: chatHistory messages accept the 'actions' field CoachTab atta
   expect(msgRules.actions[".validate"]).toBe(true);
 });
 
+test("reliability: activityLogs analytics data remains scoped to the signed-in uid", () => {
+  // The analytics ledger lives at activityLogs/{uid}, a root deliberately
+  // separate from sync/{uid} (so the normal payload listener never
+  // downloads it). The top-level $other: false catch-all denies any path
+  // without its own explicit block — without this block, every analytics
+  // write is silently PERMISSION_DENIED, indistinguishable from a real
+  // auth failure to the fail-soft write logic that has to tell them apart.
+  const rules = loadDatabaseRules();
+  const activityLogRules = rules.activityLogs.$userId;
+
+  expect(activityLogRules[".read"]).toBe("auth != null && auth.uid === $userId");
+  expect(activityLogRules[".write"]).toBe("auth != null && auth.uid === $userId");
+  expect(rules.$other[".read"]).toBe(false);
+  expect(rules.$other[".write"]).toBe(false);
+});
+
 test("reliability: bug reports are write-only and tied to the signed-in uid", () => {
   const rules = loadDatabaseRules();
   const bugReportRules = rules.bugReports;

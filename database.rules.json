@@ -51,6 +51,13 @@
         "$other": { ".validate": false }
       }
     },
+    "activityLogs": {
+      "$userId": {
+        ".read":  "auth != null && auth.uid === $userId",
+        ".write": "auth != null && auth.uid === $userId",
+        "$other": { ".validate": true }
+      }
+    },
     "bugReports": {
       ".read": false,
       "$reportId": {

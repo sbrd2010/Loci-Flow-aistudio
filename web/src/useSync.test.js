@@ -1,5 +1,26 @@
-import { describe, it, expect } from "vitest";
-import { gatePayloadToUid } from "./useSync";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const refMock = vi.fn((db, path) => ({ __path: path }));
+const updateMock = vi.fn();
+const runTransactionMock = vi.fn();
+
+vi.mock("firebase/database", () => ({
+  ref: (...args) => refMock(...args),
+  update: (...args) => updateMock(...args),
+  runTransaction: (...args) => runTransactionMock(...args),
+  onValue: vi.fn(),
+  set: vi.fn(),
+  get: vi.fn(),
+  goOffline: vi.fn(),
+  goOnline: vi.fn(),
+}));
+
+vi.mock("./firebase", () => ({
+  db: {},
+  auth: { currentUser: null },
+}));
+
+import { gatePayloadToUid, writeActivityEvents, captureTodaySnapshotIfNeeded } from "./useSync";
 
 // Tests for the uid-isolation gate that prevents a previous user's payload from
 // being visible to App-level effects during the render cycle that follows a uid change.
@@ -52,5 +73,120 @@ describe("gatePayloadToUid", () => {
   it("handles same-user cache reload correctly (uid unchanged, payload refreshed)", () => {
     const freshPayload = { tasks: [{ uuid: "t1" }, { uuid: "t2" }], config: {} };
     expect(gatePayloadToUid(freshPayload, "uid-a", "uid-a")).toBe(freshPayload);
+  });
+});
+
+// writeActivityEvents/captureTodaySnapshotIfNeeded are the standalone,
+// uid-parameterized analytics-write primitives PR A's write-path
+// instrumentation sequences after a confirmed core task write. Kept outside
+// the useSync hook specifically so they're testable here against mocked
+// firebase/database calls without needing to render the hook (this repo has
+// no hook-rendering test infra).
+describe("writeActivityEvents", () => {
+  beforeEach(() => {
+    refMock.mockClear();
+    updateMock.mockReset();
+  });
+
+  it("returns ok:false without calling update() when uid is missing", async () => {
+    const result = await writeActivityEvents(null, { "activityLogs/x/events/2026-07-10/e1": { type: "task_created" } });
+    expect(result).toEqual({ ok: false, reason: "no-uid" });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("resolves ok:true after a single successful update() call with the exact paths given", async () => {
+    updateMock.mockResolvedValueOnce(undefined);
+    const pathsToValues = { "activityLogs/uid1/events/2026-07-10/e1": { type: "task_created" } };
+    const result = await writeActivityEvents("uid1", pathsToValues);
+    expect(result).toEqual({ ok: true });
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    expect(updateMock).toHaveBeenCalledWith(expect.anything(), pathsToValues);
+  });
+
+  it("retries on transient failure and succeeds once a later attempt resolves", async () => {
+    updateMock
+      .mockRejectedValueOnce(new Error("transient"))
+      .mockResolvedValueOnce(undefined);
+    const result = await writeActivityEvents("uid1", { "activityLogs/uid1/events/2026-07-10/e2": {} }, 2);
+    expect(result).toEqual({ ok: true });
+    expect(updateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("fails soft after exhausting retries — resolves { ok:false }, never throws, and logs a missed-event record", async () => {
+    const err = new Error("permission-denied");
+    updateMock.mockRejectedValue(err);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const pathsToValues = { "activityLogs/uid1/events/2026-07-10/e3": {} };
+
+    const result = await writeActivityEvents("uid1", pathsToValues, 2);
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("write-failed");
+    expect(result.error).toBe(err);
+    expect(updateMock).toHaveBeenCalledTimes(2);
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[Loci activity ledger] Missed event(s) after retries:",
+      Object.keys(pathsToValues),
+      err
+    );
+    errorSpy.mockRestore();
+  });
+});
+
+describe("captureTodaySnapshotIfNeeded", () => {
+  beforeEach(() => {
+    refMock.mockClear();
+    runTransactionMock.mockReset();
+  });
+
+  const windows = [{ startMin: 420, endMin: 1560, overnight: true }]; // 7am-2am
+  const tasks = [
+    { uuid: "a", horizonLevel: "today", isCompleted: false, isDeleted: false, isParked: false },
+    { uuid: "b", horizonLevel: "today", isCompleted: true, isDeleted: false, isParked: false },
+  ];
+
+  it("returns ok:false without calling runTransaction when uid is missing", async () => {
+    const result = await captureTodaySnapshotIfNeeded(null, tasks, windows);
+    expect(result).toEqual({ ok: false, reason: "no-uid" });
+    expect(runTransactionMock).not.toHaveBeenCalled();
+  });
+
+  it("commits the snapshot when no value exists yet at that day's path (transaction fn returns the snapshot)", async () => {
+    let capturedUpdateFn;
+    runTransactionMock.mockImplementation(async (_ref, updateFn) => {
+      capturedUpdateFn = updateFn;
+      const next = updateFn(null); // simulate: nothing there yet
+      return { committed: next !== undefined, snapshot: next };
+    });
+
+    const result = await captureTodaySnapshotIfNeeded("uid1", tasks, windows);
+
+    expect(result.ok).toBe(true);
+    expect(result.committed).toBe(true);
+    // the transaction function must abort (return undefined) if something is already there —
+    // verify directly, since this is the multi-device race guard the plan requires.
+    expect(capturedUpdateFn({ schemaVersion: 1, todayTaskIds: ["a"] })).toBeUndefined();
+  });
+
+  it("does not overwrite an existing snapshot — a second device's transaction sees committed:false", async () => {
+    runTransactionMock.mockImplementation(async (_ref, updateFn) => {
+      const next = updateFn({ schemaVersion: 1, lociDateString: "2026-07-10", capturedAt: 1, todayTaskIds: ["a"] });
+      return { committed: next !== undefined, snapshot: next };
+    });
+
+    const result = await captureTodaySnapshotIfNeeded("uid1", tasks, windows);
+    expect(result.ok).toBe(true);
+    expect(result.committed).toBe(false);
+  });
+
+  it("fails soft when the transaction itself rejects — resolves { ok:false }, never throws", async () => {
+    const err = new Error("permission-denied");
+    runTransactionMock.mockRejectedValue(err);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await captureTodaySnapshotIfNeeded("uid1", tasks, windows);
+
+    expect(result).toEqual({ ok: false, reason: "write-failed", error: err });
+    errorSpy.mockRestore();
   });
 });
