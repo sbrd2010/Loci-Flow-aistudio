@@ -240,7 +240,7 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
                   <li
                     key={step.id}
                     className={`dm-substep${step.done ? " is-done" : ""}`}
-                    aria-label={step.done ? "Done" : "Not done"}
+                    aria-label={`${step.done ? "Completed" : "Not completed"}: ${step.text}`}
                   >
                     <span className="dm-substep-check" aria-hidden="true">{step.done ? "✓" : ""}</span>
                     <span className="dm-substep-text">{step.text}</span>

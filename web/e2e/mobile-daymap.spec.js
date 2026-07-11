@@ -115,8 +115,13 @@ test("Day Map cards show sub-step progress and reveal the full sub-step list whe
   await expect(rows.nth(0)).not.toHaveClass(/is-done/);
   await expect(rows.nth(0).getByText("Write a short, honest reply (3 sentences is enough)")).toBeVisible();
   await expect(rows.nth(0).locator(".dm-substep-check")).toHaveText("");
+  await expect(rows.nth(0)).toHaveAttribute(
+    "aria-label",
+    "Not completed: Write a short, honest reply (3 sentences is enough)"
+  );
   await expect(rows.nth(3)).toHaveClass(/is-done/);
   await expect(rows.nth(3).locator(".dm-substep-check")).toHaveText("✓");
+  await expect(rows.nth(3)).toHaveAttribute("aria-label", "Completed: Read the message properly");
 
   await expectNoHorizontalOverflow(page);
 });
