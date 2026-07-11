@@ -291,6 +291,37 @@ test("mobile reliability: editing the focused task's horizon away from Today exi
   await expect(todayRow(page, title)).not.toBeVisible({ timeout: 5_000 });
 });
 
+test("mobile reliability: editing a PINNED focused task's horizon away from Today clears its focus/pin state too", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "One Task pinned horizon change seed task";
+  await openAddTask(page);
+  await page.getByTestId("add-task-title").fill(title);
+  await page.getByTestId("add-task-submit").click();
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+
+  // Pin it to focus first — isNowFocus: true, same state a running focus
+  // session would leave it in.
+  await openTaskMenu(page, title);
+  await page.getByText("Pin to Focus", { exact: true }).click();
+  const pinnedSection = page.locator(".pinned-focus-section");
+  await expect(pinnedSection).toBeVisible({ timeout: 5_000 });
+  await expect(pinnedSection).toContainText("FOCUS");
+
+  await enterOneTaskMode(page, title);
+  await page.getByTestId("focus-now-edit-btn").click();
+  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "This Week" }).click();
+  await page.getByTestId("add-task-submit").click();
+
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".focus-now-view")).not.toBeVisible({ timeout: 5_000 });
+  // The task leaving Today must also clear isNowFocus — otherwise it stays
+  // the app's globally "active" focused task (orphaned timer/session) even
+  // though it's no longer in Today at all.
+  await expect(pinnedSection).not.toBeVisible({ timeout: 5_000 });
+});
+
 test("mobile reliability: deleting a sub-step requires confirmation and can be cancelled", async ({ page }) => {
   await enterDemo(page);
 

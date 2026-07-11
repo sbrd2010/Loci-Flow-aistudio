@@ -953,9 +953,36 @@ export default function TodayTab({
   // longer belongs in Today. Exit back to the normal Today view instead,
   // same as if the task had been deleted mid-session.
   useEffect(() => {
-    if (focusNowMode && focusNowTask && focusNowTask.horizonLevel !== "today") {
-      setFocusNowMode(false);
-      setFocusNowTaskId(null);
+    if (!focusNowMode || !focusNowTask || focusNowTask.horizonLevel === "today") return;
+    setFocusNowMode(false);
+    setFocusNowTaskId(null);
+    // AddTaskDialog's edit-save spreads ...editTask, so isNowFocus survives
+    // a horizon change untouched — a task that was actively pinned/focused
+    // can leave Today still flagged isNowFocus, orphaning any running timer/
+    // session (no terminal event, later mis-attributed as an unrelated
+    // abandonment). Clean that up exactly like handleMoveToHorizon already
+    // does for the equivalent normal-list action — task_moved was already
+    // written by AddTaskDialog's own save, so only the focus_abandoned
+    // event is new here.
+    if (focusNowTask.isNowFocus) {
+      const abandonedTaskUuid = focusNowTask.uuid;
+      const actionAt = Date.now();
+      const endedFocusSession = endFocusSession("user_abandoned");
+      setIsTimerRunning(false);
+      setIsFocusMode(false);
+      setFocusSessionActive(false);
+      savePayloadAsync({ ...payload, tasks: tasks.map(t =>
+        t.uuid === abandonedTaskUuid ? { ...t, isNowFocus: false, lastUpdated: Date.now() } : t
+      )})
+        .then(() => {
+          if (endedFocusSession) {
+            writeActivityEvents(eventPatch(
+              uid,
+              buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt })
+            ));
+          }
+        })
+        .catch(() => {});
     }
   }, [focusNowMode, focusNowTask?.horizonLevel]);
 
