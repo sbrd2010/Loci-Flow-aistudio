@@ -184,3 +184,81 @@ test("mobile reliability: Add Task flushes an in-progress sub-step edit on submi
   await expect(row).toBeVisible({ timeout: 5_000 });
   await expect(row).toContainText("Compare flight and train prices");
 });
+
+async function addTaskWithSubSteps(page, title, subStepLines) {
+  await openAddTask(page);
+  await page.getByTestId("add-task-title").fill(title);
+  await page.getByRole("button", { name: /Advanced options/i }).click();
+  await page.getByTestId("add-task-substeps-draft").fill(subStepLines.join("\n"));
+  await page.getByTestId("add-task-substeps-add").click();
+  await page.getByTestId("add-task-submit").click();
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+}
+
+async function enterOneTaskMode(page, title) {
+  await page.getByRole("button", { name: "🎯 One Task" }).click();
+  await expect(page.getByText("Pick one task")).toBeVisible({ timeout: 5_000 });
+  await page.locator(".focus-now-pick-row", { hasText: title }).click();
+  await expect(page.locator(".focus-now-card")).toBeVisible({ timeout: 5_000 });
+}
+
+test("mobile reliability: One Task mode shows every sub-step, not capped at 3", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "One Task substep count seed task";
+  const steps = ["Step one", "Step two", "Step three", "Step four", "Step five"];
+  await addTaskWithSubSteps(page, title, steps);
+  await expect(todayRow(page, title)).toBeVisible({ timeout: 5_000 });
+
+  await enterOneTaskMode(page, title);
+
+  for (const step of steps) {
+    await expect(page.locator(".focus-now-substep", { hasText: step })).toBeVisible({ timeout: 5_000 });
+  }
+});
+
+test("mobile reliability: One Task mode's edit button opens Edit Task and saves changes", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "One Task edit seed task";
+  const editedTitle = "One Task edited via focus card";
+  await openAddTask(page);
+  await page.getByTestId("add-task-title").fill(title);
+  await page.getByTestId("add-task-submit").click();
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+
+  await enterOneTaskMode(page, title);
+  await expect(page.locator(".focus-now-card-title")).toHaveText(title);
+
+  await page.getByTestId("focus-now-edit-btn").click();
+  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
+  await page.getByTestId("add-task-title").fill(editedTitle);
+  await page.getByTestId("add-task-submit").click();
+
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  // Editing closes the dialog but leaves One Task mode active on the same task.
+  await expect(page.locator(".focus-now-card-title")).toHaveText(editedTitle);
+});
+
+test("mobile reliability: deleting a sub-step requires confirmation and can be cancelled", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "Substep delete confirmation seed task";
+  await addTaskWithSubSteps(page, title, ["Keep this step", "Remove this step"]);
+  const row = todayRow(page, title);
+  await expect(row).toBeVisible({ timeout: 5_000 });
+  await expect(row).toContainText("Remove this step");
+
+  // Cancel — the step must survive.
+  await row.getByRole("button", { name: "Remove step" }).nth(1).click();
+  await expect(page.getByText("Remove this step?", { exact: false })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(row).toContainText("Remove this step");
+
+  // Confirm — the step is actually removed.
+  await row.getByRole("button", { name: "Remove step" }).nth(1).click();
+  await expect(page.getByText("Remove this step?", { exact: false })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(row).not.toContainText("Remove this step");
+  await expect(row).toContainText("Keep this step");
+});

@@ -3,6 +3,7 @@ import TaskRow from "./TaskRow";
 import AddTaskDialog from "./AddTaskDialog";
 import FocusModePage from "./FocusModePage";
 import RescueMode from "./RescueMode";
+import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { buildToggleCompletedTasks, byPriorityThenOrder } from "../utils/taskOps";
 import { buildParkTaskTasks } from "../utils/coachActions";
@@ -36,6 +37,12 @@ import {
   useSortable, arrayMove
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+
+const PencilIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+  </svg>
+);
 
 function SortableTaskItem({ id, interactionStyle, children }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -326,6 +333,7 @@ export default function TodayTab({
   const [breakdownNoKeyUuid, setBreakdownNoKeyUuid] = useState(null);
 
   const [editingTask, setEditingTask] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
   const [undoTask, setUndoTask] = useState(null);
   const undoTimeoutRef = useRef(null);
 
@@ -797,11 +805,22 @@ export default function TodayTab({
   };
 
   const handleDeleteSubStep = (task, stepId) => {
-    const updatedTasks = tasks.map(t => {
-      if (t.uuid !== task.uuid) return t;
-      return { ...t, subSteps: (t.subSteps || []).filter(s => s.id !== stepId), lastUpdated: Date.now() };
+    const step = (task.subSteps || []).find(s => s.id === stepId);
+    setConfirmDialog({
+      message: step?.text ? `Remove this step?\n\n"${step.text}"` : "Remove this step?",
+      confirmLabel: "Remove",
+      cancelLabel: "Cancel",
+      danger: true,
+      onConfirm: () => {
+        const updatedTasks = tasks.map(t => {
+          if (t.uuid !== task.uuid) return t;
+          return { ...t, subSteps: (t.subSteps || []).filter(s => s.id !== stepId), lastUpdated: Date.now() };
+        });
+        savePayload({ ...payload, tasks: updatedTasks });
+        setConfirmDialog(null);
+      },
+      onCancel: () => setConfirmDialog(null),
     });
-    savePayload({ ...payload, tasks: updatedTasks });
   };
 
   const handleMoveToHorizon = (task, horizon) => {
@@ -1695,6 +1714,15 @@ export default function TodayTab({
                       {focusNowTask.timeEstimateMinutes > 0 && (
                         <span className="focus-now-card-dur">{focusNowTask.timeEstimateMinutes}m</span>
                       )}
+                      <button
+                        className="focus-now-edit-btn"
+                        onClick={() => handleStartEdit(focusNowTask)}
+                        title="Edit task"
+                        aria-label="Edit task"
+                        data-testid="focus-now-edit-btn"
+                      >
+                        <PencilIcon />
+                      </button>
                     </div>
                     <h3 className="focus-now-card-title">{focusNowTask.title}</h3>
                     {focusNowTask.concreteStep && (
@@ -1702,7 +1730,7 @@ export default function TodayTab({
                     )}
                     {focusNowTask.subSteps && focusNowTask.subSteps.filter(s => !s.done).length > 0 && (
                       <div className="focus-now-substeps">
-                        {focusNowTask.subSteps.filter(s => !s.done).slice(0, 3).map(s => (
+                        {focusNowTask.subSteps.filter(s => !s.done).map(s => (
                           <div key={s.id} className="focus-now-substep">· {s.text}</div>
                         ))}
                       </div>
@@ -1944,6 +1972,8 @@ export default function TodayTab({
           writeActivityEvents={writeActivityEvents}
         />
       )}
+
+      {confirmDialog && <ConfirmDialog {...confirmDialog} />}
 
       {/* ── Morning Ritual popup (centered, once per Loci day) ───── */}
       {showAnchorSheet && anchorSheetSlot === "morning" && (() => {
