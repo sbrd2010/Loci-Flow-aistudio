@@ -6,8 +6,14 @@ import { test, expect } from "@playwright/test";
 
 async function enterDemo(page, viewport = { width: 375, height: 812 }) {
   await page.setViewportSize(viewport);
-  await page.goto("/");
+  // Fix the clock BEFORE navigating — demoData.js computes `today`/`d1..d6`
+  // as module-load-time `new Date()` calls, evaluated once when the bundle
+  // first runs. Setting the clock after goto() would leave those constants
+  // anchored to the real wall-clock date instead of the mocked one, so the
+  // app's mocked "today" (from useTodayStr) and the demo payload's actual
+  // dates would only agree by coincidence on days matching the mock.
   await page.clock.setFixedTime(new Date("2026-07-11T10:00:00"));
+  await page.goto("/");
   await expect(page.getByTestId("demo-btn")).toBeVisible({ timeout: 25_000 });
   await page.getByTestId("demo-btn").click();
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });

@@ -106,6 +106,11 @@ describe("sliceContributions", () => {
     expect(result).toEqual([{ dateString: "2026-06-10", count: 7 }]);
   });
 
+  it("clamps a negative count to 0 instead of letting corrupt data through", () => {
+    const result = sliceContributions([{ dateString: "2026-06-10", count: -3 }], ["2026-06-10"]);
+    expect(result).toEqual([{ dateString: "2026-06-10", count: 0 }]);
+  });
+
   it("ignores malformed entries without throwing", () => {
     const result = sliceContributions([null, { count: 1 }, { dateString: "2026-06-10" }], ["2026-06-10"]);
     expect(result).toEqual([{ dateString: "2026-06-10", count: 0 }]);
@@ -115,44 +120,30 @@ describe("sliceContributions", () => {
 describe("computeRangeStats", () => {
   const rangeDays = ["2026-06-09", "2026-06-10", "2026-06-11", "2026-06-12", "2026-06-13", "2026-06-14", "2026-06-15"];
 
+  // computeRangeStats now takes an already-sliced `daily` array (see
+  // sliceContributions) rather than raw contributions + rangeDays, so a
+  // caller that needs both the range-stats numbers and the daily slice
+  // itself (as InsightsPanel does) only pays for one scan of contributions.
   it("computes totalCompleted, dailyPace (divided by every calendar day, not just active ones), and completionDaysCount", () => {
     const contributions = [
       { dateString: "2026-06-10", count: 3 },
       { dateString: "2026-06-13", count: 2 },
     ];
-    const stats = computeRangeStats(contributions, rangeDays);
+    const stats = computeRangeStats(sliceContributions(contributions, rangeDays));
     expect(stats.totalCompleted).toBe(5);
     expect(stats.dailyPace).toBeCloseTo(5 / 7, 1);
     expect(stats.completionDaysCount).toBe(2);
   });
 
-  it("reports bestDay only when there is a single, unambiguous maximum", () => {
-    const contributions = [
-      { dateString: "2026-06-10", count: 4 },
-      { dateString: "2026-06-13", count: 1 },
-    ];
-    expect(computeRangeStats(contributions, rangeDays).bestDay).toBe("2026-06-10");
-  });
-
-  it("leaves bestDay null on a tie", () => {
-    const contributions = [
-      { dateString: "2026-06-10", count: 3 },
-      { dateString: "2026-06-13", count: 3 },
-    ];
-    expect(computeRangeStats(contributions, rangeDays).bestDay).toBeNull();
-  });
-
-  it("leaves bestDay null for a single-day ('today') range", () => {
-    expect(computeRangeStats([{ dateString: "2026-06-15", count: 4 }], ["2026-06-15"]).bestDay).toBeNull();
-  });
-
-  it("returns all zeros and a null bestDay for a completely empty period", () => {
-    const stats = computeRangeStats([], rangeDays);
-    expect(stats).toEqual({ totalCompleted: 0, dailyPace: 0, completionDaysCount: 0, bestDay: null });
+  it("returns all zeros for a completely empty period", () => {
+    const stats = computeRangeStats(sliceContributions([], rangeDays));
+    expect(stats).toEqual({ totalCompleted: 0, dailyPace: 0, completionDaysCount: 0 });
   });
 });
 
 describe("computeCompletionsByDayOfWeek", () => {
+  // Also now takes an already-sliced `daily` array, same reasoning as
+  // computeRangeStats above.
   it("buckets contributions by weekday, not by individual task records", () => {
     // 2026-06-08 is a Monday, 2026-06-13 is a Saturday.
     const contributions = [
@@ -161,7 +152,7 @@ describe("computeCompletionsByDayOfWeek", () => {
       { dateString: "2026-06-15", count: 3 }, // another Monday
     ];
     const rangeDays = getDateRangeDays("30d", new Date(2026, 5, 15));
-    const result = computeCompletionsByDayOfWeek(contributions, rangeDays);
+    const result = computeCompletionsByDayOfWeek(sliceContributions(contributions, rangeDays));
     expect(result.counts.Mon).toBe(6);
     expect(result.counts.Sat).toBe(3);
     expect(result.totalCount).toBe(9);
@@ -174,7 +165,7 @@ describe("computeCompletionsByDayOfWeek", () => {
     // reflect the full contributions total, not an undercounted per-task tally.
     const contributions = [{ dateString: "2026-06-08", count: 5 }]; // a Monday, 5 completions, but say only 1 retained task record exists
     const rangeDays = getDateRangeDays("7d", new Date(2026, 5, 8));
-    const result = computeCompletionsByDayOfWeek(contributions, rangeDays);
+    const result = computeCompletionsByDayOfWeek(sliceContributions(contributions, rangeDays));
     expect(result.counts.Mon).toBe(5);
     expect(result.totalCount).toBe(5);
   });
@@ -182,7 +173,7 @@ describe("computeCompletionsByDayOfWeek", () => {
   it("returns a null bestDay (not a misleading pattern) when total completions are too sparse", () => {
     const contributions = [{ dateString: "2026-06-08", count: 2 }];
     const rangeDays = getDateRangeDays("7d", new Date(2026, 5, 8));
-    expect(computeCompletionsByDayOfWeek(contributions, rangeDays).bestDay).toBeNull();
+    expect(computeCompletionsByDayOfWeek(sliceContributions(contributions, rangeDays)).bestDay).toBeNull();
   });
 
   it("returns a null bestDay on a tie between two weekdays", () => {
@@ -191,7 +182,7 @@ describe("computeCompletionsByDayOfWeek", () => {
       { dateString: "2026-06-13", count: 2 }, // Sat
     ];
     const rangeDays = getDateRangeDays("7d", new Date(2026, 5, 13));
-    expect(computeCompletionsByDayOfWeek(contributions, rangeDays).bestDay).toBeNull();
+    expect(computeCompletionsByDayOfWeek(sliceContributions(contributions, rangeDays)).bestDay).toBeNull();
   });
 });
 
@@ -243,19 +234,15 @@ describe("computeActiveMix", () => {
     const result = computeActiveMix(tasks);
     expect(result.currentOpenCount).toBe(1);
     expect(result.categoryMix).toEqual({ Work: 1 });
-    expect(result.priorityMix).toEqual({ P1: 1 });
-    expect(result.horizonMix).toEqual({ today: 1 });
   });
 
-  it("buckets missing category/priority/horizon as 'Uncategorized'/'Unset' instead of fabricating a default", () => {
+  it("buckets missing category as 'Uncategorized' instead of fabricating a default", () => {
     const result = computeActiveMix([{ uuid: "a" }]);
     expect(result.categoryMix).toEqual({ Uncategorized: 1 });
-    expect(result.priorityMix).toEqual({ Unset: 1 });
-    expect(result.horizonMix).toEqual({ Unset: 1 });
   });
 
   it("returns all-zero mixes for an empty task list", () => {
     const result = computeActiveMix([]);
-    expect(result).toEqual({ categoryMix: {}, priorityMix: {}, horizonMix: {}, currentOpenCount: 0 });
+    expect(result).toEqual({ categoryMix: {}, currentOpenCount: 0 });
   });
 });

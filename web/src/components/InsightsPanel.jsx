@@ -128,23 +128,30 @@ function CategoryBars({ entries, total, variant }) {
   const maxCount = Math.max(1, ...entries.map(([, n]) => n));
   return (
     <div className="insights-category-list">
-      {entries.map(([cat, count]) => (
-        <div key={cat} className="insights-category-row">
-          <span className="insights-category-name">
-            {CATEGORY_ICONS[cat] ? `${CATEGORY_ICONS[cat]} ` : ""}
-            {cat}
-          </span>
-          <div className="insights-category-track">
-            <div
-              className={`insights-category-fill${variant ? ` insights-category-fill--${variant}` : ""}`}
-              style={{ width: `${Math.round((count / maxCount) * 100)}%` }}
-              role="img"
-              aria-label={`${cat}: ${count} of ${total}`}
-            />
+      {entries.map(([cat, count]) => {
+        // Same floor as the daily/weekday bars — a low count next to a much
+        // larger max must not round down to a 0%-width bar that looks
+        // identical to an empty category while its label still reads a
+        // real, nonzero count.
+        const widthPct = count === 0 ? 0 : Math.max(6, Math.round((count / maxCount) * 100));
+        return (
+          <div key={cat} className="insights-category-row">
+            <span className="insights-category-name">
+              {CATEGORY_ICONS[cat] ? `${CATEGORY_ICONS[cat]} ` : ""}
+              {cat}
+            </span>
+            <div className="insights-category-track">
+              <div
+                className={`insights-category-fill${variant ? ` insights-category-fill--${variant}` : ""}`}
+                style={{ width: `${widthPct}%` }}
+                role="img"
+                aria-label={`${cat}: ${count} of ${total}`}
+              />
+            </div>
+            <span className="insights-category-count">{count}</span>
           </div>
-          <span className="insights-category-count">{count}</span>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -157,6 +164,12 @@ function CategoryBars({ entries, total, variant }) {
 // current completion call site (see insightsContext.js's
 // computeCompletedByCategory comment / issue #361), so retainedCount isn't a
 // reliable numerator for a coverage percentage against the range total.
+// Only ever rendered by the caller when hasAnyCompletions is true (see
+// InsightsPanel below) — so an empty entries list here specifically means
+// contributions[] recorded completions for this period but no retained task
+// record's dateCompletedString landed in range (the dual-clock gap tracked
+// in issue #361), not that the period had no activity at all. Worded to
+// reflect that distinction rather than implying nothing happened.
 function CategoryBreakdownSection({ category }) {
   const entries = Object.entries(category.categoryCounts).sort((a, b) => b[1] - a[1]);
   return (
@@ -165,7 +178,9 @@ function CategoryBreakdownSection({ category }) {
       {entries.length > 0 ? (
         <CategoryBars entries={entries} total={category.retainedCount} />
       ) : (
-        <p className="insights-pattern-note insights-pattern-note--muted">No category details available for this period.</p>
+        <p className="insights-pattern-note insights-pattern-note--muted">
+          No task-level category details are available for this period yet.
+        </p>
       )}
       <p className="insights-coverage-note">
         Category details are based on available task records and may not exactly match the completion total above.
@@ -199,20 +214,24 @@ export default function InsightsPanel({ payload, onBack }) {
   // already use for this exact class of staleness.
   const todayStr = useTodayStr();
 
+  // Current Load doesn't depend on rangeKey at all (it reflects tasks open
+  // right now, not a date window) — kept in its own memo so switching
+  // Today/7 Days/30 Days doesn't re-scan the full tasks array for a result
+  // that can't have changed.
+  const activeMix = useMemo(() => computeActiveMix(tasks), [tasks]);
+
   // contributions[] is unbounded (one record per active day for the
-  // account's lifetime) and every one of these builders re-scans it — worth
-  // skipping on re-renders that don't actually change rangeKey/tasks/
-  // contributions/todayStr (e.g. an unrelated config sync tick while this
-  // is open).
-  const { stats, daily, weekday, category, activeMix } = useMemo(() => {
+  // account's lifetime) — slice it into the range window exactly once per
+  // recompute and hand the same `daily` array to every builder that needs
+  // it, instead of each one re-slicing the full array independently.
+  const { stats, daily, weekday, category } = useMemo(() => {
     const rangeDays = getDateRangeDays(rangeKey, parseLocalDateOnly(todayStr));
-    const rangeStats = computeRangeStats(contributions, rangeDays);
+    const dailySlice = sliceContributions(contributions, rangeDays);
     return {
-      stats: rangeStats,
-      daily: sliceContributions(contributions, rangeDays),
-      weekday: rangeKey !== "today" ? computeCompletionsByDayOfWeek(contributions, rangeDays) : null,
+      stats: computeRangeStats(dailySlice),
+      daily: dailySlice,
+      weekday: rangeKey !== "today" ? computeCompletionsByDayOfWeek(dailySlice) : null,
       category: computeCompletedByCategory(tasks, rangeDays),
-      activeMix: computeActiveMix(tasks),
     };
   }, [rangeKey, tasks, contributions, todayStr]);
 

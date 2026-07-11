@@ -5,8 +5,6 @@
 // dependency for Insights to render correctly there.
 import { isActiveLociTask, getLocalDateString } from "./lociAIContext";
 
-export { isActiveLociTask };
-
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // A completed-task's weekday "best day" is only worth naming once there's
@@ -54,42 +52,40 @@ export function sliceContributions(contributions, rangeDays) {
   (contributions || []).forEach((c) => {
     if (!c || !c.dateString) return;
     const prev = sums.get(c.dateString) || 0;
-    sums.set(c.dateString, prev + (Number(c.count) || 0));
+    // Clamp at 0 — a negative count is corrupt/impossible data, and letting
+    // it through would render as a visible bar (Math.max(6, ...) in
+    // InsightsPanel.jsx floors negative percentages back up to 6%) sitting
+    // next to a label that reads e.g. "-3 completed".
+    sums.set(c.dateString, Math.max(0, prev + (Number(c.count) || 0)));
   });
   return (rangeDays || []).map((dateString) => ({ dateString, count: sums.get(dateString) || 0 }));
 }
 
-// {totalCompleted, dailyPace, completionDaysCount, bestDay} — the range's
-// headline stat-tile numbers, sourced entirely from contributions[] (the
-// sole authoritative source for completion counts; see the plan for why
-// retained task records must never be trusted for counts).
-export function computeRangeStats(contributions, rangeDays) {
-  const daily = sliceContributions(contributions, rangeDays);
+// {totalCompleted, dailyPace, completionDaysCount} — the range's headline
+// stat-tile numbers, computed from an already-sliced `daily` array (see
+// sliceContributions) — the sole authoritative source for completion counts;
+// see the plan for why retained task records must never be trusted for
+// counts. Callers that also need day-of-week or category detail should
+// slice `contributions` once and pass the same `daily` array to every
+// builder that needs it, rather than each builder re-slicing independently.
+export function computeRangeStats(daily) {
   const totalCompleted = daily.reduce((sum, d) => sum + d.count, 0);
   // "Per every calendar day in the range," not active-days-only — a
   // deliberate choice so this stays comparable across ranges and doesn't
   // flatter a sparse period by dividing only by the days something happened.
   const dailyPace = daily.length > 0 ? Math.round((totalCompleted / daily.length) * 10) / 10 : 0;
   const completionDaysCount = daily.filter((d) => d.count > 0).length;
-  let bestDay = null;
-  if (daily.length > 1) {
-    const maxCount = Math.max(...daily.map((d) => d.count));
-    if (maxCount > 0) {
-      const topDays = daily.filter((d) => d.count === maxCount);
-      if (topDays.length === 1) bestDay = topDays[0].dateString;
-    }
-  }
-  return { totalCompleted, dailyPace, completionDaysCount, bestDay };
+  return { totalCompleted, dailyPace, completionDaysCount };
 }
 
-// Sun-Sat completion counts derived from contributions[] (never from
-// retained task records — a completed task can be deleted later, silently
-// under-counting an individual-task-based tally while contributions[] stays
-// correct). `bestDay` is confidence-gated: null when there's too little
-// data or the top day is tied, so the UI can fall back to an honest
-// "Building your rhythm" message instead of presenting noise as a pattern.
-export function computeCompletionsByDayOfWeek(contributions, rangeDays) {
-  const daily = sliceContributions(contributions, rangeDays);
+// Sun-Sat completion counts derived from an already-sliced `daily` array
+// (never from retained task records — a completed task can be deleted
+// later, silently under-counting an individual-task-based tally while
+// contributions[] stays correct). `bestDay` is confidence-gated: null when
+// there's too little data or the top day is tied, so the UI can fall back
+// to an honest "Building your rhythm" message instead of presenting noise
+// as a pattern.
+export function computeCompletionsByDayOfWeek(daily) {
   const counts = { Sun: 0, Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0 };
   daily.forEach((d) => {
     if (d.count === 0) return;
@@ -137,24 +133,20 @@ export function computeCompletedByCategory(tasks, rangeDays) {
   return { categoryCounts, retainedCount: inRange.length };
 }
 
-// {categoryMix, priorityMix, horizonMix, currentOpenCount} from CURRENTLY
-// active tasks (isActiveLociTask: !isDeleted && !isCompleted && !isParked,
-// reused from lociAIContext.js rather than redefined) — "Current Load,"
-// deliberately not range-scoped, since it reflects tasks open right now.
-// currentOpenCount and every mix here share the exact same filtered array,
-// so "Current Open" can never disagree with what "Current Load" shows.
+// {categoryMix, currentOpenCount} from CURRENTLY active tasks
+// (isActiveLociTask: !isDeleted && !isCompleted && !isParked, reused from
+// lociAIContext.js rather than redefined) — "Current Load," deliberately
+// not range-scoped, since it reflects tasks open right now. currentOpenCount
+// and categoryMix share the exact same filtered array, so "Current Open"
+// can never disagree with what "Current Load" shows. Only category is
+// computed here — nothing in the panel renders a priority/horizon
+// breakdown, so those mixes aren't built.
 export function computeActiveMix(tasks) {
   const active = (tasks || []).filter(isActiveLociTask);
   const categoryMix = {};
-  const priorityMix = {};
-  const horizonMix = {};
   active.forEach((t) => {
     const cat = t.category || "Uncategorized";
     categoryMix[cat] = (categoryMix[cat] || 0) + 1;
-    const pri = t.priority || "Unset";
-    priorityMix[pri] = (priorityMix[pri] || 0) + 1;
-    const hz = t.horizonLevel || "Unset";
-    horizonMix[hz] = (horizonMix[hz] || 0) + 1;
   });
-  return { categoryMix, priorityMix, horizonMix, currentOpenCount: active.length };
+  return { categoryMix, currentOpenCount: active.length };
 }
