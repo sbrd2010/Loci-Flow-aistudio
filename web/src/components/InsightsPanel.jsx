@@ -1,7 +1,11 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeSanitize from "rehype-sanitize";
 import "../styles/insights.css";
 import { CATEGORY_ICONS } from "../utils/taskOps";
 import { useTodayStr } from "../hooks/useTodayStr";
+import { getAIKeys, callAI, describeAIError, hasAIKey } from "../utils/aiCall";
 import {
   getDateRangeDays,
   sliceContributions,
@@ -11,6 +15,18 @@ import {
   computeActiveMix,
   parseLocalDateOnly,
 } from "../utils/insightsContext";
+import {
+  RECAP_PROMPT_VERSION,
+  buildRecapInput,
+  computeInputSignature,
+  isCacheRecordValid,
+  buildRecapSystemPrompt,
+  isUsageLimitMessage,
+  stripUsageNote,
+  createRequestGuard,
+  classifyRecapAvailability,
+} from "../utils/insightsRecapContext";
+import * as insightsRecapCache from "../utils/insightsRecapCache";
 
 const RANGE_OPTIONS = [
   { key: "today", label: "Today" },
@@ -203,7 +219,54 @@ function CurrentLoadSection({ activeMix }) {
   );
 }
 
-export default function InsightsPanel({ payload, onBack }) {
+// Opt-in AI recap on top of everything above — mirrors CoachTab's Focus
+// Brief shape (hand-rolled deterministic viz + an opt-in AI button). Purely
+// presentational; all state/handlers live in InsightsPanel below so this
+// stays easy to reason about across the 8 states it can be in.
+function AskCoachSection({ availability, hasAnyKey, recap, recapLoading, recapError, recapUsageNote, onGenerate }) {
+  if (availability === "empty") {
+    return (
+      <div className="insights-section">
+        <h3 className="insights-section-title">Ask Coach</h3>
+        <p className="insights-pattern-note insights-pattern-note--muted">
+          Nothing recorded yet for this period, and no open tasks to talk about either — nothing for Coach to recap
+          right now.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="insights-section">
+      <h3 className="insights-section-title">Ask Coach</h3>
+      {!hasAnyKey ? (
+        <p className="insights-recap-nokey">
+          🔑 Add an AI key in <strong>Settings → AI Keys</strong> to enable this.
+        </p>
+      ) : (
+        <>
+          <p className="insights-recap-disclosure">
+            Ask Coach sends these summary numbers and up to five available task titles to your selected AI provider.
+          </p>
+          <button className="insights-recap-btn" type="button" onClick={onGenerate} disabled={recapLoading}>
+            {recapLoading ? "Analyzing…" : recap ? "Refresh" : "Ask Coach"}
+          </button>
+          {recapUsageNote && <p className="insights-recap-usage-note">{recapUsageNote}</p>}
+          {recapError && <p className="insights-recap-error">{recapError}</p>}
+          {recap && (
+            <div className="insights-recap-box">
+              <ReactMarkdown className="insights-recap-md" remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
+                {recap}
+              </ReactMarkdown>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+export default function InsightsPanel({ payload, onBack, uid }) {
   const { tasks = [], contributions = [] } = payload || {};
   const [rangeKey, setRangeKey] = useState("7d");
   // This panel has no other 1s/60s clock tick of its own, so without this,
@@ -224,10 +287,11 @@ export default function InsightsPanel({ payload, onBack }) {
   // account's lifetime) — slice it into the range window exactly once per
   // recompute and hand the same `daily` array to every builder that needs
   // it, instead of each one re-slicing the full array independently.
-  const { stats, daily, weekday, category } = useMemo(() => {
+  const { stats, daily, weekday, category, rangeDays } = useMemo(() => {
     const rangeDays = getDateRangeDays(rangeKey, parseLocalDateOnly(todayStr));
     const dailySlice = sliceContributions(contributions, rangeDays);
     return {
+      rangeDays,
       stats: computeRangeStats(dailySlice),
       daily: dailySlice,
       weekday: rangeKey !== "today" ? computeCompletionsByDayOfWeek(dailySlice) : null,
@@ -236,6 +300,103 @@ export default function InsightsPanel({ payload, onBack }) {
   }, [rangeKey, tasks, contributions, todayStr]);
 
   const hasAnyCompletions = stats.totalCompleted > 0;
+
+  // ---- Ask Coach recap ----------------------------------------------------
+  const recapAvailability = classifyRecapAvailability({
+    recordedCompletionTotal: stats.totalCompleted,
+    currentOpenCount: activeMix.currentOpenCount,
+  });
+
+  const recapInput = useMemo(
+    () => buildRecapInput({ tasks, rangeKey, rangeDays, stats, daily, weekday, category, activeMix }),
+    [tasks, rangeKey, rangeDays, stats, daily, weekday, category, activeMix]
+  );
+  const inputSignature = useMemo(() => computeInputSignature(recapInput), [recapInput]);
+
+  const [recap, setRecap] = useState(null);
+  const [recapLoading, setRecapLoading] = useState(false);
+  const [recapError, setRecapError] = useState(null);
+  const [recapUsageNote, setRecapUsageNote] = useState(null);
+
+  // One guard per mounted panel — tracks request identity so a resolving
+  // request only ever updates state if it's still the latest one for the
+  // live (uid, rangeKey, inputSignature) context. See
+  // insightsRecapContext.js's createRequestGuard for the full contract.
+  const guardRef = useRef(null);
+  if (!guardRef.current) guardRef.current = createRequestGuard();
+
+  // uid/rangeKey/inputSignature changing means the live context changed —
+  // invalidate whatever was in flight, reset visible state, and rehydrate
+  // only from a cache record that actually matches the new context. A
+  // structurally-valid-but-mismatched record is never displayed as current.
+  useEffect(() => {
+    guardRef.current.invalidate();
+    setRecapLoading(false);
+    setRecapError(null);
+    setRecapUsageNote(null);
+    const cached = insightsRecapCache.get(uid, rangeKey);
+    setRecap(
+      isCacheRecordValid(cached, { inputSignature, rangeEndDate: recapInput.rangeEndDate, promptVersion: RECAP_PROMPT_VERSION })
+        ? cached.recap
+        : null
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid, rangeKey, inputSignature]);
+
+  async function generateRecap() {
+    if (!hasAIKey()) return;
+    const identity = { uid, rangeKey, rangeEndDate: recapInput.rangeEndDate, inputSignature };
+    const session = guardRef.current.begin(identity);
+    if (!session) return; // an identical request is already in flight — no-op
+
+    setRecapLoading(true);
+    setRecapError(null);
+    setRecapUsageNote(null);
+
+    try {
+      const { groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
+      const reply = await callAI({
+        groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey,
+        systemPrompt: buildRecapSystemPrompt({ includeCurrentLoad: recapAvailability === "empty-with-load" }),
+        messages: [
+          {
+            role: "user",
+            content: `Here is the data for this recap:\n\`\`\`json\n${JSON.stringify(recapInput)}\n\`\`\`\nWrite the recap now.`,
+          },
+        ],
+        maxTokens: 500,
+        reasoningEffort: "low",
+      });
+
+      if (isUsageLimitMessage(reply)) {
+        if (session.isLive()) setRecapError(reply);
+      } else {
+        const { cleaned, usageNote } = stripUsageNote(reply);
+        // Cache only a successful, non-empty, stripped recap — never the
+        // usage note, never a usage-limit message.
+        insightsRecapCache.set(uid, rangeKey, {
+          rangeEndDate: recapInput.rangeEndDate,
+          inputSignature,
+          promptVersion: RECAP_PROMPT_VERSION,
+          recap: cleaned,
+          generatedAt: Date.now(),
+        });
+        if (session.isLive()) {
+          setRecap(cleaned);
+          setRecapUsageNote(usageNote);
+          setRecapError(null);
+        }
+      }
+    } catch (err) {
+      if (session.isLive()) setRecapError(describeAIError(err));
+    } finally {
+      session.end();
+      // Gated by isLive() same as every other state update above — a
+      // request that's since been superseded must not clear a newer
+      // request's loading spinner.
+      if (session.isLive()) setRecapLoading(false);
+    }
+  }
 
   return (
     <>
@@ -287,6 +448,16 @@ export default function InsightsPanel({ payload, onBack }) {
       {hasAnyCompletions && <CategoryBreakdownSection category={category} />}
 
       <CurrentLoadSection activeMix={activeMix} />
+
+      <AskCoachSection
+        availability={recapAvailability}
+        hasAnyKey={hasAIKey()}
+        recap={recap}
+        recapLoading={recapLoading}
+        recapError={recapError}
+        recapUsageNote={recapUsageNote}
+        onGenerate={generateRecap}
+      />
 
       <p className="insights-footnote">Based on tasks recorded in Loci. Loci does not monitor apps or screen activity.</p>
     </>

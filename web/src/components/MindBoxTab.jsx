@@ -897,7 +897,7 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
 
       {/* ── Sub-view: Insights */}
       {toolPanel === "insights" && (
-        <InsightsPanel payload={payload} onBack={() => setToolPanel(null)} />
+        <InsightsPanel payload={payload} onBack={() => setToolPanel(null)} uid={uid} />
       )}
 
       {/* ── Sub-view: Morning Ritual */}

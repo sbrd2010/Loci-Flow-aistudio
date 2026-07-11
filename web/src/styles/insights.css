@@ -258,3 +258,93 @@
     padding: 9px 4px;
   }
 }
+
+/* ── Ask Coach recap ─────────────────────────────────────────────────────
+   Kept self-contained here rather than reaching into coachUI.css's
+   .coach-briefing-box/.coach-md — insights.css is a deliberately
+   independent, dedicated stylesheet (see the top-of-file note), and the
+   recap's output is a much smaller shape (one paragraph + up to three
+   observations) than Coach's own chat markdown, so a minimal ruleset is
+   enough rather than pulling in that file's full 150+ line markdown rules. */
+.insights-recap-nokey {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin: 0;
+}
+
+.insights-recap-disclosure {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 10px;
+}
+
+.insights-recap-btn {
+  width: 100%;
+  background: var(--accent);
+  color: var(--btn-text, #fff);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 11px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition);
+  min-height: 40px;
+}
+.insights-recap-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.insights-recap-usage-note {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+
+.insights-recap-error {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  line-height: 1.6;
+  margin: 10px 0 0;
+}
+
+.insights-recap-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin: 10px 0 0;
+}
+.insights-recap-md {
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--text-primary);
+  overflow-wrap: break-word;
+}
+.insights-recap-md p {
+  margin: 0 0 8px;
+}
+.insights-recap-md p:last-child {
+  margin-bottom: 0;
+}
+.insights-recap-md ul, .insights-recap-md ol {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+.insights-recap-md strong {
+  color: var(--text-primary);
+  font-weight: 800;
+}
