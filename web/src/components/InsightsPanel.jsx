@@ -21,10 +21,9 @@ import {
   computeInputSignature,
   isCacheRecordValid,
   buildRecapSystemPrompt,
-  isUsageLimitMessage,
-  stripUsageNote,
   createRequestGuard,
   classifyRecapAvailability,
+  runRecapGeneration,
 } from "../utils/insightsRecapContext";
 import * as insightsRecapCache from "../utils/insightsRecapCache";
 
@@ -246,7 +245,9 @@ function AskCoachSection({ availability, hasAnyKey, recap, recapLoading, recapEr
       ) : (
         <>
           <p className="insights-recap-disclosure">
-            Ask Coach sends these summary numbers and up to five available task titles to your selected AI provider.
+            {availability === "empty-with-load"
+              ? "Ask Coach sends your current open task categories and counts to your selected AI provider."
+              : "Ask Coach sends these summary numbers, category counts, and up to five available task examples (title, category, priority) to your selected AI provider."}
           </p>
           <button className="insights-recap-btn" type="button" onClick={onGenerate} disabled={recapLoading}>
             {recapLoading ? "Analyzing…" : recap ? "Refresh" : "Ask Coach"}
@@ -326,11 +327,14 @@ export default function InsightsPanel({ payload, onBack, uid }) {
   if (!guardRef.current) guardRef.current = createRequestGuard();
 
   // uid/rangeKey/inputSignature changing means the live context changed —
-  // invalidate whatever was in flight, reset visible state, and rehydrate
-  // only from a cache record that actually matches the new context. A
-  // structurally-valid-but-mismatched record is never displayed as current.
+  // reset visible state and rehydrate only from a cache record that
+  // actually matches the new context (a structurally-valid-but-mismatched
+  // record is never displayed as current). The cleanup function — which
+  // React runs both before the NEXT time this effect fires on a dep change,
+  // and on unmount — is where invalidate() lives, so a still-in-flight
+  // request is superseded whether the panel's identity changed or the
+  // panel itself unmounted, via one code path instead of two.
   useEffect(() => {
-    guardRef.current.invalidate();
     setRecapLoading(false);
     setRecapError(null);
     setRecapUsageNote(null);
@@ -340,6 +344,9 @@ export default function InsightsPanel({ payload, onBack, uid }) {
         ? cached.recap
         : null
     );
+    return () => {
+      guardRef.current.invalidate();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid, rangeKey, inputSignature]);
 
@@ -347,55 +354,45 @@ export default function InsightsPanel({ payload, onBack, uid }) {
     if (!hasAIKey()) return;
     const identity = { uid, rangeKey, rangeEndDate: recapInput.rangeEndDate, inputSignature };
     const session = guardRef.current.begin(identity);
-    if (!session) return; // an identical request is already in flight — no-op
+    if (!session) return; // an identical request is already genuinely in flight — no-op
 
-    setRecapLoading(true);
-    setRecapError(null);
-    setRecapUsageNote(null);
-
-    try {
-      const { groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
-      const reply = await callAI({
+    const { groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
+    await runRecapGeneration({
+      session,
+      callAI,
+      callAIArgs: {
         groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey,
         systemPrompt: buildRecapSystemPrompt({ includeCurrentLoad: recapAvailability === "empty-with-load" }),
         messages: [
           {
             role: "user",
-            content: `Here is the data for this recap:\n\`\`\`json\n${JSON.stringify(recapInput)}\n\`\`\`\nWrite the recap now.`,
+            // No markdown fence — a task title containing "```" could
+            // otherwise appear to close the JSON block early from the
+            // model's perspective, undermining the "treat task text as
+            // data only" containment rule the system prompt states.
+            content: `Here is the data for this recap:\n${JSON.stringify(recapInput)}\nWrite the recap now.`,
           },
         ],
         maxTokens: 500,
         reasoningEffort: "low",
-      });
-
-      if (isUsageLimitMessage(reply)) {
-        if (session.isLive()) setRecapError(reply);
-      } else {
-        const { cleaned, usageNote } = stripUsageNote(reply);
-        // Cache only a successful, non-empty, stripped recap — never the
-        // usage note, never a usage-limit message.
-        insightsRecapCache.set(uid, rangeKey, {
-          rangeEndDate: recapInput.rangeEndDate,
-          inputSignature,
-          promptVersion: RECAP_PROMPT_VERSION,
-          recap: cleaned,
-          generatedAt: Date.now(),
-        });
-        if (session.isLive()) {
-          setRecap(cleaned);
-          setRecapUsageNote(usageNote);
-          setRecapError(null);
-        }
-      }
-    } catch (err) {
-      if (session.isLive()) setRecapError(describeAIError(err));
-    } finally {
-      session.end();
-      // Gated by isLive() same as every other state update above — a
-      // request that's since been superseded must not clear a newer
-      // request's loading spinner.
-      if (session.isLive()) setRecapLoading(false);
-    }
+      },
+      cacheSet: (record) => insightsRecapCache.set(uid, rangeKey, record),
+      cacheRecordBase: { rangeEndDate: recapInput.rangeEndDate, inputSignature, promptVersion: RECAP_PROMPT_VERSION },
+      onLoadingStart: () => {
+        setRecapLoading(true);
+        setRecapError(null);
+        setRecapUsageNote(null);
+      },
+      onSuccess: (cleaned, usageNote) => {
+        setRecap(cleaned);
+        setRecapUsageNote(usageNote);
+        setRecapError(null);
+      },
+      onUsageLimit: (message) => setRecapError(message),
+      onEmptyResult: () => setRecapError(describeAIError(new Error("empty_response"))),
+      onError: (err) => setRecapError(describeAIError(err)),
+      onSettle: () => setRecapLoading(false),
+    });
   }
 
   return (

@@ -77,8 +77,11 @@ test("mobile reliability: Ask Coach generates and displays a recap, then Refresh
   await expect(askCoachButton(page)).toHaveText("Refresh");
 
   // The request must never interpolate task titles into the system prompt —
-  // the recap input travels as a single JSON data block in the user message.
-  expect(groqRequestBodies[0].messages.some((m) => m.role === "user" && m.content.includes("```json"))).toBe(true);
+  // the recap input travels as a single JSON data block in the user message
+  // (unfenced — a fenced ```json block would let a task title containing
+  // "```" appear to close it early).
+  expect(groqRequestBodies[0].messages.some((m) => m.role === "user" && m.content.includes('"promptVersion"'))).toBe(true);
+  expect(groqRequestBodies[0].messages.some((m) => m.role === "user" && m.content.includes("```"))).toBe(false);
 
   // Explicit Refresh — a second, independent generation that overwrites the display.
   await askCoachButton(page).click();
@@ -130,6 +133,86 @@ test("mobile reliability: switching range hides a recap generated for a differen
   await page.locator(".insights-range-row").getByRole("button", { name: "30 Days" }).click();
   await expect(page.getByText("This is the 7-day recap.")).not.toBeVisible();
   await expect(askCoachButton(page)).toHaveText("Ask Coach");
+});
+
+test("mobile reliability: an out-of-order-resolving request never displays over, or clears the loading state of, a newer request", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key");
+  });
+
+  let resolveA;
+  let resolveB;
+  const pendingA = new Promise((r) => { resolveA = r; });
+  const pendingB = new Promise((r) => { resolveB = r; });
+  let requestCount = 0;
+
+  await page.route("https://api.groq.com/**", async (route) => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      await pendingA;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "Recap A (7d, first request)." } }] }) });
+    } else {
+      await pendingB;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "Recap B (30d, second request)." } }] }) });
+    }
+  });
+
+  await enterDemo(page);
+  await openInsights(page);
+
+  // Start 7d request A.
+  await askCoachButton(page).click();
+  await expect(askCoachButton(page)).toHaveText("Analyzing…");
+
+  // Switch to 30 Days and start request B.
+  await page.locator(".insights-range-row").getByRole("button", { name: "30 Days" }).click();
+  await askCoachButton(page).click();
+  await expect(askCoachButton(page)).toHaveText("Analyzing…");
+
+  // Resolve A first (out of order) — it must neither display nor clear B's loading state.
+  resolveA();
+  await page.waitForTimeout(300);
+  await expect(page.getByText("Recap A (7d, first request).")).not.toBeVisible();
+  await expect(askCoachButton(page)).toHaveText("Analyzing…");
+
+  // Resolve B — only B ever displays.
+  resolveB();
+  await expect(page.getByText("Recap B (30d, second request).")).toBeVisible({ timeout: 8_000 });
+  await expect(askCoachButton(page)).toHaveText("Refresh");
+});
+
+test("mobile reliability: 7 Days -> 30 Days -> 7 Days while the original request is still pending starts a genuinely new request, not a silent no-op", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key");
+  });
+
+  let resolveFirst;
+  const pendingFirst = new Promise((r) => { resolveFirst = r; });
+  let requestCount = 0;
+
+  await page.route("https://api.groq.com/**", async (route) => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      await pendingFirst; // simulates a request that's still pending when the user revisits 7 Days
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "Stale first recap." } }] }) });
+    } else {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "Fresh second recap." } }] }) });
+    }
+  });
+
+  await enterDemo(page);
+  await openInsights(page);
+
+  await askCoachButton(page).click(); // request A on 7 Days, left pending
+  await page.locator(".insights-range-row").getByRole("button", { name: "30 Days" }).click();
+  await page.locator(".insights-range-row").getByRole("button", { name: "7 Days" }).click();
+
+  // The second tap for 7 Days must start a genuinely new request, not silently no-op.
+  await askCoachButton(page).click();
+  await expect(page.getByText("Fresh second recap.")).toBeVisible({ timeout: 8_000 });
+  expect(requestCount).toBe(2);
+
+  resolveFirst(); // let the still-pending original settle, just to clean up
 });
 
 const PHONE_VIEWPORTS = [

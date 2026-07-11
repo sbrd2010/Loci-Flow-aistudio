@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   RECAP_PROMPT_VERSION,
   sortCategoryCounts,
@@ -11,6 +11,7 @@ import {
   isUsageLimitMessage,
   stripUsageNote,
   createRequestGuard,
+  runRecapGeneration,
 } from "./insightsRecapContext";
 
 describe("sortCategoryCounts", () => {
@@ -122,8 +123,33 @@ describe("buildRecapInput / computeInputSignature (canonicalization + determinis
     expect(input.promptVersion).toBe(RECAP_PROMPT_VERSION);
     expect(input).not.toHaveProperty("detailCoverage");
     expect(input).not.toHaveProperty("authoritativeTotal");
+    expect(input).not.toHaveProperty("categoryCounts"); // renamed to availableCategoryDetails
     expect(input.recordedCompletionTotal).toBe(2);
     expect(input.taskExamplesArePartial).toBe(true);
+    expect(input.categoryDetailsArePartial).toBe(true);
+  });
+
+  it("exposes availableCategoryDetails as a sorted array, marked partial exactly like task examples", () => {
+    const input = buildRecapInput(baseArgs([], { categoryMix: {}, currentOpenCount: 0 }));
+    expect(input.availableCategoryDetails).toEqual([
+      { category: "Health", count: 1 },
+      { category: "Work", count: 1 },
+    ]);
+  });
+
+  it("sends no task examples and no category details for a zero-completion period, even if a retained task's dateCompletedString happens to fall in range (the issue #361 clock mismatch)", () => {
+    const strayTask = {
+      uuid: "stray", title: "Stray completion", isCompleted: true, isDeleted: false,
+      dateCompletedString: "2026-06-10", category: "Work",
+    };
+    const input = buildRecapInput({
+      ...baseArgs([strayTask], { categoryMix: { Work: 1 }, currentOpenCount: 1 }),
+      stats: { totalCompleted: 0, dailyPace: 0, completionDaysCount: 0 }, // contributions[] says zero
+      category: { categoryCounts: { Work: 1 }, retainedCount: 1 }, // but a stray retained task disagrees
+    });
+    expect(input.taskExamples).toEqual([]);
+    expect(input.availableTaskExampleCount).toBe(0);
+    expect(input.availableCategoryDetails).toEqual([]);
   });
 
   it("produces an identical inputSignature when the task array is reordered", () => {
@@ -205,10 +231,13 @@ describe("isCacheRecordValid", () => {
 });
 
 describe("buildRecapSystemPrompt (partial-example honesty + prompt-injection containment wording)", () => {
-  it("always states the task examples are partial, never an exact percentage", () => {
+  it("treats category details and task examples as equally partial, never an exact percentage or distribution", () => {
     const prompt = buildRecapSystemPrompt({ includeCurrentLoad: false });
-    expect(prompt).toMatch(/available retained task records/i);
-    expect(prompt).toMatch(/may not represent every completion/i);
+    expect(prompt).toMatch(/category details and task examples come from available retained task records/i);
+    expect(prompt).toMatch(/may not represent every recorded completion/i);
+    expect(prompt).toMatch(/among the available task details/i);
+    expect(prompt).toMatch(/never infer the overall category distribution/i);
+    expect(prompt).toMatch(/never.*calculate category percentages against recordedCompletionTotal/i);
     expect(prompt).not.toMatch(/%/);
     expect(prompt).not.toMatch(/\d+\s*(of|\/)\s*\d+/); // no literal "X of Y" / "X/Y" ratio anywhere in the prompt itself
   });
@@ -224,9 +253,10 @@ describe("buildRecapSystemPrompt (partial-example honesty + prompt-injection con
     expect(prompt).toMatch(/no productivity score, no diagnosis/i);
   });
 
-  it("only allows commenting on current load, and only with the explicit no-completions disclosure, when includeCurrentLoad is true", () => {
+  it("only allows commenting on current load, and only with the explicit no-completions-and-no-examples disclosure, when includeCurrentLoad is true", () => {
     const withLoad = buildRecapSystemPrompt({ includeCurrentLoad: true });
     expect(withLoad).toMatch(/recorded no completions for the selected period/i);
+    expect(withLoad).toMatch(/no task examples or category details are included/i);
     expect(withLoad).toMatch(/currentLoad/);
 
     const withoutLoad = buildRecapSystemPrompt({ includeCurrentLoad: false });
@@ -327,5 +357,137 @@ describe("createRequestGuard (stale-response / duplicate-request protection)", (
     const sessionB = guard.begin({ uid: "u1", rangeKey: "30d" });
     expect(sessionA).not.toBeNull();
     expect(sessionB).not.toBeNull();
+  });
+
+  // Regression: a Set-based "in-flight identities" guard has no way to tell
+  // "genuinely still in flight" apart from "stale — invalidated by an
+  // identity round-trip, but the old request hasn't called end() yet," so it
+  // keeps blocking new begin() calls for a revisited identity until the
+  // ORIGINAL (now-abandoned) request finishes. Found independently by an
+  // automated loopcheck and a Codex review comment on the initial version of
+  // this guard.
+  it("a 7d -> 30d -> 7d round trip while the original 7d request is still pending allows a genuinely new 7d request (the core reported bug)", () => {
+    const guard = createRequestGuard();
+    const identity = { uid: "u1", rangeKey: "7d" };
+    const sessionOld = guard.begin(identity);
+    expect(sessionOld).not.toBeNull();
+
+    guard.invalidate(); // switched to 30d
+    guard.invalidate(); // switched back to 7d — identity is identical to sessionOld's, but sessionOld hasn't ended
+
+    const sessionNew = guard.begin(identity); // the second "Ask Coach" tap for 7d
+    expect(sessionNew).not.toBeNull(); // must NOT silently no-op
+    expect(sessionNew.isLive()).toBe(true);
+    expect(sessionOld.isLive()).toBe(false);
+  });
+
+  it("an old session's end() cannot release a newer same-identity lock, so a genuine duplicate against the NEW request is still correctly blocked", () => {
+    const guard = createRequestGuard();
+    const identity = { uid: "u1", rangeKey: "7d" };
+    const sessionOld = guard.begin(identity);
+    guard.invalidate();
+    const sessionNew = guard.begin(identity); // supersedes sessionOld, takes over the identity's lock
+
+    sessionOld.end(); // late end() from the old, already-superseded request
+
+    const dupeAttempt = guard.begin(identity); // sessionNew is still genuinely in flight
+    expect(dupeAttempt).toBeNull(); // sessionOld.end() must not have released sessionNew's lock
+    expect(sessionNew.isLive()).toBe(true); // unaffected
+  });
+});
+
+describe("runRecapGeneration", () => {
+  const cacheRecordBase = () => ({ rangeEndDate: "2026-06-10", inputSignature: "sig1", promptVersion: RECAP_PROMPT_VERSION });
+  const noop = () => {};
+
+  it("caches and calls onSuccess only when the session is still live at resolution", async () => {
+    const guard = createRequestGuard();
+    const session = guard.begin({ uid: "u1", rangeKey: "7d" });
+    const cacheSet = vi.fn();
+    const onSuccess = vi.fn();
+    await runRecapGeneration({
+      session, callAI: async () => "A real recap.", callAIArgs: {}, cacheSet, cacheRecordBase: cacheRecordBase(),
+      onLoadingStart: noop, onSuccess, onUsageLimit: noop, onEmptyResult: noop, onError: noop, onSettle: noop,
+    });
+    expect(cacheSet).toHaveBeenCalledTimes(1);
+    expect(cacheSet).toHaveBeenCalledWith(expect.objectContaining({ recap: "A real recap.", ...cacheRecordBase() }));
+    expect(onSuccess).toHaveBeenCalledWith("A real recap.", null);
+  });
+
+  it("does NOT cache or call onSuccess/onSettle when the session has been superseded before resolution", async () => {
+    const guard = createRequestGuard();
+    const session = guard.begin({ uid: "u1", rangeKey: "7d" });
+    guard.invalidate(); // simulate an identity change while this call is in flight
+    const cacheSet = vi.fn();
+    const onSuccess = vi.fn();
+    const onSettle = vi.fn();
+    await runRecapGeneration({
+      session, callAI: async () => "A real recap.", callAIArgs: {}, cacheSet, cacheRecordBase: cacheRecordBase(),
+      onLoadingStart: noop, onSuccess, onUsageLimit: noop, onEmptyResult: noop, onError: noop, onSettle,
+    });
+    expect(cacheSet).not.toHaveBeenCalled();
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(onSettle).not.toHaveBeenCalled(); // must not clear a (hypothetical) newer request's loading state
+  });
+
+  it("does not cache an empty/whitespace-only cleaned response, and calls onEmptyResult instead", async () => {
+    const guard = createRequestGuard();
+    const session = guard.begin({ uid: "u1", rangeKey: "7d" });
+    const cacheSet = vi.fn();
+    const onEmptyResult = vi.fn();
+    await runRecapGeneration({
+      session, callAI: async () => "   ", callAIArgs: {}, cacheSet, cacheRecordBase: cacheRecordBase(),
+      onLoadingStart: noop, onSuccess: noop, onUsageLimit: noop, onEmptyResult, onError: noop, onSettle: noop,
+    });
+    expect(cacheSet).not.toHaveBeenCalled();
+    expect(onEmptyResult).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats a usage-limit-only reply as an error state, never caching it", async () => {
+    const guard = createRequestGuard();
+    const session = guard.begin({ uid: "u1", rangeKey: "7d" });
+    const cacheSet = vi.fn();
+    const onUsageLimit = vi.fn();
+    await runRecapGeneration({
+      session,
+      callAI: async () => "AI daily limit reached: you have used 120/120 AI calls today. Loci will reset your AI allowance tomorrow.",
+      callAIArgs: {}, cacheSet, cacheRecordBase: cacheRecordBase(),
+      onLoadingStart: noop, onSuccess: noop, onUsageLimit, onEmptyResult: noop, onError: noop, onSettle: noop,
+    });
+    expect(cacheSet).not.toHaveBeenCalled();
+    expect(onUsageLimit).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onError (never onSuccess/cache) when callAI rejects", async () => {
+    const guard = createRequestGuard();
+    const session = guard.begin({ uid: "u1", rangeKey: "7d" });
+    const cacheSet = vi.fn();
+    const onError = vi.fn();
+    await runRecapGeneration({
+      session, callAI: async () => { throw new Error("503"); }, callAIArgs: {}, cacheSet, cacheRecordBase: cacheRecordBase(),
+      onLoadingStart: noop, onSuccess: noop, onUsageLimit: noop, onEmptyResult: noop, onError, onSettle: noop,
+    });
+    expect(cacheSet).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it("always ends the session exactly once, whether the call succeeds or fails", async () => {
+    const guard = createRequestGuard();
+    const session = guard.begin({ uid: "u1", rangeKey: "7d" });
+    const endSpy = vi.spyOn(session, "end");
+    await runRecapGeneration({
+      session, callAI: async () => "ok", callAIArgs: {}, cacheSet: noop, cacheRecordBase: cacheRecordBase(),
+      onLoadingStart: noop, onSuccess: noop, onUsageLimit: noop, onEmptyResult: noop, onError: noop, onSettle: noop,
+    });
+    expect(endSpy).toHaveBeenCalledTimes(1);
+
+    const guard2 = createRequestGuard();
+    const session2 = guard2.begin({ uid: "u1", rangeKey: "7d" });
+    const endSpy2 = vi.spyOn(session2, "end");
+    await runRecapGeneration({
+      session: session2, callAI: async () => { throw new Error("503"); }, callAIArgs: {}, cacheSet: noop, cacheRecordBase: cacheRecordBase(),
+      onLoadingStart: noop, onSuccess: noop, onUsageLimit: noop, onEmptyResult: noop, onError: noop, onSettle: noop,
+    });
+    expect(endSpy2).toHaveBeenCalledTimes(1);
   });
 });
