@@ -160,6 +160,9 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
   const pClass = p.toLowerCase();
   const isNow = isFirst && start <= currentDayMinutes() + 15;
   const lineColor = PRIORITY_LINE_COLORS[p] || PRIORITY_LINE_COLORS.P4;
+  const subSteps = task.subSteps || [];
+  const doneSubStepsCount = subSteps.filter(s => s.done).length;
+  const orderedSubSteps = [...subSteps.filter(s => !s.done), ...subSteps.filter(s => s.done)];
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -195,6 +198,9 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
             <div className="dm-card-body">
               <span className="dm-card-title"><LinkifyText text={task.title} /></span>
               {task.concreteStep && <span className="dm-card-step"><LinkifyText text={task.concreteStep} /></span>}
+              {subSteps.length > 0 && (
+                <span className="dm-card-substeps-count">{doneSubStepsCount}/{subSteps.length} steps done</span>
+              )}
             </div>
             <div className="dm-card-right">
               <PriorityBadge priority={task.priority} />
@@ -228,6 +234,20 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
 
         {isExpanded && (
           <div className="dm-edit-panel" onPointerDown={e => e.stopPropagation()}>
+            {subSteps.length > 0 && (
+              <ul className="dm-substeps-list">
+                {orderedSubSteps.map(step => (
+                  <li
+                    key={step.id}
+                    className={`dm-substep${step.done ? " is-done" : ""}`}
+                    aria-label={`${step.done ? "Completed" : "Not completed"}: ${step.text}`}
+                  >
+                    <span className="dm-substep-check" aria-hidden="true">{step.done ? "✓" : ""}</span>
+                    <span className="dm-substep-text">{step.text}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
             <div className="dm-edit-row">
               <label className="dm-edit-label">
                 Duration

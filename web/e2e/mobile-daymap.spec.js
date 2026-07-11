@@ -90,6 +90,42 @@ test("reliability: Day Map route persists after closing and reopening", async ({
   await expectNoHorizontalOverflow(page);
 });
 
+test("Day Map cards show sub-step progress and reveal the full sub-step list when expanded", async ({ page }) => {
+  await enterDemo(page, { width: 375, height: 812 });
+
+  await openDayMap(page);
+  await autoFillDayMap(page);
+
+  // demo-t1 ("Reply to the important message...") is P1 with 4 sub-steps (2 done)
+  // and sorts first into the auto-filled route.
+  const firstCard = page.locator(".dm-card-main").first();
+  await expect(firstCard.getByText("2/4 steps done")).toBeVisible({ timeout: 5_000 });
+
+  await page.locator(".dm-btn-menu").first().click();
+  const substepsList = page.locator(".dm-substeps-list").first();
+  await expect(substepsList).toBeVisible({ timeout: 3_000 });
+  await expect(substepsList.getByText("Open email / LinkedIn / WhatsApp")).toBeVisible();
+  await expect(substepsList.getByText("Write a short, honest reply (3 sentences is enough)")).toBeVisible();
+
+  // Not-done steps render first, done steps last (matches TaskRow.jsx's ordering),
+  // and each row's done/not-done state is reflected in both class and checkmark glyph.
+  await expect(substepsList.locator(".dm-substep")).toHaveCount(4);
+  await expect(substepsList.locator(".dm-substep.is-done")).toHaveCount(2);
+  const rows = substepsList.locator(".dm-substep");
+  await expect(rows.nth(0)).not.toHaveClass(/is-done/);
+  await expect(rows.nth(0).getByText("Write a short, honest reply (3 sentences is enough)")).toBeVisible();
+  await expect(rows.nth(0).locator(".dm-substep-check")).toHaveText("");
+  await expect(rows.nth(0)).toHaveAttribute(
+    "aria-label",
+    "Not completed: Write a short, honest reply (3 sentences is enough)"
+  );
+  await expect(rows.nth(3)).toHaveClass(/is-done/);
+  await expect(rows.nth(3).locator(".dm-substep-check")).toHaveText("✓");
+  await expect(rows.nth(3)).toHaveAttribute("aria-label", "Completed: Read the message properly");
+
+  await expectNoHorizontalOverflow(page);
+});
+
 test("reliability: removing a Day Map task reflows the remaining route", async ({ page }) => {
   await enterDemo(page, { width: 375, height: 812 });
 
