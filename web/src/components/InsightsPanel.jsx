@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import "../styles/insights.css";
 import { CATEGORY_ICONS } from "../utils/taskOps";
 import {
@@ -144,12 +144,20 @@ function CategoryBars({ entries, total, variant }) {
 
 function CategoryBreakdownSection({ category }) {
   const entries = Object.entries(category.categoryCounts).sort((a, b) => b[1] - a[1]);
-  if (entries.length === 0) return null;
+  const showCoverageNote = category.detailCoverage !== null && category.detailCoverage < 1;
+  // Only skip the whole section when there's truly nothing to say — if
+  // coverage is low (including the 0-entries, 0%-coverage case), the
+  // disclosure below is exactly what needs to render, not what gets hidden.
+  if (entries.length === 0 && !showCoverageNote) return null;
   return (
     <div className="insights-section">
       <h3 className="insights-section-title">Completed by Category</h3>
-      <CategoryBars entries={entries} total={category.retainedCount} />
-      {category.detailCoverage !== null && category.detailCoverage < 1 && (
+      {entries.length > 0 ? (
+        <CategoryBars entries={entries} total={category.retainedCount} />
+      ) : (
+        <p className="insights-pattern-note insights-pattern-note--muted">No category details available for this period.</p>
+      )}
+      {showCoverageNote && (
         <p className="insights-coverage-note">
           Category details are available for {category.retainedCount} of {category.authoritativeTotal} recorded completions.
         </p>
@@ -176,12 +184,21 @@ export default function InsightsPanel({ payload, onBack }) {
   const { tasks = [], contributions = [] } = payload || {};
   const [rangeKey, setRangeKey] = useState("7d");
 
-  const rangeDays = getDateRangeDays(rangeKey, new Date());
-  const stats = computeRangeStats(contributions, rangeDays);
-  const daily = sliceContributions(contributions, rangeDays);
-  const weekday = rangeKey !== "today" ? computeCompletionsByDayOfWeek(contributions, rangeDays) : null;
-  const category = computeCompletedByCategory(tasks, rangeDays, stats.totalCompleted);
-  const activeMix = computeActiveMix(tasks);
+  // contributions[] is unbounded (one record per active day for the
+  // account's lifetime) and every one of these builders re-scans it — worth
+  // skipping on re-renders that don't actually change rangeKey/tasks/
+  // contributions (e.g. an unrelated config sync tick while this is open).
+  const { stats, daily, weekday, category, activeMix } = useMemo(() => {
+    const rangeDays = getDateRangeDays(rangeKey, new Date());
+    const rangeStats = computeRangeStats(contributions, rangeDays);
+    return {
+      stats: rangeStats,
+      daily: sliceContributions(contributions, rangeDays),
+      weekday: rangeKey !== "today" ? computeCompletionsByDayOfWeek(contributions, rangeDays) : null,
+      category: computeCompletedByCategory(tasks, rangeDays, rangeStats.totalCompleted),
+      activeMix: computeActiveMix(tasks),
+    };
+  }, [rangeKey, tasks, contributions]);
 
   const hasAnyCompletions = stats.totalCompleted > 0;
 
