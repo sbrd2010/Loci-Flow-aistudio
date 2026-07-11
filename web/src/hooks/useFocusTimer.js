@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotifications";
 import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete } from "../utils/focusSession";
+import { safeUUID } from "../utils/uuid";
 
 // Lifts the Focus timer state to the App level so it survives tab switches
 // (TodayTab unmounts when the user navigates to another tab) and can be
@@ -40,9 +41,42 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   const timerIntervalRef = useRef(null);
   // Absolute deadline for the running timer — lets us snap to correct time on tab-show
   const deadlineRef = useRef(null);
+  // Correlates a focus_started activity-ledger event to its eventual terminal
+  // event. Minted by startFocusSession(), consumed exactly once by
+  // endFocusSession() — see both below for the exactly-one-terminal-event
+  // guarantee this pair provides.
+  const focusSessionIdRef = useRef(null);
+  const focusStartedAtRef = useRef(null);
+  const focusInitialPlannedSecondsRef = useRef(null);
+  // The task the in-flight session belongs to, captured at start time — lets
+  // endFocusSession() (and startFocusSession()'s auto-close of a still-open
+  // prior session, see below) identify which task a terminal event is for
+  // without relying on `activeTask`, which may have already moved on to a
+  // different task by the time the session actually ends.
+  const focusSessionTaskRef = useRef(null);
+  // "Keep Going" (extendTimer) restarts timerMaxSeconds/timerSecondsLeft
+  // from scratch for a fresh block on the SAME still-open focusSessionId —
+  // without accumulating each finished block's numbers here first, the
+  // eventual terminal event's focusElapsedSeconds/focusFinalPlannedSeconds
+  // would only reflect the final block, silently losing every earlier one
+  // (e.g. a 25-min block + a 5-min "keep going" continuation would report
+  // only 5 minutes). addTimeToSession (the mid-block "+5" button) already
+  // extends timerMaxSeconds/timerSecondsLeft in place rather than resetting
+  // them, so it doesn't need this — only extendTimer does.
+  const focusSessionAccumulatedElapsedRef = useRef(0);
+  const focusSessionAccumulatedPlannedRef = useRef(0);
+  const [focusSessionId, setFocusSessionId] = useState(null);
   // Lets the activeTask-sync effect tell "switched to a different task" apart
   // from "same task, duration edited mid-session" (the two need different responses).
   const prevActiveTaskRef = useRef({ uuid: null, timeEstimateMinutes: null });
+  // Set by startFocusSession when a caller supplies an explicit plannedSeconds
+  // override (Coach's one-off duration) — tells the activeTask-sync effect to
+  // skip its own task-estimate-derived reset the very next time it would
+  // otherwise fire for this task becoming active, so the override isn't
+  // immediately stomped the moment `tasks` syncs and activeTask updates.
+  // Consumed (cleared) after that single pass so later, unrelated syncs for
+  // the same task aren't permanently suppressed.
+  const skipNextDurationSyncRef = useRef(false);
 
   const activeTask = tasks.find((t) => t.isNowFocus && !t.isDeleted && !t.isCompleted) || null;
 
@@ -267,9 +301,19 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       timerIntervalRef.current = null;
     }
     deadlineRef.current = null;
-    
+    // Drop any in-flight session reference on account switch — never fire a
+    // terminal event tagged with the new account's uid for a session that
+    // belonged to whoever was signed in before.
+    focusSessionIdRef.current = null;
+    focusStartedAtRef.current = null;
+    focusInitialPlannedSecondsRef.current = null;
+    focusSessionTaskRef.current = null;
+    focusSessionAccumulatedElapsedRef.current = 0;
+    focusSessionAccumulatedPlannedRef.current = 0;
+    setFocusSessionId(null);
+
     closePiP(); // Close pop-out on account switch
-    
+
     const reset = buildResetFocusState(config);
     setIsTimerRunning(reset.isTimerRunning);
     setTimerSecondsLeft(reset.timerSecondsLeft);
@@ -282,6 +326,15 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
 
   useEffect(() => {
     const prev = prevActiveTaskRef.current;
+    if (skipNextDurationSyncRef.current) {
+      // startFocusSession just applied an explicit plannedSeconds override for
+      // this exact task becoming active — leave timerMaxSeconds/timerSecondsLeft
+      // alone for this one pass instead of re-deriving them from the task's own
+      // estimate, or the override would be overwritten the instant `tasks` syncs.
+      skipNextDurationSyncRef.current = false;
+      prevActiveTaskRef.current = { uuid: activeTask?.uuid ?? null, timeEstimateMinutes: activeTask?.timeEstimateMinutes ?? null };
+      return;
+    }
     if (activeTask) {
       const rawMins = Number(activeTask.timeEstimateMinutes);
       const taskSecs = (rawMins > 0 ? rawMins : 25) * 60;
@@ -409,12 +462,37 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
 
   // Restart the timer for the same task with a fresh duration ("Keep going" extension)
   const extendTimer = (minutes) => {
+    // Accumulate the block that's ending before resetting timerMaxSeconds/
+    // timerSecondsLeft for the new one — the session (focusSessionId) stays
+    // the same across "Keep Going", so without this the eventual terminal
+    // event would only see the final block's numbers.
+    if (focusSessionIdRef.current) {
+      focusSessionAccumulatedElapsedRef.current += Math.max(0, timerMaxSeconds - timerSecondsLeft);
+      focusSessionAccumulatedPlannedRef.current += timerMaxSeconds;
+    }
     const next = buildExtendedTimerState(minutes);
     setTimerMaxSeconds(next.timerMaxSeconds);
     setTimerSecondsLeft(next.timerSecondsLeft);
     setIsTimerRunning(next.isTimerRunning);
     setSessionCompletePending(false);
     setShowExtendPicker(false);
+  };
+
+  // Change the duration of an in-progress session (e.g. FocusModePage's
+  // duration picker), pausing the timer at the new duration. Same
+  // accumulate-before-reset requirement as extendTimer above — without it, a
+  // session that ran 10 minutes before the user changed the duration would
+  // later report an elapsed time near 0, since endFocusSession only ever
+  // sees the current (post-change) block's timerMaxSeconds/timerSecondsLeft.
+  const changeFocusDuration = (minutes) => {
+    if (focusSessionIdRef.current) {
+      focusSessionAccumulatedElapsedRef.current += Math.max(0, timerMaxSeconds - timerSecondsLeft);
+      focusSessionAccumulatedPlannedRef.current += timerMaxSeconds;
+    }
+    setIsTimerRunning(false);
+    const secs = minutes * 60;
+    setTimerSecondsLeft(secs);
+    setTimerMaxSeconds(secs);
   };
 
   // Add time to an in-progress session (e.g. the PiP "+5 min" button) without
@@ -433,6 +511,122 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     if (deadlineRef.current != null) deadlineRef.current += addSecs * 1000;
   };
 
+  // Mints a fresh focusSessionId and records session-start metadata, then
+  // starts the timer — the single entry point every "start a focus session"
+  // call site should use (instead of setIsFocusMode/setIsTimerRunning
+  // directly) so a focus_started activity-ledger event can be built from the
+  // returned info without each call site duplicating session-start detection.
+  //
+  // `task` is required so a still-open prior session (see priorSession below)
+  // can be attributed to the task it actually belonged to, since by the time
+  // a caller gets around to building that terminal event, `activeTask` may
+  // have already moved on to the task being started here.
+  //
+  // `enterFocusMode` (default true) controls whether this also opens the
+  // full-screen Focus overlay. Coach-triggered sessions pass false — a chat
+  // action starting a background session shouldn't yank the user out of the
+  // conversation the way explicitly tapping "Focus" does.
+  // `plannedSeconds` (optional) overrides the derived task-estimate duration
+  // and is also applied directly to the running timer — used by Coach's
+  // START_FOCUS action tag, which can carry its own explicit "|<minutes>"
+  // duration distinct from the task's own timeEstimateMinutes. Existing
+  // callers that don't pass it are unaffected: timerMaxSeconds/timerSecondsLeft
+  // are left for the activeTask-sync effect to derive from the task, exactly
+  // as before.
+  const startFocusSession = (task, { enterFocusMode = true, plannedSeconds } = {}) => {
+    // Auto-close any session that's still open when a new one starts. This
+    // hook's state is lifted to App level specifically so it survives
+    // navigating away without ending a session (e.g. Day Map's "Start Focus"
+    // on a different task while another task's session is still running) —
+    // without this, the previous session's focusSessionId would be silently
+    // overwritten below, orphaned forever with no terminal event, violating
+    // the "every focus_started eventually gets a terminal event" guarantee.
+    const priorSession = endFocusSession("user_abandoned");
+
+    const sessionId = safeUUID();
+    const startedAt = Date.now();
+    // Derived directly from `task` (same fallback formula as the
+    // activeTask-sync effect below), NOT read from `timerMaxSeconds` state —
+    // a caller that just pinned `task` (savePayload) and immediately calls
+    // this in the same synchronous handler hasn't seen that pin reflected in
+    // `tasks`/`activeTask` yet (React state updates are batched), so
+    // `timerMaxSeconds` would still be whatever the PREVIOUS active task's
+    // duration was, silently recording the wrong planned duration.
+    const derivedPlannedSeconds = task
+      ? (Number(task.timeEstimateMinutes) > 0 ? Number(task.timeEstimateMinutes) : 25) * 60
+      : timerMaxSeconds;
+    const initialPlannedSeconds = Number(plannedSeconds) > 0 ? Number(plannedSeconds) : derivedPlannedSeconds;
+    focusSessionIdRef.current = sessionId;
+    focusStartedAtRef.current = startedAt;
+    focusInitialPlannedSecondsRef.current = initialPlannedSeconds;
+    focusSessionTaskRef.current = task;
+    focusSessionAccumulatedElapsedRef.current = 0;
+    focusSessionAccumulatedPlannedRef.current = 0;
+    setFocusSessionId(sessionId);
+    if (enterFocusMode) setIsFocusMode(true);
+    setIsTimerRunning(true);
+    // Always reset to a fresh initialPlannedSeconds — not just when an
+    // explicit plannedSeconds override is given. Without this, a genuinely
+    // NEW session (e.g. re-tapping Focus on a task that's already
+    // activeTask after a prior session on it was properly ended, with time
+    // left unused) would keep whatever stale timerSecondsLeft the PREVIOUS
+    // session left behind: activeTask?.uuid doesn't change in that case, so
+    // the activeTask-sync effect below never re-runs to derive a fresh
+    // countdown either.
+    setTimerMaxSeconds(initialPlannedSeconds);
+    setTimerSecondsLeft(initialPlannedSeconds);
+    // `task` becoming `activeTask` (once `tasks` syncs) would otherwise
+    // trigger the activeTask-sync effect to immediately re-derive/overwrite
+    // this value from task.timeEstimateMinutes — suppress that one pass.
+    // Only needed when `task` is actually about to become a NEW activeTask
+    // (its uuid changing is what re-triggers that effect) — if `task` is
+    // already the current activeTask, the effect's deps won't change from
+    // this call, so it never runs to consume the flag, and it would
+    // otherwise dangle until some later, unrelated task change wrongly
+    // consumes it and skips that sync instead.
+    if (task?.uuid !== activeTask?.uuid) {
+      skipNextDurationSyncRef.current = true;
+    }
+    return {
+      focusSessionId: sessionId, focusStartedAt: startedAt, focusInitialPlannedSeconds: initialPlannedSeconds,
+      // Non-null only if a still-open session had to be auto-closed to make
+      // room for this one. Callers should build and write ITS terminal event
+      // too (priorSession.task, reason "user_abandoned") alongside the new
+      // focus_started — this hook can't write activity-ledger events itself
+      // (no access to uid/writeActivityEvents), so the caller must.
+      priorSession,
+    };
+  };
+
+  // Consumes the active session (if any) and returns everything needed to
+  // build its terminal (focus_completed/focus_abandoned) event, or null if
+  // there's nothing to end — either no session was ever started, or an
+  // earlier call already consumed it. This is what guarantees at most one
+  // terminal event per focusSessionId no matter which UI path ends it.
+  const endFocusSession = (focusEndReason) => {
+    const sessionId = focusSessionIdRef.current;
+    if (!sessionId) return null;
+    const result = {
+      focusSessionId: sessionId,
+      focusStartedAt: focusStartedAtRef.current,
+      focusInitialPlannedSeconds: focusInitialPlannedSecondsRef.current,
+      // Sum of every earlier "Keep Going" block's numbers plus the current
+      // (final) block's — see extendTimer's accumulation above.
+      focusFinalPlannedSeconds: focusSessionAccumulatedPlannedRef.current + timerMaxSeconds,
+      focusElapsedSeconds: focusSessionAccumulatedElapsedRef.current + Math.max(0, timerMaxSeconds - timerSecondsLeft),
+      focusEndReason,
+      task: focusSessionTaskRef.current,
+    };
+    focusSessionIdRef.current = null;
+    focusStartedAtRef.current = null;
+    focusInitialPlannedSecondsRef.current = null;
+    focusSessionTaskRef.current = null;
+    focusSessionAccumulatedElapsedRef.current = 0;
+    focusSessionAccumulatedPlannedRef.current = 0;
+    setFocusSessionId(null);
+    return result;
+  };
+
   return {
     activeTask,
     isTimerRunning, setIsTimerRunning,
@@ -443,8 +637,18 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     sessionCompletePending, dismissSessionComplete,
     showExtendPicker, setShowExtendPicker,
     extendTimer,
+    changeFocusDuration,
     addTimeToSession,
     pipOpen,
     handleOpenPiP,
+    focusSessionId, startFocusSession, endFocusSession,
+    // Which task the currently open session (if any) actually belongs to —
+    // NOT necessarily the same as `activeTask`, which reflects the current
+    // isNowFocus pin and can point at a different task than the still-open
+    // session when something retargeted the pin via a raw pin-only action
+    // instead of startFocusSession()/endFocusSession(). Callers deciding
+    // "reopen vs. start fresh" (e.g. Day Map's Start Focus) need this, not
+    // just whether focusSessionId is truthy.
+    focusSessionTaskUuid: focusSessionTaskRef.current?.uuid ?? null,
   };
 }

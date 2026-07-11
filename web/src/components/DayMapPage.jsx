@@ -321,7 +321,7 @@ function AvailableStrip({ tasks, isOpen, onToggle, onAdd }) {
   );
 }
 
-export default function DayMapPage({ payload, savePayload, onClose, onStartFocus, onAddTask, flushNow = () => {} }) {
+export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onAddTask, flushNow = () => {} }) {
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [stripOpen, setStripOpen] = useState(true);
 
@@ -463,9 +463,16 @@ export default function DayMapPage({ payload, savePayload, onClose, onStartFocus
       if (t.isNowFocus === shouldFocus) return t;
       return { ...t, isNowFocus: shouldFocus, lastUpdated: now };
     });
-    savePayload({ ...p, tasks: nextTasks, timestamp: Date.now() });
+    // Navigation stays immediate/optimistic (unchanged UX) — but hand the
+    // pin's confirmed-write promise to onStartFocus so the caller can defer
+    // its activity-ledger writes (focus_started/focus_abandoned) until this
+    // pin actually reached RTDB, instead of logging a session for a pin that
+    // might still fail.
+    const pinPromise = typeof savePayloadAsync === "function"
+      ? savePayloadAsync({ ...p, tasks: nextTasks, timestamp: Date.now() })
+      : (savePayload({ ...p, tasks: nextTasks, timestamp: Date.now() }), Promise.resolve());
     flushNow();
-    onStartFocus ? onStartFocus() : onClose();
+    onStartFocus ? onStartFocus(pinPromise) : onClose();
   };
 
   const handleDragEnd = ({ active, over }) => {

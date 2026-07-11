@@ -3,7 +3,7 @@ import { auth, track, setAnalyticsUser } from "./firebase";
 import { computeUserProfile } from "./utils/userProfile";
 import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
 import { isCheckinDue, buildCheckinResumeMessage, isDuplicateCheckinResume } from "./utils/coachCheckin";
-import { getFocusWindows } from "./utils/focusWindows";
+import { getFocusWindows, getLociDayStr } from "./utils/focusWindows";
 import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { useSync, CONN } from "./useSync";
@@ -27,6 +27,7 @@ import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCom
 import { celebrate } from "./utils/celebrations";
 import { safeUUID } from "./utils/uuid";
 import { submitOnEnter } from "./utils/formEvents";
+import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "./utils/activityLog";
 
 const EXTEND_DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
 
@@ -63,6 +64,11 @@ export default function App() {
   const [demoMode, setDemoMode] = useState(false);
   const [demoPayload, setDemoPayload] = useState(null);
   const [pendingFocusOpen, setPendingFocusOpen] = useState(false);
+  // Day Map's pin-write promise, handed in by onStartFocus — lets the
+  // pendingFocusOpen effect below defer its focus_started/focus_abandoned
+  // ledger writes until that pin actually confirmed in RTDB, without
+  // delaying the (already-instant) navigation to Today itself.
+  const pendingFocusPinPromiseRef = useRef(null);
 
   const enterDemo = () => {
     setDemoPayload(createDemoPayload());
@@ -95,6 +101,23 @@ export default function App() {
       const resolvedPatch = typeof patch === "function" ? patch(prev.config || {}) : patch;
       return { ...prev, config: { ...prev.config, ...resolvedPatch, lastUpdated: Date.now() }, timestamp: Date.now() };
     });
+  };
+
+  // Async counterparts of the demo save functions above — Demo Mode never
+  // touches Firebase, so these just apply the same local state update and
+  // resolve immediately, giving write-path call sites a consistent awaitable
+  // interface regardless of demoMode.
+  const saveDemoPayloadAsync = (updated) => {
+    saveDemoPayload(updated);
+    return Promise.resolve();
+  };
+  const saveDemoSubPathAsync = (subPath, value) => {
+    saveDemoSubPath(subPath, value);
+    return Promise.resolve();
+  };
+  const saveDemoSubPathsAsync = (patch) => {
+    saveDemoSubPaths(patch);
+    return Promise.resolve();
   };
 
   // ── Service worker ─────────────────────────────────────────────────────────
@@ -253,17 +276,37 @@ export default function App() {
   };
 
   // Load the sync payload from RTDB (skipped in demo mode — uid is null)
-  const { payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning: rtdbSyncWarning, savePayload: rtdbSave, saveSubPath: rtdbSaveSub, saveSubPaths: rtdbSaveSubs, saveConfigPatch: rtdbSaveConfigPatch, flushNow: rtdbFlushNow, clearCache: rtdbClearCache } =
-    useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
+  const {
+    payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning: rtdbSyncWarning,
+    savePayload: rtdbSave, savePayloadAsync: rtdbSaveAsync,
+    saveSubPath: rtdbSaveSub, saveSubPathAsync: rtdbSaveSubAsync,
+    saveSubPaths: rtdbSaveSubs, saveSubPathsAsync: rtdbSaveSubsAsync,
+    saveConfigPatch: rtdbSaveConfigPatch,
+    writeActivityEvents: rtdbWriteActivityEvents, captureTodaySnapshotIfNeeded: rtdbCaptureTodaySnapshot,
+    flushNow: rtdbFlushNow, clearCache: rtdbClearCache,
+  } = useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
   const payload = demoMode ? demoPayload : rtdbPayload;
   const savePayload = demoMode ? saveDemoPayload : rtdbSave;
+  const savePayloadAsync = demoMode ? saveDemoPayloadAsync : rtdbSaveAsync;
   const saveSubPath = demoMode ? saveDemoSubPath : rtdbSaveSub;
+  const saveSubPathAsync = demoMode ? saveDemoSubPathAsync : rtdbSaveSubAsync;
   const saveSubPaths = demoMode ? saveDemoSubPaths : rtdbSaveSubs;
+  const saveSubPathsAsync = demoMode ? saveDemoSubPathsAsync : rtdbSaveSubsAsync;
   const saveConfigPatch = demoMode ? saveDemoConfigPatch : rtdbSaveConfigPatch;
   const flushNow = demoMode ? () => {} : (rtdbFlushNow || (() => {}));
   const clearCache = demoMode ? () => {} : (rtdbClearCache || (() => {}));
   const syncWarning = demoMode ? null : rtdbSyncWarning;
+  // These are already uid-scoped closures from useSync — when demoMode forces
+  // uid to null above, they safely no-op ({ok:false, reason:"no-uid"}) rather
+  // than needing a separate demo branch, so every write-path call site can
+  // call them unconditionally regardless of demoMode.
+  const writeActivityEvents = rtdbWriteActivityEvents;
+  const captureTodaySnapshotIfNeeded = rtdbCaptureTodaySnapshot;
+  // Ledger event paths are keyed by the real Firebase uid — never build one
+  // from a demo session (uid is null then, which is already the state
+  // writeActivityEvents checks for; keeping this explicit for clarity).
+  const activityUid = demoMode ? null : (user?.uid || null);
 
   // Live ref for the check-in poller below, which runs on an interval and
   // needs the latest chatHistory/config without restarting on every change.
@@ -325,6 +368,75 @@ export default function App() {
     saveSubPath("config", { ...cfg, visitStreakCount: newStreak, lastVisitDate: todayStr, lastUpdated: Date.now() });
   }, [payload?.config?.lastVisitDate, user?.uid, isSyncingFromCache, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Capture today's carryover snapshot once per Loci day (not calendar day —
+  // deliberately a separate guard from the visit-streak effect above). The
+  // default focus window (7am-2am) means the Loci day can still be
+  // "yesterday" between midnight and 7am even though the calendar date has
+  // already rolled over; piggybacking on the calendar-day guard would both
+  // mis-key the snapshot (captureTodaySnapshotIfNeeded's own getLociDayStr
+  // call would correctly write it under yesterday's date) AND consume that
+  // guard before the real Loci day starts, permanently skipping the actual
+  // day's snapshot. captureTodaySnapshotIfNeeded's own transaction is
+  // idempotent (write-only-if-null), so re-checking here is safe.
+  // { uid, lociDay } once a capture attempt for that uid+day is CONFIRMED
+  // successful — keyed on uid too (not just lociDay) so signing out and a
+  // different account signing in on the same browser during the same Loci
+  // day doesn't inherit the previous account's already-attempted marker and
+  // skip its own capture. Only committed on captureTodaySnapshotIfNeeded's
+  // own { ok: true } (write succeeded, or another device already captured
+  // it — both confirmed outcomes) — a failed attempt (e.g. RTDB unreachable
+  // at that moment) leaves it uncommitted so a later render retries instead
+  // of silently giving up on the day's snapshot for good.
+  const attemptedSnapshotRef = useRef(null);
+  const snapshotAttemptInFlightRef = useRef(false);
+  useEffect(() => {
+    // syncWarning === "offline" means isSyncingFromCache flipped false via a
+    // timeout fallback, not a confirmed sync — capturing off that stale cache
+    // would write a wrong carryover set that the transaction's write-once
+    // guard can never correct once a real sync lands later.
+    if (!payload?.config || !user || demoMode || isSyncingFromCache || syncWarning === "offline") return;
+    const attemptCapture = () => {
+      // Read config from payloadRef.current (live), not the `payload` this
+      // effect closed over — payload?.config is deliberately NOT a
+      // dependency below, for the same reason payload?.tasks isn't (see
+      // note below): plenty of task actions (e.g. completing a task bumps
+      // config.totalXp) change `config` too, which would re-trigger this
+      // effect just as readily as a direct task edit did before.
+      const currentConfig = payloadRef.current?.config || payload.config;
+      const windows = getFocusWindows(currentConfig);
+      const lociDay = getLociDayStr(new Date(), windows);
+      const attempted = attemptedSnapshotRef.current;
+      if (attempted && attempted.uid === user.uid && attempted.lociDay === lociDay) return;
+      if (snapshotAttemptInFlightRef.current) return;
+      snapshotAttemptInFlightRef.current = true;
+      captureTodaySnapshotIfNeeded(payloadRef.current?.tasks || [], windows).then((result) => {
+        snapshotAttemptInFlightRef.current = false;
+        if (result?.ok) attemptedSnapshotRef.current = { uid: user.uid, lociDay };
+      });
+    };
+    attemptCapture();
+    // Re-check periodically — if the app stays mounted across the Loci day's
+    // actual start (e.g. left open overnight), no other dependency below
+    // would otherwise re-trigger the capture. Deliberately NOT keyed to
+    // payload?.tasks or payload?.config (earlier versions of this effect
+    // were) — any task/config edit arriving right after the boundary but
+    // before this interval's next tick would otherwise itself trigger the
+    // first capture for the new day, snapshotting the POST-edit Today list
+    // instead of the set present at day start, which the write-once
+    // transaction could never correct afterward. 15s keeps that remaining
+    // race window small.
+    const id = setInterval(attemptCapture, 15_000);
+    return () => clearInterval(id);
+    // Boolean(payload?.config), not payload?.config itself — a fresh/no-cache
+    // login has isSyncingFromCache staying false the whole session (it only
+    // ever flips true when a local cache exists to sync from), so without
+    // this the effect runs once while payload is still null, bails on the
+    // guard above, and then never re-runs once RTDB actually supplies the
+    // payload — permanently skipping that session's day-start snapshot. The
+    // boolean only flips once (false → true) so it doesn't reintroduce the
+    // payload-edit re-trigger race the plain object reference would.
+  }, [user?.uid, demoMode, isSyncingFromCache, syncWarning, Boolean(payload?.config)]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Firebase auth state listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -363,6 +475,13 @@ export default function App() {
   // constructed after useFocusTimer and isn't available yet at this point.
   const reshuffleTrackRef = useRef(() => {});
   const focusTimer = useFocusTimer(payload?.tasks || [], payload?.config || {}, user?.uid || null, reshuffleTrackRef);
+  // Live (non-stale) read of focusTimer for effect/promise callbacks that
+  // run after an async wait (e.g. the pendingFocusOpen effect's pinPromise
+  // handlers below) — those closures capture `focusTimer` from whichever
+  // render scheduled them, which startFocusSession()'s own setFocusSessionId
+  // call doesn't reach until a LATER render.
+  const focusTimerRef = useRef(focusTimer);
+  focusTimerRef.current = focusTimer;
 
   // Focus Sounds audio also lives here so ambient sound keeps playing across
   // tab switches and after exiting the Deep Focus overlay.
@@ -401,8 +520,60 @@ export default function App() {
   // Auto-start the timer when arriving from Day Map's "Start Focus" action
   useEffect(() => {
     if (pendingFocusOpen && focusTimer.activeTask) {
-      focusTimer.setIsFocusMode(true);
-      focusTimer.setIsTimerRunning(true);
+      // If activeTask ITSELF already has an open session (e.g. Day Map's
+      // "Start Focus" tapped for the same task already running from Today),
+      // just reopen the overlay — same guard as TodayTab's startFocusAndLog.
+      // Checking focusSessionId alone isn't enough: Day Map's own pin is a
+      // raw isNowFocus write (like TodayTab's handlePinTask), so retargeting
+      // to a DIFFERENT task (B) while another task's (A) session is still
+      // open would make activeTask B while focusSessionId still belongs to
+      // A — must also confirm the open session's own task matches.
+      if (focusTimer.focusSessionId && focusTimer.focusSessionTaskUuid === focusTimer.activeTask.uuid) {
+        focusTimer.setIsFocusMode(true);
+        focusTimer.setIsTimerRunning(true);
+        pendingFocusPinPromiseRef.current = null;
+        setPendingFocusOpen(false);
+        return;
+      }
+      const windows = getFocusWindows(payload?.config || {});
+      const session = focusTimer.startFocusSession(focusTimer.activeTask);
+      // Timer/session state starts immediately (optimistic, same as every
+      // other focus-start path) — but the ledger writes wait for Day Map's
+      // pin write to actually confirm in RTDB, so a rejected/failed pin
+      // doesn't leave a focus_started event for a session that never
+      // really began. pendingFocusPinPromiseRef is set by onStartFocus below.
+      const pinPromise = pendingFocusPinPromiseRef.current || Promise.resolve();
+      pendingFocusPinPromiseRef.current = null;
+      pinPromise
+        .then(() => {
+          // startFocusSession() auto-closes a still-open prior session (e.g. one
+          // started from Today before navigating to Day Map) to make room for
+          // this one — write its terminal event too, or it's orphaned forever.
+          if (session.priorSession && session.priorSession.task) {
+            const abandonEvent = buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
+              ...session.priorSession, windows,
+            });
+            writeActivityEvents(eventPatch(activityUid, abandonEvent));
+          }
+          const event = buildFocusStartedEvent(focusTimer.activeTask, session.focusSessionId, {
+            source: "day_map", focusInitialPlannedSeconds: session.focusInitialPlannedSeconds,
+            now: session.focusStartedAt, windows,
+          });
+          writeActivityEvents(eventPatch(activityUid, event));
+        })
+        .catch(() => {
+          // The Day Map pin write never confirmed — undo the optimistic
+          // session start above, or it's left open with no focus_started
+          // event for a later endFocusSession call to surface as an
+          // orphaned terminal event. Only if nothing newer has already
+          // started (live-ref check, not this closure's stale focusTimer).
+          if (focusTimerRef.current.focusSessionId === session.focusSessionId) {
+            focusTimerRef.current.endFocusSession?.("user_abandoned");
+            focusTimerRef.current.setIsTimerRunning?.(false);
+            focusTimerRef.current.setIsFocusMode?.(false);
+            focusTimerRef.current.setFocusSessionActive?.(false);
+          }
+        });
       setPendingFocusOpen(false);
     }
   }, [pendingFocusOpen, focusTimer.activeTask?.uuid]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -413,9 +584,20 @@ export default function App() {
   };
 
   const handleEndFocusSession = () => {
+    const ended = focusTimer.endFocusSession("user_abandoned");
     focusTimer.setIsTimerRunning(false);
     focusTimer.setIsFocusMode(false);
     focusTimer.setFocusSessionActive(false);
+    // Use ended.task (captured when the session started), not activeTask —
+    // if the Now Focus pin changed mid-session without ending it (e.g. the
+    // pin-only menu), activeTask would point at the NEW task and misattribute
+    // this abandonment to it instead of the task the session actually belonged to.
+    if (ended && ended.task) {
+      const event = buildFocusTerminalEvent("focus_abandoned", ended.task, ended.focusSessionId, {
+        ...ended, windows: getFocusWindows(payload?.config || {}),
+      });
+      writeActivityEvents(eventPatch(activityUid, event));
+    }
   };
 
   // Global Focus completion prompt: "Done! +120 XP" — completes the task and
@@ -426,7 +608,15 @@ export default function App() {
     if (!task) return;
     celebrate();
     const now = new Date();
-    savePayload(buildFocusCompletionPayload(payload, task, toLocalDateStr(now), now));
+    const ended = focusTimer.endFocusSession("completed_task");
+    const windows = getFocusWindows(payload?.config || {});
+    const events = [buildTaskMutationEvent("task_completed", task, { windows, source: "focus_mode", now })];
+    // Use ended.task, not `task` — see handleEndFocusSession for why these
+    // can diverge (a pin change that never ended the prior session).
+    if (ended && ended.task) events.push(buildFocusTerminalEvent("focus_completed", ended.task, ended.focusSessionId, { ...ended, windows, now }));
+    savePayloadAsync(buildFocusCompletionPayload(payload, task, toLocalDateStr(now), now))
+      .then(() => writeActivityEvents(eventsPatch(activityUid, events)))
+      .catch(() => {});
     focusTimer.setIsFocusMode(false);
     focusTimer.setFocusSessionActive(false);
   };
@@ -718,6 +908,7 @@ export default function App() {
           <TodayTab
             payload={payload}
             savePayload={savePayload}
+            savePayloadAsync={savePayloadAsync}
             saveSubPath={saveSubPath}
             isSyncingFromCache={isSyncingFromCache}
             syncWarning={syncWarning}
@@ -729,6 +920,8 @@ export default function App() {
             isAddTaskDialogOpen={showAddTask}
             pendingCheckinSlot={pendingCheckinSlot}
             setPendingCheckinSlot={setPendingCheckinSlot}
+            uid={activityUid}
+            writeActivityEvents={writeActivityEvents}
             {...focusTimer}
             {...focusAudio}
           />
@@ -737,8 +930,9 @@ export default function App() {
           <DayMapPage
             payload={payload}
             savePayload={savePayload}
+            savePayloadAsync={savePayloadAsync}
             onClose={goToday}
-            onStartFocus={() => { setPendingFocusOpen(true); goToday(); }}
+            onStartFocus={(pinPromise) => { pendingFocusPinPromiseRef.current = pinPromise; setPendingFocusOpen(true); goToday(); }}
             onAddTask={() => openAddTask("today")}
             flushNow={flushNow}
           />
@@ -747,13 +941,17 @@ export default function App() {
           <RoadmapTab
             payload={payload}
             savePayload={savePayload}
+            savePayloadAsync={savePayloadAsync}
             onOpenAddTask={openAddTask}
             onEditTask={(task) => { setEditingTask(task); setShowAddTask(true); }}
             initialExpandedCol={roadmapInitialCol}
+            uid={activityUid}
+            writeActivityEvents={writeActivityEvents}
+            focusTimer={focusTimer}
           />
         )}
-        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onOpenRoadmapInbox={openRoadmapInbox} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} />}
-        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} />}
+        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onOpenRoadmapInbox={openRoadmapInbox} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} uid={activityUid} writeActivityEvents={writeActivityEvents} focusTimer={focusTimer} />}
+        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} />}
         {activeTab === "settings" && (
           <SettingsTab
             payload={payload}
@@ -954,10 +1152,13 @@ export default function App() {
           email={demoMode ? "demo@loci.app" : user?.email}
           payload={payload}
           savePayload={savePayload}
+          savePayloadAsync={savePayloadAsync}
           userProfile={userProfile}
           defaultHorizon={preselectedHorizon}
           editTask={editingTask}
           onClose={() => { setShowAddTask(false); setEditingTask(null); }}
+          uid={activityUid}
+          writeActivityEvents={writeActivityEvents}
         />
       )}
     </div>

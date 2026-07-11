@@ -26,3 +26,16 @@ jobs:
 
       - name: Run Firebase RTDB rules emulator tests
         run: npx --yes firebase-tools@15.22.1 emulators:exec --project loci-flow --only auth,database "node web/tests/firebase-rules-user-isolation.test.mjs"
+
+      - name: Install web/ dependencies
+        working-directory: web
+        run: npm ci
+
+      # Live-enforcement check for the activityLogs/{uid} rules block (PR A /
+      # Activity Ledger) — own-user, cross-user, unauthenticated, and a
+      # sync/{uid} regression check. Runs as its own emulators:exec (separate
+      # demo project/port lifecycle from the step above) via vitest against
+      # emulator-tests/security-rules.emulator.test.js.
+      - name: Run activity-log rules emulator tests
+        working-directory: web
+        run: npm run test:rules-emulator

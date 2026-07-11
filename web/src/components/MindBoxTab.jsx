@@ -6,6 +6,8 @@ import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTaskSubSteps, CATEGORY_ICONS } from "../utils/taskOps";
 import { submitOnEnter } from "../utils/formEvents";
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
+import { getFocusWindows } from "../utils/focusWindows";
+import { buildTaskMutationEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 
 function IconTrendingUp() {
   return (
@@ -75,8 +77,9 @@ function IconChevronRight() {
   );
 }
 
-export default function MindBoxTab({ payload, savePayload, saveSubPath, saveConfigPatch, userProfile, initialPanel, onOpenRoadmapInbox, isSyncingFromCache = false, syncWarning = null }) {
+export default function MindBoxTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveConfigPatch, userProfile, initialPanel, onOpenRoadmapInbox, isSyncingFromCache = false, syncWarning = null, uid, writeActivityEvents, focusTimer = {} }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
+  const windows = getFocusWindows(config);
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [toolPanel, setToolPanel] = useState(initialPanel || null);
@@ -207,7 +210,23 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, saveConf
     if (close) setRescueActive(false);
     if (!rescueTask) return;
     const now = Date.now();
-    savePayload({ ...payload, tasks: tasks.map(t => {
+    // Retargeting focus to rescueTask clears isNowFocus on whichever task
+    // currently holds it — end that task's open session first, or it's left
+    // orphaned with no terminal event (same gap fixed for Coach's focus chips).
+    const previouslyFocused = tasks.find(t => t.uuid !== rescueTask.uuid && t.isNowFocus);
+    const endedFocusSession = previouslyFocused && typeof focusTimer.endFocusSession === "function"
+      ? focusTimer.endFocusSession("user_abandoned")
+      : null;
+    // Retargeting to a DIFFERENT task doesn't make activeTask null, so the
+    // hook's own "stop timer when activeTask disappears" effects never fire.
+    if (endedFocusSession) {
+      focusTimer.setIsTimerRunning?.(false);
+      focusTimer.setIsFocusMode?.(false);
+      focusTimer.setFocusSessionActive?.(false);
+    }
+    // This can also unpark rescueTask (see below) — record that transition too.
+    const wasParked = !!rescueTask.isParked;
+    savePayloadAsync({ ...payload, tasks: tasks.map(t => {
       const newFocus = t.uuid === rescueTask.uuid;
       if (!newFocus) {
         if (!t.isNowFocus) return t;
@@ -219,17 +238,42 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, saveConf
       // still treats any non-deleted, non-completed isNowFocus task as active.
       if (t.isNowFocus && !t.isParked) return t;
       return { ...t, isNowFocus: true, isParked: false, lastUpdated: now };
-    }) });
+    }) })
+      .then(() => {
+        const events = [];
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+        }
+        if (wasParked) {
+          events.push(buildTaskMutationEvent("task_unparked", rescueTask, { windows, now }));
+        }
+        if (events.length > 0) writeActivityEvents(eventsPatch(uid, events));
+      })
+      .catch(() => {});
   };
 
   const parkRescueTask = () => {
     if (!rescueTask) return;
     const now = Date.now();
-    savePayload({ ...payload, tasks: tasks.map(t => (
+    const event = buildTaskMutationEvent("task_parked", rescueTask, { windows, now });
+    // Rescue often opens on the actively focused task — parking it clears
+    // isNowFocus below without ending its session, same gap fixed elsewhere.
+    const endedFocusSession = rescueTask.isNowFocus && typeof focusTimer.endFocusSession === "function"
+      ? focusTimer.endFocusSession("user_abandoned")
+      : null;
+    savePayloadAsync({ ...payload, tasks: tasks.map(t => (
       t.uuid === rescueTask.uuid
         ? { ...t, isParked: true, isNowFocus: false, lastUpdated: now }
         : t
-    )) });
+    )) })
+      .then(() => {
+        const events = [event];
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+        }
+        writeActivityEvents(eventsPatch(uid, events));
+      })
+      .catch(() => {});
   };
 
   const handleBadDayReset = () => {
@@ -237,7 +281,34 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, saveConf
       message: "Park all active tasks for today?\n\nThis is a restart without shame — everything moves to parked. You can restore tasks from the AI Coach tab whenever you're ready.",
       confirmLabel: "Yes, restart", cancelLabel: "Not now",
       onConfirm: () => {
-        savePayload({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, isNowFocus: false, lastUpdated: Date.now() } : t) });
+        // Only tasks that actually transition from unparked to parked count
+        // as a task_parked event — a task already parked before this reset
+        // isn't changed by it (the core write below is a harmless no-op for
+        // it), so including it here would overcount parking actions.
+        const actionAt = Date.now();
+        const affected = tasks.filter(t => !t.isCompleted && !t.isDeleted && !t.isParked);
+        const events = affected.map((t) => buildTaskMutationEvent("task_parked", t, { windows, now: actionAt }));
+        // This batch parks every active task, including whichever one is
+        // actively focused — end its session or it's left open with no
+        // terminal event. Search ALL non-completed/non-deleted tasks here,
+        // not just `affected` — `affected` deliberately excludes tasks
+        // already parked (to avoid overcounting task_parked events), but the
+        // core write below clears isNowFocus on every non-completed/
+        // non-deleted task regardless of prior isParked state, and a task can
+        // legitimately be isParked && isNowFocus at once (see the same
+        // "hidden focus task" note in setRescueTaskAsNowFocus below).
+        const focusedTask = tasks.find(t => !t.isCompleted && !t.isDeleted && t.isNowFocus);
+        const endedFocusSession = focusedTask && typeof focusTimer.endFocusSession === "function"
+          ? focusTimer.endFocusSession("user_abandoned")
+          : null;
+        if (endedFocusSession) {
+          // Use endedFocusSession.task, not focusedTask — see the same fix
+          // in TodayTab/RoadmapTab for why these can diverge.
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
+        }
+        savePayloadAsync({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, isNowFocus: false, lastUpdated: Date.now() } : t) })
+          .then(() => writeActivityEvents(eventsPatch(uid, events)))
+          .catch(() => {});
         setConfirmDialog(null);
       },
       onCancel: () => setConfirmDialog(null)
@@ -249,10 +320,16 @@ export default function MindBoxTab({ payload, savePayload, saveSubPath, saveConf
       message: "Move today's unfinished tasks to this week?\n\nNothing is lost — you'll find them in Roadmap → This Week. Fresh start, no shame.",
       confirmLabel: "Fresh start", cancelLabel: "Keep today",
       onConfirm: () => {
-        savePayload({ ...payload, tasks: tasks.map(t =>
+        const affected = tasks.filter(t => !t.isCompleted && !t.isDeleted && t.horizonLevel === "today");
+        const events = affected.map((t) => buildTaskMutationEvent("task_moved", t, {
+          fromState: { horizonLevel: "today" }, toState: { horizonLevel: "week" }, windows,
+        }));
+        savePayloadAsync({ ...payload, tasks: tasks.map(t =>
           (!t.isCompleted && !t.isDeleted && t.horizonLevel === "today")
             ? { ...t, horizonLevel: "week", lastUpdated: Date.now() } : t
-        )});
+        )})
+          .then(() => writeActivityEvents(eventsPatch(uid, events)))
+          .catch(() => {});
         setConfirmDialog(null);
       },
       onCancel: () => setConfirmDialog(null)
@@ -392,7 +469,10 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
     // Pass all suggestions (not just accepted) so a split entry's source is only
     // cleared once every suggestion generated from it has been accepted.
     const clearedDump = buildClearedBrainDump(payload.brainDump || [], toAdd, organizeResults, organizeDroppedSourceIds);
-    savePayload({ ...payload, tasks: [...(payload.tasks || []), ...newTasks], brainDump: clearedDump });
+    const events = newTasks.map((t) => buildTaskMutationEvent("task_created", t, { windows, source: "coach_action" }));
+    savePayloadAsync({ ...payload, tasks: [...(payload.tasks || []), ...newTasks], brainDump: clearedDump })
+      .then(() => writeActivityEvents(eventsPatch(uid, events)))
+      .catch(() => {});
     setToolPanel(null);
     setOrganizeResults([]);
     setOrganizeDroppedSourceIds(new Set());

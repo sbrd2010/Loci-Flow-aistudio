@@ -541,7 +541,11 @@ export function applyCoachActions(payload, actions, { lociDateStr, localDateStr,
         continue;
       }
       nextPayload = buildAddTaskPayload(nextPayload, title, now);
-      results.push({ ...action, matched: true });
+      // buildAddTaskPayload always appends the new task last — attach it here
+      // (matching the `task` field the other matched action types already
+      // carry) so a caller sequencing an activity-ledger event after the
+      // save doesn't have to re-find it by title.
+      results.push({ ...action, matched: true, task: nextPayload.tasks[nextPayload.tasks.length - 1] });
       continue;
     }
 

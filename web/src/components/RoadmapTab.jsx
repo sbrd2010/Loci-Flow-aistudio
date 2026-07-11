@@ -6,6 +6,7 @@ import { getAIKeys, callAI, hasAIKey, extractJsonArray } from "../utils/aiCall";
 import { sanitizeTaskField, CATEGORY_ICONS, byPriorityThenOrder } from "../utils/taskOps";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import { safeCopyToClipboard } from "../utils/clipboard";
+import { buildTaskMutationEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor,
   useSensor, useSensors, DragOverlay
@@ -178,8 +179,9 @@ function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, on
   );
 }
 
-export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEditTask, initialExpandedCol }) {
+export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, onEditTask, initialExpandedCol, uid, writeActivityEvents, focusTimer = {} }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
+  const windows = getFocusWindows(config);
 
   const columns = [
     { key: "week",     label: "This Week",  shortLabel: "Week"  },
@@ -257,12 +259,17 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
 
   const handleMoveToToday = (task) => {
     const todayTasksCount = tasks.filter((t) => t.horizonLevel === "today" && isVisibleRoadmapTask(t)).length;
-    savePayload({
+    const event = buildTaskMutationEvent("task_moved", task, {
+      fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: "today" }, windows,
+    });
+    savePayloadAsync({
       ...payload,
       tasks: tasks.map((t) =>
         t.uuid === task.uuid ? { ...t, horizonLevel: "today", orderIndex: todayTasksCount, lastUpdated: Date.now() } : t
       )
-    });
+    })
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
+      .catch(() => {});
     setSelectedTask(null);
   };
 
@@ -278,16 +285,35 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
 
   const handleMarkDone = (task) => {
     celebrate();
+    const actionAt = Date.now();
     const todayDateStr = getTodayDateString();
     const lociTodayStr = getLociDayStr(new Date(), getFocusWindows(config));
-    savePayload({
+    const event = buildTaskMutationEvent("task_completed", task, { windows, now: actionAt });
+    // Marking the actively focused task done clears isNowFocus below without
+    // ending its session — end it here, same as Today's handleToggleComplete.
+    const endedFocusSession = task.isNowFocus && typeof focusTimer.endFocusSession === "function"
+      ? focusTimer.endFocusSession("completed_task")
+      : null;
+    savePayloadAsync({
       ...payload,
       tasks: tasks.map((t) =>
         t.uuid === task.uuid ? { ...t, isCompleted: true, isNowFocus: false, dateCompletedString: lociTodayStr, lastUpdated: Date.now() } : t
       ),
       config: { ...config, totalXp: (Number(config.totalXp) || 0) + 100, lastUpdated: Date.now() },
       contributions: incrementContribution([...contributions], todayDateStr)
-    });
+    })
+      .then(() => {
+        const events = [event];
+        if (endedFocusSession) {
+          // Use endedFocusSession.task, not `task` — if the pin moved to
+          // `task` via a path that never ended the PREVIOUS session, this
+          // call actually closed out that older session, which may belong to
+          // a different task entirely.
+          events.push(buildFocusTerminalEvent("focus_completed", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
+        }
+        writeActivityEvents(eventsPatch(uid, events));
+      })
+      .catch(() => {});
     setSelectedTask(null);
   };
 
@@ -304,7 +330,10 @@ export default function RoadmapTab({ payload, savePayload, onOpenAddTask, onEdit
       orderIndex: tasks.filter(t => t.horizonLevel === horizon && isVisibleRoadmapTask(t)).length,
       dateCompletedString: null, isDeleted: false, lastUpdated: Date.now()
     };
-    savePayload({ ...payload, tasks: [...tasks, freshTask], brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) });
+    const event = buildTaskMutationEvent("task_created", freshTask, { windows });
+    savePayloadAsync({ ...payload, tasks: [...tasks, freshTask], brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) })
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
+      .catch(() => {});
     setLongDumpWarning(null);
     setAiBreakdownSuggestion(null);
     setEditingDumpItem(null);
@@ -405,7 +434,10 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
       orderIndex: baseOrderIndex + i,
       dateCompletedString: null, isDeleted: false, lastUpdated: Date.now()
     }));
-    savePayload({ ...payload, tasks: [...tasks, ...freshTasks], brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) });
+    const events = freshTasks.map((t) => buildTaskMutationEvent("task_created", t, { windows }));
+    savePayloadAsync({ ...payload, tasks: [...tasks, ...freshTasks], brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) })
+      .then(() => writeActivityEvents(eventsPatch(uid, events)))
+      .catch(() => {});
     setLongDumpWarning(null);
     setAiBreakdownSuggestion(null);
     setEditingDumpItem(null);
@@ -416,7 +448,24 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
       message: `Delete "${task.title}"?\n\nYou can undo this for a few seconds after deleting.`,
       confirmLabel: "Delete", cancelLabel: "Cancel", danger: true,
       onConfirm: () => {
-        savePayload({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t) });
+        const now = Date.now();
+        const event = buildTaskMutationEvent("task_deleted", task, { windows, now });
+        // Deleting the actively focused task (e.g. one started from Coach)
+        // drops it out of activeTask (isDeleted-filtered) without ever
+        // clearing isNowFocus itself — end its session here or it's left
+        // open with no terminal event.
+        const endedFocusSession = task.isNowFocus && typeof focusTimer.endFocusSession === "function"
+          ? focusTimer.endFocusSession("user_abandoned")
+          : null;
+        savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t) })
+          .then(() => {
+            const events = [event];
+            if (endedFocusSession) {
+              events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+            }
+            writeActivityEvents(eventsPatch(uid, events));
+          })
+          .catch(() => {});
         if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
         setUndoTask(task);
         undoTimeoutRef.current = setTimeout(() => setUndoTask(null), 5000);
@@ -430,7 +479,10 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
   const handleUndoDelete = () => {
     if (!undoTask) return;
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
-    savePayload({ ...payload, tasks: tasks.map((t) => t.uuid === undoTask.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t) });
+    const event = buildTaskMutationEvent("task_restored", undoTask, { windows });
+    savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === undoTask.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t) })
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
+      .catch(() => {});
     setUndoTask(null);
   };
 

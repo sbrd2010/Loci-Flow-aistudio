@@ -252,4 +252,284 @@ describe("useFocusTimer", () => {
     expect(result.current.timerSecondsLeft).toBe(0);
     expect(result.current.timerMaxSeconds).toBe(25 * 60);
   });
+
+  describe("startFocusSession / endFocusSession", () => {
+    it("mints a focusSessionId and starts the timer/focus mode", () => {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      const started = result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+
+      expect(typeof started.focusSessionId).toBe("string");
+      expect(started.focusSessionId.length).toBeGreaterThan(0);
+      expect(started.focusInitialPlannedSeconds).toBe(25 * 60);
+      expect(typeof started.focusStartedAt).toBe("number");
+      expect(started.priorSession).toBeNull();
+      expect(result.current.focusSessionId).toBe(started.focusSessionId);
+      expect(result.current.isFocusMode).toBe(true);
+      expect(result.current.isTimerRunning).toBe(true);
+    });
+
+    it("enterFocusMode: false mints a session and starts the timer without opening the full-screen Focus overlay", () => {
+      // Coach chat's START_FOCUS action uses this — starting a background
+      // session shouldn't yank the user out of the conversation.
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      const started = result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+
+      expect(typeof started.focusSessionId).toBe("string");
+      expect(result.current.isTimerRunning).toBe(true);
+      expect(result.current.isFocusMode).toBe(false);
+    });
+
+    it("plannedSeconds overrides the task-derived duration and is applied directly to the running timer", () => {
+      // Coach's START_FOCUS can carry its own explicit "|<minutes>" duration
+      // distinct from the task's own timeEstimateMinutes (25 here).
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      const started = result.current.startFocusSession(task, { enterFocusMode: false, plannedSeconds: 10 * 60 });
+      rerender([[task], {}, "u1"]);
+
+      expect(started.focusInitialPlannedSeconds).toBe(10 * 60);
+      expect(result.current.timerMaxSeconds).toBe(10 * 60);
+      expect(result.current.timerSecondsLeft).toBe(10 * 60);
+    });
+
+    it("plannedSeconds override survives the activeTask-sync effect once `tasks` catches up to the new pin", () => {
+      // Reproduces Coach's START_FOCUS with a custom duration: the pin
+      // (isNowFocus: true) hasn't landed in `tasks` yet when startFocusSession
+      // is called, so activeTask only picks up the new task on the NEXT
+      // render — without skipNextDurationSyncRef, that render's
+      // activeTask-sync effect would stomp the override back to the task's
+      // own 25-minute estimate.
+      const task = { uuid: "a", isNowFocus: false, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      const started = result.current.startFocusSession(task, { enterFocusMode: false, plannedSeconds: 10 * 60 });
+      expect(started.focusInitialPlannedSeconds).toBe(10 * 60);
+      expect(result.current.timerMaxSeconds).toBe(10 * 60);
+
+      // `tasks` now reflects the pin — activeTask becomes this task for the
+      // first time, which would normally trigger a duration re-derive.
+      const pinnedTask = { ...task, isNowFocus: true };
+      rerender([[pinnedTask], {}, "u1"]);
+
+      expect(result.current.timerMaxSeconds).toBe(10 * 60);
+      expect(result.current.timerSecondsLeft).toBe(10 * 60);
+    });
+
+    it("starting a second session while one is already open auto-closes the first and returns it as priorSession", () => {
+      // Reproduces starting focus on Task A from Today, then — without
+      // ending it — starting focus on Task B from Day Map. Without the
+      // auto-close, Task A's session would be silently overwritten with no
+      // terminal event ever fired for it.
+      const taskA = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const taskB = { uuid: "b", isNowFocus: false, isDeleted: false, isCompleted: false, timeEstimateMinutes: 15 };
+      const { result, rerender } = renderHook(useFocusTimer, [[taskA, taskB], {}, "u1"]);
+
+      const startedA = result.current.startFocusSession(taskA);
+      rerender([[taskA, taskB], {}, "u1"]);
+      expect(result.current.timerMaxSeconds).toBe(25 * 60);
+
+      result.current.setTimerSecondsLeft(20 * 60); // 5 minutes elapsed on A
+      rerender([[taskA, taskB], {}, "u1"]);
+
+      // Start B's session directly, mirroring App.jsx's real call site:
+      // startFocusSession(focusTimer.activeTask) runs in the same effect
+      // pass where `tasks` has already flipped B's isNowFocus, but BEFORE
+      // the separate activeTask-sync effect's own timerMaxSeconds update
+      // for B has landed — so A's session must still be closed out using
+      // A's own duration/elapsed time, not B's. Deliberately not
+      // re-rendering with B's pin flip first, so timerMaxSeconds here still
+      // reflects A's still-open session at the moment of the auto-close.
+      const startedB = result.current.startFocusSession(taskB);
+
+      expect(startedB.focusSessionId).not.toBe(startedA.focusSessionId);
+      expect(startedB.priorSession).not.toBeNull();
+      expect(startedB.priorSession.focusSessionId).toBe(startedA.focusSessionId);
+      expect(startedB.priorSession.task).toBe(taskA);
+      expect(startedB.priorSession.focusEndReason).toBe("user_abandoned");
+      expect(startedB.priorSession.focusElapsedSeconds).toBe(5 * 60);
+
+      // The new session is the only one left active — ending it must not
+      // resurrect or double-report the auto-closed one.
+      expect(result.current.focusSessionId).toBe(startedB.focusSessionId);
+      const endedB = result.current.endFocusSession("completed_task");
+      expect(endedB.focusSessionId).toBe(startedB.focusSessionId);
+      expect(endedB.task).toBe(taskB);
+    });
+
+    it("starts a new session with a fresh countdown even when the task is already activeTask with no plannedSeconds override", () => {
+      // Reproduces: end a session on a task with time still left on the
+      // clock (e.g. explicit "End Session"), then tap Focus again on that
+      // SAME still-pinned task. activeTask?.uuid never changes across this,
+      // so without an unconditional reset the new session would silently
+      // inherit the old session's leftover timerSecondsLeft.
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+      result.current.setTimerSecondsLeft(3 * 60); // 22 minutes elapsed, 3 left
+      rerender([[task], {}, "u1"]);
+      result.current.endFocusSession("user_abandoned");
+      rerender([[task], {}, "u1"]);
+
+      const started = result.current.startFocusSession(task);
+      expect(started.focusInitialPlannedSeconds).toBe(25 * 60);
+      expect(result.current.timerMaxSeconds).toBe(25 * 60);
+      expect(result.current.timerSecondsLeft).toBe(25 * 60);
+    });
+
+    it("endFocusSession returns the session's data and clears focusSessionId, guaranteeing exactly one terminal consumption", () => {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      const started = result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+
+      result.current.setTimerSecondsLeft(20 * 60); // 5 minutes elapsed
+      rerender([[task], {}, "u1"]);
+
+      const ended = result.current.endFocusSession("completed_task");
+      rerender([[task], {}, "u1"]);
+
+      expect(ended.focusSessionId).toBe(started.focusSessionId);
+      expect(ended.focusStartedAt).toBe(started.focusStartedAt);
+      expect(ended.focusInitialPlannedSeconds).toBe(started.focusInitialPlannedSeconds);
+      expect(ended.focusFinalPlannedSeconds).toBe(25 * 60);
+      expect(ended.focusElapsedSeconds).toBe(5 * 60);
+      expect(ended.focusEndReason).toBe("completed_task");
+      expect(ended.task).toBe(task);
+
+      // The session is now consumed — a second call (e.g. a duplicate
+      // "End Session" click racing the "Done!" handler) must not produce a
+      // second terminal event for the same session.
+      const secondEnd = result.current.endFocusSession("user_abandoned");
+      expect(secondEnd).toBeNull();
+      expect(result.current.focusSessionId).toBeNull();
+    });
+
+    it("accumulates elapsed/planned time across a Keep Going (extendTimer) continuation instead of losing the earlier block", () => {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.timerMaxSeconds).toBe(25 * 60);
+
+      // The original 25-minute block runs all the way to 0:00.
+      result.current.setTimerSecondsLeft(0);
+      rerender([[task], {}, "u1"]);
+
+      // User picks "Keep going" for another 5 minutes.
+      result.current.extendTimer(5);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.timerMaxSeconds).toBe(5 * 60);
+
+      // The continuation block also runs to completion.
+      result.current.setTimerSecondsLeft(0);
+      rerender([[task], {}, "u1"]);
+
+      const ended = result.current.endFocusSession("completed_task");
+      // Must reflect BOTH blocks (25 + 5), not just the final 5-minute one.
+      expect(ended.focusElapsedSeconds).toBe(30 * 60);
+      expect(ended.focusFinalPlannedSeconds).toBe(30 * 60);
+      expect(ended.focusInitialPlannedSeconds).toBe(25 * 60);
+    });
+
+    it("accumulates elapsed/planned time when the duration is changed mid-session (changeFocusDuration), instead of losing the earlier block", () => {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.timerMaxSeconds).toBe(25 * 60);
+
+      // 10 minutes elapsed before the user changes the duration.
+      result.current.setTimerSecondsLeft(15 * 60);
+      rerender([[task], {}, "u1"]);
+
+      result.current.changeFocusDuration(5);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.timerMaxSeconds).toBe(5 * 60);
+      expect(result.current.timerSecondsLeft).toBe(5 * 60);
+      expect(result.current.isTimerRunning).toBe(false);
+
+      // The post-change block also runs to completion.
+      result.current.setTimerSecondsLeft(0);
+      rerender([[task], {}, "u1"]);
+
+      const ended = result.current.endFocusSession("completed_task");
+      // Must reflect the pre-change 10 minutes plus the post-change 5, not
+      // just the final 5-minute block.
+      expect(ended.focusElapsedSeconds).toBe(15 * 60);
+    });
+
+    it("does not leave skipNextDurationSyncRef dangling when plannedSeconds is applied to a task that's already activeTask", () => {
+      // Reproduces Coach START_FOCUS with a custom duration for a task that's
+      // already pinned/active with no open session — activeTask?.uuid doesn't
+      // change, so the activeTask-sync effect never re-runs to consume the
+      // flag. If the flag were set unconditionally here, it would dangle and
+      // wrongly suppress a LATER, unrelated task's own duration sync.
+      const taskA = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const taskB = { uuid: "b", isNowFocus: false, isDeleted: false, isCompleted: false, timeEstimateMinutes: 15 };
+      const { result, rerender } = renderHook(useFocusTimer, [[taskA, taskB], {}, "u1"]);
+      rerender([[taskA, taskB], {}, "u1"]);
+
+      // taskA is already activeTask; start a session on it with a custom duration.
+      result.current.startFocusSession(taskA, { enterFocusMode: false, plannedSeconds: 10 * 60 });
+      rerender([[taskA, taskB], {}, "u1"]);
+      expect(result.current.timerMaxSeconds).toBe(10 * 60);
+
+      // Now switch the pin to taskB (a genuinely new activeTask) — its own
+      // 15-minute estimate must apply, not be silently skipped by a dangling flag.
+      const pinnedB = [{ ...taskA, isNowFocus: false }, { ...taskB, isNowFocus: true }];
+      rerender([pinnedB, {}, "u1"]);
+
+      expect(result.current.timerMaxSeconds).toBe(15 * 60);
+      expect(result.current.timerSecondsLeft).toBe(15 * 60);
+    });
+
+    it("endFocusSession returns null when no session was ever started", () => {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      expect(result.current.endFocusSession("user_abandoned")).toBeNull();
+    });
+
+    it("reflects mid-session extensions (addTimeToSession) in focusFinalPlannedSeconds while focusInitialPlannedSeconds stays fixed", () => {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      const started = result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+      expect(started.focusInitialPlannedSeconds).toBe(25 * 60);
+
+      result.current.addTimeToSession(10);
+      rerender([[task], {}, "u1"]);
+
+      const ended = result.current.endFocusSession("user_abandoned");
+      expect(ended.focusInitialPlannedSeconds).toBe(25 * 60);
+      expect(ended.focusFinalPlannedSeconds).toBe(35 * 60);
+    });
+
+    it("clears any in-flight session on an account switch (uid change) so a stale session can't leak into the next account", () => {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.focusSessionId).not.toBeNull();
+
+      // Switch accounts — the reset effect keys on uid.
+      rerender([[task], {}, "u2"]);
+
+      expect(result.current.focusSessionId).toBeNull();
+      expect(result.current.endFocusSession("user_abandoned")).toBeNull();
+    });
+  });
 });

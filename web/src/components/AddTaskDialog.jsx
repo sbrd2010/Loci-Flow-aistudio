@@ -3,6 +3,8 @@ import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { safeUUID } from "../utils/uuid";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
 import { applyAiRewriteToTask, CATEGORY_ICONS } from "../utils/taskOps";
+import { getFocusWindows } from "../utils/focusWindows";
+import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 
 function defaultReminderDateTime() {
   const d = new Date();
@@ -20,7 +22,8 @@ function parseManualSubSteps(raw) {
 }
 
 
-export default function AddTaskDialog({ email, payload, savePayload, userProfile, defaultHorizon, onClose, editTask }) {
+export default function AddTaskDialog({ email, payload, savePayload, savePayloadAsync, userProfile, defaultHorizon, onClose, editTask, uid, writeActivityEvents }) {
+  const windows = getFocusWindows(payload.config || {});
   const isEditMode = !!editTask;
   const [title, setTitle] = useState(editTask?.title || "");
   const [concreteStep, setConcreteStep] = useState(editTask?.concreteStep || "");
@@ -251,7 +254,17 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       };
       if (reminderAt && reminderAt !== editTask.reminderAt) scheduleReminder(updatedTask);
       if (!reminderAt && editTask.reminderAt) cancelReminder(editTask.uuid);
-      savePayload({ ...payload, tasks: (payload.tasks || []).map(t => t.uuid === editTask.uuid ? updatedTask : t) });
+      const horizonChanged = horizonLevel !== editTask.horizonLevel;
+      if (horizonChanged) {
+        const event = buildTaskMutationEvent("task_moved", updatedTask, {
+          fromState: { horizonLevel: editTask.horizonLevel }, toState: { horizonLevel }, windows,
+        });
+        savePayloadAsync({ ...payload, tasks: (payload.tasks || []).map(t => t.uuid === editTask.uuid ? updatedTask : t) })
+          .then(() => writeActivityEvents(eventPatch(uid, event)))
+          .catch(() => {});
+      } else {
+        savePayload({ ...payload, tasks: (payload.tasks || []).map(t => t.uuid === editTask.uuid ? updatedTask : t) });
+      }
       setSaved(true);
       setTimeout(onClose, 900);
       return;
@@ -282,10 +295,13 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     if (reminderAt) scheduleReminder(freshTask);
 
     const updatedTasks = [...(payload.tasks || []), freshTask];
-    savePayload({
+    const event = buildTaskMutationEvent("task_created", freshTask, { windows });
+    savePayloadAsync({
       ...payload,
       tasks: updatedTasks
-    });
+    })
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
+      .catch(() => {});
 
     setSaved(true);
     setTimeout(onClose, 900);

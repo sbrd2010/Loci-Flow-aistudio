@@ -3,6 +3,7 @@ import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } f
 import { db, auth } from "./firebase";
 import { safeUUID } from "./utils/uuid";
 import { normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious } from "./utils/normalizePayload";
+import { activitySnapshotPath, activityMetaPath, buildTodaySnapshot } from "./utils/activityLog";
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
 // This lets the app show specific messages at each stage instead of just "loading".
@@ -26,6 +27,80 @@ async function writeWithRetry(dbRef, data, retries = 3) {
       if (attempt === retries - 1) throw err;
       await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
     }
+  }
+}
+
+// Best-effort, write-once "instrumentation started" marker — the first
+// timestamp at which any ledger event/snapshot was ever successfully
+// written for this user. Future UI/analytics reading the ledger must check
+// this (activityMetaPath(uid, "instrumentationStartedAt")) and never imply
+// ledger-derived detail exists before it. Uses the same runTransaction
+// "abort if already set" pattern as the daily snapshot below, so it's safe
+// to call after every successful write without ever overwriting an
+// existing marker — and it never throws, since a failure here must not
+// affect the write that already succeeded and triggered this call.
+async function markInstrumentationStartedIfNeeded(uid) {
+  try {
+    await runTransaction(ref(db, activityMetaPath(uid, "instrumentationStartedAt")), (current) => {
+      if (current !== null) return; // already set (this device or another) — abort
+      return Date.now();
+    });
+  } catch (err) {
+    console.error("[Loci activity ledger] Failed to set instrumentationStartedAt:", err);
+  }
+}
+
+// Analytics-only write: one or more explicit RTDB paths (already fully
+// qualified, e.g. via activityEventPath()/activitySnapshotPath()) written in
+// a single update() call under activityLogs/${uid}/... — entirely separate
+// from the sync/${uid} root and never mixed into the same update() as a
+// task write. Fails soft: on final retry failure this logs a missed-event
+// record and resolves with { ok: false } rather than rejecting, so a caller
+// sequencing this after a confirmed core write can never have an analytics
+// failure surface as if the core action failed. Kept as a standalone,
+// uid-parameterized function (not a hook closure) so it can be unit-tested
+// directly against mocked firebase/database calls.
+export async function writeActivityEvents(uid, pathsToValues, retries = 3) {
+  if (!uid) return { ok: false, reason: "no-uid" };
+  // update({}) resolves as a successful no-op — a caller passing an empty
+  // patch (e.g. eventsPatch(uid, []) when a batch action found no affected
+  // tasks) must not mark instrumentation as started for zero actual writes.
+  if (!pathsToValues || Object.keys(pathsToValues).length === 0) return { ok: true, skipped: true };
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      await update(ref(db), pathsToValues);
+      markInstrumentationStartedIfNeeded(uid); // fire-and-forget, never blocks/affects this result
+      return { ok: true };
+    } catch (err) {
+      if (attempt === retries - 1) {
+        console.error("[Loci activity ledger] Missed event(s) after retries:", Object.keys(pathsToValues), err);
+        return { ok: false, reason: "write-failed", error: err };
+      }
+      await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
+    }
+  }
+}
+
+// Captures the once-per-Loci-day "Today" snapshot that directly serves as
+// that day's carryover set (see activityLog.js / the Insights plan).
+// Guarded by runTransaction so two devices racing to capture the same day's
+// first snapshot can't both write — the loser's transaction sees a non-null
+// existing value and aborts by returning undefined. Fails soft, same
+// rationale as writeActivityEvents. Standalone for the same testability
+// reason as writeActivityEvents above.
+export async function captureTodaySnapshotIfNeeded(uid, tasks, windows) {
+  if (!uid) return { ok: false, reason: "no-uid" };
+  const snapshot = buildTodaySnapshot(tasks, { windows });
+  try {
+    const result = await runTransaction(ref(db, activitySnapshotPath(uid, snapshot.lociDateString)), (current) => {
+      if (current !== null) return; // already captured (this device or another) — abort
+      return snapshot;
+    });
+    markInstrumentationStartedIfNeeded(uid); // fire-and-forget, never blocks/affects this result
+    return { ok: true, committed: result.committed };
+  } catch (err) {
+    console.error("[Loci activity ledger] Snapshot capture failed:", err);
+    return { ok: false, reason: "write-failed", error: err };
   }
 }
 
@@ -89,6 +164,24 @@ export function useSync(uid, email) {
   const hasReceivedFirstRtdbRef = useRef(false);
   const localWriteBeforeFirstRtdbRef = useRef(false);
   const offlineWarnTimeoutRef = useRef(null);
+  // Resolvers for savePayloadAsync calls queued behind the current debounce
+  // timer — settled together when that (possibly-coalesced) write lands.
+  const pendingWriteWaitersRef = useRef([]);
+
+  // Drains and rejects any savePayloadAsync waiters still queued behind the
+  // debounce timer being canceled below (sign-out or account switch before
+  // the 1500ms flush fired). Without this, a stale waiter for the PREVIOUS
+  // user's canceled write sits in pendingWriteWaitersRef (it isn't reset by
+  // this effect otherwise) until some later, unrelated scheduleFlush() for
+  // the NEW user's data resolves it via takeWaiters() — falsely telling the
+  // original caller its write succeeded, and letting its .then() write a
+  // ledger event for a mutation that never actually persisted.
+  const rejectStaleWriteWaiters = () => {
+    const staleWaiters = pendingWriteWaitersRef.current;
+    if (staleWaiters.length === 0) return;
+    pendingWriteWaitersRef.current = [];
+    staleWaiters.forEach(w => w.reject(new Error("savePayloadAsync: canceled by uid change")));
+  };
 
   useEffect(() => {
     if (!dbRefPath) {
@@ -96,6 +189,7 @@ export function useSync(uid, email) {
       pendingRemoteRef.current = null;
       payloadUidRef.current = null;
       if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+      rejectStaleWriteWaiters();
       setLoading(false);
       return;
     }
@@ -110,6 +204,7 @@ export function useSync(uid, email) {
     pendingRemoteRef.current = null;
     payloadUidRef.current = null;
     if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+    rejectStaleWriteWaiters();
     rtdbConnectedRef.current = false;
     hasReceivedFirstRtdbRef.current = false;
     localWriteBeforeFirstRtdbRef.current = false;
@@ -379,6 +474,14 @@ export function useSync(uid, email) {
             // and let RTDB win instead, the same as the !timeoutRef path above.
             clearTimeout(timeoutRef.current);
             timeoutRef.current = null;
+            // The debounced write this cancels never reached RTDB, and the
+            // local edit it carried may or may not survive the merge below
+            // (only re-persisted if mergeRemotePayloadWithMeta finds a real
+            // local contribution) — reject rather than resolve, so any
+            // savePayloadAsync() caller's .then() (which would fire an
+            // activity-ledger event claiming the write succeeded) correctly
+            // doesn't run for a write that was never confirmed.
+            takeWaiters().forEach(w => w.reject(new Error("savePayloadAsync: superseded by RTDB before first sync")));
             const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current);
             const toApply = hasLocalContribution ? { ...merged, timestamp: Date.now() } : merged;
             payloadUidRef.current = uid;
@@ -437,6 +540,20 @@ export function useSync(uid, email) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
       const data = payloadRef.current;
+      // Any savePayloadAsync() callers queued behind the debounce timer this
+      // is preempting must still settle — otherwise a tab backgrounded (not
+      // necessarily closed — visibilitychange "hidden" fires on a simple
+      // phone lock too) within the 1500ms window leaves their promise
+      // hanging forever, silently dropping whatever .then() was waiting to
+      // fire an activity-ledger event. Resolve on confirmed success, reject
+      // otherwise — fetch()'s promise only rejects on a network-level
+      // failure, not an HTTP error status (an expired token, a rules
+      // rejection), so a raw `.then(resolve)` would wrongly treat a 401/403
+      // as success and let ledger events fire for a write that was actually
+      // rejected by the server.
+      const waiters = takeWaiters();
+      const resolveAll = () => waiters.forEach(w => w.resolve());
+      const rejectAll = (err) => waiters.forEach(w => w.reject(err));
       // keepalive: true guarantees delivery even when iOS/Android kills the page
       // mid-write. Falls back to the Firebase SDK if no token is cached yet.
       if (tokenRef.current) {
@@ -447,9 +564,12 @@ export function useSync(uid, email) {
           body: JSON.stringify(data),
           keepalive: true,
           headers: { "Content-Type": "application/json" },
-        }).catch(() => writeWithRetry(ref(db, dbRefPath), data).catch(() => {}));
+        }).then((response) => {
+          if (response.ok) resolveAll();
+          else rejectAll(new Error(`keepalive PUT failed with status ${response.status}`));
+        }).catch(() => writeWithRetry(ref(db, dbRefPath), data).then(resolveAll).catch(rejectAll));
       } else {
-        writeWithRetry(ref(db, dbRefPath), data).catch(() => {});
+        writeWithRetry(ref(db, dbRefPath), data).then(resolveAll).catch(rejectAll);
       }
     };
     const handleVisibilityChange = () => {
@@ -493,7 +613,12 @@ export function useSync(uid, email) {
     }).catch(() => {});
   }, [uid, email]);
 
-  const savePayload = (updatedPayload) => {
+  // Shared local-apply step for savePayload/savePayloadAsync: normalizes,
+  // runs the drop-guard, and — if not blocked — updates optimistic
+  // state/cache exactly as before. Returns { blocked: true } if the
+  // drop-guard rejected the write (nothing was applied), otherwise
+  // { blocked: false, nextPayload }.
+  const applyPayloadLocally = (updatedPayload) => {
     // Track if savePayload fires before the first RTDB response — used in onValue
     // to distinguish a fake-fresh timestamp (from a premature mount effect) from a
     // legitimate unsaved edit (app killed before the last debounce flushed).
@@ -519,7 +644,7 @@ export function useSync(uid, email) {
         `  Missing titles: ${dropped.map(t => t.title || "(untitled)").join(", ")}`
       );
       setSyncWarning("drop-guard");
-      return;
+      return { blocked: true };
     }
 
     payloadUidRef.current = uid;
@@ -532,13 +657,59 @@ export function useSync(uid, email) {
     // Refresh the cached token so the pagehide keepalive flush is always fresh
     auth.currentUser?.getIdToken().then(t => { tokenRef.current = t; }).catch(() => {});
 
+    return { blocked: false, nextPayload };
+  };
+
+  // Detaches the current batch of savePayloadAsync waiters so whoever
+  // preempts the debounce timer (the timer firing normally, or an early
+  // flush/flushNow) can settle exactly the callers queued behind it, without
+  // a later scheduleFlush() call re-queuing into an already-settled batch.
+  const takeWaiters = () => {
+    const waiters = pendingWriteWaitersRef.current;
+    pendingWriteWaitersRef.current = [];
+    return waiters;
+  };
+
+  // Shared debounced-flush scheduler for savePayload/savePayloadAsync. Every
+  // call within the 1500ms window clears and reschedules the timer, so rapid
+  // successive calls coalesce into a single RTDB write — identical to the
+  // original savePayload behavior. Any savePayloadAsync callers queued in
+  // pendingWriteWaitersRef settle together when that write lands.
+  //
+  // What this means for callers sequencing an activity-ledger event after
+  // the promise resolves (deliberate, accepted tradeoff — not a bug): if two
+  // savePayloadAsync calls land in the same debounce window (e.g. delete
+  // then undo within 1.5s, or rapid complete/reopen), only ONE RTDB write
+  // goes out, carrying whatever payloadRef.current holds at flush time — the
+  // LATEST call's cumulative state, which already incorporates every earlier
+  // queued call's changes (each call's optimistic update was applied to
+  // payloadRef.current synchronously in applyPayloadLocally before this
+  // timer fires). Every queued waiter resolves together off that single
+  // write's outcome, so each caller's .then() correctly represents "a write
+  // that includes my change eventually succeeded" — not "my own exact
+  // intermediate payload state was independently persisted as its own RTDB
+  // write." The resulting ledger sequence (e.g. task_deleted then
+  // task_restored) still accurately reflects the real order of user actions,
+  // and is consistent with the single persisted final state — it's a looser
+  // guarantee than a literal 1:1 write-per-call, but not a data-integrity
+  // bug, and was a deliberate call not to break debounce-coalescing to
+  // chase it (see PR #358 review discussion).
+  const scheduleFlush = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
     timeoutRef.current = setTimeout(() => {
+      const waiters = takeWaiters();
       if (dbRefPath && payloadRef.current) {
         writeWithRetry(ref(db, dbRefPath), payloadRef.current)
-          .then(() => console.log("Remote RTDB payload sync successful"))
-          .catch((err) => { console.error("Remote RTDB payload sync failed after retries:", err); setSyncWarning("write-failed"); })
+          .then(() => {
+            console.log("Remote RTDB payload sync successful");
+            waiters.forEach(w => w.resolve());
+          })
+          .catch((err) => {
+            console.error("Remote RTDB payload sync failed after retries:", err);
+            setSyncWarning("write-failed");
+            waiters.forEach(w => w.reject(err));
+          })
           .finally(() => {
             timeoutRef.current = null;
             if (pendingRemoteRef.current) {
@@ -557,12 +728,48 @@ export function useSync(uid, email) {
               }
             }
           });
+      } else {
+        // No RTDB write happened here (no dbRefPath/payloadRef.current at
+        // flush time) — resolving these waiters would tell a
+        // savePayloadAsync() caller its write succeeded when it didn't,
+        // violating the "ledger write only after a confirmed core write"
+        // contract this file's async helpers exist for. Currently
+        // unreachable in practice (dbRefPath is only ever null when uid is
+        // falsy, and every real savePayloadAsync call site is gated behind
+        // an authenticated user), but reject rather than silently lie if
+        // that ever changes.
+        waiters.forEach(w => w.reject(new Error("savePayloadAsync: no active sync target")));
       }
     }, 1500);
   };
 
-  const saveSubPath = (subPath, value) => {
-    if (!dbRefPath) return;
+  const savePayload = (updatedPayload) => {
+    const result = applyPayloadLocally(updatedPayload);
+    if (result.blocked) return;
+    scheduleFlush();
+  };
+
+  // Same as savePayload, but returns a promise that resolves once the
+  // (possibly debounce-coalesced) write actually reaches RTDB, or rejects if
+  // the drop-guard blocked it or the write ultimately failed after retries.
+  // Never call this AND savePayload for the same logical action — that would
+  // duplicate the write.
+  const savePayloadAsync = (updatedPayload) => {
+    const result = applyPayloadLocally(updatedPayload);
+    if (result.blocked) {
+      return Promise.reject(new Error("savePayloadAsync: write blocked by drop-guard"));
+    }
+    return new Promise((resolve, reject) => {
+      pendingWriteWaitersRef.current.push({ resolve, reject });
+      scheduleFlush();
+    });
+  };
+
+  // Shared primitive for saveSubPath/saveSubPathAsync: applies the optimistic
+  // local update, then writes to RTDB with retry, returning the write promise
+  // (rejects on final failure — callers decide whether to swallow or await).
+  const performSubPathWrite = (subPath, value) => {
+    if (!dbRefPath) return Promise.resolve();
     // Mirror the update locally: update both the mutable ref and React state so
     // the UI re-renders immediately (same as savePayload, but without touching tasks).
     if (payloadRef.current) {
@@ -579,17 +786,35 @@ export function useSync(uid, email) {
     const attempt = (n) =>
       update(ref(db), updates).catch(err => {
         if (n > 0) return new Promise(r => setTimeout(r, 500 * Math.pow(2, 3 - n))).then(() => attempt(n - 1));
+        // Set here (not just in the sync saveSubPath wrapper below) so the
+        // user-facing sync warning fires the same way regardless of which
+        // entry point failed — saveSubPathAsync's callers all swallow their
+        // own rejection (.catch(() => {})) to sequence an analytics write,
+        // which previously meant a real write failure via that path set no
+        // warning at all. Matches savePayload/savePayloadAsync's already-
+        // shared scheduleFlush failure handling.
         console.error(`Sub-path write failed (${subPath}):`, err);
         setSyncWarning("write-failed");
+        throw err;
       });
-    attempt(3);
+    return attempt(3);
   };
 
-  // Like saveSubPath, but writes several top-level paths in a single atomic
-  // RTDB update() — use when multiple paths must change together (e.g. a task
-  // completion that also bumps today's contribution count).
-  const saveSubPaths = (patch) => {
-    if (!dbRefPath) return;
+  const saveSubPath = (subPath, value) => {
+    performSubPathWrite(subPath, value).catch(() => {});
+  };
+
+  // Same as saveSubPath, but returns the write promise so a caller can await
+  // confirmed success/failure (e.g. to sequence an analytics follow-up write).
+  // Never call this AND saveSubPath for the same logical write.
+  const saveSubPathAsync = (subPath, value) => performSubPathWrite(subPath, value);
+
+  // Shared primitive for saveSubPaths/saveSubPathsAsync — writes several
+  // top-level paths in a single atomic RTDB update() — use when multiple
+  // paths must change together (e.g. a task completion that also bumps
+  // today's contribution count).
+  const performSubPathsWrite = (patch) => {
+    if (!dbRefPath) return Promise.resolve();
     if (payloadRef.current) {
       const next = { ...payloadRef.current, ...patch, timestamp: Date.now() };
       payloadRef.current = next;
@@ -604,11 +829,25 @@ export function useSync(uid, email) {
     const attempt = (n) =>
       update(ref(db), updates).catch(err => {
         if (n > 0) return new Promise(r => setTimeout(r, 500 * Math.pow(2, 3 - n))).then(() => attempt(n - 1));
+        // Set here, not just in the sync saveSubPaths wrapper below — see the
+        // matching comment on performSubPathWrite above. saveSubPathsAsync is
+        // used by CoachTab's chat-tag resolution, whose caller swallows its
+        // own rejection to sequence an analytics write; without this, a real
+        // multi-path write failure there set no user-facing warning at all.
         console.error(`Sub-paths write failed (${Object.keys(patch).join(", ")}):`, err);
         setSyncWarning("write-failed");
+        throw err;
       });
-    attempt(3);
+    return attempt(3);
   };
+
+  const saveSubPaths = (patch) => {
+    performSubPathsWrite(patch).catch(() => {});
+  };
+
+  // Same as saveSubPaths, but returns the write promise. Never call this AND
+  // saveSubPaths for the same logical write.
+  const saveSubPathsAsync = (patch) => performSubPathsWrite(patch);
 
   // Like saveSubPath("config", ...), but merges `patch` into the LATEST known
   // config (payloadRef.current.config) rather than a caller-held snapshot, and
@@ -657,11 +896,18 @@ export function useSync(uid, email) {
   };
 
   // Write any pending debounced payload immediately (call before navigating away).
+  // Also settles any savePayloadAsync() callers queued behind the timer this
+  // preempts — otherwise their promise (and whatever .then() was waiting to
+  // fire an activity-ledger event) would hang forever, since this timer will
+  // never fire on its own now that it's been cleared.
   const flushNow = () => {
     if (timeoutRef.current && dbRefPath && payloadRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
-      writeWithRetry(ref(db, dbRefPath), payloadRef.current).catch(() => {});
+      const waiters = takeWaiters();
+      writeWithRetry(ref(db, dbRefPath), payloadRef.current)
+        .then(() => waiters.forEach(w => w.resolve()))
+        .catch((err) => waiters.forEach(w => w.reject(err)));
     }
   };
 
@@ -677,5 +923,14 @@ export function useSync(uid, email) {
   // return null so App-level effects cannot read or write the previous user's data.
   const effectivePayload = gatePayloadToUid(payload, payloadUidRef.current, uid);
   const effectiveLoading = loading || (!!uid && payloadUidRef.current !== uid);
-  return { payload: effectivePayload, loading: effectiveLoading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning, savePayload, saveSubPath, saveSubPaths, saveConfigPatch, flushNow, clearCache };
+  return {
+    payload: effectivePayload, loading: effectiveLoading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning,
+    savePayload, savePayloadAsync,
+    saveSubPath, saveSubPathAsync,
+    saveSubPaths, saveSubPathsAsync,
+    saveConfigPatch,
+    writeActivityEvents: (pathsToValues, retries) => writeActivityEvents(uid, pathsToValues, retries),
+    captureTodaySnapshotIfNeeded: (tasks, windows) => captureTodaySnapshotIfNeeded(uid, tasks, windows),
+    flushNow, clearCache,
+  };
 }
