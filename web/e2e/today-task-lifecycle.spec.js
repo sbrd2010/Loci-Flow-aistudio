@@ -38,7 +38,7 @@ async function expectNoHorizontalOverflow(page) {
       document.body?.scrollWidth || 0,
     ];
     document.querySelectorAll(
-      ".app-container, .screen-content, .tasks-section, .tasks-list, .task-row, .modal-card, .focus-mode-overlay"
+      ".app-container, .screen-content, .tasks-section, .tasks-list, .task-row, .modal-card, .focus-mode-overlay, .focus-now-view, .focus-now-card, .focus-now-substeps"
     ).forEach((el) => {
       measured.push(el.scrollWidth);
     });
@@ -217,6 +217,26 @@ test("mobile reliability: One Task mode shows every sub-step, not capped at 3", 
   }
 });
 
+test("mobile reliability: One Task mode has no horizontal overflow with several long sub-step strings", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "One Task long substep overflow seed task";
+  const longSteps = [
+    "This is a deliberately long sub-step description meant to wrap across multiple lines on a narrow phone screen",
+    "Another long line — checking job description details against CV versions 1, 2, 3, and 4 before applying",
+    "Yet another long sub-step line to make sure five wrapped items in a row still fit without overflowing horizontally",
+  ];
+  await addTaskWithSubSteps(page, title, longSteps);
+  await expect(todayRow(page, title)).toBeVisible({ timeout: 5_000 });
+
+  await enterOneTaskMode(page, title);
+  for (const step of longSteps) {
+    await expect(page.locator(".focus-now-substep", { hasText: step })).toBeVisible({ timeout: 5_000 });
+  }
+
+  await expectNoHorizontalOverflow(page);
+});
+
 test("mobile reliability: One Task mode's edit button opens Edit Task and saves changes", async ({ page }) => {
   await enterDemo(page);
 
@@ -230,6 +250,13 @@ test("mobile reliability: One Task mode's edit button opens Edit Task and saves 
   await enterOneTaskMode(page, title);
   await expect(page.locator(".focus-now-card-title")).toHaveText(title);
 
+  // Touch target must be at least 40x40 at 375px — the pencil icon itself
+  // is much smaller, so this checks the button's actual hit area, not the
+  // icon's visual size.
+  const editBtnBox = await page.getByTestId("focus-now-edit-btn").boundingBox();
+  expect(editBtnBox.width).toBeGreaterThanOrEqual(40);
+  expect(editBtnBox.height).toBeGreaterThanOrEqual(40);
+
   await page.getByTestId("focus-now-edit-btn").click();
   await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
   await page.getByTestId("add-task-title").fill(editedTitle);
@@ -238,6 +265,30 @@ test("mobile reliability: One Task mode's edit button opens Edit Task and saves 
   await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
   // Editing closes the dialog but leaves One Task mode active on the same task.
   await expect(page.locator(".focus-now-card-title")).toHaveText(editedTitle);
+});
+
+test("mobile reliability: editing the focused task's horizon away from Today exits One Task mode", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "One Task horizon change seed task";
+  await openAddTask(page);
+  await page.getByTestId("add-task-title").fill(title);
+  await page.getByTestId("add-task-submit").click();
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+
+  await enterOneTaskMode(page, title);
+  await expect(page.locator(".focus-now-card-title")).toHaveText(title);
+
+  await page.getByTestId("focus-now-edit-btn").click();
+  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "This Week" }).click();
+  await page.getByTestId("add-task-submit").click();
+
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  // Moving the focused task off Today must exit One Task mode — it must
+  // never keep rendering/operating on a task that's no longer in Today.
+  await expect(page.locator(".focus-now-view")).not.toBeVisible({ timeout: 5_000 });
+  await expect(todayRow(page, title)).not.toBeVisible({ timeout: 5_000 });
 });
 
 test("mobile reliability: deleting a sub-step requires confirmation and can be cancelled", async ({ page }) => {

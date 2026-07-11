@@ -804,23 +804,32 @@ export default function TodayTab({
     savePayload({ ...payload, tasks: updatedTasks });
   };
 
+  // Only the pending step's identity is stored in confirmation state — never
+  // an onConfirm closure capturing `tasks`/`payload` from the moment the "×"
+  // was tapped. If another tab/device syncs a change while the dialog is
+  // open, a stale closure could write a stale full payload over the newer
+  // one; re-reading `tasks`/`payload` fresh at confirm time (below) avoids
+  // that, since this component re-renders on every incoming sync update.
   const handleDeleteSubStep = (task, stepId) => {
     const step = (task.subSteps || []).find(s => s.id === stepId);
-    setConfirmDialog({
-      message: step?.text ? `Remove this step?\n\n"${step.text}"` : "Remove this step?",
-      confirmLabel: "Remove",
-      cancelLabel: "Cancel",
-      danger: true,
-      onConfirm: () => {
-        const updatedTasks = tasks.map(t => {
-          if (t.uuid !== task.uuid) return t;
-          return { ...t, subSteps: (t.subSteps || []).filter(s => s.id !== stepId), lastUpdated: Date.now() };
-        });
-        savePayload({ ...payload, tasks: updatedTasks });
-        setConfirmDialog(null);
-      },
-      onCancel: () => setConfirmDialog(null),
+    setConfirmDialog({ taskUuid: task.uuid, stepId, stepText: step?.text || null });
+  };
+
+  const handleConfirmDeleteSubStep = () => {
+    if (!confirmDialog) return;
+    const { taskUuid, stepId } = confirmDialog;
+    const task = tasks.find(t => t.uuid === taskUuid);
+    const stepStillExists = !!task && (task.subSteps || []).some(s => s.id === stepId);
+    if (!stepStillExists) {
+      setConfirmDialog(null);
+      return;
+    }
+    const updatedTasks = tasks.map(t => {
+      if (t.uuid !== taskUuid) return t;
+      return { ...t, subSteps: (t.subSteps || []).filter(s => s.id !== stepId), lastUpdated: Date.now() };
     });
+    savePayload({ ...payload, tasks: updatedTasks });
+    setConfirmDialog(null);
   };
 
   const handleMoveToHorizon = (task, horizon) => {
@@ -936,6 +945,19 @@ export default function TodayTab({
   const focusNowTask = (focusNowMode && focusNowTaskId)
     ? tasks.find(t => t.uuid === focusNowTaskId && !t.isDeleted)
     : null;
+
+  // Editing the focused task (via One Task mode's own edit button) can move
+  // it off "today" (Week/Month/etc.). focusNowTask is looked up only by
+  // uuid/!isDeleted above, so without this it would keep rendering — and
+  // stay startable/completable — inside One Task mode even though it no
+  // longer belongs in Today. Exit back to the normal Today view instead,
+  // same as if the task had been deleted mid-session.
+  useEffect(() => {
+    if (focusNowMode && focusNowTask && focusNowTask.horizonLevel !== "today") {
+      setFocusNowMode(false);
+      setFocusNowTaskId(null);
+    }
+  }, [focusNowMode, focusNowTask?.horizonLevel]);
 
   const progressRatio = timerMaxSeconds > 0 ? timerSecondsLeft / timerMaxSeconds : 0;
   const strokeDashoffset = 439.8 * (1 - progressRatio);
@@ -1715,6 +1737,7 @@ export default function TodayTab({
                         <span className="focus-now-card-dur">{focusNowTask.timeEstimateMinutes}m</span>
                       )}
                       <button
+                        type="button"
                         className="focus-now-edit-btn"
                         onClick={() => handleStartEdit(focusNowTask)}
                         title="Edit task"
@@ -1973,7 +1996,16 @@ export default function TodayTab({
         />
       )}
 
-      {confirmDialog && <ConfirmDialog {...confirmDialog} />}
+      {confirmDialog && (
+        <ConfirmDialog
+          message={confirmDialog.stepText ? `Remove this step?\n\n"${confirmDialog.stepText}"` : "Remove this step?"}
+          confirmLabel="Remove"
+          cancelLabel="Cancel"
+          danger
+          onConfirm={handleConfirmDeleteSubStep}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
 
       {/* ── Morning Ritual popup (centered, once per Loci day) ───── */}
       {showAnchorSheet && anchorSheetSlot === "morning" && (() => {

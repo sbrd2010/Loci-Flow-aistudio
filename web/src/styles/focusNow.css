@@ -243,9 +243,11 @@
 .focus-now-edit-btn {
   background: none;
   border: none;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--text-muted);
-  padding: 4px;
+  width: 40px;
+  height: 40px;
   line-height: 1;
   display: flex;
   align-items: center;
@@ -255,10 +257,20 @@
   /* Always sticks to the right edge of .focus-now-card-header, whether or
      not the duration badge (which also has margin-left: auto) is present. */
   margin-left: auto;
+  margin-right: -8px;
+  margin-top: -8px;
+  margin-bottom: -8px;
 }
 .focus-now-edit-btn:hover {
   opacity: 1;
   color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+.focus-now-edit-btn:focus-visible {
+  opacity: 1;
+  color: var(--text-primary);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .focus-now-card-title {
