@@ -12,7 +12,16 @@ import {
 describe("parseLocalDateOnly", () => {
   const originalTZ = process.env.TZ;
   afterEach(() => {
-    process.env.TZ = originalTZ;
+    // process.env values are always coerced to strings — assigning
+    // `undefined` directly would set the literal string "undefined"
+    // instead of actually unsetting it, leaving later tests in this worker
+    // running under a bogus TZ instead of the real original (possibly
+    // absent) one.
+    if (originalTZ === undefined) {
+      delete process.env.TZ;
+    } else {
+      process.env.TZ = originalTZ;
+    }
   });
 
   it("parses a plain date string into the matching local y/m/d", () => {
