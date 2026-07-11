@@ -872,7 +872,11 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
               events.push(buildFocusTerminalEvent(
                 focusEndingResult.type === "COMPLETE_TASK" ? "focus_completed" : "focus_abandoned",
                 endedFocusSession.task, endedFocusSession.focusSessionId,
-                { ...endedFocusSession, windows, now: now.getTime() }
+                // No explicit `now` — default to a fresh Date.now() here, at
+                // the moment the session is actually ended, not `now` (the
+                // message-send time captured before `await callAI(...)`,
+                // which can take several real seconds).
+                { ...endedFocusSession, windows }
               ));
             }
           }
@@ -896,8 +900,10 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
               focusTimerRef.current.setFocusSessionActive?.(false);
             }
             if (retargetedFocusSession) {
+              // No explicit `now` — see the same fix above for why message-
+              // send time is wrong for an event built after `await callAI(...)`.
               events.push(buildFocusTerminalEvent("focus_abandoned", retargetedFocusSession.task, retargetedFocusSession.focusSessionId, {
-                ...retargetedFocusSession, windows, now: now.getTime(),
+                ...retargetedFocusSession, windows,
               }));
             }
           }
@@ -928,8 +934,9 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
                 const session = focusTimerRef.current.startFocusSession(startFocus.task, { enterFocusMode: false, plannedSeconds: mins * 60 });
                 startedFocusSession = session;
                 if (session.priorSession && session.priorSession.task) {
+                  // No explicit `now` — same fix as above.
                   events.push(buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
-                    ...session.priorSession, windows, now: now.getTime(),
+                    ...session.priorSession, windows,
                   }));
                 }
                 events.push(buildFocusStartedEvent(startFocus.task, session.focusSessionId, {

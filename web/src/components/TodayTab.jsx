@@ -64,7 +64,7 @@ export default function TodayTab({
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft, setTimerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
-  pipOpen, handleOpenPiP, isAddTaskDialogOpen, startFocusSession, endFocusSession, focusSessionId,
+  pipOpen, handleOpenPiP, isAddTaskDialogOpen, startFocusSession, endFocusSession, focusSessionId, focusSessionTaskUuid, changeFocusDuration,
   selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
   isSyncingFromCache = false,
   pendingCheckinSlot, setPendingCheckinSlot,
@@ -99,7 +99,7 @@ export default function TodayTab({
     // again on the same task), just reopen the overlay — treating this as a
     // brand-new session would auto-close the in-progress one and fragment
     // the ledger for what's really just a return-to-focus action.
-    if (activeTask?.uuid === task.uuid && focusSessionId) {
+    if (activeTask?.uuid === task.uuid && focusSessionId && focusSessionTaskUuid === task.uuid) {
       setIsFocusMode(true);
       setIsTimerRunning(true);
       return;
@@ -450,10 +450,7 @@ export default function TodayTab({
   };
 
   const handleChangeFocusDuration = (minutes) => {
-    setIsTimerRunning(false);
-    const secs = minutes * 60;
-    setTimerSecondsLeft(secs);
-    setTimerMaxSeconds(secs);
+    changeFocusDuration(minutes);
   };
 
   const handleToggleMVD = (task) => {

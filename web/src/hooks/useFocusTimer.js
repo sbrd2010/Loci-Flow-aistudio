@@ -478,6 +478,23 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     setShowExtendPicker(false);
   };
 
+  // Change the duration of an in-progress session (e.g. FocusModePage's
+  // duration picker), pausing the timer at the new duration. Same
+  // accumulate-before-reset requirement as extendTimer above — without it, a
+  // session that ran 10 minutes before the user changed the duration would
+  // later report an elapsed time near 0, since endFocusSession only ever
+  // sees the current (post-change) block's timerMaxSeconds/timerSecondsLeft.
+  const changeFocusDuration = (minutes) => {
+    if (focusSessionIdRef.current) {
+      focusSessionAccumulatedElapsedRef.current += Math.max(0, timerMaxSeconds - timerSecondsLeft);
+      focusSessionAccumulatedPlannedRef.current += timerMaxSeconds;
+    }
+    setIsTimerRunning(false);
+    const secs = minutes * 60;
+    setTimerSecondsLeft(secs);
+    setTimerMaxSeconds(secs);
+  };
+
   // Add time to an in-progress session (e.g. the PiP "+5 min" button) without
   // resetting it. Uses updater-form setters and mutates deadlineRef directly
   // so it stays correct no matter how long the PiP button's closure has been
@@ -554,7 +571,15 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       // `task` becoming `activeTask` (once `tasks` syncs) would otherwise
       // trigger the activeTask-sync effect to immediately re-derive/overwrite
       // this override from task.timeEstimateMinutes — suppress that one pass.
-      skipNextDurationSyncRef.current = true;
+      // Only needed when `task` is actually about to become a NEW
+      // activeTask (its uuid changing is what re-triggers that effect) — if
+      // `task` is already the current activeTask, the effect's deps won't
+      // change from this call, so it never runs to consume the flag, and it
+      // would otherwise dangle until some later, unrelated task change
+      // wrongly consumes it and skips that sync instead.
+      if (task?.uuid !== activeTask?.uuid) {
+        skipNextDurationSyncRef.current = true;
+      }
     }
     return {
       focusSessionId: sessionId, focusStartedAt: startedAt, focusInitialPlannedSeconds: initialPlannedSeconds,
@@ -606,6 +631,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     sessionCompletePending, dismissSessionComplete,
     showExtendPicker, setShowExtendPicker,
     extendTimer,
+    changeFocusDuration,
     addTimeToSession,
     pipOpen,
     handleOpenPiP,

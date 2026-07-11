@@ -420,6 +420,59 @@ describe("useFocusTimer", () => {
       expect(ended.focusInitialPlannedSeconds).toBe(25 * 60);
     });
 
+    it("accumulates elapsed/planned time when the duration is changed mid-session (changeFocusDuration), instead of losing the earlier block", () => {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.timerMaxSeconds).toBe(25 * 60);
+
+      // 10 minutes elapsed before the user changes the duration.
+      result.current.setTimerSecondsLeft(15 * 60);
+      rerender([[task], {}, "u1"]);
+
+      result.current.changeFocusDuration(5);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.timerMaxSeconds).toBe(5 * 60);
+      expect(result.current.timerSecondsLeft).toBe(5 * 60);
+      expect(result.current.isTimerRunning).toBe(false);
+
+      // The post-change block also runs to completion.
+      result.current.setTimerSecondsLeft(0);
+      rerender([[task], {}, "u1"]);
+
+      const ended = result.current.endFocusSession("completed_task");
+      // Must reflect the pre-change 10 minutes plus the post-change 5, not
+      // just the final 5-minute block.
+      expect(ended.focusElapsedSeconds).toBe(15 * 60);
+    });
+
+    it("does not leave skipNextDurationSyncRef dangling when plannedSeconds is applied to a task that's already activeTask", () => {
+      // Reproduces Coach START_FOCUS with a custom duration for a task that's
+      // already pinned/active with no open session — activeTask?.uuid doesn't
+      // change, so the activeTask-sync effect never re-runs to consume the
+      // flag. If the flag were set unconditionally here, it would dangle and
+      // wrongly suppress a LATER, unrelated task's own duration sync.
+      const taskA = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const taskB = { uuid: "b", isNowFocus: false, isDeleted: false, isCompleted: false, timeEstimateMinutes: 15 };
+      const { result, rerender } = renderHook(useFocusTimer, [[taskA, taskB], {}, "u1"]);
+      rerender([[taskA, taskB], {}, "u1"]);
+
+      // taskA is already activeTask; start a session on it with a custom duration.
+      result.current.startFocusSession(taskA, { enterFocusMode: false, plannedSeconds: 10 * 60 });
+      rerender([[taskA, taskB], {}, "u1"]);
+      expect(result.current.timerMaxSeconds).toBe(10 * 60);
+
+      // Now switch the pin to taskB (a genuinely new activeTask) — its own
+      // 15-minute estimate must apply, not be silently skipped by a dangling flag.
+      const pinnedB = [{ ...taskA, isNowFocus: false }, { ...taskB, isNowFocus: true }];
+      rerender([pinnedB, {}, "u1"]);
+
+      expect(result.current.timerMaxSeconds).toBe(15 * 60);
+      expect(result.current.timerSecondsLeft).toBe(15 * 60);
+    });
+
     it("endFocusSession returns null when no session was ever started", () => {
       const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
       const { result } = renderHook(useFocusTimer, [[task], {}, "u1"]);
