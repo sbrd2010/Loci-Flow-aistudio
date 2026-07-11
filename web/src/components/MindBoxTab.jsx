@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
+import InsightsPanel from "./InsightsPanel";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTaskSubSteps, CATEGORY_ICONS } from "../utils/taskOps";
@@ -58,6 +59,15 @@ function IconFeather() {
       <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/>
       <line x1="16" y1="8" x2="2" y2="22"/>
       <line x1="17.5" y1="15" x2="9" y2="15"/>
+    </svg>
+  );
+}
+function IconBarChart() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10"/>
+      <line x1="12" y1="20" x2="12" y2="4"/>
+      <line x1="6" y1="20" x2="6" y2="14"/>
     </svg>
   );
 }
@@ -885,6 +895,11 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
         );
       })()}
 
+      {/* ── Sub-view: Insights */}
+      {toolPanel === "insights" && (
+        <InsightsPanel payload={payload} onBack={() => setToolPanel(null)} />
+      )}
+
       {/* ── Sub-view: Morning Ritual */}
       {toolPanel === "ritual" && (
         <>
@@ -1011,6 +1026,14 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
               <span className="mindbox-card-body">
                 <span className="mindbox-card-title">Morning Ritual</span>
                 <span className="mindbox-card-sub">7 min · +80 XP</span>
+              </span>
+              <span className="mindbox-card-chevron"><IconChevronRight /></span>
+            </button>
+            <button className="mindbox-card" onClick={() => setToolPanel("insights")} style={{ gridColumn: "span 2" }}>
+              <span className="mindbox-card-icon mindbox-card-icon--secondary"><IconBarChart /></span>
+              <span className="mindbox-card-body">
+                <span className="mindbox-card-title">Insights</span>
+                <span className="mindbox-card-sub">Completion trends &amp; patterns</span>
               </span>
               <span className="mindbox-card-chevron"><IconChevronRight /></span>
             </button>
