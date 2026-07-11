@@ -363,6 +363,28 @@ describe("useFocusTimer", () => {
       expect(endedB.task).toBe(taskB);
     });
 
+    it("starts a new session with a fresh countdown even when the task is already activeTask with no plannedSeconds override", () => {
+      // Reproduces: end a session on a task with time still left on the
+      // clock (e.g. explicit "End Session"), then tap Focus again on that
+      // SAME still-pinned task. activeTask?.uuid never changes across this,
+      // so without an unconditional reset the new session would silently
+      // inherit the old session's leftover timerSecondsLeft.
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+
+      result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+      result.current.setTimerSecondsLeft(3 * 60); // 22 minutes elapsed, 3 left
+      rerender([[task], {}, "u1"]);
+      result.current.endFocusSession("user_abandoned");
+      rerender([[task], {}, "u1"]);
+
+      const started = result.current.startFocusSession(task);
+      expect(started.focusInitialPlannedSeconds).toBe(25 * 60);
+      expect(result.current.timerMaxSeconds).toBe(25 * 60);
+      expect(result.current.timerSecondsLeft).toBe(25 * 60);
+    });
+
     it("endFocusSession returns the session's data and clears focusSessionId, guaranteeing exactly one terminal consumption", () => {
       const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
       const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);

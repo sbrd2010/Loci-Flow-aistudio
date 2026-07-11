@@ -845,14 +845,17 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         if (Object.keys(patch).length > 0) {
           // Only ADD_TASK/COMPLETE_TASK/PARK_TASK map to a ledger event type —
           // SET_NOW_FOCUS/START_FOCUS pin changes are handled separately below
-          // (focus session bookkeeping, not a tracked mutation type). Built now
-          // (synchronously), not inside the .then() below, so the event's
-          // lociDateString reflects when the action actually happened rather
-          // than whenever the debounced write eventually confirms.
+          // (focus session bookkeeping, not a tracked mutation type). Passing
+          // `now: now.getTime()` (the message-send time, same value already
+          // given to applyCoachActions above for lociDateStr/todayStr) keeps
+          // this event's lociDateString consistent with the core mutation's
+          // own dateCompletedString/contributions day — without it, a slow
+          // AI reply crossing a Loci-day boundary would date the ledger event
+          // under a LATER day than the mutation it describes.
           const eventTypeByAction = { ADD_TASK: "task_created", COMPLETE_TASK: "task_completed", PARK_TASK: "task_parked" };
           const events = results
             .filter(r => r.matched && r.task && eventTypeByAction[r.type])
-            .map(r => buildTaskMutationEvent(eventTypeByAction[r.type], r.task, { windows, source: "coach_action" }));
+            .map(r => buildTaskMutationEvent(eventTypeByAction[r.type], r.task, { windows, source: "coach_action", now: now.getTime() }));
           // COMPLETE_TASK/PARK_TASK clear isNowFocus on the matched task
           // (buildToggleCompletedTasks/buildParkTaskTasks) — if that task was
           // the one actively focused, end its session here so the ledger

@@ -565,21 +565,27 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     setFocusSessionId(sessionId);
     if (enterFocusMode) setIsFocusMode(true);
     setIsTimerRunning(true);
-    if (Number(plannedSeconds) > 0) {
-      setTimerMaxSeconds(initialPlannedSeconds);
-      setTimerSecondsLeft(initialPlannedSeconds);
-      // `task` becoming `activeTask` (once `tasks` syncs) would otherwise
-      // trigger the activeTask-sync effect to immediately re-derive/overwrite
-      // this override from task.timeEstimateMinutes — suppress that one pass.
-      // Only needed when `task` is actually about to become a NEW
-      // activeTask (its uuid changing is what re-triggers that effect) — if
-      // `task` is already the current activeTask, the effect's deps won't
-      // change from this call, so it never runs to consume the flag, and it
-      // would otherwise dangle until some later, unrelated task change
-      // wrongly consumes it and skips that sync instead.
-      if (task?.uuid !== activeTask?.uuid) {
-        skipNextDurationSyncRef.current = true;
-      }
+    // Always reset to a fresh initialPlannedSeconds — not just when an
+    // explicit plannedSeconds override is given. Without this, a genuinely
+    // NEW session (e.g. re-tapping Focus on a task that's already
+    // activeTask after a prior session on it was properly ended, with time
+    // left unused) would keep whatever stale timerSecondsLeft the PREVIOUS
+    // session left behind: activeTask?.uuid doesn't change in that case, so
+    // the activeTask-sync effect below never re-runs to derive a fresh
+    // countdown either.
+    setTimerMaxSeconds(initialPlannedSeconds);
+    setTimerSecondsLeft(initialPlannedSeconds);
+    // `task` becoming `activeTask` (once `tasks` syncs) would otherwise
+    // trigger the activeTask-sync effect to immediately re-derive/overwrite
+    // this value from task.timeEstimateMinutes — suppress that one pass.
+    // Only needed when `task` is actually about to become a NEW activeTask
+    // (its uuid changing is what re-triggers that effect) — if `task` is
+    // already the current activeTask, the effect's deps won't change from
+    // this call, so it never runs to consume the flag, and it would
+    // otherwise dangle until some later, unrelated task change wrongly
+    // consumes it and skips that sync instead.
+    if (task?.uuid !== activeTask?.uuid) {
+      skipNextDurationSyncRef.current = true;
     }
     return {
       focusSessionId: sessionId, focusStartedAt: startedAt, focusInitialPlannedSeconds: initialPlannedSeconds,

@@ -168,12 +168,28 @@ export function useSync(uid, email) {
   // timer — settled together when that (possibly-coalesced) write lands.
   const pendingWriteWaitersRef = useRef([]);
 
+  // Drains and rejects any savePayloadAsync waiters still queued behind the
+  // debounce timer being canceled below (sign-out or account switch before
+  // the 1500ms flush fired). Without this, a stale waiter for the PREVIOUS
+  // user's canceled write sits in pendingWriteWaitersRef (it isn't reset by
+  // this effect otherwise) until some later, unrelated scheduleFlush() for
+  // the NEW user's data resolves it via takeWaiters() — falsely telling the
+  // original caller its write succeeded, and letting its .then() write a
+  // ledger event for a mutation that never actually persisted.
+  const rejectStaleWriteWaiters = () => {
+    const staleWaiters = pendingWriteWaitersRef.current;
+    if (staleWaiters.length === 0) return;
+    pendingWriteWaitersRef.current = [];
+    staleWaiters.forEach(w => w.reject(new Error("savePayloadAsync: canceled by uid change")));
+  };
+
   useEffect(() => {
     if (!dbRefPath) {
       payloadRef.current = null;
       pendingRemoteRef.current = null;
       payloadUidRef.current = null;
       if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+      rejectStaleWriteWaiters();
       setLoading(false);
       return;
     }
@@ -188,6 +204,7 @@ export function useSync(uid, email) {
     pendingRemoteRef.current = null;
     payloadUidRef.current = null;
     if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+    rejectStaleWriteWaiters();
     rtdbConnectedRef.current = false;
     hasReceivedFirstRtdbRef.current = false;
     localWriteBeforeFirstRtdbRef.current = false;
