@@ -206,42 +206,29 @@ describe("computeCompletedByCategory", () => {
       { uuid: "d", isCompleted: true, isDeleted: false, dateCompletedString: "2026-07-01", category: "Work" }, // out of range
       { uuid: "e", isCompleted: false, isDeleted: false, dateCompletedString: null, category: "Work" }, // not completed
     ];
-    const result = computeCompletedByCategory(tasks, rangeDays, 3);
+    const result = computeCompletedByCategory(tasks, rangeDays);
     expect(result.categoryCounts).toEqual({ Work: 2, Health: 1 });
     expect(result.retainedCount).toBe(3);
-    expect(result.authoritativeTotal).toBe(3);
-    expect(result.detailCoverage).toBe(1);
   });
 
   it("buckets a missing category as 'Uncategorized' rather than fabricating a default", () => {
     const tasks = [{ uuid: "a", isCompleted: true, isDeleted: false, dateCompletedString: "2026-06-10" }];
-    const result = computeCompletedByCategory(tasks, rangeDays, 1);
+    const result = computeCompletedByCategory(tasks, rangeDays);
     expect(result.categoryCounts).toEqual({ Uncategorized: 1 });
   });
 
-  it("reports detailCoverage below 1 when a completed task was deleted after completion, but contributions[] still counts it (the day where retained count undercounts the authoritative total)", () => {
-    // contributions[] says 3 completions happened in range; only 2 retained task records remain.
-    const tasks = [
-      { uuid: "a", isCompleted: true, isDeleted: false, dateCompletedString: "2026-06-10", category: "Work" },
-      { uuid: "b", isCompleted: true, isDeleted: false, dateCompletedString: "2026-06-11", category: "Health" },
-    ];
-    const result = computeCompletedByCategory(tasks, rangeDays, 3);
-    expect(result.retainedCount).toBe(2);
-    expect(result.authoritativeTotal).toBe(3);
-    expect(result.detailCoverage).toBeCloseTo(2 / 3, 5);
-  });
-
-  it("clamps detailCoverage to 1 rather than surfacing an impossible percentage over 100%", () => {
+  it("does not compute or expose a coverage ratio against contributions[] — dateCompletedString and contributions[].dateString are stamped by different clocks (see issue #361), so retainedCount alone is what's returned", () => {
     const tasks = [{ uuid: "a", isCompleted: true, isDeleted: false, dateCompletedString: "2026-06-10", category: "Work" }];
-    // authoritativeTotal understated relative to retained count — a data anomaly the UI must never show as >100%.
-    const result = computeCompletedByCategory(tasks, rangeDays, 0.5);
-    expect(result.detailCoverage).toBe(1);
+    const result = computeCompletedByCategory(tasks, rangeDays);
+    expect(result).toEqual({ categoryCounts: { Work: 1 }, retainedCount: 1 });
+    expect(result.detailCoverage).toBeUndefined();
+    expect(result.authoritativeTotal).toBeUndefined();
   });
 
-  it("returns a null detailCoverage (not a divide-by-zero) when authoritativeTotal is 0", () => {
-    const result = computeCompletedByCategory([], rangeDays, 0);
-    expect(result.detailCoverage).toBeNull();
+  it("returns empty categoryCounts and a 0 retainedCount for a period with no retained completed tasks", () => {
+    const result = computeCompletedByCategory([], rangeDays);
     expect(result.categoryCounts).toEqual({});
+    expect(result.retainedCount).toBe(0);
   });
 });
 

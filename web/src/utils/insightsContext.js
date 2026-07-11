@@ -109,15 +109,19 @@ export function computeCompletionsByDayOfWeek(contributions, rangeDays) {
 }
 
 // Category counts from retained completed tasks whose dateCompletedString
-// falls in-range, PLUS an explicit detailCoverage figure — retained tasks
-// can undercount the authoritative contributions[] total (a completed task
-// can be deleted later, taking its category with it), so `authoritativeTotal`
-// must be passed in by the caller (computeRangeStats(...).totalCompleted for
-// the same range) rather than re-derived here. detailCoverage is clamped to
-// [0, 1] to guard against ever surfacing an impossible "142%"; it's `null`
-// (not 0, not NaN) when authoritativeTotal is 0 — that's the zero-data case,
-// which the UI renders as its own state rather than a coverage percentage.
-export function computeCompletedByCategory(tasks, rangeDays, authoritativeTotal) {
+// falls in-range. Deliberately does NOT compute an exact "coverage" ratio
+// against contributions[] — dateCompletedString and contributions[].dateString
+// are stamped by two different clocks at every current completion call site
+// (TodayTab/RoadmapTab/coachActions.js/focusSession.js all pass the "Loci
+// day" value for dateCompletedString but a plain calendar date for the
+// contributions[] increment), so the two counts aren't guaranteed to
+// describe the same population even before accounting for a task being
+// deleted after completion — retainedCount/contributions-total is not a
+// reliable coverage percentage, and presenting one implies more precision
+// than the underlying data can support. See issue #361. The UI shows these
+// category counts as available examples from retained records, with a
+// flat, unconditional disclosure rather than a computed ratio.
+export function computeCompletedByCategory(tasks, rangeDays) {
   const rangeSet = new Set(rangeDays);
   const inRange = (tasks || []).filter(
     (t) => t && !t.isDeleted && t.isCompleted && t.dateCompletedString && rangeSet.has(t.dateCompletedString)
@@ -130,10 +134,7 @@ export function computeCompletedByCategory(tasks, rangeDays, authoritativeTotal)
     const cat = t.category || "Uncategorized";
     categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
   });
-  const retainedCount = inRange.length;
-  const total = Number(authoritativeTotal) || 0;
-  const detailCoverage = total > 0 ? Math.min(1, Math.max(0, retainedCount / total)) : null;
-  return { categoryCounts, retainedCount, authoritativeTotal: total, detailCoverage };
+  return { categoryCounts, retainedCount: inRange.length };
 }
 
 // {categoryMix, priorityMix, horizonMix, currentOpenCount} from CURRENTLY

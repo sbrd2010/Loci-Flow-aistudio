@@ -140,6 +140,10 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  /* A zero-count bar renders at 0 height (see InsightsPanel.jsx) — this
+     baseline is what it reads against, so "zero" stays visually anchored
+     and distinct from a gap/missing bar, without resembling real data. */
+  border-bottom: 1px solid var(--border);
 }
 .insights-bars--slim .insights-bar-track {
   height: 90px;

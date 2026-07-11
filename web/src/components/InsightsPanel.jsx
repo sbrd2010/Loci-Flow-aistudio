@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import "../styles/insights.css";
 import { CATEGORY_ICONS } from "../utils/taskOps";
+import { useTodayStr } from "../hooks/useTodayStr";
 import {
   getDateRangeDays,
   sliceContributions,
@@ -53,7 +54,12 @@ function DailyBarsSection({ rangeKey, daily }) {
         {daily.map((d, i) => {
           const date = parseLocalDateOnly(d.dateString);
           const dateLabel = formatDateLabel(date);
-          const heightPct = d.count === 0 ? 2 : Math.max(6, Math.round((d.count / maxCount) * 100));
+          // 0 height, not a small nonzero minimum — a zero day must not
+          // visually resemble a small positive value, especially in the
+          // 30-day chart where most bars have no visible numeric label.
+          // insights-bar-track's own baseline border is what a zero bar
+          // reads against, distinct from an actually-missing bar.
+          const heightPct = d.count === 0 ? 0 : Math.max(6, Math.round((d.count / maxCount) * 100));
           const showTick = !isSlim || i % 5 === 0 || i === daily.length - 1;
           const tickLabel = isSlim ? String(date.getDate()) : date.toLocaleDateString("en-US", { weekday: "short" });
           return (
@@ -92,7 +98,8 @@ function WeekdayPatternSection({ weekday }) {
         {DAY_ORDER.map((day) => {
           const count = weekday.counts[day];
           const isBest = day === weekday.bestDay;
-          const heightPct = count === 0 ? 2 : Math.max(6, Math.round((count / maxCount) * 100));
+          // Same 0-height-not-a-minimum treatment as the daily bars above.
+          const heightPct = count === 0 ? 0 : Math.max(6, Math.round((count / maxCount) * 100));
           return (
             <div key={day} className="insights-bar-col">
               <div className="insights-bar-track">
@@ -142,13 +149,16 @@ function CategoryBars({ entries, total, variant }) {
   );
 }
 
+// Rendered whenever the caller has any completions for the period at all —
+// deliberately no early-return on empty categoryCounts, since the
+// disclosure below is meaningful (and worth showing) even when there's
+// nothing to list. No exact "X of Y" coverage claim here — dateCompletedString
+// and contributions[]'s date can be stamped by two different clocks at every
+// current completion call site (see insightsContext.js's
+// computeCompletedByCategory comment / issue #361), so retainedCount isn't a
+// reliable numerator for a coverage percentage against the range total.
 function CategoryBreakdownSection({ category }) {
   const entries = Object.entries(category.categoryCounts).sort((a, b) => b[1] - a[1]);
-  const showCoverageNote = category.detailCoverage !== null && category.detailCoverage < 1;
-  // Only skip the whole section when there's truly nothing to say — if
-  // coverage is low (including the 0-entries, 0%-coverage case), the
-  // disclosure below is exactly what needs to render, not what gets hidden.
-  if (entries.length === 0 && !showCoverageNote) return null;
   return (
     <div className="insights-section">
       <h3 className="insights-section-title">Completed by Category</h3>
@@ -157,11 +167,9 @@ function CategoryBreakdownSection({ category }) {
       ) : (
         <p className="insights-pattern-note insights-pattern-note--muted">No category details available for this period.</p>
       )}
-      {showCoverageNote && (
-        <p className="insights-coverage-note">
-          Category details are available for {category.retainedCount} of {category.authoritativeTotal} recorded completions.
-        </p>
-      )}
+      <p className="insights-coverage-note">
+        Category details are based on available task records and may not exactly match the completion total above.
+      </p>
     </div>
   );
 }
@@ -183,22 +191,30 @@ function CurrentLoadSection({ activeMix }) {
 export default function InsightsPanel({ payload, onBack }) {
   const { tasks = [], contributions = [] } = payload || {};
   const [rangeKey, setRangeKey] = useState("7d");
+  // This panel has no other 1s/60s clock tick of its own, so without this,
+  // a memo keyed only on [rangeKey, tasks, contributions] would hold Today/
+  // 7 Days/30 Days anchored to whatever day it was when first computed —
+  // never advancing past a midnight rollover while the panel stays open
+  // with no task/contribution edits happening. Same hook App.jsx/DayMapPage
+  // already use for this exact class of staleness.
+  const todayStr = useTodayStr();
 
   // contributions[] is unbounded (one record per active day for the
   // account's lifetime) and every one of these builders re-scans it — worth
   // skipping on re-renders that don't actually change rangeKey/tasks/
-  // contributions (e.g. an unrelated config sync tick while this is open).
+  // contributions/todayStr (e.g. an unrelated config sync tick while this
+  // is open).
   const { stats, daily, weekday, category, activeMix } = useMemo(() => {
-    const rangeDays = getDateRangeDays(rangeKey, new Date());
+    const rangeDays = getDateRangeDays(rangeKey, parseLocalDateOnly(todayStr));
     const rangeStats = computeRangeStats(contributions, rangeDays);
     return {
       stats: rangeStats,
       daily: sliceContributions(contributions, rangeDays),
       weekday: rangeKey !== "today" ? computeCompletionsByDayOfWeek(contributions, rangeDays) : null,
-      category: computeCompletedByCategory(tasks, rangeDays, rangeStats.totalCompleted),
+      category: computeCompletedByCategory(tasks, rangeDays),
       activeMix: computeActiveMix(tasks),
     };
-  }, [rangeKey, tasks, contributions]);
+  }, [rangeKey, tasks, contributions, todayStr]);
 
   const hasAnyCompletions = stats.totalCompleted > 0;
 
