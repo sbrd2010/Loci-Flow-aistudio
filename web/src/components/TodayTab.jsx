@@ -3,6 +3,7 @@ import TaskRow from "./TaskRow";
 import AddTaskDialog from "./AddTaskDialog";
 import FocusModePage from "./FocusModePage";
 import RescueMode from "./RescueMode";
+import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { buildToggleCompletedTasks, byPriorityThenOrder } from "../utils/taskOps";
 import { buildParkTaskTasks } from "../utils/coachActions";
@@ -36,6 +37,12 @@ import {
   useSortable, arrayMove
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+
+const PencilIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+  </svg>
+);
 
 function SortableTaskItem({ id, interactionStyle, children }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -326,6 +333,7 @@ export default function TodayTab({
   const [breakdownNoKeyUuid, setBreakdownNoKeyUuid] = useState(null);
 
   const [editingTask, setEditingTask] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
   const [undoTask, setUndoTask] = useState(null);
   const undoTimeoutRef = useRef(null);
 
@@ -796,12 +804,32 @@ export default function TodayTab({
     savePayload({ ...payload, tasks: updatedTasks });
   };
 
+  // Only the pending step's identity is stored in confirmation state — never
+  // an onConfirm closure capturing `tasks`/`payload` from the moment the "×"
+  // was tapped. If another tab/device syncs a change while the dialog is
+  // open, a stale closure could write a stale full payload over the newer
+  // one; re-reading `tasks`/`payload` fresh at confirm time (below) avoids
+  // that, since this component re-renders on every incoming sync update.
   const handleDeleteSubStep = (task, stepId) => {
+    const step = (task.subSteps || []).find(s => s.id === stepId);
+    setConfirmDialog({ taskUuid: task.uuid, stepId, stepText: step?.text || null });
+  };
+
+  const handleConfirmDeleteSubStep = () => {
+    if (!confirmDialog) return;
+    const { taskUuid, stepId } = confirmDialog;
+    const task = tasks.find(t => t.uuid === taskUuid);
+    const stepStillExists = !!task && (task.subSteps || []).some(s => s.id === stepId);
+    if (!stepStillExists) {
+      setConfirmDialog(null);
+      return;
+    }
     const updatedTasks = tasks.map(t => {
-      if (t.uuid !== task.uuid) return t;
+      if (t.uuid !== taskUuid) return t;
       return { ...t, subSteps: (t.subSteps || []).filter(s => s.id !== stepId), lastUpdated: Date.now() };
     });
     savePayload({ ...payload, tasks: updatedTasks });
+    setConfirmDialog(null);
   };
 
   const handleMoveToHorizon = (task, horizon) => {
@@ -917,6 +945,46 @@ export default function TodayTab({
   const focusNowTask = (focusNowMode && focusNowTaskId)
     ? tasks.find(t => t.uuid === focusNowTaskId && !t.isDeleted)
     : null;
+
+  // Editing the focused task (via One Task mode's own edit button) can move
+  // it off "today" (Week/Month/etc.). focusNowTask is looked up only by
+  // uuid/!isDeleted above, so without this it would keep rendering — and
+  // stay startable/completable — inside One Task mode even though it no
+  // longer belongs in Today. Exit back to the normal Today view instead,
+  // same as if the task had been deleted mid-session.
+  useEffect(() => {
+    if (!focusNowMode || !focusNowTask || focusNowTask.horizonLevel === "today") return;
+    setFocusNowMode(false);
+    setFocusNowTaskId(null);
+    // AddTaskDialog's edit-save spreads ...editTask, so isNowFocus survives
+    // a horizon change untouched — a task that was actively pinned/focused
+    // can leave Today still flagged isNowFocus, orphaning any running timer/
+    // session (no terminal event, later mis-attributed as an unrelated
+    // abandonment). Clean that up exactly like handleMoveToHorizon already
+    // does for the equivalent normal-list action — task_moved was already
+    // written by AddTaskDialog's own save, so only the focus_abandoned
+    // event is new here.
+    if (focusNowTask.isNowFocus) {
+      const abandonedTaskUuid = focusNowTask.uuid;
+      const actionAt = Date.now();
+      const endedFocusSession = endFocusSession("user_abandoned");
+      setIsTimerRunning(false);
+      setIsFocusMode(false);
+      setFocusSessionActive(false);
+      savePayloadAsync({ ...payload, tasks: tasks.map(t =>
+        t.uuid === abandonedTaskUuid ? { ...t, isNowFocus: false, lastUpdated: Date.now() } : t
+      )})
+        .then(() => {
+          if (endedFocusSession) {
+            writeActivityEvents(eventPatch(
+              uid,
+              buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt })
+            ));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [focusNowMode, focusNowTask?.horizonLevel]);
 
   const progressRatio = timerMaxSeconds > 0 ? timerSecondsLeft / timerMaxSeconds : 0;
   const strokeDashoffset = 439.8 * (1 - progressRatio);
@@ -1695,6 +1763,16 @@ export default function TodayTab({
                       {focusNowTask.timeEstimateMinutes > 0 && (
                         <span className="focus-now-card-dur">{focusNowTask.timeEstimateMinutes}m</span>
                       )}
+                      <button
+                        type="button"
+                        className="focus-now-edit-btn"
+                        onClick={() => handleStartEdit(focusNowTask)}
+                        title="Edit task"
+                        aria-label="Edit task"
+                        data-testid="focus-now-edit-btn"
+                      >
+                        <PencilIcon />
+                      </button>
                     </div>
                     <h3 className="focus-now-card-title">{focusNowTask.title}</h3>
                     {focusNowTask.concreteStep && (
@@ -1702,7 +1780,7 @@ export default function TodayTab({
                     )}
                     {focusNowTask.subSteps && focusNowTask.subSteps.filter(s => !s.done).length > 0 && (
                       <div className="focus-now-substeps">
-                        {focusNowTask.subSteps.filter(s => !s.done).slice(0, 3).map(s => (
+                        {focusNowTask.subSteps.filter(s => !s.done).map(s => (
                           <div key={s.id} className="focus-now-substep">· {s.text}</div>
                         ))}
                       </div>
@@ -1942,6 +2020,17 @@ export default function TodayTab({
           onClose={() => setEditingTask(null)}
           uid={uid}
           writeActivityEvents={writeActivityEvents}
+        />
+      )}
+
+      {confirmDialog && (
+        <ConfirmDialog
+          message={confirmDialog.stepText ? `Remove this step?\n\n"${confirmDialog.stepText}"` : "Remove this step?"}
+          confirmLabel="Remove"
+          cancelLabel="Cancel"
+          danger
+          onConfirm={handleConfirmDeleteSubStep}
+          onCancel={() => setConfirmDialog(null)}
         />
       )}
 

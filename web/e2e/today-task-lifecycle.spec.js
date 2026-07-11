@@ -38,7 +38,7 @@ async function expectNoHorizontalOverflow(page) {
       document.body?.scrollWidth || 0,
     ];
     document.querySelectorAll(
-      ".app-container, .screen-content, .tasks-section, .tasks-list, .task-row, .modal-card, .focus-mode-overlay"
+      ".app-container, .screen-content, .tasks-section, .tasks-list, .task-row, .modal-card, .focus-mode-overlay, .focus-now-view, .focus-now-card, .focus-now-substeps"
     ).forEach((el) => {
       measured.push(el.scrollWidth);
     });
@@ -183,4 +183,164 @@ test("mobile reliability: Add Task flushes an in-progress sub-step edit on submi
   const row = todayRow(page, title);
   await expect(row).toBeVisible({ timeout: 5_000 });
   await expect(row).toContainText("Compare flight and train prices");
+});
+
+async function addTaskWithSubSteps(page, title, subStepLines) {
+  await openAddTask(page);
+  await page.getByTestId("add-task-title").fill(title);
+  await page.getByRole("button", { name: /Advanced options/i }).click();
+  await page.getByTestId("add-task-substeps-draft").fill(subStepLines.join("\n"));
+  await page.getByTestId("add-task-substeps-add").click();
+  await page.getByTestId("add-task-submit").click();
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+}
+
+async function enterOneTaskMode(page, title) {
+  await page.getByRole("button", { name: "🎯 One Task" }).click();
+  await expect(page.getByText("Pick one task")).toBeVisible({ timeout: 5_000 });
+  await page.locator(".focus-now-pick-row", { hasText: title }).click();
+  await expect(page.locator(".focus-now-card")).toBeVisible({ timeout: 5_000 });
+}
+
+test("mobile reliability: One Task mode shows every sub-step, not capped at 3", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "One Task substep count seed task";
+  const steps = ["Step one", "Step two", "Step three", "Step four", "Step five"];
+  await addTaskWithSubSteps(page, title, steps);
+  await expect(todayRow(page, title)).toBeVisible({ timeout: 5_000 });
+
+  await enterOneTaskMode(page, title);
+
+  for (const step of steps) {
+    await expect(page.locator(".focus-now-substep", { hasText: step })).toBeVisible({ timeout: 5_000 });
+  }
+});
+
+test("mobile reliability: One Task mode has no horizontal overflow with several long sub-step strings", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "One Task long substep overflow seed task";
+  const longSteps = [
+    "This is a deliberately long sub-step description meant to wrap across multiple lines on a narrow phone screen",
+    "Another long line — checking job description details against CV versions 1, 2, 3, and 4 before applying",
+    "Yet another long sub-step line to make sure five wrapped items in a row still fit without overflowing horizontally",
+  ];
+  await addTaskWithSubSteps(page, title, longSteps);
+  await expect(todayRow(page, title)).toBeVisible({ timeout: 5_000 });
+
+  await enterOneTaskMode(page, title);
+  for (const step of longSteps) {
+    await expect(page.locator(".focus-now-substep", { hasText: step })).toBeVisible({ timeout: 5_000 });
+  }
+
+  await expectNoHorizontalOverflow(page);
+});
+
+test("mobile reliability: One Task mode's edit button opens Edit Task and saves changes", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "One Task edit seed task";
+  const editedTitle = "One Task edited via focus card";
+  await openAddTask(page);
+  await page.getByTestId("add-task-title").fill(title);
+  await page.getByTestId("add-task-submit").click();
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+
+  await enterOneTaskMode(page, title);
+  await expect(page.locator(".focus-now-card-title")).toHaveText(title);
+
+  // Touch target must be at least 40x40 at 375px — the pencil icon itself
+  // is much smaller, so this checks the button's actual hit area, not the
+  // icon's visual size.
+  const editBtnBox = await page.getByTestId("focus-now-edit-btn").boundingBox();
+  expect(editBtnBox.width).toBeGreaterThanOrEqual(40);
+  expect(editBtnBox.height).toBeGreaterThanOrEqual(40);
+
+  await page.getByTestId("focus-now-edit-btn").click();
+  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
+  await page.getByTestId("add-task-title").fill(editedTitle);
+  await page.getByTestId("add-task-submit").click();
+
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  // Editing closes the dialog but leaves One Task mode active on the same task.
+  await expect(page.locator(".focus-now-card-title")).toHaveText(editedTitle);
+});
+
+test("mobile reliability: editing the focused task's horizon away from Today exits One Task mode", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "One Task horizon change seed task";
+  await openAddTask(page);
+  await page.getByTestId("add-task-title").fill(title);
+  await page.getByTestId("add-task-submit").click();
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+
+  await enterOneTaskMode(page, title);
+  await expect(page.locator(".focus-now-card-title")).toHaveText(title);
+
+  await page.getByTestId("focus-now-edit-btn").click();
+  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "This Week" }).click();
+  await page.getByTestId("add-task-submit").click();
+
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  // Moving the focused task off Today must exit One Task mode — it must
+  // never keep rendering/operating on a task that's no longer in Today.
+  await expect(page.locator(".focus-now-view")).not.toBeVisible({ timeout: 5_000 });
+  await expect(todayRow(page, title)).not.toBeVisible({ timeout: 5_000 });
+});
+
+test("mobile reliability: editing a PINNED focused task's horizon away from Today clears its focus/pin state too", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "One Task pinned horizon change seed task";
+  await openAddTask(page);
+  await page.getByTestId("add-task-title").fill(title);
+  await page.getByTestId("add-task-submit").click();
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+
+  // Pin it to focus first — isNowFocus: true, same state a running focus
+  // session would leave it in.
+  await openTaskMenu(page, title);
+  await page.getByText("Pin to Focus", { exact: true }).click();
+  const pinnedSection = page.locator(".pinned-focus-section");
+  await expect(pinnedSection).toBeVisible({ timeout: 5_000 });
+  await expect(pinnedSection).toContainText("FOCUS");
+
+  await enterOneTaskMode(page, title);
+  await page.getByTestId("focus-now-edit-btn").click();
+  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "This Week" }).click();
+  await page.getByTestId("add-task-submit").click();
+
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".focus-now-view")).not.toBeVisible({ timeout: 5_000 });
+  // The task leaving Today must also clear isNowFocus — otherwise it stays
+  // the app's globally "active" focused task (orphaned timer/session) even
+  // though it's no longer in Today at all.
+  await expect(pinnedSection).not.toBeVisible({ timeout: 5_000 });
+});
+
+test("mobile reliability: deleting a sub-step requires confirmation and can be cancelled", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "Substep delete confirmation seed task";
+  await addTaskWithSubSteps(page, title, ["Keep this step", "Remove this step"]);
+  const row = todayRow(page, title);
+  await expect(row).toBeVisible({ timeout: 5_000 });
+  await expect(row).toContainText("Remove this step");
+
+  // Cancel — the step must survive.
+  await row.getByRole("button", { name: "Remove step" }).nth(1).click();
+  await expect(page.getByText("Remove this step?", { exact: false })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(row).toContainText("Remove this step");
+
+  // Confirm — the step is actually removed.
+  await row.getByRole("button", { name: "Remove step" }).nth(1).click();
+  await expect(page.getByText("Remove this step?", { exact: false })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(row).not.toContainText("Remove this step");
+  await expect(row).toContainText("Keep this step");
 });
