@@ -356,6 +356,19 @@
   line-height: 1.3;
 }
 
+/* Compact "N/M steps" indicator on the collapsed card — the sub-steps
+   themselves only render in .dm-edit-panel below (tap ⋮ to expand); this
+   just makes their existence visible without expanding, matching how
+   .dm-card-step is always visible when present. */
+.dm-card-substeps-count {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(232, 238, 255, 0.42);
+  margin-top: 1px;
+  line-height: 1.3;
+}
+
 /* Right column: priority pill + duration stacked */
 .dm-card-right {
   flex-shrink: 0;
@@ -434,6 +447,61 @@
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding: 8px 10px;
   background: rgba(0, 0, 0, 0.28);
+}
+
+/* Sub-steps list — read-only display inside the expand panel (this PR only
+   fixes visibility; toggle/delete interactions here are explicitly out of
+   scope, matching TaskRow.jsx's checklist elsewhere in the app). */
+.dm-substeps-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dm-substep {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: rgba(232, 238, 255, 0.82);
+}
+
+.dm-substep-check {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  border-radius: 3px;
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  color: #0a0e17;
+}
+
+.dm-substep.is-done .dm-substep-check {
+  border-color: transparent;
+  background: var(--success);
+  color: #fff;
+}
+
+.dm-substep.is-done .dm-substep-text {
+  color: rgba(232, 238, 255, 0.42);
+  text-decoration: line-through;
+}
+
+.dm-substep-text {
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 /* Compact single row: duration select + × remove */
