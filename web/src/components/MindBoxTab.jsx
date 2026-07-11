@@ -290,8 +290,14 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
         const events = affected.map((t) => buildTaskMutationEvent("task_parked", t, { windows, now: actionAt }));
         // This batch parks every active task, including whichever one is
         // actively focused — end its session or it's left open with no
-        // terminal event.
-        const focusedTask = affected.find(t => t.isNowFocus);
+        // terminal event. Search ALL non-completed/non-deleted tasks here,
+        // not just `affected` — `affected` deliberately excludes tasks
+        // already parked (to avoid overcounting task_parked events), but the
+        // core write below clears isNowFocus on every non-completed/
+        // non-deleted task regardless of prior isParked state, and a task can
+        // legitimately be isParked && isNowFocus at once (see the same
+        // "hidden focus task" note in setRescueTaskAsNowFocus below).
+        const focusedTask = tasks.find(t => !t.isCompleted && !t.isDeleted && t.isNowFocus);
         const endedFocusSession = focusedTask && typeof focusTimer.endFocusSession === "function"
           ? focusTimer.endFocusSession("user_abandoned")
           : null;

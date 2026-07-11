@@ -712,7 +712,16 @@ export function useSync(uid, email) {
             }
           });
       } else {
-        waiters.forEach(w => w.resolve());
+        // No RTDB write happened here (no dbRefPath/payloadRef.current at
+        // flush time) — resolving these waiters would tell a
+        // savePayloadAsync() caller its write succeeded when it didn't,
+        // violating the "ledger write only after a confirmed core write"
+        // contract this file's async helpers exist for. Currently
+        // unreachable in practice (dbRefPath is only ever null when uid is
+        // falsy, and every real savePayloadAsync call site is gated behind
+        // an authenticated user), but reject rather than silently lie if
+        // that ever changes.
+        waiters.forEach(w => w.reject(new Error("savePayloadAsync: no active sync target")));
       }
     }, 1500);
   };
