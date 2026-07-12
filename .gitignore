@@ -9,6 +9,9 @@ web/playwright-report/
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/loopcheck/
+!.claude/skills/vibesec-skill/
+!.claude/skills/find-skills/
+!.claude/skills/mem-search/
 
 # Local environment files and secrets
 .env
