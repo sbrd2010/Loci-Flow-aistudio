@@ -9,6 +9,7 @@ web/playwright-report/
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/loopcheck/
+!.claude/skills/vibesec-skill/
 
 # Local environment files and secrets
 .env
