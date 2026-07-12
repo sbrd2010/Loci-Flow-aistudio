@@ -5,7 +5,7 @@ description: Helps users discover and install agent skills when they ask questio
 
 # Find Skills
 
-> Vendored from [vercel-labs/skills](https://github.com/vercel-labs/skills/blob/main/skills/find-skills/SKILL.md) (MIT).
+> Vendored from [vercel-labs/skills](https://github.com/vercel-labs/skills/blob/main/skills/find-skills/SKILL.md), licensed MIT per its `package.json` (the upstream repo ships no standalone `LICENSE` file to copy verbatim, so the standard MIT text is reproduced in `LICENSE` in this directory, copyright Vercel, Inc.).
 
 This skill helps you discover and install skills from the open agent skills ecosystem.
 
