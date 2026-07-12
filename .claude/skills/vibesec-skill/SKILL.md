@@ -5,7 +5,7 @@ description: This skill helps Claude write secure web applications. Use this whe
 
 # Secure Coding Guide for Web Applications
 
-> Vendored from [BehiSecc/VibeSec-Skill](https://github.com/BehiSecc/VibeSec-Skill) (Apache-2.0). See `LICENSE` in this directory.
+> Vendored from [BehiSecc/VibeSec-Skill](https://github.com/BehiSecc/VibeSec-Skill) (Apache-2.0). See `LICENSE` in this directory. **Modified from the original**: frontmatter `name` was lowercased to `vibesec-skill` (spec compliance), this attribution block was added, and the Password Security section's bcrypt guidance below was corrected — see this repo's git history for the exact diff.
 
 ## Overview
 
@@ -309,13 +309,14 @@ Any endpoint accepting a URL for redirection must be protected against open redi
 #### Password Requirements
 
 - Minimum 8 characters (12+ recommended)
-- No maximum length (or very high, e.g., 128 chars)
+- No maximum length (or very high, e.g., 128 chars) — **only if paired with Argon2id/scrypt for storage** (see below); this is unsafe combined with bcrypt
 - Allow all characters including special chars
 - Don't require specific character types (let users choose strong passwords)
 
 #### Storage
 
-- Use Argon2id, bcrypt, or scrypt
+- Prefer **Argon2id** (or scrypt) — no practical input-length limit, so it's safe to pair with the "no maximum length" requirement above
+- If using **bcrypt**: it silently truncates at 72 bytes, so two different passwords sharing the same first 72 bytes hash identically. Either cap password input at 72 bytes when bcrypt is the storage algorithm, or pre-hash with SHA-256 before passing to bcrypt (a common, safe workaround) — don't advertise "no maximum length" to users while storing with raw bcrypt
 - Never MD5, SHA1, or plain SHA256
 
 ---

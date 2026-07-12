@@ -5,7 +5,7 @@ description: Search claude-mem's persistent cross-session memory database. Use w
 
 # Memory Search
 
-> Vendored from [thedotmack/claude-mem](https://github.com/thedotmack/claude-mem/blob/main/plugin/skills/mem-search/SKILL.md) (Apache-2.0). See `LICENSE` in this directory.
+> Vendored from [thedotmack/claude-mem](https://github.com/thedotmack/claude-mem/blob/main/plugin/skills/mem-search/SKILL.md) (Apache-2.0). See `LICENSE` and `NOTICE` in this directory. **Modified from the original**: frontmatter is unchanged, but this attribution block and the fixed date-range example below were added/edited — see this repo's git history for the exact diff.
 >
 > **Requires the claude-mem MCP server to be installed and running** (`npx claude-mem install`) — this skill only describes a workflow over the `search`/`timeline`/`get_observations` MCP tools that claude-mem's background worker provides. Without that worker running, those tools don't exist and this skill has nothing to call.
 
@@ -107,8 +107,10 @@ search(query="bug", type="observations", obs_type="bugfix", limit=20, project="m
 
 **Find what happened last week:**
 
+Compute `dateStart`/`dateEnd` from the current date before calling `search` — don't hard-code a date. For "last week" (the 7 days before today), that's today's date minus 7 days through today:
+
 ```
-search(type="observations", dateStart="2025-11-11", limit=20, project="my-project")
+search(type="observations", dateStart="<today - 7 days, YYYY-MM-DD>", dateEnd="<today, YYYY-MM-DD>", limit=20, project="my-project")
 ```
 
 **Understand context around a discovery:**
