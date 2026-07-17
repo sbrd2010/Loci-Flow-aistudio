@@ -29,6 +29,12 @@ on:
         description: 'Version name (e.g. 1.0.0)'
         default: '1.0.0'
 
+# Without this, every new push to an open PR queues another full Android build
+# alongside any still-running one from a prior push, instead of replacing it.
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
