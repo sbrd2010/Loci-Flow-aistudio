@@ -18,6 +18,11 @@ on:
   push:
     branches: [ main, master ]
     tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'web/**'
+      - '.github/workflows/android-build.yml'
   workflow_dispatch:
     inputs:
       versionName:
