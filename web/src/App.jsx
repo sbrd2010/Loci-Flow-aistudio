@@ -80,6 +80,11 @@ export default function App() {
   };
 
   const exitDemo = () => {
+    // Demo mode schedules native alarms (task reminders, Coach check-in,
+    // daily check-ins) the same as a real account — without this, leaving
+    // demo mode strands them so a signed-out/real-account session on this
+    // device can still surface demo task titles as notifications.
+    cancelAllNativeScheduling();
     setDemoMode(false);
     setDemoPayload(null);
     setActiveTab("today");
@@ -572,7 +577,7 @@ export default function App() {
       // still get interrupted by a check-in notification fired while this
       // effect was suppressed. Re-scheduled automatically once the session
       // ends and this effect re-runs (isFocusMode is in the deps below).
-      if (isNativeApp()) cancelDailyCheckins();
+      if (isNativeApp()) cancelDailyCheckins(payload.config, getFocusWindows(payload.config));
       return;
     }
     if (isNativeApp()) {
@@ -857,7 +862,7 @@ export default function App() {
             </button>
             <button
               className="btn"
-              onClick={() => { cancelAllNativeScheduling(); signOut(auth); }}
+              onClick={() => { flushNow(); clearCache(); cancelAllNativeScheduling(); signOut(auth); }}
               style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
             >
               Sign Out

@@ -228,13 +228,77 @@ describe("scheduleDailyCheckins (native pre-scheduling glue)", () => {
 });
 
 describe("cancelDailyCheckins", () => {
+  const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] });
+  let localStorageStore;
+
   beforeEach(() => {
     cancelMock.mockReset();
+    scheduleAtMock.mockReset();
+    scheduleAtMock.mockResolvedValue(true);
+    localStorageStore = {};
+    vi.stubGlobal("localStorage", {
+      getItem: (k) => (k in localStorageStore ? localStorageStore[k] : null),
+      setItem: (k, v) => { localStorageStore[k] = String(v); },
+      removeItem: (k) => { delete localStorageStore[k]; },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("cancels all three daily check-in slots", () => {
     cancelDailyCheckins();
     expect(cancelMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("with no config/windows args, leaves dedup marks untouched (sign-out/account-switch path)", async () => {
+    await scheduleDailyCheckins({ morningRitualShownDate: TODAY }, windows, dt(8, 0));
+    const key = `morning-anon-${TODAY}`;
+    expect(JSON.parse(localStorageStore["loci_notified_daily_checkins"])).toContain(key);
+
+    cancelDailyCheckins();
+
+    const notified = JSON.parse(localStorageStore["loci_notified_daily_checkins"] || "[]");
+    expect(notified).toContain(key);
+  });
+
+  // Regression coverage for a code-review finding: unifying dedup marking
+  // onto every successful schedule (not just immediate-fire) meant a
+  // genuinely-cancelled future alarm's dedup mark would otherwise survive
+  // the cancel, permanently blocking re-notification once the slot becomes
+  // eligible again later (e.g. focus mode ends before the original target).
+  it("releases a slot's dedup mark when its scheduled alarm was still ahead of 'now' at cancel time", async () => {
+    // Morning's target (09:00) is still in the future when scheduled at 08:00.
+    await scheduleDailyCheckins({ morningRitualShownDate: TODAY }, windows, dt(8, 0));
+    const key = `morning-anon-${TODAY}`;
+    expect(JSON.parse(localStorageStore["loci_notified_daily_checkins"])).toContain(key);
+
+    cancelDailyCheckins({}, windows, dt(8, 30)); // cancelled at 08:30 — before the 09:00 target ever fired
+
+    const notified = JSON.parse(localStorageStore["loci_notified_daily_checkins"] || "[]");
+    expect(notified).not.toContain(key);
+  });
+
+  it("does NOT release a slot's dedup mark once its scheduled alarm's target has already passed (already fired)", async () => {
+    await scheduleDailyCheckins({ morningRitualShownDate: TODAY }, windows, dt(8, 0));
+    const key = `morning-anon-${TODAY}`;
+
+    cancelDailyCheckins({}, windows, dt(9, 5)); // cancelled at 09:05 — after the 09:00 target already fired
+
+    const notified = JSON.parse(localStorageStore["loci_notified_daily_checkins"] || "[]");
+    expect(notified).toContain(key);
+  });
+
+  it("does not release a different user's dedup mark", async () => {
+    await scheduleDailyCheckins({ userId: "u1", morningRitualShownDate: TODAY }, windows, dt(8, 0));
+    const key = "morning-u1-" + TODAY;
+    expect(JSON.parse(localStorageStore["loci_notified_daily_checkins"])).toContain(key);
+
+    cancelDailyCheckins({ userId: "u2" }, windows, dt(8, 30));
+
+    const notified = JSON.parse(localStorageStore["loci_notified_daily_checkins"] || "[]");
+    expect(notified).toContain(key);
   });
 });
 

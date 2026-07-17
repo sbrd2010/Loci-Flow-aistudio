@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const scheduleMock = vi.fn();
 const cancelMock = vi.fn();
+const getPendingMock = vi.fn();
 
 vi.mock("@capacitor/core", () => ({
   Capacitor: { isNativePlatform: () => true },
@@ -11,10 +12,11 @@ vi.mock("@capacitor/local-notifications", () => ({
   LocalNotifications: {
     schedule: (...args) => scheduleMock(...args),
     cancel: (...args) => cancelMock(...args),
+    getPending: (...args) => getPendingMock(...args),
   },
 }));
 
-import { nativeReschedule } from "./nativeNotifs";
+import { nativeReschedule, nativeReconcileReminders, nativeCancel } from "./nativeNotifs";
 
 // Regression coverage for a loopcheck/Codex finding on the Android Capacitor
 // bridge: nativeReschedule's cancel()+schedule() calls were fire-and-forget,
@@ -52,5 +54,44 @@ describe("nativeReschedule per-id serialization", () => {
 
     expect(order).toEqual(["first", "second"]);
     expect(scheduleMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+// Regression coverage for a code-review finding: nativeReconcileReminders
+// used to call LN.cancel() directly with a batch of stale ids, bypassing the
+// per-id serializeById queue every other mutating call goes through — so a
+// reconcile racing a concurrent nativeScheduleAt/nativeCancel for the same id
+// could settle out of order and leave the OS holding a stale alarm.
+describe("nativeReconcileReminders per-id serialization", () => {
+  beforeEach(() => {
+    scheduleMock.mockReset();
+    cancelMock.mockReset();
+    cancelMock.mockResolvedValue();
+    getPendingMock.mockReset();
+  });
+
+  it("cancels each stale id through its own queue slot, not a single batched call", async () => {
+    getPendingMock.mockResolvedValue({
+      notifications: [
+        { id: 1, extra: { uuid: "stale-1" } },
+        { id: 2, extra: { uuid: "active" } },
+        { id: 3, extra: { uuid: "stale-2" } },
+      ],
+    });
+
+    await nativeReconcileReminders(new Set(["active"]));
+
+    expect(cancelMock).toHaveBeenCalledTimes(2);
+    expect(cancelMock).toHaveBeenCalledWith({ notifications: [{ id: 1 }] });
+    expect(cancelMock).toHaveBeenCalledWith({ notifications: [{ id: 3 }] });
+  });
+
+  it("a reconcile racing a concurrent nativeCancel for the same id still issues exactly one cancel for that id", async () => {
+    getPendingMock.mockResolvedValue({ notifications: [{ id: 5, extra: { uuid: "stale" } }] });
+
+    await Promise.all([nativeCancel(5), nativeReconcileReminders(new Set())]);
+
+    expect(cancelMock).toHaveBeenCalledTimes(2); // once from nativeCancel(5), once from the reconcile's own id-5 cancel — both serialized, neither dropped
+    expect(cancelMock).toHaveBeenCalledWith({ notifications: [{ id: 5 }] });
   });
 });

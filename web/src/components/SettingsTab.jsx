@@ -1078,7 +1078,9 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
         )}
         {notifPermission === "denied" && (
           <p style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "10px" }}>
-            Notifications are blocked. Go to browser Settings → Site settings → Notifications → allow for this site.
+            {isNativeApp()
+              ? "Notifications are blocked. Go to Android Settings → Apps → Loci Focus → Notifications → allow."
+              : "Notifications are blocked. Go to browser Settings → Site settings → Notifications → allow for this site."}
           </p>
         )}
         {notifPermission !== "granted" && notifPermission !== "denied" && (

@@ -189,6 +189,27 @@ export const DAILY_CHECKIN_SLOTS = new Set(Object.keys(DAILY_CHECKIN_NOTIFICATIO
 
 const NOTIFIED_DAILY_CHECKINS_KEY = "loci_notified_daily_checkins";
 
+// Records the wall-clock instant scheduleDailyCheckins last successfully
+// scheduled a native alarm for, per slot — so cancelDailyCheckins (called
+// when a focus session starts, see App.jsx) can tell a genuinely-cancelled
+// future alarm (target still ahead of "now" at cancel time — the
+// notification never fired, so its dedup mark must be released) apart from
+// one that already fired before the cancel call (releasing the mark there
+// would let the very next scheduleDailyCheckins rerun treat it as newly
+// eligible and fire a duplicate — the exact bug fixed by unifying dedup
+// marking onto every schedule path). Fail-soft: if this record is missing
+// or stale, cancelDailyCheckins conservatively leaves the dedup mark alone.
+const SCHEDULED_TARGETS_KEY = "loci_native_checkin_targets";
+
+function loadScheduledTargets() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SCHEDULED_TARGETS_KEY) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+}
+
 // localStorage-backed dedup so a due check-in only notifies once per Loci day,
 // even across refreshes, backgrounded/discarded tabs, or multiple open tabs.
 // Keys are scoped per user (`${slot}-${userId}-${todayStr}`) so a shared browser
@@ -363,11 +384,18 @@ export async function scheduleDailyCheckins(config, windows, now = new Date()) {
     const key = `${slot}-${userId}-${todayStr}`;
     const notified = loadNotifiedDailyCheckins(todayStr);
     localStorage.setItem(NOTIFIED_DAILY_CHECKINS_KEY, JSON.stringify([...notified, key]));
-    const scheduled = await nativeScheduleAt(id, { title, body, at: target, extra: { type: "daily-checkin", slot } });
-    if (!scheduled) {
+    const didSchedule = await nativeScheduleAt(id, { title, body, at: target, extra: { type: "daily-checkin", slot } });
+    if (!didSchedule) {
       const current = loadNotifiedDailyCheckins(todayStr);
       localStorage.setItem(NOTIFIED_DAILY_CHECKINS_KEY, JSON.stringify(current.filter(k => k !== key)));
+      continue;
     }
+    // Record what was actually scheduled (not just the day's base target —
+    // this may be a snooze or immediate-fire retarget) so cancelDailyCheckins
+    // can later tell whether this specific alarm had already fired.
+    const scheduledTargets = loadScheduledTargets();
+    scheduledTargets[slot] = { todayStr, at: target.getTime() };
+    localStorage.setItem(SCHEDULED_TARGETS_KEY, JSON.stringify(scheduledTargets));
   }
 }
 
@@ -375,10 +403,33 @@ export async function scheduleDailyCheckins(config, windows, now = new Date()) {
 // scheduling anything new — used to suppress daily check-in notifications
 // during an active focus session (App.jsx re-schedules once the session
 // ends, same as scheduleDailyCheckins would naturally do on its next run).
-export function cancelDailyCheckins() {
+//
+// When called with `config`/`windows` (the focus-mode guard's case), also
+// releases a slot's dedup mark if — and only if — SCHEDULED_TARGETS_KEY shows
+// that slot's alarm was still ahead of `now` at cancel time, i.e. genuinely
+// cancelled before firing. An alarm whose recorded target has already passed
+// already fired (native alarms aren't revocable after the fact), so its
+// dedup mark must stay in place — releasing it would let the next
+// scheduleDailyCheckins rerun treat it as newly eligible and re-fire it.
+// Called with no args (sign-out/account-switch, see cancelAllNativeScheduling
+// below) this only cancels the OS alarms and leaves dedup marks untouched.
+export function cancelDailyCheckins(config, windows, now = new Date()) {
   if (!isNativeApp()) return;
+  const releaseDedup = !!windows;
+  const todayStr = releaseDedup ? getLociDayStr(now, windows) : null;
+  const userId = config?.userId || "anon";
   for (const slot of Object.keys(DAILY_CHECKIN_NOTIFICATIONS)) {
     nativeCancel(idFromString(`daily-checkin-${slot}`));
+    if (!releaseDedup) continue;
+    const scheduledTargets = loadScheduledTargets();
+    const record = scheduledTargets[slot];
+    if (record && record.todayStr === todayStr && record.at > now.getTime()) {
+      const key = `${slot}-${userId}-${todayStr}`;
+      const current = loadNotifiedDailyCheckins(todayStr);
+      if (current.includes(key)) {
+        localStorage.setItem(NOTIFIED_DAILY_CHECKINS_KEY, JSON.stringify(current.filter(k => k !== key)));
+      }
+    }
   }
 }
 

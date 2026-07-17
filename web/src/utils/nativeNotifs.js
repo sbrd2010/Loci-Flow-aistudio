@@ -21,8 +21,16 @@ export function isNativeApp() {
   }
 }
 
+// Cache the dynamic import's promise (not just its resolved value) so
+// concurrent first callers — e.g. nativeReconcileReminders cancelling
+// several stale ids via Promise.all — share a single in-flight import()
+// instead of each issuing their own. Re-issuing import() per call is at
+// best redundant work; concurrent overlapping first calls to it have also
+// been observed to leave later callers permanently unresolved.
+let _lnModulePromise = null;
 async function LocalNotifications() {
-  const mod = await import("@capacitor/local-notifications");
+  if (!_lnModulePromise) _lnModulePromise = import("@capacitor/local-notifications");
+  const mod = await _lnModulePromise;
   return mod.LocalNotifications;
 }
 
@@ -194,9 +202,14 @@ export async function nativeReconcileReminders(activeUuids) {
     const toCancel = [];
     for (const n of pending.notifications || []) {
       const uuid = n.extra && n.extra.uuid;
-      if (uuid && !activeUuids.has(uuid)) toCancel.push({ id: n.id });
+      if (uuid && !activeUuids.has(uuid)) toCancel.push(n.id);
     }
-    if (toCancel.length) await LN.cancel({ notifications: toCancel });
+    // Route through the same per-id queue as every other mutating call
+    // (nativeScheduleAt/nativeCancel/nativeReschedule), not a direct batch
+    // LN.cancel() — otherwise a reconcile racing a concurrent schedule/cancel
+    // for the same id can settle out of order and leave the OS holding a
+    // stale alarm (the exact race serializeById exists to prevent).
+    await Promise.all(toCancel.map(id => nativeCancel(id)));
   } catch (_) {}
 }
 
