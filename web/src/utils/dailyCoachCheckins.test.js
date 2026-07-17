@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { getFocusWindows, getLociDayStr } from "./focusWindows";
 import {
   shouldShowMorningCommitment,
@@ -411,5 +411,38 @@ describe("computeDailyCheckinTimes (native pre-scheduling)", () => {
 
   it("returns all-null when there are no windows", () => {
     expect(computeDailyCheckinTimes(dt(8, 0), [])).toEqual({ morning: null, midday: null, reflection: null });
+  });
+});
+
+describe("computeDailyCheckinTimes DST correctness (loopcheck round 2)", () => {
+  const originalTZ = process.env.TZ;
+  afterEach(() => {
+    // See insightsContext.test.js's parseLocalDateOnly suite for why this
+    // can't just be `process.env.TZ = originalTZ` when originalTZ is undefined.
+    if (originalTZ === undefined) {
+      delete process.env.TZ;
+    } else {
+      process.env.TZ = originalTZ;
+    }
+  });
+
+  it("is not off by an hour on the US spring-forward day (2024-03-10, America/New_York)", () => {
+    process.env.TZ = "America/New_York";
+    const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] });
+    const now = new Date(2024, 2, 10, 8, 0); // 8am, before any window opens
+    const times = computeDailyCheckinTimes(now, windows);
+    expect(times.morning).toEqual(new Date(2024, 2, 10, 9, 0));
+    expect(times.midday).toEqual(new Date(2024, 2, 10, 13, 0));
+    expect(times.reflection).toEqual(new Date(2024, 2, 10, 16, 30));
+  });
+
+  it("is not off by an hour on the US fall-back day (2024-11-03, America/New_York)", () => {
+    process.env.TZ = "America/New_York";
+    const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] });
+    const now = new Date(2024, 10, 3, 8, 0);
+    const times = computeDailyCheckinTimes(now, windows);
+    expect(times.morning).toEqual(new Date(2024, 10, 3, 9, 0));
+    expect(times.midday).toEqual(new Date(2024, 10, 3, 13, 0));
+    expect(times.reflection).toEqual(new Date(2024, 10, 3, 16, 30));
   });
 });

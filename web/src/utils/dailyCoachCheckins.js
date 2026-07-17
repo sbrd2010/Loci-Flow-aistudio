@@ -280,11 +280,27 @@ export function pickCheckinLine(kind, aiLine) {
 // Absolute Date for a Loci-minutes instant, anchored to the Loci day `now`
 // currently belongs to (per getLociDayStr) — so an instant computed for the
 // early-morning tail of an overnight window lands on the correct calendar day.
+//
+// Built from explicit local (year, month, day, hour, minute) components via
+// the Date constructor's local-component form, NOT by adding raw
+// milliseconds to a midnight timestamp. The two are not equivalent across a
+// DST transition: the local calendar day has 23 or 25 real hours on a
+// transition day, so "midnight + N minutes" as a millisecond offset lands
+// an hour off from the intended wall-clock time (loopcheck round 2 caught
+// this producing every slot 1h late on spring-forward and 1h early on
+// fall-back). The local-component constructor form resolves each field
+// against the real UTC offset in effect for that specific wall-clock
+// reading, so it's correct on both sides of a transition.
 function lociMinutesToDate(now, windows, lociMinutes) {
   const todayStr = getLociDayStr(now, windows);
   const [y, m, d] = todayStr.split("-").map(Number);
-  const base = new Date(y, m - 1, d, 0, 0, 0, 0);
-  return new Date(base.getTime() + lociMinutes * 60000);
+  const dayCarry = Math.floor(lociMinutes / 1440);
+  const minutesIntoDay = lociMinutes - dayCarry * 1440; // 0 <= minutesIntoDay < 1440, may be fractional
+  const wholeMinutes = Math.floor(minutesIntoDay);
+  const hh = Math.floor(wholeMinutes / 60);
+  const mm = wholeMinutes % 60;
+  const msRemainder = Math.round((minutesIntoDay - wholeMinutes) * 60000);
+  return new Date(y, m - 1, d + dayCarry, hh, mm, 0, msRemainder);
 }
 
 // The Loci-minutes instant at which cumulative (gap-excluded) focus time
