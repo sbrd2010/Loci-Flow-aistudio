@@ -149,7 +149,11 @@ async function rawScheduleAt(id, { title, body, at, extra = {} }) {
         id,
         title,
         body,
-        schedule: { at },
+        // No exact-alarm permission is requested (see README_ANDROID.md), so
+        // without allowWhileIdle Android can defer this well past `at` once
+        // the device enters Doze — allowWhileIdle uses the wake-while-idle
+        // alarm path instead, without needing the exact-alarm permission.
+        schedule: { at, allowWhileIdle: true },
         smallIcon: "ic_launcher_foreground",
         extra,
       }],

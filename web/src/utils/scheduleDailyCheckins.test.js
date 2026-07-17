@@ -28,6 +28,7 @@ vi.mock("./nativeNotifs", () => ({
 }));
 
 const { scheduleDailyCheckins, cancelDailyCheckins, cancelAllNativeScheduling } = await import("./reminders");
+const { idFromString } = await import("./nativeNotifs");
 
 const dt = (h, mi = 0) => new Date(2024, 5, 15, h, mi);
 const TODAY = "2024-06-15";
@@ -157,6 +158,25 @@ describe("scheduleDailyCheckins (native pre-scheduling glue)", () => {
     await scheduleDailyCheckins(config, windows, dt(15, 0));
     expect(scheduleAtMock.mock.calls.some(([, opts]) => opts.extra.slot === "midday")).toBe(false);
     expect(cancelMock).toHaveBeenCalled();
+  });
+
+  // Regression coverage for a Codex finding on the fix above: this app
+  // intentionally doesn't request exact-alarm permission (see
+  // README_ANDROID.md), so Android can legitimately defer a scheduled alarm
+  // past its nominal target under Doze. The "already notified, skip
+  // rescheduling" branch must NOT cancel that id on the assumption it must
+  // have already fired — doing so could kill a still-pending, merely-deferred
+  // alarm with no way to retry (the dedup key already reads as claimed).
+  it("does not cancel an already-notified slot's id when skipping its 'now' retarget on a later rerun", async () => {
+    const config = { dailyCommitmentDate: TODAY, dailyCommitmentTaskIds: ["t1"] };
+    const middayId = idFromString("daily-checkin-midday");
+    await scheduleDailyCheckins(config, windows, dt(14, 0)); // midday marked notified
+    scheduleAtMock.mockClear();
+    cancelMock.mockClear();
+
+    await scheduleDailyCheckins(config, windows, dt(15, 0)); // rerun hits the already-notified skip branch for midday
+
+    expect(cancelMock.mock.calls.some(([id]) => id === middayId)).toBe(false);
   });
 
   // Regression coverage for a Codex finding: a normal future-target

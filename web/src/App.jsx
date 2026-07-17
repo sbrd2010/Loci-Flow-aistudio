@@ -134,6 +134,38 @@ export default function App() {
     }
   }, []);
 
+  // Same deep-link when the notification is tapped while an app window is already
+  // open — sw.js posts a message to it instead of opening a new window. Fallback
+  // (non-SW) notifications dispatch an equivalent window event (see reminders.js).
+  //
+  // Declared before the native listener effect below so the "loci-notification-click"
+  // window listener is guaranteed registered first: on a cold start launched by
+  // tapping a notification, Capacitor's plugin can replay that retained tap as soon
+  // as its listener is attached, and the native effect's dispatch depends on this
+  // window listener already being in place to route it anywhere.
+  useEffect(() => {
+    const routeNotificationClick = (notificationType, slot) => {
+      if (notificationType === "coach-checkin") setActiveTab("coach");
+      else if (notificationType === "daily-checkin") {
+        setActiveTab("today");
+        if (DAILY_CHECKIN_SLOTS.has(slot)) setPendingCheckinSlot(slot);
+      }
+    };
+    const onMessage = (event) => {
+      if (event.data?.type !== "loci-notification-click") return;
+      routeNotificationClick(event.data.notificationType, event.data.slot);
+    };
+    const onFallbackClick = (event) => {
+      routeNotificationClick(event.detail?.type, event.detail?.slot);
+    };
+    if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", onMessage);
+    window.addEventListener("loci-notification-click", onFallbackClick);
+    return () => {
+      if ("serviceWorker" in navigator) navigator.serviceWorker.removeEventListener("message", onMessage);
+      window.removeEventListener("loci-notification-click", onFallbackClick);
+    };
+  }, []);
+
   // ── Native (Capacitor) notifications ────────────────────────────────────────
   // Refresh the cached permission state on load and route notification taps to the
   // matching tab, mirroring the web service-worker deep-link above.
@@ -185,32 +217,6 @@ export default function App() {
       const rest = params.toString();
       window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
     }
-  }, []);
-
-  // Same deep-link when the notification is tapped while an app window is already
-  // open — sw.js posts a message to it instead of opening a new window. Fallback
-  // (non-SW) notifications dispatch an equivalent window event (see reminders.js).
-  useEffect(() => {
-    const routeNotificationClick = (notificationType, slot) => {
-      if (notificationType === "coach-checkin") setActiveTab("coach");
-      else if (notificationType === "daily-checkin") {
-        setActiveTab("today");
-        if (DAILY_CHECKIN_SLOTS.has(slot)) setPendingCheckinSlot(slot);
-      }
-    };
-    const onMessage = (event) => {
-      if (event.data?.type !== "loci-notification-click") return;
-      routeNotificationClick(event.data.notificationType, event.data.slot);
-    };
-    const onFallbackClick = (event) => {
-      routeNotificationClick(event.detail?.type, event.detail?.slot);
-    };
-    if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", onMessage);
-    window.addEventListener("loci-notification-click", onFallbackClick);
-    return () => {
-      if ("serviceWorker" in navigator) navigator.serviceWorker.removeEventListener("message", onMessage);
-      window.removeEventListener("loci-notification-click", onFallbackClick);
-    };
   }, []);
 
   // Heartbeat so a backgrounded Loci tab can tell another Loci tab is visible

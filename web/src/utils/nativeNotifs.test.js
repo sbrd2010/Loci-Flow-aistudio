@@ -16,7 +16,26 @@ vi.mock("@capacitor/local-notifications", () => ({
   },
 }));
 
-import { nativeReschedule, nativeReconcileReminders, nativeCancel } from "./nativeNotifs";
+import { nativeReschedule, nativeReconcileReminders, nativeCancel, nativeScheduleAt } from "./nativeNotifs";
+
+// Regression coverage for a Codex finding: this app doesn't request Android's
+// exact-alarm permission (see README_ANDROID.md), so without allowWhileIdle a
+// scheduled alarm can be deferred well past its target once the device enters
+// Doze — allowWhileIdle uses the wake-while-idle alarm path instead.
+describe("nativeScheduleAt schedules with allowWhileIdle", () => {
+  beforeEach(() => {
+    scheduleMock.mockReset();
+    scheduleMock.mockResolvedValue();
+  });
+
+  it("passes allowWhileIdle: true so the OS can wake the device to deliver it", async () => {
+    await nativeScheduleAt(7, { title: "t", body: "b", at: new Date() });
+
+    expect(scheduleMock).toHaveBeenCalledTimes(1);
+    const [{ notifications }] = scheduleMock.mock.calls[0];
+    expect(notifications[0].schedule.allowWhileIdle).toBe(true);
+  });
+});
 
 // Regression coverage for a loopcheck/Codex finding on the Android Capacitor
 // bridge: nativeReschedule's cancel()+schedule() calls were fire-and-forget,

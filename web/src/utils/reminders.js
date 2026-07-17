@@ -338,11 +338,19 @@ export async function scheduleDailyCheckins(config, windows, now = new Date()) {
         // otherwise re-fire repeatedly for as long as the slot stays
         // eligible-but-undone. Reuses the exact same per-user dedup store
         // checkDailyCheckinNotifications (the web poll) already uses.
+        // Skip re-scheduling without cancelling: this device's own earlier
+        // scheduleDailyCheckins run is the only thing that can have marked
+        // this key (see loadNotifiedDailyCheckins's todayStr scoping) — it
+        // did so right after nativeScheduleAt succeeded for this exact id,
+        // so a pending alarm here (if any) IS the notification that key
+        // stands for. This app deliberately doesn't request exact-alarm
+        // permission (see README_ANDROID.md), so Android can legitimately
+        // defer that alarm past its nominal target under Doze; cancelling
+        // it here on the theory that it "must have already fired" (Codex
+        // finding) would silently swallow the still-pending notification,
+        // with no retry possible since the key already reads as claimed.
         const key = `${slot}-${userId}-${todayStr}`;
-        if (loadNotifiedDailyCheckins(todayStr).includes(key)) {
-          nativeCancel(id);
-          continue;
-        }
+        if (loadNotifiedDailyCheckins(todayStr).includes(key)) continue;
         target = new Date(now.getTime() + 1000);
       }
     }
