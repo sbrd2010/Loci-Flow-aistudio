@@ -1,0 +1,109 @@
+name: Android Build
+
+# Builds the Loci Focus Android app from the JavaScript web app using Capacitor.
+# Produces:
+#   - a debug APK (signed with the debug key, installable for testing), and
+#   - a release AAB (signed when signing secrets are configured, for the Play Store).
+#
+# Signing setup (one-time, see web/android/README_ANDROID.md):
+#   Repository Settings → Secrets and variables → Actions → add:
+#     ANDROID_KEYSTORE_BASE64  – base64 of your upload keystore (.jks)
+#     ANDROID_STORE_PASSWORD   – keystore password
+#     ANDROID_KEY_ALIAS        – key alias (e.g. "upload")
+#     ANDROID_KEY_PASSWORD     – key password
+# Until ALL four are set, the release AAB is built unsigned and is NOT uploaded
+# (so it can't be mistaken for a Play-ready bundle). The debug APK is always built.
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      versionName:
+        description: 'Version name (e.g. 1.0.0)'
+        default: '1.0.0'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # versionCode auto-increments per run so Play uploads never collide on the
+      # same code. Override via the manual trigger's versionName for the user-visible name.
+      VERSION_CODE: ${{ github.run_number }}
+      VERSION_NAME: ${{ github.event.inputs.versionName || '1.0.0' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install web dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: Build web app
+        run: npm run build
+        working-directory: web
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+        working-directory: web
+
+      - name: Configure release signing
+        id: signing
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          SP: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KA: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KP: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS" ] && [ -n "$SP" ] && [ -n "$KA" ] && [ -n "$KP" ]; then
+            echo "$KS" | base64 -d > web/android/keystore.jks
+            printf 'storeFile=keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$SP" "$KA" "$KP" > web/android/keystore.properties
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "Signing enabled."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Signing secrets not set — release AAB will be unsigned and skipped from upload."
+          fi
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+        working-directory: web/android
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug
+        working-directory: web/android
+
+      - name: Build release AAB
+        run: ./gradlew bundleRelease
+        working-directory: web/android
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: loci-focus-debug-apk
+          path: web/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload signed release AAB
+        if: steps.signing.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: loci-focus-release-aab
+          path: web/android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { auth, track, setAnalyticsUser } from "./firebase";
 import { computeUserProfile } from "./utils/userProfile";
 import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
+import { isNativeApp, refreshNativePermission, addNativeNotificationClickListener } from "./utils/nativeNotifs";
 import { isCheckinDue, buildCheckinResumeMessage, isDuplicateCheckinResume } from "./utils/coachCheckin";
 import { getFocusWindows, getLociDayStr } from "./utils/focusWindows";
 import { createDemoPayload } from "./utils/demoData";
@@ -125,6 +126,19 @@ export default function App() {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
+  }, []);
+
+  // ── Native (Capacitor) notifications ────────────────────────────────────────
+  // Refresh the cached permission state on load and route notification taps to the
+  // matching tab, mirroring the web service-worker deep-link above.
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    refreshNativePermission();
+    let unsub = () => {};
+    addNativeNotificationClickListener((extra) => {
+      window.dispatchEvent(new CustomEvent("loci-notification-click", { detail: extra }));
+    }).then((u) => { unsub = u; });
+    return () => unsub();
   }, []);
 
   // Deep-link to the Coach tab when opened via a "🤖 Coach check-in" notification

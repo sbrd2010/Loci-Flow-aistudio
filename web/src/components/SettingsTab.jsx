@@ -8,6 +8,7 @@ import { parseTimeToMinutes } from "../utils/focusWindows";
 import { COACH_PERSONAS, normalizeCoachPersona } from "../utils/coachPersona";
 import { COACH_PROFILE_NOTE_MAX_LENGTH } from "../utils/coachProfile";
 import { clearAllMemory, isMemoryEnabled, removePinnedFact, removeRecentObservation } from "../utils/coachMemory";
+import { isNativeApp, notifPermissionState, requestNotifPermission as nativeRequestPermission, refreshNativePermission } from "../utils/nativeNotifs";
 
 export default function SettingsTab({ payload, savePayload, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut }) {
   const { config = {} } = payload;
@@ -161,13 +162,15 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   };
 
   // ── Notifications ─────────────────────────────────────────────────────────
-  const [notifPermission, setNotifPermission] = useState(() =>
-    typeof Notification !== "undefined" ? Notification.permission : "denied"
-  );
+  const [notifPermission, setNotifPermission] = useState(() => notifPermissionState());
+
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    refreshNativePermission().then(p => { if (p) setNotifPermission(p); });
+  }, []);
 
   const requestNotifPermission = async () => {
-    if (typeof Notification === "undefined") return;
-    const result = await Notification.requestPermission();
+    const result = await nativeRequestPermission();
     setNotifPermission(result);
   };
   const [syncOpen, setSyncOpen] = useState(false);

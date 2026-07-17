@@ -11,6 +11,12 @@
     "test:rules-emulator": "npx --yes firebase-tools@15.22.1 emulators:exec --only database --project demo-loci-flow-rules-test \"vitest run --config vitest.rules-emulator.config.js\""
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/local-notifications": "^8.2.1",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -22,6 +28,7 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.4.2",
     "@firebase/rules-unit-testing": "^3.0.4",
     "@playwright/test": "^1.60.0",
     "@vitejs/plugin-react": "^5.2.0",

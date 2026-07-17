@@ -2,6 +2,16 @@ import { buildCheckinNotificationBody } from "./coachCheckin";
 import { shouldShowMorningCommitment, shouldShowMiddayCheck, shouldShowReflection } from "./dailyCoachCheckins";
 import { shouldShowMorningRitual } from "./morningRitual";
 import { getLociDayStr } from "./focusWindows";
+import {
+  isNativeApp,
+  notifPermissionGranted,
+  idFromString,
+  nativeScheduleAt,
+  nativeShowNow,
+  nativeCancel,
+  nativeReschedule,
+  nativeReconcileReminders,
+} from "./nativeNotifs";
 
 // In-memory map of task UUID → timeout ID (cleared on page refresh, re-scheduled on load)
 const scheduled = new Map();
@@ -24,6 +34,10 @@ function attachFallbackClickHandler(notif, data) {
 // Returns true if a notification was (likely) shown, false if both paths failed.
 async function showNotificationSafe(title, opts) {
   try {
+    if (isNativeApp()) {
+      const key = String(opts?.data?.uuid || opts?.tag || title);
+      return await nativeShowNow(idFromString(key), { title, body: opts?.body || "", extra: opts?.data || {} });
+    }
     if ("serviceWorker" in navigator) {
       const reg = await navigator.serviceWorker.ready;
       await reg.showNotification(title, opts);
@@ -32,6 +46,7 @@ async function showNotificationSafe(title, opts) {
     }
     return true;
   } catch (_) {
+    if (isNativeApp()) return false;
     try {
       attachFallbackClickHandler(new Notification(title, opts), opts.data);
       return true;
@@ -54,11 +69,23 @@ export function scheduleReminder(task) {
     if (task?.uuid) cancelReminder(task.uuid);
     return;
   }
-  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  if (!notifPermissionGranted()) return;
 
   const delay = task.reminderAt - Date.now();
   cancelReminder(task.uuid);
   if (delay <= 0) return; // already past — don't fire stale reminder
+
+  // Native: schedule via the OS so the reminder fires even when the app is closed.
+  // nativeReschedule cancels any prior reminder with the same id first.
+  if (isNativeApp()) {
+    nativeReschedule(idFromString(task.uuid), {
+      title: "🎯 Task reminder",
+      body: task.title,
+      at: new Date(task.reminderAt),
+      extra: { uuid: task.uuid },
+    });
+    return;
+  }
 
   if (delay > MAX_TIMEOUT_MS) {
     // Reschedule at the boundary; the callback recalculates the remaining delay
@@ -83,6 +110,7 @@ export function scheduleReminder(task) {
 export function cancelReminder(uuid) {
   const id = scheduled.get(uuid);
   if (id != null) { clearTimeout(id); scheduled.delete(uuid); }
+  if (isNativeApp()) nativeCancel(idFromString(uuid));
 }
 
 export function scheduleAllReminders(tasks = []) {
@@ -92,6 +120,9 @@ export function scheduleAllReminders(tasks = []) {
   for (const [uuid] of scheduled) {
     if (uuid !== COACH_CHECKIN_KEY && !activeUuids.has(uuid)) cancelReminder(uuid);
   }
+  // Native reminders aren't tracked in the in-memory map, so reconcile them
+  // against the OS pending list to cancel reminders for removed tasks.
+  if (isNativeApp()) nativeReconcileReminders(activeUuids);
   tasks.forEach(t => scheduleReminder(t));
 }
 
@@ -101,10 +132,21 @@ export function scheduleAllReminders(tasks = []) {
 export function scheduleCoachCheckin(checkin) {
   cancelCoachCheckin();
   if (!checkin?.fireAt) return;
-  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  if (!notifPermissionGranted()) return;
 
   const delay = checkin.fireAt - Date.now();
   if (delay <= 0 || delay > MAX_TIMEOUT_MS) return; // already due, or out of the 1-180min range — CoachTab resumes on next open
+
+  // Native: schedule via the OS so the check-in fires even when the app is closed.
+  if (isNativeApp()) {
+    nativeReschedule(idFromString(COACH_CHECKIN_KEY), {
+      title: "🤖 Coach check-in",
+      body: buildCheckinNotificationBody(checkin.note),
+      at: new Date(checkin.fireAt),
+      extra: { type: "coach-checkin" },
+    });
+    return;
+  }
 
   const id = setTimeout(() => {
     scheduled.delete(COACH_CHECKIN_KEY);
@@ -118,6 +160,7 @@ export function scheduleCoachCheckin(checkin) {
 export function cancelCoachCheckin() {
   const id = scheduled.get(COACH_CHECKIN_KEY);
   if (id != null) { clearTimeout(id); scheduled.delete(COACH_CHECKIN_KEY); }
+  if (isNativeApp()) nativeCancel(idFromString(COACH_CHECKIN_KEY));
 }
 
 // Pure check for which of the three daily check-in cards (Today tab) are due
@@ -178,7 +221,7 @@ function isAnotherTabVisible() {
 // never open the tab. Safe to call repeatedly (e.g. on a polling interval).
 export async function checkDailyCheckinNotifications(config, windows) {
   if (typeof document !== "undefined" && document.visibilityState === "visible") return;
-  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  if (!notifPermissionGranted()) return;
   if (isAnotherTabVisible()) return;
 
   const now = new Date();
