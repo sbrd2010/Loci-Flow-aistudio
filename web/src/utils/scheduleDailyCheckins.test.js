@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { getFocusWindows } from "./focusWindows";
 
 const scheduleAtMock = vi.fn();
@@ -34,11 +34,22 @@ const TODAY = "2024-06-15";
 
 describe("scheduleDailyCheckins (native pre-scheduling glue)", () => {
   const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] }); // midpoint 13:00, reflection 16:30
+  let localStorageStore;
 
   beforeEach(() => {
     scheduleAtMock.mockReset();
     cancelMock.mockReset();
     reconcileMock.mockReset();
+    localStorageStore = {};
+    vi.stubGlobal("localStorage", {
+      getItem: (k) => (k in localStorageStore ? localStorageStore[k] : null),
+      setItem: (k, v) => { localStorageStore[k] = String(v); },
+      removeItem: (k) => { delete localStorageStore[k]; },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("schedules morning and reflection, but not midday, before any commitment exists", () => {
@@ -79,9 +90,16 @@ describe("scheduleDailyCheckins (native pre-scheduling glue)", () => {
     expect(cancelMock).toHaveBeenCalledTimes(3);
   });
 
-  it("does not schedule a slot whose computed target has already passed today", () => {
-    // At 18:00, morning/midday/reflection's computed targets (09:00/13:00/16:30) are all in the past.
-    scheduleDailyCheckins({ dailyCommitmentDate: TODAY, dailyCommitmentTaskIds: ["t1"] }, windows, dt(18, 0));
+  it("does not schedule anything once a Loci day is fully over with nothing ever made eligible", () => {
+    // At 18:00: morning explicitly skipped, midday never eligible (no
+    // commitment ever made) — legitimately ineligible, no retarget needed.
+    // Reflection has no such gate (eligible indefinitely once its window
+    // closes), so it's the one case that reaches the retarget-to-now
+    // fallback; mark it already-notified to prove that path is checked too.
+    const key = `reflection-anon-${TODAY}`;
+    localStorageStore["loci_notified_daily_checkins"] = JSON.stringify([key]);
+
+    scheduleDailyCheckins({ dailyCommitmentSkippedDate: TODAY }, windows, dt(18, 0));
 
     expect(scheduleAtMock).not.toHaveBeenCalled();
   });
@@ -110,7 +128,37 @@ describe("scheduleDailyCheckins (native pre-scheduling glue)", () => {
     expect(middayCall[1].at).toEqual(dt(14, 30));
   });
 
-  it("does not retarget to an already-expired snooze", () => {
+  // Regression coverage for a second Codex finding on the same PR: a slot
+  // that becomes eligible only *after* its own computed target already
+  // passed — with no snooze involved at all — was still being silently
+  // dropped (e.g. the commitment saved at 14:00, after midday's 13:00
+  // midpoint already passed). The web poll would notify immediately since
+  // the predicate is true right now; native must retarget to "now" too.
+  it("retargets to 'now' when a slot becomes eligible only after its own target passed, with no snooze involved", () => {
+    const config = { dailyCommitmentDate: TODAY, dailyCommitmentTaskIds: ["t1"] }; // no snooze field at all
+    scheduleDailyCheckins(config, windows, dt(14, 0)); // midday's 13:00 target already passed
+
+    const middayCall = scheduleAtMock.mock.calls.find(([, opts]) => opts.extra.slot === "midday");
+    expect(middayCall).toBeDefined();
+    expect(middayCall[1].at).toEqual(new Date(dt(14, 0).getTime() + 1000));
+  });
+
+  it("does not repeatedly re-fire the 'now' retarget on every rerun once already notified today", () => {
+    const config = { dailyCommitmentDate: TODAY, dailyCommitmentTaskIds: ["t1"] };
+    // First run: midday retargets to "now" and gets marked notified.
+    scheduleDailyCheckins(config, windows, dt(14, 0));
+    expect(scheduleAtMock.mock.calls.some(([, opts]) => opts.extra.slot === "midday")).toBe(true);
+
+    scheduleAtMock.mockClear();
+    // A later rerun (e.g. an unrelated config field changing) must not
+    // re-fire the same "now" alarm again — the dedup key from the first
+    // run is still valid for the same Loci day.
+    scheduleDailyCheckins(config, windows, dt(15, 0));
+    expect(scheduleAtMock.mock.calls.some(([, opts]) => opts.extra.slot === "midday")).toBe(false);
+    expect(cancelMock).toHaveBeenCalled();
+  });
+
+  it("does not retarget to an already-expired snooze — falls through to the 'now' retarget instead", () => {
     const config = {
       dailyCommitmentDate: TODAY,
       dailyCommitmentTaskIds: ["t1"],
@@ -118,8 +166,12 @@ describe("scheduleDailyCheckins (native pre-scheduling glue)", () => {
     };
     scheduleDailyCheckins(config, windows, dt(14, 0));
 
-    const scheduledSlots = scheduleAtMock.mock.calls.map(([, opts]) => opts.extra.slot);
-    expect(scheduledSlots).not.toContain("midday");
+    // Not retargeted to the (already-past) snooze time — but still eligible
+    // right now with no snooze blocking it, so it correctly falls through
+    // to the "now" retarget rather than being silently dropped.
+    const middayCall = scheduleAtMock.mock.calls.find(([, opts]) => opts.extra.slot === "midday");
+    expect(middayCall).toBeDefined();
+    expect(middayCall[1].at).toEqual(new Date(dt(14, 0).getTime() + 1000));
   });
 });
 

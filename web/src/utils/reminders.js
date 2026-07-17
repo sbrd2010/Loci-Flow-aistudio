@@ -282,6 +282,7 @@ export function scheduleDailyCheckins(config, windows, now = new Date()) {
   if (!isNativeApp()) return;
   const todayStr = getLociDayStr(now, windows);
   const targets = computeDailyCheckinTimes(now, windows);
+  const userId = config?.userId || "anon";
 
   for (const slot of Object.keys(DAILY_CHECKIN_NOTIFICATIONS)) {
     const id = idFromString(`daily-checkin-${slot}`);
@@ -291,22 +292,40 @@ export function scheduleDailyCheckins(config, windows, now = new Date()) {
     }
 
     let target = targets[slot];
+    let immediateFire = false;
     // The originally-computed target (e.g. midday's scheduled-focus-time
-    // midpoint) is a single fixed instant with no notion of snooze. If it's
-    // already passed but the user snoozed this exact slot to a later time,
-    // retarget to the snooze expiry instead of giving up on the slot for
-    // the rest of the day — otherwise a snooze tapped after the original
-    // target only re-notifies if something else happens to rerun this
-    // scheduler before the snooze expires (loopcheck/Codex finding).
+    // midpoint) is a single fixed instant with no notion of snooze or of a
+    // gate (Morning Ritual pending, no commitment yet) clearing after that
+    // instant passes. If it's already passed, try two fallbacks before
+    // giving up on the slot for the rest of the day:
     if (!target || target.getTime() <= now.getTime()) {
       const snoozeUntil = config?.[DAILY_CHECKIN_SNOOZE_FIELDS[slot]];
       if (typeof snoozeUntil === "number" && snoozeUntil > now.getTime()) {
+        // 1. An active snooze pushes eligibility to a known future instant —
+        // retarget there. (loopcheck/Codex finding: a snooze tapped after
+        // the original target otherwise only re-notifies if something else
+        // happens to rerun this scheduler before the snooze expires.)
         target = new Date(snoozeUntil);
+      } else {
+        // 2. No snooze, but the slot may have only just become eligible now
+        // — e.g. Morning Ritual dismissed after the window opened, or the
+        // commitment saved after midday's already-passed midpoint (Codex
+        // finding). Retarget to "now" (fired ~1s out, matching
+        // nativeShowNow's immediate-fire pattern) so the eligibility check
+        // below can still catch it, matching what the web poll would do.
+        // Only once per slot per Loci day though — unlike a real future
+        // target, rescheduling "now" on every rerun of this effect would
+        // otherwise re-fire repeatedly for as long as the slot stays
+        // eligible-but-undone. Reuses the exact same per-user dedup store
+        // checkDailyCheckinNotifications (the web poll) already uses.
+        const key = `${slot}-${userId}-${todayStr}`;
+        if (loadNotifiedDailyCheckins(todayStr).includes(key)) {
+          nativeCancel(id);
+          continue;
+        }
+        target = new Date(now.getTime() + 1000);
+        immediateFire = true;
       }
-    }
-    if (!target || target.getTime() <= now.getTime()) {
-      nativeCancel(id);
-      continue;
     }
 
     let eligible;
@@ -320,6 +339,15 @@ export function scheduleDailyCheckins(config, windows, now = new Date()) {
     if (!eligible) {
       nativeCancel(id);
       continue;
+    }
+    // Reserve the dedup key now, before scheduling — nativeScheduleAt is
+    // fire-and-forget (no delivery confirmation to await), so this marks
+    // "attempted" rather than "confirmed shown," same trade-off every other
+    // native scheduling call in this file already makes.
+    if (immediateFire) {
+      const key = `${slot}-${userId}-${todayStr}`;
+      const notified = loadNotifiedDailyCheckins(todayStr);
+      localStorage.setItem(NOTIFIED_DAILY_CHECKINS_KEY, JSON.stringify([...notified, key]));
     }
     const { title, body } = DAILY_CHECKIN_NOTIFICATIONS[slot];
     nativeScheduleAt(id, { title, body, at: target, extra: { type: "daily-checkin", slot } });

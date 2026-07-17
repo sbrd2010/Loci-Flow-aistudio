@@ -60,8 +60,11 @@ captures/
 .externalNativeBuild
 .cxx/
 
-# Google Services (e.g. APIs or Firebase)
-# google-services.json
+# Google Services (e.g. APIs or Firebase) — contains a real OAuth client
+# registered to a specific signing certificate; each environment building a
+# signed release needs its own copy (see README_ANDROID.md's Google Sign-In
+# setup section), same treatment as keystore.properties/*.jks above.
+google-services.json
 
 # Freeline
 freeline.py

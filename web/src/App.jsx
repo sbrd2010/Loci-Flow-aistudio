@@ -3,6 +3,7 @@ import { auth, track, setAnalyticsUser } from "./firebase";
 import { computeUserProfile } from "./utils/userProfile";
 import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, scheduleDailyCheckins, cancelDailyCheckins, cancelAllNativeScheduling, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
 import { isNativeApp, refreshNativePermission, addNativeNotificationClickListener, NATIVE_PERMISSION_GRANTED_EVENT } from "./utils/nativeNotifs";
+import { signInWithGoogleNative } from "./utils/nativeAuth";
 import { isCheckinDue, buildCheckinResumeMessage, isDuplicateCheckinResume } from "./utils/coachCheckin";
 import { getFocusWindows, getLociDayStr } from "./utils/focusWindows";
 import { createDemoPayload } from "./utils/demoData";
@@ -253,6 +254,22 @@ export default function App() {
   const handleSignIn = () => {
     setSigningIn(true);
     setSignInError("");
+
+    // Native (Android): signInWithPopup/signInWithRedirect below both require
+    // navigating to Google's OAuth page inside the current WebView, which
+    // Google actively blocks for any embedded WebView user agent — including
+    // this app's. Route through the native Credential Manager-based flow
+    // instead (see nativeAuth.js); it bridges back into this same `auth`
+    // object, so nothing else in the app needs to know which path ran.
+    if (isNativeApp()) {
+      signInWithGoogleNative(auth).catch((err) => {
+        setSigningIn(false);
+        console.error("Native sign-in failed:", err?.code || err?.message || err);
+        setSignInError("Sign-in failed. Please try again.");
+      });
+      return;
+    }
+
     const ua = navigator.userAgent;
     const isIOS = /iPhone|iPad|iPod/i.test(ua);
     const isAndroid = /Android/i.test(ua);

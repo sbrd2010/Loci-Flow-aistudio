@@ -22,11 +22,12 @@ unchanged inside a native Android shell.
 | `web/capacitor.config.json` | Capacitor config: app id, name, splash/status-bar/notification settings |
 | `web/package.json` (deps only) | Adds `@capacitor/*` packages; no change to web scripts |
 | `web/src/utils/nativeNotifs.js` | **New** bridge module — routes notifications to the OS on Android, no-ops on web |
+| `web/src/utils/nativeAuth.js` | **New** bridge module — native Google Sign-In on Android (see Google Sign-In setup below), no-ops on web |
 | `web/src/utils/reminders.js` | Tiny bridge hooks (gated by `isNativeApp()`) — web path unchanged |
 | `web/src/utils/focusNotifications.js` | Same — bridge hooks, web path unchanged |
 | `web/src/components/AddTaskDialog.jsx` | Permission request uses bridge; web path unchanged |
 | `web/src/components/SettingsTab.jsx` | Permission UI uses bridge; web path unchanged |
-| `web/src/App.jsx` | One effect registers native notification taps; web path unchanged |
+| `web/src/App.jsx` | Registers native notification taps, branches sign-in to the native bridge; web path unchanged |
 | `.github/workflows/android-build.yml` | CI: builds debug APK + signed release AAB on push |
 
 The **old, stale native Kotlin app** (`app/`, root `build.gradle.kts`, etc.) was
@@ -97,6 +98,55 @@ Until ALL four are set, the release AAB is built unsigned and is **not**
 uploaded as an artifact (so an unsigned bundle can't be mistaken for a
 Play-ready one). The debug APK is always built and installable. Once set,
 `bundleRelease` produces a signed AAB ready for the Play Console.
+
+### Google Sign-In setup (required — sign-in does not work without this)
+
+The web app's only sign-in method (`signInWithPopup`/`signInWithRedirect` in
+`App.jsx`) cannot work inside this app's WebView — Google actively blocks
+OAuth sign-in for any embedded WebView user agent. Android instead uses
+`web/src/utils/nativeAuth.js`, which signs in via Android's native Credential
+Manager (`@capacitor-firebase/authentication`) and bridges the resulting ID
+token into this app's existing Firebase Auth (`signInWithCredential`) — so
+the rest of the app (`auth.currentUser`, `onAuthStateChanged`, RTDB security
+rules) works completely unchanged once signed in this way.
+
+**This requires manual, one-time setup in the Firebase console that no CI
+step or code change can substitute for:**
+
+1. In the [Firebase console](https://console.firebase.google.com/) → Project settings →
+   your `loci-flow` project → **Add app → Android**.
+2. Package name: `com.loci.app` (must match `applicationId` in
+   `web/android/app/build.gradle` exactly).
+3. Add **both** signing certificates' SHA-1 fingerprints under that Android
+   app's settings (Google Sign-In checks the calling app's actual signature,
+   not just the package name — sign-in fails for a fingerprint that isn't
+   registered):
+   - Debug: `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android` (standard, universal debug keystore/password — every machine's local debug builds share this key unless you've customized it).
+   - Release: `keytool -list -v -keystore loci-upload.jks -alias upload` (the same upload key from the signing setup above).
+4. Download the resulting `google-services.json` and place it at
+   `web/android/app/google-services.json` (gitignored — do not commit it;
+   each environment building a *signed* release needs its own copy, matching
+   how `keystore.properties` is handled above). Without this file present,
+   the app still builds (the Gradle plugin only applies when the file
+   exists — see `app/build.gradle`), but native sign-in fails immediately
+   with a Firebase configuration error at runtime.
+5. Firebase console → Authentication → Sign-in method → confirm **Google**
+   is enabled (it already is for the web app, since this reuses the same
+   Firebase project — nothing to change here, just confirm).
+
+**Known compromise, not yet fully clean:** `@capacitor-firebase/authentication`
+requires either `firebase@^11` or `^12` on every version compatible with this
+project's Capacitor 8, or a `firebase@^10`-compatible version (`6.3.1`, what
+this project uses) whose own peer dependency asks for `@capacitor/core@^6`.
+Upgrading `firebase` is out of scope here — it's a major-version bump
+touching this app's entire sync/auth/analytics stack for every user, web
+included, not something to do as a side effect of an Android-only fix. So
+`web/package.json` pins `@capacitor-firebase/authentication@6.3.1` and every
+CI workflow's `npm ci` step passes `--legacy-peer-deps` to accept the
+mismatch. The plugin's native Android module has not been verified against
+Capacitor 8 beyond "the project compiles in CI" — if Google Sign-In doesn't
+work end-to-end on a real device, revisit whether a firebase major upgrade
+(clean install, no flags) is worth doing at that point.
 
 ---
 
