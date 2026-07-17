@@ -94,6 +94,40 @@ describe("scheduleDailyCheckins (native pre-scheduling glue)", () => {
     expect(cancelMock).toHaveBeenCalledTimes(3);
   });
 
+  // Regression coverage for a Codex finding: disabling check-ins cancels a
+  // still-future alarm but must also release its dedup mark — otherwise
+  // re-enabling after that slot's original target has passed finds the
+  // stale mark and silently skips a check-in that never actually notified
+  // anyone (it was cancelled, not fired).
+  it("releases a slot's dedup mark when disabling cancels its still-future alarm, so re-enabling later can still notify", async () => {
+    const config = { morningRitualShownDate: TODAY }; // morning's 09:00 target still future at 08:00
+    await scheduleDailyCheckins(config, windows, dt(8, 0)); // morning scheduled + marked notified
+    const key = `morning-anon-${TODAY}`;
+    expect(JSON.parse(localStorageStore["loci_notified_daily_checkins"])).toContain(key);
+
+    // Disabled at 08:30, before the 09:00 target ever fired.
+    await scheduleDailyCheckins({ ...config, dailyCheckinsEnabled: false }, windows, dt(8, 30));
+    expect(JSON.parse(localStorageStore["loci_notified_daily_checkins"] || "[]")).not.toContain(key);
+
+    // Re-enabled at 09:30, after the original target passed — must retarget
+    // to "now" instead of finding a stale claim and skipping the slot.
+    scheduleAtMock.mockClear();
+    await scheduleDailyCheckins(config, windows, dt(9, 30));
+    expect(scheduleAtMock.mock.calls.some(([, opts]) => opts.extra.slot === "morning")).toBe(true);
+  });
+
+  it("does not release a slot's dedup mark when disabling happens after its alarm's target already passed", async () => {
+    const config = { morningRitualShownDate: TODAY };
+    await scheduleDailyCheckins(config, windows, dt(8, 0)); // morning scheduled for 09:00, marked notified
+    const key = `morning-anon-${TODAY}`;
+
+    // Disabled at 09:05 — after the 09:00 target already passed (alarm may
+    // have already fired), so the mark must stay in place.
+    await scheduleDailyCheckins({ ...config, dailyCheckinsEnabled: false }, windows, dt(9, 5));
+
+    expect(JSON.parse(localStorageStore["loci_notified_daily_checkins"] || "[]")).toContain(key);
+  });
+
   it("does not schedule anything once a Loci day is fully over with nothing ever made eligible", async () => {
     // At 18:00: morning explicitly skipped, midday never eligible (no
     // commitment ever made) — legitimately ineligible, no retarget needed.
