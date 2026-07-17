@@ -74,6 +74,17 @@ jobs:
         run: npx cap sync android
         working-directory: web
 
+      - name: Configure google-services.json (Google Sign-In)
+        env:
+          GS: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          if [ -n "$GS" ]; then
+            echo "$GS" | base64 -d > web/android/app/google-services.json
+            echo "google-services.json written — native Google Sign-In config included."
+          else
+            echo "ANDROID_GOOGLE_SERVICES_JSON_BASE64 not set — building without it. The Google Services Gradle plugin only applies when this file exists (see web/android/app/build.gradle), so the resulting APK/AAB will compile but native Google Sign-In (signInWithGoogleNative) will fail at runtime until this secret is added. See web/android/README_ANDROID.md's Google Sign-In setup section."
+          fi
+
       - name: Configure release signing
         id: signing
         env:

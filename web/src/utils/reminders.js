@@ -278,7 +278,7 @@ const DAILY_CHECKIN_SNOOZE_FIELDS = {
   reflection: "dailyReflectionSnoozeUntil",
 };
 
-export function scheduleDailyCheckins(config, windows, now = new Date()) {
+export async function scheduleDailyCheckins(config, windows, now = new Date()) {
   if (!isNativeApp()) return;
   const todayStr = getLociDayStr(now, windows);
   const targets = computeDailyCheckinTimes(now, windows);
@@ -340,17 +340,30 @@ export function scheduleDailyCheckins(config, windows, now = new Date()) {
       nativeCancel(id);
       continue;
     }
-    // Reserve the dedup key now, before scheduling — nativeScheduleAt is
-    // fire-and-forget (no delivery confirmation to await), so this marks
-    // "attempted" rather than "confirmed shown," same trade-off every other
-    // native scheduling call in this file already makes.
-    if (immediateFire) {
-      const key = `${slot}-${userId}-${todayStr}`;
-      const notified = loadNotifiedDailyCheckins(todayStr);
-      localStorage.setItem(NOTIFIED_DAILY_CHECKINS_KEY, JSON.stringify([...notified, key]));
-    }
     const { title, body } = DAILY_CHECKIN_NOTIFICATIONS[slot];
-    nativeScheduleAt(id, { title, body, at: target, extra: { type: "daily-checkin", slot } });
+    if (!immediateFire) {
+      nativeScheduleAt(id, { title, body, at: target, extra: { type: "daily-checkin", slot } });
+      continue;
+    }
+    // The immediate-fire retarget needs to actually confirm success before
+    // marking the dedup key: a fresh Android 13+ install's cached permission
+    // starts "default" (see notifPermissionGranted's comment), so this can
+    // legitimately reach here before the OS permission is really granted —
+    // nativeScheduleAt then returns false. Reserve the key first (so a
+    // concurrent rerun of this same scheduler can't double-schedule this
+    // slot while the await below is in flight — same race this file's web
+    // dedup already guards against), then release it if scheduling actually
+    // failed, so the later permission-grant retry (nativeNotifs.js's
+    // NATIVE_PERMISSION_GRANTED_EVENT) can retry this slot instead of
+    // finding it already marked "notified" and skipping it forever.
+    const key = `${slot}-${userId}-${todayStr}`;
+    const notified = loadNotifiedDailyCheckins(todayStr);
+    localStorage.setItem(NOTIFIED_DAILY_CHECKINS_KEY, JSON.stringify([...notified, key]));
+    const scheduled = await nativeScheduleAt(id, { title, body, at: target, extra: { type: "daily-checkin", slot } });
+    if (!scheduled) {
+      const current = loadNotifiedDailyCheckins(todayStr);
+      localStorage.setItem(NOTIFIED_DAILY_CHECKINS_KEY, JSON.stringify(current.filter(k => k !== key)));
+    }
   }
 }
 

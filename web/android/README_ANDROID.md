@@ -117,12 +117,16 @@ step or code change can substitute for:**
    your `loci-flow` project → **Add app → Android**.
 2. Package name: `com.loci.app` (must match `applicationId` in
    `web/android/app/build.gradle` exactly).
-3. Add **both** signing certificates' SHA-1 fingerprints under that Android
+3. Add **every** signing certificate's SHA-1 fingerprint under that Android
    app's settings (Google Sign-In checks the calling app's actual signature,
    not just the package name — sign-in fails for a fingerprint that isn't
-   registered):
+   registered). That's not just two — it's three once you release to Play,
+   because Play App Signing (step 4 under "Releasing to Google Play" below)
+   makes Google re-sign your AAB with **its own** certificate before
+   installing it on users' devices, different from your upload key entirely:
    - Debug: `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android` (standard, universal debug keystore/password — every machine's local debug builds share this key unless you've customized it).
-   - Release: `keytool -list -v -keystore loci-upload.jks -alias upload` (the same upload key from the signing setup above).
+   - Upload key: `keytool -list -v -keystore loci-upload.jks -alias upload` (the same upload key from the signing setup above) — covers a directly-installed/sideloaded signed release APK/AAB, not a Play-distributed install.
+   - **Play App Signing key — required before any Play-distributed install can sign in**: Play Console → your app → Setup → App integrity → App signing → copy the "App signing key certificate" SHA-1 (only available *after* the first upload where you opted into Play App Signing). Registering only the upload key's SHA-1 lets the AAB upload successfully but leaves Google Sign-In broken for every real Play Store user, since their installed app presents this certificate instead.
 4. Download the resulting `google-services.json` and place it at
    `web/android/app/google-services.json` (gitignored — do not commit it;
    each environment building a *signed* release needs its own copy, matching
@@ -130,6 +134,12 @@ step or code change can substitute for:**
    the app still builds (the Gradle plugin only applies when the file
    exists — see `app/build.gradle`), but native sign-in fails immediately
    with a Firebase configuration error at runtime.
+   - **For CI-built artifacts** (debug APK and signed release AAB uploaded as
+     workflow artifacts): add a fifth repository secret,
+     `ANDROID_GOOGLE_SERVICES_JSON_BASE64` (`base64 -w0 google-services.json`),
+     alongside the four signing secrets above. Without it, CI builds succeed
+     but ship with no native Google Sign-In config at all — same failure mode
+     as a local build missing the file.
 5. Firebase console → Authentication → Sign-in method → confirm **Google**
    is enabled (it already is for the web app, since this reuses the same
    Firebase project — nothing to change here, just confirm).
@@ -164,6 +174,11 @@ work end-to-end on a real device, revisit whether a firebase major upgrade
    App Signing. Accept it: Google re-signs your AAB with its own key for
    distribution, and your upload key stays yours for future uploads. This is
    standard and recommended.
+   - **Immediately after this**, go back and register this new certificate's
+     SHA-1 in Firebase — see the "Google Sign-In setup" section above. Until
+     you do, Google Sign-In is broken for every user who installs from Play
+     (it still worked in every build/test before this point, since none of
+     that used the Play App Signing certificate).
 5. Complete the store listing (icon, screenshots, privacy policy, content
    rating) and submit for review.
 

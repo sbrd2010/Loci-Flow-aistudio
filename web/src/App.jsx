@@ -576,8 +576,18 @@ export default function App() {
       return;
     }
     if (isNativeApp()) {
-      scheduleDailyCheckins(payload.config, getFocusWindows(payload.config));
-      return;
+      // A one-shot call here isn't enough on its own: scheduleDailyCheckins
+      // only pre-schedules *today's* slots, so if the app stays
+      // mounted/backgrounded across a Loci-day boundary with no config/focus
+      // change to re-trigger this effect, the previous day's alarms are
+      // exhausted and tomorrow's are never queued until something else
+      // happens to rerun this. Poll on the same cadence as the web branch
+      // below so day rollover gets caught the same way — scheduleDailyCheckins
+      // is cheap and replaces same-id alarms, so this is safe to repeat.
+      const reschedule = () => scheduleDailyCheckins(payload.config, getFocusWindows(payload.config));
+      reschedule();
+      const nativeId = setInterval(reschedule, 5 * 60 * 1000);
+      return () => clearInterval(nativeId);
     }
     const check = () => checkDailyCheckinNotifications(payload.config, getFocusWindows(payload.config));
     check();
@@ -847,7 +857,7 @@ export default function App() {
             </button>
             <button
               className="btn"
-              onClick={() => signOut(auth)}
+              onClick={() => { cancelAllNativeScheduling(); signOut(auth); }}
               style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
             >
               Sign Out

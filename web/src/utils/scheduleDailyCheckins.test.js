@@ -158,6 +158,31 @@ describe("scheduleDailyCheckins (native pre-scheduling glue)", () => {
     expect(cancelMock).toHaveBeenCalled();
   });
 
+  // Regression coverage for a Codex finding on the immediate-fire dedup
+  // write: it used to mark the slot "notified" before nativeScheduleAt()
+  // resolved, so a failed schedule (e.g. Android 13+ permission not yet
+  // granted on a fresh install) would still get marked done, permanently
+  // losing the slot for the day even after the permission-grant retry fires.
+  it("releases the dedup mark if the native schedule call actually fails, so a later retry isn't blocked", async () => {
+    scheduleAtMock.mockImplementation(() => Promise.resolve(false)); // simulates e.g. permission not yet granted
+    const config = { dailyCommitmentDate: TODAY, dailyCommitmentTaskIds: ["t1"] };
+
+    await scheduleDailyCheckins(config, windows, dt(14, 0));
+
+    const notified = JSON.parse(localStorageStore["loci_notified_daily_checkins"] || "[]");
+    expect(notified).not.toContain(`midday-anon-${TODAY}`);
+  });
+
+  it("keeps the dedup mark when the native schedule call actually succeeds", async () => {
+    scheduleAtMock.mockImplementation(() => Promise.resolve(true));
+    const config = { dailyCommitmentDate: TODAY, dailyCommitmentTaskIds: ["t1"] };
+
+    await scheduleDailyCheckins(config, windows, dt(14, 0));
+
+    const notified = JSON.parse(localStorageStore["loci_notified_daily_checkins"] || "[]");
+    expect(notified).toContain(`midday-anon-${TODAY}`);
+  });
+
   it("does not retarget to an already-expired snooze — falls through to the 'now' retarget instead", () => {
     const config = {
       dailyCommitmentDate: TODAY,
