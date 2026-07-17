@@ -268,6 +268,16 @@ export async function checkDailyCheckinNotifications(config, windows) {
 // nothing new for that slot, the same class of harmless redundancy an
 // already-fired notification for a just-completed action would produce
 // with any scheduler.
+// Slot -> the config field holding that slot's own snooze timestamp, so a
+// snoozed slot whose originally-computed target has already passed can be
+// retargeted to the snooze expiry instead of being abandoned for the day
+// (see the "snoozeUntil" retargeting step below).
+const DAILY_CHECKIN_SNOOZE_FIELDS = {
+  morning: "dailyCommitmentSnoozeUntil",
+  midday: "dailyMiddayCheckSnoozeUntil",
+  reflection: "dailyReflectionSnoozeUntil",
+};
+
 export function scheduleDailyCheckins(config, windows, now = new Date()) {
   if (!isNativeApp()) return;
   const todayStr = getLociDayStr(now, windows);
@@ -275,11 +285,30 @@ export function scheduleDailyCheckins(config, windows, now = new Date()) {
 
   for (const slot of Object.keys(DAILY_CHECKIN_NOTIFICATIONS)) {
     const id = idFromString(`daily-checkin-${slot}`);
-    const target = targets[slot];
-    if (!target || target.getTime() <= now.getTime() || config?.dailyCheckinsEnabled === false) {
+    if (config?.dailyCheckinsEnabled === false) {
       nativeCancel(id);
       continue;
     }
+
+    let target = targets[slot];
+    // The originally-computed target (e.g. midday's scheduled-focus-time
+    // midpoint) is a single fixed instant with no notion of snooze. If it's
+    // already passed but the user snoozed this exact slot to a later time,
+    // retarget to the snooze expiry instead of giving up on the slot for
+    // the rest of the day — otherwise a snooze tapped after the original
+    // target only re-notifies if something else happens to rerun this
+    // scheduler before the snooze expires (loopcheck/Codex finding).
+    if (!target || target.getTime() <= now.getTime()) {
+      const snoozeUntil = config?.[DAILY_CHECKIN_SNOOZE_FIELDS[slot]];
+      if (typeof snoozeUntil === "number" && snoozeUntil > now.getTime()) {
+        target = new Date(snoozeUntil);
+      }
+    }
+    if (!target || target.getTime() <= now.getTime()) {
+      nativeCancel(id);
+      continue;
+    }
+
     let eligible;
     if (slot === "morning") {
       eligible = shouldShowMorningCommitment(target, windows, config, todayStr, shouldShowMorningRitual(target, config));
@@ -295,6 +324,31 @@ export function scheduleDailyCheckins(config, windows, now = new Date()) {
     const { title, body } = DAILY_CHECKIN_NOTIFICATIONS[slot];
     nativeScheduleAt(id, { title, body, at: target, extra: { type: "daily-checkin", slot } });
   }
+}
+
+// Cancels any native alarms scheduled by scheduleDailyCheckins, without
+// scheduling anything new — used to suppress daily check-in notifications
+// during an active focus session (App.jsx re-schedules once the session
+// ends, same as scheduleDailyCheckins would naturally do on its next run).
+export function cancelDailyCheckins() {
+  if (!isNativeApp()) return;
+  for (const slot of Object.keys(DAILY_CHECKIN_NOTIFICATIONS)) {
+    nativeCancel(idFromString(`daily-checkin-${slot}`));
+  }
+}
+
+// Cancels every native OS-level alarm this module can schedule: all task
+// reminders (via an empty active-uuid set, so nativeReconcileReminders
+// treats every currently-pending one as stale), the Coach check-in, and all
+// three daily check-ins. Native alarms are OS-persisted, not cleared by a
+// page reload/re-render the way the in-memory `scheduled` map is — call
+// this on sign-out/account-switch so a previous account's task titles and
+// check-ins can't surface as notifications on a shared/signed-out device.
+export function cancelAllNativeScheduling() {
+  if (!isNativeApp()) return;
+  nativeReconcileReminders(new Set());
+  cancelCoachCheckin();
+  cancelDailyCheckins();
 }
 
 export function formatReminderLabel(ts) {

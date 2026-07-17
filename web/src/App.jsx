@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { auth, track, setAnalyticsUser } from "./firebase";
 import { computeUserProfile } from "./utils/userProfile";
-import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, scheduleDailyCheckins, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
-import { isNativeApp, refreshNativePermission, addNativeNotificationClickListener } from "./utils/nativeNotifs";
+import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, scheduleDailyCheckins, cancelDailyCheckins, cancelAllNativeScheduling, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
+import { isNativeApp, refreshNativePermission, addNativeNotificationClickListener, NATIVE_PERMISSION_GRANTED_EVENT } from "./utils/nativeNotifs";
 import { isCheckinDue, buildCheckinResumeMessage, isDuplicateCheckinResume } from "./utils/coachCheckin";
 import { getFocusWindows, getLociDayStr } from "./utils/focusWindows";
 import { createDemoPayload } from "./utils/demoData";
@@ -139,6 +139,21 @@ export default function App() {
       window.dispatchEvent(new CustomEvent("loci-notification-click", { detail: extra }));
     }).then((u) => { unsub = u; });
     return () => unsub();
+  }, []);
+
+  // A schedule attempted before the user has actually granted native
+  // notification permission can silently fail (see nativeNotifs.js's
+  // NATIVE_PERMISSION_GRANTED_EVENT comment) — bump this on grant so the
+  // task-reminder/coach-checkin/daily-checkin effects below (all of which
+  // depend on it) re-run their existing scheduling logic once permission is
+  // real, instead of leaving reminders unscheduled until an unrelated
+  // task/config edit happens to rerun them.
+  const [nativePermVersion, setNativePermVersion] = useState(0);
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    const onGranted = () => setNativePermVersion(v => v + 1);
+    window.addEventListener(NATIVE_PERMISSION_GRANTED_EVENT, onGranted);
+    return () => window.removeEventListener(NATIVE_PERMISSION_GRANTED_EVENT, onGranted);
   }, []);
 
   // Deep-link to the Coach tab when opened via a "🤖 Coach check-in" notification
@@ -327,15 +342,16 @@ export default function App() {
   const payloadRef = useRef(payload);
   payloadRef.current = payload;
 
-  // Schedule task reminders whenever payload loads/changes
+  // Schedule task reminders whenever payload loads/changes (or, on native,
+  // once notification permission is actually granted — see nativePermVersion above)
   useEffect(() => {
     if (payload?.tasks) scheduleAllReminders(payload.tasks);
-  }, [payload?.tasks]);
+  }, [payload?.tasks, nativePermVersion]);
 
   // Re-arm a pending Coach Check-In notification (see CoachTab) on load/refresh
   useEffect(() => {
     if (payload?.config?.coachCheckin) scheduleCoachCheckin(payload.config.coachCheckin);
-  }, [payload?.config?.coachCheckin]);
+  }, [payload?.config?.coachCheckin, nativePermVersion]);
 
   // Resume a "Coach Check-In" (see CoachTab) once it's due, regardless of
   // which tab is active. CoachTab unmounts on tab switch, so without this,
@@ -532,7 +548,16 @@ export default function App() {
     // still on stale cached config (mirrors CoachTab's cloudSyncUnconfirmed check).
     if (!payload?.config || isSyncingFromCache || syncWarning === "offline") return;
     if (!demoMode && payload.config.isOnboardingCompleted === false) return;
-    if (focusTimer.isFocusMode || focusTimer.sessionCompletePending) return;
+    if (focusTimer.isFocusMode || focusTimer.sessionCompletePending) {
+      // Native alarms already scheduled before this session started are not
+      // otherwise cleaned up by this guard alone (unlike the web poll below,
+      // which simply doesn't run) — cancel them so a Deep Focus block can't
+      // still get interrupted by a check-in notification fired while this
+      // effect was suppressed. Re-scheduled automatically once the session
+      // ends and this effect re-runs (isFocusMode is in the deps below).
+      if (isNativeApp()) cancelDailyCheckins();
+      return;
+    }
     if (isNativeApp()) {
       scheduleDailyCheckins(payload.config, getFocusWindows(payload.config));
       return;
@@ -541,7 +566,7 @@ export default function App() {
     check();
     const id = setInterval(check, 5 * 60 * 1000);
     return () => clearInterval(id);
-  }, [payload?.config, isSyncingFromCache, syncWarning, demoMode, focusTimer.isFocusMode, focusTimer.sessionCompletePending]);
+  }, [payload?.config, isSyncingFromCache, syncWarning, demoMode, focusTimer.isFocusMode, focusTimer.sessionCompletePending, nativePermVersion]);
 
   // Auto-start the timer when arriving from Day Map's "Start Focus" action
   useEffect(() => {
@@ -688,8 +713,13 @@ export default function App() {
   const handleSwitchUser = () => {
     // Flush any pending debounced write before signing out, then wipe the
     // local cache so the next user on this device doesn't see stale data.
+    // Native task/check-in alarms are OS-persisted (unlike the in-memory
+    // `scheduled` map elsewhere), so a page reload alone doesn't clear
+    // them — cancel them explicitly or a shared/signed-out device could
+    // keep surfacing the previous account's task titles as notifications.
     flushNow();
     clearCache();
+    cancelAllNativeScheduling();
     signOut(auth).then(() => { setUser(null); setActiveTab("today"); });
   };
 

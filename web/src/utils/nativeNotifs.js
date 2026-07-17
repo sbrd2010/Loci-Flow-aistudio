@@ -83,14 +83,28 @@ export async function refreshNativePermission() {
   return _nativePerm;
 }
 
+// A fresh install's cached permission is "default" (unknown), so callers
+// schedule optimistically before the user has actually granted anything —
+// intentional (see notifPermissionGranted above), but it means a schedule
+// attempted before permission is truly granted can silently fail. Nothing
+// else retries it afterward: this event lets App.jsx re-run its scheduling
+// effects the moment requestNotifPermission() below actually flips to
+// "granted", instead of leaving reminders/check-ins unscheduled until some
+// unrelated task/config edit happens to rerun the scheduler.
+export const NATIVE_PERMISSION_GRANTED_EVENT = "loci-native-permission-granted";
+
 export async function requestNotifPermission() {
   if (isNativeApp()) {
+    const prev = _nativePerm;
     try {
       const LN = await LocalNotifications();
       const res = await LN.requestPermissions();
       _nativePerm = mapPermission(res.display);
     } catch (_) {
       _nativePerm = "denied";
+    }
+    if (_nativePerm === "granted" && prev !== "granted" && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(NATIVE_PERMISSION_GRANTED_EVENT));
     }
     return _nativePerm;
   }
