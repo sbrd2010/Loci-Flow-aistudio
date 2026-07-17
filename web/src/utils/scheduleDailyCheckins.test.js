@@ -4,6 +4,7 @@ import { getFocusWindows } from "./focusWindows";
 const scheduleAtMock = vi.fn();
 const cancelMock = vi.fn();
 const reconcileMock = vi.fn();
+const clearDeliveredMock = vi.fn();
 
 // scheduleDailyCheckins is the native-only glue between computeDailyCheckinTimes
 // and the shouldShowX predicates — isolated here (rather than in
@@ -25,6 +26,7 @@ vi.mock("./nativeNotifs", () => ({
   nativeCancel: (...args) => cancelMock(...args),
   nativeReschedule: vi.fn(),
   nativeReconcileReminders: (...args) => reconcileMock(...args),
+  nativeClearDelivered: (...args) => clearDeliveredMock(...args),
 }));
 
 const { scheduleDailyCheckins, cancelDailyCheckins, cancelAllNativeScheduling } = await import("./reminders");
@@ -326,6 +328,7 @@ describe("cancelAllNativeScheduling", () => {
   beforeEach(() => {
     cancelMock.mockReset();
     reconcileMock.mockReset();
+    clearDeliveredMock.mockReset();
   });
 
   it("clears task reminders (via an empty active-uuid set), the coach check-in, and all daily check-ins", () => {
@@ -335,5 +338,16 @@ describe("cancelAllNativeScheduling", () => {
     expect(reconcileMock.mock.calls[0][0]).toEqual(new Set());
     // 1 coach check-in + 3 daily check-in slots
     expect(cancelMock).toHaveBeenCalledTimes(4);
+  });
+
+  // Regression coverage for a Codex finding: LN.cancel() only removes
+  // PENDING notifications, not ones that already fired and are sitting in
+  // the Android notification shade — those need a separate removal call so
+  // a previous account's already-shown notifications don't linger on a
+  // shared/signed-out device.
+  it("also clears already-delivered notifications, not just pending ones", () => {
+    cancelAllNativeScheduling();
+
+    expect(clearDeliveredMock).toHaveBeenCalledTimes(1);
   });
 });

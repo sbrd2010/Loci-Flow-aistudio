@@ -222,6 +222,20 @@ export function nativeCancel(id) {
   return serializeById(id, () => rawCancel(id));
 }
 
+// LN.cancel() only removes PENDING (not-yet-fired) notifications — a
+// reminder/check-in that already fired is sitting in the Android
+// notification shade as a DELIVERED notification, which cancel() cannot
+// touch (Codex finding). Used alongside cancelAllNativeScheduling on
+// sign-out/switch-user/exit-demo so a previous account's already-shown
+// notifications don't linger in the shade on a shared/signed-out device.
+export async function nativeClearDelivered() {
+  if (!isNativeApp()) return;
+  try {
+    const LN = await LocalNotifications();
+    await LN.removeAllDeliveredNotifications();
+  } catch (_) {}
+}
+
 // Register a listener for notification taps. The callback receives the
 // notification's `extra` payload. Returns an unsubscribe function.
 export async function addNativeNotificationClickListener(cb) {

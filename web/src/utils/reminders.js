@@ -11,6 +11,7 @@ import {
   nativeCancel,
   nativeReschedule,
   nativeReconcileReminders,
+  nativeClearDelivered,
 } from "./nativeNotifs";
 
 // In-memory map of task UUID → timeout ID (cleared on page refresh, re-scheduled on load)
@@ -453,6 +454,12 @@ export function cancelAllNativeScheduling() {
   nativeReconcileReminders(new Set());
   cancelCoachCheckin();
   cancelDailyCheckins();
+  // The three calls above only cancel PENDING alarms — a reminder/check-in
+  // that already fired is sitting in the notification shade as a DELIVERED
+  // notification, which they can't touch. Clear those too so a previous
+  // account's already-shown notifications don't linger on a shared/signed-out
+  // device (Codex finding).
+  nativeClearDelivered();
 }
 
 export function formatReminderLabel(ts) {

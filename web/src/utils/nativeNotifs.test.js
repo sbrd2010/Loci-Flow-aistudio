@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const scheduleMock = vi.fn();
 const cancelMock = vi.fn();
 const getPendingMock = vi.fn();
+const removeAllDeliveredMock = vi.fn();
 
 vi.mock("@capacitor/core", () => ({
   Capacitor: { isNativePlatform: () => true },
@@ -13,10 +14,11 @@ vi.mock("@capacitor/local-notifications", () => ({
     schedule: (...args) => scheduleMock(...args),
     cancel: (...args) => cancelMock(...args),
     getPending: (...args) => getPendingMock(...args),
+    removeAllDeliveredNotifications: (...args) => removeAllDeliveredMock(...args),
   },
 }));
 
-import { nativeReschedule, nativeReconcileReminders, nativeCancel, nativeScheduleAt } from "./nativeNotifs";
+import { nativeReschedule, nativeReconcileReminders, nativeCancel, nativeScheduleAt, nativeClearDelivered } from "./nativeNotifs";
 
 // Regression coverage for a Codex finding: this app doesn't request Android's
 // exact-alarm permission (see README_ANDROID.md), so without allowWhileIdle a
@@ -112,5 +114,21 @@ describe("nativeReconcileReminders per-id serialization", () => {
 
     expect(cancelMock).toHaveBeenCalledTimes(2); // once from nativeCancel(5), once from the reconcile's own id-5 cancel — both serialized, neither dropped
     expect(cancelMock).toHaveBeenCalledWith({ notifications: [{ id: 5 }] });
+  });
+});
+
+// Regression coverage for a Codex finding: LN.cancel() only removes PENDING
+// notifications — a reminder/check-in that already fired is sitting in the
+// Android notification shade as a DELIVERED notification, which needs this
+// separate removal call.
+describe("nativeClearDelivered", () => {
+  beforeEach(() => {
+    removeAllDeliveredMock.mockReset();
+    removeAllDeliveredMock.mockResolvedValue();
+  });
+
+  it("removes all delivered notifications", async () => {
+    await nativeClearDelivered();
+    expect(removeAllDeliveredMock).toHaveBeenCalledTimes(1);
   });
 });
