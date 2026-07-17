@@ -292,7 +292,6 @@ export async function scheduleDailyCheckins(config, windows, now = new Date()) {
     }
 
     let target = targets[slot];
-    let immediateFire = false;
     // The originally-computed target (e.g. midday's scheduled-focus-time
     // midpoint) is a single fixed instant with no notion of snooze or of a
     // gate (Morning Ritual pending, no commitment yet) clearing after that
@@ -324,7 +323,6 @@ export async function scheduleDailyCheckins(config, windows, now = new Date()) {
           continue;
         }
         target = new Date(now.getTime() + 1000);
-        immediateFire = true;
       }
     }
 
@@ -340,22 +338,28 @@ export async function scheduleDailyCheckins(config, windows, now = new Date()) {
       nativeCancel(id);
       continue;
     }
-    const { title, body } = DAILY_CHECKIN_NOTIFICATIONS[slot];
-    if (!immediateFire) {
-      nativeScheduleAt(id, { title, body, at: target, extra: { type: "daily-checkin", slot } });
-      continue;
-    }
-    // The immediate-fire retarget needs to actually confirm success before
-    // marking the dedup key: a fresh Android 13+ install's cached permission
-    // starts "default" (see notifPermissionGranted's comment), so this can
-    // legitimately reach here before the OS permission is really granted —
-    // nativeScheduleAt then returns false. Reserve the key first (so a
-    // concurrent rerun of this same scheduler can't double-schedule this
-    // slot while the await below is in flight — same race this file's web
-    // dedup already guards against), then release it if scheduling actually
-    // failed, so the later permission-grant retry (nativeNotifs.js's
+    // Every successful schedule attempt — future-target or immediate-fire
+    // retarget alike — must mark the dedup key, not just the immediate-fire
+    // path. Without this (Codex finding), a normal future-target alarm
+    // scheduled at e.g. 8:00 for a 9:00 morning slot fires correctly, but
+    // the native branch's 5-minute poll (App.jsx) then reruns this function
+    // at 9:05: computeDailyCheckinTimes still returns the same 9:00 target,
+    // which is now in the past, and with no dedup record and no snooze
+    // active this falls straight into the "just became eligible" retarget
+    // path and fires a second, duplicate notification for the same slot.
+    //
+    // Confirm success before marking though (same reasoning either way): a
+    // fresh Android 13+ install's cached permission starts "default" (see
+    // notifPermissionGranted's comment), so this can legitimately reach
+    // here before the OS permission is really granted — nativeScheduleAt
+    // then returns false. Reserve the key first (so a concurrent rerun of
+    // this same scheduler can't double-schedule this slot while the await
+    // below is in flight — same race this file's web dedup already guards
+    // against), then release it if scheduling actually failed, so the
+    // later permission-grant retry (nativeNotifs.js's
     // NATIVE_PERMISSION_GRANTED_EVENT) can retry this slot instead of
     // finding it already marked "notified" and skipping it forever.
+    const { title, body } = DAILY_CHECKIN_NOTIFICATIONS[slot];
     const key = `${slot}-${userId}-${todayStr}`;
     const notified = loadNotifiedDailyCheckins(todayStr);
     localStorage.setItem(NOTIFIED_DAILY_CHECKINS_KEY, JSON.stringify([...notified, key]));
