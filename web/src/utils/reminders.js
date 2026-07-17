@@ -1,5 +1,5 @@
 import { buildCheckinNotificationBody } from "./coachCheckin";
-import { shouldShowMorningCommitment, shouldShowMiddayCheck, shouldShowReflection } from "./dailyCoachCheckins";
+import { shouldShowMorningCommitment, shouldShowMiddayCheck, shouldShowReflection, computeDailyCheckinTimes } from "./dailyCoachCheckins";
 import { shouldShowMorningRitual } from "./morningRitual";
 import { getLociDayStr } from "./focusWindows";
 import {
@@ -242,6 +242,58 @@ export async function checkDailyCheckinNotifications(config, windows) {
       const current = loadNotifiedDailyCheckins(todayStr);
       localStorage.setItem(NOTIFIED_DAILY_CHECKINS_KEY, JSON.stringify(current.filter(k => k !== key)));
     }
+  }
+}
+
+// Native-only counterpart to checkDailyCheckinNotifications: rather than
+// polling every 5 minutes for a due slot (which needs the JS runtime alive —
+// fine for a backgrounded browser tab, unreliable once Android backgrounds
+// or kills the app), pre-schedule each of today's still-eligible check-ins
+// as one-shot OS alarms via nativeScheduleAt so they fire regardless of
+// process state. Callers should re-run this whenever config changes (same
+// trigger as checkDailyCheckinNotifications already uses), so a slot that
+// becomes newly eligible mid-day — e.g. midday right after the morning
+// commitment is saved — gets (re)scheduled promptly; nativeScheduleAt
+// replaces any prior alarm with the same id, so re-running this is always
+// safe to repeat.
+//
+// State-based eligibility gates (already done today, skipped, snoozed,
+// morning-ritual-pending) ARE re-checked here via the same shouldShowX
+// predicates the web poll uses, evaluated with the computed target time as
+// `now` — so a slot already satisfied as of scheduling time is correctly
+// skipped rather than firing a stale/redundant notification. What this
+// can't do: adapt if state changes again *after* scheduling but *before*
+// the target time (e.g. the check-in gets done from another device) — the
+// native alarm still fires; opening the app at that point just shows
+// nothing new for that slot, the same class of harmless redundancy an
+// already-fired notification for a just-completed action would produce
+// with any scheduler.
+export function scheduleDailyCheckins(config, windows, now = new Date()) {
+  if (!isNativeApp()) return;
+  const todayStr = getLociDayStr(now, windows);
+  const targets = computeDailyCheckinTimes(now, windows);
+
+  for (const slot of Object.keys(DAILY_CHECKIN_NOTIFICATIONS)) {
+    const id = idFromString(`daily-checkin-${slot}`);
+    const target = targets[slot];
+    if (!target || target.getTime() <= now.getTime() || config?.dailyCheckinsEnabled === false) {
+      nativeCancel(id);
+      continue;
+    }
+    let eligible;
+    if (slot === "morning") {
+      eligible = shouldShowMorningCommitment(target, windows, config, todayStr, shouldShowMorningRitual(target, config));
+    } else if (slot === "midday") {
+      eligible = shouldShowMiddayCheck(target, windows, config, todayStr);
+    } else {
+      eligible = shouldShowReflection(target, windows, config, todayStr);
+    }
+    if (!eligible) {
+      nativeCancel(id);
+      continue;
+    }
+    const { title, body } = DAILY_CHECKIN_NOTIFICATIONS[slot];
+    nativeScheduleAt(id, { title, body, at: target, extra: { type: "daily-checkin", slot } });
   }
 }
 

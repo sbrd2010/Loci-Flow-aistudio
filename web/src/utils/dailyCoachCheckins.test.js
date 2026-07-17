@@ -18,6 +18,7 @@ import {
   buildReflectionSnooze,
   getLocalCheckinLine,
   pickCheckinLine,
+  computeDailyCheckinTimes,
 } from "./dailyCoachCheckins";
 
 const dt = (h, mi = 0) => new Date(2024, 5, 15, h, mi);
@@ -364,5 +365,51 @@ describe("AI wording fallback (no AI calls made by this module)", () => {
 
   it("a short, clean AI line passes through unchanged", () => {
     expect(pickCheckinLine("middayGood", "One small step keeps the streak alive.")).toBe("One small step keeps the streak alive.");
+  });
+});
+
+describe("computeDailyCheckinTimes (native pre-scheduling)", () => {
+  it("morning target is the first window's start time today", () => {
+    const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] });
+    const times = computeDailyCheckinTimes(dt(8, 0), windows);
+    expect(times.morning).toEqual(new Date(2024, 5, 15, 9, 0));
+  });
+
+  it("midday target is the halfway point of a single window's total focus time", () => {
+    const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] }); // 8h window
+    const times = computeDailyCheckinTimes(dt(8, 0), windows);
+    expect(times.midday).toEqual(new Date(2024, 5, 15, 13, 0)); // 4h in
+  });
+
+  it("midday target accounts for a gap between two windows (gap doesn't count toward the midpoint)", () => {
+    // 09:00-11:00 (2h) + 13:00-17:00 (4h) = 6h total; midpoint at 3h elapsed
+    // falls 1h into the second window, i.e. 14:00, skipping the 11:00-13:00 gap.
+    const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "11:00" }, { start: "13:00", end: "17:00" }] });
+    const times = computeDailyCheckinTimes(dt(8, 0), windows);
+    expect(times.midday).toEqual(new Date(2024, 5, 15, 14, 0));
+  });
+
+  it("reflection target is 30 minutes before the last window closes", () => {
+    const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] });
+    const times = computeDailyCheckinTimes(dt(8, 0), windows);
+    expect(times.reflection).toEqual(new Date(2024, 5, 15, 16, 30));
+  });
+
+  it("anchors targets to the correct calendar day for an overnight window's early-morning tail", () => {
+    // Default 7am-2am overnight window; "now" at 1am is still yesterday's Loci day.
+    const windows = getFocusWindows({}); // default 7am-2am
+    const now = new Date(2024, 5, 15, 1, 0); // 1am June 15 — Loci day is June 14
+    const todayStr = getLociDayStr(now, windows);
+    expect(todayStr).toBe("2024-06-14");
+    const times = computeDailyCheckinTimes(now, windows);
+    // Morning slot (7am) anchors to June 14, not June 15.
+    expect(times.morning).toEqual(new Date(2024, 5, 14, 7, 0));
+    // Reflection (30 min before 2am close) anchors to the early hours of June 15,
+    // still counted as part of the June 14 Loci day.
+    expect(times.reflection).toEqual(new Date(2024, 5, 15, 1, 30));
+  });
+
+  it("returns all-null when there are no windows", () => {
+    expect(computeDailyCheckinTimes(dt(8, 0), [])).toEqual({ morning: null, midday: null, reflection: null });
   });
 });

@@ -102,10 +102,24 @@ export async function requestNotifPermission() {
   }
 }
 
-// Schedule a notification at a specific time. Replaces any prior notification
-// with the same numeric id. Returns true on success.
-export async function nativeScheduleAt(id, { title, body, at, extra = {} }) {
-  if (!isNativeApp()) return false;
+// Per-id operation queue: rapid successive calls for the SAME notification id
+// (e.g. a task's reminder time edited twice within a second) otherwise race —
+// nothing guarantees the underlying LocalNotifications.cancel()/schedule()
+// calls settle in call order, so a later edit's schedule could resolve before
+// an earlier edit's, leaving the OS holding the stale time. Chaining every
+// mutating call for a given id onto the same promise forces them to run and
+// settle strictly in call order, while different ids stay fully independent.
+const _idQueues = new Map();
+
+function serializeById(id, fn) {
+  const prev = _idQueues.get(id) || Promise.resolve();
+  const next = prev.then(fn, fn); // run fn regardless of the previous op's outcome
+  _idQueues.set(id, next);
+  next.finally(() => { if (_idQueues.get(id) === next) _idQueues.delete(id); });
+  return next;
+}
+
+async function rawScheduleAt(id, { title, body, at, extra = {} }) {
   try {
     const LN = await LocalNotifications();
     await LN.schedule({
@@ -124,18 +138,35 @@ export async function nativeScheduleAt(id, { title, body, at, extra = {} }) {
   }
 }
 
+async function rawCancel(id) {
+  try {
+    const LN = await LocalNotifications();
+    await LN.cancel({ notifications: [{ id }] });
+  } catch (_) {}
+}
+
+// Schedule a notification at a specific time. Replaces any prior notification
+// with the same numeric id. Returns true on success.
+export function nativeScheduleAt(id, opts) {
+  if (!isNativeApp()) return Promise.resolve(false);
+  return serializeById(id, () => rawScheduleAt(id, opts));
+}
+
 // Show a notification immediately (used by the foreground / polling paths).
-export async function nativeShowNow(id, { title, body, extra = {} }) {
+export function nativeShowNow(id, { title, body, extra = {} }) {
   return nativeScheduleAt(id, { title, body, at: new Date(Date.now() + 1000), extra });
 }
 
 // Reschedule: cancel any existing notification with this id, then schedule the
-// new one. Awaits the cancel first so it can't race ahead and delete the newly
-// scheduled notification.
-export async function nativeReschedule(id, { title, body, at, extra = {} }) {
-  if (!isNativeApp()) return false;
-  await nativeCancel(id);
-  return nativeScheduleAt(id, { title, body, at, extra });
+// new one, as a single serialized unit per id — see serializeById above. Uses
+// the raw (non-serialized) primitives internally so this doesn't deadlock
+// against its own queue slot.
+export function nativeReschedule(id, opts) {
+  if (!isNativeApp()) return Promise.resolve(false);
+  return serializeById(id, async () => {
+    await rawCancel(id);
+    return rawScheduleAt(id, opts);
+  });
 }
 
 // Reconcile native task reminders against the active task list: cancel any
@@ -155,12 +186,9 @@ export async function nativeReconcileReminders(activeUuids) {
   } catch (_) {}
 }
 
-export async function nativeCancel(id) {
-  if (!isNativeApp()) return;
-  try {
-    const LN = await LocalNotifications();
-    await LN.cancel({ notifications: [{ id }] });
-  } catch (_) {}
+export function nativeCancel(id) {
+  if (!isNativeApp()) return Promise.resolve();
+  return serializeById(id, () => rawCancel(id));
 }
 
 // Register a listener for notification taps. The callback receives the

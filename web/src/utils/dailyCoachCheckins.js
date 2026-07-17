@@ -9,7 +9,7 @@
 // (morningRitual.js) primitives so there is a single source of truth for
 // "Loci day" and "first/last focus window" math.
 
-import { getLociNowMinutes, getOverallSpan, getFocusProgress, getRemainingFocusMinutes } from "./focusWindows";
+import { getLociNowMinutes, getOverallSpan, getFocusProgress, getRemainingFocusMinutes, getLociDayStr } from "./focusWindows";
 import { isMorningRitualSlot } from "./morningRitual";
 import { countTodayCompletedTasks } from "./deadlineProgressMirror";
 import { isDailyDone } from "./deadlineCountdown";
@@ -261,4 +261,63 @@ export function pickCheckinLine(kind, aiLine) {
   if (/[\n\r`*_#]/.test(trimmed)) return fallback;
   if ((trimmed.match(/[.!?]/g) || []).length > 2) return fallback;
   return trimmed;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Native (Android) scheduling support
+// ─────────────────────────────────────────────────────────────────────────
+// The web version fires these via a 5-minute poll (utils/reminders.js's
+// checkDailyCheckinNotifications) that only works while the JS runtime is
+// still alive — fine for a backgrounded browser tab, not reliable on
+// Android once the app is backgrounded/killed. The functions below compute
+// each slot's earliest-eligible wall-clock instant so it can be
+// pre-scheduled as a one-shot OS alarm instead (see reminders.js's
+// scheduleDailyCheckins). They only capture the *time-based* half of each
+// shouldShowX predicate — callers must still re-check the real predicate
+// (passing the returned Date as `now`) for the state-based gates (already
+// done today, skipped, snoozed, morning-ritual-pending) before scheduling.
+
+// Absolute Date for a Loci-minutes instant, anchored to the Loci day `now`
+// currently belongs to (per getLociDayStr) — so an instant computed for the
+// early-morning tail of an overnight window lands on the correct calendar day.
+function lociMinutesToDate(now, windows, lociMinutes) {
+  const todayStr = getLociDayStr(now, windows);
+  const [y, m, d] = todayStr.split("-").map(Number);
+  const base = new Date(y, m - 1, d, 0, 0, 0, 0);
+  return new Date(base.getTime() + lociMinutes * 60000);
+}
+
+// The Loci-minutes instant at which cumulative (gap-excluded) focus time
+// across `windows` first reaches `fraction` (0-1) of the day's total.
+// Mirrors getFocusProgress's gap-exclusion math in reverse. Null if the
+// windows carry no focus time at all (shouldn't happen with real config).
+function lociMinutesAtProgress(windows, fraction) {
+  let total = 0;
+  for (const w of windows) total += (w.overnight ? w.endMin + 1440 : w.endMin) - w.startMin;
+  if (total <= 0) return null;
+  let remaining = total * Math.max(0, Math.min(1, fraction));
+  for (const w of windows) {
+    const lociEnd = w.overnight ? w.endMin + 1440 : w.endMin;
+    const dur = lociEnd - w.startMin;
+    if (remaining <= dur) return w.startMin + remaining;
+    remaining -= dur;
+  }
+  const last = windows[windows.length - 1];
+  return last.overnight ? last.endMin + 1440 : last.endMin;
+}
+
+// Best-effort wall-clock Date for each check-in slot's earliest eligible
+// instant today:
+//   morning:    windows[0].startMin        (matches isMorningRitualSlot)
+//   midday:     50% of today's total focus time elapsed (matches getFocusProgress >= 0.5)
+//   reflection: 30 minutes before the last window closes (matches getOverallSpan().endMin - 30)
+export function computeDailyCheckinTimes(now, windows) {
+  if (!Array.isArray(windows) || windows.length === 0) return { morning: null, midday: null, reflection: null };
+  const midpoint = lociMinutesAtProgress(windows, 0.5);
+  const span = getOverallSpan(windows);
+  return {
+    morning: lociMinutesToDate(now, windows, windows[0].startMin),
+    midday: midpoint === null ? null : lociMinutesToDate(now, windows, midpoint),
+    reflection: lociMinutesToDate(now, windows, span.endMin - 30),
+  };
 }

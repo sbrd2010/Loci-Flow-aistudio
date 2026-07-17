@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { auth, track, setAnalyticsUser } from "./firebase";
 import { computeUserProfile } from "./utils/userProfile";
-import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
+import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, scheduleDailyCheckins, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
 import { isNativeApp, refreshNativePermission, addNativeNotificationClickListener } from "./utils/nativeNotifs";
 import { isCheckinDue, buildCheckinResumeMessage, isDuplicateCheckinResume } from "./utils/coachCheckin";
 import { getFocusWindows, getLociDayStr } from "./utils/focusWindows";
@@ -515,16 +515,28 @@ export default function App() {
     setCoachChatDraft("");
   }, [user?.uid]);
 
-  // Poll for due daily check-ins (Morning Commitment / Midday / Reflection) and
-  // fire a push notification if the app is backgrounded/closed when one comes due.
-  // Suppressed during an active focus session (mirrors TodayTab's auto-show guard)
-  // so a backgrounded Deep Focus session isn't interrupted by these notifications.
+  // Fire a push notification if the app is backgrounded/closed when a daily
+  // check-in (Morning Commitment / Midday / Reflection) comes due. Suppressed
+  // during an active focus session (mirrors TodayTab's auto-show guard) so a
+  // backgrounded Deep Focus session isn't interrupted by these notifications.
+  //
+  // Web: a 5-minute poll (needs the JS runtime alive — fine for a
+  // backgrounded tab). Native (Android): the JS runtime isn't guaranteed to
+  // keep running once backgrounded/killed, so instead pre-schedule today's
+  // remaining eligible slots as one-shot OS alarms (see reminders.js's
+  // scheduleDailyCheckins) — re-run on the same triggers as the web poll
+  // (config changes, e.g. right after a commitment save) so newly-eligible
+  // slots get scheduled promptly.
   useEffect(() => {
     // syncWarning === "offline" means RTDB hasn't confirmed within 15s and we're
     // still on stale cached config (mirrors CoachTab's cloudSyncUnconfirmed check).
     if (!payload?.config || isSyncingFromCache || syncWarning === "offline") return;
     if (!demoMode && payload.config.isOnboardingCompleted === false) return;
     if (focusTimer.isFocusMode || focusTimer.sessionCompletePending) return;
+    if (isNativeApp()) {
+      scheduleDailyCheckins(payload.config, getFocusWindows(payload.config));
+      return;
+    }
     const check = () => checkDailyCheckinNotifications(payload.config, getFocusWindows(payload.config));
     check();
     const id = setInterval(check, 5 * 60 * 1000);
