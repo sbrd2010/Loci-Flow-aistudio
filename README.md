@@ -37,6 +37,20 @@ The app opens at `http://localhost:5173`. A **Try Demo** button on the landing p
 | `npm test` | Run unit tests with Vitest |
 | `npm run test:e2e` | Run Playwright E2E tests (requires dev server running) |
 
+## Android app
+
+The repo also contains a native **Android app** (Loci Focus) that wraps this web
+app with Capacitor. It lives entirely in [`web/android/`](web/android/README_ANDROID.md)
+and does not affect the web app — the JS/CSS codebase is untouched (all web tests
+still pass). New web PRs flow into the Android app automatically on each build:
+
+```
+merge JS PRs → CI runs npm run build + cap sync → new APK/AAB built
+```
+
+See [`web/android/README_ANDROID.md`](web/android/README_ANDROID.md) for local
+builds, signing setup, and Google Play release steps.
+
 ## Environment variables
 
 Copy `web/.env.example` to `web/.env`. All variables are optional for local development — the app runs in demo mode without them.

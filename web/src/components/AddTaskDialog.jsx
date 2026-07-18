@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { safeUUID } from "../utils/uuid";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
+import { notifPermissionState, requestNotifPermission as nativeRequestPermission } from "../utils/nativeNotifs";
 import { applyAiRewriteToTask, CATEGORY_ICONS } from "../utils/taskOps";
 import { getFocusWindows } from "../utils/focusWindows";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
@@ -225,8 +226,8 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     }
 
     // Request notification permission if a reminder is set
-    if (reminderAt && typeof Notification !== "undefined" && Notification.permission === "default") {
-      await Notification.requestPermission();
+    if (reminderAt && notifPermissionState() === "default") {
+      await nativeRequestPermission();
     }
 
     if (isEditMode) {
@@ -412,8 +413,8 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
             <button
               type="button"
               onClick={async () => {
-                if (!reminderOn && typeof Notification !== "undefined" && Notification.permission === "default") {
-                  await Notification.requestPermission();
+                if (!reminderOn && notifPermissionState() === "default") {
+                  await nativeRequestPermission();
                 }
                 setReminderOn(o => !o);
               }}

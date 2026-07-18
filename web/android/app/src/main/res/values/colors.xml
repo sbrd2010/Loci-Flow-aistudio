@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches web/capacitor.config.json's StatusBar/LocalNotifications colors
+         and ic_launcher_background.xml, so the native chrome (action bar,
+         status bar tint context, accent) matches the rest of the app instead
+         of resolving to whatever a transitive dependency happens to define
+         for these generically-named color resources. -->
+    <color name="colorPrimary">#4880FF</color>
+    <color name="colorPrimaryDark">#0B0F14</color>
+    <color name="colorAccent">#4880FF</color>
+</resources>

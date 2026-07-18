@@ -1,0 +1,29 @@
+{
+  "appId": "com.loci.app",
+  "appName": "Loci Focus",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "launchAutoHide": true,
+      "backgroundColor": "#0b0f14",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_CROP"
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0b0f14"
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_loci",
+      "iconColor": "#4880FF"
+    },
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["google.com"]
+    }
+  }
+}
