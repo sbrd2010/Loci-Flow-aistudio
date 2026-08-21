@@ -337,10 +337,11 @@ describe("mergeRemotePayload", () => {
 describe("mergeRemotePayload - config merge (multi-device sync safety)", () => {
   const base = { tasks: [], brainDump: [], timestamp: 1000 };
 
-  it("newer local config wins over older remote config", () => {
+  it("local keys changed since base win over older remote config", () => {
+    const baseConfig = { deadlineLabel: "Remote Sprint", lastUpdated: 100 };
     const remote = { ...base, config: { deadlineLabel: "Remote Sprint", lastUpdated: 100 } };
     const local = { ...base, config: { deadlineLabel: "Local Sprint", lastUpdated: 200 } };
-    const result = mergeRemotePayload(remote, local);
+    const result = mergeRemotePayload(remote, local, baseConfig);
     expect(result.config).toEqual({ deadlineLabel: "Local Sprint", lastUpdated: 200 });
   });
 
@@ -366,9 +367,10 @@ describe("mergeRemotePayload - config merge (multi-device sync safety)", () => {
   });
 
   it("local config with lastUpdated wins over remote config missing lastUpdated", () => {
+    const baseConfig = { deadlineLabel: "Remote Sprint" };
     const remote = { ...base, config: { deadlineLabel: "Remote Sprint" } };
     const local = { ...base, config: { deadlineLabel: "Local Sprint", lastUpdated: 100 } };
-    const result = mergeRemotePayload(remote, local);
+    const result = mergeRemotePayload(remote, local, baseConfig);
     expect(result.config.deadlineLabel).toBe("Local Sprint");
   });
 
@@ -380,9 +382,10 @@ describe("mergeRemotePayload - config merge (multi-device sync safety)", () => {
   });
 
   it("flags hasLocalContribution when local config wins, so it is written back to RTDB", () => {
+    const baseConfig = { deadlineLabel: "Remote Sprint", lastUpdated: 100 };
     const remote = { ...base, config: { deadlineLabel: "Remote Sprint", lastUpdated: 100 } };
     const local = { ...base, config: { deadlineLabel: "Local Sprint", lastUpdated: 200 } };
-    const { hasLocalContribution } = mergeRemotePayloadWithMeta(remote, local);
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(remote, local, baseConfig);
     expect(hasLocalContribution).toBe(true);
   });
 
@@ -390,6 +393,73 @@ describe("mergeRemotePayload - config merge (multi-device sync safety)", () => {
     const remote = { ...base, config: { deadlineLabel: "Remote Sprint", lastUpdated: 200 } };
     const local = { ...base, config: { deadlineLabel: "Local Sprint", lastUpdated: 100 } };
     const { hasLocalContribution } = mergeRemotePayloadWithMeta(remote, local);
+    expect(hasLocalContribution).toBe(false);
+  });
+
+  // The bug this three-way merge exists to prevent: a device bumps
+  // config.lastUpdated for its own reasons (the visit-streak effect firing on a
+  // laptop resumed from sleep) while still holding a stale copy of every other
+  // config field. Whole-object last-write-wins handed that device the entire
+  // config, reverting a Key Deadline set on another device that morning — and
+  // hasLocalContribution then pushed the stale copy back to RTDB, so the edit
+  // was destroyed for every device and survived a refresh.
+  it("stale local field does not clobber a newer remote one it never touched", () => {
+    const baseConfig = {
+      deadlineLabel: "20 Aug: 7+8 jobs apply",
+      visitStreakCount: 5, lastVisitDate: "2026-08-20", lastUpdated: 100,
+    };
+    const remote = { ...base, config: {
+      deadlineLabel: "21 Aug: 7+8 jobs apply",   // changed on the home laptop
+      visitStreakCount: 5, lastVisitDate: "2026-08-20", lastUpdated: 200,
+    } };
+    const local = { ...base, config: {
+      deadlineLabel: "20 Aug: 7+8 jobs apply",   // never re-synced: still stale
+      visitStreakCount: 6, lastVisitDate: "2026-08-21", lastUpdated: 300,
+    } };
+
+    const { merged } = mergeRemotePayloadWithMeta(remote, local, baseConfig);
+
+    expect(merged.config.deadlineLabel).toBe("21 Aug: 7+8 jobs apply");
+    // ...while the streak keys this device genuinely did change still survive.
+    expect(merged.config.visitStreakCount).toBe(6);
+    expect(merged.config.lastVisitDate).toBe("2026-08-21");
+  });
+
+  it("both sides changed the same key since base: remote wins", () => {
+    const baseConfig = { deadlineLabel: "Original", lastUpdated: 100 };
+    const remote = { ...base, config: { deadlineLabel: "Remote edit", lastUpdated: 200 } };
+    const local = { ...base, config: { deadlineLabel: "Local edit", lastUpdated: 300 } };
+    const result = mergeRemotePayload(remote, local, baseConfig);
+    expect(result.config.deadlineLabel).toBe("Remote edit");
+  });
+
+  it("without a base, remote wins outright and nothing is written back", () => {
+    const remote = { ...base, config: { deadlineLabel: "Remote Sprint", lastUpdated: 100 } };
+    const local = { ...base, config: { deadlineLabel: "Local Sprint", lastUpdated: 999 } };
+    const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(remote, local, null);
+    expect(merged.config.deadlineLabel).toBe("Remote Sprint");
+    expect(hasLocalContribution).toBe(false);
+  });
+
+  it("a preserved local edit carries a timestamp remote cannot silently outrank", () => {
+    // If the merged config kept remote's older lastUpdated, the next delivery
+    // would read the re-applied key as "nothing new here" and drop it again.
+    const baseConfig = { a: 1, deadlineLabel: "Keep me", lastUpdated: 100 };
+    const remote = { ...base, config: { a: 2, deadlineLabel: "Keep me", lastUpdated: 200 } };
+    const local = { ...base, config: { a: 1, deadlineLabel: "Local edit", lastUpdated: 300 } };
+    const result = mergeRemotePayload(remote, local, baseConfig);
+    expect(result.config.deadlineLabel).toBe("Local edit");
+    expect(result.config.a).toBe(2);
+    expect(result.config.lastUpdated).toBe(300);
+  });
+
+  it("treats a null/undefined round-trip as unchanged, not as a local edit", () => {
+    // RTDB drops keys written as null, so the same logical "unset" comes back
+    // as undefined; counting that as an edit would make every device look dirty.
+    const baseConfig = { deadlineAction: null, lastUpdated: 100 };
+    const remote = { ...base, config: { deadlineLabel: "Remote Sprint", lastUpdated: 200 } };
+    const local = { ...base, config: { deadlineAction: null, lastUpdated: 300 } };
+    const { hasLocalContribution } = mergeRemotePayloadWithMeta(remote, local, baseConfig);
     expect(hasLocalContribution).toBe(false);
   });
 

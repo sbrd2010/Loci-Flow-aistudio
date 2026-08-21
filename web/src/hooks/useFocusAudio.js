@@ -59,7 +59,7 @@ function stopInstance(instance, hardTeardown = false) {
   }
 }
 
-export function useFocusAudio(isRunning, config = {}, saveSubPath) {
+export function useFocusAudio(isRunning, config = {}, saveConfigPatch) {
   const [selectedTrack, setSelectedTrack] = useState(migrateTrackId(config.focusSoundTrack) || null);
   const [volume, setVolume] = useState(config.focusSoundVolume !== undefined ? config.focusSoundVolume : 0.5);
 
@@ -231,13 +231,8 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
 
     setSelectedTrack(nextTrack);
 
-    if (saveSubPath) {
-      saveSubPath("config", {
-        ...config,
-        focusSoundTrack: nextTrack,
-        focusSoundVolume: volume,
-        lastUpdated: Date.now()
-      });
+    if (saveConfigPatch) {
+      saveConfigPatch({ focusSoundTrack: nextTrack, focusSoundVolume: volume });
     }
   };
 
@@ -264,13 +259,8 @@ export function useFocusAudio(isRunning, config = {}, saveSubPath) {
     const clampedVolume = Math.max(0, Math.min(1, newVolume));
     setVolume(clampedVolume);
 
-    if (saveSubPath) {
-      saveSubPath("config", {
-        ...config,
-        focusSoundTrack: selectedTrack,
-        focusSoundVolume: clampedVolume,
-        lastUpdated: Date.now()
-      });
+    if (saveConfigPatch) {
+      saveConfigPatch({ focusSoundTrack: selectedTrack, focusSoundVolume: clampedVolume });
     }
   };
 

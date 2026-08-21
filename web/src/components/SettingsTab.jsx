@@ -186,8 +186,12 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
     const morningRitualStart = parseTimeToMinutes(editedMorningRitualStart);
     const morningRitualEnd = parseTimeToMinutes(editedMorningRitualEnd);
     const morningRitualValid = morningRitualStart !== null && morningRitualEnd !== null && morningRitualStart < morningRitualEnd;
-    saveSubPath("config", {
-      ...config,
+    // Every key below is an explicit value from this form, so patching writes
+    // exactly what the user just edited. Spreading `...config` as well would
+    // additionally re-send every untouched field from this component's
+    // render-time snapshot — which is how a Key Deadline set on another device
+    // could get reverted by someone merely saving an unrelated setting here.
+    saveConfigPatch({
       userName: editedName.trim(),
       mentorName: editedMentor.trim(),
       challengeType: editedChallenge,
@@ -212,7 +216,6 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
       deadlineStartDate: editedDeadlineStartDate,
       deadlineAction: editedDeadlineAction.trim(),
       deadlineCardStyle: "compact",
-      lastUpdated: Date.now()
     });
     setSavedProfile(true);
     setTimeout(() => { setSavedProfile(false); setProfileOpen(false); }, 2000);
@@ -656,7 +659,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
               <button type="button"
                 onClick={() => {
                   setEditedDeadlineDate(""); setEditedDeadlineLabel(""); setEditedDeadlineStartDate(""); setEditedDeadlineAction("");
-                  saveSubPath("config", { ...config, deadlineLabel: "", deadlineDate: "", deadlineStartDate: "", deadlineAction: "", deadlineCardStyle: "compact", lastUpdated: Date.now() });
+                  saveConfigPatch({ deadlineLabel: "", deadlineDate: "", deadlineStartDate: "", deadlineAction: "", deadlineCardStyle: "compact" });
                 }}
                 style={{ marginTop: "6px", fontSize: "11px", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                 ✕ Clear deadline
@@ -1105,7 +1108,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
             onClick={() => setConfirmDialog({
               message: "Reset 7-day tracking data?\n\nThis clears the dots AND the streak counter on the Mind Box tab. Cannot be undone.",
               confirmLabel: "Reset tracking", cancelLabel: "Cancel",
-              onConfirm: () => { saveSubPath("contributions", []); saveSubPath("config", { ...config, visitStreakCount: 0, lastUpdated: Date.now() }); setConfirmDialog(null); },
+              onConfirm: () => { saveSubPath("contributions", []); saveConfigPatch({ visitStreakCount: 0 }); setConfirmDialog(null); },
               onCancel: () => setConfirmDialog(null)
             })}
           >

@@ -415,6 +415,14 @@ export default function App() {
   // Without this guard, a second device opening the app would overwrite RTDB with the
   // stale cache payload (timestamp = now > any recent edit), silently erasing brainDump
   // items and other changes made on the first device since the cache was last written.
+  //
+  // That guard only covers a fresh mount's cache window, though: on a laptop
+  // resumed from sleep this tab mounted yesterday, so isSyncingFromCache is
+  // already false while payload still holds pre-sleep config. useTodayStr flips
+  // the date on its own 60s timer without waiting for RTDB, so this can fire
+  // against stale config before the reconnect delivers. saveConfigPatch keeps
+  // that harmless — it writes only the two streak keys onto the latest known
+  // config, so a Key Deadline (or anything else) edited elsewhere is untouched.
   useEffect(() => {
     if (!payload?.config || !user || demoMode || isSyncingFromCache) return;
     const cfg = payload.config;
@@ -422,8 +430,10 @@ export default function App() {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = toLocalDateStr(yesterday);
-    const newStreak = cfg.lastVisitDate === yesterdayStr ? (cfg.visitStreakCount || 0) + 1 : 1;
-    saveSubPath("config", { ...cfg, visitStreakCount: newStreak, lastVisitDate: todayStr, lastUpdated: Date.now() });
+    saveConfigPatch((latestConfig) => ({
+      visitStreakCount: latestConfig.lastVisitDate === yesterdayStr ? (latestConfig.visitStreakCount || 0) + 1 : 1,
+      lastVisitDate: todayStr,
+    }));
   }, [payload?.config?.lastVisitDate, user?.uid, isSyncingFromCache, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Capture today's carryover snapshot once per Loci day (not calendar day —
@@ -543,7 +553,7 @@ export default function App() {
 
   // Focus Sounds audio also lives here so ambient sound keeps playing across
   // tab switches and after exiting the Deep Focus overlay.
-  const focusAudio = useFocusAudio(focusTimer.isTimerRunning, payload?.config || {}, saveSubPath);
+  const focusAudio = useFocusAudio(focusTimer.isTimerRunning, payload?.config || {}, saveConfigPatch);
   useEffect(() => {
     reshuffleTrackRef.current = focusAudio.reshuffleTrack;
   }); // no deps - reshuffleTrack is a fresh closure every render, always resync
@@ -713,8 +723,9 @@ export default function App() {
   // Global Focus completion prompt: "+50 XP, keep going" — awards XP and opens
   // the duration picker so the same task's timer can be restarted from any tab.
   const handleFocusSessionKeepGoing = () => {
-    const config = payload?.config || {};
-    saveSubPath("config", { ...config, totalXp: (Number(config.totalXp) || 0) + 50, lastUpdated: Date.now() });
+    // Function form: an increment must be computed against the latest known
+    // config, not this render's snapshot, or two quick awards can collide.
+    saveConfigPatch((latestConfig) => ({ totalXp: (Number(latestConfig.totalXp) || 0) + 50 }));
     focusTimer.dismissSessionComplete();
     focusTimer.setShowExtendPicker(true);
   };

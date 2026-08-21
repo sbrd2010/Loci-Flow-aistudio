@@ -280,7 +280,7 @@ describe("useFocusAudio", () => {
 
   it("initializes with default values when config is empty", () => {
     const { result } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [false, {}, null]
     );
 
@@ -292,7 +292,7 @@ describe("useFocusAudio", () => {
   it("initializes with config values if provided", () => {
     const config = { focusSoundTrack: "2-am-debug-loop.mp3", focusSoundVolume: 0.75 };
     const { result } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [false, config, null]
     );
 
@@ -309,7 +309,7 @@ describe("useFocusAudio", () => {
   it("plays automatically if initialized with track and isRunning is true", () => {
     const config = { focusSoundTrack: "gentle-midday-rain.mp3" };
     renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [true, config, null]
     );
 
@@ -317,22 +317,22 @@ describe("useFocusAudio", () => {
     expect(MockAudio.instances[0].paused).toBe(false);
   });
 
-  it("saves the track and volume adjustments to config via saveSubPath", () => {
+  it("saves the track and volume adjustments to config via saveConfigPatch", () => {
     const config = { focusSoundTrack: null, focusSoundVolume: 0.5 };
-    const saveSubPath = vi.fn();
+    const saveConfigPatch = vi.fn();
 
     const { result } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
-      [false, config, saveSubPath]
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
+      [false, config, saveConfigPatch]
     );
 
     result.current.selectTrack("midnight-amber-room.mp3");
-    expect(saveSubPath).toHaveBeenCalledWith("config", expect.objectContaining({
+    expect(saveConfigPatch).toHaveBeenCalledWith(expect.objectContaining({
       focusSoundTrack: "midnight-amber-room.mp3"
     }));
 
     result.current.changeVolume(0.2);
-    expect(saveSubPath).toHaveBeenCalledWith("config", expect.objectContaining({
+    expect(saveConfigPatch).toHaveBeenCalledWith(expect.objectContaining({
       focusSoundVolume: 0.2
     }));
   });
@@ -340,7 +340,7 @@ describe("useFocusAudio", () => {
   it("toggles track off if the same track is selected again", () => {
     const config = { focusSoundTrack: "gentle-midday-rain.mp3" };
     const { result } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [false, config, null]
     );
 
@@ -353,7 +353,7 @@ describe("useFocusAudio", () => {
 
   it("pauses the previous audio instance immediately when switching tracks", () => {
     const { result } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [true, {}, null]
     );
 
@@ -374,7 +374,7 @@ describe("useFocusAudio", () => {
   it("plays/pauses audio when timer running state changes", () => {
     const config = { focusSoundTrack: "dust-on-the-morning-keys.mp3" };
     const { rerender } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [false, config, null]
     );
 
@@ -393,7 +393,7 @@ describe("useFocusAudio", () => {
   it("pauses and cleans up audio on unmount", () => {
     const config = { focusSoundTrack: "2-am-debug-loop.mp3" };
     const { unmount } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [true, config, null]
     );
 
@@ -407,7 +407,7 @@ describe("useFocusAudio", () => {
   it("removes canplay/error listeners and releases the media resource on track change", () => {
     const config = { focusSoundTrack: "gentle-midday-rain.mp3" };
     const { result } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [false, config, null]
     );
 
@@ -426,7 +426,7 @@ describe("useFocusAudio", () => {
   it("removes canplay/error listeners on unmount", () => {
     const config = { focusSoundTrack: "2-am-debug-loop.mp3" };
     const { unmount } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [true, config, null]
     );
 
@@ -440,7 +440,7 @@ describe("useFocusAudio", () => {
   it("re-asserts pause once a still-pending play() promise settles after switching tracks", async () => {
     MockAudio.delayPlay = true;
     const { result } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [true, {}, null]
     );
 
@@ -469,7 +469,7 @@ describe("useFocusAudio", () => {
     MockAudio.delayPlay = true;
     const config = { focusSoundTrack: "dust-on-the-morning-keys.mp3" };
     const { rerender } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [true, config, null]
     );
 
@@ -489,7 +489,7 @@ describe("useFocusAudio", () => {
     MockAudio.delayPlay = true;
     const config = { focusSoundTrack: "dust-on-the-morning-keys.mp3" };
     const { rerender } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [true, config, null]
     );
 
@@ -519,17 +519,17 @@ describe("useFocusAudio", () => {
 
   it("preserves the new volume when a track is selected immediately after a volume change", () => {
     const config = { focusSoundTrack: "gentle-midday-rain.mp3", focusSoundVolume: 0.5 };
-    const saveSubPath = vi.fn();
+    const saveConfigPatch = vi.fn();
     const { result } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
-      [false, config, saveSubPath]
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
+      [false, config, saveConfigPatch]
     );
 
     result.current.changeVolume(0.8);
     // Parent config prop has not re-rendered yet with the new volume.
     result.current.selectTrack("midnight-amber-room.mp3");
 
-    expect(saveSubPath).toHaveBeenLastCalledWith("config", expect.objectContaining({
+    expect(saveConfigPatch).toHaveBeenLastCalledWith(expect.objectContaining({
       focusSoundTrack: "midnight-amber-room.mp3",
       focusSoundVolume: 0.8
     }));
@@ -537,17 +537,17 @@ describe("useFocusAudio", () => {
 
   it("preserves the new track when volume is changed immediately after selecting a track", () => {
     const config = { focusSoundTrack: "gentle-midday-rain.mp3", focusSoundVolume: 0.5 };
-    const saveSubPath = vi.fn();
+    const saveConfigPatch = vi.fn();
     const { result } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
-      [false, config, saveSubPath]
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
+      [false, config, saveConfigPatch]
     );
 
     result.current.selectTrack("midnight-amber-room.mp3");
     // Parent config prop has not re-rendered yet with the new track.
     result.current.changeVolume(0.8);
 
-    expect(saveSubPath).toHaveBeenLastCalledWith("config", expect.objectContaining({
+    expect(saveConfigPatch).toHaveBeenLastCalledWith(expect.objectContaining({
       focusSoundTrack: "midnight-amber-room.mp3",
       focusSoundVolume: 0.8
     }));
@@ -556,7 +556,7 @@ describe("useFocusAudio", () => {
   it("resets track and volume to defaults when config no longer has sound fields", () => {
     const config = { focusSoundTrack: "gentle-midday-rain.mp3", focusSoundVolume: 0.8 };
     const { result, rerender } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [false, config, null]
     );
 
@@ -573,7 +573,7 @@ describe("useFocusAudio", () => {
   it("creates a binaural beat node (not an Audio element) for the binaural track", () => {
     const config = { focusSoundTrack: BINAURAL_TRACK_ID, focusSoundVolume: 0.6 };
     renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [true, config, null]
     );
 
@@ -589,7 +589,7 @@ describe("useFocusAudio", () => {
   it("resumes/suspends the binaural beat when timer running state changes", () => {
     const config = { focusSoundTrack: BINAURAL_TRACK_ID };
     const { rerender } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [false, config, null]
     );
 
@@ -606,7 +606,7 @@ describe("useFocusAudio", () => {
   it("disposes the binaural context when switching to a different track", () => {
     const config = { focusSoundTrack: BINAURAL_TRACK_ID };
     const { result } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [true, config, null]
     );
 
@@ -623,7 +623,7 @@ describe("useFocusAudio", () => {
   it("disposes the binaural context on unmount", () => {
     const config = { focusSoundTrack: BINAURAL_TRACK_ID };
     const { unmount } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [true, config, null]
     );
 
@@ -643,16 +643,16 @@ describe("useFocusAudio", () => {
     it("selectCategory picks a variation from the category and saves it", () => {
       vi.spyOn(Math, "random").mockReturnValue(0);
 
-      const saveSubPath = vi.fn();
+      const saveConfigPatch = vi.fn();
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
-        [false, {}, saveSubPath]
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
+        [false, {}, saveConfigPatch]
       );
 
       result.current.selectCategory("rain");
 
       expect(result.current.selectedTrack).toBe("sounds/rain/calming-rain.mp3");
-      expect(saveSubPath).toHaveBeenCalledWith("config", expect.objectContaining({
+      expect(saveConfigPatch).toHaveBeenCalledWith(expect.objectContaining({
         focusSoundTrack: "sounds/rain/calming-rain.mp3"
       }));
     });
@@ -662,7 +662,7 @@ describe("useFocusAudio", () => {
 
       const config = { focusSoundTrack: "gentle-midday-rain.mp3" };
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [false, config, null]
       );
 
@@ -673,7 +673,7 @@ describe("useFocusAudio", () => {
     it("creates an Audio element pointing at the jsDelivr CDN for a CDN variation track", () => {
       const config = { focusSoundTrack: "sounds/lofi/first-coffee-thoughts.mp3" };
       renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [false, config, null]
       );
 
@@ -688,7 +688,7 @@ describe("useFocusAudio", () => {
 
       const config = { focusSoundTrack: "gentle-midday-rain.mp3" };
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [false, config, null]
       );
 
@@ -701,7 +701,7 @@ describe("useFocusAudio", () => {
     it("reshuffleTrack does nothing when no ambient category is selected", () => {
       const config = { focusSoundTrack: BINAURAL_TRACK_ID };
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [true, config, null]
       );
 
@@ -714,7 +714,7 @@ describe("useFocusAudio", () => {
     it("does not loop the same track, and advances to a different variation in the category", () => {
       const config = { focusSoundTrack: "2-am-debug-loop.mp3" };
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [true, config, null]
       );
 
@@ -731,7 +731,7 @@ describe("useFocusAudio", () => {
     it("does nothing when the binaural tone reports no underlying ended event", () => {
       const config = { focusSoundTrack: BINAURAL_TRACK_ID };
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [true, config, null]
       );
 
@@ -740,22 +740,22 @@ describe("useFocusAudio", () => {
     });
 
     it("does not persist the auto-advanced track back to saved config", () => {
-      const saveSubPath = vi.fn();
+      const saveConfigPatch = vi.fn();
       const config = { focusSoundTrack: "2-am-debug-loop.mp3", focusSoundVolume: 0.5 };
       renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
-        [true, config, saveSubPath]
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
+        [true, config, saveConfigPatch]
       );
 
       MockAudio.instances[0].dispatchEvent("ended");
 
-      expect(saveSubPath).not.toHaveBeenCalled();
+      expect(saveConfigPatch).not.toHaveBeenCalled();
     });
 
     it("ignores an ended event from a stale, already-replaced audio instance", () => {
       const config = { focusSoundTrack: "2-am-debug-loop.mp3" };
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [true, config, null]
       );
 
@@ -776,7 +776,7 @@ describe("useFocusAudio", () => {
 
     it("does not repeat a variation until all category variations are exhausted", () => {
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [false, {}, null]
       );
 
@@ -798,7 +798,7 @@ describe("useFocusAudio", () => {
       // there's no pre-existing shuffle queue for its category yet.
       const config = { focusSoundTrack: "2-am-debug-loop.mp3" };
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [false, config, null]
       );
 
@@ -820,7 +820,7 @@ describe("useFocusAudio", () => {
 
     it("generates a new shuffled cycle after the current one is exhausted", () => {
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [false, {}, null]
       );
 
@@ -838,7 +838,7 @@ describe("useFocusAudio", () => {
 
     it("avoids starting a new cycle with the same track that just finished playing", () => {
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [false, {}, null]
       );
 
@@ -856,7 +856,7 @@ describe("useFocusAudio", () => {
     it("still toggles the category off when selecting an already-active category", () => {
       const config = { focusSoundTrack: "gentle-midday-rain.mp3" };
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [false, config, null]
       );
 
@@ -868,7 +868,7 @@ describe("useFocusAudio", () => {
       vi.spyOn(Math, "random").mockReturnValue(0);
 
       const { result, rerender } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [false, {}, null]
       );
 
@@ -893,7 +893,7 @@ describe("useFocusAudio", () => {
 
       const config = { focusSoundTrack: "sounds/lofi/first-coffee-thoughts.mp3" };
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [false, config, null]
       );
 
@@ -918,7 +918,7 @@ describe("useFocusAudio", () => {
     it("leaves binaural/none unaffected by the shuffle queue", () => {
       const config = { focusSoundTrack: BINAURAL_TRACK_ID };
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [true, config, null]
       );
 
@@ -934,7 +934,7 @@ describe("useFocusAudio", () => {
 
     it("is 'idle' when no track is selected", () => {
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [false, {}, null]
       );
 
@@ -944,7 +944,7 @@ describe("useFocusAudio", () => {
     it("is 'ready' immediately for the binaural beat (no buffering needed)", () => {
       const config = { focusSoundTrack: BINAURAL_TRACK_ID };
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [true, config, null]
       );
 
@@ -954,7 +954,7 @@ describe("useFocusAudio", () => {
     it("sets preload='auto' and starts as 'loading' for an ambient track, then 'ready' once it can play", () => {
       const config = { focusSoundTrack: "sounds/lofi/first-coffee-thoughts.mp3" };
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [true, config, null]
       );
 
@@ -969,7 +969,7 @@ describe("useFocusAudio", () => {
     it("sets trackLoadState to 'error' if the bundled local track fails to load", () => {
       const config = { focusSoundTrack: "2-am-debug-loop.mp3" };
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [true, config, null]
       );
 
@@ -981,7 +981,7 @@ describe("useFocusAudio", () => {
     it("falls back to the category's bundled local track when a CDN variation fails to load", () => {
       const config = { focusSoundTrack: "sounds/lofi/first-coffee-thoughts.mp3" };
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [true, config, null]
       );
 
@@ -1001,7 +1001,7 @@ describe("useFocusAudio", () => {
 
       const config = { focusSoundTrack: "sounds/lofi/first-coffee-thoughts.mp3" };
       const { result } = renderHook(
-        (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+        (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
         [true, config, null]
       );
 
@@ -1032,7 +1032,7 @@ describe("useFocusAudio", () => {
       legacyTracks.forEach(trackId => {
         const config = { focusSoundTrack: trackId };
         const { result } = renderHook(
-          (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+          (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
           [false, config, null]
         );
 
@@ -1049,7 +1049,7 @@ describe("useFocusAudio", () => {
   it("migrates a config saved with the old binaural-40hz.wav track id to the synthesized track", () => {
     const config = { focusSoundTrack: "binaural-40hz.wav" };
     const { result } = renderHook(
-      (isRunning, config, saveSubPath) => useFocusAudio(isRunning, config, saveSubPath),
+      (isRunning, config, saveConfigPatch) => useFocusAudio(isRunning, config, saveConfigPatch),
       [false, config, null]
     );
 
