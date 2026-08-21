@@ -67,7 +67,7 @@ function SortableTaskItem({ id, interactionStyle, children }) {
 }
 
 export default function TodayTab({
-  payload, savePayload, savePayloadAsync, saveSubPath, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenCoach,
+  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenCoach,
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft, setTimerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
@@ -263,12 +263,16 @@ export default function TodayTab({
   const todayShownSlots = getTodayShownSlots(config, anchorTodayStr);
   const anchorsCheckedCount = anchors.filter(a => todayCheckedIds.includes(a.id)).length;
   const todayShownSlotsKey = todayShownSlots.join(",");
+  // Patch rather than a whole-config write: `config` here is a render-time
+  // snapshot, and spreading it would send every other field back to RTDB at
+  // this moment's timestamp — including deadline fields this device may not
+  // have re-synced yet, silently reverting an edit made on another device.
   const handleDeadlineDoneToday = () => {
-    saveSubPath("config", { ...config, deadlineDailyDoneDate: todayStr, lastUpdated: Date.now() });
+    saveConfigPatch({ deadlineDailyDoneDate: todayStr });
   };
 
   const handleDeadlineReopenToday = () => {
-    saveSubPath("config", { ...config, deadlineDailyDoneDate: null, lastUpdated: Date.now() });
+    saveConfigPatch({ deadlineDailyDoneDate: null });
   };
 
   const [todayDeadlineRemaining, setTodayDeadlineRemaining] = useState(null);
@@ -514,13 +518,13 @@ export default function TodayTab({
   const handleEnergyToggle = () => {
     const enabling = !config.isLowEnergyMode;
     if (enabling) setIsMVDMode(false);
-    saveSubPath("config", { ...config, isLowEnergyMode: enabling, lastUpdated: Date.now() });
+    saveConfigPatch({ isLowEnergyMode: enabling });
   };
 
   const handleMVDModeToggle = () => {
     const enabling = !isMVDMode;
     if (enabling && config.isLowEnergyMode) {
-      saveSubPath("config", { ...config, isLowEnergyMode: false, lastUpdated: Date.now() });
+      saveConfigPatch({ isLowEnergyMode: false });
     }
     setIsMVDMode(enabling);
   };
@@ -613,21 +617,17 @@ export default function TodayTab({
     const next = todayCheckedIds.includes(id)
       ? todayCheckedIds.filter(x => x !== id)
       : [...todayCheckedIds, id];
-    saveSubPath("config", { ...config,
-      anchorsCheckedIds: next, anchorsCheckedDate: anchorTodayStr, lastUpdated: Date.now()
-    });
+    saveConfigPatch({ anchorsCheckedIds: next, anchorsCheckedDate: anchorTodayStr });
   };
 
   const handleAnchorSheetDone = () => {
     if (anchorSheetSlot === "morning") {
-      saveSubPath("config", { ...config, ...buildMorningRitualDoneConfig(), lastUpdated: Date.now() });
+      saveConfigPatch({ ...buildMorningRitualDoneConfig() });
     } else {
       const slot = anchorSheetSlot ?? getCurrentAnchorSlot(new Date(), windows);
       const nextSlots = slot && !todayShownSlots.includes(slot) ? [...todayShownSlots, slot] : todayShownSlots;
-      saveSubPath("config", { ...config,
-        anchorsShownSlots: nextSlots, anchorsSlotsDate: anchorTodayStr,
-        anchorsSnoozeUntil: null, lastUpdated: Date.now()
-      });
+      saveConfigPatch({ anchorsShownSlots: nextSlots, anchorsSlotsDate: anchorTodayStr,
+        anchorsSnoozeUntil: null });
     }
     setShowAnchorSheet(false);
     setAnchorSheetSlot(null);
@@ -635,21 +635,17 @@ export default function TodayTab({
 
   const handleAnchorLater = () => {
     if (anchorSheetSlot === "morning") {
-      saveSubPath("config", { ...config, ...buildMorningRitualSnoozeConfig(), lastUpdated: Date.now() });
+      saveConfigPatch({ ...buildMorningRitualSnoozeConfig() });
     } else {
-      saveSubPath("config", { ...config,
-        anchorsSnoozeUntil: Date.now() + 90 * 60 * 1000, lastUpdated: Date.now()
-      });
+      saveConfigPatch({ anchorsSnoozeUntil: Date.now() + 90 * 60 * 1000 });
     }
     setShowAnchorSheet(false);
     setAnchorSheetSlot(null);
   };
 
   const handleAnchorSkipToday = () => {
-    saveSubPath("config", { ...config,
-      anchorsShownSlots: ["afternoon", "evening"], anchorsSlotsDate: anchorTodayStr,
-      anchorsSnoozeUntil: null, lastUpdated: Date.now()
-    });
+    saveConfigPatch({ anchorsShownSlots: ["afternoon", "evening"], anchorsSlotsDate: anchorTodayStr,
+      anchorsSnoozeUntil: null });
     setShowAnchorSheet(false);
     setAnchorSheetSlot(null);
   };
@@ -670,56 +666,56 @@ export default function TodayTab({
   };
 
   const handleSaveCommitment = () => {
-    saveSubPath("config", buildMorningCommitmentSave(config, commitmentSelection, anchorTodayStr));
+    saveConfigPatch((latestConfig) => buildMorningCommitmentSave(latestConfig, commitmentSelection, anchorTodayStr));
     closeDailyCheckin();
   };
 
   const handleCommitmentLater = () => {
-    saveSubPath("config", buildMorningCommitmentSnooze(config));
+    saveConfigPatch((latestConfig) => buildMorningCommitmentSnooze(latestConfig));
     closeDailyCheckin();
   };
 
   const handleCommitmentSkip = () => {
-    saveSubPath("config", buildMorningCommitmentSkip(config, anchorTodayStr));
+    saveConfigPatch((latestConfig) => buildMorningCommitmentSkip(latestConfig, anchorTodayStr));
     closeDailyCheckin();
   };
 
   // Progress Check (midday)
   const handleMiddayKeepGoing = () => {
-    saveSubPath("config", buildMiddayCheckDone(config, anchorTodayStr));
+    saveConfigPatch((latestConfig) => buildMiddayCheckDone(latestConfig, anchorTodayStr));
     closeDailyCheckin();
   };
 
   const handleMiddaySnooze = () => {
-    saveSubPath("config", buildMiddayCheckSnooze(config));
+    saveConfigPatch((latestConfig) => buildMiddayCheckSnooze(latestConfig));
     closeDailyCheckin();
   };
 
   const handleMiddayOpenFocus = () => {
-    saveSubPath("config", buildMiddayCheckDone(config, anchorTodayStr));
+    saveConfigPatch((latestConfig) => buildMiddayCheckDone(latestConfig, anchorTodayStr));
     closeDailyCheckin();
     setShowFocusNowPicker(true);
   };
 
   const handleMiddayTalkToCoach = () => {
-    saveSubPath("config", buildMiddayCheckDone(config, anchorTodayStr));
+    saveConfigPatch((latestConfig) => buildMiddayCheckDone(latestConfig, anchorTodayStr));
     closeDailyCheckin();
     onOpenCoach?.();
   };
 
   const handleNarrowToOne = (taskId) => {
-    saveSubPath("config", buildNarrowToOne(buildMiddayCheckDone(config, anchorTodayStr), taskId));
+    saveConfigPatch((latestConfig) => buildNarrowToOne(buildMiddayCheckDone(latestConfig, anchorTodayStr), taskId));
     closeDailyCheckin();
   };
 
   // Day Close (end-of-day reflection)
   const finishReflection = () => {
-    saveSubPath("config", buildReflectionSave(config, { mood: reflectionMood, note: reflectionNote }, anchorTodayStr));
+    saveConfigPatch((latestConfig) => buildReflectionSave(latestConfig, { mood: reflectionMood, note: reflectionNote }, anchorTodayStr));
     closeDailyCheckin();
   };
 
   const handleReflectionSnooze = () => {
-    saveSubPath("config", buildReflectionSnooze(config));
+    saveConfigPatch((latestConfig) => buildReflectionSnooze(latestConfig));
     closeDailyCheckin();
   };
 
@@ -750,7 +746,7 @@ export default function TodayTab({
 
   const handleCoachNudgeDismiss = () => {
     track("coach_nudge_dismissed", { reason: coachNudge.reason });
-    saveSubPath("config", { ...config, ...buildCoachNudgeClearedConfig(payload, new Date()), lastUpdated: Date.now() });
+    saveConfigPatch({ ...buildCoachNudgeClearedConfig(payload, new Date()) });
   };
 
   const handleCoachNudgeTalk = () => {
@@ -758,7 +754,7 @@ export default function TodayTab({
     const extraPatch = coachNudge.reason === "deadline_date_passed_followup"
       ? { deadlineFollowupAskedFor: config.deadlineDate }
       : {};
-    saveSubPath("config", { ...config, ...buildCoachNudgeClearedConfig(payload, new Date()), ...extraPatch, pendingCoachNudge: buildPendingCoachNudge(coachNudge, payload, new Date()), lastUpdated: Date.now() });
+    saveConfigPatch({ ...buildCoachNudgeClearedConfig(payload, new Date()), ...extraPatch, pendingCoachNudge: buildPendingCoachNudge(coachNudge, payload, new Date()) });
     onOpenCoach?.();
   };
 
@@ -2068,7 +2064,7 @@ export default function TodayTab({
               <div className="morning-ritual-actions">
                 <button className="morning-ritual-btn-primary" onClick={handleAnchorSheetDone}>Done</button>
                 <button className="morning-ritual-btn-secondary" onClick={() => {
-                  saveSubPath("config", { ...config, ...buildMorningRitualDoneConfig(), lastUpdated: Date.now() });
+                  saveConfigPatch({ ...buildMorningRitualDoneConfig() });
                   setShowAnchorSheet(false);
                   setAnchorSheetSlot(null);
                   onOpenMindBox?.("ritual");

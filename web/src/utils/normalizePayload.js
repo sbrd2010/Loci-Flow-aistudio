@@ -208,21 +208,93 @@ function mergeTasks(remoteTasks, localTasks) {
   return { tasks: [...merged, ...localOnlyTasks], hasLocalContribution };
 }
 
-// Merges remote and local config objects using config.lastUpdated.
-// The config with the newer lastUpdated wins as a whole; remote wins on tie or
-// when neither/either side is missing lastUpdated (missing treated as 0), matching
-// mergeTasks's tie-breaking convention.
-// Returns { config, localConfigWon } where localConfigWon is true when the local
-// config won and the merged result must be written back to RTDB for convergence.
-function mergeConfig(remoteConfig, localConfig) {
-  const local = objectOrEmpty(localConfig);
-  const remoteTs = finiteNumber(remoteConfig?.lastUpdated) ?? 0;
-  const localTs = finiteNumber(local.lastUpdated) ?? 0;
-
-  if (localTs > remoteTs) {
-    return { config: local, localConfigWon: true };
+// Structural equality for config values. Config holds primitives plus arrays
+// (dailyAnchors, focusWindows) and plain objects (coachMemory), all produced by
+// this app, so a recursive walk is enough — no Date/Map/Set/cycle handling needed.
+// null and undefined compare equal on purpose: RTDB drops keys written as null,
+// so the same logical "unset" arrives as `undefined` from the server but may sit
+// as `null` in a local object, and treating that round-trip as a change would
+// make every device look like it had edited the field.
+export function configValuesEqual(a, b) {
+  if (a === b) return true;
+  if (a == null || b == null) return a == null && b == null;
+  if (typeof a !== "object" || typeof b !== "object") return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    return a.length === b.length && a.every((item, i) => configValuesEqual(item, b[i]));
   }
-  return { config: remoteConfig, localConfigWon: false };
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if (!configValuesEqual(a[key], b[key])) return false;
+  }
+  return true;
+}
+
+// Three-way merges config: remote is the base of the result, and only the keys
+// this device actually changed since the last remote config it saw (`base`) are
+// re-applied on top.
+//
+// The whole-object last-write-wins this replaces compared a single
+// `config.lastUpdated` and let the newer side win *entirely*. That is wrong
+// whenever a device bumps `lastUpdated` while holding a stale config — which
+// happens routinely, e.g. the visit-streak effect firing on a laptop resumed
+// from sleep before RTDB has re-delivered. Every unrelated field that device
+// still held (a Key Deadline edited on another device that morning, say) then
+// beat the newer remote value AND, via localConfigWon, got written back to
+// RTDB, destroying the edit for every device. Diffing against `base` keeps the
+// legitimate half of that write (the streak fields it meant to change) while
+// leaving fields it never touched to remote.
+//
+// Conflicts — both sides changed the same key since base — resolve to remote,
+// matching mergeTasks's "remote wins on tie" convention.
+//
+// Without a base (first sync on a device, or a cache written before this
+// existed) there is no way to tell a local edit from stale drift, so remote
+// wins outright. Taking local wholesale there is exactly the data-loss bug
+// above; the cost is that a config edit made while offline, on a device that
+// has never synced, is dropped — narrow, and strictly safer than the reverse.
+//
+// Returns { config, localConfigWon } where localConfigWon is true when at least
+// one local key was re-applied, so the caller knows to write the merged result
+// back to RTDB for convergence.
+function mergeConfig(remoteConfig, localConfig, baseConfig) {
+  const remote = objectOrEmpty(remoteConfig);
+  const local = objectOrEmpty(localConfig);
+  if (!baseConfig) return { config: remoteConfig, localConfigWon: false };
+  const base = objectOrEmpty(baseConfig);
+
+  const merged = { ...remote };
+  let localConfigWon = false;
+
+  // Only keys PRESENT locally can be local edits. Walking base's keys too would
+  // read every key the local config happens to lack as a deletion to replay —
+  // so a mount with a base but no cached payload (cache evicted, or a stale
+  // base outliving its cache) would "delete" the entire config and, via
+  // localConfigWon, write that wipe back to RTDB. The app never removes config
+  // keys anyway (clearing a deadline writes "", it does not delete), so there
+  // is no deletion to propagate and no reason to accept that risk.
+  for (const key of Object.keys(local)) {
+    // Bookkeeping, not user data — it tracks *when* config changed, so it can
+    // never itself count as an edit worth preserving. Recomputed below.
+    if (key === "lastUpdated") continue;
+    // Unchanged locally since base: nothing of this device's to preserve.
+    if (configValuesEqual(local[key], base[key])) continue;
+    // Changed on both sides since base — remote wins, per mergeTasks's convention.
+    if (!configValuesEqual(remote[key], base[key])) continue;
+    merged[key] = local[key];
+    localConfigWon = true;
+  }
+
+  if (!localConfigWon) return { config: remoteConfig, localConfigWon: false };
+
+  // The result now carries local edits that remote hasn't seen, so it must not
+  // claim remote's (older) timestamp — a later merge would read it as "nothing
+  // new here" and the re-applied keys would be lost on the next round trip.
+  merged.lastUpdated = Math.max(
+    finiteNumber(remote.lastUpdated) ?? 0,
+    finiteNumber(local.lastUpdated) ?? 0
+  );
+  return { config: merged, localConfigWon: true };
 }
 
 // If RTDB omits `brainDump`, field-level metadata tells us whether that omission
@@ -230,7 +302,9 @@ function mergeConfig(remoteConfig, localConfig) {
 // Returns { merged, hasLocalContribution } where hasLocalContribution signals that
 // the merged payload differs from remote due to local-newer tasks, and must be
 // written back to RTDB so other devices converge on the correct state.
-export function mergeRemotePayloadWithMeta(remote, local) {
+// `baseConfig` is the last config this device received from RTDB — see
+// mergeConfig for why config needs it and what happens when it's absent.
+export function mergeRemotePayloadWithMeta(remote, local, baseConfig) {
   const normalized = normalizePayload(remote);
   if (!remote || typeof remote !== "object") return { merged: normalized, hasLocalContribution: false };
 
@@ -253,12 +327,12 @@ export function mergeRemotePayloadWithMeta(remote, local) {
   const { tasks, hasLocalContribution: tasksContribution } = mergeTasks(normalized.tasks, local?.tasks);
   normalized.tasks = tasks;
 
-  const { config, localConfigWon } = mergeConfig(normalized.config, local?.config);
+  const { config, localConfigWon } = mergeConfig(normalized.config, local?.config, baseConfig);
   normalized.config = config;
 
   return { merged: normalized, hasLocalContribution: tasksContribution || localConfigWon };
 }
 
-export function mergeRemotePayload(remote, local) {
-  return mergeRemotePayloadWithMeta(remote, local).merged;
+export function mergeRemotePayload(remote, local, baseConfig) {
+  return mergeRemotePayloadWithMeta(remote, local, baseConfig).merged;
 }

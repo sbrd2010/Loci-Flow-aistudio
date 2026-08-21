@@ -87,7 +87,7 @@ function IconChevronRight() {
   );
 }
 
-export default function MindBoxTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveConfigPatch, userProfile, initialPanel, onOpenRoadmapInbox, isSyncingFromCache = false, syncWarning = null, uid, writeActivityEvents, focusTimer = {} }) {
+export default function MindBoxTab({ payload, savePayload, savePayloadAsync, saveConfigPatch, userProfile, initialPanel, onOpenRoadmapInbox, isSyncingFromCache = false, syncWarning = null, uid, writeActivityEvents, focusTimer = {} }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
   const windows = getFocusWindows(config);
 
@@ -180,7 +180,9 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
 
   useEffect(() => {
     if (ritualDone) {
-      saveSubPath("config", { ...config, totalXp: (Number(config.totalXp) || 0) + 80, lastUpdated: Date.now() });
+      // Function form: the increment is computed against the latest known
+      // config at save time, so it can't be based on a stale render snapshot.
+      saveConfigPatch((latestConfig) => ({ totalXp: (Number(latestConfig.totalXp) || 0) + 80 }));
       setRitualDone(false);
       setRitualSuccess(true);
       setTimeout(() => setRitualSuccess(false), 3500);
@@ -539,13 +541,13 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
     const next = [...editedAnchors, { id: safeUUID(), text: newAnchorText.trim() }];
     setEditedAnchors(next);
     setNewAnchorText("");
-    saveSubPath("config", { ...config, dailyAnchors: next, lastUpdated: Date.now() });
+    saveConfigPatch({ dailyAnchors: next });
   };
 
   const handleDeleteAnchor = (id) => {
     const next = editedAnchors.filter(a => a.id !== id);
     setEditedAnchors(next);
-    saveSubPath("config", { ...config, dailyAnchors: next, lastUpdated: Date.now() });
+    saveConfigPatch({ dailyAnchors: next });
   };
 
   const handleEditAnchorSave = (id) => {
@@ -553,7 +555,7 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
     const next = editedAnchors.map(a => a.id === id ? { ...a, text: editAnchorText.trim() } : a);
     setEditedAnchors(next);
     setEditingAnchorId(null);
-    saveSubPath("config", { ...config, dailyAnchors: next, lastUpdated: Date.now() });
+    saveConfigPatch({ dailyAnchors: next });
   };
 
   return (
