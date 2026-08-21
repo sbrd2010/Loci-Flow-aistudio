@@ -425,6 +425,41 @@ describe("mergeRemotePayload - config merge (multi-device sync safety)", () => {
     expect(merged.config.lastVisitDate).toBe("2026-08-21");
   });
 
+  // A base can outlive the payload cache it describes (cache evicted under
+  // quota, or dropped on sign-out). Reading base's keys as deletions to replay
+  // then emptied the whole config — and flagged it as a local contribution, so
+  // the wipe was written back to RTDB.
+  it("a base with no local payload never deletes config keys", () => {
+    const baseConfig = {
+      deadlineLabel: "My deadline", deadlineDate: "2026-09-30",
+      visitStreakCount: 7, userName: "Rohan", lastUpdated: 100,
+    };
+    const remote = { ...base, config: {
+      deadlineLabel: "My deadline", deadlineDate: "2026-09-30",
+      visitStreakCount: 7, userName: "Rohan", lastUpdated: 200,
+    } };
+
+    const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(remote, null, baseConfig);
+
+    expect(merged.config.deadlineLabel).toBe("My deadline");
+    expect(merged.config.deadlineDate).toBe("2026-09-30");
+    expect(merged.config.visitStreakCount).toBe(7);
+    expect(merged.config.userName).toBe("Rohan");
+    expect(hasLocalContribution).toBe(false);
+  });
+
+  it("a key missing locally but present in base is left to remote", () => {
+    const baseConfig = { deadlineLabel: "Keep me", userName: "Rohan", lastUpdated: 100 };
+    const remote = { ...base, config: { deadlineLabel: "Keep me", userName: "Rohan", lastUpdated: 200 } };
+    // Local knows nothing about deadlineLabel — that is absence, not a deletion.
+    const local = { ...base, config: { userName: "Renamed", lastUpdated: 300 } };
+
+    const { merged } = mergeRemotePayloadWithMeta(remote, local, baseConfig);
+
+    expect(merged.config.deadlineLabel).toBe("Keep me");
+    expect(merged.config.userName).toBe("Renamed");
+  });
+
   it("both sides changed the same key since base: remote wins", () => {
     const baseConfig = { deadlineLabel: "Original", lastUpdated: 100 };
     const remote = { ...base, config: { deadlineLabel: "Remote edit", lastUpdated: 200 } };

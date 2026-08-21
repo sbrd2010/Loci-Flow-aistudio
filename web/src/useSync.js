@@ -127,34 +127,6 @@ function writeCache(uid, data) {
   }
 }
 
-// The last config state this device knows it shared with RTDB — the base for
-// mergeConfig's three-way merge (see normalizePayload.js). Persisted next to
-// the payload cache rather than kept only in memory because the merge that
-// needs it most runs on a *fresh mount*, against a cache written by an earlier
-// session: without a persisted base, that merge falls back to "remote wins"
-// and a genuine unsynced local config edit is dropped.
-const baseConfigKey = (uid) => `loci_baseconfig_v1_${uid}`;
-
-function readBaseConfig(uid) {
-  try {
-    const raw = localStorage.getItem(baseConfigKey(uid));
-    if (!raw) return null;
-    const data = JSON.parse(raw);
-    return data && typeof data === "object" && !Array.isArray(data) ? data : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeBaseConfig(uid, config) {
-  if (!uid || !config || typeof config !== "object") return;
-  try {
-    localStorage.setItem(baseConfigKey(uid), JSON.stringify(config));
-  } catch {
-    // Ignore QuotaExceededError — best-effort, same as the payload cache
-  }
-}
-
 export function useSync(uid, email) {
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -193,17 +165,31 @@ export function useSync(uid, email) {
   const localWriteBeforeFirstRtdbRef = useRef(false);
   const offlineWarnTimeoutRef = useRef(null);
   // Base for mergeConfig's three-way merge: the config as of the last time this
-  // device and RTDB agreed. Updated (and persisted) on every applied delivery.
+  // device and RTDB agreed. Updated on every applied delivery.
+  //
+  // Deliberately in-memory only, never persisted. A base outliving the session
+  // that produced it is worse than no base: paired with a payload cache that
+  // did not survive (evicted, or cleared on sign-out while a write-back was
+  // still in flight), the merge would see a config full of keys the local side
+  // "lacks". Persisting it also bought nothing — the case it was meant to cover,
+  // an unsynced local config edit found on a fresh mount, is already handled
+  // upstream by the payload-level timestamp comparison, which pushes a
+  // locally-newer cache back to RTDB before this merge is ever consulted.
   const baseConfigRef = useRef(null);
 
   // Records the config both sides now agree on (post-merge, since any local keys
   // the merge re-applied are written straight back to RTDB), so the next
   // delivery can tell this device's real edits from stale drift.
-  const commitBaseConfig = (appliedPayload) => {
+  //
+  // `forUid` pins the commit to the account it was computed for: this runs from
+  // a write-back callback that can resolve after a sign-out or account switch,
+  // and without the check it would seed the *next* account's merge with the
+  // previous account's config.
+  const commitBaseConfig = (appliedPayload, forUid) => {
+    if (forUid !== uid) return;
     const config = appliedPayload?.config;
     if (!config) return;
     baseConfigRef.current = config;
-    writeBaseConfig(uid, config);
   };
 
   // Commits the base for a merged delivery, but only once the state it claims
@@ -215,13 +201,16 @@ export function useSync(uid, email) {
   // on failure means the next delivery re-applies and re-sends the keys.
   const commitBaseAfterWriteback = (toApply, hasLocalContribution) => {
     if (!hasLocalContribution) {
-      commitBaseConfig(toApply);
+      commitBaseConfig(toApply, uid);
       return;
     }
     // A debounced payload write is already pending and will carry this state.
     if (timeoutRef.current) return;
+    // Capture the uid this write belongs to — by the time it resolves the hook
+    // may have moved to a different account.
+    const writeUid = uid;
     writeWithRetry(ref(db, dbRefPath), toApply)
-      .then(() => commitBaseConfig(toApply))
+      .then(() => commitBaseConfig(toApply, writeUid))
       .catch(() => {});
   };
   // Resolvers for savePayloadAsync calls queued behind the current debounce
@@ -269,10 +258,9 @@ export function useSync(uid, email) {
     rtdbConnectedRef.current = false;
     hasReceivedFirstRtdbRef.current = false;
     localWriteBeforeFirstRtdbRef.current = false;
-    // Load this uid's persisted merge base before any delivery can arrive.
-    // Read per-uid, so switching accounts never diffs one user's config
-    // against another's base.
-    baseConfigRef.current = readBaseConfig(uid);
+    // Start each account with no base: nothing is known to be shared with RTDB
+    // until this session sees a delivery.
+    baseConfigRef.current = null;
     setSyncWarning(null);
     if (offlineWarnTimeoutRef.current) { clearTimeout(offlineWarnTimeoutRef.current); offlineWarnTimeoutRef.current = null; }
     const userRef = ref(db, dbRefPath);
@@ -400,7 +388,7 @@ export function useSync(uid, email) {
           // payloadRef.current is already set from cache; leave payload as-is.
           // The cache is being made authoritative here, so it becomes the base:
           // nothing in it is a pending local edit any more.
-          commitBaseConfig(payloadRef.current);
+          commitBaseConfig(payloadRef.current, uid);
         } else {
           // Brand-new user — derive a clean display name from email
           const rawName = email.split("@")[0];
@@ -524,7 +512,7 @@ export function useSync(uid, email) {
           setPayload(defaultPayload);
           payloadRef.current = defaultPayload;
           writeCache(uid, defaultPayload);
-          commitBaseConfig(defaultPayload);
+          commitBaseConfig(defaultPayload, uid);
 
           runTransaction(ref(db, dbRefPath), (current) => {
             if (current !== null) return;
@@ -994,10 +982,7 @@ export function useSync(uid, email) {
   const clearCache = () => {
     if (uid) {
       try { localStorage.removeItem(cacheKey(uid)); } catch {}
-      // The merge base describes the cache that was just dropped — leaving it
-      // behind would have the next sign-in diff fresh RTDB config against a
-      // base from a session whose payload no longer exists.
-      try { localStorage.removeItem(baseConfigKey(uid)); } catch {}
+      // The base describes the cache that was just dropped, so it must go too.
       baseConfigRef.current = null;
     }
   };

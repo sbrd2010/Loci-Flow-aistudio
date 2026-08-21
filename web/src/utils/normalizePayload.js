@@ -266,7 +266,14 @@ function mergeConfig(remoteConfig, localConfig, baseConfig) {
   const merged = { ...remote };
   let localConfigWon = false;
 
-  for (const key of new Set([...Object.keys(local), ...Object.keys(base)])) {
+  // Only keys PRESENT locally can be local edits. Walking base's keys too would
+  // read every key the local config happens to lack as a deletion to replay —
+  // so a mount with a base but no cached payload (cache evicted, or a stale
+  // base outliving its cache) would "delete" the entire config and, via
+  // localConfigWon, write that wipe back to RTDB. The app never removes config
+  // keys anyway (clearing a deadline writes "", it does not delete), so there
+  // is no deletion to propagate and no reason to accept that risk.
+  for (const key of Object.keys(local)) {
     // Bookkeeping, not user data — it tracks *when* config changed, so it can
     // never itself count as an edit worth preserving. Recomputed below.
     if (key === "lastUpdated") continue;
