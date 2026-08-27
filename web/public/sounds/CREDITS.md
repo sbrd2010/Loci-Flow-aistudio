@@ -26,13 +26,13 @@ All background audio loops utilized in Loci Focus are sourced from open-licensed
 
 ### 3. Chillhop
 - **Source**: Downloaded from [Free Stock Music](https://www.free-stock-music.com).
-- **License**: Mixed. Most tracks are Creative Commons Attribution 3.0 Unported
-  (CC BY 3.0); the AERØHEAD tracks marked below are Creative Commons
-  Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0). The licence stated on each
-  individual track is the authoritative one. ShareAlike obligations attach to
-  *adaptations* — these tracks play unmodified as background audio, which is not
-  an adaptation, so CC BY-SA imposes no licensing condition on Loci Flow itself.
-  Attribution and the licence link are required either way.
+- **License**: Mixed — this category spans three Creative Commons licences.
+  The licence stated on each individual track below is the authoritative one:
+  Attribution 3.0 (CC BY 3.0), Attribution-ShareAlike 3.0 (CC BY-SA 3.0), and
+  Attribution 4.0 (CC BY 4.0). ShareAlike obligations attach to *adaptations* —
+  these tracks play unmodified as background audio, which is not an adaptation,
+  so CC BY-SA imposes no licensing condition on Loci Flow itself. Attribution
+  and the licence link are required under all three.
 - **Tracks & Accreditation**:
   - **Local Offline Track**: [2tech-audio-technology.mp3](./2tech-audio-technology.mp3) (Technology) by 2B Studio / 2tech-audio | https://soundcloud.com/2tech-audio
   - **CDN Variations**:
@@ -86,6 +86,32 @@ All background audio loops utilized in Loci Focus are sourced from open-licensed
       Licensed under CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/)
     - **Giving Way** by AERØHEAD | https://soundcloud.com/aerohead
       Licensed under CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/)
+    - **Sanctuary** by AERØHEAD feat. Idyllic | https://soundcloud.com/aerohead
+      Licensed under CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/)
+    - **Lost Memories** by AERØHEAD | https://soundcloud.com/aerohead
+      Licensed under CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/)
+    - **Somewhere Down the Line** by AERØHEAD | https://soundcloud.com/aerohead
+      Licensed under CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/)
+    - **Sunset** by AERØHEAD | https://soundcloud.com/aerohead
+      Licensed under CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/)
+    - **Calling Out** by AERØHEAD | https://soundcloud.com/aerohead
+      Licensed under CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/)
+    - **Path of the Fireflies** by AERØHEAD | https://soundcloud.com/aerohead
+      Licensed under CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/)
+    - **Last Promise** by Nettson | https://soundcloud.com/nettson
+      Licensed under CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/)
+    - **Remember** by Nettson | https://soundcloud.com/nettson
+      Licensed under CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/)
+    - **Dreamers** by Nettson | https://soundcloud.com/nettson
+      Licensed under CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/)
+    - **Be Myself** by Nettson | https://soundcloud.com/nettson
+      Licensed under CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/)
+    - **Miss You Back** by Nettson & RedBird | https://soundcloud.com/nettson
+      Licensed under CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/)
+    - **Dusk Horizon** by FSM Team feat. < e s c p > | https://fsmteam.bandcamp.com
+      Licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+    - **Parallel Synthesis** by FSM Team feat. < e s c p > | https://fsmteam.bandcamp.com
+      Licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 
 ---
 
