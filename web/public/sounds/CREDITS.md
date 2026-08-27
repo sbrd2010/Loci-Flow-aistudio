@@ -36,8 +36,8 @@ All background audio loops utilized in Loci Focus are sourced from open-licensed
 - **Tracks & Accreditation**:
   - **Local Offline Track**: [2tech-audio-technology.mp3](./2tech-audio-technology.mp3) (Technology) by 2B Studio / 2tech-audio | https://soundcloud.com/2tech-audio
   - **CDN Variations**:
-    - **Leaving** by aerohead | https://soundcloud.com/aerohead
-      Licensed under CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/)
+    - **Leaving** by AERØHEAD | https://soundcloud.com/aerohead
+      Licensed under CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/)
     - **Don't Leave** by Nettson | https://soundcloud.com/nettson
       Licensed under CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/)
     - **Reflections** by Oraeth | https://soundcloud.com/oraeth
