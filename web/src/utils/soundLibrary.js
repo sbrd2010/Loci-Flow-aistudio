@@ -114,6 +114,7 @@ export const SOUND_CATEGORIES = {
       { file: "sounds/chillhop/nettson-redbird-miss-you-back.mp3", title: "Miss You Back" },
       { file: "sounds/chillhop/fsm-team-escp-dusk-horizon.mp3", title: "Dusk Horizon" },
       { file: "sounds/chillhop/fsm-team-escp-parallel-synthesis.mp3", title: "Parallel Synthesis" },
+      { file: "sounds/chillhop/jmhbm-electron.mp3", title: "Electron" },
     ]
   }
 };

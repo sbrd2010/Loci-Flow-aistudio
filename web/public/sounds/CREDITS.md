@@ -25,14 +25,16 @@ All background audio loops utilized in Loci Focus are sourced from open-licensed
     - `river-wildlife-environment.mp3` (River Wildlife Environment)
 
 ### 3. Chillhop
-- **Source**: Downloaded from [Free Stock Music](https://www.free-stock-music.com).
-- **License**: Mixed — this category spans three Creative Commons licences.
-  The licence stated on each individual track below is the authoritative one:
-  Attribution 3.0 (CC BY 3.0), Attribution-ShareAlike 3.0 (CC BY-SA 3.0), and
-  Attribution 4.0 (CC BY 4.0). ShareAlike obligations attach to *adaptations* —
-  these tracks play unmodified as background audio, which is not an adaptation,
-  so CC BY-SA imposes no licensing condition on Loci Flow itself. Attribution
-  and the licence link are required under all three.
+- **Source**: Mostly [Free Stock Music](https://www.free-stock-music.com); one track from
+  [Free Music Archive](https://freemusicarchive.org).
+- **License**: Mixed. The statement on each individual track below is the
+  authoritative one: Attribution 3.0 (CC BY 3.0), Attribution-ShareAlike 3.0
+  (CC BY-SA 3.0), Attribution 4.0 (CC BY 4.0), and one CC0 1.0 public-domain
+  dedication. ShareAlike obligations attach to *adaptations* — these tracks play
+  unmodified as background audio, which is not an adaptation, so CC BY-SA imposes
+  no licensing condition on Loci Flow itself. Attribution and the licence link are
+  required under all three CC BY variants; the CC0 track requires neither, and is
+  credited below as a courtesy rather than an obligation.
 - **Tracks & Accreditation**:
   - **Local Offline Track**: [2tech-audio-technology.mp3](./2tech-audio-technology.mp3) (Technology) by 2B Studio / 2tech-audio | https://soundcloud.com/2tech-audio
   - **CDN Variations**:
@@ -112,6 +114,9 @@ All background audio loops utilized in Loci Focus are sourced from open-licensed
       Licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
     - **Parallel Synthesis** by FSM Team feat. < e s c p > | https://fsmteam.bandcamp.com
       Licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+    - **Electron** by JMHBM / Johnathon M. Horner (Beat Mekanik) | https://freemusicarchive.org/music/beat-mekanik/
+      CC0 1.0 Universal — public domain dedication, no attribution required
+      (https://creativecommons.org/publicdomain/zero/1.0/)
 
 ---
 
