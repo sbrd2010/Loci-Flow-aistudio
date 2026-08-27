@@ -90,6 +90,17 @@ export const SOUND_CATEGORIES = {
       { file: "sounds/chillhop/sappheiros-descent.mp3", title: "Descent" },
       { file: "sounds/chillhop/sappheiros-embrace.mp3", title: "Embrace" },
       { file: "sounds/chillhop/sappheiros-stay.mp3", title: "Stay" },
+      { file: "sounds/chillhop/sappheiros-ktsg-celestial.mp3", title: "Celestial" },
+      { file: "sounds/chillhop/sappheiros-the-sound-of-rain.mp3", title: "The Sound of Rain" },
+      { file: "sounds/chillhop/sappheiros-truth.mp3", title: "Truth" },
+      { file: "sounds/chillhop/sappheiros-seasons.mp3", title: "Seasons" },
+      { file: "sounds/chillhop/sappheiros-sorrow.mp3", title: "Sorrow" },
+      { file: "sounds/chillhop/sappheiros-lights.mp3", title: "Lights" },
+      { file: "sounds/chillhop/aerohead-fragments.mp3", title: "Fragments" },
+      { file: "sounds/chillhop/aerohead-perilune.mp3", title: "Perilune" },
+      { file: "sounds/chillhop/aerohead-lights-of-elysium.mp3", title: "Lights of Elysium" },
+      { file: "sounds/chillhop/aerohead-the-long-road-home.mp3", title: "The Long Road Home" },
+      { file: "sounds/chillhop/aerohead-giving-way.mp3", title: "Giving Way" },
     ]
   }
 };
