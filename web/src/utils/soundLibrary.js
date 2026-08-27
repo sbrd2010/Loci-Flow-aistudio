@@ -101,6 +101,20 @@ export const SOUND_CATEGORIES = {
       { file: "sounds/chillhop/aerohead-lights-of-elysium.mp3", title: "Lights of Elysium" },
       { file: "sounds/chillhop/aerohead-the-long-road-home.mp3", title: "The Long Road Home" },
       { file: "sounds/chillhop/aerohead-giving-way.mp3", title: "Giving Way" },
+      { file: "sounds/chillhop/aerohead-feat-idyllic-sanctuary.mp3", title: "Sanctuary" },
+      { file: "sounds/chillhop/aerohead-lost-memories.mp3", title: "Lost Memories" },
+      { file: "sounds/chillhop/aerohead-somewhere-down-the-line.mp3", title: "Somewhere Down the Line" },
+      { file: "sounds/chillhop/aerohead-sunset.mp3", title: "Sunset" },
+      { file: "sounds/chillhop/aerohead-calling-out.mp3", title: "Calling Out" },
+      { file: "sounds/chillhop/aerohead-path-of-the-fireflies.mp3", title: "Path of the Fireflies" },
+      { file: "sounds/chillhop/nettson-last-promise.mp3", title: "Last Promise" },
+      { file: "sounds/chillhop/nettson-remember.mp3", title: "Remember" },
+      { file: "sounds/chillhop/nettson-dreamers.mp3", title: "Dreamers" },
+      { file: "sounds/chillhop/nettson-be-myself.mp3", title: "Be Myself" },
+      { file: "sounds/chillhop/nettson-redbird-miss-you-back.mp3", title: "Miss You Back" },
+      { file: "sounds/chillhop/fsm-team-escp-dusk-horizon.mp3", title: "Dusk Horizon" },
+      { file: "sounds/chillhop/fsm-team-escp-parallel-synthesis.mp3", title: "Parallel Synthesis" },
+      { file: "sounds/chillhop/jmhbm-electron.mp3", title: "Electron" },
     ]
   }
 };
