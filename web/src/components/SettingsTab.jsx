@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 import PrivacyPolicy from "./PrivacyPolicy";
 import { db, auth } from "../firebase";
 import { ref, push } from "firebase/database";
 import { exportPayloadAsJson, exportTasksAsCsv } from "../utils/exportTasks";
 import { parseTimeToMinutes } from "../utils/focusWindows";
+import { analyzeFocusWindowRows, getTotalPlannedMinutes, formatDuration, formatTime12 } from "../utils/focusWindowHints";
 import { COACH_PERSONAS, normalizeCoachPersona } from "../utils/coachPersona";
 import { COACH_PROFILE_NOTE_MAX_LENGTH } from "../utils/coachProfile";
 import { clearAllMemory, isMemoryEnabled, removePinnedFact, removeRecentObservation } from "../utils/coachMemory";
@@ -34,6 +35,10 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const [editedTaskRowStyle, setEditedTaskRowStyle] = useState(config.taskRowInteractionStyle || "classic");
   const [editedChallenge, setEditedChallenge] = useState(() => normalizeChallengeKey(config.challengeType));
   const [editedFocusWindows, setEditedFocusWindows] = useState(config.focusWindows || []);
+  // Recomputed each render from the rows as typed, so the length and any
+  // AM/PM warning track the inputs live rather than waiting for a save.
+  const focusWindowHints = useMemo(() => analyzeFocusWindowRows(editedFocusWindows), [editedFocusWindows]);
+  const totalPlannedMinutes = useMemo(() => getTotalPlannedMinutes(editedFocusWindows), [editedFocusWindows]);
   const [editedMorningRitualStart, setEditedMorningRitualStart] = useState(config.morningRitualWindowStart || "05:00");
   const [editedMorningRitualEnd, setEditedMorningRitualEnd] = useState(config.morningRitualWindowEnd || "11:00");
   const [editedMorningRitualEnabled, setEditedMorningRitualEnabled] = useState(config.morningRitualEnabled !== false);
@@ -488,41 +493,89 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
             <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px", marginBottom: "8px" }}>
               Add one or more time ranges for when you want to focus. If an end time is earlier than its start time, that window crosses midnight. Defaults to 7:00 AM-2:00 AM if none are set.
             </p>
-            {editedFocusWindows.map((w, idx) => (
-              <div key={idx} style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
-                <input
-                  type="time"
-                  className="text-input"
-                  value={w.start || ""}
-                  onChange={e => handleFocusWindowChange(idx, "start", e.target.value)}
-                  aria-label={`Focus window ${idx + 1} start time`}
-                  style={{ flex: 1, minWidth: 0 }}
-                />
-                <span style={{ fontSize: "12px", color: "var(--text-muted)", flexShrink: 0 }}>to</span>
-                <input
-                  type="time"
-                  className="text-input"
-                  value={w.end || ""}
-                  onChange={e => handleFocusWindowChange(idx, "end", e.target.value)}
-                  aria-label={`Focus window ${idx + 1} end time`}
-                  style={{ flex: 1, minWidth: 0 }}
-                />
-                <button
-                  type="button"
-                  onClick={() => handleRemoveFocusWindow(idx)}
-                  aria-label={`Remove focus window ${idx + 1}`}
-                  style={{
-                    flexShrink: 0, width: "32px", height: "32px", padding: 0,
-                    borderRadius: "8px", border: "1.5px solid var(--border)",
-                    background: "var(--bg-secondary)", color: "var(--text-muted)",
-                    fontSize: "14px", cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center"
-                  }}
-                >
-                  ✕
-                </button>
+            {editedFocusWindows.map((w, idx) => {
+              const hint = focusWindowHints[idx] || {};
+              const suspect = !!hint.meridiemFix;
+              return (
+                <div key={idx} style={{ marginBottom: "8px" }}>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <input
+                      type="time"
+                      className="text-input"
+                      value={w.start || ""}
+                      onChange={e => handleFocusWindowChange(idx, "start", e.target.value)}
+                      aria-label={`Focus window ${idx + 1} start time`}
+                      style={{ flex: 1, minWidth: 0, ...(suspect ? { borderColor: "var(--danger)" } : {}) }}
+                    />
+                    <span style={{ fontSize: "12px", color: "var(--text-muted)", flexShrink: 0 }}>to</span>
+                    <input
+                      type="time"
+                      className="text-input"
+                      value={w.end || ""}
+                      onChange={e => handleFocusWindowChange(idx, "end", e.target.value)}
+                      aria-label={`Focus window ${idx + 1} end time`}
+                      style={{ flex: 1, minWidth: 0, ...(suspect ? { borderColor: "var(--danger)" } : {}) }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFocusWindow(idx)}
+                      aria-label={`Remove focus window ${idx + 1}`}
+                      style={{
+                        flexShrink: 0, width: "32px", height: "32px", padding: 0,
+                        borderRadius: "8px", border: "1.5px solid var(--border)",
+                        background: "var(--bg-secondary)", color: "var(--text-muted)",
+                        fontSize: "14px", cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center"
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  {/* The length is shown for every complete row, not only
+                      suspicious ones: a stated "13h 30m" is what makes a
+                      mistyped meridiem visible the moment it happens, and it
+                      states a fact rather than guessing at intent. */}
+                  {hint.durationMin !== null && hint.durationMin !== undefined && (
+                    <div style={{ fontSize: "11px", marginTop: "3px", paddingLeft: "2px",
+                                  color: suspect ? "var(--danger)" : "var(--text-muted)" }}>
+                      {formatDuration(hint.durationMin)}
+                      {suspect && (
+                        <>
+                          {" — that's unusually long. Did you mean "}
+                          <strong>{formatTime12(hint.meridiemFix.value)}</strong>
+                          {"? "}
+                          <button
+                            type="button"
+                            onClick={() => handleFocusWindowChange(idx, hint.meridiemFix.field, hint.meridiemFix.value)}
+                            style={{
+                              border: "none", background: "none", padding: 0,
+                              color: "var(--accent)", fontSize: "11px", fontWeight: "700",
+                              cursor: "pointer", textDecoration: "underline"
+                            }}
+                          >
+                            Fix
+                          </button>
+                        </>
+                      )}
+                      {!suspect && hint.overlapsWith?.length > 0 && (
+                        <span style={{ color: "var(--text-muted)" }}>
+                          {` · overlaps window ${hint.overlapsWith.map(i => i + 1).join(", ")}`}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {totalPlannedMinutes > 0 && (
+              <div style={{ fontSize: "12px", fontWeight: "700", color: "var(--text-secondary)",
+                            margin: "10px 0 8px", paddingLeft: "2px" }}>
+                {`Total focus time: ${formatDuration(totalPlannedMinutes)}`}
+                <span style={{ fontWeight: "400", color: "var(--text-muted)" }}>
+                  {" — time these windows actually cover"}
+                </span>
               </div>
-            ))}
+            )}
             <button
               type="button"
               onClick={handleAddFocusWindow}

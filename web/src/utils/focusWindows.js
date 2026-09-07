@@ -66,23 +66,49 @@ export function getLociNowMinutes(now, windows) {
   return windows.some(w => w.overnight && nowMin < w.endMin) ? nowMin + 1440 : nowMin;
 }
 
+// Windows collapsed to non-overlapping [start, end) spans in "loci minutes" (an
+// overnight window's end extends past 1440).
+//
+// Nothing stops a user entering windows that overlap — and one slip in the
+// settings time picker (an end time left at AM) reliably produces them. Summing
+// each window's own length then counts the shared minutes once per window, so
+// five windows covering 15h 45m of real time reported 29h 15m, and "remaining
+// today" and the progress bar inflated to match. Measuring the union instead
+// makes every total the amount of wall-clock time actually covered, which can
+// never exceed 24h.
+export function mergeWindowSpans(windows) {
+  const spans = windows
+    .map(w => [w.startMin, w.overnight ? w.endMin + 1440 : w.endMin])
+    .sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  for (const [start, end] of spans) {
+    const last = merged[merged.length - 1];
+    if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+    else merged.push([start, end]);
+  }
+  return merged;
+}
+
 // Single pass over the windows relative to "now": which state we're in, how much
-// focus time remains today (gaps excluded), and which window opens next.
+// focus time remains today (gaps excluded, overlaps counted once), and which
+// window opens next.
 function analyzeWindows(now, windows) {
   const lociNow = getLociNowMinutes(now, windows);
   let state = "after";
   let remainingMin = 0;
-  let nextWindow = null;
-  for (const w of windows) {
-    const lociStart = w.startMin;
-    const lociEnd = w.overnight ? w.endMin + 1440 : w.endMin;
+  for (const [lociStart, lociEnd] of mergeWindowSpans(windows)) {
     if (lociNow >= lociStart && lociNow < lociEnd) {
       state = "during";
       remainingMin += lociEnd - lociNow;
     } else if (lociNow < lociStart) {
       remainingMin += lociEnd - lociStart;
-      if (!nextWindow) nextWindow = w;
     }
+  }
+  // Reported from the original windows, not the merged spans, so callers still
+  // get the actual window the user configured (its own start/end) to render.
+  let nextWindow = null;
+  for (const w of windows) {
+    if (lociNow < w.startMin) { nextWindow = w; break; }
   }
   if (state !== "during") state = remainingMin > 0 ? "before" : "after";
   return { state, remainingMin, nextWindow };
@@ -100,9 +126,10 @@ export function getRemainingFocusMinutes(now, windows) {
   return analyzeWindows(now, windows).remainingMin;
 }
 
-// Total scheduled focus minutes across all windows today (gaps excluded).
-function getTotalFocusMinutes(windows) {
-  return windows.reduce((sum, w) => sum + ((w.overnight ? w.endMin + 1440 : w.endMin) - w.startMin), 0);
+// Total scheduled focus minutes today: gaps excluded, and overlapping windows
+// counted once (see mergeWindowSpans).
+export function getTotalFocusMinutes(windows) {
+  return mergeWindowSpans(windows).reduce((sum, [start, end]) => sum + (end - start), 0);
 }
 
 // Fraction (0-1) of today's total scheduled focus time that has elapsed.
