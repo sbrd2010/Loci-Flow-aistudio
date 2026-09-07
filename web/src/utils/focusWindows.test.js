@@ -11,6 +11,7 @@ import {
   getFocusProgress,
   getLociDayStr,
   hasConfiguredFocusWindow,
+  getTotalFocusMinutes,
 } from "./focusWindows";
 
 const dt = (h, mi = 0) => new Date(2024, 5, 15, h, mi);
@@ -340,3 +341,30 @@ describe("hasConfiguredFocusWindow", () => {
   });
 });
 
+// Overlapping windows must be measured as the union everywhere the day's total
+// is used, not just in getRemainingFocusMinutes: each of these read the raw
+// windows and so disagreed with getFocusProgress once overlaps existed.
+describe("overlapping windows are measured consistently", () => {
+  const windows = getFocusWindows({ focusWindows: [
+    { start: "09:00", end: "17:00" },
+    { start: "12:00", end: "16:00" },  // wholly inside the first
+  ] });
+  const at = (h, m = 0) => { const d = new Date(); d.setHours(h, m, 0, 0); return d; };
+
+  it("counts the covered day once", () => {
+    expect(getTotalFocusMinutes(windows)).toBe(480); // 09:00-17:00, not 480+240
+  });
+
+  it("keeps the focus slot in step with progress and never moves it backwards", () => {
+    // Reading raw windows returned "evening" at noon (37.5% through) and then
+    // fell back to "afternoon" at 16:30 once the inner window closed.
+    expect(getCurrentFocusSlot(at(12), windows)).toBe("afternoon");
+    const order = ["morning", "afternoon", "evening"];
+    let seen = -1;
+    for (let h = 9; h < 17; h += 0.5) {
+      const slot = getCurrentFocusSlot(at(Math.floor(h), (h % 1) * 60), windows);
+      expect(order.indexOf(slot)).toBeGreaterThanOrEqual(seen);
+      seen = order.indexOf(slot);
+    }
+  });
+});

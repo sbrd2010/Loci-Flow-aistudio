@@ -162,11 +162,16 @@ export function getOverallSpan(windows) {
 // window" behavior.
 export function getCurrentFocusSlot(now, windows) {
   const lociNow = getLociNowMinutes(now, windows);
+  // Walks the merged spans for the same reason getFocusProgress does: over raw
+  // windows, overlapping ranges inflate the total AND `elapsed` is reassigned by
+  // each active window, so it took the value from the last one rather than the
+  // furthest through the day. With 09:00-17:00 plus 12:00-16:00 that returned
+  // "evening" at noon (37.5% through) and then moved back to "afternoon" once
+  // the shorter window closed. dailyAnchors.js picks the anchor sheet from this,
+  // so the slot going backwards showed the evening prompt around midday.
   let totalActive = 0;
   let elapsed = null;
-  for (const w of windows) {
-    const lociStart = w.startMin;
-    const lociEnd = w.overnight ? w.endMin + 1440 : w.endMin;
+  for (const [lociStart, lociEnd] of mergeWindowSpans(windows)) {
     if (lociNow >= lociStart && lociNow < lociEnd) {
       elapsed = totalActive + (lociNow - lociStart);
     }

@@ -9,7 +9,7 @@
 // (morningRitual.js) primitives so there is a single source of truth for
 // "Loci day" and "first/last focus window" math.
 
-import { getLociNowMinutes, getOverallSpan, getFocusProgress, getRemainingFocusMinutes, getLociDayStr } from "./focusWindows";
+import { getLociNowMinutes, getOverallSpan, getFocusProgress, getRemainingFocusMinutes, getLociDayStr, mergeWindowSpans } from "./focusWindows";
 import { isMorningRitualSlot } from "./morningRitual";
 import { countTodayCompletedTasks } from "./deadlineProgressMirror";
 import { isDailyDone } from "./deadlineCountdown";
@@ -308,18 +308,22 @@ function lociMinutesToDate(now, windows, lociMinutes) {
 // Mirrors getFocusProgress's gap-exclusion math in reverse. Null if the
 // windows carry no focus time at all (shouldn't happen with real config).
 function lociMinutesAtProgress(windows, fraction) {
+  // Must traverse the same merged spans getFocusProgress measures, or the time
+  // this schedules a native notification for stops being the time the in-app
+  // check-in becomes eligible. Summing raw windows counted overlapping minutes
+  // once per window: with 09:00-17:00 plus 12:00-16:00 it read the day as 12h
+  // and put midday at 15:00, while the UI reached 50% at 13:00.
+  const spans = mergeWindowSpans(windows);
   let total = 0;
-  for (const w of windows) total += (w.overnight ? w.endMin + 1440 : w.endMin) - w.startMin;
+  for (const [start, end] of spans) total += end - start;
   if (total <= 0) return null;
   let remaining = total * Math.max(0, Math.min(1, fraction));
-  for (const w of windows) {
-    const lociEnd = w.overnight ? w.endMin + 1440 : w.endMin;
-    const dur = lociEnd - w.startMin;
-    if (remaining <= dur) return w.startMin + remaining;
+  for (const [start, end] of spans) {
+    const dur = end - start;
+    if (remaining <= dur) return start + remaining;
     remaining -= dur;
   }
-  const last = windows[windows.length - 1];
-  return last.overnight ? last.endMin + 1440 : last.endMin;
+  return spans[spans.length - 1][1];
 }
 
 // Best-effort wall-clock Date for each check-in slot's earliest eligible
