@@ -192,7 +192,7 @@ test("13. Brain dump long-note gate — move as-is lands in horizon", async ({ p
   await page.getByRole("tab", { name: /Inbox/ }).click();
 
   // Demo item bd4 is > 20 words — it should be in the inbox
-  const longItemText = "I need to figure out if I should change";
+  const longItemText = "I need to decide whether to keep the current plan";
   const dumpItem = page.locator('[data-testid="dump-item"]').filter({ hasText: longItemText });
   await expect(dumpItem).toBeVisible({ timeout: 5_000 });
 
@@ -273,7 +273,7 @@ test("12. Deadline card shows redesigned compact layout in demo mode", async ({ 
 
   // Row 2: TODAY'S MOVE is visible as the primary action anchor
   await expect(card).toContainText("TODAY'S MOVE");
-  await expect(card).toContainText("Apply to one job today");
+  await expect(card).toContainText("Finish one launch task today");
 
   // Clock mocked to 10am; dayStartHour=7, dayEndHour=26 — inside work window → bar shows "Xh Ym left"
   await expect(card).toContainText(/\d+h \d+m left/);
@@ -285,6 +285,6 @@ test("12. Deadline card shows redesigned compact layout in demo mode", async ({ 
   expect(["OPEN", "STILL OPEN"].includes(btnText.trim())).toBe(true);
 
   // Card label shown
-  await expect(card).toContainText("Visa & career deadline");
+  await expect(card).toContainText("Project launch");
 });
 

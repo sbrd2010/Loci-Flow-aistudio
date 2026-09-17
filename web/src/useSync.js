@@ -480,70 +480,53 @@ export function useSync(uid, email) {
             return `${d.getFullYear()}-${m}-${day}`;
           };
           const todayStr = toDateStr(new Date());
-          const d1 = new Date(); d1.setDate(d1.getDate() - 1); const yStr = toDateStr(d1);
-          const d2 = new Date(); d2.setDate(d2.getDate() - 2); const d2Str = toDateStr(d2);
           const now = Date.now();
+
+          // Three neutral starter tasks that teach the app's own moves (add,
+          // pin and focus, step away), and no invented history: a brand-new
+          // account starts at 0 XP with an empty heatmap. Loci is a planning
+          // and execution app for anyone, so nothing here assumes a job hunt
+          // or any other goal.
+          const starterTask = (index, fields) => ({
+            id: now + index,
+            userId: email,
+            uuid: safeUUID(),
+            horizonLevel: "today",
+            timeEstimateMinutes: 15,
+            deadlineTimestamp: null,
+            isCompleted: false,
+            isParked: false,
+            isNowFocus: false,
+            orderIndex: index,
+            dateCompletedString: null,
+            isDeleted: false,
+            lastUpdated: now,
+            ...fields,
+          });
 
           const defaultPayload = {
             userId: email,
             tasks: [
-              {
-                id: now,
-                userId: email,
-                uuid: safeUUID(),
-                title: "Optimize resume for tech product role",
-                concreteStep: "Add metrics to job #1",
-                horizonLevel: "today",
+              starterTask(0, {
+                title: "Write down the one thing that matters most today",
+                concreteStep: "Add it as a task, then pin it",
                 priority: "P1",
-                category: "Career",
-                timeEstimateMinutes: 45,
-                deadlineTimestamp: null,
-                isCompleted: false,
-                isParked: false,
-                isNowFocus: false,
-                orderIndex: 0,
-                dateCompletedString: null,
-                isDeleted: false,
-                lastUpdated: now
-              },
-              {
-                id: now + 1,
-                userId: email,
-                uuid: safeUUID(),
-                title: "Prep interview answers for star technique",
-                concreteStep: "Draft situation for leadership question",
-                horizonLevel: "today",
+                category: "Personal",
+                timeEstimateMinutes: 10,
+              }),
+              starterTask(1, {
+                title: "Try one 25-minute focus session",
+                concreteStep: "Pin a task and start the timer",
                 priority: "P2",
-                category: "Career",
-                timeEstimateMinutes: 30,
-                deadlineTimestamp: null,
-                isCompleted: false,
-                isParked: false,
-                isNowFocus: false,
-                orderIndex: 1,
-                dateCompletedString: null,
-                isDeleted: false,
-                lastUpdated: now
-              },
-              {
-                id: now + 2,
-                userId: email,
-                uuid: safeUUID(),
-                title: "Go for a brief outdoor walk to recharge dopamine",
-                concreteStep: "Put on sneakers and walk 10 mins",
-                horizonLevel: "today",
+                category: "Work",
+                timeEstimateMinutes: 25,
+              }),
+              starterTask(2, {
+                title: "Take a short walk to reset",
+                concreteStep: "Put on shoes and walk 10 minutes",
                 priority: "P4",
                 category: "Health",
-                timeEstimateMinutes: 15,
-                deadlineTimestamp: null,
-                isCompleted: false,
-                isParked: false,
-                isNowFocus: false,
-                orderIndex: 2,
-                dateCompletedString: null,
-                isDeleted: false,
-                lastUpdated: now
-              }
+              }),
             ],
             config: {
               userId: email,
@@ -554,7 +537,7 @@ export function useSync(uid, email) {
               reminderNagIntervalMinutes: 15,
               visitStreakCount: 1,
               lastVisitDate: todayStr,
-              totalXp: 150,
+              totalXp: 0,
               intentionMessage: "Start tiny. One action. Right now.",
               isLowEnergyMode: false,
               isOnboardingCompleted: false,
@@ -562,22 +545,7 @@ export function useSync(uid, email) {
               roadmapStyle: "compact",
               lastUpdated: now
             },
-            contributions: [
-              {
-                compositeKey: `${email}_${yStr}`,
-                userId: email,
-                dateString: yStr,
-                count: 3,
-                lastUpdated: now
-              },
-              {
-                compositeKey: `${email}_${d2Str}`,
-                userId: email,
-                dateString: d2Str,
-                count: 1,
-                lastUpdated: now
-              }
-            ],
+            contributions: [],
             brainDump: [],
             brainDumpUpdatedAt: now,
             timestamp: now

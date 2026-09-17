@@ -90,10 +90,10 @@ export function createDemoPayload() {
       roadmapStyle: "compact",
       headerStyle: "full",
       toolsStyle: "inline",
-      deadlineLabel: "Visa & career deadline",
+      deadlineLabel: "Project launch",
       deadlineDate: (() => { const d = new Date(); d.setFullYear(d.getFullYear() + 1); return d.toISOString().slice(0, 10); })(),
       deadlineStartDate: new Date().toISOString().slice(0, 10),
-      deadlineAction: "Apply to one job today",
+      deadlineAction: "Finish one launch task today",
       deadlineCardStyle: "compact",
       lastUpdated: Date.now(),
       dailyAnchors: [
@@ -124,7 +124,7 @@ export function createDemoPayload() {
       { id:"bd1", text:"Look into freelancing or consulting on the side — is the market there?", createdAt: Date.now() - 86400000 },
       { id:"bd2", text:"Reach out to that person from last year — it's been too long", createdAt: Date.now() - 3600000 },
       { id:"bd3", text:"Figure out if this current path is leading somewhere or just keeping me busy", createdAt: Date.now() - 7200000 },
-      { id:"bd4", text:"I need to figure out if I should change career paths or double down on what I am currently doing professionally", createdAt: Date.now() - 900000 },
+      { id:"bd4", text:"I need to decide whether to keep the current plan for the launch or simplify it to what I can actually finish", createdAt: Date.now() - 900000 },
     ],
 
     timestamp: Date.now(),
