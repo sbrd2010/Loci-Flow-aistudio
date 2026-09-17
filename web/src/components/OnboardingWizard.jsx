@@ -82,7 +82,11 @@ export default function OnboardingWizard({ payload, savePayload }) {
         pomodoroDurationMinutes: config.pomodoroDurationMinutes || 25,
         reminderNagIntervalMinutes: config.reminderNagIntervalMinutes || 15,
         eveningGuardWindowActive: config.eveningGuardWindowActive !== undefined ? config.eveningGuardWindowActive : true,
-        totalXp: (Number(config.totalXp) > 0) ? Number(config.totalXp) : 150,
+        // A genuinely new account now starts at 0 XP (useSync.js) — that must
+        // survive onboarding, not be treated as "missing" and promoted to 150.
+        // Number(x) || 0 only falls back on undefined/NaN (a legacy or
+        // corrupted payload with no totalXp at all), never on a real 0.
+        totalXp: Number(config.totalXp) || 0,
         lastUpdated: Date.now()
       }
     });
