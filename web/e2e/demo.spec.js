@@ -273,7 +273,7 @@ test("12. Deadline card shows redesigned compact layout in demo mode", async ({ 
 
   // Row 2: TODAY'S MOVE is visible as the primary action anchor
   await expect(card).toContainText("TODAY'S MOVE");
-  await expect(card).toContainText("Apply to one job today");
+  await expect(card).toContainText("Finish one launch task today");
 
   // Clock mocked to 10am; dayStartHour=7, dayEndHour=26 — inside work window → bar shows "Xh Ym left"
   await expect(card).toContainText(/\d+h \d+m left/);
