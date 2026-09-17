@@ -297,10 +297,25 @@ describe("writeWithRetry (merge-on-write)", () => {
     expect(written.config).toMatchObject({ deadlineLabel: "Job offer", visitStreakCount: 5 });
   });
 
+  it("resolves with the committed payload (what the server holds after the merge), for use as the agreed base", async () => {
+    const committed = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "from server" }, timestamp: 9 };
+    runTransactionMock.mockResolvedValue({ committed: true, snapshot: { val: () => committed } });
+    const result = await writeWithRetry(dbRef, { userId: "u", tasks: [], config: { userId: "u" }, timestamp: 1 }, null);
+    expect(result).toEqual(committed);
+  });
+
+  it("trustLocalConfig: the fresh-mount recovery path keeps an offline config edit the server never received", async () => {
+    runTransactionMock.mockResolvedValue({ committed: true });
+    const local = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "renamed offline" }, timestamp: 300 };
+    await writeWithRetry(dbRef, local, null, { trustLocalConfig: true });
+    const server = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "old name" }, timestamp: 200 };
+    expect(runTransactionMock.mock.calls[0][1](server).config.deadlineLabel).toBe("renamed offline");
+  });
+
   it("retries a failed transaction and rejects once retries are exhausted", async () => {
     vi.useFakeTimers();
     runTransactionMock.mockRejectedValue(new Error("network"));
-    const promise = writeWithRetry(dbRef, { userId: "u", tasks: [], config: {} }, null, 3);
+    const promise = writeWithRetry(dbRef, { userId: "u", tasks: [], config: {} }, null, { retries: 3 });
     const assertion = expect(promise).rejects.toThrow("network");
     await vi.runAllTimersAsync();
     await assertion;

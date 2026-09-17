@@ -27,12 +27,20 @@ export const CONN = { CONNECTING: "connecting", CONNECTED: "connected", OFFLINE:
 // agreed with RTDB on, so the merge can tell its own config edits from drift.
 // applyLocally:false — local state already holds the optimistic value, so
 // only the server-confirmed result should come back through onValue.
+// `trustLocalConfig` is for the one caller that has established the cache is
+// genuinely newer than the server (see mergeConfigForWrite). Resolves with the
+// committed payload — what the server holds after the merge, which may differ
+// from `data` — so a caller recording the agreed base uses that, not `data`.
 // Exported so the merge-on-write contract can be unit-tested directly.
-export async function writeWithRetry(dbRef, data, baseConfig, retries = 3) {
+export async function writeWithRetry(dbRef, data, baseConfig, { retries = 3, trustLocalConfig = false } = {}) {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      await runTransaction(dbRef, (current) => mergeLocalIntoServer(current, data, baseConfig), { applyLocally: false });
-      return;
+      const result = await runTransaction(
+        dbRef,
+        (current) => mergeLocalIntoServer(current, data, baseConfig, { trustLocalConfig }),
+        { applyLocally: false }
+      );
+      return result && result.snapshot ? result.snapshot.val() : undefined;
     } catch (err) {
       if (attempt === retries - 1) throw err;
       await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
@@ -219,8 +227,12 @@ export function useSync(uid, email) {
     // Capture the uid this write belongs to — by the time it resolves the hook
     // may have moved to a different account.
     const writeUid = uid;
+    // The base is what the server holds after the merge, not `toApply`: if
+    // another device changed config between assembling toApply and the
+    // commit, the merge kept that newer value, and a base recorded from
+    // toApply would make the next save read it as this device's own edit.
     writeWithRetry(ref(db, dbRefPath), toApply, baseConfigRef.current)
-      .then(() => commitBaseConfig(toApply, writeUid))
+      .then((committed) => commitBaseConfig(committed || toApply, writeUid))
       .catch(() => {});
   };
   // Resolvers for savePayloadAsync calls queued behind the current debounce
@@ -373,7 +385,10 @@ export function useSync(uid, email) {
             if (!localWriteBeforeFirstRtdbRef.current) {
               // No savePayload fired during the cache-only window — local is genuinely
               // newer (app was killed before the last debounce flushed). Push it back.
-              writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseConfigRef.current).catch(() => {});
+              // There is no base yet on a fresh mount, so tell the merge the cached
+              // config is unsaved work rather than drift, or an offline edit such as
+              // a renamed Key Deadline would be replaced by the server's older value.
+              writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseConfigRef.current, { trustLocalConfig: true }).catch(() => {});
             } else {
               // savePayload fired before RTDB responded (e.g. a mount-effect on stale
               // cache), giving local a fake-fresh timestamp. Trust RTDB instead of

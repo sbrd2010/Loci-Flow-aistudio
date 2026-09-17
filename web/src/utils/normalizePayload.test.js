@@ -905,12 +905,28 @@ describe("mergeLocalIntoServer - outgoing write safety (full-payload save must n
     expect(result.config).not.toHaveProperty("pendingCoachNudge");
   });
 
-  it("config: with no base, the server's values win and only keys the server lacks are added", () => {
-    const local = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "stale", newKey: "x" }, timestamp: 300 };
+  it("config: with no base, the server's config is authoritative — a key cleared elsewhere is not restored from cache", () => {
+    const local = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "stale", pendingCoachNudge: { text: "old nudge" } }, timestamp: 300 };
     const server = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "fresh" }, timestamp: 200 };
     const result = mergeLocalIntoServer(server, local, null);
     expect(result.config.deadlineLabel).toBe("fresh");
-    expect(result.config.newKey).toBe("x");
+    expect(result.config).not.toHaveProperty("pendingCoachNudge");
+  });
+
+  it("config: trustLocalConfig (fresh-mount recovery of a newer cache) keeps the offline edit and any server-only keys", () => {
+    const local = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "renamed offline" }, timestamp: 300 };
+    const server = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "old name", roadmapStyle: "compact" }, timestamp: 200 };
+    const result = mergeLocalIntoServer(server, local, null, { trustLocalConfig: true });
+    expect(result.config.deadlineLabel).toBe("renamed offline");
+    expect(result.config.roadmapStyle).toBe("compact");
+  });
+
+  it("contributions: the larger count for a day wins, so offline completions are not discarded by a later smaller write", () => {
+    // Both devices started the day at 3; this one completed two offline (5), the other completed one later (4).
+    const local = { userId: "u", tasks: [], config: {}, contributions: [{ compositeKey: "u_d", dateString: "d", count: 5, lastUpdated: 100 }], timestamp: 100 };
+    const server = { userId: "u", tasks: [], config: {}, contributions: [{ compositeKey: "u_d", dateString: "d", count: 4, lastUpdated: 200 }], timestamp: 200 };
+    expect(mergeLocalIntoServer(server, local, null).contributions[0].count).toBe(5);
+    expect(mergeLocalIntoServer(local, server, null).contributions[0].count).toBe(5);
   });
 
   it("contributions: a day's count bumped more recently on the other device is kept, other days merged by key", () => {

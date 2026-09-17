@@ -415,25 +415,29 @@ function mergeTasksForWrite(serverTasks, localTasks) {
 
 // Per-key against `base` (the config this device last agreed with RTDB on):
 // keys this device changed since base are its edits and win; every other key
-// is the server's, so an edit made elsewhere that this device has not received
-// yet is not pushed back at its old value. Without a base an edit cannot be
-// told from stale drift, so the server's value wins wherever it has one —
-// the same accepted cost as the incoming merge, and strictly safer than the
-// whole-config overwrite this replaces.
-function mergeConfigForWrite(serverConfig, localConfig, baseConfig) {
+// is the server's — including keys the server no longer has, so a nudge or
+// check-in cleared elsewhere stays cleared. Without a base an edit cannot be
+// told from stale drift, so the server's config is authoritative, matching
+// the incoming merge (mergeConfig). The one exception is `trustLocal`: the
+// caller has already established, from the payload-level timestamp check on
+// a fresh mount with no local write since, that this cache holds unsaved work
+// the server never received — the case the old blind set() persisted — so
+// every local key is that work and wins. Server-only keys are kept either way.
+function mergeConfigForWrite(serverConfig, localConfig, baseConfig, trustLocal = false) {
   const server = objectOrEmpty(serverConfig);
   const local = objectOrEmpty(localConfig);
-  const base = baseConfig ? objectOrEmpty(baseConfig) : null;
   const merged = { ...server };
-  for (const key of Object.keys(local)) {
-    if (key === "lastUpdated") continue;
-    // Unchanged here since base: the server's state stands — including the
-    // key being gone, which is how a nudge or check-in cleared elsewhere
-    // (written as null, so RTDB dropped it) stays cleared instead of being
-    // resurrected from this device's stale copy.
-    if (base && configValuesEqual(local[key], base[key])) continue;
-    if (!base && hasOwn(server, key)) continue;
-    merged[key] = local[key];
+  if (trustLocal) {
+    for (const key of Object.keys(local)) {
+      if (key !== "lastUpdated") merged[key] = local[key];
+    }
+  } else if (baseConfig) {
+    const base = objectOrEmpty(baseConfig);
+    for (const key of Object.keys(local)) {
+      if (key === "lastUpdated") continue;
+      if (configValuesEqual(local[key], base[key])) continue;
+      merged[key] = local[key];
+    }
   }
   merged.lastUpdated = Math.max(
     finiteNumber(server.lastUpdated) ?? 0,
@@ -442,8 +446,14 @@ function mergeConfigForWrite(serverConfig, localConfig, baseConfig) {
   return merged;
 }
 
-// Per-day by compositeKey (dateString as fallback for legacy rows), same
-// "server wins only when strictly newer" rule as tasks.
+// Per-day by compositeKey (dateString as fallback for legacy rows). A day's
+// count is a completion counter that both devices may have advanced from the
+// same starting point, so picking a row by timestamp would discard the other
+// side's completions; the larger count is kept instead (timestamp, then
+// local, only break ties). Under-counts the smaller side's concurrent
+// completions, as every previous write did too; can over-count by one when a
+// task is un-completed on one device while the other still holds the old
+// count — the lesser error for a streak/heatmap counter.
 function mergeContributionsForWrite(serverContributions, localContributions) {
   const keyOf = c => c?.compositeKey || c?.dateString || null;
   const server = arrayOrEmpty(serverContributions).filter(c => c && typeof c === "object");
@@ -452,6 +462,9 @@ function mergeContributionsForWrite(serverContributions, localContributions) {
   const merged = local.map(localRow => {
     const serverRow = keyOf(localRow) ? serverByKey.get(keyOf(localRow)) : undefined;
     if (!serverRow) return localRow;
+    const serverCount = finiteNumber(serverRow.count) ?? 0;
+    const localCount = finiteNumber(localRow.count) ?? 0;
+    if (serverCount !== localCount) return serverCount > localCount ? serverRow : localRow;
     const serverTs = finiteNumber(serverRow.lastUpdated) ?? 0;
     const localTs = finiteNumber(localRow.lastUpdated) ?? 0;
     return serverTs > localTs ? serverRow : localRow;
@@ -470,7 +483,7 @@ function mergeContributionsForWrite(serverContributions, localContributions) {
 // chatHistory has no per-message metadata to merge on, so it stays
 // last-write-wins as before. The written `timestamp` is the max of both
 // sides so neither device later reads this write as older than what it holds.
-export function mergeLocalIntoServer(server, local, baseConfig) {
+export function mergeLocalIntoServer(server, local, baseConfig, { trustLocalConfig = false } = {}) {
   const normalizedLocal = normalizePayload(local);
   if (!server || typeof server !== "object" || Array.isArray(server)) return normalizedLocal;
   const normalizedServer = normalizePayload(server);
@@ -481,7 +494,7 @@ export function mergeLocalIntoServer(server, local, baseConfig) {
   return {
     ...normalizedLocal,
     tasks: mergeTasksForWrite(normalizedServer.tasks, normalizedLocal.tasks),
-    config: mergeConfigForWrite(normalizedServer.config, normalizedLocal.config, baseConfig),
+    config: mergeConfigForWrite(normalizedServer.config, normalizedLocal.config, baseConfig, trustLocalConfig),
     contributions: mergeContributionsForWrite(normalizedServer.contributions, normalizedLocal.contributions),
     brainDump: serverBrainDumpIsNewer ? normalizedServer.brainDump : normalizedLocal.brainDump,
     brainDumpUpdatedAt: Math.max(
