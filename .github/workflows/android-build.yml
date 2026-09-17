@@ -61,6 +61,11 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default list is "tools platform-tools"; Google removed
+          # the legacy "tools" package from the SDK repository, so installing it
+          # fails. Gradle resolves build-tools and platforms itself.
+          packages: platform-tools
 
       - name: Install web dependencies
         run: npm ci --legacy-peer-deps
