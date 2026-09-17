@@ -352,7 +352,9 @@ function mergeConfig(remoteConfig, localConfig, baseConfig) {
 // written back to RTDB so other devices converge on the correct state.
 // `baseConfig` is the last config this device received from RTDB — see
 // mergeConfig for why config needs it and what happens when it's absent.
-export function mergeRemotePayloadWithMeta(remote, local, baseConfig) {
+// `baseContributions` likewise for contribution rows (see mergeContributions);
+// without it the remote rows are taken wholesale, as before it existed.
+export function mergeRemotePayloadWithMeta(remote, local, baseConfig, baseContributions) {
   const normalized = normalizePayload(remote);
   if (!remote || typeof remote !== "object") return { merged: normalized, hasLocalContribution: false };
 
@@ -378,7 +380,14 @@ export function mergeRemotePayloadWithMeta(remote, local, baseConfig) {
   const { config, localConfigWon } = mergeConfig(normalized.config, local?.config, baseConfig);
   normalized.config = config;
 
-  return { merged: normalized, hasLocalContribution: tasksContribution || localConfigWon };
+  let contributionsContribution = false;
+  if (baseContributions) {
+    const result = mergeContributions(normalized.contributions, local?.contributions, baseContributions);
+    normalized.contributions = result.contributions;
+    contributionsContribution = result.hasLocalContribution;
+  }
+
+  return { merged: normalized, hasLocalContribution: tasksContribution || localConfigWon || contributionsContribution };
 }
 
 export function mergeRemotePayload(remote, local, baseConfig) {
@@ -456,48 +465,46 @@ function mergeConfigForWrite(serverConfig, localConfig, baseConfig) {
   return merged;
 }
 
-// Per-day by compositeKey (dateString as fallback for legacy rows), three-way
-// against `base` — the rows this device last agreed with RTDB on. A day's
-// count is a completion counter both devices may have advanced from the same
-// start, so the write carries the server's count plus this device's change
-// since base (which also carries an un-complete correctly, as a negative
-// change). A row the server no longer has but base did was removed there
-// ("Reset progress" writes an empty list) and stays removed; a row only this
-// device has and base did not is new work and is kept; the mirror rule keeps
-// a reset made here from being undone by rows the server still holds. With no
-// base a local change cannot be told from drift, so the server's rows are
-// authoritative, as for config.
-function mergeContributionsForWrite(serverContributions, localContributions, baseContributions) {
+// Per-day by compositeKey (dateString as fallback for legacy rows), used by
+// both the incoming and the outgoing merge. `base` is the rows this device
+// last received from RTDB. Every rule here is idempotent: RTDB echoes a
+// device's own write back through onValue before the write's promise
+// resolves, so a rule that added "this device's change since base" would
+// count that change twice on the echo. Instead:
+// - a day both sides hold keeps the larger count. This never drops a device's
+//   own completions; it can under-count by the smaller side when both devices
+//   completed tasks on the same day before syncing, and over-count by one
+//   when a task is un-completed on one device while the other still holds the
+//   old count — the lesser errors for a streak/heatmap counter;
+// - a day only this device holds is new work and is kept, unless base holds
+//   it too, in which case the server removed it ("Reset progress" writes an
+//   empty list) and it stays removed;
+// - a day only the server holds is kept, unless base holds it too, in which
+//   case it was removed here;
+// - with no base a local change cannot be told from drift, so the server's
+//   rows are authoritative, as for config.
+// Returns { contributions, hasLocalContribution }, the flag set when the
+// result differs from the server's rows and so must be written back.
+function mergeContributions(serverContributions, localContributions, baseContributions) {
   const keyOf = c => c?.compositeKey || c?.dateString || null;
   const clean = rows => arrayOrEmpty(rows).filter(c => c && typeof c === "object");
   const countOf = row => finiteNumber(row?.count) ?? 0;
-  const tsOf = row => finiteNumber(row?.lastUpdated) ?? 0;
   const server = clean(serverContributions);
   const local = clean(localContributions);
-  const base = baseContributions ? clean(baseContributions) : null;
+  const baseByKey = baseContributions ? new Map(clean(baseContributions).filter(keyOf).map(c => [keyOf(c), c])) : null;
   const serverByKey = new Map(server.filter(keyOf).map(c => [keyOf(c), c]));
   const localKeys = new Set(local.map(keyOf).filter(Boolean));
-  const baseByKey = base ? new Map(base.filter(keyOf).map(c => [keyOf(c), c])) : null;
 
   const merged = [];
   for (const localRow of local) {
     const key = keyOf(localRow);
     const serverRow = key ? serverByKey.get(key) : undefined;
-    const baseRow = key && baseByKey ? baseByKey.get(key) : undefined;
-    if (!serverRow) {
-      if (!base) continue;
-      if (baseRow) continue;
-      merged.push(localRow);
+    if (serverRow) {
+      merged.push(baseByKey && countOf(localRow) > countOf(serverRow) ? localRow : serverRow);
       continue;
     }
-    if (!base) { merged.push(serverRow); continue; }
-    const localDelta = countOf(localRow) - countOf(baseRow);
-    if (localDelta === 0) { merged.push(serverRow); continue; }
-    merged.push({
-      ...serverRow,
-      count: Math.max(0, countOf(serverRow) + localDelta),
-      lastUpdated: Math.max(tsOf(serverRow), tsOf(localRow)),
-    });
+    if (!baseByKey || baseByKey.has(key)) continue;
+    merged.push(localRow);
   }
   for (const serverRow of server) {
     const key = keyOf(serverRow);
@@ -505,7 +512,14 @@ function mergeContributionsForWrite(serverContributions, localContributions, bas
     if (baseByKey && baseByKey.has(key)) continue;
     merged.push(serverRow);
   }
-  return merged;
+
+  const hasLocalContribution =
+    merged.length !== server.length ||
+    merged.some(row => {
+      const serverRow = keyOf(row) ? serverByKey.get(keyOf(row)) : undefined;
+      return !serverRow || countOf(serverRow) !== countOf(row);
+    });
+  return { contributions: merged, hasLocalContribution };
 }
 
 // Update function for the full-payload write transaction. `server` is null
@@ -518,7 +532,8 @@ function mergeContributionsForWrite(serverContributions, localContributions, bas
 // last-write-wins as before. The written `timestamp` is the max of both
 // sides so neither device later reads this write as older than what it holds.
 // `base` is { config, contributions } as this device last received them from
-// RTDB, or null when it has never received a delivery for this account.
+// RTDB, or null when it has never received a delivery for this account. Every
+// rule here is idempotent (see mergeContributions for why that matters).
 export function mergeLocalIntoServer(server, local, base) {
   const normalizedLocal = normalizePayload(local);
   if (!server || typeof server !== "object" || Array.isArray(server)) return normalizedLocal;
@@ -531,7 +546,7 @@ export function mergeLocalIntoServer(server, local, base) {
     ...normalizedLocal,
     tasks: mergeTasksForWrite(normalizedServer.tasks, normalizedLocal.tasks),
     config: mergeConfigForWrite(normalizedServer.config, normalizedLocal.config, base ? base.config : null),
-    contributions: mergeContributionsForWrite(normalizedServer.contributions, normalizedLocal.contributions, base ? arrayOrEmpty(base.contributions) : null),
+    contributions: mergeContributions(normalizedServer.contributions, normalizedLocal.contributions, base ? arrayOrEmpty(base.contributions) : null).contributions,
     brainDump: serverBrainDumpIsNewer ? normalizedServer.brainDump : normalizedLocal.brainDump,
     brainDumpUpdatedAt: Math.max(
       finiteNumber(normalizedServer.brainDumpUpdatedAt) ?? 0,

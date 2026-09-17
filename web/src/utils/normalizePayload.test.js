@@ -917,16 +917,18 @@ describe("mergeLocalIntoServer - outgoing write safety (full-payload save must n
   const withRows = (rows, timestamp) => ({ userId: "u", tasks: [], config: { userId: "u" }, contributions: rows, timestamp });
   const baseOf = (rows) => ({ config: { userId: "u" }, contributions: rows });
 
-  it("contributions: both devices advanced a day from the same start — the write carries both sets of completions", () => {
-    // Base 3; this device completed two offline (5), the other completed one meanwhile (4). Neither is lost: 6.
+  it("contributions: a day both devices completed on keeps the larger count, so this device's own completions are never dropped", () => {
+    // Base 3; this device completed two offline (5), the other completed one meanwhile (4).
     const result = mergeLocalIntoServer(withRows([row("d", 4, 200)], 200), withRows([row("d", 5, 150)], 150), baseOf([row("d", 3)]));
-    expect(result.contributions[0].count).toBe(6);
-    expect(result.contributions[0].lastUpdated).toBe(200);
+    expect(result.contributions[0].count).toBe(5);
+    // Idempotent: merging the written result against itself changes nothing (RTDB echoes our own write).
+    const echo = withRows(result.contributions, 300);
+    expect(mergeLocalIntoServer(echo, echo, baseOf([row("d", 3)])).contributions[0].count).toBe(5);
   });
 
-  it("contributions: an un-complete here is carried as a decrement, and a day unchanged here takes the server's count", () => {
-    const local = withRows([row("d", 2, 150), row("e", 1, 100)], 150);
-    const server = withRows([row("d", 4, 200), row("e", 3, 200)], 200);
+  it("contributions: a day unchanged here takes the server's count", () => {
+    const local = withRows([row("d", 3, 100), row("e", 1, 100)], 150);
+    const server = withRows([row("d", 3, 200), row("e", 3, 200)], 200);
     const result = mergeLocalIntoServer(server, local, baseOf([row("d", 3), row("e", 1)]));
     expect(result.contributions.find(c => c.dateString === "d").count).toBe(3);
     expect(result.contributions.find(c => c.dateString === "e").count).toBe(3);
@@ -938,7 +940,6 @@ describe("mergeLocalIntoServer - outgoing write safety (full-payload save must n
     const server = withRows([row("today", 1, 800)], 800);
     const result = mergeLocalIntoServer(server, local, baseOf([row("old-1", 2), row("old-2", 1)]));
     expect(result.contributions.map(c => c.dateString)).toEqual(["today"]);
-    expect(result.contributions[0].count).toBe(2);
   });
 
   it("contributions: a reset made here is not undone by rows the server still holds, but a day added there since is kept", () => {
@@ -960,6 +961,19 @@ describe("mergeLocalIntoServer - outgoing write safety (full-payload save must n
     const result = mergeLocalIntoServer(server, local, null);
     expect(result.tasks).toHaveLength(1);
     expect(result.tasks[0].id).toBe(42);
+  });
+
+  it("incoming merge: with a contribution base, an offline completion not yet on the server survives a newer foreign delivery and is flagged for write-back", () => {
+    const base = [row("d", 3)];
+    const local = withRows([row("d", 4, 150), row("new-here", 1, 160)], 160);
+    // The other device wrote something unrelated later; its rows are still the base's.
+    const remote = withRows([row("d", 3, 100)], 900);
+    const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(remote, local, { userId: "u" }, base);
+    expect(merged.contributions.find(c => c.dateString === "d").count).toBe(4);
+    expect(merged.contributions.find(c => c.dateString === "new-here").count).toBe(1);
+    expect(hasLocalContribution).toBe(true);
+    // Without a contribution base the remote rows are taken wholesale, as before.
+    expect(mergeRemotePayloadWithMeta(remote, local, { userId: "u" }).merged.contributions).toEqual([row("d", 3, 100)]);
   });
 
   it("tasks: the incoming merge matches a legacy task without a uuid by id too, so cache and server copies stay one task", () => {
