@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } from "firebase/database";
-import { db, auth } from "./firebase";
+import { db } from "./firebase";
 import { safeUUID } from "./utils/uuid";
 import { normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, configValuesEqual, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules } from "./utils/normalizePayload";
 import { activitySnapshotPath, activityMetaPath, buildTodaySnapshot } from "./utils/activityLog";
@@ -27,17 +27,15 @@ export const CONN = { CONNECTING: "connecting", CONNECTED: "connected", OFFLINE:
 // agreed with RTDB on, so the merge can tell its own config edits from drift.
 // applyLocally:false — local state already holds the optimistic value, so
 // only the server-confirmed result should come back through onValue.
-// `trustLocalConfig` is for the one caller that has established the cache is
-// genuinely newer than the server (see mergeConfigForWrite). Resolves with the
-// committed payload — what the server holds after the merge, which may differ
+// Resolves with the committed payload — what the server holds after the merge, which may differ
 // from `data` — so a caller recording the agreed base uses that, not `data`.
 // Exported so the merge-on-write contract can be unit-tested directly.
-export async function writeWithRetry(dbRef, data, baseConfig, { retries = 3, trustLocalConfig = false } = {}) {
+export async function writeWithRetry(dbRef, data, baseConfig, { retries = 3 } = {}) {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       const result = await runTransaction(
         dbRef,
-        (current) => mergeLocalIntoServer(current, data, baseConfig, { trustLocalConfig }),
+        (current) => mergeLocalIntoServer(current, data, baseConfig),
         { applyLocally: false }
       );
       return result && result.snapshot ? result.snapshot.val() : undefined;
@@ -123,6 +121,35 @@ export async function captureTodaySnapshotIfNeeded(uid, tasks, windows) {
 }
 
 const cacheKey = (uid) => `loci_payload_v1_${uid}`;
+const baseCacheKey = (uid) => `loci_base_config_v1_${uid}`;
+
+// The config this device last agreed with RTDB on, persisted next to the
+// payload cache so a fresh mount can merge config per key (see
+// mergeConfigForWrite) rather than treating the whole cached config as either
+// unsaved work or drift. Written by commitBaseConfig, removed by clearCache.
+// Exported for unit tests.
+export function readCachedBase(uid) {
+  try {
+    const raw = localStorage.getItem(baseCacheKey(uid));
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    return data && typeof data === "object" && !Array.isArray(data) ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeCachedBase(uid, config) {
+  try {
+    localStorage.setItem(baseCacheKey(uid), JSON.stringify(config));
+  } catch {
+    // best-effort, same as writeCache
+  }
+}
+
+export function clearCachedBase(uid) {
+  try { localStorage.removeItem(baseCacheKey(uid)); } catch {}
+}
 
 function readCache(uid) {
   try {
@@ -170,9 +197,6 @@ export function useSync(uid, email) {
   // effectivePayload is null so App-level effects cannot read or write
   // a previous user's data during the uid-change render gap.
   const payloadUidRef = useRef(null);
-  // Cached Firebase ID token — refreshed on each save so the pagehide
-  // keepalive fetch has a valid token even if the page is being killed.
-  const tokenRef = useRef(null);
   // Track if RTDB is physically connected (via .info/connected)
   const rtdbConnectedRef = useRef(false);
   // Mutable ref so the timeout callback can see the latest phase without stale closure
@@ -182,17 +206,13 @@ export function useSync(uid, email) {
   const hasReceivedFirstRtdbRef = useRef(false);
   const localWriteBeforeFirstRtdbRef = useRef(false);
   const offlineWarnTimeoutRef = useRef(null);
-  // Base for mergeConfig's three-way merge: the config as of the last time this
-  // device and RTDB agreed. Updated on every applied delivery.
-  //
-  // Deliberately in-memory only, never persisted. A base outliving the session
-  // that produced it is worse than no base: paired with a payload cache that
-  // did not survive (evicted, or cleared on sign-out while a write-back was
-  // still in flight), the merge would see a config full of keys the local side
-  // "lacks". Persisting it also bought nothing — the case it was meant to cover,
-  // an unsynced local config edit found on a fresh mount, is already handled
-  // upstream by the payload-level timestamp comparison, which pushes a
-  // locally-newer cache back to RTDB before this merge is ever consulted.
+  // Base for the per-key config merges (mergeConfig incoming, mergeConfigForWrite
+  // outgoing): the config as of the last time this device and RTDB agreed.
+  // Updated on every applied delivery and persisted with the payload cache
+  // (readCachedBase/writeCachedBase), so a fresh mount from cache has the base
+  // that cache was built on. Both are cleared together on sign-out, and the
+  // base is only read when a payload cache exists, so it can never describe a
+  // cache that is no longer there.
   const baseConfigRef = useRef(null);
 
   // Records the config both sides now agree on (post-merge, since any local keys
@@ -208,6 +228,7 @@ export function useSync(uid, email) {
     const config = appliedPayload?.config;
     if (!config) return;
     baseConfigRef.current = config;
+    writeCachedBase(forUid, config);
   };
 
   // Commits the base for a merged delivery, but only once the state it claims
@@ -280,8 +301,8 @@ export function useSync(uid, email) {
     rtdbConnectedRef.current = false;
     hasReceivedFirstRtdbRef.current = false;
     localWriteBeforeFirstRtdbRef.current = false;
-    // Start each account with no base: nothing is known to be shared with RTDB
-    // until this session sees a delivery.
+    // The base is restored below together with the payload cache it belongs
+    // to; without a cache nothing is known to be shared with RTDB yet.
     baseConfigRef.current = null;
     setSyncWarning(null);
     if (offlineWarnTimeoutRef.current) { clearTimeout(offlineWarnTimeoutRef.current); offlineWarnTimeoutRef.current = null; }
@@ -295,6 +316,7 @@ export function useSync(uid, email) {
       payloadUidRef.current = uid;
       setPayload(cached);
       payloadRef.current = cached;
+      baseConfigRef.current = readCachedBase(uid);
       setLoading(false);
       setIsSyncingFromCache(true);
       // If RTDB doesn't respond within 15s, surface a visible warning so the user
@@ -384,11 +406,10 @@ export function useSync(uid, email) {
             // Local timestamp appears newer than RTDB.
             if (!localWriteBeforeFirstRtdbRef.current) {
               // No savePayload fired during the cache-only window — local is genuinely
-              // newer (app was killed before the last debounce flushed). Push it back.
-              // There is no base yet on a fresh mount, so tell the merge the cached
-              // config is unsaved work rather than drift, or an offline edit such as
-              // a renamed Key Deadline would be replaced by the server's older value.
-              writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseConfigRef.current, { trustLocalConfig: true }).catch(() => {});
+              // newer (app was killed before the last debounce flushed). Push it back,
+              // merged against the persisted base so an offline config edit such as a
+              // renamed Key Deadline is recognised as this device's own and kept.
+              writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseConfigRef.current).catch(() => {});
             } else {
               // savePayload fired before RTDB responded (e.g. a mount-effect on stale
               // cache), giving local a fake-fresh timestamp. Trust RTDB instead of
@@ -608,6 +629,16 @@ export function useSync(uid, email) {
   // Also force-reconnects Firebase when the tab comes back after OS suspension —
   // on iOS/Android the long-poll silently drops while backgrounded, and Firebase's
   // auto-reconnect is unreliable after a deep sleep. goOffline+goOnline kicks it.
+  //
+  // This used to send a keepalive REST PUT of the whole payload so the write
+  // survived the page being killed. A PUT is a blind overwrite, and a tab
+  // resumed from background is exactly the one likely to hold a stale copy —
+  // so it could replace what another device had written since, the loss this
+  // file's merge-on-write exists to remove. The flush now goes through the
+  // same merging transaction as every other save. If the page dies before it
+  // lands, the edit is already in the localStorage cache, and the next mount
+  // pushes it back merged (the "local newer" path in onValue); the cost is
+  // that the other device sees it only then, not immediately.
   useEffect(() => {
     let hiddenAt = 0;
 
@@ -615,38 +646,16 @@ export function useSync(uid, email) {
       if (!timeoutRef.current || !dbRefPath || !payloadRef.current) return;
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
-      const data = payloadRef.current;
       // Any savePayloadAsync() callers queued behind the debounce timer this
       // is preempting must still settle — otherwise a tab backgrounded (not
       // necessarily closed — visibilitychange "hidden" fires on a simple
       // phone lock too) within the 1500ms window leaves their promise
       // hanging forever, silently dropping whatever .then() was waiting to
-      // fire an activity-ledger event. Resolve on confirmed success, reject
-      // otherwise — fetch()'s promise only rejects on a network-level
-      // failure, not an HTTP error status (an expired token, a rules
-      // rejection), so a raw `.then(resolve)` would wrongly treat a 401/403
-      // as success and let ledger events fire for a write that was actually
-      // rejected by the server.
+      // fire an activity-ledger event.
       const waiters = takeWaiters();
-      const resolveAll = () => waiters.forEach(w => w.resolve());
-      const rejectAll = (err) => waiters.forEach(w => w.reject(err));
-      // keepalive: true guarantees delivery even when iOS/Android kills the page
-      // mid-write. Falls back to the Firebase SDK if no token is cached yet.
-      if (tokenRef.current) {
-        const rtdbUrl = db.app.options.databaseURL;
-        const url = `${rtdbUrl}/${dbRefPath}.json?auth=${tokenRef.current}`;
-        fetch(url, {
-          method: "PUT",
-          body: JSON.stringify(data),
-          keepalive: true,
-          headers: { "Content-Type": "application/json" },
-        }).then((response) => {
-          if (response.ok) resolveAll();
-          else rejectAll(new Error(`keepalive PUT failed with status ${response.status}`));
-        }).catch(() => writeWithRetry(ref(db, dbRefPath), data, baseConfigRef.current).then(resolveAll).catch(rejectAll));
-      } else {
-        writeWithRetry(ref(db, dbRefPath), data, baseConfigRef.current).then(resolveAll).catch(rejectAll);
-      }
+      writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseConfigRef.current)
+        .then(() => waiters.forEach(w => w.resolve()))
+        .catch((err) => waiters.forEach(w => w.reject(err)));
     };
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
@@ -729,9 +738,6 @@ export function useSync(uid, email) {
 
     // Keep local cache up-to-date immediately — protects against network loss
     if (uid) writeCache(uid, nextPayload);
-
-    // Refresh the cached token so the pagehide keepalive flush is always fresh
-    auth.currentUser?.getIdToken().then(t => { tokenRef.current = t; }).catch(() => {});
 
     return { blocked: false, nextPayload };
   };
@@ -1024,6 +1030,7 @@ export function useSync(uid, email) {
     if (uid) {
       try { localStorage.removeItem(cacheKey(uid)); } catch {}
       // The base describes the cache that was just dropped, so it must go too.
+      clearCachedBase(uid);
       baseConfigRef.current = null;
     }
   };

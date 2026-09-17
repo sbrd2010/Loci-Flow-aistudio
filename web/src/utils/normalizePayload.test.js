@@ -913,14 +913,6 @@ describe("mergeLocalIntoServer - outgoing write safety (full-payload save must n
     expect(result.config).not.toHaveProperty("pendingCoachNudge");
   });
 
-  it("config: trustLocalConfig (fresh-mount recovery of a newer cache) keeps the offline edit and any server-only keys", () => {
-    const local = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "renamed offline" }, timestamp: 300 };
-    const server = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "old name", roadmapStyle: "compact" }, timestamp: 200 };
-    const result = mergeLocalIntoServer(server, local, null, { trustLocalConfig: true });
-    expect(result.config.deadlineLabel).toBe("renamed offline");
-    expect(result.config.roadmapStyle).toBe("compact");
-  });
-
   it("contributions: the larger count for a day wins, so offline completions are not discarded by a later smaller write", () => {
     // Both devices started the day at 3; this one completed two offline (5), the other completed one later (4).
     const local = { userId: "u", tasks: [], config: {}, contributions: [{ compositeKey: "u_d", dateString: "d", count: 5, lastUpdated: 100 }], timestamp: 100 };
@@ -946,6 +938,30 @@ describe("mergeLocalIntoServer - outgoing write safety (full-payload save must n
     const result = mergeLocalIntoServer(server, local, null);
     expect(result.contributions.find(c => c.dateString === "2026-09-17").count).toBe(3);
     expect(result.contributions.find(c => c.dateString === "2026-09-16").count).toBe(2);
+  });
+
+  it("contributions: a progress reset on the other device (server has no rows) is not undone by a stale device's old rows", () => {
+    const local = {
+      userId: "u", tasks: [], config: {},
+      contributions: [
+        { compositeKey: "u_2026-09-10", dateString: "2026-09-10", count: 2, lastUpdated: 100 },
+        { compositeKey: "u_2026-09-17", dateString: "2026-09-17", count: 1, lastUpdated: 900 },
+      ],
+      timestamp: 900,
+    };
+    // Reset at t=500 wrote an empty list, which RTDB stores as no key at all.
+    const server = { userId: "u", tasks: [], config: {}, timestamp: 500 };
+    const result = mergeLocalIntoServer(server, local, null);
+    expect(result.contributions.map(c => c.dateString)).toEqual(["2026-09-17"]);
+  });
+
+  it("tasks: a legacy task without a uuid is matched by id, not duplicated on every save", () => {
+    // The local copy was normalized earlier and carries a repaired-* uuid; the server copy never had one.
+    const local = { userId: "u", tasks: [{ id: 42, uuid: "repaired-1-0", userId: "u", title: "Legacy", lastUpdated: 200 }], config: {}, timestamp: 200 };
+    const server = { userId: "u", tasks: [{ id: 42, userId: "u", title: "Legacy", lastUpdated: 100 }], config: {}, timestamp: 100 };
+    const result = mergeLocalIntoServer(server, local, null);
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0].id).toBe(42);
   });
 
   it("brainDump: the side with the newer brainDumpUpdatedAt wins", () => {

@@ -21,7 +21,7 @@ vi.mock("./firebase", () => ({
   auth: { currentUser: null },
 }));
 
-import { gatePayloadToUid, writeActivityEvents, captureTodaySnapshotIfNeeded, writeWithRetry } from "./useSync";
+import { gatePayloadToUid, writeActivityEvents, captureTodaySnapshotIfNeeded, writeWithRetry, readCachedBase, writeCachedBase, clearCachedBase } from "./useSync";
 
 // Tests for the uid-isolation gate that prevents a previous user's payload from
 // being visible to App-level effects during the render cycle that follows a uid change.
@@ -304,14 +304,6 @@ describe("writeWithRetry (merge-on-write)", () => {
     expect(result).toEqual(committed);
   });
 
-  it("trustLocalConfig: the fresh-mount recovery path keeps an offline config edit the server never received", async () => {
-    runTransactionMock.mockResolvedValue({ committed: true });
-    const local = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "renamed offline" }, timestamp: 300 };
-    await writeWithRetry(dbRef, local, null, { trustLocalConfig: true });
-    const server = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "old name" }, timestamp: 200 };
-    expect(runTransactionMock.mock.calls[0][1](server).config.deadlineLabel).toBe("renamed offline");
-  });
-
   it("retries a failed transaction and rejects once retries are exhausted", async () => {
     vi.useFakeTimers();
     runTransactionMock.mockRejectedValue(new Error("network"));
@@ -321,5 +313,41 @@ describe("writeWithRetry (merge-on-write)", () => {
     await assertion;
     expect(runTransactionMock).toHaveBeenCalledTimes(3);
     vi.useRealTimers();
+  });
+});
+
+// The config base is persisted next to the payload cache so a fresh mount can
+// merge config per key instead of trusting or discarding the whole cached config.
+describe("cached config base (readCachedBase / writeCachedBase / clearCachedBase)", () => {
+  let store;
+  beforeEach(() => {
+    store = new Map();
+    globalThis.localStorage = {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => { store.set(k, String(v)); },
+      removeItem: (k) => { store.delete(k); },
+    };
+  });
+
+  it("round-trips a config per uid and returns null when nothing is stored", () => {
+    expect(readCachedBase("uid-A")).toBeNull();
+    writeCachedBase("uid-A", { userId: "u", deadlineLabel: "Thesis" });
+    expect(readCachedBase("uid-A")).toEqual({ userId: "u", deadlineLabel: "Thesis" });
+    expect(readCachedBase("uid-B")).toBeNull();
+  });
+
+  it("clearCachedBase removes it, and a corrupt entry reads as null rather than throwing", () => {
+    writeCachedBase("uid-A", { userId: "u" });
+    clearCachedBase("uid-A");
+    expect(readCachedBase("uid-A")).toBeNull();
+    store.set("loci_base_config_v1_uid-A", "{not json");
+    expect(readCachedBase("uid-A")).toBeNull();
+  });
+
+  it("tolerates a missing localStorage (private mode / blocked storage) on every call", () => {
+    delete globalThis.localStorage;
+    expect(() => writeCachedBase("uid-A", { userId: "u" })).not.toThrow();
+    expect(readCachedBase("uid-A")).toBeNull();
+    expect(() => clearCachedBase("uid-A")).not.toThrow();
   });
 });

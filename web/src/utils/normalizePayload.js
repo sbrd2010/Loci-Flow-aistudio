@@ -395,21 +395,33 @@ export function mergeRemotePayload(remote, local, baseConfig) {
 // write, so on equal timestamps local wins (an edit that did not bump its own
 // timestamp must still land), and the server wins only when strictly newer.
 
-// Per-task by uuid. Tasks only the server has are kept — including its
+// Per-task identity. A task that never had a uuid (legacy rows, which the
+// rules permit) is given a fresh `repaired-*` uuid by sanitizeTaskForRules on
+// every normalization, so the local and server copies of the same row would
+// carry different repaired uuids and be merged as two tasks. Such rows are
+// matched on their `id` instead, which every task has and which is stable.
+function taskIdentity(task) {
+  const uuid = task?.uuid;
+  if (typeof uuid === "string" && uuid && !uuid.startsWith("repaired-")) return uuid;
+  return task?.id != null ? `id:${task.id}` : null;
+}
+
+// Per-task by identity. Tasks only the server has are kept — including its
 // tombstones, so a delete made elsewhere is not resurrected.
 function mergeTasksForWrite(serverTasks, localTasks) {
   const server = sanitizeTasksForRules(serverTasks);
   const local = sanitizeTasksForRules(localTasks);
-  const serverByUuid = new Map(server.filter(t => t.uuid).map(t => [t.uuid, t]));
+  const serverByKey = new Map(server.filter(taskIdentity).map(t => [taskIdentity(t), t]));
   const merged = local.map(localTask => {
-    const serverTask = localTask.uuid ? serverByUuid.get(localTask.uuid) : undefined;
+    const key = taskIdentity(localTask);
+    const serverTask = key ? serverByKey.get(key) : undefined;
     if (!serverTask) return localTask;
     const serverTs = finiteNumber(serverTask.lastUpdated) ?? 0;
     const localTs = finiteNumber(localTask.lastUpdated) ?? 0;
     return serverTs > localTs ? serverTask : localTask;
   });
-  const localUuids = new Set(local.map(t => t.uuid).filter(Boolean));
-  const serverOnly = server.filter(t => t.uuid && !localUuids.has(t.uuid));
+  const localKeys = new Set(local.map(taskIdentity).filter(Boolean));
+  const serverOnly = server.filter(t => taskIdentity(t) && !localKeys.has(taskIdentity(t)));
   return [...merged, ...serverOnly];
 }
 
@@ -418,20 +430,14 @@ function mergeTasksForWrite(serverTasks, localTasks) {
 // is the server's — including keys the server no longer has, so a nudge or
 // check-in cleared elsewhere stays cleared. Without a base an edit cannot be
 // told from stale drift, so the server's config is authoritative, matching
-// the incoming merge (mergeConfig). The one exception is `trustLocal`: the
-// caller has already established, from the payload-level timestamp check on
-// a fresh mount with no local write since, that this cache holds unsaved work
-// the server never received — the case the old blind set() persisted — so
-// every local key is that work and wins. Server-only keys are kept either way.
-function mergeConfigForWrite(serverConfig, localConfig, baseConfig, trustLocal = false) {
+// the incoming merge (mergeConfig). useSync persists the base alongside the
+// payload cache so a fresh mount has one too, and an offline config edit
+// recovered from cache is still recognised as this device's own.
+function mergeConfigForWrite(serverConfig, localConfig, baseConfig) {
   const server = objectOrEmpty(serverConfig);
   const local = objectOrEmpty(localConfig);
   const merged = { ...server };
-  if (trustLocal) {
-    for (const key of Object.keys(local)) {
-      if (key !== "lastUpdated") merged[key] = local[key];
-    }
-  } else if (baseConfig) {
+  if (baseConfig) {
     const base = objectOrEmpty(baseConfig);
     for (const key of Object.keys(local)) {
       if (key === "lastUpdated") continue;
@@ -446,7 +452,11 @@ function mergeConfigForWrite(serverConfig, localConfig, baseConfig, trustLocal =
   return merged;
 }
 
-// Per-day by compositeKey (dateString as fallback for legacy rows). A day's
+// Per-day by compositeKey (dateString as fallback for legacy rows). When the
+// server holds no rows at all it was reset ("Reset progress" writes an empty
+// list, which RTDB stores as no key), so local rows written before that reset
+// are the stale copy it removed and are dropped; rows completed since (newer
+// than the server's last write) are genuine new work and kept. A day's
 // count is a completion counter that both devices may have advanced from the
 // same starting point, so picking a row by timestamp would discard the other
 // side's completions; the larger count is kept instead (timestamp, then
@@ -454,10 +464,13 @@ function mergeConfigForWrite(serverConfig, localConfig, baseConfig, trustLocal =
 // completions, as every previous write did too; can over-count by one when a
 // task is un-completed on one device while the other still holds the old
 // count — the lesser error for a streak/heatmap counter.
-function mergeContributionsForWrite(serverContributions, localContributions) {
+function mergeContributionsForWrite(serverContributions, localContributions, serverTimestamp) {
   const keyOf = c => c?.compositeKey || c?.dateString || null;
   const server = arrayOrEmpty(serverContributions).filter(c => c && typeof c === "object");
-  const local = arrayOrEmpty(localContributions).filter(c => c && typeof c === "object");
+  let local = arrayOrEmpty(localContributions).filter(c => c && typeof c === "object");
+  if (server.length === 0 && (finiteNumber(serverTimestamp) ?? 0) > 0) {
+    local = local.filter(c => (finiteNumber(c.lastUpdated) ?? 0) > serverTimestamp);
+  }
   const serverByKey = new Map(server.filter(keyOf).map(c => [keyOf(c), c]));
   const merged = local.map(localRow => {
     const serverRow = keyOf(localRow) ? serverByKey.get(keyOf(localRow)) : undefined;
@@ -483,7 +496,7 @@ function mergeContributionsForWrite(serverContributions, localContributions) {
 // chatHistory has no per-message metadata to merge on, so it stays
 // last-write-wins as before. The written `timestamp` is the max of both
 // sides so neither device later reads this write as older than what it holds.
-export function mergeLocalIntoServer(server, local, baseConfig, { trustLocalConfig = false } = {}) {
+export function mergeLocalIntoServer(server, local, baseConfig) {
   const normalizedLocal = normalizePayload(local);
   if (!server || typeof server !== "object" || Array.isArray(server)) return normalizedLocal;
   const normalizedServer = normalizePayload(server);
@@ -494,8 +507,8 @@ export function mergeLocalIntoServer(server, local, baseConfig, { trustLocalConf
   return {
     ...normalizedLocal,
     tasks: mergeTasksForWrite(normalizedServer.tasks, normalizedLocal.tasks),
-    config: mergeConfigForWrite(normalizedServer.config, normalizedLocal.config, baseConfig, trustLocalConfig),
-    contributions: mergeContributionsForWrite(normalizedServer.contributions, normalizedLocal.contributions),
+    config: mergeConfigForWrite(normalizedServer.config, normalizedLocal.config, baseConfig),
+    contributions: mergeContributionsForWrite(normalizedServer.contributions, normalizedLocal.contributions, normalizedServer.timestamp),
     brainDump: serverBrainDumpIsNewer ? normalizedServer.brainDump : normalizedLocal.brainDump,
     brainDumpUpdatedAt: Math.max(
       finiteNumber(normalizedServer.brainDumpUpdatedAt) ?? 0,
