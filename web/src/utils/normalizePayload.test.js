@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, mergeLocalIntoServer } from "./normalizePayload";
+import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules } from "./normalizePayload";
 
 describe("normalizePayload", () => {
   it("fills missing brainDump with []", () => {
@@ -31,10 +31,11 @@ describe("normalizePayload", () => {
     expect(normalizePayload({ tasks: [], config: {}, brainDump: items }).brainDump).toEqual(items);
   });
 
-  it("preserves unknown fields like chatHistory", () => {
-    const history = [{ role: "user", content: "hi" }];
-    const result = normalizePayload({ tasks: [], config: {}, chatHistory: history });
+  it("preserves chatHistory and unknown fields", () => {
+    const history = [{ text: "hi", isUser: true }];
+    const result = normalizePayload({ tasks: [], config: {}, chatHistory: history, someFutureField: { a: 1 } });
     expect(result.chatHistory).toEqual(history);
+    expect(result.someFutureField).toEqual({ a: 1 });
   });
 
   it("preserves timestamp", () => {
@@ -230,9 +231,11 @@ describe("mergeRemotePayload", () => {
     expect(result.brainDump).toEqual([]);
   });
 
-  it("preserves unknown fields from remote", () => {
-    const remote = { tasks: [], config: {}, chatHistory: [{ role: "user", content: "hi" }], timestamp: 100 };
-    expect(mergeRemotePayload(remote, null).chatHistory).toEqual([{ role: "user", content: "hi" }]);
+  it("preserves chatHistory and unknown fields from remote", () => {
+    const remote = { tasks: [], config: {}, chatHistory: [{ text: "hi", isUser: true }], someFutureField: 1, timestamp: 100 };
+    const merged = mergeRemotePayload(remote, null);
+    expect(merged.chatHistory).toEqual([{ text: "hi", isUser: true }]);
+    expect(merged.someFutureField).toBe(1);
   });
 
   // Sync safety: stale-cache rollback prevention.
@@ -944,5 +947,53 @@ describe("mergeLocalIntoServer - outgoing write safety (full-payload save must n
     const server = { userId: "u", tasks: [], config: {}, timestamp: 900 };
     expect(mergeLocalIntoServer(server, local, null).timestamp).toBe(900);
     expect(mergeLocalIntoServer(local, server, null).timestamp).toBe(900);
+  });
+});
+
+describe("rule caps on config strings and chat messages (one over-long value must not break every later save)", () => {
+  it("normalizePayload clamps userName/mentorName/deadlineLabel to 100 and intentionMessage to 500", () => {
+    const long = "x".repeat(700);
+    const result = normalizePayload({ userId: "u", tasks: [], config: { userId: "u", userName: long, mentorName: long, deadlineLabel: long, intentionMessage: long } });
+    expect(result.config.userName).toHaveLength(100);
+    expect(result.config.mentorName).toHaveLength(100);
+    expect(result.config.deadlineLabel).toHaveLength(100);
+    expect(result.config.intentionMessage).toHaveLength(500);
+  });
+
+  it("clampConfigStringsForRules returns the same object when nothing is over the cap, and leaves other keys alone", () => {
+    const patch = { userName: "Rohan", visitStreakCount: 3, coachMemory: { pinned: [] } };
+    expect(clampConfigStringsForRules(patch)).toBe(patch);
+    const clamped = clampConfigStringsForRules({ userName: "y".repeat(150), visitStreakCount: 3 });
+    expect(clamped.userName).toHaveLength(100);
+    expect(clamped.visitStreakCount).toBe(3);
+  });
+
+  it("clampConfigStringsForRules coerces a non-string value (the rule accepts only a string or nothing) and keeps null", () => {
+    expect(clampConfigStringsForRules({ userName: 42 }).userName).toBe("42");
+    expect(clampConfigStringsForRules({ deadlineLabel: null }).deadlineLabel).toBeNull();
+  });
+
+  it("a Coach reply over 5000 characters is cut to the cap, and messages keep only text/isUser/actions", () => {
+    const history = [
+      { text: "hi", isUser: true, id: "extra-key-the-rules-reject" },
+      { text: "r".repeat(6000), isUser: false, actions: [{ matched: true }] },
+    ];
+    const result = sanitizeChatHistoryForRules(history);
+    expect(result[0]).toEqual({ text: "hi", isUser: true });
+    expect(result[1].text).toHaveLength(5000);
+    expect(result[1].isUser).toBe(false);
+    expect(result[1].actions).toEqual([{ matched: true }]);
+  });
+
+  it("chat messages with a missing or non-string text are coerced to a string, and non-objects are dropped", () => {
+    const result = sanitizeChatHistoryForRules([{ isUser: false }, null, "junk", { text: 7, isUser: true }]);
+    expect(result).toEqual([{ text: "", isUser: false }, { text: "7", isUser: true }]);
+  });
+
+  it("normalizePayload sanitizes chatHistory when present and leaves the key absent when it is not", () => {
+    const withChat = normalizePayload({ userId: "u", tasks: [], config: {}, chatHistory: [{ text: "a".repeat(5001), isUser: false }] });
+    expect(withChat.chatHistory[0].text).toHaveLength(5000);
+    expect(normalizePayload({ userId: "u", tasks: [], config: {} })).not.toHaveProperty("chatHistory");
+    expect(sanitizeChatHistoryForRules(null)).toBeNull();
   });
 });

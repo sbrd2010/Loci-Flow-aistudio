@@ -107,12 +107,55 @@ function inferBrainDumpUpdatedAt(raw, brainDump) {
   return 0;
 }
 
+// database.rules.json caps these config strings and rejects the write when one
+// is over. Like a malformed task (sanitizeTaskForRules), one over-long value
+// held locally makes EVERY later full-payload write fail atomically — the app
+// keeps showing the edit from cache while nothing saves any more. Nothing
+// upstream caps them (Settings, onboarding and the Coach all write freely).
+export const CONFIG_STRING_LIMITS = { userName: 100, mentorName: 100, deadlineLabel: 100, intentionMessage: 500 };
+export const CHAT_TEXT_LIMIT = 5000;
+
+// Clamps the rule-limited config strings in a whole config or a partial
+// patch. Returns the same object when nothing needed clamping. Non-string
+// values for these keys are coerced, since the rule accepts only a string or
+// no value at all.
+export function clampConfigStringsForRules(config) {
+  if (!config || typeof config !== "object" || Array.isArray(config)) return config;
+  let out = config;
+  for (const [key, limit] of Object.entries(CONFIG_STRING_LIMITS)) {
+    if (!hasOwn(config, key)) continue;
+    const value = config[key];
+    if (value == null) continue;
+    const str = typeof value === "string" ? value : String(value);
+    if (str === value && str.length <= limit) continue;
+    if (out === config) out = { ...config };
+    out[key] = str.slice(0, limit);
+  }
+  return out;
+}
+
+// chatHistory messages may carry only text (string, ≤ CHAT_TEXT_LIMIT),
+// isUser (boolean) and actions — the rules reject any other key. A Coach
+// reply can exceed the cap at the current token budget, and a single such
+// message fails every later full-payload write the same way as above.
+export function sanitizeChatHistoryForRules(history) {
+  if (!Array.isArray(history)) return history;
+  return history
+    .filter(m => m && typeof m === "object")
+    .map(m => {
+      const text = typeof m.text === "string" ? m.text : String(m.text ?? "");
+      const msg = { text: text.slice(0, CHAT_TEXT_LIMIT), isUser: !!m.isUser };
+      if (m.actions !== undefined) msg.actions = m.actions;
+      return msg;
+    });
+}
+
 export function normalizePayload(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return { tasks: [], config: {}, contributions: [], brainDump: [], brainDumpUpdatedAt: 0 };
   }
   const brainDump = arrayOrEmpty(raw.brainDump);
-  const config = objectOrEmpty(raw.config);
+  const config = clampConfigStringsForRules(objectOrEmpty(raw.config));
   const fallbackUserId = sanitizeString(raw.userId, 200, sanitizeString(config.userId, 200, ""));
   return {
     ...raw,
@@ -121,6 +164,7 @@ export function normalizePayload(raw) {
     contributions: arrayOrEmpty(raw.contributions),
     brainDump,
     brainDumpUpdatedAt: inferBrainDumpUpdatedAt(raw, brainDump),
+    ...(Array.isArray(raw.chatHistory) ? { chatHistory: sanitizeChatHistoryForRules(raw.chatHistory) } : {}),
   };
 }
 

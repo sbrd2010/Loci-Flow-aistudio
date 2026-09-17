@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } from "firebase/database";
 import { db, auth } from "./firebase";
 import { safeUUID } from "./utils/uuid";
-import { normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, configValuesEqual, mergeLocalIntoServer } from "./utils/normalizePayload";
+import { normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, configValuesEqual, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules } from "./utils/normalizePayload";
 import { activitySnapshotPath, activityMetaPath, buildTodaySnapshot } from "./utils/activityLog";
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
@@ -824,11 +824,22 @@ export function useSync(uid, email) {
     });
   };
 
+  // Sub-path writes bypass normalizePayload, so the rule caps it applies to
+  // config strings and chat messages are applied here too — otherwise one
+  // over-long Coach reply or name written this way lands in local state and
+  // fails every later full-payload write.
+  const sanitizeSubPathValue = (subPath, value) => {
+    if (subPath === "chatHistory") return sanitizeChatHistoryForRules(value);
+    if (subPath === "config") return clampConfigStringsForRules(value);
+    return value;
+  };
+
   // Shared primitive for saveSubPath/saveSubPathAsync: applies the optimistic
   // local update, then writes to RTDB with retry, returning the write promise
   // (rejects on final failure — callers decide whether to swallow or await).
-  const performSubPathWrite = (subPath, value) => {
+  const performSubPathWrite = (subPath, rawValue) => {
     if (!dbRefPath) return Promise.resolve();
+    const value = sanitizeSubPathValue(subPath, rawValue);
     // Mirror the update locally: update both the mutable ref and React state so
     // the UI re-renders immediately (same as savePayload, but without touching tasks).
     if (payloadRef.current) {
@@ -872,8 +883,11 @@ export function useSync(uid, email) {
   // top-level paths in a single atomic RTDB update() — use when multiple
   // paths must change together (e.g. a task completion that also bumps
   // today's contribution count).
-  const performSubPathsWrite = (patch) => {
+  const performSubPathsWrite = (rawPatch) => {
     if (!dbRefPath) return Promise.resolve();
+    const patch = Object.fromEntries(
+      Object.entries(rawPatch).map(([subPath, value]) => [subPath, sanitizeSubPathValue(subPath, value)])
+    );
     if (payloadRef.current) {
       const next = { ...payloadRef.current, ...patch, timestamp: Date.now() };
       payloadRef.current = next;
@@ -922,7 +936,9 @@ export function useSync(uid, email) {
   const saveConfigPatch = (patch) => {
     if (!dbRefPath) return;
     const latestConfig = payloadRef.current?.config || {};
-    const requestedPatch = typeof patch === "function" ? patch(latestConfig) : patch;
+    // Clamped before the no-op comparison so an over-long name is compared,
+    // stored and written at the length the rules accept.
+    const requestedPatch = clampConfigStringsForRules(typeof patch === "function" ? patch(latestConfig) : patch);
     // Drop keys whose value already matches the latest known config. Callers
     // that hand back a whole rebuilt config (the build*(latestConfig) helpers)
     // would otherwise re-write every field, and a field this device merely
