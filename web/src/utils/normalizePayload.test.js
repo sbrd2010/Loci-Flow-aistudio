@@ -1003,6 +1003,50 @@ describe("mergeLocalIntoServer - outgoing write safety (full-payload save must n
     expect(applyEditsSince(merged, written, written)).toEqual(merged);
   });
 
+  it("brainDump: the merge never trims to the cap — an item the other device added near the cap is not deleted", () => {
+    const item = (id) => ({ id, text: id, createdAt: 1 });
+    const shared = Array.from({ length: 49 }, (_, i) => item(`s${i}`));
+    const base = { config: { userId: "u" }, contributions: [], brainDump: shared };
+    const local = { userId: "u", tasks: [], config: {}, brainDump: [...shared, item("mine")], brainDumpUpdatedAt: 300, timestamp: 300 };
+    const server = { userId: "u", tasks: [], config: {}, brainDump: [...shared, item("theirs")], brainDumpUpdatedAt: 400, timestamp: 400 };
+    const result = mergeLocalIntoServer(server, local, base);
+    expect(result.brainDump).toHaveLength(51);
+    expect(result.brainDump.map(i => i.id)).toContain("theirs");
+  });
+
+  it("chatHistory: with a base, a Coach reply written directly during an in-flight task save is not overwritten by the save's older list", () => {
+    const msg = (text, isUser) => ({ text, isUser });
+    const h0 = [msg("hi", true)];
+    const h1 = [...h0, msg("reply", false)];
+    const base = { config: { userId: "u" }, contributions: [], brainDump: [], chatHistory: h0 };
+    // The transaction's data was captured before the reply landed; on retry the server already holds the reply.
+    const submitted = { userId: "u", tasks: [], config: {}, chatHistory: h0, timestamp: 100 };
+    const server = { userId: "u", tasks: [], config: {}, chatHistory: h1, timestamp: 200 };
+    expect(mergeLocalIntoServer(server, submitted, base).chatHistory).toEqual(h1);
+    // Killed page: a chat change in the cache the server never received is pushed back.
+    const localOnly = { userId: "u", tasks: [], config: {}, chatHistory: h1, timestamp: 300 };
+    const staleServer = { userId: "u", tasks: [], config: {}, chatHistory: h0, timestamp: 100 };
+    expect(mergeLocalIntoServer(staleServer, localOnly, base).chatHistory).toEqual(h1);
+    // Incoming: same three-way, flagged for write-back when local's change wins.
+    const incoming = mergeRemotePayloadWithMeta(staleServer, localOnly, base.config, base.contributions, base.brainDump, base.chatHistory);
+    expect(incoming.merged.chatHistory).toEqual(h1);
+    expect(incoming.hasLocalContribution).toBe(true);
+    // Both changed since base: the server's list stands.
+    const h2 = [...h0, msg("other device", false)];
+    expect(mergeLocalIntoServer({ ...server, chatHistory: h2 }, localOnly, base).chatHistory).toEqual(h2);
+    // Without a base: this device's list outgoing, the remote list incoming, as before.
+    expect(mergeLocalIntoServer(server, submitted, null).chatHistory).toEqual(h0);
+    expect(mergeRemotePayloadWithMeta(staleServer, localOnly, { userId: "u" }).merged.chatHistory).toEqual(h0);
+  });
+
+  it("applyEditsSince: a chat change made since submit (via the sub-path writer) survives absorbing the commit", () => {
+    const written = { userId: "u", tasks: [], config: {}, contributions: [], brainDump: [], chatHistory: [{ text: "hi", isUser: true }] };
+    const local = { ...written, chatHistory: [...written.chatHistory, { text: "reply", isUser: false }] };
+    const merged = { ...written };
+    expect(applyEditsSince(merged, local, written).chatHistory).toEqual(local.chatHistory);
+    expect(applyEditsSince(merged, written, written).chatHistory).toEqual(written.chatHistory);
+  });
+
   it("brainDump: with a base, items are merged per item — an item added on each device survives, one deleted elsewhere stays deleted", () => {
     const item = (id, text) => ({ id, text, createdAt: 1 });
     const base = { config: { userId: "u" }, contributions: [], brainDump: [item("a", "old"), item("gone", "deleted there")] };

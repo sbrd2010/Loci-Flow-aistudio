@@ -352,10 +352,11 @@ function mergeConfig(remoteConfig, localConfig, baseConfig) {
 // written back to RTDB so other devices converge on the correct state.
 // `baseConfig` is the last config this device received from RTDB — see
 // mergeConfig for why config needs it and what happens when it's absent.
-// `baseContributions` likewise for contribution rows (see mergeContributions)
-// and `baseBrainDump` for brain-dump items (see mergeBrainDump); without them
-// the remote rows/items are taken wholesale, as before they existed.
-export function mergeRemotePayloadWithMeta(remote, local, baseConfig, baseContributions, baseBrainDump) {
+// `baseContributions` likewise for contribution rows (see mergeContributions),
+// `baseBrainDump` for brain-dump items (see mergeBrainDump) and
+// `baseChatHistory` for the chat list (see mergeChatHistory); without them the
+// remote rows/items/list are taken wholesale, as before they existed.
+export function mergeRemotePayloadWithMeta(remote, local, baseConfig, baseContributions, baseBrainDump, baseChatHistory) {
   const normalized = normalizePayload(remote);
   if (!remote || typeof remote !== "object") return { merged: normalized, hasLocalContribution: false };
 
@@ -398,7 +399,14 @@ export function mergeRemotePayloadWithMeta(remote, local, baseConfig, baseContri
     }
   }
 
-  return { merged: normalized, hasLocalContribution: tasksContribution || localConfigWon || contributionsContribution || brainDumpContribution };
+  let chatContribution = false;
+  const chatMerge = mergeChatHistory(normalized.chatHistory, local?.chatHistory, baseChatHistory);
+  if (chatMerge) {
+    normalized.chatHistory = chatMerge.chatHistory;
+    chatContribution = chatMerge.hasLocalContribution;
+  }
+
+  return { merged: normalized, hasLocalContribution: tasksContribution || localConfigWon || contributionsContribution || brainDumpContribution || chatContribution };
 }
 
 export function mergeRemotePayload(remote, local, baseConfig) {
@@ -543,6 +551,26 @@ function mergeContributions(serverContributions, localContributions, baseContrib
   return { contributions: merged, hasLocalContribution };
 }
 
+// chatHistory is only ever changed through the chatHistory sub-path writer,
+// never through a full-payload save, so a full write must not carry this
+// device's older copy over a newer server list: three-way against `base`
+// (the list this device last received), the side that changed since base
+// wins, the server on a two-sided change. Without a base, null — callers
+// keep their previous whole-list rule.
+function mergeChatHistory(serverHistory, localHistory, baseHistory) {
+  if (!baseHistory) return null;
+  const canon = list => JSON.stringify(sanitizeChatHistoryForRules(arrayOrEmpty(list)));
+  const server = canon(serverHistory);
+  const local = canon(localHistory);
+  const base = canon(baseHistory);
+  const localChanged = local !== base;
+  const serverChanged = server !== base;
+  if (localChanged && !serverChanged) {
+    return { chatHistory: sanitizeChatHistoryForRules(arrayOrEmpty(localHistory)), hasLocalContribution: true };
+  }
+  return { chatHistory: sanitizeChatHistoryForRules(arrayOrEmpty(serverHistory)), hasLocalContribution: false };
+}
+
 // Per-item brainDump merge, used by both paths when a base (the items this
 // device last received from RTDB) is known. Items are matched by id (legacy
 // items without one by createdAt+text). Local order is kept and server-only
@@ -564,17 +592,20 @@ function mergeBrainDump(serverItems, localItems, baseItems) {
     if (localKeys.has(key) || baseKeys.has(key)) continue;
     merged.push(item);
   }
-  const items = merged.slice(0, BRAIN_DUMP_LIMIT);
+  // Not trimmed to BRAIN_DUMP_LIMIT: the rules allow more, the UI blocks new
+  // additions at the cap, and trimming here would delete an item the other
+  // device just added when both sides added one near the cap.
   const hasLocalContribution =
-    items.length !== server.length || items.some((item, i) => keyOf(item) !== keyOf(server[i]));
-  return { items, hasLocalContribution };
+    merged.length !== server.length || merged.some((item, i) => keyOf(item) !== keyOf(server[i]));
+  return { items: merged, hasLocalContribution };
 }
 
 // Re-applies the edits this device made AFTER `written` was submitted to a
 // write transaction, on top of `merged` (the committed result merged into
 // local state). Those edits are newer in real time than anything the commit
 // carries, so they win even where the standard per-key conflict rule would
-// prefer the committed value; a debounce is already pending to write them.
+// prefer the committed value; a debounce is already pending to write them
+// (or, for chat, the sub-path write already landed).
 // Tasks need no overlay: a post-submit edit has a newer lastUpdated and wins
 // in the merge already.
 export function applyEditsSince(merged, local, written) {
@@ -618,7 +649,14 @@ export function applyEditsSince(merged, local, written) {
     if (!mergedKeys.has(itemKey(item)) && !writtenKeys.has(itemKey(item))) brainDump.push(item);
   }
 
-  return { ...merged, config, contributions, brainDump: brainDump.slice(0, BRAIN_DUMP_LIMIT) };
+  const result = { ...merged, config, contributions, brainDump };
+  // A chat change made here since submit went through the sub-path writer and
+  // is already on the server; the commit's older copy must not replace it.
+  const chatCanon = list => JSON.stringify(sanitizeChatHistoryForRules(arrayOrEmpty(list)));
+  if (chatCanon(local?.chatHistory) !== chatCanon(written?.chatHistory)) {
+    result.chatHistory = sanitizeChatHistoryForRules(arrayOrEmpty(local?.chatHistory));
+  }
+  return result;
 }
 
 // Update function for the full-payload write transaction. `server` is null
@@ -627,9 +665,10 @@ export function applyEditsSince(merged, local, written) {
 // re-runs it with the real value), in which case the local payload is
 // written as-is.
 //
-// chatHistory has no per-message metadata to merge on, so it stays
-// last-write-wins as before. The written `timestamp` is the max of both
-// sides so neither device later reads this write as older than what it holds.
+// chatHistory is merged three-way against the base (see mergeChatHistory);
+// without a base it stays this device's list, as before. The written
+// `timestamp` is the max of both sides so neither device later reads this
+// write as older than what it holds.
 // `base` is { config, contributions } as this device last received them from
 // RTDB, or null when it has never received a delivery for this account. Every
 // rule here is idempotent (see mergeContributions for why that matters).
@@ -641,9 +680,11 @@ export function mergeLocalIntoServer(server, local, base) {
   const serverBrainDumpIsNewer =
     (finiteNumber(normalizedServer.brainDumpUpdatedAt) ?? 0) > (finiteNumber(normalizedLocal.brainDumpUpdatedAt) ?? 0);
   const brainDumpMerge = mergeBrainDump(normalizedServer.brainDump, normalizedLocal.brainDump, base ? arrayOrEmpty(base.brainDump) : null);
+  const chatMerge = mergeChatHistory(normalizedServer.chatHistory, normalizedLocal.chatHistory, base ? arrayOrEmpty(base.chatHistory) : null);
 
   return {
     ...normalizedLocal,
+    ...(chatMerge ? { chatHistory: chatMerge.chatHistory } : {}),
     tasks: mergeTasksForWrite(normalizedServer.tasks, normalizedLocal.tasks),
     config: mergeConfigForWrite(normalizedServer.config, normalizedLocal.config, base ? base.config : null),
     contributions: mergeContributions(normalizedServer.contributions, normalizedLocal.contributions, base ? arrayOrEmpty(base.contributions) : null).contributions,

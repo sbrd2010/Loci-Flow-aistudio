@@ -193,7 +193,7 @@ export function useSync(uid, email) {
   const localWriteBeforeFirstRtdbRef = useRef(false);
   const offlineWarnTimeoutRef = useRef(null);
   // Merge base: the last server state this device has seen — { config,
-  // contributions, brainDump } from the latest delivery or the committed
+  // contributions, brainDump, chatHistory } from the latest delivery or the committed
   // result of its own latest write, always absorbed into local state first.
   // Used per key by mergeConfig / mergeConfigForWrite, per day by
   // mergeContributions and per item by mergeBrainDump. Persisted in the same
@@ -231,6 +231,7 @@ export function useSync(uid, email) {
       config: normalized.config,
       contributions: normalized.contributions,
       brainDump: normalized.brainDump,
+      chatHistory: Array.isArray(normalized.chatHistory) ? normalized.chatHistory : [],
     };
     return true;
   };
@@ -262,7 +263,7 @@ export function useSync(uid, email) {
     if (ctx.seq !== deliverySeqRef.current) return;
     const base = baseRef.current;
     const local = payloadRef.current;
-    const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(committed, local, base?.config, base?.contributions, base?.brainDump);
+    const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(committed, local, base?.config, base?.contributions, base?.brainDump, base?.chatHistory);
     const withEdits = applyEditsSince(merged, local, ctx.written);
     const toApply = hasLocalContribution ? { ...withEdits, timestamp: Date.now() } : withEdits;
     payloadUidRef.current = ctx.uid;
@@ -429,7 +430,7 @@ export function useSync(uid, email) {
           // prevents a stale long-poll snapshot (e.g. after Brave reconnects) from
           // overwriting optimistic updates that haven't reached Firebase yet.
           if ((data.timestamp || 0) >= (payloadRef.current?.timestamp || 0)) {
-            const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current, baseRef.current?.config, baseRef.current?.contributions, baseRef.current?.brainDump);
+            const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current, baseRef.current?.config, baseRef.current?.contributions, baseRef.current?.brainDump, baseRef.current?.chatHistory);
             const toApply = hasLocalContribution ? { ...merged, timestamp: Date.now() } : merged;
             applyDelivery(data, toApply, hasLocalContribution);
           } else {
@@ -447,7 +448,7 @@ export function useSync(uid, email) {
               // savePayload fired before RTDB responded (e.g. a mount-effect on stale
               // cache), giving local a fake-fresh timestamp. Trust RTDB instead of
               // pushing the stale cache back up.
-              const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current, baseRef.current?.config, baseRef.current?.contributions, baseRef.current?.brainDump);
+              const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current, baseRef.current?.config, baseRef.current?.contributions, baseRef.current?.brainDump, baseRef.current?.chatHistory);
               const toApply = hasLocalContribution ? { ...merged, timestamp: Date.now() } : merged;
               applyDelivery(data, toApply, hasLocalContribution);
             }
@@ -609,7 +610,7 @@ export function useSync(uid, email) {
             // activity-ledger event claiming the write succeeded) correctly
             // doesn't run for a write that was never confirmed.
             takeWaiters().forEach(w => w.reject(new Error("savePayloadAsync: superseded by RTDB before first sync")));
-            const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current, baseRef.current?.config, baseRef.current?.contributions, baseRef.current?.brainDump);
+            const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current, baseRef.current?.config, baseRef.current?.contributions, baseRef.current?.brainDump, baseRef.current?.chatHistory);
             const toApply = hasLocalContribution ? { ...merged, timestamp: Date.now() } : merged;
             applyDelivery(data, toApply, hasLocalContribution);
           } else {
@@ -828,7 +829,7 @@ export function useSync(uid, email) {
               const remote = pendingRemoteRef.current;
               pendingRemoteRef.current = null;
               if ((remote.timestamp || 0) >= (payloadRef.current?.timestamp || 0)) {
-                const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(remote, payloadRef.current, baseRef.current?.config, baseRef.current?.contributions, baseRef.current?.brainDump);
+                const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(remote, payloadRef.current, baseRef.current?.config, baseRef.current?.contributions, baseRef.current?.brainDump, baseRef.current?.chatHistory);
                 const toApply = hasLocalContribution ? { ...merged, timestamp: Date.now() } : merged;
                 applyDelivery(remote, toApply, hasLocalContribution);
               }
