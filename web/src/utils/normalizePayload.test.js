@@ -949,6 +949,56 @@ describe("mergeLocalIntoServer - outgoing write safety (full-payload save must n
     expect(result.contributions.map(c => c.dateString)).toEqual(["new-there"]);
   });
 
+  it("contributions: un-completing a task on this device lowers the day's count and is written (not overridden by the larger server count)", () => {
+    // Base 3, this device un-completed one (2), the server still holds 3.
+    const outgoing = mergeLocalIntoServer(withRows([row("d", 3, 100)], 100), withRows([row("d", 2, 150)], 150), baseOf([row("d", 3)]));
+    expect(outgoing.contributions[0].count).toBe(2);
+    // Same on the incoming path: a stale delivery does not put the count back up, and the write-back is flagged.
+    const incoming = mergeRemotePayloadWithMeta(withRows([row("d", 3, 100)], 100), withRows([row("d", 2, 150)], 150), { userId: "u" }, [row("d", 3)]);
+    expect(incoming.merged.contributions[0].count).toBe(2);
+    expect(incoming.hasLocalContribution).toBe(true);
+    // And a count changed only on the server since base stands, even if lower.
+    expect(mergeLocalIntoServer(withRows([row("d", 2, 200)], 200), withRows([row("d", 3, 100)], 100), baseOf([row("d", 3)])).contributions[0].count).toBe(2);
+  });
+
+  it("write lifecycle: a commit that kept the other device's config change and new day is absorbed into local before it becomes the base, so the echo does not write the old values back", () => {
+    // Phone (local) had a task write pending; laptop renamed the deadline and completed the first task of day d2 meanwhile.
+    const base = { config: { userId: "u", deadlineLabel: "Thesis" }, contributions: [row("d1", 2)], brainDump: [] };
+    const local = { userId: "u", tasks: [task("t", { isCompleted: true, lastUpdated: 300 })], config: { userId: "u", deadlineLabel: "Thesis" }, contributions: [row("d1", 2)], brainDump: [], timestamp: 300 };
+    const server = { userId: "u", tasks: [task("t")], config: { userId: "u", deadlineLabel: "Job offer" }, contributions: [row("d1", 2), row("d2", 1, 250)], brainDump: [], timestamp: 250 };
+    const committed = mergeLocalIntoServer(server, local, base);
+    expect(committed.config.deadlineLabel).toBe("Job offer");
+    expect(committed.contributions.map(c => c.dateString).sort()).toEqual(["d1", "d2"]);
+    // absorbCommitted: merge the commit into local like a delivery (against the OLD base), then base := committed.
+    const absorbed = mergeRemotePayloadWithMeta(committed, local, base.config, base.contributions, base.brainDump);
+    expect(absorbed.hasLocalContribution).toBe(false);
+    expect(absorbed.merged.config.deadlineLabel).toBe("Job offer");
+    expect(absorbed.merged.contributions.map(c => c.dateString).sort()).toEqual(["d1", "d2"]);
+    // The echo of the write, processed with local = absorbed and base = committed: nothing to write back.
+    const echo = mergeRemotePayloadWithMeta(committed, absorbed.merged, committed.config, committed.contributions, committed.brainDump);
+    expect(echo.hasLocalContribution).toBe(false);
+    expect(echo.merged.config.deadlineLabel).toBe("Job offer");
+    expect(echo.merged.contributions.map(c => c.dateString).sort()).toEqual(["d1", "d2"]);
+    // Counter-example, the bug this guards against: base := committed WITHOUT absorbing it into local flags a write-back of the stale values.
+    const stale = mergeRemotePayloadWithMeta(committed, local, committed.config, committed.contributions, committed.brainDump);
+    expect(stale.hasLocalContribution).toBe(true);
+  });
+
+  it("brainDump: with a base, items are merged per item — an item added on each device survives, one deleted elsewhere stays deleted", () => {
+    const item = (id, text) => ({ id, text, createdAt: 1 });
+    const base = { config: { userId: "u" }, contributions: [], brainDump: [item("a", "old"), item("gone", "deleted there")] };
+    const local = { userId: "u", tasks: [], config: {}, brainDump: [item("a", "old"), item("gone", "deleted there"), item("mine", "added here")], brainDumpUpdatedAt: 300, timestamp: 300 };
+    const server = { userId: "u", tasks: [], config: {}, brainDump: [item("a", "old"), item("theirs", "added there")], brainDumpUpdatedAt: 400, timestamp: 400 };
+    const outgoing = mergeLocalIntoServer(server, local, base);
+    expect(outgoing.brainDump.map(i => i.id)).toEqual(["a", "mine", "theirs"]);
+    const incoming = mergeRemotePayloadWithMeta(server, local, base.config, base.contributions, base.brainDump);
+    expect(incoming.merged.brainDump.map(i => i.id)).toEqual(["a", "mine", "theirs"]);
+    expect(incoming.hasLocalContribution).toBe(true);
+    // Without a base the previous whole-list rules apply: the side with the newer brainDumpUpdatedAt wins outgoing, remote wins incoming.
+    expect(mergeLocalIntoServer(server, local, null).brainDump.map(i => i.id)).toEqual(["a", "theirs"]);
+    expect(mergeRemotePayloadWithMeta(server, local, { userId: "u" }).merged.brainDump.map(i => i.id)).toEqual(["a", "theirs"]);
+  });
+
   it("contributions: with no base the server's rows are authoritative", () => {
     const result = mergeLocalIntoServer(withRows([row("d", 4, 200)], 200), withRows([row("d", 5, 150), row("x", 1)], 150), null);
     expect(result.contributions).toEqual([row("d", 4, 200)]);

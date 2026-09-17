@@ -188,12 +188,17 @@ export function useSync(uid, email) {
   const localWriteBeforeFirstRtdbRef = useRef(false);
   const offlineWarnTimeoutRef = useRef(null);
   // Merge base: the last server state this device has seen — { config,
-  // contributions, timestamp } from the latest delivery or the committed result
-  // of its own latest write. Used per key by mergeConfig / mergeConfigForWrite
-  // and per day by mergeContributions. Persisted in the same cache record as
-  // the payload so a fresh mount from cache has the base that cache was built
-  // on; cleared with the cache on sign-out.
+  // contributions, brainDump } from the latest delivery or the committed
+  // result of its own latest write, always absorbed into local state first.
+  // Used per key by mergeConfig / mergeConfigForWrite, per day by
+  // mergeContributions and per item by mergeBrainDump. Persisted in the same
+  // cache record as the payload so a fresh mount from cache has the base that
+  // cache was built on; cleared with the cache on sign-out.
   const baseRef = useRef(null);
+  // The uid of the latest render, so a write or delivery callback created in
+  // an earlier render (before an account switch) can tell it is stale.
+  const uidRef = useRef(uid);
+  uidRef.current = uid;
 
   // Records the config both sides now agree on (post-merge, since any local keys
   // the merge re-applied are written straight back to RTDB), so the next
@@ -205,31 +210,46 @@ export function useSync(uid, email) {
   // previous account's config.
   // Adopts `payload` — a delivery from RTDB, or the committed result of this
   // device's own write — as the merge base, without touching the cache. The
-  // base is the last server state this device has seen; local state may hold
-  // edits on top of it, and it is exactly those edits the per-key merges
-  // re-apply. It never moves backwards: a write's promise can resolve after a
-  // newer delivery has already been adopted.
+  // base is the last server state this device has seen; the invariant every
+  // caller keeps is that local state has already absorbed that state, so the
+  // only differences between local and base are this device's own edits,
+  // which is exactly what the per-key merges re-apply.
   const adoptBase = (payload, forUid) => {
-    if (forUid !== uid || !payload || typeof payload !== "object") return false;
+    if (forUid !== uidRef.current || !payload || typeof payload !== "object") return false;
     const normalized = normalizePayload(payload);
-    if (!normalized.config) return false;
-    const next = {
+    baseRef.current = {
       config: normalized.config,
       contributions: normalized.contributions,
-      timestamp: Number(normalized.timestamp) || 0,
+      brainDump: normalized.brainDump,
     };
-    if (baseRef.current && next.timestamp < (baseRef.current.timestamp || 0)) return false;
-    baseRef.current = next;
     return true;
   };
 
-  // adoptBase plus a cache write pairing the current local payload with it —
-  // for a committed write, and for the two paths that make a local payload
-  // the server's (new account, cache restore). Deliveries pair the base with
-  // the payload they apply in their own single cache write instead.
+  // For the two paths that make the local payload the server's (new account,
+  // cache restore): base := local, then one cache write pairing them.
   const commitBase = (payload, forUid) => {
     if (!adoptBase(payload, forUid)) return;
     if (payloadRef.current) writeCache(forUid, payloadRef.current, baseRef.current);
+  };
+
+  // After this device's own write commits: `committed` is what the server now
+  // holds — this device's payload merged with whatever the other device had
+  // written meanwhile. It must reach local state BEFORE it becomes the base,
+  // through the same merge a delivery goes through, or the echo of this write
+  // (buffered while a debounce timer is pending, so processed after this)
+  // would read local's older copies of the other device's changes as this
+  // device's edits and write them back over them. No write-back here: any
+  // edit made while the write was in flight has its own debounce pending.
+  const absorbCommitted = (committed, forUid) => {
+    if (forUid !== uidRef.current || !committed || typeof committed !== "object" || !payloadRef.current) return;
+    const base = baseRef.current;
+    const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(committed, payloadRef.current, base?.config, base?.contributions, base?.brainDump);
+    const toApply = hasLocalContribution ? { ...merged, timestamp: Date.now() } : merged;
+    payloadUidRef.current = forUid;
+    setPayload(toApply);
+    payloadRef.current = toApply;
+    adoptBase(committed, forUid);
+    writeCache(forUid, toApply, baseRef.current);
   };
 
   // Applies a delivery: the merged payload becomes local state, the delivered
@@ -249,7 +269,7 @@ export function useSync(uid, email) {
     // may have moved to a different account.
     const writeUid = uid;
     writeWithRetry(ref(db, dbRefPath), toApply, baseRef.current)
-      .then((committed) => commitBase(committed || toApply, writeUid))
+      .then((committed) => absorbCommitted(committed, writeUid))
       .catch(() => {});
   };
   // Resolvers for savePayloadAsync calls queued behind the current debounce
@@ -390,7 +410,7 @@ export function useSync(uid, email) {
           // prevents a stale long-poll snapshot (e.g. after Brave reconnects) from
           // overwriting optimistic updates that haven't reached Firebase yet.
           if ((data.timestamp || 0) >= (payloadRef.current?.timestamp || 0)) {
-            const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current, baseRef.current?.config, baseRef.current?.contributions);
+            const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current, baseRef.current?.config, baseRef.current?.contributions, baseRef.current?.brainDump);
             const toApply = hasLocalContribution ? { ...merged, timestamp: Date.now() } : merged;
             applyDelivery(data, toApply, hasLocalContribution);
           } else {
@@ -401,13 +421,13 @@ export function useSync(uid, email) {
               // merged against the persisted base so an offline config edit such as a
               // renamed Key Deadline is recognised as this device's own and kept.
               writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
-                .then((committed) => commitBase(committed || payloadRef.current, uid))
+                .then((committed) => absorbCommitted(committed, uid))
                 .catch(() => {});
             } else {
               // savePayload fired before RTDB responded (e.g. a mount-effect on stale
               // cache), giving local a fake-fresh timestamp. Trust RTDB instead of
               // pushing the stale cache back up.
-              const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current, baseRef.current?.config, baseRef.current?.contributions);
+              const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current, baseRef.current?.config, baseRef.current?.contributions, baseRef.current?.brainDump);
               const toApply = hasLocalContribution ? { ...merged, timestamp: Date.now() } : merged;
               applyDelivery(data, toApply, hasLocalContribution);
             }
@@ -569,7 +589,7 @@ export function useSync(uid, email) {
             // activity-ledger event claiming the write succeeded) correctly
             // doesn't run for a write that was never confirmed.
             takeWaiters().forEach(w => w.reject(new Error("savePayloadAsync: superseded by RTDB before first sync")));
-            const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current, baseRef.current?.config, baseRef.current?.contributions);
+            const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(data, payloadRef.current, baseRef.current?.config, baseRef.current?.contributions, baseRef.current?.brainDump);
             const toApply = hasLocalContribution ? { ...merged, timestamp: Date.now() } : merged;
             applyDelivery(data, toApply, hasLocalContribution);
           } else {
@@ -638,7 +658,7 @@ export function useSync(uid, email) {
       const waiters = takeWaiters();
       const writeUid = uid;
       writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
-        .then((committed) => { commitBase(committed || payloadRef.current, writeUid); waiters.forEach(w => w.resolve()); })
+        .then((committed) => { absorbCommitted(committed, writeUid); waiters.forEach(w => w.resolve()); })
         .catch((err) => waiters.forEach(w => w.reject(err)));
     };
     const handleVisibilityChange = () => {
@@ -770,10 +790,11 @@ export function useSync(uid, email) {
         writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
           .then((committed) => {
             console.log("Remote RTDB payload sync successful");
-            // Advance the base to what the server now holds even if the echo of
-            // this write is buffered and then discarded below (a newer local
-            // edit raised the local timestamp while it was in flight).
-            commitBase(committed || payloadRef.current, writeUid);
+            // Absorb what the server now holds (and make it the base) before the
+            // echo of this write, buffered below while the timer was pending, is
+            // processed — or discarded, if a newer local edit raised the local
+            // timestamp while the write was in flight.
+            absorbCommitted(committed, writeUid);
             waiters.forEach(w => w.resolve());
           })
           .catch((err) => {
@@ -787,7 +808,7 @@ export function useSync(uid, email) {
               const remote = pendingRemoteRef.current;
               pendingRemoteRef.current = null;
               if ((remote.timestamp || 0) >= (payloadRef.current?.timestamp || 0)) {
-                const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(remote, payloadRef.current, baseRef.current?.config, baseRef.current?.contributions);
+                const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(remote, payloadRef.current, baseRef.current?.config, baseRef.current?.contributions, baseRef.current?.brainDump);
                 const toApply = hasLocalContribution ? { ...merged, timestamp: Date.now() } : merged;
                 applyDelivery(remote, toApply, hasLocalContribution);
               }
@@ -1005,7 +1026,7 @@ export function useSync(uid, email) {
       const waiters = takeWaiters();
       const writeUid = uid;
       writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
-        .then((committed) => { commitBase(committed || payloadRef.current, writeUid); waiters.forEach(w => w.resolve()); })
+        .then((committed) => { absorbCommitted(committed, writeUid); waiters.forEach(w => w.resolve()); })
         .catch((err) => waiters.forEach(w => w.reject(err)));
     }
   };

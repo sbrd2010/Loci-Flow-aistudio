@@ -352,9 +352,10 @@ function mergeConfig(remoteConfig, localConfig, baseConfig) {
 // written back to RTDB so other devices converge on the correct state.
 // `baseConfig` is the last config this device received from RTDB — see
 // mergeConfig for why config needs it and what happens when it's absent.
-// `baseContributions` likewise for contribution rows (see mergeContributions);
-// without it the remote rows are taken wholesale, as before it existed.
-export function mergeRemotePayloadWithMeta(remote, local, baseConfig, baseContributions) {
+// `baseContributions` likewise for contribution rows (see mergeContributions)
+// and `baseBrainDump` for brain-dump items (see mergeBrainDump); without them
+// the remote rows/items are taken wholesale, as before they existed.
+export function mergeRemotePayloadWithMeta(remote, local, baseConfig, baseContributions, baseBrainDump) {
   const normalized = normalizePayload(remote);
   if (!remote || typeof remote !== "object") return { merged: normalized, hasLocalContribution: false };
 
@@ -387,7 +388,17 @@ export function mergeRemotePayloadWithMeta(remote, local, baseConfig, baseContri
     contributionsContribution = result.hasLocalContribution;
   }
 
-  return { merged: normalized, hasLocalContribution: tasksContribution || localConfigWon || contributionsContribution };
+  let brainDumpContribution = false;
+  const brainDumpMerge = mergeBrainDump(normalized.brainDump, local?.brainDump, baseBrainDump);
+  if (brainDumpMerge) {
+    normalized.brainDump = brainDumpMerge.items;
+    brainDumpContribution = brainDumpMerge.hasLocalContribution;
+    if (brainDumpContribution) {
+      normalized.brainDumpUpdatedAt = Math.max(normalized.brainDumpUpdatedAt || 0, localBrainDumpUpdatedAt);
+    }
+  }
+
+  return { merged: normalized, hasLocalContribution: tasksContribution || localConfigWon || contributionsContribution || brainDumpContribution };
 }
 
 export function mergeRemotePayload(remote, local, baseConfig) {
@@ -471,11 +482,14 @@ function mergeConfigForWrite(serverConfig, localConfig, baseConfig) {
 // device's own write back through onValue before the write's promise
 // resolves, so a rule that added "this device's change since base" would
 // count that change twice on the echo. Instead:
-// - a day both sides hold keeps the larger count. This never drops a device's
-//   own completions; it can under-count by the smaller side when both devices
-//   completed tasks on the same day before syncing, and over-count by one
-//   when a task is un-completed on one device while the other still holds the
-//   old count — the lesser errors for a streak/heatmap counter;
+// - a day both sides hold: a count changed only on this side since base is
+//   this device's edit (a completion, or an un-complete, which lowers it) and
+//   is written; changed only on the server, the server's stands; changed on
+//   both, the larger count is kept — this never drops a device's own
+//   completions, and can under-count by the smaller side when both devices
+//   completed tasks on the same day before syncing, or over-count by one
+//   when one un-completes while the other completes — the lesser errors for
+//   a streak/heatmap counter;
 // - a day only this device holds is new work and is kept, unless base holds
 //   it too, in which case the server removed it ("Reset progress" writes an
 //   empty list) and it stays removed;
@@ -500,7 +514,14 @@ function mergeContributions(serverContributions, localContributions, baseContrib
     const key = keyOf(localRow);
     const serverRow = key ? serverByKey.get(key) : undefined;
     if (serverRow) {
-      merged.push(baseByKey && countOf(localRow) > countOf(serverRow) ? localRow : serverRow);
+      if (!baseByKey) { merged.push(serverRow); continue; }
+      const baseRow = baseByKey.get(key);
+      const baseCount = baseRow ? countOf(baseRow) : 0;
+      const localChanged = countOf(localRow) !== baseCount;
+      const serverChanged = countOf(serverRow) !== baseCount;
+      if (localChanged && !serverChanged) merged.push(localRow);
+      else if (!localChanged) merged.push(serverRow);
+      else merged.push(countOf(localRow) > countOf(serverRow) ? localRow : serverRow);
       continue;
     }
     if (!baseByKey || baseByKey.has(key)) continue;
@@ -522,6 +543,33 @@ function mergeContributions(serverContributions, localContributions, baseContrib
   return { contributions: merged, hasLocalContribution };
 }
 
+// Per-item brainDump merge, used by both paths when a base (the items this
+// device last received from RTDB) is known. Items are matched by id (legacy
+// items without one by createdAt+text). Local order is kept and server-only
+// items appended; an item base holds that one side lacks was deleted on that
+// side and stays deleted. Idempotent for the same reason as mergeContributions.
+// Returns null without a base, so callers keep their whole-list rules.
+function mergeBrainDump(serverItems, localItems, baseItems) {
+  if (!baseItems) return null;
+  const keyOf = item => item?.id ?? (item && typeof item === "object" ? `${item.createdAt ?? ""}:${item.text ?? ""}` : null);
+  const clean = items => arrayOrEmpty(items).filter(item => item && typeof item === "object");
+  const server = clean(serverItems);
+  const local = clean(localItems);
+  const baseKeys = new Set(clean(baseItems).map(keyOf).filter(k => k !== null));
+  const serverKeys = new Set(server.map(keyOf).filter(k => k !== null));
+  const localKeys = new Set(local.map(keyOf).filter(k => k !== null));
+  const merged = local.filter(item => serverKeys.has(keyOf(item)) || !baseKeys.has(keyOf(item)));
+  for (const item of server) {
+    const key = keyOf(item);
+    if (localKeys.has(key) || baseKeys.has(key)) continue;
+    merged.push(item);
+  }
+  const items = merged.slice(0, BRAIN_DUMP_LIMIT);
+  const hasLocalContribution =
+    items.length !== server.length || items.some((item, i) => keyOf(item) !== keyOf(server[i]));
+  return { items, hasLocalContribution };
+}
+
 // Update function for the full-payload write transaction. `server` is null
 // when RTDB has nothing at this path yet (or the SDK has no cached value on
 // the transaction's first, speculative run — the server then rejects and
@@ -541,13 +589,14 @@ export function mergeLocalIntoServer(server, local, base) {
 
   const serverBrainDumpIsNewer =
     (finiteNumber(normalizedServer.brainDumpUpdatedAt) ?? 0) > (finiteNumber(normalizedLocal.brainDumpUpdatedAt) ?? 0);
+  const brainDumpMerge = mergeBrainDump(normalizedServer.brainDump, normalizedLocal.brainDump, base ? arrayOrEmpty(base.brainDump) : null);
 
   return {
     ...normalizedLocal,
     tasks: mergeTasksForWrite(normalizedServer.tasks, normalizedLocal.tasks),
     config: mergeConfigForWrite(normalizedServer.config, normalizedLocal.config, base ? base.config : null),
     contributions: mergeContributions(normalizedServer.contributions, normalizedLocal.contributions, base ? arrayOrEmpty(base.contributions) : null).contributions,
-    brainDump: serverBrainDumpIsNewer ? normalizedServer.brainDump : normalizedLocal.brainDump,
+    brainDump: brainDumpMerge ? brainDumpMerge.items : (serverBrainDumpIsNewer ? normalizedServer.brainDump : normalizedLocal.brainDump),
     brainDumpUpdatedAt: Math.max(
       finiteNumber(normalizedServer.brainDumpUpdatedAt) ?? 0,
       finiteNumber(normalizedLocal.brainDumpUpdatedAt) ?? 0
