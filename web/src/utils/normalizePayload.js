@@ -221,17 +221,21 @@ export function isTaskCountDropSuspicious(nextTasks, currentTasks, threshold = 3
 function mergeTasks(remoteTasks, localTasks) {
   const sanitizedRemoteTasks = sanitizeTasksForRules(remoteTasks);
   const sanitizedLocalTasks = sanitizeTasksForRules(localTasks);
-  const localByUuid = new Map(
+  // Matched on taskIdentity (uuid, or id for legacy rows that never had one)
+  // rather than uuid alone, since sanitizeTasksForRules gives a uuid-less row
+  // a fresh repaired-* uuid on each side and they would merge as two tasks.
+  const localByKey = new Map(
     sanitizedLocalTasks
-      .filter(t => t.uuid)
-      .map(t => [t.uuid, t])
+      .filter(taskIdentity)
+      .map(t => [taskIdentity(t), t])
   );
 
   let hasLocalContribution = false;
 
   const merged = sanitizedRemoteTasks.map(remoteTask => {
-    if (!remoteTask.uuid) return remoteTask;
-    const localTask = localByUuid.get(remoteTask.uuid);
+    const key = taskIdentity(remoteTask);
+    if (!key) return remoteTask;
+    const localTask = localByKey.get(key);
     if (!localTask) return remoteTask;
     const localTs = finiteNumber(localTask.lastUpdated) ?? 0;
     const remoteTs = finiteNumber(remoteTask.lastUpdated) ?? 0;
@@ -242,9 +246,9 @@ function mergeTasks(remoteTasks, localTasks) {
     return remoteTask;
   });
 
-  const remoteUuids = new Set(sanitizedRemoteTasks.map(t => t.uuid).filter(Boolean));
+  const remoteKeys = new Set(sanitizedRemoteTasks.map(taskIdentity).filter(Boolean));
   const localOnlyTasks = sanitizedLocalTasks.filter(
-    t => t.uuid && !remoteUuids.has(t.uuid) && !t.isDeleted
+    t => taskIdentity(t) && !remoteKeys.has(taskIdentity(t)) && !t.isDeleted
   );
 
   if (localOnlyTasks.length > 0) hasLocalContribution = true;
@@ -452,39 +456,56 @@ function mergeConfigForWrite(serverConfig, localConfig, baseConfig) {
   return merged;
 }
 
-// Per-day by compositeKey (dateString as fallback for legacy rows). When the
-// server holds no rows at all it was reset ("Reset progress" writes an empty
-// list, which RTDB stores as no key), so local rows written before that reset
-// are the stale copy it removed and are dropped; rows completed since (newer
-// than the server's last write) are genuine new work and kept. A day's
-// count is a completion counter that both devices may have advanced from the
-// same starting point, so picking a row by timestamp would discard the other
-// side's completions; the larger count is kept instead (timestamp, then
-// local, only break ties). Under-counts the smaller side's concurrent
-// completions, as every previous write did too; can over-count by one when a
-// task is un-completed on one device while the other still holds the old
-// count — the lesser error for a streak/heatmap counter.
-function mergeContributionsForWrite(serverContributions, localContributions, serverTimestamp) {
+// Per-day by compositeKey (dateString as fallback for legacy rows), three-way
+// against `base` — the rows this device last agreed with RTDB on. A day's
+// count is a completion counter both devices may have advanced from the same
+// start, so the write carries the server's count plus this device's change
+// since base (which also carries an un-complete correctly, as a negative
+// change). A row the server no longer has but base did was removed there
+// ("Reset progress" writes an empty list) and stays removed; a row only this
+// device has and base did not is new work and is kept; the mirror rule keeps
+// a reset made here from being undone by rows the server still holds. With no
+// base a local change cannot be told from drift, so the server's rows are
+// authoritative, as for config.
+function mergeContributionsForWrite(serverContributions, localContributions, baseContributions) {
   const keyOf = c => c?.compositeKey || c?.dateString || null;
-  const server = arrayOrEmpty(serverContributions).filter(c => c && typeof c === "object");
-  let local = arrayOrEmpty(localContributions).filter(c => c && typeof c === "object");
-  if (server.length === 0 && (finiteNumber(serverTimestamp) ?? 0) > 0) {
-    local = local.filter(c => (finiteNumber(c.lastUpdated) ?? 0) > serverTimestamp);
-  }
+  const clean = rows => arrayOrEmpty(rows).filter(c => c && typeof c === "object");
+  const countOf = row => finiteNumber(row?.count) ?? 0;
+  const tsOf = row => finiteNumber(row?.lastUpdated) ?? 0;
+  const server = clean(serverContributions);
+  const local = clean(localContributions);
+  const base = baseContributions ? clean(baseContributions) : null;
   const serverByKey = new Map(server.filter(keyOf).map(c => [keyOf(c), c]));
-  const merged = local.map(localRow => {
-    const serverRow = keyOf(localRow) ? serverByKey.get(keyOf(localRow)) : undefined;
-    if (!serverRow) return localRow;
-    const serverCount = finiteNumber(serverRow.count) ?? 0;
-    const localCount = finiteNumber(localRow.count) ?? 0;
-    if (serverCount !== localCount) return serverCount > localCount ? serverRow : localRow;
-    const serverTs = finiteNumber(serverRow.lastUpdated) ?? 0;
-    const localTs = finiteNumber(localRow.lastUpdated) ?? 0;
-    return serverTs > localTs ? serverRow : localRow;
-  });
   const localKeys = new Set(local.map(keyOf).filter(Boolean));
-  const serverOnly = server.filter(c => keyOf(c) && !localKeys.has(keyOf(c)));
-  return [...merged, ...serverOnly];
+  const baseByKey = base ? new Map(base.filter(keyOf).map(c => [keyOf(c), c])) : null;
+
+  const merged = [];
+  for (const localRow of local) {
+    const key = keyOf(localRow);
+    const serverRow = key ? serverByKey.get(key) : undefined;
+    const baseRow = key && baseByKey ? baseByKey.get(key) : undefined;
+    if (!serverRow) {
+      if (!base) continue;
+      if (baseRow) continue;
+      merged.push(localRow);
+      continue;
+    }
+    if (!base) { merged.push(serverRow); continue; }
+    const localDelta = countOf(localRow) - countOf(baseRow);
+    if (localDelta === 0) { merged.push(serverRow); continue; }
+    merged.push({
+      ...serverRow,
+      count: Math.max(0, countOf(serverRow) + localDelta),
+      lastUpdated: Math.max(tsOf(serverRow), tsOf(localRow)),
+    });
+  }
+  for (const serverRow of server) {
+    const key = keyOf(serverRow);
+    if (!key || localKeys.has(key)) continue;
+    if (baseByKey && baseByKey.has(key)) continue;
+    merged.push(serverRow);
+  }
+  return merged;
 }
 
 // Update function for the full-payload write transaction. `server` is null
@@ -496,7 +517,9 @@ function mergeContributionsForWrite(serverContributions, localContributions, ser
 // chatHistory has no per-message metadata to merge on, so it stays
 // last-write-wins as before. The written `timestamp` is the max of both
 // sides so neither device later reads this write as older than what it holds.
-export function mergeLocalIntoServer(server, local, baseConfig) {
+// `base` is { config, contributions } as this device last received them from
+// RTDB, or null when it has never received a delivery for this account.
+export function mergeLocalIntoServer(server, local, base) {
   const normalizedLocal = normalizePayload(local);
   if (!server || typeof server !== "object" || Array.isArray(server)) return normalizedLocal;
   const normalizedServer = normalizePayload(server);
@@ -507,8 +530,8 @@ export function mergeLocalIntoServer(server, local, baseConfig) {
   return {
     ...normalizedLocal,
     tasks: mergeTasksForWrite(normalizedServer.tasks, normalizedLocal.tasks),
-    config: mergeConfigForWrite(normalizedServer.config, normalizedLocal.config, baseConfig),
-    contributions: mergeContributionsForWrite(normalizedServer.contributions, normalizedLocal.contributions, normalizedServer.timestamp),
+    config: mergeConfigForWrite(normalizedServer.config, normalizedLocal.config, base ? base.config : null),
+    contributions: mergeContributionsForWrite(normalizedServer.contributions, normalizedLocal.contributions, base ? arrayOrEmpty(base.contributions) : null),
     brainDump: serverBrainDumpIsNewer ? normalizedServer.brainDump : normalizedLocal.brainDump,
     brainDumpUpdatedAt: Math.max(
       finiteNumber(normalizedServer.brainDumpUpdatedAt) ?? 0,

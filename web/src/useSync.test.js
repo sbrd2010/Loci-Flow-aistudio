@@ -21,7 +21,7 @@ vi.mock("./firebase", () => ({
   auth: { currentUser: null },
 }));
 
-import { gatePayloadToUid, writeActivityEvents, captureTodaySnapshotIfNeeded, writeWithRetry, readCachedBase, writeCachedBase, clearCachedBase } from "./useSync";
+import { gatePayloadToUid, writeActivityEvents, captureTodaySnapshotIfNeeded, writeWithRetry, readCache, writeCache } from "./useSync";
 
 // Tests for the uid-isolation gate that prevents a previous user's payload from
 // being visible to App-level effects during the render cycle that follows a uid change.
@@ -289,7 +289,7 @@ describe("writeWithRetry (merge-on-write)", () => {
 
   it("passes the base config through so this device's own config edits win in the merge", async () => {
     runTransactionMock.mockResolvedValue({ committed: true });
-    const base = { userId: "u", deadlineLabel: "Thesis", visitStreakCount: 4 };
+    const base = { config: { userId: "u", deadlineLabel: "Thesis", visitStreakCount: 4 }, contributions: [] };
     const local = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "Thesis", visitStreakCount: 5 }, timestamp: 300 };
     await writeWithRetry(dbRef, local, base);
     const server = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "Job offer", visitStreakCount: 4 }, timestamp: 200 };
@@ -316,9 +316,9 @@ describe("writeWithRetry (merge-on-write)", () => {
   });
 });
 
-// The config base is persisted next to the payload cache so a fresh mount can
-// merge config per key instead of trusting or discarding the whole cached config.
-describe("cached config base (readCachedBase / writeCachedBase / clearCachedBase)", () => {
+// The payload cache record carries the merge base it was built on, written in
+// one setItem, so a fresh mount can merge per key like a live session does.
+describe("payload cache record (readCache / writeCache)", () => {
   let store;
   beforeEach(() => {
     store = new Map();
@@ -329,25 +329,28 @@ describe("cached config base (readCachedBase / writeCachedBase / clearCachedBase
     };
   });
 
-  it("round-trips a config per uid and returns null when nothing is stored", () => {
-    expect(readCachedBase("uid-A")).toBeNull();
-    writeCachedBase("uid-A", { userId: "u", deadlineLabel: "Thesis" });
-    expect(readCachedBase("uid-A")).toEqual({ userId: "u", deadlineLabel: "Thesis" });
-    expect(readCachedBase("uid-B")).toBeNull();
+  const payload = { userId: "u", tasks: [{ id: 1, uuid: "a", userId: "u", title: "A" }], config: { userId: "u" }, timestamp: 5 };
+
+  it("round-trips the payload together with its base in a single record", () => {
+    const base = { config: { userId: "u", deadlineLabel: "Thesis" }, contributions: [{ compositeKey: "u_d", count: 2 }] };
+    writeCache("uid-A", payload, base);
+    expect(store.size).toBe(1);
+    expect(readCache("uid-A")).toEqual({ payload, base });
+    expect(readCache("uid-B")).toBeNull();
   });
 
-  it("clearCachedBase removes it, and a corrupt entry reads as null rather than throwing", () => {
-    writeCachedBase("uid-A", { userId: "u" });
-    clearCachedBase("uid-A");
-    expect(readCachedBase("uid-A")).toBeNull();
-    store.set("loci_base_config_v1_uid-A", "{not json");
-    expect(readCachedBase("uid-A")).toBeNull();
+  it("reads a record written before the base existed (a bare payload) with base null", () => {
+    store.set("loci_payload_v1_uid-A", JSON.stringify(payload));
+    expect(readCache("uid-A")).toEqual({ payload, base: null });
   });
 
-  it("tolerates a missing localStorage (private mode / blocked storage) on every call", () => {
+  it("rejects a record without tasks or config, a corrupt entry, and tolerates missing localStorage", () => {
+    writeCache("uid-A", { config: {} }, null);
+    expect(readCache("uid-A")).toBeNull();
+    store.set("loci_payload_v1_uid-A", "{not json");
+    expect(readCache("uid-A")).toBeNull();
     delete globalThis.localStorage;
-    expect(() => writeCachedBase("uid-A", { userId: "u" })).not.toThrow();
-    expect(readCachedBase("uid-A")).toBeNull();
-    expect(() => clearCachedBase("uid-A")).not.toThrow();
+    expect(() => writeCache("uid-A", payload, null)).not.toThrow();
+    expect(readCache("uid-A")).toBeNull();
   });
 });

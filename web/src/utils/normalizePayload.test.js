@@ -891,7 +891,7 @@ describe("mergeLocalIntoServer - outgoing write safety (full-payload save must n
     const local = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "Thesis", visitStreakCount: 5, lastUpdated: 300 }, timestamp: 300 };
     // Phone renamed the deadline this morning.
     const server = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "Job offer", visitStreakCount: 4, lastUpdated: 200 }, timestamp: 200 };
-    const result = mergeLocalIntoServer(server, local, base);
+    const result = mergeLocalIntoServer(server, local, { config: base, contributions: [] });
     expect(result.config.deadlineLabel).toBe("Job offer");
     expect(result.config.visitStreakCount).toBe(5);
     expect(result.config.lastUpdated).toBe(300);
@@ -901,7 +901,7 @@ describe("mergeLocalIntoServer - outgoing write safety (full-payload save must n
     const base = { userId: "u", pendingCoachNudge: { text: "Take a break" }, lastUpdated: 100 };
     const local = { userId: "u", tasks: [], config: { userId: "u", pendingCoachNudge: { text: "Take a break" }, lastUpdated: 100 }, timestamp: 300 };
     const server = { userId: "u", tasks: [], config: { userId: "u", lastUpdated: 200 }, timestamp: 200 };
-    const result = mergeLocalIntoServer(server, local, base);
+    const result = mergeLocalIntoServer(server, local, { config: base, contributions: [] });
     expect(result.config).not.toHaveProperty("pendingCoachNudge");
   });
 
@@ -913,46 +913,44 @@ describe("mergeLocalIntoServer - outgoing write safety (full-payload save must n
     expect(result.config).not.toHaveProperty("pendingCoachNudge");
   });
 
-  it("contributions: the larger count for a day wins, so offline completions are not discarded by a later smaller write", () => {
-    // Both devices started the day at 3; this one completed two offline (5), the other completed one later (4).
-    const local = { userId: "u", tasks: [], config: {}, contributions: [{ compositeKey: "u_d", dateString: "d", count: 5, lastUpdated: 100 }], timestamp: 100 };
-    const server = { userId: "u", tasks: [], config: {}, contributions: [{ compositeKey: "u_d", dateString: "d", count: 4, lastUpdated: 200 }], timestamp: 200 };
-    expect(mergeLocalIntoServer(server, local, null).contributions[0].count).toBe(5);
-    expect(mergeLocalIntoServer(local, server, null).contributions[0].count).toBe(5);
+  const row = (dateString, count, lastUpdated = 100) => ({ compositeKey: `u_${dateString}`, userId: "u", dateString, count, lastUpdated });
+  const withRows = (rows, timestamp) => ({ userId: "u", tasks: [], config: { userId: "u" }, contributions: rows, timestamp });
+  const baseOf = (rows) => ({ config: { userId: "u" }, contributions: rows });
+
+  it("contributions: both devices advanced a day from the same start — the write carries both sets of completions", () => {
+    // Base 3; this device completed two offline (5), the other completed one meanwhile (4). Neither is lost: 6.
+    const result = mergeLocalIntoServer(withRows([row("d", 4, 200)], 200), withRows([row("d", 5, 150)], 150), baseOf([row("d", 3)]));
+    expect(result.contributions[0].count).toBe(6);
+    expect(result.contributions[0].lastUpdated).toBe(200);
   });
 
-  it("contributions: a day's count bumped more recently on the other device is kept, other days merged by key", () => {
-    const local = {
-      userId: "u", tasks: [], config: {},
-      contributions: [{ compositeKey: "u_2026-09-17", dateString: "2026-09-17", count: 1, lastUpdated: 100 }],
-      timestamp: 100,
-    };
-    const server = {
-      userId: "u", tasks: [], config: {},
-      contributions: [
-        { compositeKey: "u_2026-09-17", dateString: "2026-09-17", count: 3, lastUpdated: 200 },
-        { compositeKey: "u_2026-09-16", dateString: "2026-09-16", count: 2, lastUpdated: 50 },
-      ],
-      timestamp: 200,
-    };
-    const result = mergeLocalIntoServer(server, local, null);
-    expect(result.contributions.find(c => c.dateString === "2026-09-17").count).toBe(3);
-    expect(result.contributions.find(c => c.dateString === "2026-09-16").count).toBe(2);
+  it("contributions: an un-complete here is carried as a decrement, and a day unchanged here takes the server's count", () => {
+    const local = withRows([row("d", 2, 150), row("e", 1, 100)], 150);
+    const server = withRows([row("d", 4, 200), row("e", 3, 200)], 200);
+    const result = mergeLocalIntoServer(server, local, baseOf([row("d", 3), row("e", 1)]));
+    expect(result.contributions.find(c => c.dateString === "d").count).toBe(3);
+    expect(result.contributions.find(c => c.dateString === "e").count).toBe(3);
   });
 
-  it("contributions: a progress reset on the other device (server has no rows) is not undone by a stale device's old rows", () => {
-    const local = {
-      userId: "u", tasks: [], config: {},
-      contributions: [
-        { compositeKey: "u_2026-09-10", dateString: "2026-09-10", count: 2, lastUpdated: 100 },
-        { compositeKey: "u_2026-09-17", dateString: "2026-09-17", count: 1, lastUpdated: 900 },
-      ],
-      timestamp: 900,
-    };
-    // Reset at t=500 wrote an empty list, which RTDB stores as no key at all.
-    const server = { userId: "u", tasks: [], config: {}, timestamp: 500 };
-    const result = mergeLocalIntoServer(server, local, null);
-    expect(result.contributions.map(c => c.dateString)).toEqual(["2026-09-17"]);
+  it("contributions: a reset on the other device stays reset, even after new activity there, while new work here is kept", () => {
+    // Base had old days; the other device reset progress and then completed a task today.
+    const local = withRows([row("old-1", 2), row("old-2", 1), row("today", 1, 900)], 900);
+    const server = withRows([row("today", 1, 800)], 800);
+    const result = mergeLocalIntoServer(server, local, baseOf([row("old-1", 2), row("old-2", 1)]));
+    expect(result.contributions.map(c => c.dateString)).toEqual(["today"]);
+    expect(result.contributions[0].count).toBe(2);
+  });
+
+  it("contributions: a reset made here is not undone by rows the server still holds, but a day added there since is kept", () => {
+    const local = withRows([], 900);
+    const server = withRows([row("old-1", 2), row("new-there", 1, 850)], 850);
+    const result = mergeLocalIntoServer(server, local, baseOf([row("old-1", 2)]));
+    expect(result.contributions.map(c => c.dateString)).toEqual(["new-there"]);
+  });
+
+  it("contributions: with no base the server's rows are authoritative", () => {
+    const result = mergeLocalIntoServer(withRows([row("d", 4, 200)], 200), withRows([row("d", 5, 150), row("x", 1)], 150), null);
+    expect(result.contributions).toEqual([row("d", 4, 200)]);
   });
 
   it("tasks: a legacy task without a uuid is matched by id, not duplicated on every save", () => {
@@ -962,6 +960,12 @@ describe("mergeLocalIntoServer - outgoing write safety (full-payload save must n
     const result = mergeLocalIntoServer(server, local, null);
     expect(result.tasks).toHaveLength(1);
     expect(result.tasks[0].id).toBe(42);
+  });
+
+  it("tasks: the incoming merge matches a legacy task without a uuid by id too, so cache and server copies stay one task", () => {
+    const remote = { userId: "u", tasks: [{ id: 42, userId: "u", title: "Legacy", lastUpdated: 100 }], config: {}, timestamp: 100 };
+    const local = { userId: "u", tasks: [{ id: 42, uuid: "repaired-1-0", userId: "u", title: "Legacy", lastUpdated: 100 }], config: {}, timestamp: 100 };
+    expect(mergeRemotePayload(remote, local).tasks).toHaveLength(1);
   });
 
   it("brainDump: the side with the newer brainDumpUpdatedAt wins", () => {
