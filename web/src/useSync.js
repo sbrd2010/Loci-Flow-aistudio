@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } from "firebase/database";
 import { db, auth } from "./firebase";
 import { safeUUID } from "./utils/uuid";
-import { normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, configValuesEqual } from "./utils/normalizePayload";
+import { normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, configValuesEqual, mergeLocalIntoServer } from "./utils/normalizePayload";
 import { activitySnapshotPath, activityMetaPath, buildTodaySnapshot } from "./utils/activityLog";
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
@@ -17,11 +17,21 @@ export function gatePayloadToUid(payload, payloadUid, currentUid) {
 
 export const CONN = { CONNECTING: "connecting", CONNECTED: "connected", OFFLINE: "offline", ERROR: "error" };
 
-// Retry a Firebase set() up to `retries` times with exponential backoff (500ms, 1s, 2s).
-async function writeWithRetry(dbRef, data, retries = 3) {
+// Full-payload write, retried up to `retries` times with exponential backoff
+// (500ms, 1s, 2s). Runs as a transaction that merges `data` into whatever
+// sync/{uid} holds at that moment (see mergeLocalIntoServer) instead of a
+// blind set(): a set() from a device that had missed a delivery — offline,
+// asleep, or mid-debounce when the other device wrote — replaced the other
+// device's tasks with this device's stale copy, and only an open tab on the
+// other device could repair it. `baseConfig` is the config this device last
+// agreed with RTDB on, so the merge can tell its own config edits from drift.
+// applyLocally:false — local state already holds the optimistic value, so
+// only the server-confirmed result should come back through onValue.
+// Exported so the merge-on-write contract can be unit-tested directly.
+export async function writeWithRetry(dbRef, data, baseConfig, retries = 3) {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      await set(dbRef, data);
+      await runTransaction(dbRef, (current) => mergeLocalIntoServer(current, data, baseConfig), { applyLocally: false });
       return;
     } catch (err) {
       if (attempt === retries - 1) throw err;
@@ -209,7 +219,7 @@ export function useSync(uid, email) {
     // Capture the uid this write belongs to — by the time it resolves the hook
     // may have moved to a different account.
     const writeUid = uid;
-    writeWithRetry(ref(db, dbRefPath), toApply)
+    writeWithRetry(ref(db, dbRefPath), toApply, baseConfigRef.current)
       .then(() => commitBaseConfig(toApply, writeUid))
       .catch(() => {});
   };
@@ -363,7 +373,7 @@ export function useSync(uid, email) {
             if (!localWriteBeforeFirstRtdbRef.current) {
               // No savePayload fired during the cache-only window — local is genuinely
               // newer (app was killed before the last debounce flushed). Push it back.
-              writeWithRetry(ref(db, dbRefPath), payloadRef.current).catch(() => {});
+              writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseConfigRef.current).catch(() => {});
             } else {
               // savePayload fired before RTDB responded (e.g. a mount-effect on stale
               // cache), giving local a fake-fresh timestamp. Trust RTDB instead of
@@ -618,9 +628,9 @@ export function useSync(uid, email) {
         }).then((response) => {
           if (response.ok) resolveAll();
           else rejectAll(new Error(`keepalive PUT failed with status ${response.status}`));
-        }).catch(() => writeWithRetry(ref(db, dbRefPath), data).then(resolveAll).catch(rejectAll));
+        }).catch(() => writeWithRetry(ref(db, dbRefPath), data, baseConfigRef.current).then(resolveAll).catch(rejectAll));
       } else {
-        writeWithRetry(ref(db, dbRefPath), data).then(resolveAll).catch(rejectAll);
+        writeWithRetry(ref(db, dbRefPath), data, baseConfigRef.current).then(resolveAll).catch(rejectAll);
       }
     };
     const handleVisibilityChange = () => {
@@ -751,7 +761,7 @@ export function useSync(uid, email) {
     timeoutRef.current = setTimeout(() => {
       const waiters = takeWaiters();
       if (dbRefPath && payloadRef.current) {
-        writeWithRetry(ref(db, dbRefPath), payloadRef.current)
+        writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseConfigRef.current)
           .then(() => {
             console.log("Remote RTDB payload sync successful");
             waiters.forEach(w => w.resolve());
@@ -971,7 +981,7 @@ export function useSync(uid, email) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
       const waiters = takeWaiters();
-      writeWithRetry(ref(db, dbRefPath), payloadRef.current)
+      writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseConfigRef.current)
         .then(() => waiters.forEach(w => w.resolve()))
         .catch((err) => waiters.forEach(w => w.reject(err)));
     }

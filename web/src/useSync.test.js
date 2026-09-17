@@ -3,13 +3,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const refMock = vi.fn((db, path) => ({ __path: path }));
 const updateMock = vi.fn();
 const runTransactionMock = vi.fn();
+const setMock = vi.fn();
 
 vi.mock("firebase/database", () => ({
   ref: (...args) => refMock(...args),
   update: (...args) => updateMock(...args),
   runTransaction: (...args) => runTransactionMock(...args),
   onValue: vi.fn(),
-  set: vi.fn(),
+  set: (...args) => setMock(...args),
   get: vi.fn(),
   goOffline: vi.fn(),
   goOnline: vi.fn(),
@@ -20,7 +21,7 @@ vi.mock("./firebase", () => ({
   auth: { currentUser: null },
 }));
 
-import { gatePayloadToUid, writeActivityEvents, captureTodaySnapshotIfNeeded } from "./useSync";
+import { gatePayloadToUid, writeActivityEvents, captureTodaySnapshotIfNeeded, writeWithRetry } from "./useSync";
 
 // Tests for the uid-isolation gate that prevents a previous user's payload from
 // being visible to App-level effects during the render cycle that follows a uid change.
@@ -242,5 +243,68 @@ describe("captureTodaySnapshotIfNeeded", () => {
     await Promise.resolve(); // flush the not-awaited markInstrumentationStartedIfNeeded microtask
 
     expect(seenPaths).toContain("activityLogs/uid1/meta/instrumentationStartedAt");
+  });
+});
+
+// The full-payload writer must merge into what the server holds, never blindly
+// replace it — a device that missed a delivery (offline, asleep, mid-debounce)
+// used to overwrite the other device's tasks with its own stale copy.
+describe("writeWithRetry (merge-on-write)", () => {
+  beforeEach(() => {
+    runTransactionMock.mockReset();
+    setMock.mockReset();
+  });
+
+  const dbRef = { __path: "sync/uid-A" };
+  const task = (uuid, overrides = {}) => ({ id: 1, uuid, userId: "u", title: uuid, isDeleted: false, lastUpdated: 100, ...overrides });
+
+  it("writes through runTransaction (server-confirmed, applyLocally:false), never set()", async () => {
+    runTransactionMock.mockResolvedValue({ committed: true });
+    await writeWithRetry(dbRef, { userId: "u", tasks: [task("a")], config: {}, timestamp: 1 }, null);
+    expect(setMock).not.toHaveBeenCalled();
+    expect(runTransactionMock).toHaveBeenCalledTimes(1);
+    expect(runTransactionMock.mock.calls[0][0]).toBe(dbRef);
+    expect(runTransactionMock.mock.calls[0][2]).toEqual({ applyLocally: false });
+  });
+
+  it("the transaction keeps tasks the server has that this device lacks, and this device's newer edit", async () => {
+    runTransactionMock.mockResolvedValue({ committed: true });
+    const local = { userId: "u", tasks: [task("a", { isCompleted: true, lastUpdated: 300 })], config: { userId: "u" }, timestamp: 300 };
+    await writeWithRetry(dbRef, local, null);
+    const updater = runTransactionMock.mock.calls[0][1];
+    const server = { userId: "u", tasks: [task("a"), task("added-elsewhere", { lastUpdated: 250 })], config: { userId: "u" }, timestamp: 250 };
+    const written = updater(server);
+    expect(written.tasks.map(t => t.uuid).sort()).toEqual(["a", "added-elsewhere"]);
+    expect(written.tasks.find(t => t.uuid === "a").isCompleted).toBe(true);
+    expect(written.timestamp).toBe(300);
+  });
+
+  it("writes the local payload when the server has nothing at the path yet", async () => {
+    runTransactionMock.mockResolvedValue({ committed: true });
+    const local = { userId: "u", tasks: [task("a")], config: { userId: "u" }, timestamp: 5 };
+    await writeWithRetry(dbRef, local, null);
+    const written = runTransactionMock.mock.calls[0][1](null);
+    expect(written.tasks.map(t => t.uuid)).toEqual(["a"]);
+  });
+
+  it("passes the base config through so this device's own config edits win in the merge", async () => {
+    runTransactionMock.mockResolvedValue({ committed: true });
+    const base = { userId: "u", deadlineLabel: "Thesis", visitStreakCount: 4 };
+    const local = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "Thesis", visitStreakCount: 5 }, timestamp: 300 };
+    await writeWithRetry(dbRef, local, base);
+    const server = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "Job offer", visitStreakCount: 4 }, timestamp: 200 };
+    const written = runTransactionMock.mock.calls[0][1](server);
+    expect(written.config).toMatchObject({ deadlineLabel: "Job offer", visitStreakCount: 5 });
+  });
+
+  it("retries a failed transaction and rejects once retries are exhausted", async () => {
+    vi.useFakeTimers();
+    runTransactionMock.mockRejectedValue(new Error("network"));
+    const promise = writeWithRetry(dbRef, { userId: "u", tasks: [], config: {} }, null, 3);
+    const assertion = expect(promise).rejects.toThrow("network");
+    await vi.runAllTimersAsync();
+    await assertion;
+    expect(runTransactionMock).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
   });
 });

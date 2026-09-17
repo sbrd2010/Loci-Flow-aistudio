@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious } from "./normalizePayload";
+import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, mergeLocalIntoServer } from "./normalizePayload";
 
 describe("normalizePayload", () => {
   it("fills missing brainDump with []", () => {
@@ -821,5 +821,128 @@ describe("isTaskCountDropSuspicious", () => {
     expect(isTaskCountDropSuspicious(undefined, active(5))).toBe(true);
     expect(isTaskCountDropSuspicious(active(5), null)).toBe(false);
     expect(isTaskCountDropSuspicious(active(5), undefined)).toBe(false);
+  });
+});
+
+describe("mergeLocalIntoServer - outgoing write safety (full-payload save must not erase another device's work)", () => {
+  const task = (uuid, overrides = {}) => ({
+    id: 1, uuid, userId: "u", title: `Task ${uuid}`, isDeleted: false, lastUpdated: 100, ...overrides,
+  });
+
+  it("writes the local payload as-is when the server has nothing yet (first run of the transaction)", () => {
+    const local = { userId: "u", tasks: [task("a")], config: { userId: "u" }, timestamp: 500 };
+    const result = mergeLocalIntoServer(null, local, null);
+    expect(result.tasks.map(t => t.uuid)).toEqual(["a"]);
+    expect(result.timestamp).toBe(500);
+  });
+
+  it("phone reconnects after offline edits: tasks the laptop added meanwhile survive the phone's save", () => {
+    // Phone's stale copy: only task a (ticked off while offline). Laptop added b and c.
+    const local = {
+      userId: "u",
+      tasks: [task("a", { isCompleted: true, lastUpdated: 300 })],
+      config: { userId: "u" },
+      timestamp: 300,
+    };
+    const server = {
+      userId: "u",
+      tasks: [task("a"), task("b", { lastUpdated: 250 }), task("c", { lastUpdated: 260 })],
+      config: { userId: "u" },
+      timestamp: 260,
+    };
+    const result = mergeLocalIntoServer(server, local, null);
+    expect(result.tasks.map(t => t.uuid).sort()).toEqual(["a", "b", "c"]);
+    expect(result.tasks.find(t => t.uuid === "a").isCompleted).toBe(true);
+  });
+
+  it("a task edited more recently on the other device keeps that edit", () => {
+    const local = { userId: "u", tasks: [task("a", { title: "old title", lastUpdated: 100 })], config: {}, timestamp: 100 };
+    const server = { userId: "u", tasks: [task("a", { title: "new title", lastUpdated: 200 })], config: {}, timestamp: 200 };
+    const result = mergeLocalIntoServer(server, local, null);
+    expect(result.tasks[0].title).toBe("new title");
+  });
+
+  it("on an equal task timestamp the local copy wins (it is this device's own write)", () => {
+    const local = { userId: "u", tasks: [task("a", { title: "mine", lastUpdated: 100 })], config: {}, timestamp: 100 };
+    const server = { userId: "u", tasks: [task("a", { title: "theirs", lastUpdated: 100 })], config: {}, timestamp: 100 };
+    expect(mergeLocalIntoServer(server, local, null).tasks[0].title).toBe("mine");
+  });
+
+  it("a task deleted more recently on the other device stays deleted, and its tombstone is kept", () => {
+    const local = { userId: "u", tasks: [task("a", { lastUpdated: 100 }), task("b", { lastUpdated: 100 })], config: {}, timestamp: 100 };
+    const server = { userId: "u", tasks: [task("a", { isDeleted: true, lastUpdated: 200 })], config: {}, timestamp: 200 };
+    const result = mergeLocalIntoServer(server, local, null);
+    expect(result.tasks.find(t => t.uuid === "a").isDeleted).toBe(true);
+    expect(result.tasks.find(t => t.uuid === "b")).toBeTruthy();
+  });
+
+  it("local-only new tasks are written (an add on this device is never dropped)", () => {
+    const local = { userId: "u", tasks: [task("a"), task("new")], config: {}, timestamp: 100 };
+    const server = { userId: "u", tasks: [task("a")], config: {}, timestamp: 100 };
+    expect(mergeLocalIntoServer(server, local, null).tasks.map(t => t.uuid)).toEqual(["a", "new"]);
+  });
+
+  it("config: a key this device changed since base wins, a key changed elsewhere is not pushed back stale", () => {
+    const base = { userId: "u", deadlineLabel: "Thesis", visitStreakCount: 4, lastUpdated: 100 };
+    // Laptop resumed from sleep: bumped the streak, still holds the old deadline label.
+    const local = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "Thesis", visitStreakCount: 5, lastUpdated: 300 }, timestamp: 300 };
+    // Phone renamed the deadline this morning.
+    const server = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "Job offer", visitStreakCount: 4, lastUpdated: 200 }, timestamp: 200 };
+    const result = mergeLocalIntoServer(server, local, base);
+    expect(result.config.deadlineLabel).toBe("Job offer");
+    expect(result.config.visitStreakCount).toBe(5);
+    expect(result.config.lastUpdated).toBe(300);
+  });
+
+  it("config: a nudge cleared on the other device (key gone from the server) is not resurrected by a stale save", () => {
+    const base = { userId: "u", pendingCoachNudge: { text: "Take a break" }, lastUpdated: 100 };
+    const local = { userId: "u", tasks: [], config: { userId: "u", pendingCoachNudge: { text: "Take a break" }, lastUpdated: 100 }, timestamp: 300 };
+    const server = { userId: "u", tasks: [], config: { userId: "u", lastUpdated: 200 }, timestamp: 200 };
+    const result = mergeLocalIntoServer(server, local, base);
+    expect(result.config).not.toHaveProperty("pendingCoachNudge");
+  });
+
+  it("config: with no base, the server's values win and only keys the server lacks are added", () => {
+    const local = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "stale", newKey: "x" }, timestamp: 300 };
+    const server = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "fresh" }, timestamp: 200 };
+    const result = mergeLocalIntoServer(server, local, null);
+    expect(result.config.deadlineLabel).toBe("fresh");
+    expect(result.config.newKey).toBe("x");
+  });
+
+  it("contributions: a day's count bumped more recently on the other device is kept, other days merged by key", () => {
+    const local = {
+      userId: "u", tasks: [], config: {},
+      contributions: [{ compositeKey: "u_2026-09-17", dateString: "2026-09-17", count: 1, lastUpdated: 100 }],
+      timestamp: 100,
+    };
+    const server = {
+      userId: "u", tasks: [], config: {},
+      contributions: [
+        { compositeKey: "u_2026-09-17", dateString: "2026-09-17", count: 3, lastUpdated: 200 },
+        { compositeKey: "u_2026-09-16", dateString: "2026-09-16", count: 2, lastUpdated: 50 },
+      ],
+      timestamp: 200,
+    };
+    const result = mergeLocalIntoServer(server, local, null);
+    expect(result.contributions.find(c => c.dateString === "2026-09-17").count).toBe(3);
+    expect(result.contributions.find(c => c.dateString === "2026-09-16").count).toBe(2);
+  });
+
+  it("brainDump: the side with the newer brainDumpUpdatedAt wins", () => {
+    const local = { userId: "u", tasks: [], config: {}, brainDump: [{ id: 1, text: "old" }], brainDumpUpdatedAt: 100, timestamp: 100 };
+    const server = { userId: "u", tasks: [], config: {}, brainDump: [{ id: 2, text: "new" }], brainDumpUpdatedAt: 200, timestamp: 200 };
+    const result = mergeLocalIntoServer(server, local, null);
+    expect(result.brainDump).toEqual([{ id: 2, text: "new" }]);
+    expect(result.brainDumpUpdatedAt).toBe(200);
+    const flipped = mergeLocalIntoServer(local, server, null);
+    expect(flipped.brainDump).toEqual([{ id: 2, text: "new" }]);
+  });
+
+  it("the written timestamp is the max of both sides so neither device reads the write as stale", () => {
+    const local = { userId: "u", tasks: [], config: {}, timestamp: 100 };
+    const server = { userId: "u", tasks: [], config: {}, timestamp: 900 };
+    expect(mergeLocalIntoServer(server, local, null).timestamp).toBe(900);
+    expect(mergeLocalIntoServer(local, server, null).timestamp).toBe(900);
   });
 });

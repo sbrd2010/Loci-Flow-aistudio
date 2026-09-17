@@ -336,3 +336,117 @@ export function mergeRemotePayloadWithMeta(remote, local, baseConfig) {
 export function mergeRemotePayload(remote, local, baseConfig) {
   return mergeRemotePayloadWithMeta(remote, local, baseConfig).merged;
 }
+
+// ── Outgoing merge: what this device is about to WRITE ────────────────────
+//
+// mergeRemotePayloadWithMeta above shapes data coming IN. Nothing shaped data
+// going OUT: every full-payload save was a blind overwrite of sync/{uid}, so a
+// device that had missed a delivery (offline, asleep, or mid-debounce when the
+// other device wrote) replaced the other device's work with its own stale copy.
+// The other device could only repair it if it was still open. These helpers
+// run inside the write transaction, with `server` being what RTDB actually
+// holds at that moment, so the write carries both sides.
+//
+// Tie-breaks deliberately differ from the incoming merge: this is our own
+// write, so on equal timestamps local wins (an edit that did not bump its own
+// timestamp must still land), and the server wins only when strictly newer.
+
+// Per-task by uuid. Tasks only the server has are kept — including its
+// tombstones, so a delete made elsewhere is not resurrected.
+function mergeTasksForWrite(serverTasks, localTasks) {
+  const server = sanitizeTasksForRules(serverTasks);
+  const local = sanitizeTasksForRules(localTasks);
+  const serverByUuid = new Map(server.filter(t => t.uuid).map(t => [t.uuid, t]));
+  const merged = local.map(localTask => {
+    const serverTask = localTask.uuid ? serverByUuid.get(localTask.uuid) : undefined;
+    if (!serverTask) return localTask;
+    const serverTs = finiteNumber(serverTask.lastUpdated) ?? 0;
+    const localTs = finiteNumber(localTask.lastUpdated) ?? 0;
+    return serverTs > localTs ? serverTask : localTask;
+  });
+  const localUuids = new Set(local.map(t => t.uuid).filter(Boolean));
+  const serverOnly = server.filter(t => t.uuid && !localUuids.has(t.uuid));
+  return [...merged, ...serverOnly];
+}
+
+// Per-key against `base` (the config this device last agreed with RTDB on):
+// keys this device changed since base are its edits and win; every other key
+// is the server's, so an edit made elsewhere that this device has not received
+// yet is not pushed back at its old value. Without a base an edit cannot be
+// told from stale drift, so the server's value wins wherever it has one —
+// the same accepted cost as the incoming merge, and strictly safer than the
+// whole-config overwrite this replaces.
+function mergeConfigForWrite(serverConfig, localConfig, baseConfig) {
+  const server = objectOrEmpty(serverConfig);
+  const local = objectOrEmpty(localConfig);
+  const base = baseConfig ? objectOrEmpty(baseConfig) : null;
+  const merged = { ...server };
+  for (const key of Object.keys(local)) {
+    if (key === "lastUpdated") continue;
+    // Unchanged here since base: the server's state stands — including the
+    // key being gone, which is how a nudge or check-in cleared elsewhere
+    // (written as null, so RTDB dropped it) stays cleared instead of being
+    // resurrected from this device's stale copy.
+    if (base && configValuesEqual(local[key], base[key])) continue;
+    if (!base && hasOwn(server, key)) continue;
+    merged[key] = local[key];
+  }
+  merged.lastUpdated = Math.max(
+    finiteNumber(server.lastUpdated) ?? 0,
+    finiteNumber(local.lastUpdated) ?? 0
+  );
+  return merged;
+}
+
+// Per-day by compositeKey (dateString as fallback for legacy rows), same
+// "server wins only when strictly newer" rule as tasks.
+function mergeContributionsForWrite(serverContributions, localContributions) {
+  const keyOf = c => c?.compositeKey || c?.dateString || null;
+  const server = arrayOrEmpty(serverContributions).filter(c => c && typeof c === "object");
+  const local = arrayOrEmpty(localContributions).filter(c => c && typeof c === "object");
+  const serverByKey = new Map(server.filter(keyOf).map(c => [keyOf(c), c]));
+  const merged = local.map(localRow => {
+    const serverRow = keyOf(localRow) ? serverByKey.get(keyOf(localRow)) : undefined;
+    if (!serverRow) return localRow;
+    const serverTs = finiteNumber(serverRow.lastUpdated) ?? 0;
+    const localTs = finiteNumber(localRow.lastUpdated) ?? 0;
+    return serverTs > localTs ? serverRow : localRow;
+  });
+  const localKeys = new Set(local.map(keyOf).filter(Boolean));
+  const serverOnly = server.filter(c => keyOf(c) && !localKeys.has(keyOf(c)));
+  return [...merged, ...serverOnly];
+}
+
+// Update function for the full-payload write transaction. `server` is null
+// when RTDB has nothing at this path yet (or the SDK has no cached value on
+// the transaction's first, speculative run — the server then rejects and
+// re-runs it with the real value), in which case the local payload is
+// written as-is.
+//
+// chatHistory has no per-message metadata to merge on, so it stays
+// last-write-wins as before. The written `timestamp` is the max of both
+// sides so neither device later reads this write as older than what it holds.
+export function mergeLocalIntoServer(server, local, baseConfig) {
+  const normalizedLocal = normalizePayload(local);
+  if (!server || typeof server !== "object" || Array.isArray(server)) return normalizedLocal;
+  const normalizedServer = normalizePayload(server);
+
+  const serverBrainDumpIsNewer =
+    (finiteNumber(normalizedServer.brainDumpUpdatedAt) ?? 0) > (finiteNumber(normalizedLocal.brainDumpUpdatedAt) ?? 0);
+
+  return {
+    ...normalizedLocal,
+    tasks: mergeTasksForWrite(normalizedServer.tasks, normalizedLocal.tasks),
+    config: mergeConfigForWrite(normalizedServer.config, normalizedLocal.config, baseConfig),
+    contributions: mergeContributionsForWrite(normalizedServer.contributions, normalizedLocal.contributions),
+    brainDump: serverBrainDumpIsNewer ? normalizedServer.brainDump : normalizedLocal.brainDump,
+    brainDumpUpdatedAt: Math.max(
+      finiteNumber(normalizedServer.brainDumpUpdatedAt) ?? 0,
+      finiteNumber(normalizedLocal.brainDumpUpdatedAt) ?? 0
+    ),
+    timestamp: Math.max(
+      finiteNumber(normalizedServer.timestamp) ?? 0,
+      finiteNumber(normalizedLocal.timestamp) ?? 0
+    ),
+  };
+}
