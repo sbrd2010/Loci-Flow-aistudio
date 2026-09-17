@@ -3,13 +3,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const refMock = vi.fn((db, path) => ({ __path: path }));
 const updateMock = vi.fn();
 const runTransactionMock = vi.fn();
+const setMock = vi.fn();
 
 vi.mock("firebase/database", () => ({
   ref: (...args) => refMock(...args),
   update: (...args) => updateMock(...args),
   runTransaction: (...args) => runTransactionMock(...args),
   onValue: vi.fn(),
-  set: vi.fn(),
+  set: (...args) => setMock(...args),
   get: vi.fn(),
   goOffline: vi.fn(),
   goOnline: vi.fn(),
@@ -20,7 +21,7 @@ vi.mock("./firebase", () => ({
   auth: { currentUser: null },
 }));
 
-import { gatePayloadToUid, writeActivityEvents, captureTodaySnapshotIfNeeded } from "./useSync";
+import { gatePayloadToUid, writeActivityEvents, captureTodaySnapshotIfNeeded, writeWithRetry, readCache, writeCache } from "./useSync";
 
 // Tests for the uid-isolation gate that prevents a previous user's payload from
 // being visible to App-level effects during the render cycle that follows a uid change.
@@ -242,5 +243,125 @@ describe("captureTodaySnapshotIfNeeded", () => {
     await Promise.resolve(); // flush the not-awaited markInstrumentationStartedIfNeeded microtask
 
     expect(seenPaths).toContain("activityLogs/uid1/meta/instrumentationStartedAt");
+  });
+});
+
+// The full-payload writer must merge into what the server holds, never blindly
+// replace it — a device that missed a delivery (offline, asleep, mid-debounce)
+// used to overwrite the other device's tasks with its own stale copy.
+describe("writeWithRetry (merge-on-write)", () => {
+  beforeEach(() => {
+    runTransactionMock.mockReset();
+    setMock.mockReset();
+  });
+
+  const dbRef = { __path: "sync/uid-A" };
+  const task = (uuid, overrides = {}) => ({ id: 1, uuid, userId: "u", title: uuid, isDeleted: false, lastUpdated: 100, ...overrides });
+
+  it("writes through runTransaction (server-confirmed, applyLocally:false), never set()", async () => {
+    runTransactionMock.mockResolvedValue({ committed: true });
+    await writeWithRetry(dbRef, { userId: "u", tasks: [task("a")], config: {}, timestamp: 1 }, null);
+    expect(setMock).not.toHaveBeenCalled();
+    expect(runTransactionMock).toHaveBeenCalledTimes(1);
+    expect(runTransactionMock.mock.calls[0][0]).toBe(dbRef);
+    expect(runTransactionMock.mock.calls[0][2]).toEqual({ applyLocally: false });
+  });
+
+  it("the transaction keeps tasks the server has that this device lacks, and this device's newer edit", async () => {
+    runTransactionMock.mockResolvedValue({ committed: true });
+    const local = { userId: "u", tasks: [task("a", { isCompleted: true, lastUpdated: 300 })], config: { userId: "u" }, timestamp: 300 };
+    await writeWithRetry(dbRef, local, null);
+    const updater = runTransactionMock.mock.calls[0][1];
+    const server = { userId: "u", tasks: [task("a"), task("added-elsewhere", { lastUpdated: 250 })], config: { userId: "u" }, timestamp: 250 };
+    const written = updater(server);
+    expect(written.tasks.map(t => t.uuid).sort()).toEqual(["a", "added-elsewhere"]);
+    expect(written.tasks.find(t => t.uuid === "a").isCompleted).toBe(true);
+    expect(written.timestamp).toBe(300);
+  });
+
+  it("writes the local payload when the server has nothing at the path yet", async () => {
+    runTransactionMock.mockResolvedValue({ committed: true });
+    const local = { userId: "u", tasks: [task("a")], config: { userId: "u" }, timestamp: 5 };
+    await writeWithRetry(dbRef, local, null);
+    const written = runTransactionMock.mock.calls[0][1](null);
+    expect(written.tasks.map(t => t.uuid)).toEqual(["a"]);
+  });
+
+  it("passes the base config through so this device's own config edits win in the merge", async () => {
+    runTransactionMock.mockResolvedValue({ committed: true });
+    const base = { config: { userId: "u", deadlineLabel: "Thesis", visitStreakCount: 4 }, contributions: [] };
+    const local = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "Thesis", visitStreakCount: 5 }, timestamp: 300 };
+    await writeWithRetry(dbRef, local, base);
+    const server = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "Job offer", visitStreakCount: 4 }, timestamp: 200 };
+    const written = runTransactionMock.mock.calls[0][1](server);
+    expect(written.config).toMatchObject({ deadlineLabel: "Job offer", visitStreakCount: 5 });
+  });
+
+  it("resolves with the committed payload (what the server holds after the merge), for use as the agreed base", async () => {
+    const committed = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "from server" }, timestamp: 9 };
+    runTransactionMock.mockResolvedValue({ committed: true, snapshot: { val: () => committed } });
+    const result = await writeWithRetry(dbRef, { userId: "u", tasks: [], config: { userId: "u" }, timestamp: 1 }, null);
+    expect(result).toEqual(committed);
+  });
+
+  it("treats a resolved-but-uncommitted transaction as a failure: retries, then rejects", async () => {
+    vi.useFakeTimers();
+    runTransactionMock.mockResolvedValue({ committed: false, snapshot: { val: () => ({ userId: "u" }) } });
+    const promise = writeWithRetry(dbRef, { userId: "u", tasks: [], config: {} }, null, { retries: 2 });
+    const assertion = expect(promise).rejects.toThrow("not committed");
+    await vi.runAllTimersAsync();
+    await assertion;
+    expect(runTransactionMock).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it("retries a failed transaction and rejects once retries are exhausted", async () => {
+    vi.useFakeTimers();
+    runTransactionMock.mockRejectedValue(new Error("network"));
+    const promise = writeWithRetry(dbRef, { userId: "u", tasks: [], config: {} }, null, { retries: 3 });
+    const assertion = expect(promise).rejects.toThrow("network");
+    await vi.runAllTimersAsync();
+    await assertion;
+    expect(runTransactionMock).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
+  });
+});
+
+// The payload cache record carries the merge base it was built on, written in
+// one setItem, so a fresh mount can merge per key like a live session does.
+describe("payload cache record (readCache / writeCache)", () => {
+  let store;
+  beforeEach(() => {
+    store = new Map();
+    globalThis.localStorage = {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => { store.set(k, String(v)); },
+      removeItem: (k) => { store.delete(k); },
+    };
+  });
+
+  const payload = { userId: "u", tasks: [{ id: 1, uuid: "a", userId: "u", title: "A" }], config: { userId: "u" }, timestamp: 5 };
+
+  it("round-trips the payload together with its base in a single record", () => {
+    const base = { config: { userId: "u", deadlineLabel: "Thesis" }, contributions: [{ compositeKey: "u_d", count: 2 }] };
+    writeCache("uid-A", payload, base);
+    expect(store.size).toBe(1);
+    expect(readCache("uid-A")).toEqual({ payload, base });
+    expect(readCache("uid-B")).toBeNull();
+  });
+
+  it("reads a record written before the base existed (a bare payload) with base null", () => {
+    store.set("loci_payload_v1_uid-A", JSON.stringify(payload));
+    expect(readCache("uid-A")).toEqual({ payload, base: null });
+  });
+
+  it("rejects a record without tasks or config, a corrupt entry, and tolerates missing localStorage", () => {
+    writeCache("uid-A", { config: {} }, null);
+    expect(readCache("uid-A")).toBeNull();
+    store.set("loci_payload_v1_uid-A", "{not json");
+    expect(readCache("uid-A")).toBeNull();
+    delete globalThis.localStorage;
+    expect(() => writeCache("uid-A", payload, null)).not.toThrow();
+    expect(readCache("uid-A")).toBeNull();
   });
 });
