@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules } from "./normalizePayload";
+import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules, applyEditsSince } from "./normalizePayload";
 
 describe("normalizePayload", () => {
   it("fills missing brainDump with []", () => {
@@ -982,6 +982,25 @@ describe("mergeLocalIntoServer - outgoing write safety (full-payload save must n
     // Counter-example, the bug this guards against: base := committed WITHOUT absorbing it into local flags a write-back of the stale values.
     const stale = mergeRemotePayloadWithMeta(committed, local, committed.config, committed.contributions, committed.brainDump);
     expect(stale.hasLocalContribution).toBe(true);
+  });
+
+  it("applyEditsSince: edits made after the payload was submitted survive absorbing the commit, even against the other device's change", () => {
+    const item = (id) => ({ id, text: id, createdAt: 1 });
+    const written = { userId: "u", tasks: [], config: { userId: "u", deadlineLabel: "Thesis", roadmapStyle: "compact" }, contributions: [row("d", 3, 100)], brainDump: [item("a"), item("b")], timestamp: 100 };
+    // While the write was in flight, this device: renamed the deadline again, un-completed one task (3 → 2), deleted note b, added note c.
+    const local = { ...written, config: { ...written.config, deadlineLabel: "Job offer v3" }, contributions: [row("d", 2, 150)], brainDump: [item("a"), item("c")], timestamp: 150 };
+    // The commit kept the laptop's rename (a conflict the standard rule resolves to the committed value) and its new note.
+    const committed = { ...written, config: { ...written.config, deadlineLabel: "Job offer v2", roadmapStyle: "detailed" }, contributions: [row("d", 3, 100)], brainDump: [item("a"), item("b"), item("theirs")], timestamp: 200 };
+    const base = { config: { userId: "u", deadlineLabel: "Thesis", roadmapStyle: "compact" }, contributions: [row("d", 3)], brainDump: [item("a"), item("b")] };
+    const { merged } = mergeRemotePayloadWithMeta(committed, local, base.config, base.contributions, base.brainDump);
+    expect(merged.config.deadlineLabel).toBe("Job offer v2"); // standard conflict rule alone would lose the newer local edit
+    const result = applyEditsSince(merged, local, written);
+    expect(result.config.deadlineLabel).toBe("Job offer v3");
+    expect(result.config.roadmapStyle).toBe("detailed"); // unchanged here since submit: the commit's value stands
+    expect(result.contributions.find(c => c.dateString === "d").count).toBe(2);
+    expect(result.brainDump.map(i => i.id).sort()).toEqual(["a", "c", "theirs"]);
+    // No edits since submit: a no-op.
+    expect(applyEditsSince(merged, written, written)).toEqual(merged);
   });
 
   it("brainDump: with a base, items are merged per item — an item added on each device survives, one deleted elsewhere stays deleted", () => {

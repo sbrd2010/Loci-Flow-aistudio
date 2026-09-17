@@ -304,6 +304,17 @@ describe("writeWithRetry (merge-on-write)", () => {
     expect(result).toEqual(committed);
   });
 
+  it("treats a resolved-but-uncommitted transaction as a failure: retries, then rejects", async () => {
+    vi.useFakeTimers();
+    runTransactionMock.mockResolvedValue({ committed: false, snapshot: { val: () => ({ userId: "u" }) } });
+    const promise = writeWithRetry(dbRef, { userId: "u", tasks: [], config: {} }, null, { retries: 2 });
+    const assertion = expect(promise).rejects.toThrow("not committed");
+    await vi.runAllTimersAsync();
+    await assertion;
+    expect(runTransactionMock).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
   it("retries a failed transaction and rejects once retries are exhausted", async () => {
     vi.useFakeTimers();
     runTransactionMock.mockRejectedValue(new Error("network"));

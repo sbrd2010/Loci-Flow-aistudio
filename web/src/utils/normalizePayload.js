@@ -570,6 +570,57 @@ function mergeBrainDump(serverItems, localItems, baseItems) {
   return { items, hasLocalContribution };
 }
 
+// Re-applies the edits this device made AFTER `written` was submitted to a
+// write transaction, on top of `merged` (the committed result merged into
+// local state). Those edits are newer in real time than anything the commit
+// carries, so they win even where the standard per-key conflict rule would
+// prefer the committed value; a debounce is already pending to write them.
+// Tasks need no overlay: a post-submit edit has a newer lastUpdated and wins
+// in the merge already.
+export function applyEditsSince(merged, local, written) {
+  const localConfig = objectOrEmpty(local?.config);
+  const writtenConfig = objectOrEmpty(written?.config);
+  const config = { ...objectOrEmpty(merged.config) };
+  for (const key of Object.keys(localConfig)) {
+    if (key === "lastUpdated") continue;
+    if (!configValuesEqual(localConfig[key], writtenConfig[key])) config[key] = localConfig[key];
+  }
+
+  const rowKey = c => c?.compositeKey || c?.dateString || null;
+  const rows = items => arrayOrEmpty(items).filter(c => c && typeof c === "object");
+  const localRows = new Map(rows(local?.contributions).filter(rowKey).map(c => [rowKey(c), c]));
+  const writtenRows = new Map(rows(written?.contributions).filter(rowKey).map(c => [rowKey(c), c]));
+  const countOf = row => finiteNumber(row?.count) ?? 0;
+  const contributions = [];
+  const seen = new Set();
+  for (const row of rows(merged.contributions)) {
+    const key = rowKey(row);
+    if (!key) { contributions.push(row); continue; }
+    seen.add(key);
+    const localRow = localRows.get(key);
+    const writtenRow = writtenRows.get(key);
+    if (!localRow && writtenRow) continue; // removed here since submit
+    if (localRow && (!writtenRow || countOf(localRow) !== countOf(writtenRow))) { contributions.push(localRow); continue; }
+    contributions.push(row);
+  }
+  for (const [key, localRow] of localRows) {
+    if (!seen.has(key) && !writtenRows.has(key)) contributions.push(localRow); // added here since submit
+  }
+
+  const itemKey = item => item?.id ?? (item && typeof item === "object" ? `${item.createdAt ?? ""}:${item.text ?? ""}` : null);
+  const items = list => arrayOrEmpty(list).filter(item => item && typeof item === "object");
+  const localItems = items(local?.brainDump);
+  const localKeys = new Set(localItems.map(itemKey));
+  const writtenKeys = new Set(items(written?.brainDump).map(itemKey));
+  const mergedKeys = new Set(items(merged.brainDump).map(itemKey));
+  const brainDump = items(merged.brainDump).filter(item => localKeys.has(itemKey(item)) || !writtenKeys.has(itemKey(item)));
+  for (const item of localItems) {
+    if (!mergedKeys.has(itemKey(item)) && !writtenKeys.has(itemKey(item))) brainDump.push(item);
+  }
+
+  return { ...merged, config, contributions, brainDump: brainDump.slice(0, BRAIN_DUMP_LIMIT) };
+}
+
 // Update function for the full-payload write transaction. `server` is null
 // when RTDB has nothing at this path yet (or the SDK has no cached value on
 // the transaction's first, speculative run — the server then rejects and
