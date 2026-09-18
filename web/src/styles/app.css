@@ -3209,6 +3209,162 @@ html[data-theme="option-e-slate"] {
   --btn-text: #ffffff;
 }
 
+/* ============================================================
+   THE REDESIGN — two themes over one design (handoff, turn 10)
+   ============================================================
+   Evening (warm near-black + gold) and Paper (warm light) are the
+   same design with one token set swapped. Nothing in the layout is
+   conditional on which one is active.
+
+   Both blocks define the handoff's own token names as well as this
+   file's existing vocabulary, so the rebuilt components can consume
+   --ground/--ink/--gold directly while every screen that has not
+   been rebuilt yet keeps working off --bg-primary/--accent/etc.
+
+   Two deliberate departures from the handoff, both noted inline:
+     - --gold is #b07d31, not #b68235. The spec value is 2.98:1 on
+       --paper, just under the 3:1 WCAG 1.4.11 floor for a border
+       that signals "act on this".
+     - --border-strong is a third line token the handoff does not
+       have. It only has --divider (hairlines) and --border (panel
+       edges), and neither clears 3:1, so an outlined button drawn
+       with them has no perceivable boundary. Hairlines stay quiet;
+       control edges use --border-strong.
+   ============================================================ */
+
+/* ---- THEME 14: Evening (the redesign's default) ---- */
+html[data-theme="evening"] {
+  /* — handoff tokens: the source of truth for rebuilt screens — */
+  --ground:        #171512;
+  --surface:       #1e1b17;
+  --ink:           #f2efe9;  /* on a dark ground the "ink" role is the light one */
+  --ink-hover:     #ffffff;
+  --text-soft:     #b0a99e;  /* the handoff calls this --text-muted; renamed because
+                                this file already uses --text-muted for the tier below */
+  --text-quiet:    #8f887d;
+  --text-faint:    #5f594f;  /* NON-TEXT ONLY: icon strokes, 1px marks */
+  --text-placeholder: #8f887d;
+  --gold:          #a8863f;  /* --accent-line: borders and 1px rules */
+  --gold-deep:     #a8863f;
+  --gold-lift:     #d8ad63;  /* gold on dark grounds — the accent proper */
+  --gold-tint:     rgba(216, 173, 99, 0.13);
+  --clay:          #e0704f;  /* time pressure only: days-left, zero-progress figures */
+  --divider:       #2e2a24;
+  --divider-soft:  #26221c;
+  --border-strong: #6a6356;  /* control edges; clears 3:1 on --ground */
+  --hover-paper:   #26221c;
+  --hover-row:     #2a251e;
+
+  /* — existing vocabulary, mapped onto the above — */
+  --radius: 4px;
+  --radius-sm: 4px;
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-sans: 'Manrope', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Space Mono', ui-monospace, monospace;
+  --font-serif: 'Lora', Georgia, serif;
+  --bg-primary: #171512;
+  --bg-card: #1e1b17;
+  --bg-card-hover: #26221c;
+  --bg-secondary: #1e1b17;
+  --bg-input: #1e1b17;
+  --accent: #d8ad63;
+  --accent-light: rgba(216, 173, 99, 0.16);
+  --accent-dark: #a8863f;
+  --accent-secondary: #a8863f;
+  --text-primary: #f2efe9;
+  --text-secondary: #b0a99e;
+  --text-muted: #8f887d;
+  --border: #3d3830;
+  --border-focus: #d8ad63;
+  --success: #d8ad63;        /* the handoff marks completion with a gold check */
+  --warning: #e0704f;
+  --danger: #e0704f;         /* departure: the handoff routes errors to ink. This app
+                                has real destructive actions, and an uncoloured delete
+                                is a safety regression, so --danger keeps the alert hue. */
+  --p1-bg: rgba(224, 112, 79, 0.14);  --p1-text: #e0704f;
+  --p2-bg: rgba(216, 173, 99, 0.13);  --p2-text: #d8ad63;
+  --p3-bg: rgba(242, 239, 233, 0.07); --p3-text: #b0a99e;
+  --p4-bg: rgba(242, 239, 233, 0.05); --p4-text: #8f887d;
+  --shadow-sm: none;         /* elevation is --surface plus a 1px border, never a shadow */
+  --shadow-md: none;
+  --shadow-lg: none;
+  --accent-glow: rgba(216, 173, 99, 0.34);
+  --accent-ring: rgba(216, 173, 99, 0.16);
+  --overlay-bg: rgba(10, 9, 7, 0.78);
+  --affirmation-bg: rgba(216, 173, 99, 0.08);
+  --bento-l1: rgba(216, 173, 99, 0.12);
+  --bento-l2: rgba(216, 173, 99, 0.32);
+  --bento-l3: rgba(216, 173, 99, 0.58);
+  --btn-text: #171512;       /* near-black on the gold fill — 8.4:1 */
+}
+
+/* ---- THEME 15: Paper ---- */
+html[data-theme="paper"] {
+  /* — handoff tokens: the source of truth for rebuilt screens — */
+  --ground:        #f4f1e9;
+  --surface:       #fdfbf6;
+  --ink:           #201f1d;
+  --ink-hover:     #3a3833;
+  --text-soft:     #45433e;  /* the handoff's --text-muted; see the note in Evening */
+  --text-quiet:    #5c5a55;
+  --text-faint:    #a8a49c;  /* NON-TEXT ONLY: 2.2:1 on --ground */
+  --text-placeholder: #5c5a55;
+  --gold:          #b07d31;  /* spec says #b68235; raised to clear 3:1 as a border */
+  --gold-deep:     #835c24;  /* gold used AS TEXT — 5.3:1 on --ground */
+  --gold-lift:     #d8ad63;  /* dark grounds only: the focus session, the rail's timer */
+  --gold-tint:     #f5ecda;
+  --clay:          #a94a28;  /* time pressure only */
+  --divider:       #ded9cd;
+  --divider-soft:  #e6e1d5;
+  --border-strong: #8f8a7c;  /* control edges; clears 3:1 on --ground */
+  --hover-paper:   #ece7db;
+  --hover-row:     #efe9dc;
+
+  /* — existing vocabulary, mapped onto the above — */
+  --radius: 4px;
+  --radius-sm: 4px;
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-sans: 'Manrope', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Space Mono', ui-monospace, monospace;
+  --font-serif: 'Lora', Georgia, serif;
+  --bg-primary: #f4f1e9;
+  --bg-card: #fdfbf6;
+  --bg-card-hover: #ece7db;
+  --bg-secondary: #efe9dc;
+  --bg-input: #fdfbf6;
+  --accent: #835c24;         /* correct for the 23 label/kicker and 6 border uses.
+                                The 16 places that fill with --accent stay gold until
+                                the buttons are rebuilt to the ink fill — contrast is
+                                safe at 5.3:1, but the "gold is stroke only" rule is
+                                not true on those until then. */
+  --accent-light: #f5ecda;
+  --accent-dark: #6f4e1f;
+  --accent-secondary: #b07d31;
+  --text-primary: #201f1d;
+  --text-secondary: #45433e;
+  --text-muted: #5c5a55;     /* 6.1:1 — the handoff's floor is 4.5:1 for every text tier */
+  --border: #ded9cd;
+  --border-focus: #b07d31;
+  --success: #835c24;
+  --warning: #a94a28;
+  --danger: #a94a28;         /* departure — see the Evening block */
+  --p1-bg: #f7e8e1; --p1-text: #a94a28;
+  --p2-bg: #f5ecda; --p2-text: #835c24;
+  --p3-bg: #ece7db; --p3-text: #45433e;
+  --p4-bg: #efe9dc; --p4-text: #5c5a55;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --accent-glow: rgba(176, 125, 49, 0.32);
+  --accent-ring: rgba(176, 125, 49, 0.16);
+  --overlay-bg: rgba(32, 31, 29, 0.55);
+  --affirmation-bg: #f5ecda;
+  --bento-l1: rgba(176, 125, 49, 0.12);
+  --bento-l2: rgba(176, 125, 49, 0.32);
+  --bento-l3: rgba(176, 125, 49, 0.58);
+  --btn-text: #f4f1e9;       /* 5.3:1 on the --accent fill */
+}
+
 /* Motivation quote — clamp to 1 line on small phones so it doesn't eat screen space */
 @media (max-width: 480px) {
   .today-quote-secondary {

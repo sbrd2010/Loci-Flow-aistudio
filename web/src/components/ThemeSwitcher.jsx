@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from "react";
 
 const THEMES = [
+  // The redesign ships as two themes over one design: Evening is the default the
+  // handoff specifies, Paper is the same layout on a warm light ground.
+  { id: "evening",   label: "Evening",     emoji: "\u{1F319}", desc: "Warm near-black and gold" },
+  { id: "paper",     label: "Paper",       emoji: "\u{1F4C4}", desc: "Warm light, gold strokes" },
   { id: "glassy",    label: "Dark Glass",  emoji: "🔮", desc: "Deep navy glassmorphism" },
   { id: "coral",     label: "Warm Coral",  emoji: "🌅", desc: "Terracotta light" },
   { id: "teal",      label: "Executive",   emoji: "🌿", desc: "Corporate teal" },
