@@ -1160,3 +1160,39 @@ describe("rule caps on config strings and chat messages (one over-long value mus
     expect(sanitizeChatHistoryForRules(null)).toBeNull();
   });
 });
+
+describe("normalizePayload — config.fronts", () => {
+  it("clamps an overlong front name so it cannot fail the whole payload write", () => {
+    const out = normalizePayload({
+      tasks: [], config: { userId: "u", fronts: [{ id: "f1", name: "n".repeat(500), nextMove: "m".repeat(900) }] },
+    });
+    expect(out.config.fronts[0].name).toHaveLength(100);
+    expect(out.config.fronts[0].nextMove).toHaveLength(300);
+  });
+
+  it("drops malformed fronts rather than writing junk", () => {
+    const out = normalizePayload({
+      tasks: [], config: { userId: "u", fronts: [{ name: "Keeps" }, null, { name: "" }, "nope"] },
+    });
+    expect(out.config.fronts.map(f => f.name)).toEqual(["Keeps"]);
+  });
+
+  it("coerces a non-array fronts value to []", () => {
+    expect(normalizePayload({ tasks: [], config: { userId: "u", fronts: "not an array" } }).config.fronts).toEqual([]);
+  });
+
+  it("leaves a config with no fronts key untouched — existing users write exactly what they wrote before", () => {
+    const out = normalizePayload({ tasks: [], config: { userId: "u", deadlineLabel: "Membrane paper" } });
+    expect(out.config).not.toHaveProperty("fronts");
+  });
+
+  it("preserves frontId and waitingOn on tasks through sanitisation", () => {
+    const out = normalizePayload({
+      userId: "u",
+      tasks: [{ id: 1, uuid: "a", title: "Chase the seal spec", userId: "u", frontId: "f2", waitingOn: "Chris" }],
+      config: { userId: "u" },
+    });
+    expect(out.tasks[0].frontId).toBe("f2");
+    expect(out.tasks[0].waitingOn).toBe("Chris");
+  });
+});
