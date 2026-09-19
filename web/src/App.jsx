@@ -1095,6 +1095,8 @@ export default function App() {
             saveConfigPatch={saveConfigPatch}
             lastSyncedAt={lastSyncedAt}
             onSignOut={demoMode ? exitDemo : handleSwitchUser}
+            theme={theme}
+            onThemeChange={setTheme}
           />
         )}
       </main>
