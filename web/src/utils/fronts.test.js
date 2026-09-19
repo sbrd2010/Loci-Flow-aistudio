@@ -17,6 +17,8 @@ import {
   frontNextMove,
   sortFronts,
   frontIsWaiting,
+  frontDueLabel,
+  planFooterSentence,
 } from "./fronts";
 
 const task = (over = {}) => ({ uuid: "t", title: "A task", frontId: null, isCompleted: false, isParked: false, isDeleted: false, orderIndex: 0, ...over });
@@ -307,5 +309,65 @@ describe("frontIsWaiting", () => {
   it("is false for a front with nothing open, rather than vacuously true", () => {
     expect(frontIsWaiting([task({ frontId: "f1", isCompleted: true, waitingOn: "Chris" })], "f1")).toBe(false);
     expect(frontIsWaiting([], "f1")).toBe(false);
+  });
+});
+
+describe("frontDueLabel", () => {
+  const now = new Date(2026, 10, 4); // 4 Nov 2026
+
+  it("shows days when the deadline is close enough to feel", () => {
+    expect(frontDueLabel({ dueAt: "2026-11-15" }, now)).toBe("11d");
+    expect(frontDueLabel({ dueAt: "2026-11-04" }, now)).toBe("0d");
+  });
+
+  it("shows a date once it is further out, and a bare month further still", () => {
+    expect(frontDueLabel({ dueAt: "2026-12-20" }, now)).toBe("20 Dec");
+    expect(frontDueLabel({ dueAt: "2027-06-01" }, now)).toBe("Jun");
+  });
+
+  it("says OVERDUE rather than a negative number", () => {
+    expect(frontDueLabel({ dueAt: "2026-10-01" }, now)).toBe("OVERDUE");
+  });
+
+  it("replaces the date with PARKED for a parked front", () => {
+    expect(frontDueLabel({ dueAt: "2026-11-15", parked: true }, now)).toBe("PARKED");
+    expect(frontDueLabel({ parked: true }, now)).toBe("PARKED");
+  });
+
+  it("shows nothing for an undated, unparked front", () => {
+    expect(frontDueLabel({ name: "Someday" }, now)).toBeNull();
+  });
+});
+
+describe("planFooterSentence", () => {
+  const now = new Date(2026, 10, 4);
+  const front = (over) => ({ id: "f", name: "F", parked: false, ...over });
+
+  it("is null when there is nothing live to describe", () => {
+    expect(planFooterSentence([], [], now)).toBeNull();
+    expect(planFooterSentence([front({ parked: true })], [], now)).toBeNull();
+  });
+
+  it("states how many fronts are actually moving", () => {
+    const fronts = [front({ id: "a", nextMove: "Do it" }), front({ id: "b" })];
+    expect(planFooterSentence(fronts, [], now)).toContain("1 of 2 fronts have a next move");
+  });
+
+  it("does not shame when nothing is moving", () => {
+    const s = planFooterSentence([front({ id: "a" })], [], now);
+    expect(s).toBe("No front has a next move yet.");
+    expect(s).not.toMatch(/should|behind|fail/i);
+  });
+
+  it("names deadline pressure only when it is real", () => {
+    expect(planFooterSentence([front({ id: "a", dueAt: "2026-11-10", nextMove: "x" })], [], now))
+      .toContain("One has a deadline inside a fortnight.");
+    expect(planFooterSentence([front({ id: "a", dueAt: "2027-06-01", nextMove: "x" })], [], now))
+      .not.toContain("fortnight");
+  });
+
+  it("frames parked fronts as a choice, not a failure", () => {
+    const s = planFooterSentence([front({ id: "a", nextMove: "x" }), front({ id: "b", parked: true })], [], now);
+    expect(s).toContain("1 is parked, and stays that way until you say otherwise.");
   });
 });

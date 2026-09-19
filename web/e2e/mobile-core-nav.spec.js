@@ -47,7 +47,16 @@ for (const viewport of MOBILE_VIEWPORTS) {
     await expect(page.getByTestId("today-tasks-list")).toBeVisible({ timeout: 8_000 });
     await expectNoHorizontalOverflow(page);
 
+    // The Roadmap tab opens on Plan (the redesign's screen 4); the horizon
+    // board is one tap behind it. Both need the overflow guard — Plan's header
+    // puts a title and a "New front" button on one row, which is exactly the
+    // kind of thing that overflows at 320px.
     await openTab(page, "Roadmap");
+    await expect(page.locator(".plan-tab")).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText("ONE NEXT MOVE EACH")).toBeVisible({ timeout: 8_000 });
+    await expectNoHorizontalOverflow(page);
+
+    await page.getByRole("button", { name: "Plan by time horizon instead" }).click();
     await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible({ timeout: 8_000 });
     await expectNoHorizontalOverflow(page);
 

@@ -1,0 +1,242 @@
+/* Plan — screen 4. Hairline rows, no cards, one dominant element.
+   Every token falls back to this app's existing vocabulary so the screen still
+   renders correctly under the thirteen themes that predate the redesign. */
+
+.plan-tab {
+  padding: 18px 22px 96px;
+  font-family: var(--font-sans);
+  color: var(--ink, var(--text-primary));
+}
+
+/* — header — */
+.plan-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+.plan-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+.plan-kicker {
+  margin-top: 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold-deep, var(--accent));
+}
+/* The design gives this button nowrap + no shrink: "New front" wrapping to two
+   lines is what breaks this header at 320px. */
+.plan-new-front {
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-height: 44px;
+  padding: 0 14px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, var(--text-primary));
+  background: transparent;
+  border: 1px solid var(--divider, var(--border));
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.plan-new-front:hover { background: var(--hover-paper, var(--bg-card-hover)); }
+
+/* — new front form — */
+.plan-new-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 18px 0 4px;
+  padding: 16px 0;
+  border-top: 1px solid var(--divider, var(--border));
+  border-bottom: 1px solid var(--divider, var(--border));
+}
+.plan-new-label {
+  font-size: 12px;
+  color: var(--text-quiet, var(--text-muted));
+}
+.plan-new-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 0;
+  margin-bottom: 8px;
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink, var(--text-primary));
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ink, var(--text-primary));
+  border-radius: 0;
+}
+.plan-new-input:focus-visible {
+  outline: 2px solid var(--gold, var(--accent));
+  outline-offset: 2px;
+}
+.plan-new-actions { display: flex; gap: 8px; }
+.plan-new-commit {
+  min-height: 44px;
+  padding: 0 16px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--paper, var(--btn-text, #fff));
+  background: var(--ink, var(--text-primary));
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+}
+.plan-new-commit:disabled { opacity: 0.45; cursor: not-allowed; }
+.plan-new-commit:not(:disabled):hover { background: var(--ink-hover, var(--text-secondary)); }
+.plan-new-cancel {
+  min-height: 44px;
+  padding: 0 14px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-quiet, var(--text-muted));
+  background: transparent;
+  border: 1px solid var(--divider, var(--border));
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+}
+
+/* — the fronts — */
+.plan-fronts { margin-top: 18px; }
+
+.plan-front {
+  padding: 18px 0;
+  border-top: 1px solid var(--divider, var(--border));
+}
+.plan-front:last-child { border-bottom: 1px solid var(--divider, var(--border)); }
+/* Parked is a choice, not a failure — quieter, never struck through or hidden. */
+.plan-front.is-parked { opacity: 0.6; }
+
+.plan-front-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.plan-front-name {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+/* Exactly one front is dominant: the one with the nearest deadline. */
+.plan-front.is-lead .plan-front-name { font-size: 17px; font-weight: 700; }
+
+.plan-front-due {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-quiet, var(--text-muted));
+}
+/* Clay is time pressure and nothing else. */
+.plan-front-due.is-pressing { color: var(--clay, var(--warning)); }
+.plan-front-due.is-parked-tag {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  font-weight: 400;
+}
+
+/* — the single next move — */
+.plan-front-move {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 10px;
+}
+.plan-front-rule {
+  flex-shrink: 0;
+  width: 22px;
+  height: 1px;
+  margin-top: 9px;
+  background: var(--divider, var(--border));
+}
+/* A gold rule marks the front you are actually on. */
+.plan-front.is-lead .plan-front-rule { background: var(--gold, var(--accent)); }
+.plan-front-move-text {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-soft, var(--text-secondary));
+  overflow-wrap: anywhere;
+}
+.plan-front-move-empty { color: var(--text-quiet, var(--text-muted)); font-style: italic; }
+
+/* — progress — */
+.plan-front-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+.plan-front-track {
+  flex: 1;
+  height: 2px;
+  background: var(--divider-soft, var(--border));
+  border-radius: 1px;
+  overflow: hidden;
+}
+.plan-front-fill {
+  height: 100%;
+  background: var(--gold, var(--accent));
+  transition: width 0.18s ease-out;
+}
+.plan-front-figure {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--text-quiet, var(--text-muted));
+}
+
+/* — footer — */
+/* Empty reads as a beginning, not a void: a sentence, never an illustration. */
+.plan-empty {
+  margin: 26px 0 0;
+  font-family: var(--font-serif, var(--font-sans));
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-soft, var(--text-secondary));
+}
+.plan-footer {
+  margin: 22px 0 0;
+  font-family: var(--font-serif, var(--font-sans));
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-quiet, var(--text-muted));
+}
+.plan-horizons-link {
+  display: block;
+  margin-top: 18px;
+  padding: 10px 0;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-quiet, var(--text-muted));
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--gold, var(--accent));
+  cursor: pointer;
+}
+.plan-horizons-link:hover { color: var(--ink, var(--text-primary)); }
+
+@media (max-width: 430px) {
+  .plan-tab { padding-left: 20px; padding-right: 20px; }
+}

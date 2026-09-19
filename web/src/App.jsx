@@ -14,6 +14,7 @@ import Header from "./components/Header";
 import BottomNav from "./components/BottomNav";
 import TodayTab from "./components/TodayTab";
 import RoadmapTab from "./components/RoadmapTab";
+import PlanTab from "./components/PlanTab";
 import MindBoxTab from "./components/MindBoxTab";
 import CoachTab from "./components/CoachTab";
 import SettingsTab from "./components/SettingsTab";
@@ -53,6 +54,7 @@ export default function App() {
     const removed = ["sage", "option-b-linear", "option-f-chronos"];
     return removed.includes(stored) ? "glassy" : stored;
   });
+  const [roadmapView, setRoadmapView] = useState("plan");
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState("");
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -736,7 +738,7 @@ export default function App() {
     tabStartRef.current = Date.now();
     setFabExpanded(false);
     if (tab === "mindbox") setMindBoxInitialPanel(null);
-    if (tab === "roadmap") setRoadmapInitialCol(null);
+    if (tab === "roadmap") { setRoadmapInitialCol(null); setRoadmapView("plan"); }
     setActiveTab(tab);
   };
 
@@ -752,6 +754,7 @@ export default function App() {
   // the one and only place brain dump items are browsable.
   const openRoadmapInbox = () => {
     handleTabSelect("roadmap");
+    setRoadmapView("horizons");
     setRoadmapInitialCol("inbox");
   };
 
@@ -1042,7 +1045,14 @@ export default function App() {
             flushNow={flushNow}
           />
         )}
-        {activeTab === "roadmap" && (
+        {activeTab === "roadmap" && roadmapView === "plan" && (
+          <PlanTab
+            payload={payload}
+            saveConfigPatch={saveConfigPatch}
+            onOpenHorizons={() => setRoadmapView("horizons")}
+          />
+        )}
+        {activeTab === "roadmap" && roadmapView === "horizons" && (
           <RoadmapTab
             payload={payload}
             savePayload={savePayload}
