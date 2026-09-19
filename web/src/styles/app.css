@@ -3221,15 +3221,16 @@ html[data-theme="option-e-slate"] {
    --ground/--ink/--gold directly while every screen that has not
    been rebuilt yet keeps working off --bg-primary/--accent/etc.
 
-   Two deliberate departures from the handoff, both noted inline:
+   Both contrast departures raised against the original handoff were
+   accepted by the designer and are now the spec (Addendum E):
      - --gold is #b07d31, not #b68235. The spec value is 2.98:1 on
-       --paper, just under the 3:1 WCAG 1.4.11 floor for a border
-       that signals "act on this".
-     - --border-strong is a third line token the handoff does not
-       have. It only has --divider (hairlines) and --border (panel
-       edges), and neither clears 3:1, so an outlined button drawn
-       with them has no perceivable boundary. Hairlines stay quiet;
-       control edges use --border-strong.
+       --paper, under the 3:1 WCAG 1.4.11 floor for a border that
+       signals "act on this". "Do not revert to #b68235."
+     - The line system is three tokens, not two: --divider (hairline,
+       no contrast floor), --border (region edge), and --control-edge
+       (the ONLY token allowed on the edge of something clickable,
+       >=3:1 in both themes). This shipped first as --border-strong;
+       it is renamed here to the designer's name and values.
    ============================================================ */
 
 /* ---- THEME 14: Evening (the redesign's default) ---- */
@@ -3251,7 +3252,7 @@ html[data-theme="evening"] {
   --clay:          #e0704f;  /* time pressure only: days-left, zero-progress figures */
   --divider:       #2e2a24;
   --divider-soft:  #26221c;
-  --border-strong: #6a6356;  /* control edges; clears 3:1 on --ground */
+  --control-edge:  #6b655c;  /* the edge of a clickable thing. 3.16:1 on --ground */
   --hover-paper:   #26221c;
   --hover-row:     #2a251e;
 
@@ -3316,7 +3317,7 @@ html[data-theme="paper"] {
   --clay:          #a94a28;  /* time pressure only */
   --divider:       #ded9cd;
   --divider-soft:  #e6e1d5;
-  --border-strong: #8f8a7c;  /* control edges; clears 3:1 on --ground */
+  --control-edge:  #8f8a7e;  /* the edge of a clickable thing. 3.05:1 on --ground */
   --hover-paper:   #ece7db;
   --hover-row:     #efe9dc;
 

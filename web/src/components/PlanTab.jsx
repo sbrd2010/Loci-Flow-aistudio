@@ -6,6 +6,7 @@ import {
   sortFronts,
   frontNextMove,
   frontProgress,
+  unassignedTasks,
   frontDueLabel,
   frontDaysLeft,
   planFooterSentence,
@@ -84,6 +85,12 @@ export default function PlanTab({ payload = {}, saveConfigPatch, onOpenHorizons 
   const now = useMemo(() => new Date(), [tasks, config]); // eslint-disable-line react-hooks/exhaustive-deps
   const fronts = useMemo(() => sortFronts(frontsFromConfig(config), now), [config, now]);
   const footer = useMemo(() => planFooterSentence(fronts, tasks, now), [fronts, tasks, now]);
+  // A task needs no front (Addendum C). Loose tasks are listed, never labelled
+  // "Uncategorised" and never counted against the fronts above.
+  const loose = useMemo(
+    () => unassignedTasks(tasks).filter(t => !t.isCompleted && !t.isParked),
+    [tasks],
+  );
 
   const commitFront = () => {
     const front = makeFront({ name: draftName, dueAt: draftDate || null });
@@ -155,6 +162,22 @@ export default function PlanTab({ payload = {}, saveConfigPatch, onOpenHorizons 
             <FrontBlock key={front.id} front={front} tasks={tasks} isLead={i === 0 && !front.parked} now={now} />
           ))}
         </div>
+      )}
+
+      {loose.length > 0 && (
+        <section className="plan-loose">
+          <div className="plan-loose-head">
+            <h3 className="plan-loose-name">Not on a front</h3>
+            <span className="plan-loose-count">{loose.length}</span>
+          </div>
+          <ul className="plan-loose-list">
+            {loose.map(t => (
+              <li key={t.uuid || t.id} className="plan-loose-row">
+                <LinkifyText text={t.title} />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {footer && <p className="plan-footer">{footer}</p>}
