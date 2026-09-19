@@ -99,6 +99,28 @@ export function minutesByFront(events, tasks = []) {
   return out;
 }
 
+// The hour the user most often actually starts focusing, 0-23, or null when
+// there is not enough evidence to say. This is what makes "Protect tomorrow's
+// 08:00?" a real proposal rather than a guess at a respectable-sounding hour.
+export function commonestStartHour(events, minSessions = 3) {
+  const byHour = new Map();
+  for (const event of events || []) {
+    const started = Number(event?.focusStartedAt);
+    if (!Number.isFinite(started) || started <= 0) continue;
+    if (eventMinutes(event) < MIN_COUNTABLE_MINUTES) continue;
+    const hour = new Date(started).getHours();
+    byHour.set(hour, (byHour.get(hour) || 0) + 1);
+  }
+  let best = null;
+  let bestCount = 0;
+  // Ties resolve to the earlier hour: of two equally common start times, the
+  // earlier one is the one worth defending.
+  for (const [hour, count] of [...byHour.entries()].sort((a, b) => a[0] - b[0])) {
+    if (count > bestCount) { best = hour; bestCount = count; }
+  }
+  return bestCount >= minSessions ? best : null;
+}
+
 export function formatMinutes(mins) {
   const n = Math.max(0, Math.round(Number(mins) || 0));
   if (n < 60) return `${n}m`;
@@ -134,6 +156,7 @@ export function weekSummary(raw, tasks = [], now = new Date(), windows, days = 7
   const totalMoves = perDay.reduce((n, d) => n + d.moves, 0);
 
   return {
+    events,
     perDay,
     totalMinutes,
     totalMoves,

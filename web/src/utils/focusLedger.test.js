@@ -9,6 +9,7 @@ import {
   minutesByFront,
   formatMinutes,
   weekSummary,
+  commonestStartHour,
 } from "./focusLedger";
 
 const NOW = new Date(2026, 10, 4, 12, 0); // 4 Nov 2026, midday
@@ -213,5 +214,35 @@ describe("weekSummary", () => {
     // "WHERE IT WENT" sits under the week's own figure — a session from two
     // months ago appearing there would contradict the number above it.
     expect(out.byFront.size).toBe(0);
+  });
+});
+
+describe("commonestStartHour", () => {
+  const at = (hour, over = {}) => ev({
+    focusStartedAt: new Date(2026, 10, 4, hour, 0).getTime(),
+    ...over,
+  });
+
+  it("finds the hour the user actually starts, given enough evidence", () => {
+    expect(commonestStartHour([at(8), at(8), at(8), at(14)])).toBe(8);
+  });
+
+  it("says nothing when there is too little evidence to claim a pattern", () => {
+    expect(commonestStartHour([at(8), at(8)])).toBeNull();
+    expect(commonestStartHour([])).toBeNull();
+    expect(commonestStartHour(null)).toBeNull();
+  });
+
+  it("ignores sessions too short to mean anything", () => {
+    expect(commonestStartHour([at(8, { focusElapsedSeconds: 5 }), at(8, { focusElapsedSeconds: 5 }), at(8, { focusElapsedSeconds: 5 })]))
+      .toBeNull();
+  });
+
+  it("ignores events with no usable start time", () => {
+    expect(commonestStartHour([at(8), at(8), at(8), ev({ focusStartedAt: "nope" })])).toBe(8);
+  });
+
+  it("breaks a tie toward the earlier hour — that is the one worth defending", () => {
+    expect(commonestStartHour([at(8), at(8), at(8), at(16), at(16), at(16)])).toBe(8);
   });
 });

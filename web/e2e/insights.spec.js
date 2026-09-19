@@ -23,6 +23,10 @@ async function openInsights(page) {
   await page.locator(".bottom-nav").getByRole("button", { name: "Mind Box" }).click();
   await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 8_000 });
   await page.getByText("Insights", { exact: true }).click();
+  await expect(page.locator(".week")).toBeVisible({ timeout: 8_000 });
+  // The Insights tool now opens on The week (screen 8); the completion stats
+  // and AI recap sit one tap behind it.
+  await page.getByRole("button", { name: "Completion stats and the AI recap" }).click();
   await expect(page.getByRole("heading", { name: "Insights" })).toBeVisible({ timeout: 5_000 });
 }
 
@@ -49,7 +53,7 @@ async function expectNoHorizontalOverflow(page) {
   expect(widths.maxScrollWidth).toBeLessThanOrEqual(widths.innerWidth + 8);
 }
 
-test("mobile reliability: Insights opens from Mind Box's grid, defaults to 7 Days, and Back returns to the grid", async ({ page }) => {
+test("mobile reliability: Insights opens from Mind Box's grid, defaults to 7 Days, and Back walks out through The week", async ({ page }) => {
   await enterDemo(page);
   await openInsights(page);
 
@@ -59,6 +63,9 @@ test("mobile reliability: Insights opens from Mind Box's grid, defaults to 7 Day
   await expect(page.getByText("Daily Completions")).toBeVisible();
 
   await page.getByText("← Back").click();
+  await expect(page.locator(".week")).toBeVisible({ timeout: 5_000 });
+
+  await page.locator(".week-back").click();
   await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText("Insights", { exact: true })).toBeVisible();
 });

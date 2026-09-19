@@ -21,6 +21,10 @@ async function openInsights(page) {
   await page.locator(".bottom-nav").getByRole("button", { name: "Mind Box" }).click();
   await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 8_000 });
   await page.getByText("Insights", { exact: true }).click();
+  await expect(page.locator(".week")).toBeVisible({ timeout: 8_000 });
+  // The Insights tool now opens on The week (screen 8); the completion stats
+  // and AI recap sit one tap behind it.
+  await page.getByRole("button", { name: "Completion stats and the AI recap" }).click();
   await expect(page.getByRole("heading", { name: "Insights" })).toBeVisible({ timeout: 5_000 });
 }
 
