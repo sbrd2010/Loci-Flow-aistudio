@@ -1,0 +1,237 @@
+import { describe, it, expect } from "vitest";
+import {
+  numberWord,
+  openTasks,
+  minutesLeftToday,
+  formatMinutesLeft,
+  narrowDown,
+} from "./narrowDown";
+
+const NOW = new Date(2026, 10, 4, 9, 41); // 4 Nov 2026, 09:41 local
+const DAYS = (n) => n * 86400000;
+
+// A task that survives every cut by default: due today, touched just now,
+// small enough to fit. Each test spoils exactly the field it is about.
+const task = (over = {}) => ({
+  uuid: "t",
+  title: "A task",
+  horizonLevel: "today",
+  priority: "P3",
+  timeEstimateMinutes: 25,
+  deadlineTimestamp: null,
+  lastUpdated: NOW.getTime(),
+  isCompleted: false,
+  isParked: false,
+  isDeleted: false,
+  orderIndex: 0,
+  ...over,
+});
+
+describe("numberWord", () => {
+  it("spells the counts the headline uses", () => {
+    expect(numberWord(0)).toBe("No");
+    expect(numberWord(1)).toBe("One");
+    expect(numberWord(14)).toBe("Fourteen");
+  });
+  it("falls back to digits past its range", () => {
+    expect(numberWord(37)).toBe("37");
+  });
+});
+
+describe("openTasks", () => {
+  it("counts only what is genuinely still open", () => {
+    const tasks = [
+      task({ uuid: "a" }),
+      task({ uuid: "b", isCompleted: true }),
+      task({ uuid: "c", isParked: true }),
+      task({ uuid: "d", isDeleted: true }),
+      null,
+    ];
+    expect(openTasks(tasks).map(t => t.uuid)).toEqual(["a"]);
+  });
+  it("survives a non-array", () => {
+    expect(openTasks(null)).toEqual([]);
+    expect(openTasks(undefined)).toEqual([]);
+  });
+});
+
+describe("minutesLeftToday", () => {
+  it("measures to the configured end of day", () => {
+    // 09:41 -> 18:00 is 8h19m, the figure the design itself uses.
+    expect(minutesLeftToday({ dayEndHour: 18 }, NOW)).toBe(499);
+    expect(formatMinutesLeft(499)).toBe("8h19m");
+  });
+
+  it("handles a day that ends after midnight", () => {
+    // dayEndHour 26 means 2am tomorrow — the app's own demo default.
+    expect(minutesLeftToday({ dayEndHour: 26 }, NOW)).toBe(979);
+    expect(formatMinutesLeft(979)).toBe("16h19m");
+  });
+
+  it("never goes negative once the day is over", () => {
+    expect(minutesLeftToday({ dayEndHour: 18 }, new Date(2026, 10, 4, 23, 0))).toBe(0);
+  });
+
+  it("falls back to a sane end hour when config is missing or junk", () => {
+    expect(minutesLeftToday({}, NOW)).toBeGreaterThan(0);
+    expect(minutesLeftToday({ dayEndHour: "nonsense" }, NOW)).toBeGreaterThan(0);
+  });
+});
+
+describe("formatMinutesLeft", () => {
+  it("pads the minutes so the figure is stable width", () => {
+    expect(formatMinutesLeft(499)).toBe("8h19m");
+    expect(formatMinutesLeft(605)).toBe("10h05m");
+    expect(formatMinutesLeft(45)).toBe("45m");
+    expect(formatMinutesLeft(0)).toBe("0m");
+  });
+});
+
+describe("narrowDown — the reduction ledger", () => {
+  const config = { dayEndHour: 18 };
+
+  it("shows every cut it makes, and lands on exactly one", () => {
+    const tasks = [
+      // survives everything
+      task({ uuid: "keep1", title: "Write the crossover paragraph" }),
+      task({ uuid: "keep2" }),
+      // cut 1 — not due this horizon
+      task({ uuid: "far1", horizonLevel: "month" }),
+      task({ uuid: "far2", horizonLevel: "quarter" }),
+      task({ uuid: "far3", horizonLevel: "halfyear" }),
+      // cut 2 — untouched for over a week
+      task({ uuid: "old1", lastUpdated: NOW.getTime() - DAYS(9) }),
+      task({ uuid: "old2", lastUpdated: NOW.getTime() - DAYS(30) }),
+      // cut 3 — won't fit in the time left
+      task({ uuid: "big1", timeEstimateMinutes: 600 }),
+    ];
+    const out = narrowDown(tasks, config, NOW);
+
+    expect(out.total).toBe(8);
+    expect(out.rows.map(r => [r.figure, r.reason])).toEqual([
+      ["8", "open across your lists"],
+      ["−3", "aren't due this horizon"],
+      ["−2", "you haven't touched in 7 days"],
+      ["−1", "won't fit in the 8h19m you have left"],
+      ["1", "is actually yours, today"],
+    ]);
+    expect(out.chosen.uuid).toBe("keep1");
+    expect(out.parked).toHaveLength(7);
+  });
+
+  it("omits a cut that removes nothing, rather than showing -0", () => {
+    const out = narrowDown([task({ uuid: "a" }), task({ uuid: "b" })], config, NOW);
+    expect(out.rows.map(r => r.key)).toEqual(["open", "one"]);
+    expect(out.rows.every(r => r.figure !== "−0")).toBe(true);
+  });
+
+  it("SKIPS a cut that would empty the pool — the screen must land on one", () => {
+    // Every task is beyond this horizon. Applying the cut would leave nothing,
+    // so it is not applied and not shown.
+    const tasks = [
+      task({ uuid: "a", horizonLevel: "month" }),
+      task({ uuid: "b", horizonLevel: "quarter" }),
+    ];
+    const out = narrowDown(tasks, config, NOW);
+    expect(out.rows.map(r => r.key)).toEqual(["open", "one"]);
+    expect(out.chosen).not.toBeNull();
+  });
+
+  it("still lands on one when every task is too big for the time left", () => {
+    const tasks = [
+      task({ uuid: "a", timeEstimateMinutes: 900 }),
+      task({ uuid: "b", timeEstimateMinutes: 900 }),
+    ];
+    const out = narrowDown(tasks, config, NOW);
+    expect(out.chosen).not.toBeNull();
+    expect(out.rows.some(r => r.key === "toobig")).toBe(false);
+  });
+
+  it("counts fronts when tasks are on them", () => {
+    const tasks = [
+      task({ uuid: "a", frontId: "f1" }),
+      task({ uuid: "b", frontId: "f2" }),
+      task({ uuid: "c", frontId: "f1" }),
+    ];
+    expect(narrowDown(tasks, config, NOW).rows[0].reason).toBe("open across two fronts");
+  });
+
+  it("says 'one front' rather than 'one fronts'", () => {
+    const tasks = [task({ uuid: "a", frontId: "f1" }), task({ uuid: "b", frontId: "f1" })];
+    expect(narrowDown(tasks, config, NOW).rows[0].reason).toBe("open across one front");
+  });
+
+  it("returns an empty result, not a crash, when nothing is open", () => {
+    const out = narrowDown([task({ isCompleted: true })], config, NOW);
+    expect(out).toMatchObject({ total: 0, rows: [], chosen: null, why: null, parked: [] });
+    expect(narrowDown(null, config, NOW).chosen).toBeNull();
+  });
+
+  it("treats a task with no lastUpdated as fresh, never as stale", () => {
+    const tasks = [task({ uuid: "a", lastUpdated: undefined }), task({ uuid: "b" })];
+    expect(narrowDown(tasks, config, NOW).rows.some(r => r.key === "stale")).toBe(false);
+  });
+
+  it("does not treat a missing estimate as too big", () => {
+    const tasks = [task({ uuid: "a", timeEstimateMinutes: null }), task({ uuid: "b" })];
+    expect(narrowDown(tasks, config, NOW).rows.some(r => r.key === "toobig")).toBe(false);
+  });
+});
+
+describe("narrowDown — which one, and why", () => {
+  const config = { dayEndHour: 18 };
+
+  it("prefers the nearest real deadline", () => {
+    const tasks = [
+      task({ uuid: "later", deadlineTimestamp: NOW.getTime() + DAYS(20) }),
+      task({ uuid: "soon", deadlineTimestamp: NOW.getTime() + DAYS(2) }),
+      task({ uuid: "undated" }),
+    ];
+    const out = narrowDown(tasks, config, NOW);
+    expect(out.chosen.uuid).toBe("soon");
+    expect(out.why).toBe("It has the nearest date of everything still standing.");
+  });
+
+  it("only claims 'the only thing with a date' when that is literally true", () => {
+    const tasks = [
+      task({ uuid: "dated", deadlineTimestamp: NOW.getTime() + DAYS(3) }),
+      task({ uuid: "undated" }),
+    ];
+    expect(narrowDown(tasks, config, NOW).why).toBe("It's the only thing left with a date on it.");
+  });
+
+  it("falls back to priority when nothing is dated", () => {
+    const tasks = [
+      task({ uuid: "low", priority: "P4", orderIndex: 0 }),
+      task({ uuid: "high", priority: "P1", orderIndex: 1 }),
+    ];
+    const out = narrowDown(tasks, config, NOW);
+    expect(out.chosen.uuid).toBe("high");
+    expect(out.why).toBe("It's the highest priority of what's left.");
+  });
+
+  it("falls back to the user's own order when nothing distinguishes them", () => {
+    const tasks = [
+      task({ uuid: "second", orderIndex: 2 }),
+      task({ uuid: "first", orderIndex: 1 }),
+    ];
+    const out = narrowDown(tasks, config, NOW);
+    expect(out.chosen.uuid).toBe("first");
+    expect(out.why).toBe("It's first in the order you already put these in.");
+  });
+
+  it("never claims a priority edge it does not have", () => {
+    const tasks = [task({ uuid: "a", priority: "P1" }), task({ uuid: "b", priority: "P1" })];
+    expect(narrowDown(tasks, config, NOW).why).not.toMatch(/highest priority/);
+  });
+
+  it("parks everything except the chosen task, and deletes nothing", () => {
+    const tasks = [task({ uuid: "a" }), task({ uuid: "b" }), task({ uuid: "c" })];
+    const out = narrowDown(tasks, config, NOW);
+    expect(out.parked).toHaveLength(2);
+    expect(out.parked.map(t => t.uuid)).not.toContain(out.chosen.uuid);
+    // The input array is untouched — "nothing was deleted" is literal.
+    expect(tasks).toHaveLength(3);
+    expect(tasks.every(t => !t.isDeleted && !t.isParked)).toBe(true);
+  });
+});
