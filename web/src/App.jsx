@@ -15,6 +15,7 @@ import BottomNav from "./components/BottomNav";
 import TodayTab from "./components/TodayTab";
 import RoadmapTab from "./components/RoadmapTab";
 import PlanTab from "./components/PlanTab";
+import ScatteredFlow from "./components/ScatteredFlow";
 import MindBoxTab from "./components/MindBoxTab";
 import CoachTab from "./components/CoachTab";
 import SettingsTab from "./components/SettingsTab";
@@ -1050,6 +1051,25 @@ export default function App() {
             payload={payload}
             saveConfigPatch={saveConfigPatch}
             onOpenHorizons={() => setRoadmapView("horizons")}
+            onScattered={() => setRoadmapView("scattered")}
+          />
+        )}
+        {activeTab === "roadmap" && roadmapView === "scattered" && (
+          <ScatteredFlow
+            payload={payload}
+            savePayload={savePayload}
+            savePayloadAsync={savePayloadAsync}
+            flushNow={flushNow}
+            onBack={() => setRoadmapView("plan")}
+            // Same handoff Day Map uses: pin the task, hand up the confirmed
+            // write, and let Today open the session. Driving the timer from
+            // here would risk orphaned sessions and missing ledger events.
+            onStartFocus={(pinPromise, minutes) => {
+              if (minutes) focusTimer.changeFocusDuration?.(minutes);
+              pendingFocusPinPromiseRef.current = pinPromise;
+              setPendingFocusOpen(true);
+              goToday();
+            }}
           />
         )}
         {activeTab === "roadmap" && roadmapView === "horizons" && (

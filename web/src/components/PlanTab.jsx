@@ -74,7 +74,7 @@ function FrontBlock({ front, tasks, isLead, now }) {
   );
 }
 
-export default function PlanTab({ payload = {}, saveConfigPatch, onOpenHorizons }) {
+export default function PlanTab({ payload = {}, saveConfigPatch, onOpenHorizons, onScattered }) {
   const { tasks = [], config = {} } = payload;
   const [adding, setAdding] = useState(false);
   const [draftName, setDraftName] = useState("");
@@ -181,6 +181,12 @@ export default function PlanTab({ payload = {}, saveConfigPatch, onOpenHorizons 
       )}
 
       {footer && <p className="plan-footer">{footer}</p>}
+
+      {onScattered && (
+        <button type="button" className="plan-scattered" onClick={onScattered}>
+          I'm scattered
+        </button>
+      )}
 
       {onOpenHorizons && (
         <button type="button" className="plan-horizons-link" onClick={onOpenHorizons}>

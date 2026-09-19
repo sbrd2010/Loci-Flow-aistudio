@@ -1,0 +1,219 @@
+/* Screen 14 — "When you're scattered".
+   Hairline rows, one dominant element (the chosen task), and a five-minute
+   door rather than a twenty-five-minute commitment. Every token falls back to
+   this app's existing vocabulary so the screen renders under the thirteen
+   themes that predate the redesign. */
+
+.scattered {
+  padding: 18px 22px 96px;
+  font-family: var(--font-sans);
+  color: var(--ink, var(--text-primary));
+}
+
+/* — header — */
+.scattered-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 44px;
+}
+.scattered-back {
+  min-height: 44px;
+  padding: 0 2px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-quiet, var(--text-muted));
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.scattered-back:hover { color: var(--ink, var(--text-primary)); }
+.scattered-kicker {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold-deep, var(--accent));
+}
+
+.scattered-headline {
+  margin: 16px 0 22px;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+}
+
+/* — the reduction ledger — */
+/* A mono figure in a fixed column so the numbers line up as a column of
+   arithmetic, which is the whole persuasive point of the screen. */
+.scattered-ledger {
+  margin: 0 0 26px;
+  padding: 0;
+  list-style: none;
+}
+.scattered-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 11px 0;
+  border-top: 1px solid var(--divider, var(--border));
+}
+.scattered-row:last-child { border-bottom: 1px solid var(--divider, var(--border)); }
+.scattered-figure {
+  flex: 0 0 26px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: right;
+  color: var(--text-quiet, var(--text-muted));
+  font-variant-numeric: tabular-nums;
+}
+.scattered-reason {
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--text-soft, var(--text-secondary));
+}
+/* The arrival: the one that is actually yours. */
+.scattered-row.is-final .scattered-figure {
+  font-size: 19px;
+  color: var(--gold-deep, var(--accent));
+}
+.scattered-row.is-final .scattered-reason {
+  color: var(--ink, var(--text-primary));
+  font-weight: 600;
+}
+
+/* — the chosen task — */
+/* A border means "act on this": this is the only bordered region on screen. */
+.scattered-pick {
+  padding: 16px;
+  background: var(--surface, var(--bg-card));
+  border: 1px solid var(--gold, var(--accent));
+  border-radius: var(--radius-sm, 4px);
+}
+.scattered-pick-kicker,
+.scattered-small-kicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold-deep, var(--accent));
+}
+.scattered-pick-title {
+  margin: 8px 0 0;
+  font-family: var(--font-sans);
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.scattered-why {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-soft, var(--text-secondary));
+}
+.scattered-pick-rule {
+  height: 1px;
+  margin: 16px 0;
+  background: var(--divider, var(--border));
+}
+.scattered-first-action {
+  margin: 8px 0 0;
+  font-family: var(--font-serif, var(--font-sans));
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-soft, var(--text-secondary));
+}
+
+.scattered-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+/* Five minutes is the primary, deliberately. To a scattered person twenty-five
+   minutes is one more thing to be afraid of. */
+.scattered-primary {
+  flex: 1;
+  min-height: 50px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--paper, var(--btn-text, #fff));
+  background: var(--ink, var(--text-primary));
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.scattered-primary:hover { background: var(--ink-hover, var(--text-secondary)); }
+.scattered-secondary {
+  flex: 1;
+  min-height: 50px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink, var(--text-primary));
+  background: transparent;
+  border: 1px solid var(--control-edge, var(--border));
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.scattered-secondary:hover { background: var(--hover-paper, var(--bg-card-hover)); }
+
+/* — footer — */
+.scattered-foot { margin-top: 22px; }
+.scattered-parked-line {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-quiet, var(--text-muted));
+}
+.scattered-show {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-quiet, var(--text-muted));
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--gold, var(--accent));
+  padding: 0;
+  cursor: pointer;
+}
+.scattered-show:hover { color: var(--ink, var(--text-primary)); }
+.scattered-parked-list { margin: 12px 0 0; padding: 0; list-style: none; }
+.scattered-parked-row {
+  padding: 9px 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-soft, var(--text-secondary));
+  border-top: 1px solid var(--divider, var(--border));
+  overflow-wrap: anywhere;
+}
+/* The promise the whole screen rests on, set as prose rather than as UI. */
+.scattered-reassure {
+  margin: 14px 0 0;
+  font-family: var(--font-serif, var(--font-sans));
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-quiet, var(--text-muted));
+}
+
+.scattered-empty {
+  margin: 22px 0 0;
+  font-family: var(--font-serif, var(--font-sans));
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-soft, var(--text-secondary));
+}
+
+@media (max-width: 430px) {
+  .scattered { padding-left: 20px; padding-right: 20px; }
+  .scattered-headline { font-size: 26px; }
+}

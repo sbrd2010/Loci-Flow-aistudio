@@ -278,3 +278,23 @@
   overflow-wrap: anywhere;
 }
 .plan-loose-row:first-child { border-top: 0; }
+
+/* The door into screen 14. The handoff puts it in the Plan header on desktop;
+   on mobile it sits at the foot of the list, where you actually reach for it
+   after reading down the fronts and feeling it is too much. */
+.plan-scattered {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 20px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, var(--text-primary));
+  background: transparent;
+  border: 1px solid var(--gold, var(--accent));
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.plan-scattered:hover { background: var(--gold-tint, var(--accent-light)); }
