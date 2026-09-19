@@ -127,3 +127,52 @@ describe("sync/{uid} — regression check, unaffected by the new activityLogs bl
     await assertFails(path.once("value"));
   });
 });
+
+// The redesign's "fronts" live at config.fronts, and a task joins one through
+// an optional frontId — rather than at a new top-level key. These tests pin
+// down why: sync/$userId ends in "$other": { ".validate": false }, so ANY
+// unrecognised key at the payload root makes the whole atomic set() fail. A
+// front stored at the root would silently break saving for every signed-in
+// user. config and tasks both end in "$other": { ".validate": true }, so they
+// take new fields without a rules change or a deploy.
+//
+// Same caveat as the note at the top of this file: these could not be executed
+// by hand in the sandbox that wrote them (the emulator's local rules-push is
+// blocked by the environment's network policy). CI's "firebase-rules" job is
+// the real pass/fail signal.
+describe("sync/{uid} — where the redesign's fronts are allowed to live", () => {
+  const withFronts = {
+    userId: "alice",
+    tasks: [
+      // A task joined to a front, and one waiting on someone else.
+      { id: 1, title: "Finish the results section", userId: "alice", frontId: "front-key-deadline" },
+      { id: 2, title: "Chase the seal spec", userId: "alice", frontId: "f2", waitingOn: "Chris" },
+      // An untouched task: no frontId at all, exactly as every task is today.
+      { id: 3, title: "Unassigned task", userId: "alice" },
+    ],
+    config: {
+      userId: "alice",
+      deadlineLabel: "Membrane paper",
+      deadlineDate: "2026-11-04",
+      fronts: [
+        { id: "front-key-deadline", name: "Membrane paper", dueAt: "2026-11-04", nextMove: "Finish §3.1", parked: false },
+        { id: "f2", name: "Pressure-cycling rig", dueAt: "2026-11-30", nextMove: null, parked: false },
+      ],
+    },
+  };
+
+  it("accepts fronts under config and frontId/waitingOn on tasks", async () => {
+    const alice = testEnv.authenticatedContext("alice");
+    await assertSucceeds(alice.database().ref("sync/alice").set(withFronts));
+  });
+
+  it("rejects fronts at the payload root — which is why they live under config", async () => {
+    const alice = testEnv.authenticatedContext("alice");
+    await assertFails(alice.database().ref("sync/alice").set({
+      userId: "alice",
+      tasks: [{ id: 1, title: "Test task", userId: "alice" }],
+      config: { userId: "alice" },
+      fronts: [{ id: "f1", name: "Membrane paper" }],
+    }));
+  });
+});

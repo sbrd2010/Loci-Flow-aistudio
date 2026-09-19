@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import AppearanceSettings from "./AppearanceSettings";
 import ConfirmDialog from "./ConfirmDialog";
 import PrivacyPolicy from "./PrivacyPolicy";
 import { db, auth } from "../firebase";
@@ -11,7 +12,7 @@ import { COACH_PROFILE_NOTE_MAX_LENGTH } from "../utils/coachProfile";
 import { clearAllMemory, isMemoryEnabled, removePinnedFact, removeRecentObservation } from "../utils/coachMemory";
 import { isNativeApp, notifPermissionState, requestNotifPermission as nativeRequestPermission, refreshNativePermission } from "../utils/nativeNotifs";
 
-export default function SettingsTab({ payload, savePayload, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut }) {
+export default function SettingsTab({ payload, savePayload, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut, theme, onThemeChange }) {
   const { config = {} } = payload;
   const pinnedFacts = config.coachMemory?.pinnedFacts || [];
   const recentObservations = config.coachMemory?.recentObservations || [];
@@ -327,6 +328,16 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+
+      {/* ── Appearance (screen 10c) ──────────────────────────────────────── */}
+      <section className="card">
+        <AppearanceSettings
+          theme={theme}
+          onThemeChange={onThemeChange}
+          config={config}
+          saveConfigPatch={saveConfigPatch}
+        />
+      </section>
 
       {/* ── Profile ──────────────────────────────────────────────────────── */}
       <section className="card">

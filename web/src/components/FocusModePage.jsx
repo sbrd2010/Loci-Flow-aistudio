@@ -119,7 +119,8 @@ export default function FocusModePage({
 
   // Visual state color mappings — always cyan, no shift as time runs out
   const timerState = getTimerState(secondsLeft, maxSeconds);
-  const ringStroke = "#57f1db";
+  // Warm gold on the ink ground — the session screen is the design's one dark island.
+  const ringStroke = "#d8ad63";
 
   const mins = Math.floor(secondsLeft / 60);
   const secs = String(secondsLeft % 60).padStart(2, "0");

@@ -130,7 +130,7 @@
 /* Paused state (dimmed slightly) */
 .floating-focus-timer.is-paused {
   opacity: 0.82;
-  border-color: rgba(237, 247, 242, 0.2);
+  border-color: rgba(240, 238, 233, 0.2);
 }
 .floating-focus-timer.is-paused .floating-focus-timer-time {
   color: var(--text-secondary);
@@ -141,7 +141,7 @@
 .floating-focus-timer.timer-state-near-end,
 .floating-focus-timer.timer-state-almost-done,
 .floating-focus-timer.timer-state-complete {
-  --timer-progress-color: #57f1db;
+  --timer-progress-color: #d8ad63;
 }
 
 .floating-focus-timer-progress {
