@@ -29,7 +29,7 @@
   font-family: var(--font-mono);
   font-size: 12.5px;
   font-weight: 700;
-  color: var(--text-quiet, var(--text-muted));
+  color: var(--gold-lift, var(--accent));
   font-variant-numeric: tabular-nums;
 }
 .wall-head-days.is-pressing { color: var(--clay, var(--warning)); }
@@ -81,13 +81,17 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
-/* The handoff's two-state prose: 42/800 closed, 29/700 open. */
+/* J1: 42/800 closed, 29/700 open — the type table's 41/800 and the Components
+   list's 34/700 predate the 7b/7c merge and are explicitly withdrawn. */
 .wall-title.is-wall {
-  font-size: 42px;
   font-weight: 800;
   line-height: 1.01;
   letter-spacing: -0.055em;
 }
+/* Clamped down a step at a time rather than wrapping past three lines. */
+.wall-title.is-wall.is-42 { font-size: 42px; }
+.wall-title.is-wall.is-34 { font-size: 34px; }
+.wall-title.is-wall.is-29 { font-size: 29px; letter-spacing: -0.045em; }
 .wall-title.is-desk {
   margin-top: 8px;
   font-size: 29px;
@@ -286,6 +290,10 @@
   cursor: pointer;
 }
 
-@media (max-width: 430px) {
-  .wall-title.is-wall { font-size: 38px; }
+/* J1: mobile <=360px — closed 36/800, open 27/700. */
+@media (max-width: 360px) {
+  .wall-title.is-wall.is-42 { font-size: 36px; }
+  .wall-title.is-wall.is-34 { font-size: 31px; }
+  .wall-title.is-wall.is-29 { font-size: 27px; }
+  .wall-title.is-desk { font-size: 27px; }
 }

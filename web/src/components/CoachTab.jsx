@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { track, auth } from "../firebase";
 import { callAI, describeAIError, getAIKeys, hasAIKey } from "../utils/aiCall";
+import { getCoachNudge, buildPendingCoachNudge, buildCoachNudgeClearedConfig } from "../utils/coachNudge";
 import { buildLocalSafetyReply } from "../utils/crisisSafety";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
@@ -292,7 +293,22 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // pending and is picked up on a later mount.
     if (isCheckinDue(configRef.current.coachCheckin)) return;
 
-    const nudge = configRef.current.pendingCoachNudge;
+    // J3 moved the proactive nudge off Today: "it never appears unprompted on
+    // Today. The same logic renders as the first line of the Coach transcript
+    // when Coach is opened." Today used to compute it, show a card, and hand it
+    // over here only if tapped — so with that card gone, Coach has to derive it
+    // itself or the nudge would simply never reach anyone.
+    //
+    // A pending one still wins: it carries the context of whatever the user
+    // acted on, and it may name a reason that is no longer derivable.
+    //
+    // getCoachNudge already returns null under Low Energy and when the day's
+    // nudge has been cleared, so neither is re-checked here.
+    const derived = getCoachNudge(payload, new Date());
+    // It returns null most of the time, and buildPendingCoachNudge reads
+    // signal.reason — so that is only called once there is a signal.
+    const nudge = configRef.current.pendingCoachNudge
+      || (derived ? buildPendingCoachNudge(derived, payload, new Date()) : null);
     if (!shouldDeliverPendingCoachNudge(nudge, deliveredNudgeRef.current)) return;
     // Defer until cloud sync is confirmed — saveConfigPatch() before the
     // first RTDB snapshot stamps a still-cached config as "newest" (see
@@ -302,7 +318,15 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // nudge — it isn't dropped until the next mount.
     if (cloudSyncUnconfirmedRef.current) return;
     deliveredNudgeRef.current = nudge;
-    saveConfigPatch({ pendingCoachNudge: null });
+    // Clearing is what makes this once per loci day. Today used to write this
+    // when the card was dismissed or acted on; with the card gone, delivering
+    // here is the moment the day's nudge is spent. Without it getCoachNudge
+    // would hand back the same signal on every single open of this tab — a
+    // nudge that interrupts every visit is worse than the card ever was.
+    saveConfigPatch({
+      ...buildCoachNudgeClearedConfig(payload, new Date()),
+      ...(configRef.current.pendingCoachNudge ? { pendingCoachNudge: null } : {}),
+    });
     if (isPendingCoachNudgeStale(nudge, payload)) return;
 
     const deliver = (text, voiced) => {

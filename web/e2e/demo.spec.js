@@ -271,30 +271,23 @@ test("11. Day Map route timeline — always visible, no view toggle", async ({ p
   await expect(page.locator(".dmb-grid")).not.toBeVisible();
 });
 
-test("12. Deadline card shows redesigned compact layout in demo mode", async ({ page }) => {
+test("12. The deadline strip is gone; its information moved onto the wall", async ({ page }) => {
   await enterDemo(page);
 
-  const card = page.getByTestId("deadline-card");
-  await expect(card).toBeVisible({ timeout: 5_000 });
+  // J3: "Key Deadline strip — deleted, folded into the commitment kicker...
+  // The 'today's move' line is the commitment itself, so it can't also be a
+  // strip above it. The progress bar goes; the front's progress lives in Plan."
+  await expect(page.getByTestId("deadline-card")).toHaveCount(0);
+  await expect(page.getByTestId("deadline-done-btn")).toHaveCount(0);
+  await expect(page.getByText("TODAY'S MOVE")).toHaveCount(0);
 
-  // Row 1: deadline countdown (days + "left")
-  await expect(card).toContainText("d");
-  await expect(card).toContainText("left");
+  // What it carried is now on the wall: one time-remaining figure for the
+  // screen, and the day count beside it.
+  // Lowercase in the DOM; text-transform only changes how it renders.
+  await expect(page.locator(".wall-head-when")).toContainText(/\d+h\d+m LEFT/i);
+  await expect(page.locator(".wall-head-days")).toContainText(/^\d+d$/);
 
-  // Row 2: TODAY'S MOVE is visible as the primary action anchor
-  await expect(card).toContainText("TODAY'S MOVE");
-  await expect(card).toContainText("Finish one launch task today");
-
-  // Clock mocked to 10am; dayStartHour=7, dayEndHour=26 — inside work window → bar shows "Xh Ym left"
-  await expect(card).toContainText(/\d+h \d+m left/);
-
-  // OPEN/STILL OPEN/DONE button present (demo config has no done date)
-  const btn = page.getByTestId("deadline-done-btn");
-  await expect(btn).toBeVisible();
-  const btnText = await btn.textContent();
-  expect(["OPEN", "STILL OPEN"].includes(btnText.trim())).toBe(true);
-
-  // Card label shown
-  await expect(card).toContainText("Project launch");
+  // And the commitment itself is the "today's move" — no separate line for it.
+  await expect(page.locator(".wall-title")).toBeVisible();
 });
 

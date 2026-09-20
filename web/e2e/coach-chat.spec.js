@@ -46,7 +46,10 @@ test("mobile reliability: Coach chat sends reasoning_effort low to Groq", async 
   await page.getByPlaceholder(/Shift\+Enter for a new line/).fill("I feel a bit scattered right now");
   await page.getByRole("button", { name: "Send" }).click();
 
-  await expect(page.getByText("Let's pick one tiny next step.")).toBeVisible({ timeout: 8_000 });
+  // Two replies now carry this text: Coach opens with the proactive nudge (J3
+  // moved it off Today and onto Coach's first line), then answers the message.
+  // The subject here is the request body, not which paragraph rendered.
+  await expect(page.getByText("Let's pick one tiny next step.").first()).toBeVisible({ timeout: 8_000 });
 
   expect(groqRequestBodies.length).toBeGreaterThan(0);
   for (const body of groqRequestBodies) {

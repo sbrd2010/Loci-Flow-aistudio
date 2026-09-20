@@ -45,11 +45,19 @@ export default function TodayWall({
   const timer = `${pad2(focusMinutes)}:00`;
   // "The kicker becomes the front name *or* nothing — never 'Uncategorised'."
   const kicker = frontName ? `${frontName} · YOU COMMITTED TO` : "YOU COMMITTED TO";
-  // Clay is time pressure ONLY. A deadline a year out is not pressure, so the
-  // figure still shows but drops to the quiet tier — otherwise the one alert
-  // colour in the design is spent on something that isn't urgent.
+  // J3: the day count is --alert ONLY under three days, otherwise --gold-lift.
+  // The Key Deadline strip's information lives here now, and the one alert
+  // colour is spent only on something genuinely imminent.
   const hasDays = Number.isFinite(daysLeft) && daysLeft !== null;
-  const pressing = hasDays && daysLeft <= 14;
+  const pressing = hasDays && daysLeft < 3;
+
+  // J1: "clamped so a long title drops to 34 then 29 rather than wrapping past
+  // three lines". Chosen by length rather than by measuring: at 390px the wall
+  // fits roughly 13 characters per line at 42px and 17 at 34px, so these are
+  // the points where a title would otherwise reach a fourth line. Approximate
+  // by construction — a measured fit would need a layout pass per render.
+  const titleLen = (task?.title || "").length;
+  const wallSize = titleLen <= 40 ? "is-42" : titleLen <= 58 ? "is-34" : "is-29";
 
   const header = (
     <header className="wall-head">
@@ -110,7 +118,7 @@ export default function TodayWall({
         <button type="button" className="wall-hero" onClick={onStartFocus}>
           <span className="wall-kicker">{kicker}</span>
           <span className="wall-rule-short" aria-hidden="true" />
-          <span className="wall-title is-wall"><LinkifyText text={task.title} /></span>
+          <span className={`wall-title is-wall ${wallSize}`}><LinkifyText text={task.title} /></span>
           {support && (
             <span className="wall-support is-wall"><LinkifyText text={support} /></span>
           )}
