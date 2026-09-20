@@ -135,10 +135,11 @@ export function formatMinutes(mins) {
 /**
  * Everything screen 8 and the momentum strip need, from one pass.
  *
- * `hasMinutes` is the switch the addendum asks for: when no session has ever
- * logged time — a brand-new user, or demo mode, which has no uid and therefore
- * no ledger at all — callers render moves instead of durations rather than
- * showing a fabricated 0h00m.
+ * This used to also return a `hasMinutes` flag, so callers could switch to
+ * rendering MOVES when no time was logged. That switch was unreachable:
+ * `moves` only increments for an event yielding at least a minute, and
+ * `totalMinutes` sums those same minutes, so zero minutes implies zero moves.
+ * Callers show the duration and let an empty week read as empty.
  */
 export function weekSummary(raw, tasks = [], now = new Date(), windows, days = 7) {
   const window = lociDayWindow(days, now, windows);
@@ -168,6 +169,5 @@ export function weekSummary(raw, tasks = [], now = new Date(), windows, days = 7
     // nothing still counts, which is the whole point.
     daysMoved: perDay.filter(d => d.moves > 0).length,
     byFront: minutesByFront(events, tasks),
-    hasMinutes: totalMinutes > 0,
   };
 }

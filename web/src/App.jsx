@@ -1069,6 +1069,7 @@ export default function App() {
         {activeTab === "roadmap" && roadmapView === "plan" && (
           <PlanTab
             payload={payload}
+            savePayload={savePayload}
             saveConfigPatch={saveConfigPatch}
             onOpenHorizons={() => setRoadmapView("horizons")}
             onScattered={() => setRoadmapView("scattered")}

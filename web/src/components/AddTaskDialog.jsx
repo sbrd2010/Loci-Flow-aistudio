@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { safeUUID } from "../utils/uuid";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
 import { notifPermissionState, requestNotifPermission as nativeRequestPermission } from "../utils/nativeNotifs";
 import { applyAiRewriteToTask, CATEGORY_ICONS } from "../utils/taskOps";
 import { getFocusWindows } from "../utils/focusWindows";
+import { frontsFromConfig, sortFronts } from "../utils/fronts";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 
 function defaultReminderDateTime() {
@@ -32,6 +33,9 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
   const [saved, setSaved] = useState(false);
   const [priority, setPriority] = useState(editTask?.priority || "P3");
   const [category, setCategory] = useState(editTask?.category || "Personal");
+  // "" means no front. Stored as null, never "", so the field is absent rather
+  // than empty for a task that belongs to nothing.
+  const [frontId, setFrontId] = useState(editTask?.frontId || "");
   const [estimateMinutes, setEstimateMinutes] = useState(editTask?.timeEstimateMinutes || 25);
   const [advancedOpen, setAdvancedOpen] = useState(isEditMode);
   const [aiLoading, setAiLoading] = useState(false);
@@ -41,6 +45,14 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
   const [subStepDraft, setSubStepDraft] = useState("");
   const [editingSubStepId, setEditingSubStepId] = useState(null);
   const [editingSubStepText, setEditingSubStepText] = useState("");
+  // Fronts in the same order Plan shows them, so the picker reads like the
+  // screen the user just came from. frontsFromConfig includes the projected
+  // legacy Key Deadline, which is a real, selectable front.
+  const fronts = useMemo(
+    () => sortFronts(frontsFromConfig(payload.config || {}), new Date()),
+    [payload.config],
+  );
+
   const [formError, setFormError] = useState("");
   const [reminderOn, setReminderOn] = useState(!!editTask?.reminderAt);
   const [reminderDate, setReminderDate] = useState(() => {
@@ -247,6 +259,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
         horizonLevel,
         priority,
         category,
+        frontId: frontId || null,
         timeEstimateMinutes: newEstimate,
         ...(estimateChanged ? { dayMapDurationMinutes: newEstimate } : {}),
         reminderAt,
@@ -280,6 +293,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       horizonLevel,
       priority,
       category,
+      frontId: frontId || null,
       timeEstimateMinutes: Number(estimateMinutes),
       deadlineTimestamp: null,
       reminderAt,
@@ -389,6 +403,26 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
               ))}
             </div>
           </div>
+
+          {/* Front — only when there is at least one to join. A native select
+              rather than the button grid the fields above use: there can be up
+              to FRONT_LIMIT fronts with long names, which a grid cannot hold. */}
+          {fronts.length > 0 && (
+            <div className="form-group">
+              <label className="form-label" htmlFor="task-front">FRONT</label>
+              <select
+                id="task-front"
+                className="task-front-select"
+                value={frontId}
+                onChange={e => setFrontId(e.target.value)}
+              >
+                <option value="">Not on a front</option>
+                {fronts.map(f => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Priority */}
           <div className="form-group">

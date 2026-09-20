@@ -8,11 +8,15 @@ import "../styles/theWeek.css";
 // Screen 8 — "The week": the ledger, summed, with one sentence of meaning.
 // No tiles, no donuts, no percentage badges.
 //
-// Everything here reads from the focus ledger the app has always written.
-// Where minutes exist the figures are durations; where they don't — a new
-// account, or demo mode, which has no uid and therefore no ledger — the screen
-// renders MOVES instead, which is addendum F's own fallback rather than a
-// fabricated 0h00m.
+// Everything here reads from the focus ledger the app has always written, and
+// every figure is a duration.
+//
+// Addendum F asked for a MOVES fallback when no time is logged, to avoid a
+// fabricated 0h00m. That fallback was removed: it assumed moves were a signal
+// independent of timed sessions, and here they are not. dailyTotals counts a
+// move only for an event yielding at least a minute, and totalMinutes sums
+// those same minutes — so no minutes implies no moves, always. The branch could
+// only ever render "0". An empty week now says so in words instead.
 
 const DAY_INITIALS = ["S", "M", "T", "W", "T", "F", "S"];
 const CHART_HEIGHT = 96;
@@ -34,12 +38,14 @@ function formatRange(perDay) {
 // The one sentence. Every branch states something demonstrably true of the
 // week's own numbers; none of it is encouragement, and none of it shames.
 function patternSentence(summary, frontNameOf) {
-  const { perDay, totalMinutes, totalMoves, daysMoved, byFront, hasMinutes } = summary;
+  const { perDay, totalMinutes, totalMoves, daysMoved, byFront } = summary;
   if (totalMoves === 0) {
     return { before: "Nothing is logged this week. ", bold: "That is a record too", after: ", not a gap." };
   }
 
-  if (hasMinutes && byFront.size > 0) {
+  // byFront is only ever populated from events with countable minutes, so a
+  // non-empty map guarantees totalMinutes > 0.
+  if (byFront.size > 0) {
     const [topId, topMins] = [...byFront.entries()].sort((a, b) => b[1] - a[1])[0];
     if (topMins / totalMinutes > 0.5) {
       return { before: "More than half of it went to ", bold: frontNameOf(topId), after: "." };
@@ -48,7 +54,7 @@ function patternSentence(summary, frontNameOf) {
 
   const best = [...perDay].sort((a, b) => b.moves - a.moves)[0];
   if (best && best.moves > 0 && daysMoved > 1) {
-    const share = hasMinutes ? best.minutes / totalMinutes : best.moves / totalMoves;
+    const share = best.minutes / totalMinutes;
     if (share > 0.4) {
       return { before: "Most of the week happened on ", bold: "one day", after: "." };
     }
@@ -91,8 +97,8 @@ export default function TheWeek({ payload = {}, uid, onBack, saveConfigPatch, on
   const fronts = useMemo(() => frontsFromConfig(config), [config]);
   const frontNameOf = (id) => fronts.find(f => f.id === id)?.name || "work on no front";
 
-  const { perDay, totalMinutes, totalMoves, byFront, hasMinutes } = summary;
-  const peak = Math.max(...perDay.map(d => (hasMinutes ? d.minutes : d.moves)), 1);
+  const { perDay, totalMinutes, totalMoves, byFront } = summary;
+  const peak = Math.max(...perDay.map(d => d.minutes), 1);
   const sentence = patternSentence(summary, frontNameOf);
 
   // "Protect tomorrow's 08:00?" is only offered when the ledger actually shows
@@ -132,11 +138,9 @@ export default function TheWeek({ payload = {}, uid, onBack, saveConfigPatch, on
         <span className="week-range">{formatRange(perDay)}</span>
       </header>
 
-      <div className="week-figure">{hasMinutes ? formatMinutes(totalMinutes) : String(totalMoves)}</div>
+      <div className="week-figure">{formatMinutes(totalMinutes)}</div>
       <div className="week-kicker">
-        {hasMinutes
-          ? `FOCUSED · ${totalMoves} ${totalMoves === 1 ? "MOVE" : "MOVES"} LOGGED`
-          : `${totalMoves === 1 ? "MOVE" : "MOVES"} · ${rows.length || "NO"} ${rows.length === 1 ? "FRONT" : "FRONTS"}`}
+        {`FOCUSED · ${totalMoves} ${totalMoves === 1 ? "MOVE" : "MOVES"} LOGGED`}
       </div>
 
       <p className="week-sentence">
@@ -145,7 +149,7 @@ export default function TheWeek({ payload = {}, uid, onBack, saveConfigPatch, on
 
       <div className="week-chart" style={{ height: `${CHART_HEIGHT}px` }}>
         {perDay.map((d, i) => {
-          const value = hasMinutes ? d.minutes : d.moves;
+          const value = d.minutes;
           const isToday = i === perDay.length - 1;
           return (
             <div key={d.date} className="week-col">
@@ -172,7 +176,7 @@ export default function TheWeek({ payload = {}, uid, onBack, saveConfigPatch, on
               {/* A zero reads in clay — the one place the alert colour is
                   allowed outside a deadline, per the screen's own spec. */}
               <span className={`week-row-figure${mins === 0 ? " is-zero" : ""}`}>
-                {hasMinutes ? formatMinutes(mins) : `${mins}m`}
+                {formatMinutes(mins)}
               </span>
             </li>
           ))}

@@ -194,7 +194,6 @@ describe("weekSummary", () => {
     expect(out.perDay[6]).toEqual({ date: "2026-11-04", minutes: 50, moves: 2 });
     expect(out.totalMinutes).toBe(110);
     expect(out.totalMoves).toBe(3);
-    expect(out.hasMinutes).toBe(true);
     expect(out.byFront.get("f1")).toBe(110);
   });
 
@@ -206,10 +205,10 @@ describe("weekSummary", () => {
     expect(weekSummary(raw, tasks, NOW, WINDOWS).daysMoved).toBe(2);
   });
 
-  it("reports hasMinutes false for an empty ledger, so callers show moves instead of a fabricated 0h00m", () => {
+  it("is all zeros for an empty ledger — an empty week reads as empty, not as a fallback", () => {
     const out = weekSummary({}, tasks, NOW, WINDOWS);
-    expect(out.hasMinutes).toBe(false);
     expect(out.totalMinutes).toBe(0);
+    expect(out.totalMoves).toBe(0);
     expect(out.daysMoved).toBe(0);
     expect(out.perDay).toHaveLength(7);
     expect(out.perDay.every(d => d.minutes === 0 && d.moves === 0)).toBe(true);
@@ -217,8 +216,17 @@ describe("weekSummary", () => {
 
   it("is safe with no ledger at all — demo mode has no uid and therefore no events", () => {
     const out = weekSummary(null, [], NOW, WINDOWS);
-    expect(out.hasMinutes).toBe(false);
+    expect(out.totalMinutes).toBe(0);
     expect(out.byFront.size).toBe(0);
+  });
+
+  // The removed fallback assumed these could differ. They cannot: a move is an
+  // event with countable minutes, so no minutes always means no moves.
+  it("cannot report moves without minutes", () => {
+    const raw = { "2026-11-04": { a: ev({ focusElapsedSeconds: 20 }), b: ev({ focusElapsedSeconds: 5 }) } };
+    const out = weekSummary(raw, tasks, NOW, WINDOWS);
+    expect(out.totalMinutes).toBe(0);
+    expect(out.totalMoves).toBe(0);
   });
 
   it("ignores sessions older than the window, in the breakdown as well as the total", () => {

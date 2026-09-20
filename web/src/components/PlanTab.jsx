@@ -75,7 +75,7 @@ function FrontBlock({ front, tasks, isLead, now }) {
   );
 }
 
-export default function PlanTab({ payload = {}, saveConfigPatch, onOpenHorizons, onScattered }) {
+export default function PlanTab({ payload = {}, savePayload, saveConfigPatch, onOpenHorizons, onScattered }) {
   const { tasks = [], config = {} } = payload;
   const [adding, setAdding] = useState(false);
   const [draftName, setDraftName] = useState("");
@@ -100,6 +100,21 @@ export default function PlanTab({ payload = {}, saveConfigPatch, onOpenHorizons,
   // does not consume a slot.
   const stored = useMemo(() => normalizeFronts(config.fronts), [config]);
   const atFrontLimit = stored.length >= FRONT_LIMIT;
+
+  // Putting a loose task on a front. This writes task.frontId and nothing else:
+  // a front's next move and progress are DERIVED from the tasks on it
+  // (frontNextMove, frontProgress), so assignment alone is what makes a front
+  // real. No ledger event — the app writes those for horizon moves, not for
+  // category-like fields, and this is the latter.
+  const assignToFront = (task, nextFrontId) => {
+    if (!task?.uuid || !nextFrontId || typeof savePayload !== "function") return;
+    savePayload({
+      ...payload,
+      tasks: (payload.tasks || []).map(t => (
+        t.uuid === task.uuid ? { ...t, frontId: nextFrontId, lastUpdated: Date.now() } : t
+      )),
+    });
+  };
 
   const commitFront = () => {
     const front = makeFront({ name: draftName, dueAt: draftDate || null });
@@ -193,7 +208,22 @@ export default function PlanTab({ payload = {}, saveConfigPatch, onOpenHorizons,
           <ul className="plan-loose-list">
             {loose.map(t => (
               <li key={t.uuid || t.id} className="plan-loose-row">
-                <LinkifyText text={t.title} />
+                <span className="plan-loose-title"><LinkifyText text={t.title} /></span>
+                {fronts.length > 0 && typeof savePayload === "function" && (
+                  // Resets to "" after each change: it is an action, not a
+                  // stored value — once assigned, the row leaves this list.
+                  <select
+                    className="plan-loose-assign"
+                    value=""
+                    aria-label={`Put ${t.title} on a front`}
+                    onChange={e => assignToFront(t, e.target.value)}
+                  >
+                    <option value="">Put on a front…</option>
+                    {fronts.map(f => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                )}
               </li>
             ))}
           </ul>

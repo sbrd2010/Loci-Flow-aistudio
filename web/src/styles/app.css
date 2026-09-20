@@ -780,6 +780,27 @@ textarea.text-input {
   line-height: 1.5;
 }
 
+/* The front picker in Add/Edit Task. Built on the same tokens as .text-input
+   rather than hardcoded colours, so it renders under all fifteen themes. */
+.task-front-select {
+  background: var(--bg-input);
+  border: 1.5px solid var(--control-edge, var(--border));
+  color: var(--text-primary);
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  outline: none;
+  transition: var(--transition);
+  width: 100%;
+  cursor: pointer;
+}
+
+.task-front-select:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
 .btn {
   background: var(--accent);
   color: var(--btn-text, #fff);
