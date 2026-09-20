@@ -37,7 +37,7 @@ function formatRange(perDay) {
 
 // The one sentence. Every branch states something demonstrably true of the
 // week's own numbers; none of it is encouragement, and none of it shames.
-function patternSentence(summary, frontNameOf) {
+export function patternSentence(summary, frontNameOf) {
   const { perDay, totalMinutes, totalMoves, daysMoved, byFront } = summary;
   if (totalMoves === 0) {
     return { before: "Nothing is logged this week. ", bold: "That is a record too", after: ", not a gap." };
@@ -52,8 +52,11 @@ function patternSentence(summary, frontNameOf) {
     }
   }
 
-  const best = [...perDay].sort((a, b) => b.moves - a.moves)[0];
-  if (best && best.moves > 0 && daysMoved > 1) {
+  // Ranked by the same measure the share is then computed in. Sorting by moves
+  // and measuring in minutes picked the wrong day whenever a day of several
+  // short moves outnumbered a day holding one long session.
+  const best = [...perDay].sort((a, b) => b.minutes - a.minutes)[0];
+  if (best && best.minutes > 0 && daysMoved > 1) {
     const share = best.minutes / totalMinutes;
     if (share > 0.4) {
       return { before: "Most of the week happened on ", bold: "one day", after: "." };

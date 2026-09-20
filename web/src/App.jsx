@@ -666,17 +666,23 @@ export default function App() {
       // really began. pendingFocusPinPromiseRef is set by onStartFocus below.
       const pinPromise = pendingFocusPinPromiseRef.current || Promise.resolve();
       pendingFocusPinPromiseRef.current = null;
+      // startFocusSession() auto-closes a still-open prior session (e.g. one
+      // started from Today before navigating here) to make room for this one.
+      // That close ALREADY HAPPENED, synchronously, and does not un-happen if
+      // the pin write below fails — so its terminal event cannot be written
+      // inside the success branch. It was, which meant a rejected pin ended the
+      // user's running session and left its focus_started orphaned forever,
+      // breaking the one guarantee this ledger makes. The new session is
+      // different: it has no focus_started until the pin confirms, so rolling
+      // it back in .catch() needs no terminal event of its own.
+      if (session.priorSession && session.priorSession.task) {
+        const abandonEvent = buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
+          ...session.priorSession, windows,
+        });
+        writeActivityEvents(eventPatch(activityUid, abandonEvent));
+      }
       pinPromise
         .then(() => {
-          // startFocusSession() auto-closes a still-open prior session (e.g. one
-          // started from Today before navigating to Day Map) to make room for
-          // this one — write its terminal event too, or it's orphaned forever.
-          if (session.priorSession && session.priorSession.task) {
-            const abandonEvent = buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
-              ...session.priorSession, windows,
-            });
-            writeActivityEvents(eventPatch(activityUid, abandonEvent));
-          }
           const event = buildFocusStartedEvent(focusTimer.activeTask, session.focusSessionId, {
             source: focusSource || "day_map", focusInitialPlannedSeconds: session.focusInitialPlannedSeconds,
             now: session.focusStartedAt, windows,

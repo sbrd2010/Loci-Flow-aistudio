@@ -39,7 +39,21 @@ export default function ScatteredFlow({
     window.scrollTo?.({ top: 0 });
   }, []);
 
-  const now = useMemo(() => new Date(), [tasks, config]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Nothing on this screen was clock-driven, so the remaining-time cut — and
+  // therefore the chosen task — stayed frozen at the moment it opened. Left
+  // open at 11:30 inside a window ending at noon, it went on claiming thirty
+  // minutes and keeping a 25-minute task that no longer fits. State only
+  // changes when the minute number actually does, so this is not a re-render
+  // every thirty seconds. The trade is that the choice can shift under a
+  // screen left open a long time; a recommendation that cannot be acted on is
+  // the worse of the two.
+  const [minuteTick, setMinuteTick] = useState(() => Math.floor(Date.now() / 60000));
+  useEffect(() => {
+    const id = setInterval(() => setMinuteTick(Math.floor(Date.now() / 60000)), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const now = useMemo(() => new Date(), [tasks, config, minuteTick]); // eslint-disable-line react-hooks/exhaustive-deps
   const result = useMemo(() => narrowDown(tasks, config, now), [tasks, config, now]);
   const { total, rows, chosen, why, parked } = result;
 
