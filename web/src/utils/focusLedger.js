@@ -26,7 +26,10 @@ export const MIN_COUNTABLE_MINUTES = 1;
 
 export function eventMinutes(event) {
   const secs = Number(event?.focusElapsedSeconds);
-  if (!Number.isFinite(secs) || secs <= 0) return 0;
+  // Under a minute is zero, not a rounded-up one. Math.round alone turned a
+  // 45-second mis-tap into a whole minute, and dailyTotals then counted it as
+  // a move — inflating days-moved, the one figure that has to stay honest.
+  if (!Number.isFinite(secs) || secs < MIN_COUNTABLE_MINUTES * 60) return 0;
   return Math.round(secs / 60);
 }
 

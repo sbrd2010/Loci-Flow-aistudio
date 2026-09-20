@@ -74,6 +74,11 @@ export default function App() {
   // ledger writes until that pin actually confirmed in RTDB, without
   // delaying the (already-instant) navigation to Today itself.
   const pendingFocusPinPromiseRef = useRef(null);
+  // How the session that is about to open was requested: an explicit duration
+  // (screen 14's "Just 5 minutes", which is NOT the task's own estimate) and
+  // the entry point to record in the ledger. Null for Day Map, which wants the
+  // task estimate and the "day_map" source.
+  const pendingFocusOptionsRef = useRef(null);
 
   const enterDemo = () => {
     setDemoPayload(createDemoPayload());
@@ -634,11 +639,18 @@ export default function App() {
         focusTimer.setIsFocusMode(true);
         focusTimer.setIsTimerRunning(true);
         pendingFocusPinPromiseRef.current = null;
+        pendingFocusOptionsRef.current = null;
         setPendingFocusOpen(false);
         return;
       }
       const windows = getFocusWindows(payload?.config || {});
-      const session = focusTimer.startFocusSession(focusTimer.activeTask);
+      const { plannedSeconds, source: focusSource } = pendingFocusOptionsRef.current || {};
+      pendingFocusOptionsRef.current = null;
+      // plannedSeconds must go THROUGH startFocusSession: it resets the timer
+      // from the task's own estimate, so a duration applied beforehand (via
+      // changeFocusDuration) is overwritten a moment later and the session runs
+      // — and is logged — at the wrong length.
+      const session = focusTimer.startFocusSession(focusTimer.activeTask, { plannedSeconds });
       // Timer/session state starts immediately (optimistic, same as every
       // other focus-start path) — but the ledger writes wait for Day Map's
       // pin write to actually confirm in RTDB, so a rejected/failed pin
@@ -658,7 +670,7 @@ export default function App() {
             writeActivityEvents(eventPatch(activityUid, abandonEvent));
           }
           const event = buildFocusStartedEvent(focusTimer.activeTask, session.focusSessionId, {
-            source: "day_map", focusInitialPlannedSeconds: session.focusInitialPlannedSeconds,
+            source: focusSource || "day_map", focusInitialPlannedSeconds: session.focusInitialPlannedSeconds,
             now: session.focusStartedAt, windows,
           });
           writeActivityEvents(eventPatch(activityUid, event));
@@ -1065,8 +1077,11 @@ export default function App() {
             // write, and let Today open the session. Driving the timer from
             // here would risk orphaned sessions and missing ledger events.
             onStartFocus={(pinPromise, minutes) => {
-              if (minutes) focusTimer.changeFocusDuration?.(minutes);
               pendingFocusPinPromiseRef.current = pinPromise;
+              pendingFocusOptionsRef.current = {
+                plannedSeconds: Number(minutes) > 0 ? Number(minutes) * 60 : undefined,
+                source: "scattered",
+              };
               setPendingFocusOpen(true);
               goToday();
             }}

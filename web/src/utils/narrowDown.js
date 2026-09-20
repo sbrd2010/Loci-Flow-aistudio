@@ -17,6 +17,8 @@
 //     always land on one task, and a reduction that eliminates everything is
 //     not a reduction — it is a dead end shown to someone already overwhelmed.
 
+import { getFocusWindows, getRemainingFocusMinutes } from "./focusWindows";
+
 const STALE_DAYS = 7;
 // Horizons further out than this week are not "due this horizon".
 const BEYOND_THIS_HORIZON = new Set(["month", "quarter", "halfyear"]);
@@ -36,15 +38,15 @@ export function openTasks(tasks) {
   return tasks.filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked);
 }
 
-// Minutes between now and the end of the working day. dayEndHour may exceed 24
-// (the app lets a day end at 2am, stored as 26), so it is measured from the
-// start of today rather than clamped into a single calendar date.
+// Focus minutes left today, measured the way the rest of the app measures them.
+// This read config.dayEndHour directly, which focusWindows superseded: for
+// anyone with configured windows the two disagree outright — at 10:00 inside a
+// 09:00-12:00 window it claimed twelve hours left where the app shows two, and
+// so kept work that demonstrably cannot fit. getRemainingFocusMinutes also
+// excludes the gaps between windows and handles a day ending after midnight,
+// both of which this had to special-case by hand.
 export function minutesLeftToday(config = {}, now = new Date()) {
-  const endHour = Number(config.dayEndHour);
-  const end = Number.isFinite(endHour) ? endHour : 22;
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const endMs = startOfDay.getTime() + end * 3600000;
-  return Math.max(0, Math.round((endMs - now.getTime()) / 60000));
+  return getRemainingFocusMinutes(now, getFocusWindows(config));
 }
 
 export function formatMinutesLeft(mins) {

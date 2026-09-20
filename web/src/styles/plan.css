@@ -206,6 +206,16 @@
   color: var(--text-quiet, var(--text-muted));
 }
 
+/* Only appears at the storage ceiling, in place of the disabled button's
+   silence — it says what happened and what to do about it. */
+.plan-limit-note {
+  margin: 14px 0 0;
+  font-family: var(--font-serif, var(--font-sans));
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--clay, var(--warning));
+}
+
 /* — footer — */
 /* Empty reads as a beginning, not a void: a sentence, never an illustration. */
 .plan-empty {

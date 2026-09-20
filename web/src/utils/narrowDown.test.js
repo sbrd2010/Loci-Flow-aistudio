@@ -72,6 +72,21 @@ describe("minutesLeftToday", () => {
     expect(minutesLeftToday({ dayEndHour: 18 }, new Date(2026, 10, 4, 23, 0))).toBe(0);
   });
 
+  // It used to read config.dayEndHour directly, so a user with configured
+  // windows was told they had the whole day left and kept work that cannot fit.
+  it("measures the user's configured focus windows, not the legacy end hour", () => {
+    const config = { focusWindows: [{ start: "09:00", end: "12:00" }] };
+    // 09:41 inside a 09:00-12:00 window: 2h19m left, not 8h19m.
+    expect(minutesLeftToday(config, NOW)).toBe(139);
+    expect(formatMinutesLeft(139)).toBe("2h19m");
+  });
+
+  it("excludes the gap between two windows rather than counting straight through", () => {
+    const config = { focusWindows: [{ start: "09:00", end: "12:00" }, { start: "14:00", end: "16:00" }] };
+    // 2h19m left of the morning window + the full 2h afternoon one.
+    expect(minutesLeftToday(config, NOW)).toBe(139 + 120);
+  });
+
   it("falls back to a sane end hour when config is missing or junk", () => {
     expect(minutesLeftToday({}, NOW)).toBeGreaterThan(0);
     expect(minutesLeftToday({ dayEndHour: "nonsense" }, NOW)).toBeGreaterThan(0);

@@ -32,6 +32,15 @@ describe("eventMinutes", () => {
     expect(eventMinutes(ev({ focusElapsedSeconds: 89 }))).toBe(1);
   });
 
+  // Math.round alone turned 30-59s into a whole minute, which dailyTotals then
+  // counted as a move — a mis-tap could mark a day as "moved".
+  it("is 0 below a full minute, not rounded up to one", () => {
+    expect(eventMinutes(ev({ focusElapsedSeconds: 30 }))).toBe(0);
+    expect(eventMinutes(ev({ focusElapsedSeconds: 45 }))).toBe(0);
+    expect(eventMinutes(ev({ focusElapsedSeconds: 59 }))).toBe(0);
+    expect(eventMinutes(ev({ focusElapsedSeconds: 60 }))).toBe(1);
+  });
+
   it("is 0 for missing, zero, negative or junk elapsed time", () => {
     for (const bad of [undefined, null, 0, -60, "twenty", NaN]) {
       expect(eventMinutes(ev({ focusElapsedSeconds: bad }))).toBe(0);
@@ -112,6 +121,11 @@ describe("dailyTotals", () => {
     const events = [ev({ focusElapsedSeconds: 8 })];
     expect(dailyTotals(events)["2026-11-04"]).toEqual({ minutes: 0, moves: 0 });
     expect(MIN_COUNTABLE_MINUTES).toBe(1);
+  });
+
+  it("does not let a 45-second mis-tap count as a move or a day moved", () => {
+    const totals = dailyTotals([ev({ focusElapsedSeconds: 45 })]);
+    expect(totals["2026-11-04"]).toEqual({ minutes: 0, moves: 0 });
   });
 
   it("skips events with no day to file them under", () => {

@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { useFocusLedger } from "../hooks/useFocusLedger";
 import { weekSummary, formatMinutes, commonestStartHour } from "../utils/focusLedger";
 import { frontsFromConfig } from "../utils/fronts";
-import { getFocusWindows } from "../utils/focusWindows";
+import { getFocusWindows, isHourInWindow } from "../utils/focusWindows";
 import "../styles/theWeek.css";
 
 // Screen 8 — "The week": the ledger, summed, with one sentence of meaning.
@@ -82,15 +82,17 @@ export default function TheWeek({ payload = {}, uid, onBack, saveConfigPatch, on
   // "Protect tomorrow's 08:00?" is only offered when the ledger actually shows
   // a habitual start hour, and only when no focus window already covers it.
   const suggestHour = commonestStartHour(summary.events);
-  const alreadyProtected = suggestHour !== null
-    && windows.some(w => suggestHour * 60 >= w.startMin && suggestHour * 60 < w.endMin);
+  const alreadyProtected = suggestHour !== null && windows.some(w => isHourInWindow(suggestHour, w));
   const canSuggest = suggestHour !== null && !alreadyProtected && typeof saveConfigPatch === "function";
 
   const protectHour = () => {
     const pad = (n) => String(n).padStart(2, "0");
     const existing = Array.isArray(config.focusWindows) ? config.focusWindows : [];
     saveConfigPatch({
-      focusWindows: [...existing, { start: `${pad(suggestHour)}:00`, end: `${pad(suggestHour + 1)}:00` }],
+      // Wrap at midnight: parseTimeToMinutes rejects hour 24, so a 23:00
+      // suggestion saved as "24:00" is silently discarded by getFocusWindows
+      // and "Block it" protects nothing while appearing to work.
+      focusWindows: [...existing, { start: `${pad(suggestHour)}:00`, end: `${pad((suggestHour + 1) % 24)}:00` }],
     });
   };
 

@@ -8,8 +8,12 @@ import "../styles/scattered.css";
 // thirteen things get eliminated for stated reasons is.
 //
 // Every figure here is computed (see narrowDown.js). Nothing on this screen is
-// generated prose, and nothing is deleted: the tasks that drop out of the
-// ledger are untouched in the payload and come back tomorrow.
+// generated prose, and nothing is written: the tasks that drop out of the
+// ledger are untouched in the payload and still on the user's list. The copy
+// below has to say exactly that. It previously said they were "parked until
+// tomorrow", which is a promise this flow does not keep — and "parked" is
+// already a real state in this app (isParked / task_parked), so it read as a
+// claim that a mutation had happened when none had.
 //
 // Starting a session follows Day Map's pattern rather than driving the timer
 // directly — pin the task, hand the confirmed-write promise up, and let the
@@ -120,7 +124,7 @@ export default function ScatteredFlow({
       {parked.length > 0 && (
         <footer className="scattered-foot">
           <p className="scattered-parked-line">
-            The other {parked.length} {parked.length === 1 ? "is" : "are"} parked until tomorrow.{" "}
+            The other {parked.length} {parked.length === 1 ? "is" : "are"} out of the way, not gone.{" "}
             <button type="button" className="scattered-show" onClick={() => setShowParked(v => !v)}>
               {showParked ? "Hide them" : "Show them"}
             </button>
@@ -135,7 +139,8 @@ export default function ScatteredFlow({
             </ul>
           )}
           <p className="scattered-reassure">
-            Nothing was deleted. They come back when you have room for them.
+            Nothing was changed or deleted. They are still on your list, waiting
+            for when you have room for them.
           </p>
         </footer>
       )}

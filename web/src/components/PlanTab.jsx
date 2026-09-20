@@ -12,6 +12,7 @@ import {
   planFooterSentence,
   makeFront,
   FRONT_NAME_MAX,
+  FRONT_LIMIT,
 } from "../utils/fronts";
 import "../styles/plan.css";
 
@@ -92,13 +93,23 @@ export default function PlanTab({ payload = {}, saveConfigPatch, onOpenHorizons,
     [tasks],
   );
 
+  // The LIMIT applies to stored fronts. frontsFromConfig can return one more
+  // than this (the legacy Key Deadline projection), which is not stored and so
+  // does not consume a slot.
+  const stored = useMemo(() => normalizeFronts(config.fronts), [config]);
+  const atFrontLimit = stored.length >= FRONT_LIMIT;
+
   const commitFront = () => {
     const front = makeFront({ name: draftName, dueAt: draftDate || null });
     if (!front) return;
+    // normalizeFronts caps the list at FRONT_LIMIT, so appending to a full list
+    // saved a front that the very next render dropped: the form closed, the
+    // typed name was gone, and nothing said why.
+    if (atFrontLimit) return;
     // Write only the STORED fronts plus the new one. The legacy Key Deadline is
     // a read-time projection; materialising it here would silently turn it into
     // stored data the user never asked to create.
-    saveConfigPatch?.({ fronts: [...normalizeFronts(config.fronts), front] });
+    saveConfigPatch?.({ fronts: [...stored, front] });
     setDraftName("");
     setDraftDate("");
     setAdding(false);
@@ -116,10 +127,17 @@ export default function PlanTab({ payload = {}, saveConfigPatch, onOpenHorizons,
           className="plan-new-front"
           onClick={() => setAdding(v => !v)}
           aria-expanded={adding}
+          disabled={atFrontLimit}
         >
           New front
         </button>
       </header>
+
+      {atFrontLimit && (
+        <p className="plan-limit-note">
+          That is {FRONT_LIMIT} fronts — the most Loci holds. Close one before adding another.
+        </p>
+      )}
 
       {adding && (
         <div className="plan-new-form">
@@ -143,7 +161,7 @@ export default function PlanTab({ payload = {}, saveConfigPatch, onOpenHorizons,
             onChange={e => setDraftDate(e.target.value)}
           />
           <div className="plan-new-actions">
-            <button type="button" className="plan-new-commit" disabled={!draftName.trim()} onClick={commitFront}>
+            <button type="button" className="plan-new-commit" disabled={!draftName.trim() || atFrontLimit} onClick={commitFront}>
               Add the front
             </button>
             <button type="button" className="plan-new-cancel" onClick={() => setAdding(false)}>Cancel</button>
