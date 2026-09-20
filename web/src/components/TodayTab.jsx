@@ -17,15 +17,10 @@ import { formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
 import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows, getWindowState, getRemainingFocusMinutes, getNextWindowStart, getOverallSpan, getFocusProgress, hasConfiguredFocusWindow } from "../utils/focusWindows";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
-import { getMorningRitualVariant, shouldShowMorningRitual, buildMorningRitualDoneConfig, buildMorningRitualSnoozeConfig } from "../utils/morningRitual";
 import { getCoachNudge, buildCoachNudgeClearedConfig, buildPendingCoachNudge } from "../utils/coachNudge";
 import {
-  shouldShowMorningCommitment, buildMorningCommitmentPrompt, canSaveMorningCommitment,
-  buildMorningCommitmentSave, buildMorningCommitmentSkip, buildMorningCommitmentSnooze,
-  shouldShowMiddayCheck, buildMiddayProgressSummary, buildMiddayCheckDone, buildMiddayCheckSnooze,
-  buildNarrowToOne, getValidCommittedTaskIds,
+  getValidCommittedTaskIds,
   shouldShowReflection, buildEndOfDaySummary, buildReflectionSave, buildReflectionSnooze, REFLECTION_MOODS,
-  MAX_COMMITMENT_TASKS,
 } from "../utils/dailyCoachCheckins";
 import "../styles/focusNow.css";
 import {
@@ -160,11 +155,10 @@ export default function TodayTab({
   const [showAnchorSheet, setShowAnchorSheet] = useState(false);
   const [anchorSheetSlot, setAnchorSheetSlot] = useState(null);
 
-  // Daily Coach check-ins: "morning" (Today's Commitment) | "midday" (Progress Check) | "reflection" (Day Close)
+  // The one surviving scheduled prompt: "reflection" (Day Close). Addendum B
+  // deleted the morning commitment and the midday progress check outright.
   const [dailyCheckinSlot, setDailyCheckinSlot] = useState(null);
   const [showDailyCheckin, setShowDailyCheckin] = useState(false);
-  const [commitmentSelection, setCommitmentSelection] = useState([]);
-  const [middayNarrowPicker, setMiddayNarrowPicker] = useState(false);
   const [reflectionMood, setReflectionMood] = useState(null);
   const [reflectionNote, setReflectionNote] = useState("");
 
@@ -547,15 +541,15 @@ export default function TodayTab({
   // ── Daily Anchors / Morning Ritual auto-show ───────────────────────────────
   useEffect(() => {
     if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || rescueActive) return;
+    // The morning ritual popup is gone (Addendum B: "no popup ever opens on app
+    // launch"). What remains is the anchors sheet, which Addendum A moves onto
+    // Day Map as pinned stops — it stays here until that move is built, rather
+    // than leaving anchors with nowhere to live.
     let slot = null;
-    if (shouldShowMorningRitual(new Date(), config)) {
-      slot = "morning";
-    } else {
-      const anchorSlot = getCurrentAnchorSlot(new Date(), windows);
-      if (anchorSlot && anchorSlot !== "morning" && anchors.length && !todayShownSlots.includes(anchorSlot)) {
-        const snoozeUntil = config.anchorsSnoozeUntil;
-        if (!snoozeUntil || Date.now() >= snoozeUntil) slot = anchorSlot;
-      }
+    const anchorSlot = getCurrentAnchorSlot(new Date(), windows);
+    if (anchorSlot && anchorSlot !== "morning" && anchors.length && !todayShownSlots.includes(anchorSlot)) {
+      const snoozeUntil = config.anchorsSnoozeUntil;
+      if (!snoozeUntil || Date.now() >= snoozeUntil) slot = anchorSlot;
     }
     if (!slot) return;
     setAnchorSheetSlot(slot);
@@ -564,28 +558,25 @@ export default function TodayTab({
   }, [
     anchors.length, todayShownSlotsKey, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending,
     isAddTaskDialogOpen, showAnchorSheet, showDailyCheckin, rescueActive, config.anchorsSnoozeUntil,
-    config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, config.morningRitualEnabled, visibilityTick,
+    visibilityTick,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Daily Coach Check-ins auto-show (Today's Commitment / Progress Check / Day Close) ──
+  // ── Day Close auto-show — the one scheduled interruption, at day's end ──
   useEffect(() => {
     if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || rescueActive) return;
     const now = new Date();
-    const morningRitualPending = shouldShowMorningRitual(now, config);
+    // Addendum B: the morning commitment and the midday progress check are
+    // gone, and so is the morning ritual popup — "an app that interrupts an
+    // overwhelmed person to ask how they are is part of the problem". Day Close
+    // is the one surviving prompt, and it becomes the Evening Review; until
+    // that screen exists it stays here rather than leaving a gap.
     const dueSlots = {
-      morning: shouldShowMorningCommitment(now, windows, config, anchorTodayStr, morningRitualPending),
-      midday: shouldShowMiddayCheck(now, windows, config, anchorTodayStr),
       reflection: shouldShowReflection(now, windows, config, anchorTodayStr),
     };
-    // A tapped daily check-in notification names a specific slot — show that one
-    // (if still due) instead of letting normal priority order pick a different card.
+    // A tapped check-in notification names a slot — honour it if still due.
     let slot = null;
     if (pendingCheckinSlot && dueSlots[pendingCheckinSlot]) {
       slot = pendingCheckinSlot;
-    } else if (dueSlots.morning) {
-      slot = "morning";
-    } else if (dueSlots.midday) {
-      slot = "midday";
     } else if (dueSlots.reflection) {
       slot = "reflection";
     }
@@ -595,7 +586,6 @@ export default function TodayTab({
       return;
     }
     setDailyCheckinSlot(slot);
-    if (slot === "morning") setCommitmentSelection([]);
     if (slot === "reflection") { setReflectionMood(null); setReflectionNote(""); }
     // Clear pendingCheckinSlot only once the modal actually opens — clearing it now
     // would change a dependency of this effect, canceling this timer (via cleanup)
@@ -608,7 +598,7 @@ export default function TodayTab({
   }, [
     anchorTodayStr, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, isAddTaskDialogOpen,
     showAnchorSheet, showDailyCheckin, rescueActive, pendingCheckinSlot, config.anchorsSnoozeUntil,
-    config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, config.morningRitualEnabled, visibilityTick,
+    visibilityTick,
     config.dailyCommitmentDate, config.dailyCommitmentSkippedDate, config.dailyCommitmentSnoozeUntil, config.dailyCommitmentTaskIds,
     config.dailyMiddayCheckDate, config.dailyMiddayCheckSnoozeUntil, config.dailyReflectionDate, config.dailyReflectionSnoozeUntil, config.dailyCheckinsEnabled,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -621,24 +611,16 @@ export default function TodayTab({
   };
 
   const handleAnchorSheetDone = () => {
-    if (anchorSheetSlot === "morning") {
-      saveConfigPatch({ ...buildMorningRitualDoneConfig() });
-    } else {
-      const slot = anchorSheetSlot ?? getCurrentAnchorSlot(new Date(), windows);
-      const nextSlots = slot && !todayShownSlots.includes(slot) ? [...todayShownSlots, slot] : todayShownSlots;
-      saveConfigPatch({ anchorsShownSlots: nextSlots, anchorsSlotsDate: anchorTodayStr,
-        anchorsSnoozeUntil: null });
-    }
+    const slot = anchorSheetSlot ?? getCurrentAnchorSlot(new Date(), windows);
+    const nextSlots = slot && !todayShownSlots.includes(slot) ? [...todayShownSlots, slot] : todayShownSlots;
+    saveConfigPatch({ anchorsShownSlots: nextSlots, anchorsSlotsDate: anchorTodayStr,
+      anchorsSnoozeUntil: null });
     setShowAnchorSheet(false);
     setAnchorSheetSlot(null);
   };
 
   const handleAnchorLater = () => {
-    if (anchorSheetSlot === "morning") {
-      saveConfigPatch({ ...buildMorningRitualSnoozeConfig() });
-    } else {
-      saveConfigPatch({ anchorsSnoozeUntil: Date.now() + 90 * 60 * 1000 });
-    }
+    saveConfigPatch({ anchorsSnoozeUntil: Date.now() + 90 * 60 * 1000 });
     setShowAnchorSheet(false);
     setAnchorSheetSlot(null);
   };
@@ -654,58 +636,6 @@ export default function TodayTab({
   const closeDailyCheckin = () => {
     setDailyCheckinSlot(null);
     setShowDailyCheckin(false);
-    setMiddayNarrowPicker(false);
-  };
-
-  // Today's Commitment (morning)
-  const toggleCommitmentTask = (uuid) => {
-    setCommitmentSelection(sel =>
-      sel.includes(uuid) ? sel.filter(id => id !== uuid)
-        : sel.length < MAX_COMMITMENT_TASKS ? [...sel, uuid] : sel
-    );
-  };
-
-  const handleSaveCommitment = () => {
-    saveConfigPatch((latestConfig) => buildMorningCommitmentSave(latestConfig, commitmentSelection, anchorTodayStr));
-    closeDailyCheckin();
-  };
-
-  const handleCommitmentLater = () => {
-    saveConfigPatch((latestConfig) => buildMorningCommitmentSnooze(latestConfig));
-    closeDailyCheckin();
-  };
-
-  const handleCommitmentSkip = () => {
-    saveConfigPatch((latestConfig) => buildMorningCommitmentSkip(latestConfig, anchorTodayStr));
-    closeDailyCheckin();
-  };
-
-  // Progress Check (midday)
-  const handleMiddayKeepGoing = () => {
-    saveConfigPatch((latestConfig) => buildMiddayCheckDone(latestConfig, anchorTodayStr));
-    closeDailyCheckin();
-  };
-
-  const handleMiddaySnooze = () => {
-    saveConfigPatch((latestConfig) => buildMiddayCheckSnooze(latestConfig));
-    closeDailyCheckin();
-  };
-
-  const handleMiddayOpenFocus = () => {
-    saveConfigPatch((latestConfig) => buildMiddayCheckDone(latestConfig, anchorTodayStr));
-    closeDailyCheckin();
-    setShowFocusNowPicker(true);
-  };
-
-  const handleMiddayTalkToCoach = () => {
-    saveConfigPatch((latestConfig) => buildMiddayCheckDone(latestConfig, anchorTodayStr));
-    closeDailyCheckin();
-    onOpenCoach?.();
-  };
-
-  const handleNarrowToOne = (taskId) => {
-    saveConfigPatch((latestConfig) => buildNarrowToOne(buildMiddayCheckDone(latestConfig, anchorTodayStr), taskId));
-    closeDailyCheckin();
   };
 
   // Day Close (end-of-day reflection)
@@ -1422,100 +1352,6 @@ export default function TodayTab({
         </div>
       )}
 
-      {/* ── Today's Commitment (morning check-in) ─────────────────── */}
-      {showDailyCheckin && dailyCheckinSlot === "morning" && (() => {
-        const todayIncompleteTasks = todayTasksAll.filter(t => !t.isCompleted).sort(byPriorityThenOrder);
-        const prompt = buildMorningCommitmentPrompt(todayIncompleteTasks);
-        const canSave = canSaveMorningCommitment(commitmentSelection, todayIncompleteTasks.length);
-        return (
-          <div data-testid="daily-checkin-card" style={dailyCheckinCardStyle}>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button type="button" aria-label="Dismiss daily check-in" style={dailyCheckinDismissStyle} onClick={handleCommitmentLater}>✕</button>
-            </div>
-              <div className="morning-ritual-header">
-                <div className="morning-ritual-title">{prompt.title}</div>
-                <div className="morning-ritual-line">{prompt.line}</div>
-              </div>
-              {prompt.mode === "choose" && (
-                <div className="anchor-chips morning-ritual-chips">
-                  {todayIncompleteTasks.map(task => {
-                    const checked = commitmentSelection.includes(task.uuid);
-                    return (
-                      <button
-                        key={task.uuid}
-                        className={`anchor-chip${checked ? " anchor-chip--checked" : ""}`}
-                        onClick={() => toggleCommitmentTask(task.uuid)}
-                      >
-                        {checked ? "✓ " : ""}{task.title}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="morning-ritual-actions">
-                <button className="morning-ritual-btn-primary" onClick={handleSaveCommitment} disabled={!canSave}>
-                  {prompt.mode === "empty" ? "Got it" : "Save commitment"}
-                </button>
-                <div className="morning-ritual-actions-row">
-                  <button className="morning-ritual-btn-ghost" onClick={handleCommitmentLater}>Later</button>
-                  <button className="morning-ritual-btn-ghost" onClick={handleCommitmentSkip}>Skip today</button>
-                </div>
-              </div>
-          </div>
-        );
-      })()}
-
-      {/* ── Progress Check (midday check-in) ──────────────────────── */}
-      {showDailyCheckin && dailyCheckinSlot === "midday" && (() => {
-        const summary = buildMiddayProgressSummary(tasks, config, new Date(), windows);
-        const remainingCommitted = summary.committedTasks.filter(t => !t.isCompleted);
-        return (
-          <div data-testid="daily-checkin-card" style={dailyCheckinCardStyle}>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button type="button" aria-label="Dismiss daily check-in" style={dailyCheckinDismissStyle} onClick={handleMiddaySnooze}>✕</button>
-            </div>
-              <div className="morning-ritual-header">
-                <div className="morning-ritual-title">{summary.title}</div>
-                {summary.countLine && <div className="morning-ritual-line">{summary.countLine}</div>}
-                <div className="morning-ritual-line">{summary.timeLine}</div>
-              </div>
-              {middayNarrowPicker ? (
-                <div className="anchor-chips morning-ritual-chips">
-                  {remainingCommitted.map(task => (
-                    <button key={task.uuid} className="anchor-chip" onClick={() => handleNarrowToOne(task.uuid)}>
-                      {task.title}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="morning-ritual-nudge">{summary.line}</div>
-              )}
-              <div className="morning-ritual-actions">
-                {middayNarrowPicker ? (
-                  <button className="morning-ritual-btn-ghost" onClick={() => setMiddayNarrowPicker(false)}>Back</button>
-                ) : (
-                  <>
-                    <button className="morning-ritual-btn-primary" onClick={handleMiddayKeepGoing}>
-                      {summary.total === 0 ? "Got it" : "Keep going"}
-                    </button>
-                    {remainingCommitted.length > 1 && (
-                      <div className="morning-ritual-actions-row">
-                        <button className="morning-ritual-btn-ghost" onClick={() => setMiddayNarrowPicker(true)}>Narrow to one</button>
-                      </div>
-                    )}
-                    <div className="morning-ritual-actions-row">
-                      <button className="morning-ritual-btn-ghost" onClick={handleMiddayOpenFocus}>Open One Task Focus</button>
-                    </div>
-                    <div className="morning-ritual-actions-row">
-                      <button className="morning-ritual-btn-ghost" onClick={handleMiddayTalkToCoach}>Talk to Coach</button>
-                    </div>
-                  </>
-                )}
-              </div>
-          </div>
-        );
-      })()}
-
       {/* ── Day Close (end-of-day reflection) ─────────────────────── */}
       {showDailyCheckin && dailyCheckinSlot === "reflection" && (() => {
         const summary = buildEndOfDaySummary(tasks, config, anchorTodayStr);
@@ -2029,55 +1865,6 @@ export default function TodayTab({
           onCancel={() => setConfirmDialog(null)}
         />
       )}
-
-      {/* ── Morning Ritual popup (centered, once per Loci day) ───── */}
-      {showAnchorSheet && anchorSheetSlot === "morning" && (() => {
-        const variant = getMorningRitualVariant(new Date());
-        return (
-          <div className="focus-now-backdrop focus-now-backdrop--center" onClick={handleAnchorSheetDone}>
-            <div className="morning-ritual-card" onClick={e => e.stopPropagation()}>
-              <div className="morning-ritual-header">
-                <div className="morning-ritual-title">{variant.title}</div>
-                <div className="morning-ritual-line">{variant.line}</div>
-              </div>
-              {anchors.length > 0 ? (
-                <>
-                  <div className="anchor-chips morning-ritual-chips">
-                    {anchors.map(a => {
-                      const checked = todayCheckedIds.includes(a.id);
-                      return (
-                        <button
-                          key={a.id}
-                          className={`anchor-chip${checked ? " anchor-chip--checked" : ""}`}
-                          onClick={() => handleAnchorCheck(a.id)}
-                        >
-                          {checked ? "✓ " : ""}{a.text}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="morning-ritual-nudge">Pick one anchor. Then start one task.</div>
-                </>
-              ) : (
-                <div className="morning-ritual-nudge">No anchors yet &#8212; pick one task and begin.</div>
-              )}
-              <div className="morning-ritual-actions">
-                <button className="morning-ritual-btn-primary" onClick={handleAnchorSheetDone}>Done</button>
-                <button className="morning-ritual-btn-secondary" onClick={() => {
-                  saveConfigPatch({ ...buildMorningRitualDoneConfig() });
-                  setShowAnchorSheet(false);
-                  setAnchorSheetSlot(null);
-                  onOpenMindBox?.("ritual");
-                }}>Start Morning Ritual &#8594;</button>
-                <div className="morning-ritual-actions-row">
-                  <button className="morning-ritual-btn-ghost" onClick={handleAnchorLater}>Later</button>
-                  <button className="morning-ritual-btn-ghost" onClick={() => { setShowAnchorSheet(false); setAnchorSheetSlot(null); onOpenMindBox?.("anchors"); }}>Manage</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ── Daily Anchors check-in sheet ────────────────────────── */}
       {showAnchorSheet && anchorSheetSlot !== "morning" && anchors.length > 0 && (() => {

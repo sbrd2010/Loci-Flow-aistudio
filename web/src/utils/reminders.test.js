@@ -12,36 +12,34 @@ describe("getDueDailyCheckins", () => {
     expect(getDueDailyCheckins({}, windows, dt(8, 0))).toEqual([]);
   });
 
-  it("returns 'morning' once Morning Ritual is no longer pending", () => {
-    const config = { morningRitualShownDate: TODAY };
-    expect(getDueDailyCheckins(config, windows, dt(9, 0))).toEqual(["morning"]);
-  });
-
-  it("returns 'midday' once the focus midpoint passes, after committing", () => {
+  // Addendum B: the morning commitment and the midday progress check are gone,
+  // and their notifications went with them — a push that opens the app to a
+  // prompt that no longer exists is worse than the prompt was. Day Close is the
+  // one scheduled interruption left.
+  it("never returns the deleted morning or midday slots", () => {
     const config = { morningRitualShownDate: TODAY, dailyCommitmentDate: TODAY, dailyCommitmentTaskIds: ["a"] };
-    expect(getDueDailyCheckins(config, windows, dt(13, 0))).toEqual(["midday"]);
+    for (const hour of [9, 11, 13, 15]) {
+      expect(getDueDailyCheckins(config, windows, dt(hour, 0))).not.toContain("morning");
+      expect(getDueDailyCheckins(config, windows, dt(hour, 0))).not.toContain("midday");
+    }
   });
 
-  it("can return multiple due check-ins at once", () => {
-    const config = { morningRitualShownDate: TODAY };
-    expect(getDueDailyCheckins(config, windows, dt(16, 45))).toEqual(["morning", "reflection"]);
+  it("returns 'reflection' near the end of the focus window", () => {
+    expect(getDueDailyCheckins({}, windows, dt(16, 45))).toEqual(["reflection"]);
   });
 
-  it("returns nothing once all three are completed for the day", () => {
-    const config = {
-      morningRitualShownDate: TODAY,
-      dailyCommitmentDate: TODAY,
-      dailyCommitmentTaskIds: ["a"],
-      dailyMiddayCheckDate: TODAY,
-      dailyReflectionDate: TODAY,
-    };
-    expect(getDueDailyCheckins(config, windows, dt(16, 45))).toEqual([]);
+  it("returns nothing once the reflection is done for the day", () => {
+    expect(getDueDailyCheckins({ dailyReflectionDate: TODAY }, windows, dt(16, 45))).toEqual([]);
   });
 });
 
 describe("checkDailyCheckinNotifications", () => {
   const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] });
-  const config = { morningRitualShownDate: TODAY };
+  const config = {};
+  // 16:45 — Day Close is the only slot left, so every test of the dedupe and
+  // heartbeat machinery runs against it rather than against the deleted
+  // morning one it used to use.
+  const DUE = () => dt(16, 45);
 
   function stubEnv({ showNotification } = {}) {
     const store = {};
@@ -65,7 +63,7 @@ describe("checkDailyCheckinNotifications", () => {
 
   it("reserves the dedupe key before the notification resolves, so a concurrent poll skips the same slot", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(dt(9, 0));
+    vi.setSystemTime(DUE());
 
     // The reservation write happens synchronously before the first `await` inside
     // checkDailyCheckinNotifications, so p2 (called right after p1, before p1's
@@ -80,12 +78,12 @@ describe("checkDailyCheckinNotifications", () => {
 
     expect(showNotification).toHaveBeenCalledTimes(1);
     const notified = JSON.parse(store["loci_notified_daily_checkins"]);
-    expect(notified.some((k) => k.startsWith("morning-"))).toBe(true);
+    expect(notified.some((k) => k.startsWith("reflection-"))).toBe(true);
   });
 
   it("releases the reservation if the notification could not be shown, so a later poll retries", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(dt(9, 0));
+    vi.setSystemTime(DUE());
 
     const showNotification = vi.fn(() => Promise.reject(new Error("sw failed")));
     const store = stubEnv({ showNotification });
@@ -94,12 +92,12 @@ describe("checkDailyCheckinNotifications", () => {
     await checkDailyCheckinNotifications(config, windows);
 
     const notified = JSON.parse(store["loci_notified_daily_checkins"] || "[]");
-    expect(notified.some((k) => k.startsWith("morning-"))).toBe(false);
+    expect(notified.some((k) => k.startsWith("reflection-"))).toBe(false);
   });
 
   it("does not notify when another Loci tab heartbeated as visible recently", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(dt(9, 0));
+    vi.setSystemTime(DUE());
 
     const showNotification = vi.fn(() => Promise.resolve());
     const store = stubEnv({ showNotification });
@@ -113,7 +111,7 @@ describe("checkDailyCheckinNotifications", () => {
 
   it("notifies when the other tab's visibility heartbeat is stale", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(dt(9, 0));
+    vi.setSystemTime(DUE());
 
     const showNotification = vi.fn(() => Promise.resolve());
     const store = stubEnv({ showNotification });

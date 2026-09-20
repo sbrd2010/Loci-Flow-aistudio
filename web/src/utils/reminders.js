@@ -1,6 +1,5 @@
 import { buildCheckinNotificationBody } from "./coachCheckin";
-import { shouldShowMorningCommitment, shouldShowMiddayCheck, shouldShowReflection, computeDailyCheckinTimes } from "./dailyCoachCheckins";
-import { shouldShowMorningRitual } from "./morningRitual";
+import { shouldShowReflection, computeDailyCheckinTimes } from "./dailyCoachCheckins";
 import { getLociDayStr } from "./focusWindows";
 import {
   isNativeApp,
@@ -164,22 +163,22 @@ export function cancelCoachCheckin() {
   if (isNativeApp()) nativeCancel(idFromString(COACH_CHECKIN_KEY));
 }
 
-// Pure check for which of the three daily check-in cards (Today tab) are due
-// right now. Mirrors the eligibility rules each card already uses so the
-// push notification fires exactly when the card would appear.
+// Pure check for which daily check-in card is due right now. Mirrors the
+// eligibility rule the card uses, so the push notification fires exactly when
+// the card would appear.
+//
+// Only Day Close remains. The morning commitment and the midday progress check
+// were deleted with their cards (Addendum B), and their notifications had to go
+// with them: a push that opens the app to a prompt that no longer exists is
+// worse than the prompt was.
 export function getDueDailyCheckins(config, windows, now = new Date()) {
   const todayStr = getLociDayStr(now, windows);
-  const morningRitualPending = shouldShowMorningRitual(now, config);
   const due = [];
-  if (shouldShowMorningCommitment(now, windows, config, todayStr, morningRitualPending)) due.push("morning");
-  if (shouldShowMiddayCheck(now, windows, config, todayStr)) due.push("midday");
   if (shouldShowReflection(now, windows, config, todayStr)) due.push("reflection");
   return due;
 }
 
 const DAILY_CHECKIN_NOTIFICATIONS = {
-  morning: { title: "🌅 Today's Commitment", body: "What matters most today? Open Loci to set your focus." },
-  midday: { title: "📊 Progress Check", body: "How's it going? Open Loci to check your progress." },
   reflection: { title: "🌙 Day Close", body: "Wrap up your day — open Loci to reflect." },
 };
 
@@ -315,8 +314,6 @@ export async function checkDailyCheckinNotifications(config, windows) {
 // retargeted to the snooze expiry instead of being abandoned for the day
 // (see the "snoozeUntil" retargeting step below).
 const DAILY_CHECKIN_SNOOZE_FIELDS = {
-  morning: "dailyCommitmentSnoozeUntil",
-  midday: "dailyMiddayCheckSnoozeUntil",
   reflection: "dailyReflectionSnoozeUntil",
 };
 
@@ -382,14 +379,7 @@ export async function scheduleDailyCheckins(config, windows, now = new Date()) {
       }
     }
 
-    let eligible;
-    if (slot === "morning") {
-      eligible = shouldShowMorningCommitment(target, windows, config, todayStr, shouldShowMorningRitual(target, config));
-    } else if (slot === "midday") {
-      eligible = shouldShowMiddayCheck(target, windows, config, todayStr);
-    } else {
-      eligible = shouldShowReflection(target, windows, config, todayStr);
-    }
+    const eligible = shouldShowReflection(target, windows, config, todayStr);
     if (!eligible) {
       nativeCancel(id);
       continue;
