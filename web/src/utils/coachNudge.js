@@ -65,3 +65,33 @@ export function isPendingCoachNudgeStale(nudge, payload = {}, now = new Date()) 
 export function shouldDeliverPendingCoachNudge(nudge, deliveredNudge) {
   return !!nudge && nudge !== deliveredNudge;
 }
+
+// Which nudge, if any, Coach should speak on open — and whether a stale
+// hand-off needs sweeping out of config on the way past.
+//
+// The ordering here is the whole point. A pending hand-off from an earlier
+// Loci day must be judged stale BEFORE it is allowed to win, because
+// delivering is what spends the day's single nudge: an earlier version let
+// the stale one win, wrote coachNudgeClearedDate for today, and only then
+// discovered it was stale — suppressing every valid nudge for the rest of
+// the day and delivering nothing.
+export function resolveCoachNudge({ pending, derived, payload = {}, now = new Date() }) {
+  const pendingIsStale = !!pending && isPendingCoachNudgeStale(pending, payload, now);
+  const nudge = (pending && !pendingIsStale)
+    ? pending
+    : (derived ? buildPendingCoachNudge(derived, payload, now) : null);
+  return { nudge, pendingIsStale };
+}
+
+// The config patch that delivering `nudge` writes. Clearing the day is what
+// makes this once per Loci day; the follow-up sentinel is what stops
+// buildExecutionCoachSignal asking about an expired deadline again tomorrow,
+// and every day after that.
+export function buildCoachNudgeDeliveredConfig(nudge, config = {}, payload = {}, now = new Date()) {
+  const patch = { ...buildCoachNudgeClearedConfig(payload, now) };
+  if (config.pendingCoachNudge) patch.pendingCoachNudge = null;
+  if (nudge && nudge.reason === "deadline_date_passed_followup" && config.deadlineDate) {
+    patch.deadlineFollowupAskedFor = config.deadlineDate;
+  }
+  return patch;
+}

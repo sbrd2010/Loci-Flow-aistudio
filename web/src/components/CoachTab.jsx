@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { track, auth } from "../firebase";
 import { callAI, describeAIError, getAIKeys, hasAIKey } from "../utils/aiCall";
-import { getCoachNudge, buildPendingCoachNudge, buildCoachNudgeClearedConfig } from "../utils/coachNudge";
+import { getCoachNudge, resolveCoachNudge, buildCoachNudgeDeliveredConfig } from "../utils/coachNudge";
 import { buildLocalSafetyReply } from "../utils/crisisSafety";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
@@ -12,7 +12,7 @@ import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, parseCheckinRequestFromMessage, buildCoachCheckinContext } from "../utils/coachCheckin";
 import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks, findTaskByTitle } from "../utils/coachActions";
-import { isPendingCoachNudgeStale, shouldDeliverPendingCoachNudge } from "../utils/coachNudge";
+import { shouldDeliverPendingCoachNudge } from "../utils/coachNudge";
 import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
 import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFromMemory, isMemoryEnabled, parseMemoryTags, isResurrectedMemoryEntry } from "../utils/coachMemory";
@@ -286,6 +286,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   // deferred during the cache-sync window is delivered as soon as sync
   // confirms, instead of waiting for the next Coach remount.
   const deliveredNudgeRef = useRef(null);
+  const deliveringNudgeRef = useRef(false);
   useEffect(() => {
     // Defer to App's Coach Check-In resume effect if it's also acting on
     // this tick — both write a fresh `config`/`chatHistory` snapshot, so
@@ -304,12 +305,20 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     //
     // getCoachNudge already returns null under Low Energy and when the day's
     // nudge has been cleared, so neither is re-checked here.
-    const derived = getCoachNudge(payload, new Date());
-    // It returns null most of the time, and buildPendingCoachNudge reads
-    // signal.reason — so that is only called once there is a signal.
-    const nudge = configRef.current.pendingCoachNudge
-      || (derived ? buildPendingCoachNudge(derived, payload, new Date()) : null);
-    if (!shouldDeliverPendingCoachNudge(nudge, deliveredNudgeRef.current)) return;
+    // resolveCoachNudge judges a pending hand-off stale BEFORE letting it win
+    // — see its comment for why that ordering is the whole point.
+    const pending = configRef.current.pendingCoachNudge;
+    const { nudge, pendingIsStale } = resolveCoachNudge({
+      pending,
+      derived: getCoachNudge(payload, new Date()),
+      payload,
+    });
+    if (!shouldDeliverPendingCoachNudge(nudge, deliveredNudgeRef.current)) {
+      // A stale hand-off with nothing to replace it still has to be swept, or
+      // it sits in config and is re-evaluated on every open forever.
+      if (pendingIsStale && !cloudSyncUnconfirmedRef.current) saveConfigPatch({ pendingCoachNudge: null });
+      return;
+    }
     // Defer until cloud sync is confirmed — saveConfigPatch() before the
     // first RTDB snapshot stamps a still-cached config as "newest" (see
     // saveConfigPatch in useSync.js), which could overwrite newer config
@@ -317,17 +326,23 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // deps, so once sync confirms this re-runs and delivers the still-pending
     // nudge — it isn't dropped until the next mount.
     if (cloudSyncUnconfirmedRef.current) return;
+    // A derived nudge is a fresh object on every effect invocation, so the
+    // identity check above cannot catch StrictMode's double-invoke the way it
+    // does for one read from config. This does. It is set only past the
+    // deferral above — setting it before would make a nudge deferred during
+    // the cache-sync window undeliverable when this re-runs.
+    if (deliveringNudgeRef.current) return;
+    deliveringNudgeRef.current = true;
     deliveredNudgeRef.current = nudge;
     // Clearing is what makes this once per loci day. Today used to write this
     // when the card was dismissed or acted on; with the card gone, delivering
     // here is the moment the day's nudge is spent. Without it getCoachNudge
     // would hand back the same signal on every single open of this tab — a
     // nudge that interrupts every visit is worse than the card ever was.
-    saveConfigPatch({
-      ...buildCoachNudgeClearedConfig(payload, new Date()),
-      ...(configRef.current.pendingCoachNudge ? { pendingCoachNudge: null } : {}),
-    });
-    if (isPendingCoachNudgeStale(nudge, payload)) return;
+    // Delivering is the moment the day's nudge is spent — and, for the
+    // expired-deadline follow-up, the moment it was asked. Today's deleted
+    // handler used to record both.
+    saveConfigPatch(buildCoachNudgeDeliveredConfig(nudge, configRef.current, payload, new Date()));
 
     const deliver = (text, voiced) => {
       const withReply = [...chatHistoryRef.current, { text, isUser: false }];
