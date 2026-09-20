@@ -1,31 +1,25 @@
 import React, { useState, useEffect, useRef } from "react";
 import TaskRow from "./TaskRow";
 import AddTaskDialog from "./AddTaskDialog";
+import TodayWall from "./TodayWall";
+import { frontsFromConfig, commitmentDaysLeft } from "../utils/fronts";
 import FocusModePage from "./FocusModePage";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
-import { buildToggleCompletedTasks, byPriorityThenOrder } from "../utils/taskOps";
+import { buildToggleCompletedTasks, byPriorityThenOrder, countCompletedOn } from "../utils/taskOps";
 import { buildParkTaskTasks } from "../utils/coachActions";
 import { shouldStopFocusOnComplete } from "../utils/focusSession";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
-import { getCurrentFocusQuote } from "../utils/focusQuotes";
-import { formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
 import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
-import { getFocusWindows, getWindowState, getRemainingFocusMinutes, getNextWindowStart, getOverallSpan, getFocusProgress, hasConfiguredFocusWindow } from "../utils/focusWindows";
+import { getFocusWindows, getRemainingFocusMinutes } from "../utils/focusWindows";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
-import { getMorningRitualVariant, shouldShowMorningRitual, buildMorningRitualDoneConfig, buildMorningRitualSnoozeConfig } from "../utils/morningRitual";
-import { getCoachNudge, buildCoachNudgeClearedConfig, buildPendingCoachNudge } from "../utils/coachNudge";
 import {
-  shouldShowMorningCommitment, buildMorningCommitmentPrompt, canSaveMorningCommitment,
-  buildMorningCommitmentSave, buildMorningCommitmentSkip, buildMorningCommitmentSnooze,
-  shouldShowMiddayCheck, buildMiddayProgressSummary, buildMiddayCheckDone, buildMiddayCheckSnooze,
-  buildNarrowToOne, getValidCommittedTaskIds,
+  getValidCommittedTaskIds,
   shouldShowReflection, buildEndOfDaySummary, buildReflectionSave, buildReflectionSnooze, REFLECTION_MOODS,
-  MAX_COMMITMENT_TASKS,
 } from "../utils/dailyCoachCheckins";
 import "../styles/focusNow.css";
 import {
@@ -37,6 +31,25 @@ import {
   useSortable, arrayMove
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+
+// Addendum A: on a Low Energy day the wall offers a smaller start instead of
+// "split it". Five minutes, the same length ScatteredFlow's "Just 5 minutes"
+// starts — not the task's own estimate.
+const LOW_ENERGY_SESSION_SECONDS = 5 * 60;
+
+// The wall header: "SAT, JUN 15 · 8h19m LEFT". Both figures change at most
+// once a minute, so they are built together on a minute tick rather than
+// recomputed on every render.
+function buildWallHeader(now, windows) {
+  const mins = Math.round(getRemainingFocusMinutes(now, windows));
+  const h = Math.floor(mins / 60);
+  return {
+    dateLabel: now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).toUpperCase(),
+    hoursLeftLabel: mins <= 0 ? null
+      : h > 0 ? `${h}h${String(mins % 60).padStart(2, "0")}m LEFT`
+      : `${mins}m LEFT`,
+  };
+}
 
 const PencilIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -67,7 +80,7 @@ function SortableTaskItem({ id, interactionStyle, children }) {
 }
 
 export default function TodayTab({
-  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenCoach,
+  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenCoach, onScattered,
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft, setTimerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
@@ -100,18 +113,27 @@ export default function TodayTab({
   // `pinPromise` (optional) is a still-in-flight pin write (e.g. Focus Now's
   // "pin then immediately start" button) — if given, ledger events wait for
   // it to confirm instead of logging for a pin that might not have landed.
-  const startFocusAndLog = (task, pinPromise) => {
+  // `options` is passed straight to startFocusSession — the wall's low-energy
+  // action uses it to start a genuine five-minute session rather than one at
+  // the task's own estimate.
+  const startFocusAndLog = (task, pinPromise, options) => {
     // If this task already has an open session (e.g. the user backed out of
     // the full-screen overlay while the timer kept running, then taps Focus
     // again on the same task), just reopen the overlay — treating this as a
     // brand-new session would auto-close the in-progress one and fragment
     // the ledger for what's really just a return-to-focus action.
-    if (activeTask?.uuid === task.uuid && focusSessionId && focusSessionTaskUuid === task.uuid) {
+    // ...unless the caller asked for a specific length. "Start small — 5
+    // minutes" reaching this branch would resume whatever was already
+    // running — a 25-minute countdown under a button promising five.
+    // startFocusSession closes the open session with a proper terminal
+    // event, so restarting here doesn't orphan anything.
+    if (activeTask?.uuid === task.uuid && focusSessionId && focusSessionTaskUuid === task.uuid
+        && !(Number(options?.plannedSeconds) > 0)) {
       setIsFocusMode(true);
       setIsTimerRunning(true);
       return;
     }
-    const session = startFocusSession(task);
+    const session = startFocusSession(task, options);
     (pinPromise || Promise.resolve())
       .then(() => {
         if (session.priorSession && session.priorSession.task) {
@@ -157,14 +179,28 @@ export default function TodayTab({
   const [focusNowMode, setFocusNowMode] = useState(false);
   const [focusNowTaskId, setFocusNowTaskId] = useState(null);
   const [showFocusNowPicker, setShowFocusNowPicker] = useState(false);
+  // The same sheet serves two callers. Opened from the One Task Focus chip it
+  // only stages a task (the pin happens when that view's Start is tapped);
+  // opened from the wall's "Choose today's one thing" the selection IS the
+  // commitment, so it has to reach isNowFocus — otherwise the wall still asks
+  // the question the user just answered, and a reload loses the choice.
+  const [pickerCommits, setPickerCommits] = useState(false);
+  // "peekOpen is persisted to localStorage." Closed by default — the wall is
+  // the default state, and the peek is how you ask for the rest.
+  const [peekOpen, setPeekOpen] = useState(() => {
+    try { return localStorage.getItem("loci_today_peek_open") === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("loci_today_peek_open", peekOpen ? "1" : "0"); } catch { /* private mode */ }
+  }, [peekOpen]);
+
   const [showAnchorSheet, setShowAnchorSheet] = useState(false);
   const [anchorSheetSlot, setAnchorSheetSlot] = useState(null);
 
-  // Daily Coach check-ins: "morning" (Today's Commitment) | "midday" (Progress Check) | "reflection" (Day Close)
+  // The one surviving scheduled prompt: "reflection" (Day Close). Addendum B
+  // deleted the morning commitment and the midday progress check outright.
   const [dailyCheckinSlot, setDailyCheckinSlot] = useState(null);
   const [showDailyCheckin, setShowDailyCheckin] = useState(false);
-  const [commitmentSelection, setCommitmentSelection] = useState([]);
-  const [middayNarrowPicker, setMiddayNarrowPicker] = useState(false);
   const [reflectionMood, setReflectionMood] = useState(null);
   const [reflectionNote, setReflectionNote] = useState("");
 
@@ -239,22 +275,7 @@ export default function TodayTab({
     }
   }, [tasks, focusNowMode, focusNowTaskId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const currentQuote = getCurrentFocusQuote();
-
-  const [todayCountdown, setTodayCountdown] = useState(null);
-  useEffect(() => {
-    const tick = () => {
-      const now = new Date();
-      const isDuring = getWindowState(now, windows) === "during";
-      setTodayCountdown(isDuring ? formatTodayCountdown(getRemainingFocusMinutes(now, windows) * 60000) : null);
-    };
-    tick();
-    const id = setInterval(tick, 60000);
-    return () => clearInterval(id);
-  }, [config.dayStartHour, config.dayEndHour, config.focusWindows]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const todayStr = getLociDayStr(new Date(), windows);
-  const isDoneToday = isDailyDone(config.deadlineDailyDoneDate, todayStr);
 
   // ── Daily Anchors derived state ────────────────────────────────────────────
   const anchors = config.dailyAnchors || [];
@@ -263,65 +284,20 @@ export default function TodayTab({
   const todayShownSlots = getTodayShownSlots(config, anchorTodayStr);
   const anchorsCheckedCount = anchors.filter(a => todayCheckedIds.includes(a.id)).length;
   const todayShownSlotsKey = todayShownSlots.join(",");
-  // Patch rather than a whole-config write: `config` here is a render-time
-  // snapshot, and spreading it would send every other field back to RTDB at
-  // this moment's timestamp — including deadline fields this device may not
-  // have re-synced yet, silently reverting an edit made on another device.
-  const handleDeadlineDoneToday = () => {
-    saveConfigPatch({ deadlineDailyDoneDate: todayStr });
-  };
-
-  const handleDeadlineReopenToday = () => {
-    saveConfigPatch({ deadlineDailyDoneDate: null });
-  };
-
-  const [todayDeadlineRemaining, setTodayDeadlineRemaining] = useState(null);
+  // The wall header's two live figures, refreshed once a minute.
+  //
+  // This replaces a one-second interval that also maintained a seconds-precise
+  // clock string and a timeline progress fraction. Both stopped being rendered
+  // when the greeting-clock-quote card and the Focus Window strip went, so
+  // what was left was a full TodayTab and task-list re-render every second, on
+  // a phone, to keep state nothing read up to date. Neither figure here has
+  // sub-minute precision to lose.
+  const [wallHeader, setWallHeader] = useState(() => buildWallHeader(new Date(), windows));
   useEffect(() => {
-    const tick = () => {
-      if (!config.deadlineDate) { setTodayDeadlineRemaining(null); return; }
-      const now = new Date();
-      const isDuring = getWindowState(now, windows) === "during";
-      setTodayDeadlineRemaining(isDuring ? getRemainingFocusMinutes(now, windows) * 60000 : null);
-    };
+    const tick = () => setWallHeader(buildWallHeader(new Date(), windows));
     tick();
     const id = setInterval(tick, 60000);
     return () => clearInterval(id);
-  }, [config.deadlineDate, config.dayStartHour, config.dayEndHour, config.focusWindows]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const todayLiveDisplay = todayDeadlineRemaining === null ? null
-    : todayDeadlineRemaining === 0 ? "0h 00m"
-    : formatTodayCountdown(todayDeadlineRemaining);
-
-  const [timelineProgress, setTimelineProgress] = useState(0.5);
-  const [currentTimeStr, setCurrentTimeStr] = useState("");
-  const [currentDateStr, setCurrentDateStr] = useState("");
-
-  const formatHourLabel = (hourFloat) => {
-    const totalMin = Math.round((((hourFloat % 24) + 24) % 24) * 60);
-    const hWhole = Math.floor(totalMin / 60);
-    const mins = totalMin % 60;
-    const isAM = hWhole < 12;
-    const displayH = hWhole % 12 === 0 ? 12 : hWhole % 12;
-    const minStr = mins === 0 ? "" : `:${String(mins).padStart(2, "0")}`;
-    return `${displayH}${minStr}${isAM ? "am" : "pm"}`;
-  };
-
-  const updateTimeline = () => {
-    const now = new Date();
-    const hour = now.getHours();
-    const minute = now.getMinutes();
-    const second = now.getSeconds();
-    const displayHour = hour % 12 === 0 ? 12 : hour % 12;
-    const amPmStr = hour >= 12 ? "PM" : "AM";
-    setCurrentTimeStr(`${displayHour}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")} ${amPmStr}`);
-    setCurrentDateStr(now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }));
-    setTimelineProgress(getFocusProgress(now, windows));
-  };
-
-  useEffect(() => {
-    updateTimeline();
-    const interval = setInterval(updateTimeline, 1000);
-    return () => clearInterval(interval);
   }, [config.dayStartHour, config.dayEndHour, config.focusWindows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -455,6 +431,24 @@ export default function TodayTab({
     return pinPromise;
   };
 
+  const handleFocusNowPick = (task) => {
+    setShowFocusNowPicker(false);
+    setPickerCommits(false);
+    if (pickerCommits) {
+      // Choosing the day's commitment is not entering One Task mode. Doing
+      // both left the screen stuck on a One Task card for the chosen task
+      // once it was completed — pinnedFocusTask disappears, but focusNowTask
+      // still accepts a completed task, hiding the rest of Today until Exit.
+      //
+      // handlePinTask TOGGLES, so an already-pinned task would be unpinned by
+      // a blind call — the very state this is here to prevent.
+      if (!task.isNowFocus) handlePinTask(task);
+      return;
+    }
+    setFocusNowTaskId(task.uuid);
+    setFocusNowMode(true);
+  };
+
   const handleFocusBrainDump = (text) => {
     if (!text.trim()) return;
     const newItem = { id: `bd_${Date.now()}`, text: text.trim(), createdAt: Date.now() };
@@ -547,15 +541,15 @@ export default function TodayTab({
   // ── Daily Anchors / Morning Ritual auto-show ───────────────────────────────
   useEffect(() => {
     if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || rescueActive) return;
+    // The morning ritual popup is gone (Addendum B: "no popup ever opens on app
+    // launch"). What remains is the anchors sheet, which Addendum A moves onto
+    // Day Map as pinned stops — it stays here until that move is built, rather
+    // than leaving anchors with nowhere to live.
     let slot = null;
-    if (shouldShowMorningRitual(new Date(), config)) {
-      slot = "morning";
-    } else {
-      const anchorSlot = getCurrentAnchorSlot(new Date(), windows);
-      if (anchorSlot && anchorSlot !== "morning" && anchors.length && !todayShownSlots.includes(anchorSlot)) {
-        const snoozeUntil = config.anchorsSnoozeUntil;
-        if (!snoozeUntil || Date.now() >= snoozeUntil) slot = anchorSlot;
-      }
+    const anchorSlot = getCurrentAnchorSlot(new Date(), windows);
+    if (anchorSlot && anchorSlot !== "morning" && anchors.length && !todayShownSlots.includes(anchorSlot)) {
+      const snoozeUntil = config.anchorsSnoozeUntil;
+      if (!snoozeUntil || Date.now() >= snoozeUntil) slot = anchorSlot;
     }
     if (!slot) return;
     setAnchorSheetSlot(slot);
@@ -564,28 +558,25 @@ export default function TodayTab({
   }, [
     anchors.length, todayShownSlotsKey, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending,
     isAddTaskDialogOpen, showAnchorSheet, showDailyCheckin, rescueActive, config.anchorsSnoozeUntil,
-    config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, config.morningRitualEnabled, visibilityTick,
+    visibilityTick,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Daily Coach Check-ins auto-show (Today's Commitment / Progress Check / Day Close) ──
+  // ── Day Close auto-show — the one scheduled interruption, at day's end ──
   useEffect(() => {
     if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || rescueActive) return;
     const now = new Date();
-    const morningRitualPending = shouldShowMorningRitual(now, config);
+    // Addendum B: the morning commitment and the midday progress check are
+    // gone, and so is the morning ritual popup — "an app that interrupts an
+    // overwhelmed person to ask how they are is part of the problem". Day Close
+    // is the one surviving prompt, and it becomes the Evening Review; until
+    // that screen exists it stays here rather than leaving a gap.
     const dueSlots = {
-      morning: shouldShowMorningCommitment(now, windows, config, anchorTodayStr, morningRitualPending),
-      midday: shouldShowMiddayCheck(now, windows, config, anchorTodayStr),
       reflection: shouldShowReflection(now, windows, config, anchorTodayStr),
     };
-    // A tapped daily check-in notification names a specific slot — show that one
-    // (if still due) instead of letting normal priority order pick a different card.
+    // A tapped check-in notification names a slot — honour it if still due.
     let slot = null;
     if (pendingCheckinSlot && dueSlots[pendingCheckinSlot]) {
       slot = pendingCheckinSlot;
-    } else if (dueSlots.morning) {
-      slot = "morning";
-    } else if (dueSlots.midday) {
-      slot = "midday";
     } else if (dueSlots.reflection) {
       slot = "reflection";
     }
@@ -595,7 +586,6 @@ export default function TodayTab({
       return;
     }
     setDailyCheckinSlot(slot);
-    if (slot === "morning") setCommitmentSelection([]);
     if (slot === "reflection") { setReflectionMood(null); setReflectionNote(""); }
     // Clear pendingCheckinSlot only once the modal actually opens — clearing it now
     // would change a dependency of this effect, canceling this timer (via cleanup)
@@ -608,7 +598,7 @@ export default function TodayTab({
   }, [
     anchorTodayStr, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, isAddTaskDialogOpen,
     showAnchorSheet, showDailyCheckin, rescueActive, pendingCheckinSlot, config.anchorsSnoozeUntil,
-    config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualShownDate, config.morningRitualSnoozeUntil, config.morningRitualEnabled, visibilityTick,
+    visibilityTick,
     config.dailyCommitmentDate, config.dailyCommitmentSkippedDate, config.dailyCommitmentSnoozeUntil, config.dailyCommitmentTaskIds,
     config.dailyMiddayCheckDate, config.dailyMiddayCheckSnoozeUntil, config.dailyReflectionDate, config.dailyReflectionSnoozeUntil, config.dailyCheckinsEnabled,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -621,24 +611,16 @@ export default function TodayTab({
   };
 
   const handleAnchorSheetDone = () => {
-    if (anchorSheetSlot === "morning") {
-      saveConfigPatch({ ...buildMorningRitualDoneConfig() });
-    } else {
-      const slot = anchorSheetSlot ?? getCurrentAnchorSlot(new Date(), windows);
-      const nextSlots = slot && !todayShownSlots.includes(slot) ? [...todayShownSlots, slot] : todayShownSlots;
-      saveConfigPatch({ anchorsShownSlots: nextSlots, anchorsSlotsDate: anchorTodayStr,
-        anchorsSnoozeUntil: null });
-    }
+    const slot = anchorSheetSlot ?? getCurrentAnchorSlot(new Date(), windows);
+    const nextSlots = slot && !todayShownSlots.includes(slot) ? [...todayShownSlots, slot] : todayShownSlots;
+    saveConfigPatch({ anchorsShownSlots: nextSlots, anchorsSlotsDate: anchorTodayStr,
+      anchorsSnoozeUntil: null });
     setShowAnchorSheet(false);
     setAnchorSheetSlot(null);
   };
 
   const handleAnchorLater = () => {
-    if (anchorSheetSlot === "morning") {
-      saveConfigPatch({ ...buildMorningRitualSnoozeConfig() });
-    } else {
-      saveConfigPatch({ anchorsSnoozeUntil: Date.now() + 90 * 60 * 1000 });
-    }
+    saveConfigPatch({ anchorsSnoozeUntil: Date.now() + 90 * 60 * 1000 });
     setShowAnchorSheet(false);
     setAnchorSheetSlot(null);
   };
@@ -654,58 +636,6 @@ export default function TodayTab({
   const closeDailyCheckin = () => {
     setDailyCheckinSlot(null);
     setShowDailyCheckin(false);
-    setMiddayNarrowPicker(false);
-  };
-
-  // Today's Commitment (morning)
-  const toggleCommitmentTask = (uuid) => {
-    setCommitmentSelection(sel =>
-      sel.includes(uuid) ? sel.filter(id => id !== uuid)
-        : sel.length < MAX_COMMITMENT_TASKS ? [...sel, uuid] : sel
-    );
-  };
-
-  const handleSaveCommitment = () => {
-    saveConfigPatch((latestConfig) => buildMorningCommitmentSave(latestConfig, commitmentSelection, anchorTodayStr));
-    closeDailyCheckin();
-  };
-
-  const handleCommitmentLater = () => {
-    saveConfigPatch((latestConfig) => buildMorningCommitmentSnooze(latestConfig));
-    closeDailyCheckin();
-  };
-
-  const handleCommitmentSkip = () => {
-    saveConfigPatch((latestConfig) => buildMorningCommitmentSkip(latestConfig, anchorTodayStr));
-    closeDailyCheckin();
-  };
-
-  // Progress Check (midday)
-  const handleMiddayKeepGoing = () => {
-    saveConfigPatch((latestConfig) => buildMiddayCheckDone(latestConfig, anchorTodayStr));
-    closeDailyCheckin();
-  };
-
-  const handleMiddaySnooze = () => {
-    saveConfigPatch((latestConfig) => buildMiddayCheckSnooze(latestConfig));
-    closeDailyCheckin();
-  };
-
-  const handleMiddayOpenFocus = () => {
-    saveConfigPatch((latestConfig) => buildMiddayCheckDone(latestConfig, anchorTodayStr));
-    closeDailyCheckin();
-    setShowFocusNowPicker(true);
-  };
-
-  const handleMiddayTalkToCoach = () => {
-    saveConfigPatch((latestConfig) => buildMiddayCheckDone(latestConfig, anchorTodayStr));
-    closeDailyCheckin();
-    onOpenCoach?.();
-  };
-
-  const handleNarrowToOne = (taskId) => {
-    saveConfigPatch((latestConfig) => buildNarrowToOne(buildMiddayCheckDone(latestConfig, anchorTodayStr), taskId));
-    closeDailyCheckin();
   };
 
   // Day Close (end-of-day reflection)
@@ -734,29 +664,12 @@ export default function TodayTab({
     onOpenCoach?.();
   };
 
-  // ── Proactive Coach Nudge (the coach speaks first) ───────────────────────
-  const coachNudge = (
-    isSyncingFromCache || isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending ||
-    isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || rescueActive
-  ) ? null : getCoachNudge(payload, new Date());
-
-  useEffect(() => {
-    if (coachNudge) track("coach_nudge_shown", { reason: coachNudge.reason, level: coachNudge.level });
-  }, [coachNudge?.reason]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleCoachNudgeDismiss = () => {
-    track("coach_nudge_dismissed", { reason: coachNudge.reason });
-    saveConfigPatch({ ...buildCoachNudgeClearedConfig(payload, new Date()) });
-  };
-
-  const handleCoachNudgeTalk = () => {
-    track("coach_nudge_engaged", { reason: coachNudge.reason });
-    const extraPatch = coachNudge.reason === "deadline_date_passed_followup"
-      ? { deadlineFollowupAskedFor: config.deadlineDate }
-      : {};
-    saveConfigPatch({ ...buildCoachNudgeClearedConfig(payload, new Date()), ...extraPatch, pendingCoachNudge: buildPendingCoachNudge(coachNudge, payload, new Date()) });
-    onOpenCoach?.();
-  };
+  // The proactive nudge no longer appears here. J3: "It never appears
+  // unprompted on Today. The same logic renders as the first line of the Coach
+  // transcript when Coach is opened." A card that interrupts the execution
+  // screen on its own is the class Addendum B removes. CoachTab now derives it
+  // itself rather than waiting to be handed one, so nothing is lost by the card
+  // going away.
 
   const handleStartEdit = (task) => setEditingTask(task);
 
@@ -924,8 +837,46 @@ export default function TodayTab({
     : config.isLowEnergyMode
       ? todayTasksAll.filter(t => t.priority === "P4")
       : todayTasksAll;
+  // — values the wall's header and kicker read —
+  // The kicker is the front name OR nothing. Never "Uncategorised": a task with
+  // no front is a first-class task (Addendum C).
+  const wallFronts = frontsFromConfig(config);
+  const wallFront = pinnedFocusTask?.frontId
+    ? (wallFronts.find(f => f.id === pinnedFocusTask.frontId) || null)
+    : null;
+  const wallFrontName = wallFront?.name || null;
+  // J3 reads "MEMBRANE PAPER · 11d" — one front, and its own count. Taking the
+  // count from the legacy config.deadlineDate while the kicker named a
+  // different front put one front's days beside another's name, and hid the
+  // named front's own dueAt. The count belongs to whatever the kicker names;
+  // with no front, that is the legacy key deadline, as the deleted strip
+  // showed. An overdue deadline is not "days left".
+  const wallDaysLeft = commitmentDaysLeft(wallFront, config, new Date());
+  const wallDateLabel = wallHeader.dateLabel;
+  const wallHoursLeft = wallHeader.hoursLeftLabel;
+  const openAcrossFronts = (tasks || []).filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked).length;
+  // A session left running behind the overlay is REOPENED by the wall, not
+  // restarted (see startFocusAndLog) — so the chip has to name the time that
+  // tap will actually resume, not the task's estimate. Advertising 25:00 and
+  // resuming 08:12 is the same lie as a button whose label doesn't match its
+  // handler.
+  const wallSessionLive = !!(pinnedFocusTask && focusSessionId && focusSessionTaskUuid === pinnedFocusTask.uuid);
+  const wallLiveTimerLabel = wallSessionLive && Number.isFinite(timerSecondsLeft)
+    ? `${String(Math.floor(Math.max(0, timerSecondsLeft) / 60)).padStart(2, "0")}:${String(Math.max(0, timerSecondsLeft) % 60).padStart(2, "0")}`
+    : null;
+
   const remainingTasks = todayTasksFiltered.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
   const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted);
+  // The wall's two figures are claims about the whole day, so they come from
+  // todayTasksAll — the Must-Do and Low Energy filters narrow the LIST below,
+  // not the day. Reading them off the filtered list let the wall say "0 more
+  // today" on a Low Energy day with a full Today list behind it.
+  //
+  // "N done" is also a claim about TODAY specifically: a completed task keeps
+  // the Today horizon until something moves it, so counting them all reported
+  // last week's finished work as this morning's progress.
+  const wallRemainingCount = todayTasksAll.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).length;
+  const doneTodayCount = countCompletedOn(todayTasksAll, todayStr);
 
   // Focus Now: first incomplete task in Day Map order for today (shown as "Recommended")
   const dayMapNextTask = todayTasksAll
@@ -1065,456 +1016,30 @@ export default function TodayTab({
 
   return (
     <>
-      {/* ── Day header: style switchable via Settings → Header Style ── */}
-      {(() => {
-        const startHour = config.dayStartHour ?? 7;
-        const endHour = config.dayEndHour ?? 26;
-        const daySpan = endHour - startHour;
-        const labelCount = daySpan > 10 ? 5 : 3;
-        const timeLabels = Array.from({ length: labelCount }, (_, i) =>
-          formatHourLabel(startHour + Math.round((daySpan / (labelCount - 1)) * i))
-        );
-        const nowHour = new Date().getHours();
-        const greeting = nowHour < 12 ? "Good morning" : nowHour < 17 ? "Good afternoon" : "Good evening";
-        const firstName = (config.userName || "").split(" ")[0];
-        const headerStyle = config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full");
-
-        // Option E: Auto-hide — wraps the full card, collapses on scroll
-        if (headerStyle === "autohide") {
-          const fullCard = (
-            <section className="today-time-card" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px 14px" }}>
-              {firstName ? (
-                <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "8px", letterSpacing: "-0.01em" }}>
-                  {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
-                </div>
-              ) : null}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "10px" }}>
-                <div style={{ fontSize: "18px", fontWeight: "800", color: "var(--text-primary)", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-mono)", lineHeight: 1 }}>{currentTimeStr}</div>
-                <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>{currentDateStr}</div>
-              </div>
-              <p style={{ margin: 0, fontSize: "13px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
-                "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
-              </p>
-            </section>
-          );
-          return (
-            <div className={`header-autohide-wrapper${isScrolled ? " header-collapsed" : ""}`}>
-              {fullCard}
-            </div>
-          );
-        }
-
-        // Option C: Compact strip — tap ▾ to reveal full details
-        if (headerStyle === "compact") {
-          return (
-            <section className="today-time-card" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "8px 14px" }}>
-              <div onClick={() => setHeaderExpanded(e => !e)} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", userSelect: "none" }}>
-                <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-mono)", letterSpacing: "-0.02em", flexShrink: 0, flex: 1 }}>
-                  {currentTimeStr}
-                </span>
-                <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600", flexShrink: 0 }}>{currentDateStr}</span>
-                <span style={{ fontSize: "12px", color: "var(--text-muted)", flexShrink: 0 }}>{headerExpanded ? "▴" : "▾"}</span>
-              </div>
-              {headerExpanded && (
-                <div style={{ marginTop: "10px" }}>
-                  {firstName && (
-                    <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "8px" }}>
-                      {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
-                    </div>
-                  )}
-                  <p style={{ margin: 0, fontSize: "13px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
-                    "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
-                  </p>
-                </div>
-              )}
-            </section>
-          );
-        }
-
-        // Option D: Frameless bar — no card border/padding, all info on two rows
-        if (headerStyle === "frameless") {
-          return (
-            <div className="today-time-card" style={{ padding: "4px 2px 8px 2px" }}>
-              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "6px" }}>
-                {firstName ? (
-                  <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>
-                    {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
-                  </span>
-                ) : (
-                  <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{currentTimeStr}</span>
-                )}
-                <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
-                  {firstName && <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{currentTimeStr}</span>}
-                  <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>{currentDateStr}</span>
-                </div>
-              </div>
-              <p style={{ margin: 0, fontSize: "13px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.4, fontWeight: "600" }}>
-                "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
-              </p>
-            </div>
-          );
-        }
-
-        // Default ("full"): original 4-row card
-        return (
-          <section className="today-time-card" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px 14px" }}>
-            {firstName ? (
-              <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "8px", letterSpacing: "-0.01em" }}>
-                {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
-              </div>
-            ) : null}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "10px" }}>
-              <div style={{ fontSize: "18px", fontWeight: "800", color: "var(--text-primary)", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
-                {currentTimeStr}
-              </div>
-              <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>
-                {currentDateStr}
-              </div>
-            </div>
-            <p className="today-quote-secondary" style={{ margin: 0, fontSize: "13px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
-              "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
-            </p>
-          </section>
-        );
-      })()}
-
-      {/* ── Key Deadline countdown strip */}
-      {config.deadlineDate && (() => {
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        const target = new Date(config.deadlineDate + "T00:00:00");
-        const days = Math.round((target - today) / 86400000);
-        const label = (config.deadlineLabel || "Deadline").trim();
-        const isExpired = days < 0;
-
-        const isCritical = !isExpired && days <= 14;
-        const isWarning  = !isExpired && days > 14 && days <= 30;
-        const color = isExpired ? "var(--text-muted)"
-          : isCritical ? "var(--danger)"
-          : isWarning  ? "var(--warning)"
-          : "var(--accent)";
-        const bg = isExpired ? "rgba(255,255,255,0.04)"
-          : isCritical ? "rgba(248,113,113,0.12)"
-          : isWarning  ? "rgba(251,191,36,0.10)"
-          : "var(--accent-light)";
-        const icon = isExpired ? "✅"
-          : days === 0 ? "🔴"
-          : isCritical ? "⚡"
-          : isWarning  ? "⏳"
-          : "🎯";
-
-        const now = new Date();
-        const windowState = getWindowState(now, windows);
-        const span = getOverallSpan(windows);
-        const startLabel = formatHourLabel(span.startMin / 60);
-        const endLabel = formatHourLabel(span.endMin / 60);
-        const nextWindow = windowState === "before" ? getNextWindowStart(now, windows) : null;
-        const nextOpenLabel = nextWindow ? formatHourLabel(nextWindow.startMin / 60) : startLabel;
-
-        // ── Compact card ──────────────────────────────────────────────────────────
-        return (
-          <div
-            className="today-deadline-card"
-            data-testid="deadline-card"
-            style={{
-              background: bg,
-              border: `1px solid ${color}`,
-              borderRadius: "var(--radius-sm)",
-              padding: "7px 10px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "5px",
-              animation: isCritical ? "deadline-pulse 2.5s ease-in-out infinite" : "none",
-            }}
-          >
-            {isExpired ? (
-              <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-muted)" }}>
-                🎯 {label} · Deadline reached
-              </div>
-            ) : (
-              <>
-                {/* Row 1: icon + eyebrow LEFT · day count RIGHT */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                    <span style={{ fontSize: "14px", lineHeight: 1 }}>{icon}</span>
-                    <span style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.10em", textTransform: "uppercase", color }}>
-                      KEY DEADLINE
-                    </span>
-                  </div>
-                  <span className="dc-days" style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "16px", fontWeight: "900", color: "#EF4444", letterSpacing: "0.02em", flexShrink: 0 }}>
-                    {days === 0 ? "TODAY" : `${days}d`} left
-                  </span>
-                </div>
-
-                {/* Row 2: deadline sentence */}
-                <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {label}
-                </div>
-
-                {/* Row 3: TODAY'S MOVE + OPEN / STILL OPEN / DONE button */}
-                {(() => {
-                  const isStillOpen = !isDoneToday && timelineProgress >= 0.5;
-                  const btnBg = isDoneToday ? "#15803D" : isStillOpen ? "#D97706" : "#EAB308";
-                  const btnTextColor = isDoneToday ? "#ffffff" : "#1a1a1a";
-                  const btnLabel = isDoneToday ? "DONE" : isStillOpen ? "STILL OPEN" : "OPEN";
-                  const btnTitle = isDoneToday ? "Reopen today's move" : "Mark today's move done";
-                  const rowLabel = isDoneToday ? "TODAY'S MOVE DONE ✓" : "TODAY'S MOVE";
-                  const rowLabelColor = isDoneToday ? "#15803D" : "#D97706";
-                  return (
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.08em", textTransform: "uppercase", color: rowLabelColor }}>
-                          {rowLabel}
-                        </span>
-                        {config.deadlineAction && (
-                          <span style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-primary)", marginLeft: "5px" }}>
-                            {config.deadlineAction}
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        data-testid="deadline-done-btn"
-                        onClick={isDoneToday ? handleDeadlineReopenToday : handleDeadlineDoneToday}
-                        title={btnTitle}
-                        style={{
-                          fontSize: "11px", fontWeight: "900", letterSpacing: "0.06em", textTransform: "uppercase",
-                          padding: "5px 12px", borderRadius: "20px", border: "none", cursor: "pointer",
-                          flexShrink: 0, lineHeight: 1,
-                          background: btnBg, color: btnTextColor, whiteSpace: "nowrap",
-                          minHeight: "30px",
-                        }}
-                      >
-                        {btnLabel}
-                      </button>
-                    </div>
-                  );
-                })()}
-
-                {/* Row 4: thin day-progress bar with window-state awareness */}
-                <div style={{ marginTop: "1px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
-                    <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>{startLabel}</span>
-                    {windowState === "before" && (
-                      <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>
-                        opens {nextOpenLabel}
-                      </span>
-                    )}
-                    {windowState === "during" && todayLiveDisplay && (
-                      <span className="dc-countdown" style={{ fontSize: "10px", color: "#D97706", fontWeight: "800" }}>
-                        {todayLiveDisplay} left today
-                      </span>
-                    )}
-                    {windowState === "after" && (
-                      <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>closed</span>
-                    )}
-                    <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>{endLabel}</span>
-                  </div>
-                  <div className="dc-bar-track" style={{ position: "relative", height: "6px", background: "var(--bg-secondary)", borderRadius: "999px", overflow: "visible" }}>
-                    {windowState === "during" && (
-                      <div className="dc-bar-fill" style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "linear-gradient(90deg, #374151 0%, #1d70a0 55%, #d97706 100%)", borderRadius: "999px", transition: "width 1s linear" }} />
-                    )}
-                    {windowState === "after" && (
-                      <div style={{ height: "100%", width: "100%", background: "var(--bg-tertiary, var(--bg-secondary))", borderRadius: "999px", opacity: 0.5 }} />
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        );
-      })()}
-
-      {/* ── Focus Window strip (shown when no Key Deadline is configured, and the
-           user has set up a focus window) */}
-      {!config.deadlineDate && hasConfiguredFocusWindow(config) && (() => {
-        const now = new Date();
-        const windowState = getWindowState(now, windows);
-        const span = getOverallSpan(windows);
-        const startLabel = formatHourLabel(span.startMin / 60);
-        const endLabel = formatHourLabel(span.endMin / 60);
-        const nextWindow = windowState === "before" ? getNextWindowStart(now, windows) : null;
-        const nextOpenLabel = nextWindow ? formatHourLabel(nextWindow.startMin / 60) : startLabel;
-
-        return (
-          <div className="today-deadline-card" data-testid="focus-window-card" style={{
-            background: "var(--accent-light)",
-            border: "1px solid var(--accent)",
-            borderRadius: "var(--radius-sm)",
-            padding: "7px 10px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "5px",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-              <span style={{ fontSize: "14px", lineHeight: 1 }}>🎯</span>
-              <span style={{ fontSize: "9px", fontWeight: "900", letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--accent)" }}>
-                FOCUS WINDOW
-              </span>
-            </div>
-            <div style={{ marginTop: "1px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
-                <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>{startLabel}</span>
-                {windowState === "before" && (
-                  <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>
-                    opens {nextOpenLabel}
-                  </span>
-                )}
-                {windowState === "during" && todayCountdown && (
-                  <span className="dc-countdown" style={{ fontSize: "10px", color: "#D97706", fontWeight: "800" }}>
-                    {todayCountdown} left today
-                  </span>
-                )}
-                {windowState === "after" && (
-                  <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>closed</span>
-                )}
-                <span style={{ fontSize: "9px", color: "var(--text-muted)", fontWeight: "600" }}>{endLabel}</span>
-              </div>
-              <div className="dc-bar-track" style={{ position: "relative", height: "6px", background: "var(--bg-secondary)", borderRadius: "999px", overflow: "visible" }}>
-                {windowState === "during" && (
-                  <div className="dc-bar-fill" style={{ height: "100%", width: `${timelineProgress * 100}%`, background: "linear-gradient(90deg, #374151 0%, #1d70a0 55%, #d97706 100%)", borderRadius: "999px", transition: "width 1s linear" }} />
-                )}
-                {windowState === "after" && (
-                  <div style={{ height: "100%", width: "100%", background: "var(--bg-tertiary, var(--bg-secondary))", borderRadius: "999px", opacity: 0.5 }} />
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── Proactive Coach Nudge ─────────────────────────────────────────── */}
-      {coachNudge && (
-        <div
-          data-testid="coach-nudge-card"
-          style={{
-            background: "var(--accent-light)",
-            border: "1px solid var(--accent)",
-            borderRadius: "var(--radius-sm)",
-            padding: "10px 12px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "6px",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: "12.5px", fontWeight: "800", color: "var(--text-primary)" }}>
-                🤖 {coachNudge.title}
-              </div>
-              <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--text-secondary)", lineHeight: "1.45" }}>
-                {coachNudge.body}
-              </p>
-            </div>
-            <button
-              onClick={handleCoachNudgeDismiss}
-              aria-label="Dismiss"
-              style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: "14px", cursor: "pointer", padding: "2px", flexShrink: 0, lineHeight: 1 }}
-            >
-              ✕
-            </button>
-          </div>
-          <button
-            onClick={handleCoachNudgeTalk}
-            style={{ alignSelf: "flex-start", background: "none", border: "none", color: "var(--accent)", fontSize: "11.5px", fontWeight: "800", cursor: "pointer", padding: 0 }}
-          >
-            Talk to {config.mentorName || "your coach"} →
-          </button>
-        </div>
-      )}
-
-      {/* ── Today's Commitment (morning check-in) ─────────────────── */}
-      {showDailyCheckin && dailyCheckinSlot === "morning" && (() => {
-        const todayIncompleteTasks = todayTasksAll.filter(t => !t.isCompleted).sort(byPriorityThenOrder);
-        const prompt = buildMorningCommitmentPrompt(todayIncompleteTasks);
-        const canSave = canSaveMorningCommitment(commitmentSelection, todayIncompleteTasks.length);
-        return (
-          <div data-testid="daily-checkin-card" style={dailyCheckinCardStyle}>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button type="button" aria-label="Dismiss daily check-in" style={dailyCheckinDismissStyle} onClick={handleCommitmentLater}>✕</button>
-            </div>
-              <div className="morning-ritual-header">
-                <div className="morning-ritual-title">{prompt.title}</div>
-                <div className="morning-ritual-line">{prompt.line}</div>
-              </div>
-              {prompt.mode === "choose" && (
-                <div className="anchor-chips morning-ritual-chips">
-                  {todayIncompleteTasks.map(task => {
-                    const checked = commitmentSelection.includes(task.uuid);
-                    return (
-                      <button
-                        key={task.uuid}
-                        className={`anchor-chip${checked ? " anchor-chip--checked" : ""}`}
-                        onClick={() => toggleCommitmentTask(task.uuid)}
-                      >
-                        {checked ? "✓ " : ""}{task.title}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="morning-ritual-actions">
-                <button className="morning-ritual-btn-primary" onClick={handleSaveCommitment} disabled={!canSave}>
-                  {prompt.mode === "empty" ? "Got it" : "Save commitment"}
-                </button>
-                <div className="morning-ritual-actions-row">
-                  <button className="morning-ritual-btn-ghost" onClick={handleCommitmentLater}>Later</button>
-                  <button className="morning-ritual-btn-ghost" onClick={handleCommitmentSkip}>Skip today</button>
-                </div>
-              </div>
-          </div>
-        );
-      })()}
-
-      {/* ── Progress Check (midday check-in) ──────────────────────── */}
-      {showDailyCheckin && dailyCheckinSlot === "midday" && (() => {
-        const summary = buildMiddayProgressSummary(tasks, config, new Date(), windows);
-        const remainingCommitted = summary.committedTasks.filter(t => !t.isCompleted);
-        return (
-          <div data-testid="daily-checkin-card" style={dailyCheckinCardStyle}>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button type="button" aria-label="Dismiss daily check-in" style={dailyCheckinDismissStyle} onClick={handleMiddaySnooze}>✕</button>
-            </div>
-              <div className="morning-ritual-header">
-                <div className="morning-ritual-title">{summary.title}</div>
-                {summary.countLine && <div className="morning-ritual-line">{summary.countLine}</div>}
-                <div className="morning-ritual-line">{summary.timeLine}</div>
-              </div>
-              {middayNarrowPicker ? (
-                <div className="anchor-chips morning-ritual-chips">
-                  {remainingCommitted.map(task => (
-                    <button key={task.uuid} className="anchor-chip" onClick={() => handleNarrowToOne(task.uuid)}>
-                      {task.title}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="morning-ritual-nudge">{summary.line}</div>
-              )}
-              <div className="morning-ritual-actions">
-                {middayNarrowPicker ? (
-                  <button className="morning-ritual-btn-ghost" onClick={() => setMiddayNarrowPicker(false)}>Back</button>
-                ) : (
-                  <>
-                    <button className="morning-ritual-btn-primary" onClick={handleMiddayKeepGoing}>
-                      {summary.total === 0 ? "Got it" : "Keep going"}
-                    </button>
-                    {remainingCommitted.length > 1 && (
-                      <div className="morning-ritual-actions-row">
-                        <button className="morning-ritual-btn-ghost" onClick={() => setMiddayNarrowPicker(true)}>Narrow to one</button>
-                      </div>
-                    )}
-                    <div className="morning-ritual-actions-row">
-                      <button className="morning-ritual-btn-ghost" onClick={handleMiddayOpenFocus}>Open One Task Focus</button>
-                    </div>
-                    <div className="morning-ritual-actions-row">
-                      <button className="morning-ritual-btn-ghost" onClick={handleMiddayTalkToCoach}>Talk to Coach</button>
-                    </div>
-                  </>
-                )}
-              </div>
-          </div>
-        );
-      })()}
+      {/* ── The wall / the desk (screen 1). Replaces the greeting-clock-quote
+           card: the commitment is what this screen is for, and the handoff
+           allows exactly one dominant element. ── */}
+      <TodayWall
+        task={pinnedFocusTask}
+        frontName={wallFrontName}
+        daysLeft={wallDaysLeft}
+        dateLabel={wallDateLabel}
+        hoursLeftLabel={wallHoursLeft}
+        focusMinutes={Number(pinnedFocusTask?.timeEstimateMinutes) > 0 ? Number(pinnedFocusTask.timeEstimateMinutes) : 25}
+        peekOpen={peekOpen}
+        onTogglePeek={() => setPeekOpen(v => !v)}
+        remainingCount={wallRemainingCount}
+        doneCount={doneTodayCount}
+        lowEnergy={!!config.isLowEnergyMode}
+        openCount={openAcrossFronts}
+        timerLabel={wallLiveTimerLabel}
+        onStartFocus={() => pinnedFocusTask && startFocusAndLog(pinnedFocusTask)}
+        onMarkDone={() => pinnedFocusTask && handleToggleComplete(pinnedFocusTask)}
+        onSplit={() => pinnedFocusTask && setEditingTask(pinnedFocusTask)}
+        onStartSmall={() => pinnedFocusTask && startFocusAndLog(pinnedFocusTask, null, { plannedSeconds: LOW_ENERGY_SESSION_SECONDS })}
+        onChooseCommitment={() => { setPickerCommits(true); setShowFocusNowPicker(true); }}
+        onScattered={onScattered}
+      />
 
       {/* ── Day Close (end-of-day reflection) ─────────────────────── */}
       {showDailyCheckin && dailyCheckinSlot === "reflection" && (() => {
@@ -1572,7 +1097,21 @@ export default function TodayTab({
       })()}
 
       {/* ── Today's Focus — tasks dominate the screen */}
-      <section className="tasks-section" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      {/* The peek IS this section. Closed is the default — that is the wall.
+          With no commitment there is no wall to look at, so the list stays
+          visible rather than leaving the screen empty. */}
+      <section
+        className="tasks-section"
+        style={{
+          // Conditional INLINE, not via a class: this element already carries an
+          // inline display, and an inline style beats any class rule — a
+          // `.is-peek-closed { display: none }` looked right, toggled its class
+          // correctly, and hid nothing at all.
+          display: !peekOpen && pinnedFocusTask ? "none" : "flex",
+          flexDirection: "column",
+          gap: "8px",
+        }}
+      >
         <div className="section-header" style={{ gap: "8px", alignItems: "center", justifyContent: "flex-start" }}>
           <h2 className="section-title" style={{ flex: "0 0 auto", margin: 0 }}>
             Today's Focus
@@ -2030,55 +1569,6 @@ export default function TodayTab({
         />
       )}
 
-      {/* ── Morning Ritual popup (centered, once per Loci day) ───── */}
-      {showAnchorSheet && anchorSheetSlot === "morning" && (() => {
-        const variant = getMorningRitualVariant(new Date());
-        return (
-          <div className="focus-now-backdrop focus-now-backdrop--center" onClick={handleAnchorSheetDone}>
-            <div className="morning-ritual-card" onClick={e => e.stopPropagation()}>
-              <div className="morning-ritual-header">
-                <div className="morning-ritual-title">{variant.title}</div>
-                <div className="morning-ritual-line">{variant.line}</div>
-              </div>
-              {anchors.length > 0 ? (
-                <>
-                  <div className="anchor-chips morning-ritual-chips">
-                    {anchors.map(a => {
-                      const checked = todayCheckedIds.includes(a.id);
-                      return (
-                        <button
-                          key={a.id}
-                          className={`anchor-chip${checked ? " anchor-chip--checked" : ""}`}
-                          onClick={() => handleAnchorCheck(a.id)}
-                        >
-                          {checked ? "✓ " : ""}{a.text}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="morning-ritual-nudge">Pick one anchor. Then start one task.</div>
-                </>
-              ) : (
-                <div className="morning-ritual-nudge">No anchors yet &#8212; pick one task and begin.</div>
-              )}
-              <div className="morning-ritual-actions">
-                <button className="morning-ritual-btn-primary" onClick={handleAnchorSheetDone}>Done</button>
-                <button className="morning-ritual-btn-secondary" onClick={() => {
-                  saveConfigPatch({ ...buildMorningRitualDoneConfig() });
-                  setShowAnchorSheet(false);
-                  setAnchorSheetSlot(null);
-                  onOpenMindBox?.("ritual");
-                }}>Start Morning Ritual &#8594;</button>
-                <div className="morning-ritual-actions-row">
-                  <button className="morning-ritual-btn-ghost" onClick={handleAnchorLater}>Later</button>
-                  <button className="morning-ritual-btn-ghost" onClick={() => { setShowAnchorSheet(false); setAnchorSheetSlot(null); onOpenMindBox?.("anchors"); }}>Manage</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* ── Daily Anchors check-in sheet ────────────────────────── */}
       {showAnchorSheet && anchorSheetSlot !== "morning" && anchors.length > 0 && (() => {
         const variant = getAnchorVariant(new Date());
@@ -2120,11 +1610,11 @@ export default function TodayTab({
 
       {/* ── Focus Now: task picker bottom sheet ─────────────────── */}
       {showFocusNowPicker && (
-        <div className="focus-now-backdrop" onClick={() => setShowFocusNowPicker(false)}>
+        <div className="focus-now-backdrop" onClick={() => { setShowFocusNowPicker(false); setPickerCommits(false); }}>
           <div className="focus-now-sheet" onClick={e => e.stopPropagation()}>
             <div className="focus-now-sheet-header">
               <span className="focus-now-sheet-title">Pick one task</span>
-              <button className="focus-now-sheet-close" onClick={() => setShowFocusNowPicker(false)} aria-label="Close picker">✕</button>
+              <button className="focus-now-sheet-close" onClick={() => { setShowFocusNowPicker(false); setPickerCommits(false); }} aria-label="Close picker">✕</button>
             </div>
             <div className="focus-now-sheet-body">
               {focusNowPickerTasks.length === 0 ? (
@@ -2136,7 +1626,7 @@ export default function TodayTab({
                       <div className="focus-now-section-label">Recommended · Day Map</div>
                       <button
                         className={`focus-now-pick-row${focusNowTaskId === dayMapNextTask.uuid ? " is-selected" : ""}`}
-                        onClick={() => { setFocusNowTaskId(dayMapNextTask.uuid); setFocusNowMode(true); setShowFocusNowPicker(false); }}
+                        onClick={() => handleFocusNowPick(dayMapNextTask)}
                       >
                         <span className={`focus-now-priority ${(dayMapNextTask.priority || "P3").toLowerCase()}`}>
                           {dayMapNextTask.priority || "P3"}
@@ -2158,7 +1648,7 @@ export default function TodayTab({
                       <button
                         key={task.uuid}
                         className={`focus-now-pick-row${focusNowTaskId === task.uuid ? " is-selected" : ""}`}
-                        onClick={() => { setFocusNowTaskId(task.uuid); setFocusNowMode(true); setShowFocusNowPicker(false); }}
+                        onClick={() => handleFocusNowPick(task)}
                       >
                         <span className={`focus-now-priority ${(task.priority || "P3").toLowerCase()}`}>
                           {task.priority || "P3"}

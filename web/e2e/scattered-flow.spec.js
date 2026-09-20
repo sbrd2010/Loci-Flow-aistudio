@@ -11,6 +11,14 @@ import { test, expect } from "@playwright/test";
 // estimate.
 
 async function enterDemo(page) {
+  // Today's list now lives behind the peek, closed by default (screen 1, "the
+  // wall"). These specs were written when it was always on screen, and their
+  // subject is the list, not the wall — so the precondition is established here
+  // rather than by editing each assertion. today-wall.spec.js covers the
+  // closed-by-default behaviour itself, without this seed.
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
+  });
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/");
   await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
@@ -59,4 +67,40 @@ test("mobile reliability: the scattered screen does not claim to park anything",
   // "Parked" is a real state in this app (isParked / task_parked). This screen
   // writes nothing, so it must not borrow the word.
   await expect(page.locator(".scattered-foot")).not.toContainText(/parked until tomorrow/i);
+});
+
+// Addendum D: the five-minute session is "the same FocusSession, three
+// deltas". This covers the two that are presentation — the kicker and the
+// primary naming the length it will log. The third (holding at 00:00 with
+// "Keep going · +20m" instead of a modal) touches the shared completion path
+// and lands in its own commit.
+test("mobile reliability: a five-minute session presents as one, not as a 25-minute session", async ({ page }) => {
+  await enterDemo(page);
+  await openScattered(page);
+
+  await page.getByRole("button", { name: "Just 5 minutes" }).click();
+
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 10_000 });
+  await expect(overlay.locator(".focus-mode-header-label")).toHaveText("FIVE MINUTES · THAT'S ALL");
+
+  // At the start nothing has elapsed, and the completion path logs ELAPSED
+  // seconds — so a button promising "log 5m" here names a figure the ledger
+  // would never write. It names what would actually be logged, which at zero
+  // is nothing. (This spec previously asserted the promise itself.)
+  const done = overlay.locator(".focus-mode-done-btn");
+  await expect(done).toContainText("Done");
+  await expect(done).not.toContainText("5m");
+});
+
+test("mobile reliability: the full session is untouched by the five-minute deltas", async ({ page }) => {
+  await enterDemo(page);
+  await openScattered(page);
+
+  await page.getByRole("button", { name: "Full 25 instead" }).click();
+
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 10_000 });
+  await expect(overlay.locator(".focus-mode-header-label")).toHaveText("Deep Focus");
+  await expect(overlay.locator(".focus-mode-done-btn")).not.toContainText("log 5m");
 });

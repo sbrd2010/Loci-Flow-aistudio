@@ -24,13 +24,21 @@ export const FOCUS_TERMINAL_TYPES = new Set(["focus_completed", "focus_abandoned
 // three-second mis-tap out of the figures without discarding real short work.
 export const MIN_COUNTABLE_MINUTES = 1;
 
-export function eventMinutes(event) {
-  const secs = Number(event?.focusElapsedSeconds);
+// Seconds to the minutes the ledger will credit. Exported because anything
+// that TELLS the user how many minutes an action will log has to use the same
+// conversion — a label that floors while this rounds says "log 1m" for 90
+// seconds and then books 2.
+export function minutesFromSeconds(secs) {
+  const n = Number(secs);
   // Under a minute is zero, not a rounded-up one. Math.round alone turned a
   // 45-second mis-tap into a whole minute, and dailyTotals then counted it as
   // a move — inflating days-moved, the one figure that has to stay honest.
-  if (!Number.isFinite(secs) || secs < MIN_COUNTABLE_MINUTES * 60) return 0;
-  return Math.round(secs / 60);
+  if (!Number.isFinite(n) || n < MIN_COUNTABLE_MINUTES * 60) return 0;
+  return Math.round(n / 60);
+}
+
+export function eventMinutes(event) {
+  return minutesFromSeconds(event?.focusElapsedSeconds);
 }
 
 export function isFocusTerminal(event) {

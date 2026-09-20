@@ -4,6 +4,14 @@ import { test, expect } from "@playwright/test";
 // They protect the execution flow Rohan cares about most: pin task, focus, capture stray thought, return.
 
 async function enterDemo(page, viewport = { width: 375, height: 812 }) {
+  // Today's list now lives behind the peek, closed by default (screen 1, "the
+  // wall"). These specs were written when it was always on screen, and their
+  // subject is the list, not the wall — so the precondition is established here
+  // rather than by editing each assertion. today-wall.spec.js covers the
+  // closed-by-default behaviour itself, without this seed.
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
+  });
   await page.setViewportSize(viewport);
   await page.goto("/");
   await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
@@ -301,9 +309,15 @@ test("mobile reliability: Opening Rescue chat without typing still hands off con
   await expect(page.getByRole("heading", { name: /Chat with/ })).toBeVisible({ timeout: 8_000 });
   await page.getByPlaceholder(/Shift\+Enter for a new line/).fill("I feel a bit scattered right now");
   await page.getByRole("button", { name: "Send" }).click();
-  await expect(page.getByText("Let's find one small step together.")).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByText("Let's find one small step together.").first()).toBeVisible({ timeout: 8_000 });
 
   expect(groqRequestBodies.length).toBeGreaterThan(0);
-  const systemContent = groqRequestBodies[0].messages.find(m => m.role === "system")?.content || "";
+  // Coach now opens with its own proactive nudge (J3), so index 0 is that
+  // call, not this message. Pick the request that actually carries what was
+  // typed rather than assuming the user's turn is the first one out.
+  const mine = groqRequestBodies.find(b =>
+    (b.messages || []).some(m => m.role === "user" && String(m.content).includes("scattered")));
+  expect(mine).toBeDefined();
+  const systemContent = mine.messages.find(m => m.role === "system")?.content || "";
   expect(systemContent).toContain("RECENT RESCUE MODE HANDOFF");
 });

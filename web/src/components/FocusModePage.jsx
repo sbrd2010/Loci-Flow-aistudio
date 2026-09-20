@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { minutesFromSeconds } from "../utils/focusLedger";
 import { getTimerState } from "../utils/focusSession";
 import { BINAURAL_TRACK_ID } from "../utils/binauralBeat";
 import { SOUND_CATEGORIES, getCategoryKeyForTrack, getTrackTitle } from "../utils/soundLibrary";
@@ -56,6 +57,8 @@ const hiddenControlTextStyle = {
 
 const PIP_SUPPORTED = "documentPictureInPicture" in window;
 
+const FIVE_MINUTES_SECONDS = 5 * 60;
+
 
 
 export default function FocusModePage({
@@ -82,6 +85,11 @@ export default function FocusModePage({
 }) {
   const autoExitRef = useRef(null);
   const isComplete = secondsLeft === 0;
+  // Addendum D: the five-minute session is "the same FocusSession, three
+  // deltas", not a new component. Keyed off the planned length rather than a
+  // flag, so a task whose own estimate is five minutes reads the same way — it
+  // is the same kind of session either way.
+  const isFiveMinute = maxSeconds === FIVE_MINUTES_SECONDS;
 
   // Which Sounds drawer tile is currently active: an ambient category key
   // (e.g. "rain"), the binaural track id, or "none".
@@ -125,6 +133,16 @@ export default function FocusModePage({
   const mins = Math.floor(secondsLeft / 60);
   const secs = String(secondsLeft % 60).padStart(2, "0");
   const stateLabel = isComplete ? "Complete" : isRunning ? "In progress" : "Paused";
+  // The five-minute session names the length it will log — but this button is
+  // available before the countdown reaches zero, and the completion path
+  // records ELAPSED seconds, not the planned length. Promising "log 5m" after
+  // forty seconds was a figure the ledger would never write.
+  //
+  // minutesFromSeconds is the ledger's OWN conversion, not a reimplementation
+  // of it: a label that floored while the ledger rounds read "log 1m" at 90
+  // seconds and then booked 2.
+  const loggedMinutes = minutesFromSeconds(Math.max(0, maxSeconds - secondsLeft));
+  const loggedLabel = isFiveMinute && loggedMinutes >= 1 ? `${loggedMinutes}m` : null;
   const currentDurMins = Math.round(maxSeconds / 60);
 
   return (
@@ -178,7 +196,9 @@ export default function FocusModePage({
 
       <main className="focus-mode-body" aria-label="Deep focus session">
         <div className="focus-mode-session-meta">
-          <span className="focus-mode-header-label">Deep Focus</span>
+          <span className="focus-mode-header-label">
+            {isFiveMinute ? (isComplete ? "FIVE MINUTES · DONE" : "FIVE MINUTES · THAT'S ALL") : "Deep Focus"}
+          </span>
           <span className="focus-mode-state-pill">{stateLabel}</span>
         </div>
 
@@ -279,10 +299,10 @@ export default function FocusModePage({
           type="button"
           className="focus-mode-done-btn"
           onClick={onDone}
-          aria-label="Mark task complete and exit"
+          aria-label={loggedLabel ? `Mark task complete and log ${loggedMinutes} minutes` : "Mark task complete and exit"}
         >
           <CheckIcon />
-          <span>Done</span>
+          <span>{loggedLabel ? `Done — log ${loggedLabel}` : "Done"}</span>
         </button>
 
         {/* Brain dump — capture stray thoughts without breaking focus */}

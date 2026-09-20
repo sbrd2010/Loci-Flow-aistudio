@@ -7,6 +7,14 @@ import { test, expect } from "@playwright/test";
 // so it can't silently regress the way it did (only Mind Box/Roadmap had it).
 
 async function enterDemo(page, viewport = { width: 375, height: 812 }) {
+  // Today's list now lives behind the peek, closed by default (screen 1, "the
+  // wall"). These specs were written when it was always on screen, and their
+  // subject is the list, not the wall — so the precondition is established here
+  // rather than by editing each assertion. today-wall.spec.js covers the
+  // closed-by-default behaviour itself, without this seed.
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
+  });
   await page.setViewportSize(viewport);
   await page.goto("/");
   await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
@@ -38,7 +46,10 @@ test("mobile reliability: Coach chat sends reasoning_effort low to Groq", async 
   await page.getByPlaceholder(/Shift\+Enter for a new line/).fill("I feel a bit scattered right now");
   await page.getByRole("button", { name: "Send" }).click();
 
-  await expect(page.getByText("Let's pick one tiny next step.")).toBeVisible({ timeout: 8_000 });
+  // Two replies now carry this text: Coach opens with the proactive nudge (J3
+  // moved it off Today and onto Coach's first line), then answers the message.
+  // The subject here is the request body, not which paragraph rendered.
+  await expect(page.getByText("Let's pick one tiny next step.").first()).toBeVisible({ timeout: 8_000 });
 
   expect(groqRequestBodies.length).toBeGreaterThan(0);
   for (const body of groqRequestBodies) {

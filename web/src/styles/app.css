@@ -3276,6 +3276,11 @@ html[data-theme="evening"] {
   --control-edge:  #6b655c;  /* the edge of a clickable thing. 3.16:1 on --ground */
   --hover-paper:   #26221c;
   --hover-row:     #2a251e;
+  /* The filled primary. The one genuine divergence between the two themes:
+     "In Evening, gold IS the filled primary, with near-black text on it." */
+  --fill-primary:        #d8ad63;
+  --fill-primary-text:   #171512;
+  --fill-primary-figure: #171512;  /* the mono numeral sits on gold here, so it stays dark */
 
   /* — existing vocabulary, mapped onto the above — */
   --radius: 4px;
@@ -3327,6 +3332,11 @@ html[data-theme="paper"] {
   --surface:       #fdfbf6;
   --ink:           #201f1d;
   --ink-hover:     #3a3833;
+  /* Paper flips it: gold is stroke-only here, so the filled primary is ink and
+     only the numeral carries gold. */
+  --fill-primary:        #201f1d;
+  --fill-primary-text:   #f4f1e9;
+  --fill-primary-figure: #d8ad63;
   --text-soft:     #45433e;  /* the handoff's --text-muted; see the note in Evening */
   --text-quiet:    #5c5a55;
   --text-faint:    #a8a49c;  /* NON-TEXT ONLY: 2.2:1 on --ground */

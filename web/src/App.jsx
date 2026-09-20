@@ -6,6 +6,8 @@ import { isNativeApp, refreshNativePermission, addNativeNotificationClickListene
 import { signInWithGoogleNative } from "./utils/nativeAuth";
 import { isCheckinDue, buildCheckinResumeMessage, isDuplicateCheckinResume } from "./utils/coachCheckin";
 import { getFocusWindows, getLociDayStr } from "./utils/focusWindows";
+import { buildWallCommitmentSave } from "./utils/dailyCoachCheckins";
+import { deriveCommitmentDeadlineMove } from "./utils/deadlineCountdown";
 import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { useSync, CONN } from "./useSync";
@@ -730,6 +732,120 @@ export default function App() {
 
   // Global Focus completion prompt: "Done! +120 XP" — completes the task and
   // ends the session, regardless of which tab the user is on.
+  // ── The day's commitment, recorded and reconciled in one place ────────
+  //
+  // The wall's pin IS the day's commitment (J3, J5), and Day Close, the
+  // Coach's daily context and buildEndOfDaySummary all read the commitment
+  // fields the deleted morning prompt used to write. SEVEN places in this app
+  // set isNowFocus (Today, Day Map, Scattered, Mind Box, Coach, coachActions)
+  // and THREE write isCompleted. Recording at each of them is how the next
+  // new path silently forgets — a first attempt that patched only Today's
+  // handlers left both the Day Map/Scattered pin flows and the ordinary
+  // finish-the-timer completion path unrecorded. Observing the state instead
+  // cannot be missed.
+  //
+  // Skipped while syncing from cache, for the same reason as the snapshot
+  // capture above: a config write stamped off a stale cache can overwrite
+  // newer config from another device.
+  //
+  // The predicate matches the wall's own (TodayTab's pinnedFocusTask): the
+  // commitment is a live Today task. Coach's plain Focus action and Mind
+  // Box's Rescue can pin a week or month task without moving it to Today —
+  // one the wall cannot render, that getValidCommittedTaskIds strips back
+  // out of Day Close, but whose completion would still have marked the
+  // deadline move done.
+  const commitmentPinnedUuid = (payload?.tasks || []).find(t =>
+    t?.isNowFocus && t.horizonLevel === "today" && !t.isDeleted && !t.isParked && !t.isCompleted
+  )?.uuid || null;
+  // Driven by a clock, not by rendering. Read once per render, this value
+  // would only change when something else re-rendered App — so an app left
+  // open across the Loci-day boundary (which can be 2am, not midnight) would
+  // keep writing to yesterday's commitment. Completing the task then clears
+  // isNowFocus before any re-render, and the new day's commitment would never
+  // be recorded at all.
+  const [lociDayTick, setLociDayTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setLociDayTick(n => n + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
+  const commitmentDayStr = useMemo(
+    () => getLociDayStr(new Date(), getFocusWindows(payload?.config || {})),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lociDayTick, payload?.config?.dayStartHour, payload?.config?.dayEndHour, payload?.config?.focusWindows]
+  );
+  //
+  // A pin observed while sync is still unconfirmed is REMEMBERED, not dropped.
+  // The user can pin and complete inside that window, and completing clears
+  // isNowFocus — so by the time this effect is allowed to write there would be
+  // nothing left to observe, and that commitment would be lost permanently:
+  // Day Close omits it, and the deadline observer below has no same-day
+  // commitment to mark progress from. Only a deferral from the same Loci day
+  // is flushed, so an app reopened the next morning doesn't record yesterday's.
+  //
+  // "Unconfirmed" includes syncWarning === "offline", which is how useSync
+  // reports that it gave up waiting after 15 seconds and flipped
+  // isSyncingFromCache false with no RTDB snapshot ever arriving. The three
+  // other config-writing effects in this file already treat it that way;
+  // these two did not, so they would have flushed from exactly the stale
+  // cache the guard exists to keep out.
+  // The deferral carries the ACCOUNT and the day it belongs to, and holds every
+  // commitment made in the window rather than only the last. Neither is
+  // hypothetical: a ref survives a sign-out (this effect returns early on the
+  // null payload, so nothing clears it), and without the uid one account's
+  // commitment was written into the next account's config on the same Loci
+  // day — taking that account's deadline-move state with it. Holding only the
+  // latest lost the first of two commitments made in the same window.
+  const deferredCommitmentRef = useRef(null);
+  const syncUnconfirmed = isSyncingFromCache || syncWarning === "offline";
+  const commitmentUid = demoMode ? null : (user?.uid || null);
+  useEffect(() => {
+    if (!payload?.config) return;
+    const held = deferredCommitmentRef.current;
+    if (held && (held.uid !== commitmentUid || held.day !== commitmentDayStr)) {
+      deferredCommitmentRef.current = null;
+    }
+    if (syncUnconfirmed) {
+      if (commitmentPinnedUuid) {
+        const kept = deferredCommitmentRef.current?.uuids || [];
+        if (!kept.includes(commitmentPinnedUuid)) {
+          deferredCommitmentRef.current = {
+            uid: commitmentUid,
+            day: commitmentDayStr,
+            uuids: [...kept, commitmentPinnedUuid],
+          };
+        }
+      }
+      return;
+    }
+    const pending = deferredCommitmentRef.current;
+    deferredCommitmentRef.current = null;
+    const uuids = [...(pending?.uuids || [])];
+    if (commitmentPinnedUuid && !uuids.includes(commitmentPinnedUuid)) uuids.push(commitmentPinnedUuid);
+    if (uuids.length === 0) return;
+    // Folded into one patch: buildWallCommitmentSave appends to what it is
+    // given, so each must see the previous one's result or they overwrite.
+    let base = payload.config;
+    let merged = null;
+    for (const uuid of uuids) {
+      const patch = buildWallCommitmentSave(base, uuid, commitmentDayStr);
+      if (!patch) continue;
+      merged = { ...(merged || {}), ...patch };
+      base = { ...base, ...patch };
+    }
+    if (merged) saveConfigPatch(merged);
+  }, [commitmentPinnedUuid, commitmentDayStr, syncUnconfirmed, commitmentUid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // And the key deadline's daily move, which is "is any of today's
+  // commitments complete right now" — see deriveCommitmentDeadlineMove. It
+  // returns undefined when it has no opinion, and the write is guarded on a
+  // real change so this cannot loop against its own config update.
+  const deadlineMoveState = deriveCommitmentDeadlineMove(payload?.config || {}, payload?.tasks || [], commitmentDayStr);
+  useEffect(() => {
+    if (!payload?.config || syncUnconfirmed || deadlineMoveState === undefined) return;
+    if ((payload.config.deadlineDailyDoneDate || null) === deadlineMoveState) return;
+    saveConfigPatch({ deadlineDailyDoneDate: deadlineMoveState });
+  }, [deadlineMoveState, syncUnconfirmed]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleFocusSessionDone = () => {
     const task = focusTimer.activeTask;
     focusTimer.dismissSessionComplete();
@@ -1052,6 +1168,7 @@ export default function App() {
             onOpenDayMap={openDayMap}
             onOpenMindBox={openMindBox}
             onOpenCoach={() => setActiveTab("coach")}
+            onScattered={() => { setRoadmapView("scattered"); setActiveTab("roadmap"); }}
             isAddTaskDialogOpen={showAddTask}
             pendingCheckinSlot={pendingCheckinSlot}
             setPendingCheckinSlot={setPendingCheckinSlot}

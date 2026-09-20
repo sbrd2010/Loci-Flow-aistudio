@@ -60,6 +60,40 @@ function cloneHistory(history) {
   return history && typeof history === "object" && !Array.isArray(history) ? { ...history } : {};
 }
 
+// What the key deadline's daily-move state SHOULD be, given today's
+// commitments and the current task list. Returns undefined when it has no
+// opinion — no key deadline, or nothing committed today.
+//
+// J3 deleted the Key Deadline strip on the grounds that "the 'today's move'
+// line is the commitment itself" — and with it the only two writers of
+// deadlineDailyDoneDate, while Day Close, buildExecutionCoachSignal and the
+// history mirror all went on reading it. Completing the commitment is that
+// move now.
+//
+// This is a derivation rather than a patch applied at each completion, and
+// deliberately so: three separate places in this app write isCompleted, and a
+// first attempt that patched only Today's handler left the ordinary
+// finish-the-timer path still reporting the move as open. Asking "is any of
+// today's commitments complete right now" cannot be missed by a new path, and
+// it also means reopening one commitment while another stands doesn't
+// wrongly clear it.
+export function deriveCommitmentDeadlineMove(config = {}, tasks = [], todayStr) {
+  if (!hasDeadline(config) || !todayStr) return undefined;
+  const committed = config.dailyCommitmentDate === todayStr && Array.isArray(config.dailyCommitmentTaskIds)
+    ? config.dailyCommitmentTaskIds
+    : [];
+  if (committed.length === 0) return undefined;
+  // The horizon predicate matches getValidCommittedTaskIds, which is what Day
+  // Close uses: a recorded commitment can later be moved to Week or Month and
+  // completed there. Without this, that completion marked the deadline move
+  // done while Day Close omitted the same task — two readers of one field
+  // disagreeing about what counts.
+  const anyDone = (tasks || []).some((t) =>
+    t && committed.includes(t.uuid) && t.isCompleted && !t.isDeleted && t.horizonLevel === "today"
+  );
+  return anyDone ? todayStr : null;
+}
+
 export function markDeadlineMoveDone(config = {}, todayStr = getLocalDateString()) {
   if (!isValidDateString(todayStr)) return config;
   return {

@@ -5,7 +5,6 @@ import PrivacyPolicy from "./PrivacyPolicy";
 import { db, auth } from "../firebase";
 import { ref, push } from "firebase/database";
 import { exportPayloadAsJson, exportTasksAsCsv } from "../utils/exportTasks";
-import { parseTimeToMinutes } from "../utils/focusWindows";
 import { analyzeFocusWindowRows, getTotalPlannedMinutes, formatDuration, formatTime12 } from "../utils/focusWindowHints";
 import { COACH_PERSONAS, normalizeCoachPersona } from "../utils/coachPersona";
 import { COACH_PROFILE_NOTE_MAX_LENGTH } from "../utils/coachProfile";
@@ -40,17 +39,11 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   // AM/PM warning track the inputs live rather than waiting for a save.
   const focusWindowHints = useMemo(() => analyzeFocusWindowRows(editedFocusWindows), [editedFocusWindows]);
   const totalPlannedMinutes = useMemo(() => getTotalPlannedMinutes(editedFocusWindows), [editedFocusWindows]);
-  const [editedMorningRitualStart, setEditedMorningRitualStart] = useState(config.morningRitualWindowStart || "05:00");
-  const [editedMorningRitualEnd, setEditedMorningRitualEnd] = useState(config.morningRitualWindowEnd || "11:00");
-  const [editedMorningRitualEnabled, setEditedMorningRitualEnabled] = useState(config.morningRitualEnabled !== false);
   const [editedCoachNudgesEnabled, setEditedCoachNudgesEnabled] = useState(config.coachNudgesEnabled !== false);
   const [editedDailyCheckinsEnabled, setEditedDailyCheckinsEnabled] = useState(config.dailyCheckinsEnabled !== false);
   const [editedCoachPersona, setEditedCoachPersona] = useState(() => normalizeCoachPersona(config.coachPersona));
   const [editedCoachPersonaNote, setEditedCoachPersonaNote] = useState(config.coachPersonaNote || "");
   const [editedCoachProfileNote, setEditedCoachProfileNote] = useState(config.coachProfileNote || "");
-  const [editedHeaderStyle, setEditedHeaderStyle] = useState(
-    config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full")
-  );
   const [editedToolsStyle, setEditedToolsStyle] = useState(config.toolsStyle || "inline");
   const [editedDeadlineLabel, setEditedDeadlineLabel] = useState(config.deadlineLabel || "");
   const [editedDeadlineDate, setEditedDeadlineDate] = useState(config.deadlineDate || "");
@@ -66,15 +59,11 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
     setEditedTaskRowStyle(config.taskRowInteractionStyle || "classic");
     setEditedChallenge(normalizeChallengeKey(config.challengeType));
     setEditedFocusWindows(config.focusWindows || []);
-    setEditedMorningRitualStart(config.morningRitualWindowStart || "05:00");
-    setEditedMorningRitualEnd(config.morningRitualWindowEnd || "11:00");
-    setEditedMorningRitualEnabled(config.morningRitualEnabled !== false);
     setEditedCoachNudgesEnabled(config.coachNudgesEnabled !== false);
     setEditedDailyCheckinsEnabled(config.dailyCheckinsEnabled !== false);
     setEditedCoachPersona(normalizeCoachPersona(config.coachPersona));
     setEditedCoachPersonaNote(config.coachPersonaNote || "");
     setEditedCoachProfileNote(config.coachProfileNote || "");
-    setEditedHeaderStyle(config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full"));
     setEditedToolsStyle(config.toolsStyle || "inline");
     setEditedDeadlineLabel(config.deadlineLabel || "");
     setEditedDeadlineDate(config.deadlineDate || "");
@@ -83,7 +72,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
       config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.taskRowInteractionStyle, config.challengeType,
       config.focusWindows,
-      config.morningRitualWindowStart, config.morningRitualWindowEnd, config.morningRitualEnabled, config.coachNudgesEnabled, config.dailyCheckinsEnabled, config.headerStyle, config.toolsStyle,
+      config.coachNudgesEnabled, config.dailyCheckinsEnabled, config.toolsStyle,
       config.deadlineLabel, config.deadlineDate,
       config.deadlineStartDate, config.deadlineAction,
       config.coachPersona, config.coachPersonaNote, config.coachProfileNote]);
@@ -189,9 +178,6 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const [savedProfile, setSavedProfile] = useState(false);
   const handleSaveSettings = (e) => {
     e.preventDefault();
-    const morningRitualStart = parseTimeToMinutes(editedMorningRitualStart);
-    const morningRitualEnd = parseTimeToMinutes(editedMorningRitualEnd);
-    const morningRitualValid = morningRitualStart !== null && morningRitualEnd !== null && morningRitualStart < morningRitualEnd;
     // Every key below is an explicit value from this form, so patching writes
     // exactly what the user just edited. Spreading `...config` as well would
     // additionally re-send every untouched field from this component's
@@ -206,15 +192,11 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
       eveningGuardWindowActive: editedEveningGuard,
       taskRowInteractionStyle: editedTaskRowStyle,
       focusWindows: editedFocusWindows.filter(w => w.start && w.end && w.start !== w.end),
-      morningRitualWindowStart: morningRitualValid ? editedMorningRitualStart : "05:00",
-      morningRitualWindowEnd: morningRitualValid ? editedMorningRitualEnd : "11:00",
-      morningRitualEnabled: editedMorningRitualEnabled,
       coachNudgesEnabled: editedCoachNudgesEnabled,
       dailyCheckinsEnabled: editedDailyCheckinsEnabled,
       coachPersona: editedCoachPersona,
       coachPersonaNote: editedCoachPersonaNote.trim().slice(0, 300),
       coachProfileNote: editedCoachProfileNote.trim().slice(0, COACH_PROFILE_NOTE_MAX_LENGTH),
-      headerStyle: editedHeaderStyle,
       toolsStyle: editedToolsStyle,
       roadmapStyle: "compact",
       deadlineLabel: editedDeadlineLabel.trim(),
@@ -597,22 +579,6 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
 
           <div
             className="toggle-row"
-            onClick={() => setEditedMorningRitualEnabled(!editedMorningRitualEnabled)}
-            style={{ cursor: "pointer" }}
-          >
-            <div>
-              <span style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--text-primary)" }}>
-                🌅 Morning Ritual popup
-              </span>
-              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                A daily motivational nudge (with a rotating quote and a link to your Mind Box morning ritual) on your first app open of the day.
-              </p>
-            </div>
-            <input type="checkbox" className="pill-toggle" checked={editedMorningRitualEnabled} readOnly />
-          </div>
-
-          <div
-            className="toggle-row"
             onClick={() => setEditedCoachNudgesEnabled(!editedCoachNudgesEnabled)}
             style={{ cursor: "pointer" }}
           >
@@ -621,7 +587,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
                 🤖 Proactive coach nudges
               </span>
               <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                Let your coach speak up first — a once-a-day banner on Today when it notices something worth flagging (a missed deadline move, a pinned focus task, an overloaded day). Skipped during Low Energy Mode and Evening Guard.
+                Let your coach speak up first — when it notices something worth flagging (a missed deadline move, a pinned focus task, an overloaded day), it opens the Coach transcript with that observation, once a day. Nothing appears unprompted on Today. Skipped during Low Energy Mode and Evening Guard.
               </p>
             </div>
             <input type="checkbox" className="pill-toggle" checked={editedCoachNudgesEnabled} readOnly />
@@ -637,59 +603,10 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
                 🎯 Daily Coach Check-ins
               </span>
               <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                Three lightweight, dismissible cards on Today: pick your non-negotiables in the morning, a midday progress check, and an end-of-day reflection. Turn off if these feel like noise.
+                A dismissible end-of-day reflection card on Today. Turn off if it feels like noise.
               </p>
             </div>
             <input type="checkbox" className="pill-toggle" checked={editedDailyCheckinsEnabled} readOnly />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Morning Ritual Window</label>
-            <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px", marginBottom: "8px" }}>
-              When today's Morning Ritual motivational nudge can appear on your first app open of the day. Independent of your Focus Windows. Defaults to 5:00 AM-11:00 AM.
-            </p>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <input
-                type="time"
-                className="text-input"
-                value={editedMorningRitualStart}
-                onChange={e => setEditedMorningRitualStart(e.target.value)}
-                aria-label="Morning Ritual window start time"
-                style={{ flex: 1, minWidth: 0 }}
-              />
-              <span style={{ fontSize: "12px", color: "var(--text-muted)", flexShrink: 0 }}>to</span>
-              <input
-                type="time"
-                className="text-input"
-                value={editedMorningRitualEnd}
-                onChange={e => setEditedMorningRitualEnd(e.target.value)}
-                aria-label="Morning Ritual window end time"
-                style={{ flex: 1, minWidth: 0 }}
-              />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Home Header Style</label>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
-              {[
-                { key: "full", label: "Full card" },
-                { key: "compact", label: "Compact (tap)" },
-                { key: "frameless", label: "Frameless" }
-              ].map(({ key, label }) => (
-                <button key={key} type="button"
-                  onClick={() => setEditedHeaderStyle(key)}
-                  style={{
-                    padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: "700",
-                    cursor: "pointer", transition: "all 0.15s",
-                    background: editedHeaderStyle === key ? "var(--accent)" : "var(--bg-secondary)",
-                    color: editedHeaderStyle === key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
-                    border: editedHeaderStyle === key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
-                  }}>
-                  {label}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div className="form-group">

@@ -245,6 +245,15 @@ export function buildClearedBrainDump(brainDump, acceptedSuggestions, allSuggest
 
 // Pure helper for the task-completion toggle — extracted for unit-testability.
 // TodayTab.handleToggleComplete uses this to build the updated task array.
+// How many of these were completed ON a given Loci day. A completed task keeps
+// the Today horizon until something moves it, so "how many are completed" and
+// "how many were completed today" are different questions — the wall asks the
+// second one.
+export function countCompletedOn(tasks = [], dateStr) {
+  if (!dateStr) return 0;
+  return tasks.filter((t) => t && t.isCompleted && t.dateCompletedString === dateStr).length;
+}
+
 export function buildToggleCompletedTasks(tasks, taskUuid, isCompleting, dateStr) {
   return tasks.map((t) =>
     t.uuid === taskUuid
