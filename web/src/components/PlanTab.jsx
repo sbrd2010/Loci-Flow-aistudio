@@ -89,8 +89,10 @@ export default function PlanTab({ payload = {}, saveConfigPatch, onOpenHorizons,
   // A task needs no front (Addendum C). Loose tasks are listed, never labelled
   // "Uncategorised" and never counted against the fronts above.
   const loose = useMemo(
-    () => unassignedTasks(tasks).filter(t => !t.isCompleted && !t.isParked),
-    [tasks],
+    // Pass the fronts that actually rendered: a task pointing at a front that
+    // was dropped in normalization belongs here, not nowhere.
+    () => unassignedTasks(tasks, fronts.map(f => f.id)).filter(t => !t.isCompleted && !t.isParked),
+    [tasks, fronts],
   );
 
   // The LIMIT applies to stored fronts. frontsFromConfig can return one more

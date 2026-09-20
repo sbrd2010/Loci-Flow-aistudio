@@ -1,8 +1,8 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useFocusLedger } from "../hooks/useFocusLedger";
 import { weekSummary, formatMinutes, commonestStartHour } from "../utils/focusLedger";
 import { frontsFromConfig } from "../utils/fronts";
-import { getFocusWindows, isHourInWindow, formatMinutesToTime } from "../utils/focusWindows";
+import { getFocusWindows, isHourInWindow, formatMinutesToTime, getLociDayStr } from "../utils/focusWindows";
 import "../styles/theWeek.css";
 
 // Screen 8 — "The week": the ledger, summed, with one sentence of meaning.
@@ -66,7 +66,23 @@ export default function TheWeek({ payload = {}, uid, onBack, saveConfigPatch, on
   const windows = useMemo(() => getFocusWindows(config), [config]);
   const raw = useFocusLedger(uid, 7, windows);
 
-  const now = useMemo(() => new Date(), [raw, tasks]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The current loci day, polled. Nothing else here is clock-driven, so a screen
+  // left open across the day boundary kept a `now` from yesterday: the range,
+  // the highlighted "today" bar and the ledger hook's oldest key all stayed on
+  // the previous day until something else happened to re-render.
+  const [dayKey, setDayKey] = useState(() => getLociDayStr(new Date(), windows));
+  useEffect(() => {
+    const id = setInterval(
+      () => setDayKey(prev => {
+        const next = getLociDayStr(new Date(), windows);
+        return next === prev ? prev : next; // same string ⇒ same state ⇒ no render
+      }),
+      60_000,
+    );
+    return () => clearInterval(id);
+  }, [windows]);
+
+  const now = useMemo(() => new Date(), [raw, tasks, dayKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const summary = useMemo(
     () => weekSummary(raw, tasks, now, windows),
     [raw, tasks, now, windows],
@@ -87,18 +103,18 @@ export default function TheWeek({ payload = {}, uid, onBack, saveConfigPatch, on
 
   const protectHour = () => {
     const pad = (n) => String(n).padStart(2, "0");
-    // Seed from the EFFECTIVE windows, not from config.focusWindows alone. On an
-    // account still using dayStartHour/dayEndHour — or on the default schedule —
-    // that key is absent, so appending to [] would persist a focusWindows array
-    // holding only this one hour. getFocusWindows gives that array precedence
-    // over the legacy range, so the user's whole workday would be silently
-    // replaced by the sixty minutes they just tried to protect.
-    const existing = Array.isArray(config.focusWindows) && config.focusWindows.length > 0
-      ? config.focusWindows
-      : windows.map(w => ({
-          start: formatMinutesToTime(w.startMin),
-          end: formatMinutesToTime(w.endMin),
-        }));
+    // ALWAYS seed from the effective windows. Reading config.focusWindows
+    // directly is wrong in two ways that both end the same: when the key is
+    // absent (an account on dayStartHour/dayEndHour, or the default schedule)
+    // and when it is present but every row is invalid — in both cases
+    // getFocusWindows falls back to the legacy range, so persisting the stored
+    // value plus one hour leaves an array whose only usable row is that hour.
+    // It would then take precedence and silently replace the whole workday.
+    // Seeding from `windows` also normalizes, dropping rows that never parsed.
+    const existing = windows.map(w => ({
+      start: formatMinutesToTime(w.startMin),
+      end: formatMinutesToTime(w.endMin),
+    }));
     saveConfigPatch({
       // Wrap at midnight: parseTimeToMinutes rejects hour 24, so a 23:00
       // suggestion saved as "24:00" is silently discarded by getFocusWindows

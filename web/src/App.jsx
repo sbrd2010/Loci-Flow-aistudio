@@ -636,6 +636,14 @@ export default function App() {
       // open would make activeTask B while focusSessionId still belongs to
       // A — must also confirm the open session's own task matches.
       if (focusTimer.focusSessionId && focusTimer.focusSessionTaskUuid === focusTimer.activeTask.uuid) {
+        // A duration chosen on the way in (screen 14's "Just 5 minutes") has to
+        // be honoured on this path too. Without it the button reopens whatever
+        // was left of the running block — it promised five minutes and handed
+        // back eighteen. changeFocusDuration is the API for resizing a LIVE
+        // session: it banks the replaced block's elapsed and planned time
+        // instead of losing it, which is why this is not startFocusSession.
+        const reopenSeconds = Number(pendingFocusOptionsRef.current?.plannedSeconds);
+        if (reopenSeconds > 0) focusTimer.changeFocusDuration?.(reopenSeconds / 60);
         focusTimer.setIsFocusMode(true);
         focusTimer.setIsTimerRunning(true);
         pendingFocusPinPromiseRef.current = null;

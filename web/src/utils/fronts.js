@@ -45,7 +45,16 @@ export function parseDueDate(dueAt) {
   if (!m) return null;
   const [, y, mo, d] = m;
   const date = new Date(Number(y), Number(mo) - 1, Number(d));
-  return Number.isNaN(date.getTime()) ? null : date;
+  if (Number.isNaN(date.getTime())) return null;
+  // The multi-argument Date constructor ROLLS OVER rather than rejecting:
+  // 2026-02-31 becomes 3 March and 2026-13-01 becomes 1 Jan 2027, neither of
+  // them NaN. normalizeFront would then keep the original string while sorting
+  // and the countdown used a different, real date. Only a value that survives
+  // the round trip is a date.
+  if (date.getFullYear() !== Number(y)
+    || date.getMonth() !== Number(mo) - 1
+    || date.getDate() !== Number(d)) return null;
+  return date;
 }
 
 export function normalizeFront(raw, index = 0) {
@@ -130,9 +139,19 @@ export function tasksForFront(tasks, frontId) {
 }
 
 // Tasks that belong to no front — the state every existing task is in.
-export function unassignedTasks(tasks) {
+//
+// `knownFrontIds` (optional) is the set of fronts that actually rendered. A task
+// whose frontId is not among them counts as loose too: without that it appears
+// in no front block AND is filtered out of this list, so an open task vanishes
+// from Plan entirely. That happens whenever a front is dropped in
+// normalization — malformed, or past FRONT_LIMIT — and will happen routinely
+// once fronts can be deleted.
+export function unassignedTasks(tasks, knownFrontIds) {
   if (!Array.isArray(tasks)) return [];
-  return tasks.filter(t => isLiveTask(t) && !t.frontId);
+  const known = knownFrontIds instanceof Set
+    ? knownFrontIds
+    : (Array.isArray(knownFrontIds) ? new Set(knownFrontIds) : null);
+  return tasks.filter(t => isLiveTask(t) && (!t.frontId || (known !== null && !known.has(t.frontId))));
 }
 
 // The "5/8" on a front's progress track.

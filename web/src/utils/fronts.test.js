@@ -34,6 +34,18 @@ describe("parseDueDate", () => {
     expect(d.getHours()).toBe(0);
   });
 
+  // The multi-argument Date constructor rolls these over instead of returning
+  // NaN, so the shape check alone let a non-date through as a real one.
+  it("rejects a well-shaped date that is not a real calendar day", () => {
+    expect(parseDueDate("2026-02-31")).toBeNull(); // would roll to 3 March
+    expect(parseDueDate("2026-13-01")).toBeNull(); // would roll to 1 Jan 2027
+    expect(parseDueDate("2026-00-10")).toBeNull();
+    expect(parseDueDate("2026-04-31")).toBeNull();
+    // A real leap day still parses.
+    expect(parseDueDate("2028-02-29")).not.toBeNull();
+    expect(parseDueDate("2026-02-28")).not.toBeNull();
+  });
+
   it("rejects anything that is not YYYY-MM-DD", () => {
     for (const bad of ["", "  ", "04-11-2026", "2026-11", "not a date", null, undefined, 20261104, {}]) {
       expect(parseDueDate(bad)).toBeNull();
@@ -209,6 +221,19 @@ describe("task <-> front joins", () => {
 
   it("treats every existing task with no frontId as unassigned", () => {
     expect(unassignedTasks(tasks).map(t => t.uuid)).toEqual(["d"]);
+  });
+
+  // A task pointing at a front that was dropped in normalization renders in no
+  // front block. Without counting it loose it is in neither list — an open task
+  // that has vanished from Plan.
+  it("counts a task whose front no longer exists as loose, not as missing", () => {
+    const orphaned = [...tasks, { uuid: "orphan", title: "Orphan", frontId: "gone" }];
+    expect(unassignedTasks(orphaned, ["f1", "f2"]).map(t => t.uuid)).toEqual(["d", "orphan"]);
+    expect(unassignedTasks(orphaned, new Set(["f1", "f2"])).map(t => t.uuid)).toEqual(["d", "orphan"]);
+    // Still on a front that DOES exist — stays out of the loose list.
+    expect(unassignedTasks(orphaned, ["f1", "f2", "gone"]).map(t => t.uuid)).toEqual(["d"]);
+    // Dropping a front makes every task on it loose, not invisible.
+    expect(unassignedTasks(orphaned, ["f1"]).map(t => t.uuid)).toEqual(["c", "d", "orphan"]);
   });
 
   it("counts progress as done/total, excluding deleted", () => {
