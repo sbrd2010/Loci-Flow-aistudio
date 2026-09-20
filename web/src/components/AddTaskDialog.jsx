@@ -25,6 +25,10 @@ function parseManualSubSteps(raw) {
 }
 
 
+// What the estimate selector shows for a task that has none. Named because
+// the save path has to tell "the user chose 25" from "nobody chose anything".
+const DEFAULT_ESTIMATE_MINUTES = 25;
+
 export default function AddTaskDialog({ email, payload, savePayload, savePayloadAsync, userProfile, defaultHorizon, onClose, editTask, uid, writeActivityEvents }) {
   const windows = getFocusWindows(payload.config || {});
   const isEditMode = !!editTask;
@@ -37,7 +41,7 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
   // "" means no front. Stored as null, never "", so the field is absent rather
   // than empty for a task that belongs to nothing.
   const [frontId, setFrontId] = useState(editTask?.frontId || "");
-  const [estimateMinutes, setEstimateMinutes] = useState(editTask?.timeEstimateMinutes || 25);
+  const [estimateMinutes, setEstimateMinutes] = useState(editTask?.timeEstimateMinutes || DEFAULT_ESTIMATE_MINUTES);
   const [advancedOpen, setAdvancedOpen] = useState(isEditMode);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
@@ -251,16 +255,30 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       // When it did change, mirror DayMap's own duration edit (DayMapPage.jsx's
       // changeDuration), which writes both fields so DayMap doesn't keep showing
       // a stale duration (DayMap's getEstimate prefers dayMapDurationMinutes).
-      const estimateChanged = newEstimate !== Number(editTask.timeEstimateMinutes);
+      // A task can legitimately have NO estimate and NO subtask — the wall's
+      // commit field creates exactly that (K1). Writing the form's defaults
+      // back on an edit that never touched those fields invents data the user
+      // never entered: rename a wall task and it silently gained a 25-minute
+      // estimate and a "Do first tiny step". The spread preserves whatever
+      // editTask already had, so omitting the key is how absence survives.
+      const hadEstimate = Number(editTask.timeEstimateMinutes) > 0;
+      // Not a plain !== : Number(undefined) is NaN, which differs from
+      // everything, so a task with no estimate would always look "changed".
+      const estimateChanged = hadEstimate
+        ? newEstimate !== Number(editTask.timeEstimateMinutes)
+        : newEstimate !== DEFAULT_ESTIMATE_MINUTES;
+      const stepText = concreteStep.trim();
       const updatedTask = {
         ...editTask,
         title: title.trim(),
-        concreteStep: concreteStep.trim() || editTask.concreteStep || "Do first tiny step",
+        // Clearing the field on a task that HAD a step still keeps the old
+        // one, exactly as before — the spread does it.
+        ...(stepText ? { concreteStep: stepText } : {}),
         horizonLevel,
         priority,
         category,
         frontId: frontId || null,
-        timeEstimateMinutes: newEstimate,
+        ...(hadEstimate || estimateChanged ? { timeEstimateMinutes: newEstimate } : {}),
         ...(estimateChanged ? { dayMapDurationMinutes: newEstimate } : {}),
         reminderAt,
         subSteps: effectiveSubSteps,

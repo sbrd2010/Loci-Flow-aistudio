@@ -266,9 +266,14 @@ export default function TodayTab({
     };
   }, [showMoreMenu]);
 
-  // Auto-exit Focus Now if the selected task is deleted externally
+  // Auto-exit Focus Now if the selected task is deleted externally — or
+  // completed. A completed task leaves the section locked on its "Done" card
+  // while the wall has moved on, hiding the rest of Today until Exit is
+  // pressed. Completion reaches this from several paths (the wall's Mark
+  // done, the row checkbox, the timer, accepting the wall's proposal), so it
+  // is caught here rather than at each of them.
   useEffect(() => {
-    if (focusNowMode && focusNowTaskId && !tasks.find(t => t.uuid === focusNowTaskId && !t.isDeleted)) {
+    if (focusNowMode && focusNowTaskId && !tasks.find(t => t.uuid === focusNowTaskId && !t.isDeleted && !t.isCompleted)) {
       setFocusNowMode(false);
       setFocusNowTaskId(null);
     }
@@ -446,7 +451,7 @@ export default function TodayTab({
     // user switched on for themselves — a path that quietly ignores it is a
     // way around their own decision. The wall disables Commit and says why,
     // so this is a backstop rather than the only check.
-    if (isEveningGuardBlocked(config)) return;
+    if (isEveningGuardBlocked(config)) return false;
     const now = Date.now();
     const freshTask = {
       id: now,
@@ -503,6 +508,7 @@ export default function TodayTab({
         writeActivityEvents(eventsPatch(uid, events));
       })
       .catch(() => {});
+    return true;
   };
 
   // Staging only: the pin happens when One Task Focus's own Start is tapped.

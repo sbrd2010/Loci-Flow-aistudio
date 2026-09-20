@@ -326,3 +326,28 @@ test("mobile reliability: picking an existing task clears the typed query", asyn
 
   await expect(page.locator(".wall-commit-field")).toHaveValue("", { timeout: 8_000 });
 });
+
+// A task committed from the wall has no estimate and no subtask by design
+// (K1). Editing it must not quietly materialise the form's defaults: renaming
+// it should not give it a 25-minute estimate and a "Do first tiny step" it
+// never had.
+test("mobile reliability: editing a wall task keeps its no-estimate, no-subtask state", async ({ page }) => {
+  await emptyTheWall(page);
+
+  await page.locator(".wall-commit-field").fill("Draft the membrane abstract");
+  await page.locator(".wall-commit-btn").click();
+  await expect(page.locator(".wall-title")).toContainText("Draft the membrane abstract", { timeout: 8_000 });
+  // No subtask to begin with.
+  await expect(page.locator(".wall-support")).toHaveCount(0);
+
+  // Open the editor from the wall and change ONLY the title.
+  await page.locator(".wall-action", { hasText: "Split it" }).click();
+  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
+  await page.getByPlaceholder("e.g. Write cover letter draft").fill("Draft the abstract properly");
+  await page.getByTestId("add-task-submit").click();
+
+  await expect(page.locator(".wall-title")).toContainText("Draft the abstract properly", { timeout: 8_000 });
+  // Still no invented subtask, and still no duration presented as chosen.
+  await expect(page.locator(".wall-support")).toHaveCount(0);
+  await expect(page.getByText("Do first tiny step")).toHaveCount(0);
+});

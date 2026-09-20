@@ -141,9 +141,13 @@ export default function TodayWall({
     ).slice(0, 3);
     const commit = () => {
       const title = draft.trim();
-      if (!title || commitBlocked) return;
+      if (!title) return;
+      // The handler decides, and the draft is cleared only if it accepted.
+      // commitBlocked is a render-time value that can be up to a minute
+      // stale, so a wall left open across 20:00 would otherwise swallow what
+      // the user typed: cleared here, rejected there, nothing to show for it.
+      if (onCommitNewTask?.(title) === false) return;
       setDraft("");
-      onCommitNewTask?.(title);
     };
     // Picking an existing task clears the draft too. TodayWall stays mounted,
     // so a query left behind reappears in the field if that task is ever
