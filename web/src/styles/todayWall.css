@@ -476,3 +476,44 @@
   .wall-title.is-wall.is-29 { font-size: 27px; }
   .wall-title.is-desk { font-size: 27px; }
 }
+
+/* — Momentum: Today's footer (J4/K5) — */
+.momentum {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 0 4px;
+  margin-top: 14px;
+  border-top: 1px solid var(--divider, var(--border));
+}
+.momentum-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  flex-shrink: 0;
+  height: 16px;
+}
+.momentum-bar {
+  display: block;
+  width: 5px;
+  border-radius: 1px;
+}
+/* The one binary fact, in height and colour. A quiet day is present but
+   quiet — it is not an empty slot, and it is not an accusation. */
+.momentum-bar.is-quiet {
+  height: 6px;
+  background: var(--border, var(--divider));
+}
+.momentum-bar.is-moved {
+  height: 16px;
+  background: var(--accent-line, var(--gold, var(--accent)));
+}
+.momentum-bar.is-today {
+  height: 16px;
+  background: var(--accent, var(--gold-deep));
+}
+.momentum-line {
+  font-family: var(--font-serif, var(--font-sans));
+  font-size: 13.5px;
+  color: var(--text-soft, var(--text-secondary));
+}

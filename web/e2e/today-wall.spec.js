@@ -277,3 +277,16 @@ test("mobile reliability: Commit to this makes the proposal the new commitment",
 
   await expect(page.locator(".wall-title.is-wall")).toContainText(next, { timeout: 8_000 });
 });
+
+// ── J4: Momentum ─────────────────────────────────────────────────────────
+// Demo mode has no uid, so the ledger is unreadable and there is no history.
+// That is exactly the case the design is strictest about: nothing renders. An
+// empty frame is a scoreboard of what you haven't done.
+
+test("mobile reliability: Momentum does not render an empty frame", async ({ page }) => {
+  await enterDemo(page);
+  await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
+
+  await expect(page.locator(".momentum")).toHaveCount(0);
+  await expect(page.locator(".momentum-bar")).toHaveCount(0);
+});

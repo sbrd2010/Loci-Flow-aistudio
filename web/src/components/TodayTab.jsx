@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import TaskRow from "./TaskRow";
 import AddTaskDialog from "./AddTaskDialog";
 import TodayWall from "./TodayWall";
+import Momentum from "./Momentum";
 import { frontsFromConfig, commitmentDaysLeft } from "../utils/fronts";
 import { useFocusLedger } from "../hooks/useFocusLedger";
 import { minutesForTaskOn } from "../utils/focusLedger";
+import { buildMomentum } from "../utils/momentum";
 import FocusModePage from "./FocusModePage";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
@@ -854,7 +856,10 @@ export default function TodayTab({
 
   // One bounded subscription for both figures the wall needs from the ledger:
   // the done line's minutes (J2b) and Momentum's days (J4).
-  const { raw: ledgerRaw } = useFocusLedger(uid, 7, windows);
+  // Thirty days rather than seven: the strip needs only five bars, but the
+  // sentence counts a run, and a run longer than the window fetched would be
+  // silently truncated. It undercounts at the edge rather than guessing.
+  const { raw: ledgerRaw } = useFocusLedger(uid, 30, windows);
 
   const todayTasksAll = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isParked);
   const committedTaskIds = new Set(config.dailyCommitmentDate === anchorTodayStr ? getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds) : []);
@@ -940,6 +945,8 @@ export default function TodayTab({
         .filter(t => !t.isCompleted && t.uuid !== doneCommitment.uuid)
         .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))[0] || null
     : null;
+
+  const momentum = buildMomentum(ledgerRaw, new Date(), windows);
 
   const wallPickOptions = todayTasksAll
     .filter((t) => !t.isCompleted)
@@ -1579,6 +1586,12 @@ export default function TodayTab({
         </div>
       </section>
 
+      {/* ── Momentum (J4). Below the ledger, never beside the hero. Hidden
+           entirely by the Settings switch, and absent on its own with no
+           history — an empty frame is a scoreboard of what you haven't done. ── */}
+      {config.momentumEnabled !== false && momentum && (
+        <Momentum bars={momentum.bars} sentence={momentum.sentence} />
+      )}
 
       {/* ── Full-Screen Focus Mode Overlay */}
       {isFocusMode && activeTask && (

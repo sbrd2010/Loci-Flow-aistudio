@@ -16,12 +16,12 @@ export const REDESIGN_THEMES = [
   { id: "paper", name: "Paper", blurb: "Warm and light" },
 ];
 
-// Screen 10c also draws a "Show momentum" switch. It is NOT built here: the
-// momentum strip it would control does not exist yet, so the switch would have
-// persisted a preference that nothing reads — a control that looks like it
-// works and cannot. It belongs in the commit that builds the strip.
+// Screen 10c's "Show momentum" switch is built here now that the strip it
+// controls exists. It was deliberately left out until then: a switch that
+// persists a preference nothing reads is a control that looks like it works
+// and cannot.
 
-export default function AppearanceSettings({ theme, onThemeChange }) {
+export default function AppearanceSettings({ theme, onThemeChange, momentumEnabled = true, onMomentumChange }) {
   const isRedesignTheme = REDESIGN_THEMES.some(t => t.id === theme);
 
   return (
@@ -49,6 +49,26 @@ export default function AppearanceSettings({ theme, onThemeChange }) {
             <span className="appearance-theme-blurb">{t.blurb}</span>
           </button>
         ))}
+      </div>
+
+      <div
+        className="appearance-row appearance-row--switch"
+        role="switch"
+        aria-checked={momentumEnabled}
+        tabIndex={0}
+        onClick={() => onMomentumChange?.(!momentumEnabled)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onMomentumChange?.(!momentumEnabled); }
+        }}
+      >
+        <div className="appearance-row-text">
+          <div className="appearance-label">Show momentum</div>
+          <div className="appearance-note">
+            Five bars under Today, one per day you moved something. Off hides
+            it at any count.
+          </div>
+        </div>
+        <input type="checkbox" className="pill-toggle" checked={momentumEnabled} readOnly tabIndex={-1} />
       </div>
 
       {!isRedesignTheme && (
