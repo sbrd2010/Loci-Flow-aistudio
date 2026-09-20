@@ -186,6 +186,9 @@ test("mobile reliability: typing on the empty wall creates and commits a task", 
   await expect(page.locator(".wall-commit-field")).toHaveCount(0);
   await expect(page.locator(".wall-title")).toContainText("Write the membrane paper intro");
 
+  // The task is created with the canonical "Personal" category and NO
+  // estimate, so no duration is rendered for it as if the user had chosen one.
+  await expect(page.locator(".wall-title")).not.toContainText("25m");
   // K1: no front, so the kicker carries only the fixed words — no front name.
   await expect(page.locator(".wall-kicker")).toHaveText("YOU COMMITTED TO");
   // And no subtask: concreteStep is OMITTED rather than set empty, so
@@ -289,4 +292,14 @@ test("mobile reliability: Momentum does not render an empty frame", async ({ pag
 
   await expect(page.locator(".momentum")).toHaveCount(0);
   await expect(page.locator(".momentum-bar")).toHaveCount(0);
+});
+
+// The wall asks the question itself, so the legacy first-run panel must not
+// render beneath it — two competing creation flows on first launch is the
+// screen this redesign exists to remove.
+test("mobile reliability: the empty wall does not compete with the old onboarding panel", async ({ page }) => {
+  await emptyTheWall(page);
+
+  await expect(page.locator(".wall-commit-field")).toBeVisible();
+  await expect(page.getByText("tap + to add your first task", { exact: false })).toHaveCount(0);
 });

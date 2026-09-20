@@ -449,9 +449,15 @@ export default function TodayTab({
       title: clean,
       horizonLevel: "today",
       priority: "P3",
-      category: "personal",
+      // The canonical value every other creation path stores. Lowercase made a
+      // second bucket in Insights and lost the row's category icon, because
+      // consumers compare the stored string directly.
+      category: "Personal",
       frontId: null,
-      timeEstimateMinutes: 25,
+      // timeEstimateMinutes is OMITTED, not set to 25: K1 says no estimate,
+      // and writing one would have lists and Coach present an unsized task as
+      // a deliberate 25-minute one. Every focus-time caller already falls back
+      // to 25 at runtime when the field is absent.
       deadlineTimestamp: null,
       reminderAt: null,
       isCompleted: false,
@@ -464,9 +470,28 @@ export default function TodayTab({
       subSteps: [],
     };
     // Exclusive, like every other pin (J5): whatever held isNowFocus lets go.
+    // And ending its session is part of letting go — handlePinTask has done
+    // this since it was written, and clearing the flag without it leaves a
+    // session open against the OLD task while the timer retargets to the new
+    // one, so the eventual terminal event credits the wrong task. The pinned
+    // task can be outside Today (Coach and Mind Box can pin a week task), so
+    // this looks at every task, not just today's.
+    const previouslyFocused = (tasks || []).find(t => t.isNowFocus);
+    const endedFocusSession = previouslyFocused ? endFocusSession("user_abandoned") : null;
+    if (endedFocusSession) {
+      setIsTimerRunning(false);
+      setIsFocusMode(false);
+      setFocusSessionActive(false);
+    }
     const tasks_ = (tasks || []).map(t => (t.isNowFocus ? { ...t, isNowFocus: false, lastUpdated: now } : t));
     savePayloadAsync({ ...payload, tasks: [...tasks_, freshTask] })
-      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_created", freshTask, { windows }))))
+      .then(() => {
+        const events = [buildTaskMutationEvent("task_created", freshTask, { windows })];
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+        }
+        writeActivityEvents(eventsPatch(uid, events));
+      })
       .catch(() => {});
   };
 
@@ -947,6 +972,12 @@ export default function TodayTab({
     : null;
 
   const momentum = buildMomentum(ledgerRaw, new Date(), windows);
+
+  // The wall is asking the question itself (J2a), so the legacy first-run
+  // panel — brain illustration, six steps, "tap + to add your first task" —
+  // must not render beneath it. Two competing creation flows on first launch
+  // is the screen this redesign exists to remove.
+  const wallIsAsking = !pinnedFocusTask && !doneCommitment;
 
   const wallPickOptions = todayTasksAll
     .filter((t) => !t.isCompleted)
@@ -1443,7 +1474,7 @@ export default function TodayTab({
           )}
 
           {/* ── Normal task list (hidden when Focus Now mode is active) ── */}
-          {(!focusNowMode || !focusNowTask) && todayTasksAll.length === 0 && (() => {
+          {(!focusNowMode || !focusNowTask) && !wallIsAsking && todayTasksAll.length === 0 && (() => {
             const hasEverHadTasks = tasks.filter(t => !t.isDeleted).length > 0;
             if (hasEverHadTasks) {
               return (
