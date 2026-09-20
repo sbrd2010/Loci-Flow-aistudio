@@ -129,6 +129,17 @@ export function frontDaysLeft(front, now = new Date()) {
   return Math.round((due.getTime() - today.getTime()) / 86400000);
 }
 
+// The day count the wall shows beside its kicker. J3 reads "MEMBRANE PAPER ·
+// 11d": one front, its own deadline. So the count follows whatever the kicker
+// names — the commitment's front when it has one, and otherwise the legacy key
+// deadline, which is what the deleted Key Deadline strip showed. An overdue
+// deadline is not "days left", and a front with no due date shows no count
+// rather than borrowing an unrelated one.
+export function commitmentDaysLeft(front, config = {}, now = new Date()) {
+  const d = frontDaysLeft(front || legacyDeadlineAsFront(config), now);
+  return d !== null && d >= 0 ? d : null;
+}
+
 function isLiveTask(task) {
   return task && !task.isDeleted;
 }

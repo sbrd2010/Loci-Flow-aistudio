@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import TaskRow from "./TaskRow";
 import AddTaskDialog from "./AddTaskDialog";
 import TodayWall from "./TodayWall";
-import { frontsFromConfig } from "../utils/fronts";
+import { frontsFromConfig, commitmentDaysLeft } from "../utils/fronts";
 import FocusModePage from "./FocusModePage";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
@@ -841,16 +841,17 @@ export default function TodayTab({
   // The kicker is the front name OR nothing. Never "Uncategorised": a task with
   // no front is a first-class task (Addendum C).
   const wallFronts = frontsFromConfig(config);
-  const wallFrontName = pinnedFocusTask?.frontId
-    ? (wallFronts.find(f => f.id === pinnedFocusTask.frontId)?.name || null)
+  const wallFront = pinnedFocusTask?.frontId
+    ? (wallFronts.find(f => f.id === pinnedFocusTask.frontId) || null)
     : null;
-  const wallDaysLeft = config.deadlineDate
-    ? (() => {
-        const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
-        const d = Math.round((new Date(config.deadlineDate + "T00:00:00") - midnight) / 86400000);
-        return d >= 0 ? d : null; // an overdue deadline is not "days left"
-      })()
-    : null;
+  const wallFrontName = wallFront?.name || null;
+  // J3 reads "MEMBRANE PAPER · 11d" — one front, and its own count. Taking the
+  // count from the legacy config.deadlineDate while the kicker named a
+  // different front put one front's days beside another's name, and hid the
+  // named front's own dueAt. The count belongs to whatever the kicker names;
+  // with no front, that is the legacy key deadline, as the deleted strip
+  // showed. An overdue deadline is not "days left".
+  const wallDaysLeft = commitmentDaysLeft(wallFront, config, new Date());
   const wallDateLabel = wallHeader.dateLabel;
   const wallHoursLeft = wallHeader.hoursLeftLabel;
   const openAcrossFronts = (tasks || []).filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked).length;

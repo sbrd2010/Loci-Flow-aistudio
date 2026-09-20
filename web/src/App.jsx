@@ -788,22 +788,52 @@ export default function App() {
   // other config-writing effects in this file already treat it that way;
   // these two did not, so they would have flushed from exactly the stale
   // cache the guard exists to keep out.
+  // The deferral carries the ACCOUNT and the day it belongs to, and holds every
+  // commitment made in the window rather than only the last. Neither is
+  // hypothetical: a ref survives a sign-out (this effect returns early on the
+  // null payload, so nothing clears it), and without the uid one account's
+  // commitment was written into the next account's config on the same Loci
+  // day — taking that account's deadline-move state with it. Holding only the
+  // latest lost the first of two commitments made in the same window.
   const deferredCommitmentRef = useRef(null);
   const syncUnconfirmed = isSyncingFromCache || syncWarning === "offline";
+  const commitmentUid = demoMode ? null : (user?.uid || null);
   useEffect(() => {
     if (!payload?.config) return;
+    const held = deferredCommitmentRef.current;
+    if (held && (held.uid !== commitmentUid || held.day !== commitmentDayStr)) {
+      deferredCommitmentRef.current = null;
+    }
     if (syncUnconfirmed) {
-      if (commitmentPinnedUuid) deferredCommitmentRef.current = { uuid: commitmentPinnedUuid, day: commitmentDayStr };
+      if (commitmentPinnedUuid) {
+        const kept = deferredCommitmentRef.current?.uuids || [];
+        if (!kept.includes(commitmentPinnedUuid)) {
+          deferredCommitmentRef.current = {
+            uid: commitmentUid,
+            day: commitmentDayStr,
+            uuids: [...kept, commitmentPinnedUuid],
+          };
+        }
+      }
       return;
     }
-    const deferred = deferredCommitmentRef.current;
+    const pending = deferredCommitmentRef.current;
     deferredCommitmentRef.current = null;
-    const uuid = commitmentPinnedUuid
-      || (deferred && deferred.day === commitmentDayStr ? deferred.uuid : null);
-    if (!uuid) return;
-    const patch = buildWallCommitmentSave(payload.config, uuid, commitmentDayStr);
-    if (patch) saveConfigPatch(patch);
-  }, [commitmentPinnedUuid, commitmentDayStr, syncUnconfirmed]); // eslint-disable-line react-hooks/exhaustive-deps
+    const uuids = [...(pending?.uuids || [])];
+    if (commitmentPinnedUuid && !uuids.includes(commitmentPinnedUuid)) uuids.push(commitmentPinnedUuid);
+    if (uuids.length === 0) return;
+    // Folded into one patch: buildWallCommitmentSave appends to what it is
+    // given, so each must see the previous one's result or they overwrite.
+    let base = payload.config;
+    let merged = null;
+    for (const uuid of uuids) {
+      const patch = buildWallCommitmentSave(base, uuid, commitmentDayStr);
+      if (!patch) continue;
+      merged = { ...(merged || {}), ...patch };
+      base = { ...base, ...patch };
+    }
+    if (merged) saveConfigPatch(merged);
+  }, [commitmentPinnedUuid, commitmentDayStr, syncUnconfirmed, commitmentUid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // And the key deadline's daily move, which is "is any of today's
   // commitments complete right now" — see deriveCommitmentDeadlineMove. It
