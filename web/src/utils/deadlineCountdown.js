@@ -60,31 +60,31 @@ function cloneHistory(history) {
   return history && typeof history === "object" && !Array.isArray(history) ? { ...history } : {};
 }
 
-// Whether completing or reopening a task changes the key deadline's daily
-// move, and to what.
+// What the key deadline's daily-move state SHOULD be, given today's
+// commitments and the current task list. Returns undefined when it has no
+// opinion — no key deadline, or nothing committed today.
 //
 // J3 deleted the Key Deadline strip on the grounds that "the 'today's move'
 // line is the commitment itself" — and with it the only two writers of
-// deadlineDailyDoneDate. Day Close and buildExecutionCoachSignal kept reading
-// it, so for anyone with a key deadline the move read as never made no matter
-// how much they finished. Completing the commitment is that move.
+// deadlineDailyDoneDate, while Day Close, buildExecutionCoachSignal and the
+// history mirror all went on reading it. Completing the commitment is that
+// move now.
 //
-// `tasks` is the list AFTER the toggle, so the answer is simply "is any of
-// today's committed tasks complete now" — which keeps reopening one while
-// another still stands from wrongly clearing it. Returns an empty patch when
-// the toggled task isn't the commitment, or there is no key deadline at all.
-export function buildCommitmentDeadlineMovePatch(config = {}, tasks = [], toggledTask = {}, todayStr) {
-  if (!hasDeadline(config) || !todayStr) return {};
+// This is a derivation rather than a patch applied at each completion, and
+// deliberately so: three separate places in this app write isCompleted, and a
+// first attempt that patched only Today's handler left the ordinary
+// finish-the-timer path still reporting the move as open. Asking "is any of
+// today's commitments complete right now" cannot be missed by a new path, and
+// it also means reopening one commitment while another stands doesn't
+// wrongly clear it.
+export function deriveCommitmentDeadlineMove(config = {}, tasks = [], todayStr) {
+  if (!hasDeadline(config) || !todayStr) return undefined;
   const committed = config.dailyCommitmentDate === todayStr && Array.isArray(config.dailyCommitmentTaskIds)
     ? config.dailyCommitmentTaskIds
     : [];
-  // The pinned task counts even when nothing recorded it — other paths pin
-  // (Day Map, Rescue, the Coach) without going through the wall's own record.
-  const relevant = new Set(committed);
-  if (toggledTask.isNowFocus && toggledTask.uuid) relevant.add(toggledTask.uuid);
-  if (!relevant.has(toggledTask.uuid)) return {};
-  const anyDone = tasks.some((t) => t && relevant.has(t.uuid) && t.isCompleted);
-  return { deadlineDailyDoneDate: anyDone ? todayStr : null };
+  if (committed.length === 0) return undefined;
+  const anyDone = (tasks || []).some((t) => t && committed.includes(t.uuid) && t.isCompleted && !t.isDeleted);
+  return anyDone ? todayStr : null;
 }
 
 export function markDeadlineMoveDone(config = {}, todayStr = getLocalDateString()) {

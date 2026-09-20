@@ -149,3 +149,26 @@ test("mobile reliability: choosing today's one thing actually commits it", async
   await expect(page.locator(".wall-title")).toContainText(chosen, { timeout: 8_000 });
   await expect(page.getByText("SO — WHAT'S THE ONE THING TODAY?")).toHaveCount(0);
 });
+
+// A fix to a fix: the handler was corrected, but startFocusAndLog's
+// existing-session branch returned before applying the length — so with a
+// session already open the button still promised five minutes and resumed
+// twenty-five.
+test("mobile reliability: five minutes is honoured even with a session already open", async ({ page }) => {
+  await enterDemoWithPeek(page);
+
+  // Start the ordinary session, then back out of the overlay leaving it running.
+  await page.locator(".wall-primary").click();
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 10_000 });
+  await expect(overlay.getByText(/\b25:00\b/)).toBeVisible();
+  await overlay.locator(".focus-mode-exit-btn").click();
+  await expect(overlay).toHaveCount(0);
+
+  await page.locator("button.stuck-btn", { hasText: "Low Energy" }).click();
+  await page.locator(".wall-action", { hasText: "Start small — 5 minutes" }).click();
+
+  await expect(overlay).toBeVisible({ timeout: 8_000 });
+  await expect(overlay.getByText(/\b5:00\b/)).toBeVisible();
+  await expect(overlay.getByText(/\b25:00\b/)).toHaveCount(0);
+});

@@ -371,6 +371,15 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       return;
     }
 
+    // Hold the composer while the opening line is in flight. handleSendChat
+    // bails on chatLoading, so this serializes the two paths: without it a
+    // message typed during the nudge's request produces two independent
+    // replies, each saving a whole chatHistory array built from its own
+    // (by then stale) chatHistoryRef — so the "opening" line can land after
+    // the exchange it was meant to open, or clobber the reply to it. Rare
+    // before J3, when the nudge only arrived if handed off from Today;
+    // routine now that Coach derives one on every open.
+    setChatLoading(true);
     (async () => {
       try {
         // Read config/cloudSyncUnconfirmed via their refs (not the mount-time
@@ -396,6 +405,8 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         deliver(reply.trim(), true);
       } catch (_) {
         deliver(nudge.body, false);
+      } finally {
+        setChatLoading(false);
       }
     })();
   }, [cloudSyncUnconfirmed]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -6,6 +6,8 @@ import { isNativeApp, refreshNativePermission, addNativeNotificationClickListene
 import { signInWithGoogleNative } from "./utils/nativeAuth";
 import { isCheckinDue, buildCheckinResumeMessage, isDuplicateCheckinResume } from "./utils/coachCheckin";
 import { getFocusWindows, getLociDayStr } from "./utils/focusWindows";
+import { buildWallCommitmentSave } from "./utils/dailyCoachCheckins";
+import { deriveCommitmentDeadlineMove } from "./utils/deadlineCountdown";
 import { createDemoPayload } from "./utils/demoData";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { useSync, CONN } from "./useSync";
@@ -730,6 +732,40 @@ export default function App() {
 
   // Global Focus completion prompt: "Done! +120 XP" — completes the task and
   // ends the session, regardless of which tab the user is on.
+  // ── The day's commitment, recorded and reconciled in one place ────────
+  //
+  // The wall's pin IS the day's commitment (J3, J5), and Day Close, the
+  // Coach's daily context and buildEndOfDaySummary all read the commitment
+  // fields the deleted morning prompt used to write. SEVEN places in this app
+  // set isNowFocus (Today, Day Map, Scattered, Mind Box, Coach, coachActions)
+  // and THREE write isCompleted. Recording at each of them is how the next
+  // new path silently forgets — a first attempt that patched only Today's
+  // handlers left both the Day Map/Scattered pin flows and the ordinary
+  // finish-the-timer completion path unrecorded. Observing the state instead
+  // cannot be missed.
+  //
+  // Skipped while syncing from cache, for the same reason as the snapshot
+  // capture above: a config write stamped off a stale cache can overwrite
+  // newer config from another device.
+  const commitmentPinnedUuid = (payload?.tasks || []).find(t => t?.isNowFocus && !t.isDeleted)?.uuid || null;
+  const commitmentDayStr = getLociDayStr(new Date(), getFocusWindows(payload?.config || {}));
+  useEffect(() => {
+    if (!payload?.config || isSyncingFromCache || !commitmentPinnedUuid) return;
+    const patch = buildWallCommitmentSave(payload.config, commitmentPinnedUuid, commitmentDayStr);
+    if (patch) saveConfigPatch(patch);
+  }, [commitmentPinnedUuid, commitmentDayStr, isSyncingFromCache]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // And the key deadline's daily move, which is "is any of today's
+  // commitments complete right now" — see deriveCommitmentDeadlineMove. It
+  // returns undefined when it has no opinion, and the write is guarded on a
+  // real change so this cannot loop against its own config update.
+  const deadlineMoveState = deriveCommitmentDeadlineMove(payload?.config || {}, payload?.tasks || [], commitmentDayStr);
+  useEffect(() => {
+    if (!payload?.config || isSyncingFromCache || deadlineMoveState === undefined) return;
+    if ((payload.config.deadlineDailyDoneDate || null) === deadlineMoveState) return;
+    saveConfigPatch({ deadlineDailyDoneDate: deadlineMoveState });
+  }, [deadlineMoveState, isSyncingFromCache]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleFocusSessionDone = () => {
     const task = focusTimer.activeTask;
     focusTimer.dismissSessionComplete();

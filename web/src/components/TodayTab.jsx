@@ -16,10 +16,9 @@ import { track } from "../firebase";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
 import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows, getRemainingFocusMinutes } from "../utils/focusWindows";
-import { buildCommitmentDeadlineMovePatch } from "../utils/deadlineCountdown";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import {
-  getValidCommittedTaskIds, buildWallCommitmentSave,
+  getValidCommittedTaskIds,
   shouldShowReflection, buildEndOfDaySummary, buildReflectionSave, buildReflectionSnooze, REFLECTION_MOODS,
 } from "../utils/dailyCoachCheckins";
 import "../styles/focusNow.css";
@@ -123,7 +122,13 @@ export default function TodayTab({
     // again on the same task), just reopen the overlay — treating this as a
     // brand-new session would auto-close the in-progress one and fragment
     // the ledger for what's really just a return-to-focus action.
-    if (activeTask?.uuid === task.uuid && focusSessionId && focusSessionTaskUuid === task.uuid) {
+    // ...unless the caller asked for a specific length. "Start small — 5
+    // minutes" reaching this branch would resume whatever was already
+    // running — a 25-minute countdown under a button promising five.
+    // startFocusSession closes the open session with a proper terminal
+    // event, so restarting here doesn't orphan anything.
+    if (activeTask?.uuid === task.uuid && focusSessionId && focusSessionTaskUuid === task.uuid
+        && !(Number(options?.plannedSeconds) > 0)) {
       setIsFocusMode(true);
       setIsTimerRunning(true);
       return;
@@ -371,17 +376,7 @@ export default function TodayTab({
         nextContributions[contrIdx] = { ...nextContributions[contrIdx], count: nextContributions[contrIdx].count - 1, lastUpdated: Date.now() };
       }
     }
-    // J3 deleted the Key Deadline strip because "the 'today's move' line is
-    // the commitment itself" — which also deleted the only writers of
-    // deadlineDailyDoneDate. Day Close and buildExecutionCoachSignal kept
-    // reading it, so for anyone with a key deadline the move read as never
-    // made, however much they finished. Completing the commitment is that
-    // move; the state is re-derived from whether any of today's committed
-    // tasks is complete AFTER this toggle, so reopening one while another
-    // stands doesn't wrongly clear it.
-    const deadlinePatch = buildCommitmentDeadlineMovePatch(config, updatedTasks, task, todayStr);
-
-    savePayloadAsync({ ...payload, tasks: updatedTasks, config: { ...config, totalXp: nextXp, ...deadlinePatch, lastUpdated: Date.now() }, contributions: nextContributions })
+    savePayloadAsync({ ...payload, tasks: updatedTasks, config: { ...config, totalXp: nextXp, lastUpdated: Date.now() }, contributions: nextContributions })
       .then(() => {
         const events = [buildTaskMutationEvent(isCompleted ? "task_completed" : "task_reopened", task, { windows, now: actionAt })];
         if (endedFocusSession) {
@@ -420,21 +415,11 @@ export default function TodayTab({
     // Returned so callers (e.g. the Focus Now button, which pins then
     // immediately starts a session) can wait for this pin to actually
     // confirm before logging events of their own.
-    // Pinning is what records the day's commitment now that the morning
-    // prompt is gone (see buildWallCommitmentSave). Day Close, the Coach's
-    // daily context and buildEndOfDaySummary all read those fields, and
-    // nothing had written them since 18087d5 — so Day Close reported no
-    // commitment even on a day the wall's task was chosen and finished.
-    const commitmentPatch = isPinning ? buildWallCommitmentSave(config, task.uuid, todayStr, now) : null;
-    const pinPromise = savePayloadAsync({
-      ...payload,
-      ...(commitmentPatch ? { config: { ...config, ...commitmentPatch, lastUpdated: now } } : {}),
-      tasks: tasks.map((t) => {
-        const newFocus = isPinning && t.uuid === task.uuid;
-        if (t.isNowFocus === newFocus) return t;
-        return { ...t, isNowFocus: newFocus, lastUpdated: now };
-      }),
-    });
+    const pinPromise = savePayloadAsync({ ...payload, tasks: tasks.map((t) => {
+      const newFocus = isPinning && t.uuid === task.uuid;
+      if (t.isNowFocus === newFocus) return t;
+      return { ...t, isNowFocus: newFocus, lastUpdated: now };
+    })});
     pinPromise
       .then(() => {
         if (endedFocusSession) {
@@ -873,11 +858,16 @@ export default function TodayTab({
 
   const remainingTasks = todayTasksFiltered.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
   const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted);
-  // The list below keeps showing everything completed that still carries the
-  // Today horizon, which is what that section is for. The wall's "N done" is a
-  // claim about TODAY, so it counts only tasks completed on this Loci day —
-  // otherwise last week's finished work reads as this morning's progress.
-  const doneTodayCount = countCompletedOn(completedTasks, todayStr);
+  // The wall's two figures are claims about the whole day, so they come from
+  // todayTasksAll — the Must-Do and Low Energy filters narrow the LIST below,
+  // not the day. Reading them off the filtered list let the wall say "0 more
+  // today" on a Low Energy day with a full Today list behind it.
+  //
+  // "N done" is also a claim about TODAY specifically: a completed task keeps
+  // the Today horizon until something moves it, so counting them all reported
+  // last week's finished work as this morning's progress.
+  const wallRemainingCount = todayTasksAll.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).length;
+  const doneTodayCount = countCompletedOn(todayTasksAll, todayStr);
 
   // Focus Now: first incomplete task in Day Map order for today (shown as "Recommended")
   const dayMapNextTask = todayTasksAll
@@ -1029,7 +1019,7 @@ export default function TodayTab({
         focusMinutes={Number(pinnedFocusTask?.timeEstimateMinutes) > 0 ? Number(pinnedFocusTask.timeEstimateMinutes) : 25}
         peekOpen={peekOpen}
         onTogglePeek={() => setPeekOpen(v => !v)}
-        remainingCount={remainingTasks.length}
+        remainingCount={wallRemainingCount}
         doneCount={doneTodayCount}
         lowEnergy={!!config.isLowEnergyMode}
         openCount={openAcrossFronts}

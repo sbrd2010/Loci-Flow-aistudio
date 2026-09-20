@@ -132,6 +132,14 @@ export default function FocusModePage({
   const mins = Math.floor(secondsLeft / 60);
   const secs = String(secondsLeft % 60).padStart(2, "0");
   const stateLabel = isComplete ? "Complete" : isRunning ? "In progress" : "Paused";
+  // The five-minute session names the length it will log — but this button is
+  // available before the countdown reaches zero, and the completion path
+  // records ELAPSED seconds, not the planned length. Promising "log 5m" after
+  // forty seconds was a figure the ledger would never write. Elapsed is what
+  // gets logged, so elapsed is what it says; under a minute the ledger counts
+  // nothing (see focusLedger's MIN_COUNTABLE_MINUTES), so it says nothing.
+  const loggedMinutes = Math.floor(Math.max(0, maxSeconds - secondsLeft) / 60);
+  const loggedLabel = isFiveMinute && loggedMinutes >= 1 ? `${loggedMinutes}m` : null;
   const currentDurMins = Math.round(maxSeconds / 60);
 
   return (
@@ -288,10 +296,10 @@ export default function FocusModePage({
           type="button"
           className="focus-mode-done-btn"
           onClick={onDone}
-          aria-label={isFiveMinute ? "Mark task complete and log five minutes" : "Mark task complete and exit"}
+          aria-label={loggedLabel ? `Mark task complete and log ${loggedMinutes} minutes` : "Mark task complete and exit"}
         >
           <CheckIcon />
-          <span>{isFiveMinute ? "Done — log 5m" : "Done"}</span>
+          <span>{loggedLabel ? `Done — log ${loggedLabel}` : "Done"}</span>
         </button>
 
         {/* Brain dump — capture stray thoughts without breaking focus */}

@@ -83,7 +83,14 @@ test("mobile reliability: a five-minute session presents as one, not as a 25-min
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 10_000 });
   await expect(overlay.locator(".focus-mode-header-label")).toHaveText("FIVE MINUTES · THAT'S ALL");
-  await expect(overlay.locator(".focus-mode-done-btn")).toContainText("Done — log 5m");
+
+  // At the start nothing has elapsed, and the completion path logs ELAPSED
+  // seconds — so a button promising "log 5m" here names a figure the ledger
+  // would never write. It names what would actually be logged, which at zero
+  // is nothing. (This spec previously asserted the promise itself.)
+  const done = overlay.locator(".focus-mode-done-btn");
+  await expect(done).toContainText("Done");
+  await expect(done).not.toContainText("5m");
 });
 
 test("mobile reliability: the full session is untouched by the five-minute deltas", async ({ page }) => {

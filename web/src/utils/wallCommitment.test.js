@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildWallCommitmentSave, committedTaskIdsForDay } from "./dailyCoachCheckins";
-import { buildCommitmentDeadlineMovePatch } from "./deadlineCountdown";
+import { deriveCommitmentDeadlineMove } from "./deadlineCountdown";
 
 // PR #380 deleted the morning check-in, which was the only writer of the
 // daily-commitment fields, and the Key Deadline strip, which was the only
@@ -52,41 +52,36 @@ describe("committedTaskIdsForDay", () => {
   });
 });
 
-describe("buildCommitmentDeadlineMovePatch", () => {
+describe("deriveCommitmentDeadlineMove", () => {
   const withDeadline = { deadlineLabel: "Thesis", deadlineDate: "2024-07-01", dailyCommitmentDate: TODAY, dailyCommitmentTaskIds: ["t1"] };
 
-  it("marks the deadline move done when the commitment is completed", () => {
-    const tasks = [{ uuid: "t1", isCompleted: true }];
-    expect(buildCommitmentDeadlineMovePatch(withDeadline, tasks, { uuid: "t1" }, TODAY))
-      .toEqual({ deadlineDailyDoneDate: TODAY });
+  it("is done when the commitment is complete", () => {
+    expect(deriveCommitmentDeadlineMove(withDeadline, [{ uuid: "t1", isCompleted: true }], TODAY)).toBe(TODAY);
   });
 
-  it("clears it when the commitment is reopened", () => {
-    const tasks = [{ uuid: "t1", isCompleted: false }];
-    expect(buildCommitmentDeadlineMovePatch(withDeadline, tasks, { uuid: "t1" }, TODAY))
-      .toEqual({ deadlineDailyDoneDate: null });
+  it("is open when it is not", () => {
+    expect(deriveCommitmentDeadlineMove(withDeadline, [{ uuid: "t1", isCompleted: false }], TODAY)).toBeNull();
   });
 
-  it("keeps it done when another of today's commitments still stands", () => {
+  // Reopening one commitment must not clear a move another already made.
+  it("stays done while another of today's commitments stands", () => {
     const config = { ...withDeadline, dailyCommitmentTaskIds: ["t1", "t2"] };
     const tasks = [{ uuid: "t1", isCompleted: false }, { uuid: "t2", isCompleted: true }];
-    expect(buildCommitmentDeadlineMovePatch(config, tasks, { uuid: "t1" }, TODAY))
-      .toEqual({ deadlineDailyDoneDate: TODAY });
+    expect(deriveCommitmentDeadlineMove(config, tasks, TODAY)).toBe(TODAY);
   });
 
-  // Other paths pin without going through the wall's own record (Day Map,
-  // Rescue, the Coach), so the pinned task has to count on its own. Reading
-  // only the recorded list would clear the move on the very completion that
-  // made it.
-  it("counts the pinned task even when nothing recorded it", () => {
-    const config = { deadlineLabel: "Thesis" };
-    expect(buildCommitmentDeadlineMovePatch(config, [{ uuid: "t9", isCompleted: true }], { uuid: "t9", isNowFocus: true }, TODAY))
-      .toEqual({ deadlineDailyDoneDate: TODAY });
+  it("ignores a deleted task", () => {
+    const tasks = [{ uuid: "t1", isCompleted: true, isDeleted: true }];
+    expect(deriveCommitmentDeadlineMove(withDeadline, tasks, TODAY)).toBeNull();
   });
 
-  it("leaves the deadline alone for an ordinary task, or when there is no deadline", () => {
-    const tasks = [{ uuid: "t5", isCompleted: true }];
-    expect(buildCommitmentDeadlineMovePatch(withDeadline, tasks, { uuid: "t5" }, TODAY)).toEqual({});
-    expect(buildCommitmentDeadlineMovePatch({ dailyCommitmentDate: TODAY, dailyCommitmentTaskIds: ["t1"] }, tasks, { uuid: "t1" }, TODAY)).toEqual({});
+  // undefined means "no opinion" — the observer in App writes nothing, rather
+  // than clearing a field it has no business touching.
+  it("has no opinion without a key deadline, or with nothing committed today", () => {
+    const tasks = [{ uuid: "t1", isCompleted: true }];
+    expect(deriveCommitmentDeadlineMove({ dailyCommitmentDate: TODAY, dailyCommitmentTaskIds: ["t1"] }, tasks, TODAY)).toBeUndefined();
+    expect(deriveCommitmentDeadlineMove({ deadlineLabel: "Thesis" }, tasks, TODAY)).toBeUndefined();
+    expect(deriveCommitmentDeadlineMove({ ...withDeadline, dailyCommitmentDate: YESTERDAY }, tasks, TODAY)).toBeUndefined();
+    expect(deriveCommitmentDeadlineMove(withDeadline, tasks, null)).toBeUndefined();
   });
 });

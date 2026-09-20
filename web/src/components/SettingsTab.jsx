@@ -587,7 +587,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
                 🤖 Proactive coach nudges
               </span>
               <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                Let your coach speak up first — a once-a-day banner on Today when it notices something worth flagging (a missed deadline move, a pinned focus task, an overloaded day). Skipped during Low Energy Mode and Evening Guard.
+                Let your coach speak up first — when it notices something worth flagging (a missed deadline move, a pinned focus task, an overloaded day), it opens the Coach transcript with that observation, once a day. Nothing appears unprompted on Today. Skipped during Low Energy Mode and Evening Guard.
               </p>
             </div>
             <input type="checkbox" className="pill-toggle" checked={editedCoachNudgesEnabled} readOnly />

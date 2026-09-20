@@ -24,12 +24,16 @@
   text-transform: uppercase;
   color: var(--text-quiet, var(--text-muted));
 }
-/* Clay is time pressure and nothing else — so only the pressing one gets it. */
+/* Clay is time pressure and nothing else — so only the pressing one gets it.
+   J3 names --gold-lift for this, but that token is defined "dark grounds
+   only" and measures about 1.85:1 on Paper's #f4f1e9 — below rule 5's 4.5:1
+   floor, which the handoff applies to every piece of text. --gold-deep is
+   the token defined for gold used AS TEXT (5.3:1). Rule 5 wins. */
 .wall-head-days {
   font-family: var(--font-mono);
   font-size: 12.5px;
   font-weight: 700;
-  color: var(--gold-lift, var(--accent));
+  color: var(--gold-deep, var(--accent));
   font-variant-numeric: tabular-nums;
 }
 .wall-head-days.is-pressing { color: var(--clay, var(--warning)); }
