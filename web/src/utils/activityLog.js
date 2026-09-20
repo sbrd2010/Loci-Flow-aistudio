@@ -69,6 +69,16 @@ function taskSnapshotFrom(task) {
   if (task.category) snapshot.category = task.category;
   if (task.priority) snapshot.priority = task.priority;
   if (task.horizonLevel) snapshot.horizonLevel = task.horizonLevel;
+  // The front the task was on WHEN the event happened. Without it the weekly
+  // breakdown reads the live task, so moving a task to another front silently
+  // rewrites last week's figures — history changing with no activity behind it.
+  //
+  // Written even when there is NO front, as an empty string. A merely absent
+  // key cannot be told apart from an event logged before this field existed,
+  // so an unassigned session would still have been re-attributed to whatever
+  // front its task joined later — the same bug, just narrower. An empty string
+  // is a real stored value; null is not, since RTDB deletes the key.
+  snapshot.frontId = task.frontId || "";
   return snapshot;
 }
 

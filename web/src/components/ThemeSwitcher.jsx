@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from "react";
 
 const THEMES = [
+  // The redesign ships as two themes over one design: Evening is the ground the
+  // handoff draws on, Paper the same layout on a warm light one. Note that
+  // Evening is NOT yet the first-run default — App.jsx still initialises an
+  // absent loci_theme to "glassy". Flipping that changes the app under every
+  // existing user, so it waits for the screens to be finished.
+  { id: "evening",   label: "Evening",     emoji: "\u{1F319}", desc: "Warm near-black and gold" },
+  { id: "paper",     label: "Paper",       emoji: "\u{1F4C4}", desc: "Warm light, gold strokes" },
   { id: "glassy",    label: "Dark Glass",  emoji: "🔮", desc: "Deep navy glassmorphism" },
   { id: "coral",     label: "Warm Coral",  emoji: "🌅", desc: "Terracotta light" },
   { id: "teal",      label: "Executive",   emoji: "🌿", desc: "Corporate teal" },

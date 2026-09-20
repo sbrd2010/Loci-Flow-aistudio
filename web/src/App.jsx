@@ -14,6 +14,8 @@ import Header from "./components/Header";
 import BottomNav from "./components/BottomNav";
 import TodayTab from "./components/TodayTab";
 import RoadmapTab from "./components/RoadmapTab";
+import PlanTab from "./components/PlanTab";
+import ScatteredFlow from "./components/ScatteredFlow";
 import MindBoxTab from "./components/MindBoxTab";
 import CoachTab from "./components/CoachTab";
 import SettingsTab from "./components/SettingsTab";
@@ -53,6 +55,7 @@ export default function App() {
     const removed = ["sage", "option-b-linear", "option-f-chronos"];
     return removed.includes(stored) ? "glassy" : stored;
   });
+  const [roadmapView, setRoadmapView] = useState("plan");
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState("");
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -71,6 +74,11 @@ export default function App() {
   // ledger writes until that pin actually confirmed in RTDB, without
   // delaying the (already-instant) navigation to Today itself.
   const pendingFocusPinPromiseRef = useRef(null);
+  // How the session that is about to open was requested: an explicit duration
+  // (screen 14's "Just 5 minutes", which is NOT the task's own estimate) and
+  // the entry point to record in the ledger. Null for Day Map, which wants the
+  // task estimate and the "day_map" source.
+  const pendingFocusOptionsRef = useRef(null);
 
   const enterDemo = () => {
     setDemoPayload(createDemoPayload());
@@ -628,14 +636,29 @@ export default function App() {
       // open would make activeTask B while focusSessionId still belongs to
       // A — must also confirm the open session's own task matches.
       if (focusTimer.focusSessionId && focusTimer.focusSessionTaskUuid === focusTimer.activeTask.uuid) {
+        // A duration chosen on the way in (screen 14's "Just 5 minutes") has to
+        // be honoured on this path too. Without it the button reopens whatever
+        // was left of the running block — it promised five minutes and handed
+        // back eighteen. changeFocusDuration is the API for resizing a LIVE
+        // session: it banks the replaced block's elapsed and planned time
+        // instead of losing it, which is why this is not startFocusSession.
+        const reopenSeconds = Number(pendingFocusOptionsRef.current?.plannedSeconds);
+        if (reopenSeconds > 0) focusTimer.changeFocusDuration?.(reopenSeconds / 60);
         focusTimer.setIsFocusMode(true);
         focusTimer.setIsTimerRunning(true);
         pendingFocusPinPromiseRef.current = null;
+        pendingFocusOptionsRef.current = null;
         setPendingFocusOpen(false);
         return;
       }
       const windows = getFocusWindows(payload?.config || {});
-      const session = focusTimer.startFocusSession(focusTimer.activeTask);
+      const { plannedSeconds, source: focusSource } = pendingFocusOptionsRef.current || {};
+      pendingFocusOptionsRef.current = null;
+      // plannedSeconds must go THROUGH startFocusSession: it resets the timer
+      // from the task's own estimate, so a duration applied beforehand (via
+      // changeFocusDuration) is overwritten a moment later and the session runs
+      // — and is logged — at the wrong length.
+      const session = focusTimer.startFocusSession(focusTimer.activeTask, { plannedSeconds });
       // Timer/session state starts immediately (optimistic, same as every
       // other focus-start path) — but the ledger writes wait for Day Map's
       // pin write to actually confirm in RTDB, so a rejected/failed pin
@@ -643,19 +666,25 @@ export default function App() {
       // really began. pendingFocusPinPromiseRef is set by onStartFocus below.
       const pinPromise = pendingFocusPinPromiseRef.current || Promise.resolve();
       pendingFocusPinPromiseRef.current = null;
+      // startFocusSession() auto-closes a still-open prior session (e.g. one
+      // started from Today before navigating here) to make room for this one.
+      // That close ALREADY HAPPENED, synchronously, and does not un-happen if
+      // the pin write below fails — so its terminal event cannot be written
+      // inside the success branch. It was, which meant a rejected pin ended the
+      // user's running session and left its focus_started orphaned forever,
+      // breaking the one guarantee this ledger makes. The new session is
+      // different: it has no focus_started until the pin confirms, so rolling
+      // it back in .catch() needs no terminal event of its own.
+      if (session.priorSession && session.priorSession.task) {
+        const abandonEvent = buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
+          ...session.priorSession, windows,
+        });
+        writeActivityEvents(eventPatch(activityUid, abandonEvent));
+      }
       pinPromise
         .then(() => {
-          // startFocusSession() auto-closes a still-open prior session (e.g. one
-          // started from Today before navigating to Day Map) to make room for
-          // this one — write its terminal event too, or it's orphaned forever.
-          if (session.priorSession && session.priorSession.task) {
-            const abandonEvent = buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
-              ...session.priorSession, windows,
-            });
-            writeActivityEvents(eventPatch(activityUid, abandonEvent));
-          }
           const event = buildFocusStartedEvent(focusTimer.activeTask, session.focusSessionId, {
-            source: "day_map", focusInitialPlannedSeconds: session.focusInitialPlannedSeconds,
+            source: focusSource || "day_map", focusInitialPlannedSeconds: session.focusInitialPlannedSeconds,
             now: session.focusStartedAt, windows,
           });
           writeActivityEvents(eventPatch(activityUid, event));
@@ -736,7 +765,7 @@ export default function App() {
     tabStartRef.current = Date.now();
     setFabExpanded(false);
     if (tab === "mindbox") setMindBoxInitialPanel(null);
-    if (tab === "roadmap") setRoadmapInitialCol(null);
+    if (tab === "roadmap") { setRoadmapInitialCol(null); setRoadmapView("plan"); }
     setActiveTab(tab);
   };
 
@@ -752,6 +781,7 @@ export default function App() {
   // the one and only place brain dump items are browsable.
   const openRoadmapInbox = () => {
     handleTabSelect("roadmap");
+    setRoadmapView("horizons");
     setRoadmapInitialCol("inbox");
   };
 
@@ -1042,7 +1072,37 @@ export default function App() {
             flushNow={flushNow}
           />
         )}
-        {activeTab === "roadmap" && (
+        {activeTab === "roadmap" && roadmapView === "plan" && (
+          <PlanTab
+            payload={payload}
+            savePayload={savePayload}
+            saveConfigPatch={saveConfigPatch}
+            onOpenHorizons={() => setRoadmapView("horizons")}
+            onScattered={() => setRoadmapView("scattered")}
+          />
+        )}
+        {activeTab === "roadmap" && roadmapView === "scattered" && (
+          <ScatteredFlow
+            payload={payload}
+            savePayload={savePayload}
+            savePayloadAsync={savePayloadAsync}
+            flushNow={flushNow}
+            onBack={() => setRoadmapView("plan")}
+            // Same handoff Day Map uses: pin the task, hand up the confirmed
+            // write, and let Today open the session. Driving the timer from
+            // here would risk orphaned sessions and missing ledger events.
+            onStartFocus={(pinPromise, minutes) => {
+              pendingFocusPinPromiseRef.current = pinPromise;
+              pendingFocusOptionsRef.current = {
+                plannedSeconds: Number(minutes) > 0 ? Number(minutes) * 60 : undefined,
+                source: "scattered",
+              };
+              setPendingFocusOpen(true);
+              goToday();
+            }}
+          />
+        )}
+        {activeTab === "roadmap" && roadmapView === "horizons" && (
           <RoadmapTab
             payload={payload}
             savePayload={savePayload}
@@ -1065,6 +1125,8 @@ export default function App() {
             saveConfigPatch={saveConfigPatch}
             lastSyncedAt={lastSyncedAt}
             onSignOut={demoMode ? exitDemo : handleSwitchUser}
+            theme={theme}
+            onThemeChange={setTheme}
           />
         )}
       </main>

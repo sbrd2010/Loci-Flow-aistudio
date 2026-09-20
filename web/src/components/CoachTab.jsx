@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { track, auth } from "../firebase";
 import { callAI, describeAIError, getAIKeys, hasAIKey } from "../utils/aiCall";
+import { buildLocalSafetyReply } from "../utils/crisisSafety";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
 import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "../utils/lociAIContext";
@@ -367,6 +368,16 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const userText = (pendingChip || chatInput).trim();
     if (!userText || chatLoading) return;
 
+    // -- Safety short-circuit, ahead of every other local reply --
+    // Coach is a free-text box reaching the same provider as Rescue, and a
+    // person in crisis types into whichever box is open. Rescue has answered
+    // locally since it was built; Coach had only prompt instructions, which
+    // depend on the model complying AND on the request completing at all —
+    // and these provider keys rate-limit hard, so a 429 could turn a crisis
+    // message into an error. Answering here means the text never leaves the
+    // device and the reply is certain.
+    const crisisReply = buildLocalSafetyReply(userText, firstName);
+
     // -- Local Replies Interceptor --
     const lowerText = userText.toLowerCase().replace(/[.?!]/g, "").trim();
     const isHi = /^(hi|hello|hey|hey yoda|hello yoda|hi yoda)$/i.test(lowerText);
@@ -376,7 +387,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const isClear = /^(clear chat|clear history|clear conversation)$/i.test(lowerText);
     const isFocus = /^(what is my current focus|what's my current focus|what is my focus|what's my focus|what focus task)$/i.test(lowerText);
 
-    if (isHi || isThanks || isDay || isWho || isClear || isFocus) {
+    if (crisisReply || isHi || isThanks || isDay || isWho || isClear || isFocus) {
       if (!pendingChip) setChatInput("");
       if (isClear) {
         saveSubPath("chatHistory", null);
@@ -410,7 +421,9 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       // network conditions, not local call spacing (code-review finding,
       // PR #347).
       let localReplyText = "";
-      if (isHi) {
+      if (crisisReply) {
+        localReplyText = crisisReply;
+      } else if (isHi) {
         localReplyText = `Hey ${firstName}! I'm here. Want to ease in gently, or are you trying to decide what to do next?`;
       } else if (isThanks) {
         localReplyText = `You're welcome, ${firstName}. Let me know if you need to set focus or capture anything else.`;

@@ -3,6 +3,7 @@ import { buildPersonaInstruction } from "./coachPersona";
 import { buildProfileContext } from "./coachProfile";
 import { buildLociMemoryContext, isMemoryEnabled } from "./coachMemory";
 import { messageSeemsActionLike } from "./coachActions";
+import { buildLocalSafetyReply, CRISIS_RE, MEDICAL_RISK_RE } from "./crisisSafety";
 
 const ENTRY_POINT_LABELS = {
   deep_focus: "Deep Focus session",
@@ -166,20 +167,10 @@ ${buildReasonInstruction(reason, name, entryPoint)}
 Start from the user's latest message and the selected rescue state. Human first, task second, safety above both.`;
 }
 
-const CRISIS_RE = /\b(suicid(?:e|al)|kill(?:ing)? myself|want(?:s|ed)? to die|don['’]?t want to (?:exist|be here|live)|end(?:ing)? (?:it all|my life)|self[-\s]?harm|hurt(?:ing)? myself|might hurt myself|better off (?:dead|without me)|i feel unsafe|done with life)\b/i;
-const MEDICAL_RISK_RE = /\b(can['’]?t breathe|chest (?:pain|tight\w*)|heart\w*.{0,15}racing|faint(?:ing)?|passed out|overdose|medical emergency)\b/i;
-
-export function buildLocalSafetyReply(userText = "", firstName = "friend") {
-  const name = firstName || "friend";
-  const text = String(userText || "");
-  if (CRISIS_RE.test(text)) {
-    return `${name}, this sounds serious and you should not be alone with it. If you might hurt yourself or are in immediate danger, contact emergency services now; otherwise reach a trusted person or a local crisis line right now, and stay with me while you do.`;
-  }
-  if (MEDICAL_RISK_RE.test(text)) {
-    return `${name}, that could be urgent. Please stop focusing on tasks and seek medical help now, especially if you have chest pain, trouble breathing, fainting, or symptoms that feel dangerous.`;
-  }
-  return null;
-}
+// Re-exported so every existing importer (RescueMode and its tests) is
+// untouched; the implementation now lives in crisisSafety.js so Coach reaches
+// the same check.
+export { buildLocalSafetyReply, CRISIS_RE, MEDICAL_RISK_RE };
 
 export function buildOfflineRescueReply(reason, firstName = "friend", userText = "") {
   const name = firstName || "friend";

@@ -2,6 +2,8 @@
 // arrive as `undefined` after a read when the array was empty or the key was
 // never written. normalizePayload ensures required fields always exist so
 // callers can safely spread or iterate without null-checks.
+import { normalizeFronts } from "./fronts";
+
 export const BRAIN_DUMP_LIMIT = 50;
 
 function arrayOrEmpty(value) {
@@ -150,12 +152,22 @@ export function sanitizeChatHistoryForRules(history) {
     });
 }
 
+// config.fronts is an array of objects, so clampConfigStringsForRules (which
+// only walks known scalar keys) does not reach inside it. A single overlong
+// front name would fail the whole atomic payload write, the same way an
+// overlong chat message used to. normalizeFronts caps every field it keeps.
+function withNormalizedFronts(config) {
+  if (!config || typeof config !== "object" || Array.isArray(config)) return config;
+  if (!hasOwn(config, "fronts")) return config;
+  return { ...config, fronts: normalizeFronts(config.fronts) };
+}
+
 export function normalizePayload(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return { tasks: [], config: {}, contributions: [], brainDump: [], brainDumpUpdatedAt: 0 };
   }
   const brainDump = arrayOrEmpty(raw.brainDump);
-  const config = clampConfigStringsForRules(objectOrEmpty(raw.config));
+  const config = withNormalizedFronts(clampConfigStringsForRules(objectOrEmpty(raw.config)));
   const fallbackUserId = sanitizeString(raw.userId, 200, sanitizeString(config.userId, 200, ""));
   return {
     ...raw,

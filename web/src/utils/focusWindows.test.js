@@ -12,6 +12,7 @@ import {
   getLociDayStr,
   hasConfiguredFocusWindow,
   getTotalFocusMinutes,
+  isHourInWindow,
 } from "./focusWindows";
 
 const dt = (h, mi = 0) => new Date(2024, 5, 15, h, mi);
@@ -366,5 +367,37 @@ describe("overlapping windows are measured consistently", () => {
       expect(order.indexOf(slot)).toBeGreaterThanOrEqual(seen);
       seen = order.indexOf(slot);
     }
+  });
+});
+
+describe("isHourInWindow", () => {
+  const plain = { startMin: 540, endMin: 720, overnight: false };   // 09:00-12:00
+  const night = { startMin: 1320, endMin: 120, overnight: true };   // 22:00-02:00
+  const fallback = getFocusWindows({})[0];                          // 07:00-02:00
+
+  it("covers a plain window, end-exclusive", () => {
+    expect(isHourInWindow(9, plain)).toBe(true);
+    expect(isHourInWindow(11, plain)).toBe(true);
+    expect(isHourInWindow(12, plain)).toBe(false);
+    expect(isHourInWindow(8, plain)).toBe(false);
+  });
+
+  // A plain `start <= x < end` test fails on BOTH sides of midnight here: 23:00
+  // is past endMin and 01:00 is before startMin.
+  it("covers an overnight window on both sides of midnight", () => {
+    expect(isHourInWindow(22, night)).toBe(true);
+    expect(isHourInWindow(23, night)).toBe(true);
+    expect(isHourInWindow(0, night)).toBe(true);
+    expect(isHourInWindow(1, night)).toBe(true);
+    expect(isHourInWindow(2, night)).toBe(false);
+    expect(isHourInWindow(12, night)).toBe(false);
+  });
+
+  // The default schedule is overnight, so a hand-rolled containment test got
+  // the answer wrong for most of the working day.
+  it("covers the ordinary working hours of the fallback window", () => {
+    expect(fallback.overnight).toBe(true);
+    for (const h of [8, 9, 14, 20, 23, 1]) expect(isHourInWindow(h, fallback)).toBe(true);
+    for (const h of [3, 5, 6]) expect(isHourInWindow(h, fallback)).toBe(false);
   });
 });

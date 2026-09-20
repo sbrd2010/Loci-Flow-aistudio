@@ -58,6 +58,18 @@ export function getFocusWindows(config = {}) {
   return [{ startMin, endMin, overnight: endMin <= startMin }];
 }
 
+// Whether a wall-clock hour (0-23) falls inside a window. An overnight window
+// (22:00-02:00) wraps past midnight, so its endMin sits BELOW its startMin and
+// a plain `start <= x < end` test is false for every hour it actually covers.
+// The fallback window is 07:00-02:00 overnight, so callers that test
+// containment by hand get the wrong answer for almost every hour of the day.
+export function isHourInWindow(hour, w) {
+  const min = hour * 60;
+  return w.overnight
+    ? (min >= w.startMin || min < w.endMin)
+    : (min >= w.startMin && min < w.endMin);
+}
+
 // "Loci now": minutes since today's midnight, pushed past 1440 when `now` falls
 // in the early-morning tail of an overnight window (so it compares correctly
 // against that window's start, which is still "yesterday" in wall-clock terms).

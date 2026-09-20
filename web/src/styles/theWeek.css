@@ -1,0 +1,197 @@
+/* Screen 8 — "The week". The ledger, summed, with one sentence of meaning.
+   No tiles, no donuts, no percentage badges. Tokens fall back to this app's
+   existing vocabulary so the screen renders under the legacy themes too. */
+
+.week {
+  padding: 18px 22px 96px;
+  font-family: var(--font-sans);
+  color: var(--ink, var(--text-primary));
+}
+
+.week-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 44px;
+}
+.week-back {
+  min-height: 44px;
+  padding: 0 2px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-quiet, var(--text-muted));
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.week-back:hover { color: var(--ink, var(--text-primary)); }
+.week-range {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--text-quiet, var(--text-muted));
+}
+
+/* The one dominant element on the screen. */
+.week-figure {
+  margin-top: 18px;
+  font-family: var(--font-mono);
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+}
+.week-kicker {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold-deep, var(--accent));
+}
+
+.week-sentence {
+  margin: 18px 0 0;
+  font-family: var(--font-serif, var(--font-sans));
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-soft, var(--text-secondary));
+}
+.week-sentence strong {
+  font-weight: 600;
+  color: var(--ink, var(--text-primary));
+}
+
+/* — the seven-bar day chart — */
+.week-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 26px;
+}
+.week-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+.week-bar-track {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+.week-bar {
+  width: 100%;
+  min-height: 2px;
+  background: var(--divider, var(--border));
+  border-radius: 1px;
+  transition: height 0.18s ease-out;
+}
+/* Today is the only bar that carries the accent. */
+.week-bar.is-today { background: var(--gold, var(--accent)); }
+.week-tick {
+  margin-top: 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-quiet, var(--text-muted));
+}
+
+/* — where it went — */
+.week-breakdown-kicker {
+  margin-top: 30px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold-deep, var(--accent));
+}
+.week-rows { margin: 12px 0 0; padding: 0; list-style: none; }
+.week-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--divider, var(--border));
+}
+.week-row:last-child { border-bottom: 1px solid var(--divider, var(--border)); }
+.week-row-name {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.week-row-figure {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-quiet, var(--text-muted));
+  font-variant-numeric: tabular-nums;
+}
+.week-row-figure.is-zero { color: var(--clay, var(--warning)); }
+
+.week-empty {
+  margin: 12px 0 0;
+  font-family: var(--font-serif, var(--font-sans));
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-quiet, var(--text-muted));
+}
+
+/* — the one proposed action — */
+.week-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--divider, var(--border));
+}
+.week-suggest {
+  flex: 1;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-soft, var(--text-secondary));
+}
+.week-block {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 14px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, var(--text-primary));
+  background: transparent;
+  border: 1px solid var(--gold, var(--accent));
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.week-block:hover { background: var(--gold-tint, var(--accent-light)); }
+
+.week-old-link {
+  display: block;
+  margin-top: 20px;
+  padding: 10px 0;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-quiet, var(--text-muted));
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--gold, var(--accent));
+  cursor: pointer;
+}
+.week-old-link:hover { color: var(--ink, var(--text-primary)); }
+
+@media (max-width: 430px) {
+  .week { padding-left: 20px; padding-right: 20px; }
+  .week-figure { font-size: 38px; }
+}

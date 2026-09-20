@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
 import InsightsPanel from "./InsightsPanel";
+import TheWeek from "./TheWeek";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTaskSubSteps, CATEGORY_ICONS } from "../utils/taskOps";
@@ -898,8 +899,21 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
       })()}
 
       {/* ── Sub-view: Insights */}
+      {/* The week (screen 8) is the default view. The completion stats and the
+          AI recap below it are a feature the redesign has no screen for — one
+          of the ones still out with the designer — so they stay reachable
+          rather than being deleted on an inference. */}
       {toolPanel === "insights" && (
-        <InsightsPanel payload={payload} onBack={() => setToolPanel(null)} uid={uid} />
+        <TheWeek
+          payload={payload}
+          uid={uid}
+          saveConfigPatch={saveConfigPatch}
+          onBack={() => setToolPanel(null)}
+          onOpenOldInsights={() => setToolPanel("insights-stats")}
+        />
+      )}
+      {toolPanel === "insights-stats" && (
+        <InsightsPanel payload={payload} onBack={() => setToolPanel("insights")} uid={uid} />
       )}
 
       {/* ── Sub-view: Morning Ritual */}
