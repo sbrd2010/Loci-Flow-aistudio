@@ -747,8 +747,32 @@ export default function App() {
   // Skipped while syncing from cache, for the same reason as the snapshot
   // capture above: a config write stamped off a stale cache can overwrite
   // newer config from another device.
-  const commitmentPinnedUuid = (payload?.tasks || []).find(t => t?.isNowFocus && !t.isDeleted)?.uuid || null;
-  const commitmentDayStr = getLociDayStr(new Date(), getFocusWindows(payload?.config || {}));
+  //
+  // The predicate matches the wall's own (TodayTab's pinnedFocusTask): the
+  // commitment is a live Today task. Coach's plain Focus action and Mind
+  // Box's Rescue can pin a week or month task without moving it to Today —
+  // one the wall cannot render, that getValidCommittedTaskIds strips back
+  // out of Day Close, but whose completion would still have marked the
+  // deadline move done.
+  const commitmentPinnedUuid = (payload?.tasks || []).find(t =>
+    t?.isNowFocus && t.horizonLevel === "today" && !t.isDeleted && !t.isParked && !t.isCompleted
+  )?.uuid || null;
+  // Driven by a clock, not by rendering. Read once per render, this value
+  // would only change when something else re-rendered App — so an app left
+  // open across the Loci-day boundary (which can be 2am, not midnight) would
+  // keep writing to yesterday's commitment. Completing the task then clears
+  // isNowFocus before any re-render, and the new day's commitment would never
+  // be recorded at all.
+  const [lociDayTick, setLociDayTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setLociDayTick(n => n + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
+  const commitmentDayStr = useMemo(
+    () => getLociDayStr(new Date(), getFocusWindows(payload?.config || {})),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lociDayTick, payload?.config?.dayStartHour, payload?.config?.dayEndHour, payload?.config?.focusWindows]
+  );
   useEffect(() => {
     if (!payload?.config || isSyncingFromCache || !commitmentPinnedUuid) return;
     const patch = buildWallCommitmentSave(payload.config, commitmentPinnedUuid, commitmentDayStr);

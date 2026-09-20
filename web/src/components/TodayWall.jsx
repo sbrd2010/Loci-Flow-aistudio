@@ -123,9 +123,15 @@ export default function TodayWall({
         <button type="button" className="wall-hero" onClick={onStartFocus}>
           <span className="wall-kicker">{kicker}</span>
           <span className="wall-rule-short" aria-hidden="true" />
-          <span className={`wall-title is-wall ${wallSize}`}><LinkifyText text={task.title} /></span>
+          {/* Plain text, not LinkifyText: an <a> inside this <button> is
+              invalid nested interactive content, gives assistive technology
+              conflicting button/link semantics, and breaks the "tap anywhere
+              to begin" contract — tapping the linked words would open a tab
+              instead of starting focus. The desk state below is ordinary
+              markup, so links work there. */}
+          <span className={`wall-title is-wall ${wallSize}`}>{task.title}</span>
           {support && (
-            <span className="wall-support is-wall"><LinkifyText text={support} /></span>
+            <span className="wall-support is-wall">{support}</span>
           )}
           <span className="wall-start-row">
             <span className="wall-chip">▸ {timer}</span>

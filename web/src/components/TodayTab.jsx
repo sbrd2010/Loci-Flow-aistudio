@@ -432,13 +432,21 @@ export default function TodayTab({
   };
 
   const handleFocusNowPick = (task) => {
+    setShowFocusNowPicker(false);
+    setPickerCommits(false);
+    if (pickerCommits) {
+      // Choosing the day's commitment is not entering One Task mode. Doing
+      // both left the screen stuck on a One Task card for the chosen task
+      // once it was completed — pinnedFocusTask disappears, but focusNowTask
+      // still accepts a completed task, hiding the rest of Today until Exit.
+      //
+      // handlePinTask TOGGLES, so an already-pinned task would be unpinned by
+      // a blind call — the very state this is here to prevent.
+      if (!task.isNowFocus) handlePinTask(task);
+      return;
+    }
     setFocusNowTaskId(task.uuid);
     setFocusNowMode(true);
-    setShowFocusNowPicker(false);
-    // handlePinTask TOGGLES, so an already-pinned task would be unpinned by a
-    // blind call — which would be the very state this is here to prevent.
-    if (pickerCommits && !task.isNowFocus) handlePinTask(task);
-    setPickerCommits(false);
   };
 
   const handleFocusBrainDump = (text) => {

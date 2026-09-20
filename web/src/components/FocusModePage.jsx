@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { minutesFromSeconds } from "../utils/focusLedger";
 import { getTimerState } from "../utils/focusSession";
 import { BINAURAL_TRACK_ID } from "../utils/binauralBeat";
 import { SOUND_CATEGORIES, getCategoryKeyForTrack, getTrackTitle } from "../utils/soundLibrary";
@@ -135,10 +136,12 @@ export default function FocusModePage({
   // The five-minute session names the length it will log — but this button is
   // available before the countdown reaches zero, and the completion path
   // records ELAPSED seconds, not the planned length. Promising "log 5m" after
-  // forty seconds was a figure the ledger would never write. Elapsed is what
-  // gets logged, so elapsed is what it says; under a minute the ledger counts
-  // nothing (see focusLedger's MIN_COUNTABLE_MINUTES), so it says nothing.
-  const loggedMinutes = Math.floor(Math.max(0, maxSeconds - secondsLeft) / 60);
+  // forty seconds was a figure the ledger would never write.
+  //
+  // minutesFromSeconds is the ledger's OWN conversion, not a reimplementation
+  // of it: a label that floored while the ledger rounds read "log 1m" at 90
+  // seconds and then booked 2.
+  const loggedMinutes = minutesFromSeconds(Math.max(0, maxSeconds - secondsLeft));
   const loggedLabel = isFiveMinute && loggedMinutes >= 1 ? `${loggedMinutes}m` : null;
   const currentDurMins = Math.round(maxSeconds / 60);
 

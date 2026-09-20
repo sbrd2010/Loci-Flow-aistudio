@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildWallCommitmentSave, committedTaskIdsForDay } from "./dailyCoachCheckins";
 import { deriveCommitmentDeadlineMove } from "./deadlineCountdown";
+import { minutesFromSeconds, eventMinutes } from "./focusLedger";
 
 // PR #380 deleted the morning check-in, which was the only writer of the
 // daily-commitment fields, and the Key Deadline strip, which was the only
@@ -83,5 +84,25 @@ describe("deriveCommitmentDeadlineMove", () => {
     expect(deriveCommitmentDeadlineMove({ deadlineLabel: "Thesis" }, tasks, TODAY)).toBeUndefined();
     expect(deriveCommitmentDeadlineMove({ ...withDeadline, dailyCommitmentDate: YESTERDAY }, tasks, TODAY)).toBeUndefined();
     expect(deriveCommitmentDeadlineMove(withDeadline, tasks, null)).toBeUndefined();
+  });
+});
+
+// Third Codex round: the label that tells the user how many minutes an action
+// will log has to use the ledger's own conversion, not a reimplementation.
+describe("minutesFromSeconds", () => {
+  it("rounds the way the ledger credits, rather than flooring", () => {
+    expect(minutesFromSeconds(90)).toBe(2);   // a floor here read "log 1m" and booked 2
+    expect(minutesFromSeconds(110)).toBe(2);
+    expect(minutesFromSeconds(60)).toBe(1);
+  });
+
+  it("counts nothing under a minute, so a mis-tap is not a move", () => {
+    expect(minutesFromSeconds(59)).toBe(0);
+    expect(minutesFromSeconds(0)).toBe(0);
+  });
+
+  it("is what eventMinutes uses", () => {
+    expect(eventMinutes({ focusElapsedSeconds: 90 })).toBe(minutesFromSeconds(90));
+    expect(eventMinutes({})).toBe(0);
   });
 });
