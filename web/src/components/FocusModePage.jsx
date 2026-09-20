@@ -56,6 +56,8 @@ const hiddenControlTextStyle = {
 
 const PIP_SUPPORTED = "documentPictureInPicture" in window;
 
+const FIVE_MINUTES_SECONDS = 5 * 60;
+
 
 
 export default function FocusModePage({
@@ -82,6 +84,11 @@ export default function FocusModePage({
 }) {
   const autoExitRef = useRef(null);
   const isComplete = secondsLeft === 0;
+  // Addendum D: the five-minute session is "the same FocusSession, three
+  // deltas", not a new component. Keyed off the planned length rather than a
+  // flag, so a task whose own estimate is five minutes reads the same way — it
+  // is the same kind of session either way.
+  const isFiveMinute = maxSeconds === FIVE_MINUTES_SECONDS;
 
   // Which Sounds drawer tile is currently active: an ambient category key
   // (e.g. "rain"), the binaural track id, or "none".
@@ -178,7 +185,9 @@ export default function FocusModePage({
 
       <main className="focus-mode-body" aria-label="Deep focus session">
         <div className="focus-mode-session-meta">
-          <span className="focus-mode-header-label">Deep Focus</span>
+          <span className="focus-mode-header-label">
+            {isFiveMinute ? (isComplete ? "FIVE MINUTES · DONE" : "FIVE MINUTES · THAT'S ALL") : "Deep Focus"}
+          </span>
           <span className="focus-mode-state-pill">{stateLabel}</span>
         </div>
 
@@ -279,10 +288,10 @@ export default function FocusModePage({
           type="button"
           className="focus-mode-done-btn"
           onClick={onDone}
-          aria-label="Mark task complete and exit"
+          aria-label={isFiveMinute ? "Mark task complete and log five minutes" : "Mark task complete and exit"}
         >
           <CheckIcon />
-          <span>Done</span>
+          <span>{isFiveMinute ? "Done — log 5m" : "Done"}</span>
         </button>
 
         {/* Brain dump — capture stray thoughts without breaking focus */}

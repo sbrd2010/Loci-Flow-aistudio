@@ -68,3 +68,32 @@ test("mobile reliability: the scattered screen does not claim to park anything",
   // writes nothing, so it must not borrow the word.
   await expect(page.locator(".scattered-foot")).not.toContainText(/parked until tomorrow/i);
 });
+
+// Addendum D: the five-minute session is "the same FocusSession, three
+// deltas". This covers the two that are presentation — the kicker and the
+// primary naming the length it will log. The third (holding at 00:00 with
+// "Keep going · +20m" instead of a modal) touches the shared completion path
+// and lands in its own commit.
+test("mobile reliability: a five-minute session presents as one, not as a 25-minute session", async ({ page }) => {
+  await enterDemo(page);
+  await openScattered(page);
+
+  await page.getByRole("button", { name: "Just 5 minutes" }).click();
+
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 10_000 });
+  await expect(overlay.locator(".focus-mode-header-label")).toHaveText("FIVE MINUTES · THAT'S ALL");
+  await expect(overlay.locator(".focus-mode-done-btn")).toContainText("Done — log 5m");
+});
+
+test("mobile reliability: the full session is untouched by the five-minute deltas", async ({ page }) => {
+  await enterDemo(page);
+  await openScattered(page);
+
+  await page.getByRole("button", { name: "Full 25 instead" }).click();
+
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 10_000 });
+  await expect(overlay.locator(".focus-mode-header-label")).toHaveText("Deep Focus");
+  await expect(overlay.locator(".focus-mode-done-btn")).not.toContainText("log 5m");
+});
