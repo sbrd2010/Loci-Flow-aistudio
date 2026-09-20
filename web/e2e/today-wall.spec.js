@@ -156,10 +156,18 @@ test("mobile reliability: five minutes is honoured even with a session already o
 // The field creates a task, because the thing you commit to may not exist in
 // the app yet — without that, first launch has no exit.
 
+// Reaching the empty wall means having no commitment AND none finished today
+// — completing one gives the done state (J2b), which stands for the rest of
+// the day. So this unpins instead, from the pinned row's own menu.
 async function emptyTheWall(page) {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
+  });
   await enterDemo(page);
-  await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
-  await page.locator(".wall-action", { hasText: "Mark done" }).click();
+  const pinned = page.locator(".pinned-focus-section .task-row").first();
+  await expect(pinned).toBeVisible({ timeout: 10_000 });
+  await pinned.locator(".task-row-top").click();
+  await page.getByText("Unpin from Focus").click();
   await expect(page.locator(".wall-commit-field")).toBeVisible({ timeout: 8_000 });
 }
 
@@ -176,7 +184,7 @@ test("mobile reliability: typing on the empty wall creates and commits a task", 
 
   // It becomes the commitment: the wall stops asking and the task IS the hero.
   await expect(page.locator(".wall-commit-field")).toHaveCount(0);
-  await expect(page.locator(".wall-title.is-wall")).toContainText("Write the membrane paper intro");
+  await expect(page.locator(".wall-title")).toContainText("Write the membrane paper intro");
 
   // K1: no front, so the kicker carries only the fixed words — no front name.
   await expect(page.locator(".wall-kicker")).toHaveText("YOU COMMITTED TO");
@@ -191,7 +199,7 @@ test("mobile reliability: Enter commits, without touching the button", async ({ 
   await page.locator(".wall-commit-field").fill("Reply to the supervisor");
   await page.locator(".wall-commit-field").press("Enter");
 
-  await expect(page.locator(".wall-title.is-wall")).toContainText("Reply to the supervisor");
+  await expect(page.locator(".wall-title")).toContainText("Reply to the supervisor");
 });
 
 test("mobile reliability: the pick rows narrow as you type, and tapping one commits it", async ({ page }) => {
@@ -213,6 +221,59 @@ test("mobile reliability: the pick rows narrow as you type, and tapping one comm
   await rows.first().click();
 
   // The existing task is committed — not a new one created from the typed text.
-  await expect(page.locator(".wall-title.is-wall")).toContainText(firstTitle);
+  await expect(page.locator(".wall-title")).toContainText(firstTitle);
   await expect(page.locator(".wall-commit-field")).toHaveCount(0);
+});
+
+// ── J2b / Addendum K2, K3: the commitment, finished ───────────────────────
+
+test("mobile reliability: finishing the commitment gives the done state, not the empty wall", async ({ page }) => {
+  await enterDemo(page);
+  await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
+  const title = (await page.locator(".wall-title.is-wall").innerText()).trim();
+
+  await page.locator(".wall-action", { hasText: "Mark done" }).click();
+
+  // The closing line is the hero; the finished title is struck above it.
+  await expect(page.locator(".wall-done-line")).toBeVisible({ timeout: 8_000 });
+  await expect(page.locator(".wall-done-was")).toContainText(title);
+  // K2: no session was run, so zero minutes — the line is a bare "Done.",
+  // never "0m logged".
+  await expect(page.locator(".wall-done-line")).toHaveText("Done.");
+  // And NOT the empty wall's field, which would be asking the question again.
+  await expect(page.locator(".wall-commit-field")).toHaveCount(0);
+});
+
+test("mobile reliability: the proposal never auto-commits, and Not now holds", async ({ page }) => {
+  await enterDemo(page);
+  await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
+  await page.locator(".wall-action", { hasText: "Mark done" }).click();
+
+  const proposal = page.locator(".wall-proposal");
+  await expect(proposal).toBeVisible({ timeout: 8_000 });
+  await expect(proposal.locator(".wall-proposal-kicker")).toHaveText("NEXT, IF YOU WANT");
+
+  // Nothing is committed until the user says so: the done line still stands.
+  await expect(page.locator(".wall-done-line")).toBeVisible();
+
+  await proposal.locator(".wall-proposal-not-now").click();
+
+  // K3: "Not now" leaves the done state standing, and does not propose
+  // something else in its place.
+  await expect(page.locator(".wall-proposal")).toHaveCount(0);
+  await expect(page.locator(".wall-done-line")).toBeVisible();
+});
+
+test("mobile reliability: Commit to this makes the proposal the new commitment", async ({ page }) => {
+  await enterDemo(page);
+  await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
+  await page.locator(".wall-action", { hasText: "Mark done" }).click();
+
+  const proposal = page.locator(".wall-proposal");
+  await expect(proposal).toBeVisible({ timeout: 8_000 });
+  const next = (await proposal.locator(".wall-proposal-title").innerText()).trim();
+
+  await proposal.locator(".wall-proposal-commit").click();
+
+  await expect(page.locator(".wall-title.is-wall")).toContainText(next, { timeout: 8_000 });
 });

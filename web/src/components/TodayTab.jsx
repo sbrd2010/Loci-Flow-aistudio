@@ -3,6 +3,8 @@ import TaskRow from "./TaskRow";
 import AddTaskDialog from "./AddTaskDialog";
 import TodayWall from "./TodayWall";
 import { frontsFromConfig, commitmentDaysLeft } from "../utils/fronts";
+import { useFocusLedger } from "../hooks/useFocusLedger";
+import { minutesForTaskOn } from "../utils/focusLedger";
 import FocusModePage from "./FocusModePage";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
@@ -18,7 +20,7 @@ import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodaySho
 import { getFocusWindows, getRemainingFocusMinutes } from "../utils/focusWindows";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import {
-  getValidCommittedTaskIds,
+  getValidCommittedTaskIds, committedTaskIdsForDay,
   shouldShowReflection, buildEndOfDaySummary, buildReflectionSave, buildReflectionSnooze, REFLECTION_MOODS,
 } from "../utils/dailyCoachCheckins";
 import "../styles/focusNow.css";
@@ -850,6 +852,10 @@ export default function TodayTab({
     )});
   };
 
+  // One bounded subscription for both figures the wall needs from the ledger:
+  // the done line's minutes (J2b) and Momentum's days (J4).
+  const { raw: ledgerRaw } = useFocusLedger(uid, 7, windows);
+
   const todayTasksAll = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isParked);
   const committedTaskIds = new Set(config.dailyCommitmentDate === anchorTodayStr ? getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds) : []);
   const pinnedFocusTask = todayTasksAll.find(t => t.isNowFocus && !t.isCompleted && !t.isDeleted) || null;
@@ -905,6 +911,36 @@ export default function TodayTab({
   // What the empty wall's "Or pick one" rows draw from — the same pool the
   // peek shows, so the near-duplicate the user is about to retype is the one
   // they would have seen anyway.
+  // — J2b: the commitment, finished —
+  //
+  // Completing clears isNowFocus, so pinnedFocusTask is null by the time this
+  // renders. What survives is dailyCommitmentTaskIds, which App's observer
+  // writes for every pin; the done state is the last of today's commitments
+  // that is actually finished today.
+  const doneCommitment = (() => {
+    if (pinnedFocusTask) return null;
+    const ids = committedTaskIdsForDay(config, todayStr);
+    for (let i = ids.length - 1; i >= 0; i--) {
+      const t = todayTasksAll.find(x => x.uuid === ids[i]);
+      if (t && t.isCompleted && t.dateCompletedString === todayStr) return t;
+    }
+    return null;
+  })();
+  // K2: minutes on THAT task today, not the day's total. An unreadable ledger
+  // (demo mode has no uid, a refused read) yields 0, which renders as a bare
+  // "Done." — the same as a genuine zero, and never a figure that isn't real.
+  const doneMinutes = doneCommitment ? minutesForTaskOn(ledgerRaw, doneCommitment.uuid, todayStr) : 0;
+  // K3: the proposal is the next open item, and "Not now" holds until the Loci
+  // day turns over — a reload, a relaunch or a theme switch must not resurrect
+  // it. With nothing left to propose it simply does not render; no "nothing
+  // left" celebration replaces it.
+  const proposalDismissed = config.wallProposalDismissedDate === todayStr;
+  const wallProposal = (doneCommitment && !proposalDismissed)
+    ? todayTasksAll
+        .filter(t => !t.isCompleted && t.uuid !== doneCommitment.uuid)
+        .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))[0] || null
+    : null;
+
   const wallPickOptions = todayTasksAll
     .filter((t) => !t.isCompleted)
     .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
@@ -1069,6 +1105,11 @@ export default function TodayTab({
         onMarkDone={() => pinnedFocusTask && handleToggleComplete(pinnedFocusTask)}
         onSplit={() => pinnedFocusTask && setEditingTask(pinnedFocusTask)}
         onStartSmall={() => pinnedFocusTask && startFocusAndLog(pinnedFocusTask, null, { plannedSeconds: LOW_ENERGY_SESSION_SECONDS })}
+        doneTask={doneCommitment}
+        doneMinutes={doneMinutes}
+        proposal={wallProposal}
+        onCommitProposal={() => wallProposal && handlePinTask(wallProposal)}
+        onDismissProposal={() => saveConfigPatch({ wallProposalDismissedDate: todayStr })}
         onCommitNewTask={handleCommitNewTask}
         onPickExisting={(t) => { if (!t.isNowFocus) handlePinTask(t); }}
         pickOptions={wallPickOptions}

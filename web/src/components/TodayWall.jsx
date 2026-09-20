@@ -40,6 +40,11 @@ export default function TodayWall({
   onMarkDone,
   onSplit,
   onStartSmall,
+  doneTask = null,
+  doneMinutes = 0,
+  proposal = null,
+  onCommitProposal,
+  onDismissProposal,
   onCommitNewTask,
   onPickExisting,
   pickOptions = [],
@@ -83,6 +88,41 @@ export default function TodayWall({
   // Nothing committed yet. The handoff says the wall renders the first-launch
   // question inline; that screen is not built, so this asks the same question
   // with the picker the app already has, rather than inventing a second one.
+  // — the commitment, finished (J2b/K2/K3) —
+  //
+  // The hero becomes the closing line, not the proposal: what you did is the
+  // dominant element, and what you might do next is offered beneath it. There
+  // is NO auto-commit, ever — "Not now" leaves this standing for the rest of
+  // the day rather than proposing something else.
+  if (doneTask && !task) {
+    return (
+      <section className="today-wall is-done">
+        {header}
+        <div className="wall-done">
+          <div className="wall-done-was">{doneTask.title}</div>
+          {/* K2: the figure is minutes on THIS task today. Zero reads just
+              "Done." — no "0m logged", no "no time logged", no apology. */}
+          <h2 className="wall-done-line">
+            {doneMinutes > 0 ? `Done. ${doneMinutes}m logged.` : "Done."}
+          </h2>
+
+          {proposal && (
+            <div className="wall-proposal">
+              <div className="wall-proposal-kicker">NEXT, IF YOU WANT</div>
+              <p className="wall-proposal-title">{proposal.title}</p>
+              <button type="button" className="wall-proposal-commit" onClick={onCommitProposal}>
+                Commit to this
+              </button>
+              <button type="button" className="wall-proposal-not-now" onClick={onDismissProposal}>
+                Not now
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  }
+
   // — nothing committed yet: screen 10's field, on the same ground (J2a/K1) —
   //
   // The field takes free text and CREATES a task, because the thing you commit

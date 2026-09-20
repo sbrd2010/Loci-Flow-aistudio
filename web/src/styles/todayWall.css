@@ -258,6 +258,83 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* — the commitment, finished (J2b) — */
+.wall-done { padding: 26px 0 8px; }
+/* The finished title, struck, above the closing line — small, because it is
+   the thing that is over. */
+.wall-done-was {
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--text-quiet, var(--text-muted));
+  text-decoration: line-through;
+  overflow-wrap: anywhere;
+}
+.wall-done-line {
+  margin: 8px 0 0;
+  font-family: var(--font-sans);
+  font-size: 29px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.045em;
+  color: var(--ink, var(--text-primary));
+}
+
+.wall-proposal { margin-top: 34px; }
+.wall-proposal-kicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-quiet, var(--text-muted));
+}
+/* Muted is the token, not "greyed to unreadable" — this still has to be read. */
+.wall-proposal-title {
+  margin: 10px 0 0;
+  font-family: var(--font-sans);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--text-muted, var(--text-secondary));
+  overflow-wrap: anywhere;
+}
+.wall-proposal-commit {
+  display: block;
+  width: 100%;
+  min-height: 50px;
+  margin-top: 20px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink, var(--text-primary));
+  background: transparent;
+  border: 1px solid var(--control-edge, var(--border));
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.wall-proposal-commit:hover { background: var(--hover-paper, var(--bg-card-hover)); }
+.wall-proposal-commit:focus-visible,
+.wall-proposal-not-now:focus-visible {
+  outline: 2px solid var(--gold, var(--accent));
+  outline-offset: 2px;
+}
+/* Ghost: no border, because a border means "act on this" and this is the
+   option to not. */
+.wall-proposal-not-now {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-soft, var(--text-secondary));
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
 /* — nothing committed yet: screen 10's field, on the same ground (J2a/K1) — */
 .wall-empty { padding: 26px 0 8px; }
 .wall-empty-line {
