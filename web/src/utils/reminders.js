@@ -187,6 +187,18 @@ const DAILY_CHECKIN_NOTIFICATIONS = {
 // before they're trusted as object keys or state.
 export const DAILY_CHECKIN_SLOTS = new Set(Object.keys(DAILY_CHECKIN_NOTIFICATIONS));
 
+// Slots this app used to schedule native alarms for. A device upgrading from a
+// build that had them can still be holding OS alarms under these IDs — native
+// alarms outlive the code that scheduled them, and nothing else iterates these
+// names any more, so without this they fire a "Today's Commitment" notification
+// that opens the app to a prompt that no longer exists. Cancelling an ID that
+// was never scheduled is a no-op, so this is safe to run on every pass.
+const REMOVED_CHECKIN_SLOTS = ["morning", "midday"];
+
+function cancelRemovedCheckinAlarms() {
+  for (const slot of REMOVED_CHECKIN_SLOTS) nativeCancel(idFromString(`daily-checkin-${slot}`));
+}
+
 const NOTIFIED_DAILY_CHECKINS_KEY = "loci_notified_daily_checkins";
 
 // Records the wall-clock instant scheduleDailyCheckins last successfully
@@ -319,6 +331,7 @@ const DAILY_CHECKIN_SNOOZE_FIELDS = {
 
 export async function scheduleDailyCheckins(config, windows, now = new Date()) {
   if (!isNativeApp()) return;
+  cancelRemovedCheckinAlarms();
   const todayStr = getLociDayStr(now, windows);
   const targets = computeDailyCheckinTimes(now, windows);
   const userId = config?.userId || "anon";
@@ -440,6 +453,7 @@ export async function scheduleDailyCheckins(config, windows, now = new Date()) {
 // below) this only cancels the OS alarms and leaves dedup marks untouched.
 export function cancelDailyCheckins(config, windows, now = new Date()) {
   if (!isNativeApp()) return;
+  cancelRemovedCheckinAlarms();
   const releaseDedup = !!windows;
   const todayStr = releaseDedup ? getLociDayStr(now, windows) : null;
   const userId = config?.userId || "anon";

@@ -14,10 +14,8 @@ import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
-import { getCurrentFocusQuote } from "../utils/focusQuotes";
-import { formatTodayCountdown, isDailyDone } from "../utils/deadlineCountdown";
 import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
-import { getFocusWindows, getWindowState, getRemainingFocusMinutes, getNextWindowStart, getOverallSpan, getFocusProgress, hasConfiguredFocusWindow } from "../utils/focusWindows";
+import { getFocusWindows, getRemainingFocusMinutes } from "../utils/focusWindows";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import {
   getValidCommittedTaskIds,
@@ -38,6 +36,20 @@ import { CSS } from "@dnd-kit/utilities";
 // "split it". Five minutes, the same length ScatteredFlow's "Just 5 minutes"
 // starts — not the task's own estimate.
 const LOW_ENERGY_SESSION_SECONDS = 5 * 60;
+
+// The wall header: "SAT, JUN 15 · 8h19m LEFT". Both figures change at most
+// once a minute, so they are built together on a minute tick rather than
+// recomputed on every render.
+function buildWallHeader(now, windows) {
+  const mins = Math.round(getRemainingFocusMinutes(now, windows));
+  const h = Math.floor(mins / 60);
+  return {
+    dateLabel: now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).toUpperCase(),
+    hoursLeftLabel: mins <= 0 ? null
+      : h > 0 ? `${h}h${String(mins % 60).padStart(2, "0")}m LEFT`
+      : `${mins}m LEFT`,
+  };
+}
 
 const PencilIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -257,22 +269,7 @@ export default function TodayTab({
     }
   }, [tasks, focusNowMode, focusNowTaskId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const currentQuote = getCurrentFocusQuote();
-
-  const [todayCountdown, setTodayCountdown] = useState(null);
-  useEffect(() => {
-    const tick = () => {
-      const now = new Date();
-      const isDuring = getWindowState(now, windows) === "during";
-      setTodayCountdown(isDuring ? formatTodayCountdown(getRemainingFocusMinutes(now, windows) * 60000) : null);
-    };
-    tick();
-    const id = setInterval(tick, 60000);
-    return () => clearInterval(id);
-  }, [config.dayStartHour, config.dayEndHour, config.focusWindows]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const todayStr = getLociDayStr(new Date(), windows);
-  const isDoneToday = isDailyDone(config.deadlineDailyDoneDate, todayStr);
 
   // ── Daily Anchors derived state ────────────────────────────────────────────
   const anchors = config.dailyAnchors || [];
@@ -293,53 +290,20 @@ export default function TodayTab({
     saveConfigPatch({ deadlineDailyDoneDate: null });
   };
 
-  const [todayDeadlineRemaining, setTodayDeadlineRemaining] = useState(null);
+  // The wall header's two live figures, refreshed once a minute.
+  //
+  // This replaces a one-second interval that also maintained a seconds-precise
+  // clock string and a timeline progress fraction. Both stopped being rendered
+  // when the greeting-clock-quote card and the Focus Window strip went, so
+  // what was left was a full TodayTab and task-list re-render every second, on
+  // a phone, to keep state nothing read up to date. Neither figure here has
+  // sub-minute precision to lose.
+  const [wallHeader, setWallHeader] = useState(() => buildWallHeader(new Date(), windows));
   useEffect(() => {
-    const tick = () => {
-      if (!config.deadlineDate) { setTodayDeadlineRemaining(null); return; }
-      const now = new Date();
-      const isDuring = getWindowState(now, windows) === "during";
-      setTodayDeadlineRemaining(isDuring ? getRemainingFocusMinutes(now, windows) * 60000 : null);
-    };
+    const tick = () => setWallHeader(buildWallHeader(new Date(), windows));
     tick();
     const id = setInterval(tick, 60000);
     return () => clearInterval(id);
-  }, [config.deadlineDate, config.dayStartHour, config.dayEndHour, config.focusWindows]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const todayLiveDisplay = todayDeadlineRemaining === null ? null
-    : todayDeadlineRemaining === 0 ? "0h 00m"
-    : formatTodayCountdown(todayDeadlineRemaining);
-
-  const [timelineProgress, setTimelineProgress] = useState(0.5);
-  const [currentTimeStr, setCurrentTimeStr] = useState("");
-  const [currentDateStr, setCurrentDateStr] = useState("");
-
-  const formatHourLabel = (hourFloat) => {
-    const totalMin = Math.round((((hourFloat % 24) + 24) % 24) * 60);
-    const hWhole = Math.floor(totalMin / 60);
-    const mins = totalMin % 60;
-    const isAM = hWhole < 12;
-    const displayH = hWhole % 12 === 0 ? 12 : hWhole % 12;
-    const minStr = mins === 0 ? "" : `:${String(mins).padStart(2, "0")}`;
-    return `${displayH}${minStr}${isAM ? "am" : "pm"}`;
-  };
-
-  const updateTimeline = () => {
-    const now = new Date();
-    const hour = now.getHours();
-    const minute = now.getMinutes();
-    const second = now.getSeconds();
-    const displayHour = hour % 12 === 0 ? 12 : hour % 12;
-    const amPmStr = hour >= 12 ? "PM" : "AM";
-    setCurrentTimeStr(`${displayHour}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")} ${amPmStr}`);
-    setCurrentDateStr(now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }));
-    setTimelineProgress(getFocusProgress(now, windows));
-  };
-
-  useEffect(() => {
-    updateTimeline();
-    const interval = setInterval(updateTimeline, 1000);
-    return () => clearInterval(interval);
   }, [config.dayStartHour, config.dayEndHour, config.focusWindows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -885,13 +849,8 @@ export default function TodayTab({
         return d >= 0 ? d : null; // an overdue deadline is not "days left"
       })()
     : null;
-  const wallDateLabel = currentDateStr ? currentDateStr.toUpperCase() : "";
-  const wallHoursLeft = (() => {
-    const mins = Math.round(getRemainingFocusMinutes(new Date(), windows));
-    if (mins <= 0) return null;
-    const h = Math.floor(mins / 60);
-    return h > 0 ? `${h}h${String(mins % 60).padStart(2, "0")}m LEFT` : `${mins}m LEFT`;
-  })();
+  const wallDateLabel = wallHeader.dateLabel;
+  const wallHoursLeft = wallHeader.hoursLeftLabel;
   const openAcrossFronts = (tasks || []).filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked).length;
   // A session left running behind the overlay is REOPENED by the wall, not
   // restarted (see startFocusAndLog) — so the chip has to name the time that

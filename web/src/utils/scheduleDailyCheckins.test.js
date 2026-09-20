@@ -90,7 +90,9 @@ describe("scheduleDailyCheckins (native pre-scheduling glue)", () => {
     await scheduleDailyCheckins({ dailyCheckinsEnabled: false }, windows, dt(16, 0));
 
     expect(scheduleAtMock).not.toHaveBeenCalled();
-    expect(cancelMock).toHaveBeenCalledTimes(1);
+    // The one surviving slot, plus the two removed slots' legacy alarms.
+    expect(cancelMock).toHaveBeenCalledWith(idFromString("daily-checkin-reflection"));
+    expect(cancelMock).toHaveBeenCalledTimes(3);
   });
 
   // Regression coverage for a Codex finding: disabling check-ins cancels a
@@ -205,15 +207,15 @@ describe("scheduleDailyCheckins (native pre-scheduling glue)", () => {
   // have already fired — doing so could kill a still-pending, merely-deferred
   // alarm with no way to retry (the dedup key already reads as claimed).
   it("does not cancel an already-notified slot's id when skipping its 'now' retarget on a later rerun", async () => {
-    const config = { dailyCommitmentDate: TODAY, dailyCommitmentTaskIds: ["t1"] };
-    const middayId = idFromString("daily-checkin-midday");
-    await scheduleDailyCheckins(config, windows, dt(17, 0)); // midday marked notified
+    const config = {};
+    const reflectionId = idFromString("daily-checkin-reflection");
+    await scheduleDailyCheckins(config, windows, dt(17, 0)); // reflection retargeted to now, marked notified
     scheduleAtMock.mockClear();
     cancelMock.mockClear();
 
-    await scheduleDailyCheckins(config, windows, dt(17, 30)); // rerun hits the already-notified skip branch for midday
+    await scheduleDailyCheckins(config, windows, dt(17, 30)); // rerun hits the already-notified skip branch
 
-    expect(cancelMock.mock.calls.some(([id]) => id === middayId)).toBe(false);
+    expect(cancelMock.mock.calls.some(([id]) => id === reflectionId)).toBe(false);
   });
 
   // Regression coverage for a Codex finding: a normal future-target
@@ -306,7 +308,9 @@ describe("cancelDailyCheckins", () => {
 
   it("cancels the daily check-in slot", () => {
     cancelDailyCheckins();
-    expect(cancelMock).toHaveBeenCalledTimes(1); // one surviving slot, not three
+    // One surviving slot, not three — plus the two removed slots' legacy alarms.
+    expect(cancelMock).toHaveBeenCalledWith(idFromString("daily-checkin-reflection"));
+    expect(cancelMock).toHaveBeenCalledTimes(3);
   });
 
   it("with no config/windows args, leaves dedup marks untouched (sign-out/account-switch path)", async () => {
@@ -371,8 +375,8 @@ describe("cancelAllNativeScheduling", () => {
 
     expect(reconcileMock).toHaveBeenCalledTimes(1);
     expect(reconcileMock.mock.calls[0][0]).toEqual(new Set());
-    // 1 coach check-in + the 1 surviving daily check-in slot
-    expect(cancelMock).toHaveBeenCalledTimes(2);
+    // 1 coach check-in + the 1 surviving daily check-in slot + the 2 legacy ones
+    expect(cancelMock).toHaveBeenCalledTimes(4);
   });
 
   // Regression coverage for a Codex finding: LN.cancel() only removes
@@ -384,5 +388,37 @@ describe("cancelAllNativeScheduling", () => {
     cancelAllNativeScheduling();
 
     expect(clearDeliveredMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// A device upgrading from a build that still had the morning and midday
+// check-ins can be holding OS alarms under their IDs. Native alarms outlive
+// the code that scheduled them, and nothing iterates those names any more —
+// so unless they are explicitly cancelled they still fire, opening the app to
+// a prompt that no longer exists.
+describe("legacy check-in alarms from a previous build", () => {
+  const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "17:00" }] });
+
+  beforeEach(() => {
+    scheduleAtMock.mockReset();
+    scheduleAtMock.mockResolvedValue(true);
+    cancelMock.mockReset();
+    vi.stubGlobal("localStorage", {
+      getItem: () => null, setItem: () => {}, removeItem: () => {}, clear: () => {},
+    });
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("cancels the removed morning and midday alarms when scheduling", async () => {
+    await scheduleDailyCheckins({ dailyCheckinsEnabled: true }, windows, dt(9));
+    expect(cancelMock).toHaveBeenCalledWith(idFromString("daily-checkin-morning"));
+    expect(cancelMock).toHaveBeenCalledWith(idFromString("daily-checkin-midday"));
+  });
+
+  it("cancels them on the cancel path too", () => {
+    cancelDailyCheckins({}, windows, dt(9));
+    expect(cancelMock).toHaveBeenCalledWith(idFromString("daily-checkin-morning"));
+    expect(cancelMock).toHaveBeenCalledWith(idFromString("daily-checkin-midday"));
   });
 });
