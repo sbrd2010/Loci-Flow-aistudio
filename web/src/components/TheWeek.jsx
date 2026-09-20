@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { useFocusLedger } from "../hooks/useFocusLedger";
 import { weekSummary, formatMinutes, commonestStartHour } from "../utils/focusLedger";
 import { frontsFromConfig } from "../utils/fronts";
-import { getFocusWindows, isHourInWindow } from "../utils/focusWindows";
+import { getFocusWindows, isHourInWindow, formatMinutesToTime } from "../utils/focusWindows";
 import "../styles/theWeek.css";
 
 // Screen 8 — "The week": the ledger, summed, with one sentence of meaning.
@@ -87,7 +87,18 @@ export default function TheWeek({ payload = {}, uid, onBack, saveConfigPatch, on
 
   const protectHour = () => {
     const pad = (n) => String(n).padStart(2, "0");
-    const existing = Array.isArray(config.focusWindows) ? config.focusWindows : [];
+    // Seed from the EFFECTIVE windows, not from config.focusWindows alone. On an
+    // account still using dayStartHour/dayEndHour — or on the default schedule —
+    // that key is absent, so appending to [] would persist a focusWindows array
+    // holding only this one hour. getFocusWindows gives that array precedence
+    // over the legacy range, so the user's whole workday would be silently
+    // replaced by the sixty minutes they just tried to protect.
+    const existing = Array.isArray(config.focusWindows) && config.focusWindows.length > 0
+      ? config.focusWindows
+      : windows.map(w => ({
+          start: formatMinutesToTime(w.startMin),
+          end: formatMinutesToTime(w.endMin),
+        }));
     saveConfigPatch({
       // Wrap at midnight: parseTimeToMinutes rejects hour 24, so a 23:00
       // suggestion saved as "24:00" is silently discarded by getFocusWindows

@@ -366,6 +366,16 @@ describe("planFooterSentence", () => {
       .not.toContain("fortnight");
   });
 
+  // frontDaysLeft is negative for an overdue front, and `d <= 14` alone was
+  // true for a deadline three months gone.
+  it("does not call an overdue deadline upcoming", () => {
+    const overdue = planFooterSentence([front({ id: "a", dueAt: "2026-08-01", nextMove: "x" })], [], now);
+    expect(overdue).not.toContain("fortnight");
+    // Due today still counts as inside the fortnight.
+    expect(planFooterSentence([front({ id: "a", dueAt: "2026-11-04", nextMove: "x" })], [], now))
+      .toContain("One has a deadline inside a fortnight.");
+  });
+
   it("frames parked fronts as a choice, not a failure", () => {
     const s = planFooterSentence([front({ id: "a", nextMove: "x" }), front({ id: "b", parked: true })], [], now);
     expect(s).toContain("1 is parked, and stays that way until you say otherwise.");

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { ref, query, orderByKey, startAt, onValue } from "firebase/database";
 import { db } from "../firebase";
 import { lociDayWindow } from "../utils/focusLedger";
@@ -18,18 +18,20 @@ import { lociDayWindow } from "../utils/focusLedger";
 // render moves instead of durations, which is the addendum's own fallback.
 export function useFocusLedger(uid, days = 7, windows) {
   const [raw, setRaw] = useState(null);
-  // Held in a ref so a fresh windows array on every render cannot retrigger the
-  // subscription. The window only shifts when the day does, and re-reading one
-  // extra day is far cheaper than tearing down and rebuilding the listener.
-  const windowsRef = useRef(windows);
-  windowsRef.current = windows;
+  // The oldest day in the window, as a plain "YYYY-MM-DD" string. Depending on
+  // THIS rather than on `windows` gives both properties at once: a fresh windows
+  // array on every render cannot retrigger the subscription (the string is
+  // unchanged), but a synced config change that genuinely moves the loci-day
+  // boundary does resubscribe. Holding the windows in a ref instead kept a
+  // startAt from the old boundary, so a newly included day read back empty
+  // until the component remounted.
+  const oldest = lociDayWindow(days, new Date(), windows)[0];
 
   useEffect(() => {
     if (!uid) {
       setRaw(null);
       return undefined;
     }
-    const oldest = lociDayWindow(days, new Date(), windowsRef.current)[0];
     const eventsQuery = query(
       ref(db, `activityLogs/${uid}/events`),
       orderByKey(),
@@ -42,7 +44,7 @@ export function useFocusLedger(uid, days = 7, windows) {
       // figures simply fall back to moves. Never let it take the screen down.
       () => setRaw(null),
     );
-  }, [uid, days]);
+  }, [uid, oldest]);
 
   return raw;
 }

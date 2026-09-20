@@ -68,6 +68,13 @@ describe("minutesLeftToday", () => {
     expect(formatMinutesLeft(979)).toBe("16h19m");
   });
 
+  it("returns a whole number of minutes even mid-minute", () => {
+    const midMinute = new Date(2026, 10, 4, 9, 41, 31);
+    const mins = minutesLeftToday({ dayEndHour: 18 }, midMinute);
+    expect(Number.isInteger(mins)).toBe(true);
+    expect(formatMinutesLeft(mins)).toMatch(/^\d+h\d{2}m$/);
+  });
+
   it("never goes negative once the day is over", () => {
     expect(minutesLeftToday({ dayEndHour: 18 }, new Date(2026, 10, 4, 23, 0))).toBe(0);
   });
@@ -94,6 +101,15 @@ describe("minutesLeftToday", () => {
 });
 
 describe("formatMinutesLeft", () => {
+  // getRemainingFocusMinutes carries the current seconds as a fraction of a
+  // minute, which `% 60` rendered as "8h18.48333333333335m".
+  it("never renders a fractional minute", () => {
+    expect(formatMinutesLeft(498.48333333333335)).toBe("8h18m");
+    expect(formatMinutesLeft(59.6)).toBe("1h00m");
+    expect(formatMinutesLeft(-3)).toBe("0m");
+    expect(formatMinutesLeft(undefined)).toBe("0m");
+  });
+
   it("pads the minutes so the figure is stable width", () => {
     expect(formatMinutesLeft(499)).toBe("8h19m");
     expect(formatMinutesLeft(605)).toBe("10h05m");

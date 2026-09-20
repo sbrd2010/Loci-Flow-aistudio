@@ -79,32 +79,3 @@
   color: var(--text-quiet, var(--text-muted));
 }
 
-/* — 42x25 toggle, 19px knob — */
-.appearance-toggle {
-  flex-shrink: 0;
-  position: relative;
-  width: 42px;
-  height: 25px;
-  padding: 0;
-  background: var(--divider, var(--border));
-  border: 0;
-  border-radius: 13px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.appearance-toggle.is-on { background: var(--ink, var(--text-primary)); }
-.appearance-knob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 19px;
-  height: 19px;
-  border-radius: 50%;
-  background: var(--surface, #fff);
-  transition: transform 0.15s ease;
-}
-.appearance-toggle.is-on .appearance-knob { transform: translateX(17px); }
-.appearance-toggle:focus-visible {
-  outline: 2px solid var(--gold, var(--accent));
-  outline-offset: 2px;
-}

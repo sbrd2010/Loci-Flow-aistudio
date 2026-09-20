@@ -196,9 +196,12 @@ export function planFooterSentence(fronts, tasks, now = new Date()) {
   if (!live.length) return null;
   const moving = live.filter(f => frontNextMove(f, tasks)).length;
   const parked = (fronts || []).length - live.length;
+  // frontDaysLeft is NEGATIVE for an overdue front, which also satisfies
+  // `d <= 14` — so a deadline three months gone was being reported as "inside a
+  // fortnight". A front that is already past due is not upcoming.
   const pressing = live.filter(f => {
     const d = frontDaysLeft(f, now);
-    return d !== null && d <= 14;
+    return d !== null && d >= 0 && d <= 14;
   }).length;
 
   const parts = [];

@@ -331,12 +331,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
 
       {/* ── Appearance (screen 10c) ──────────────────────────────────────── */}
       <section className="card">
-        <AppearanceSettings
-          theme={theme}
-          onThemeChange={onThemeChange}
-          config={config}
-          saveConfigPatch={saveConfigPatch}
-        />
+        <AppearanceSettings theme={theme} onThemeChange={onThemeChange} />
       </section>
 
       {/* ── Profile ──────────────────────────────────────────────────────── */}

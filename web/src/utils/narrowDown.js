@@ -46,12 +46,18 @@ export function openTasks(tasks) {
 // excludes the gaps between windows and handles a day ending after midnight,
 // both of which this had to special-case by hand.
 export function minutesLeftToday(config = {}, now = new Date()) {
-  return getRemainingFocusMinutes(now, getFocusWindows(config));
+  // Rounded at the source: getRemainingFocusMinutes carries the current seconds
+  // as a fraction of a minute, and this value is both formatted for display and
+  // compared against task estimates.
+  return Math.round(getRemainingFocusMinutes(now, getFocusWindows(config)));
 }
 
 export function formatMinutesLeft(mins) {
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
+  // Rounds defensively as well: a fractional minute reaching `% 60` rendered
+  // "8h18.48333333333335m" on screen 14.
+  const total = Math.max(0, Math.round(Number(mins) || 0));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
   return h > 0 ? `${h}h${String(m).padStart(2, "0")}m` : `${m}m`;
 }
 

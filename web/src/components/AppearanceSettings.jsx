@@ -16,11 +16,12 @@ export const REDESIGN_THEMES = [
   { id: "paper", name: "Paper", blurb: "Warm and light" },
 ];
 
-export default function AppearanceSettings({ theme, onThemeChange, config = {}, saveConfigPatch }) {
-  // The design's momentum strip is "days moved, never a streak you can break",
-  // and it is toggleable. Default on: it is the reason to open the app
-  // tomorrow, so hiding it by default would defeat the point.
-  const showMomentum = config.showMomentum !== false;
+// Screen 10c also draws a "Show momentum" switch. It is NOT built here: the
+// momentum strip it would control does not exist yet, so the switch would have
+// persisted a preference that nothing reads — a control that looks like it
+// works and cannot. It belongs in the commit that builds the strip.
+
+export default function AppearanceSettings({ theme, onThemeChange }) {
   const isRedesignTheme = REDESIGN_THEMES.some(t => t.id === theme);
 
   return (
@@ -56,23 +57,6 @@ export default function AppearanceSettings({ theme, onThemeChange, config = {}, 
           drawn for — everything else still works, but only these two follow it.
         </p>
       )}
-
-      <div className="appearance-row">
-        <div className="appearance-row-text">
-          <div className="appearance-label">Show momentum</div>
-          <div className="appearance-note">Days moved. Never a streak you can break</div>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={showMomentum}
-          aria-label="Show momentum"
-          className={`appearance-toggle${showMomentum ? " is-on" : ""}`}
-          onClick={() => saveConfigPatch?.({ showMomentum: !showMomentum })}
-        >
-          <span className="appearance-knob" />
-        </button>
-      </div>
     </section>
   );
 }
