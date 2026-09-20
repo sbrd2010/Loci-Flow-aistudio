@@ -83,7 +83,14 @@ export function deriveCommitmentDeadlineMove(config = {}, tasks = [], todayStr) 
     ? config.dailyCommitmentTaskIds
     : [];
   if (committed.length === 0) return undefined;
-  const anyDone = (tasks || []).some((t) => t && committed.includes(t.uuid) && t.isCompleted && !t.isDeleted);
+  // The horizon predicate matches getValidCommittedTaskIds, which is what Day
+  // Close uses: a recorded commitment can later be moved to Week or Month and
+  // completed there. Without this, that completion marked the deadline move
+  // done while Day Close omitted the same task — two readers of one field
+  // disagreeing about what counts.
+  const anyDone = (tasks || []).some((t) =>
+    t && committed.includes(t.uuid) && t.isCompleted && !t.isDeleted && t.horizonLevel === "today"
+  );
   return anyDone ? todayStr : null;
 }
 

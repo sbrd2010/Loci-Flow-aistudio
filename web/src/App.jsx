@@ -781,10 +781,18 @@ export default function App() {
   // Day Close omits it, and the deadline observer below has no same-day
   // commitment to mark progress from. Only a deferral from the same Loci day
   // is flushed, so an app reopened the next morning doesn't record yesterday's.
+  //
+  // "Unconfirmed" includes syncWarning === "offline", which is how useSync
+  // reports that it gave up waiting after 15 seconds and flipped
+  // isSyncingFromCache false with no RTDB snapshot ever arriving. The three
+  // other config-writing effects in this file already treat it that way;
+  // these two did not, so they would have flushed from exactly the stale
+  // cache the guard exists to keep out.
   const deferredCommitmentRef = useRef(null);
+  const syncUnconfirmed = isSyncingFromCache || syncWarning === "offline";
   useEffect(() => {
     if (!payload?.config) return;
-    if (isSyncingFromCache) {
+    if (syncUnconfirmed) {
       if (commitmentPinnedUuid) deferredCommitmentRef.current = { uuid: commitmentPinnedUuid, day: commitmentDayStr };
       return;
     }
@@ -795,7 +803,7 @@ export default function App() {
     if (!uuid) return;
     const patch = buildWallCommitmentSave(payload.config, uuid, commitmentDayStr);
     if (patch) saveConfigPatch(patch);
-  }, [commitmentPinnedUuid, commitmentDayStr, isSyncingFromCache]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [commitmentPinnedUuid, commitmentDayStr, syncUnconfirmed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // And the key deadline's daily move, which is "is any of today's
   // commitments complete right now" — see deriveCommitmentDeadlineMove. It
@@ -803,10 +811,10 @@ export default function App() {
   // real change so this cannot loop against its own config update.
   const deadlineMoveState = deriveCommitmentDeadlineMove(payload?.config || {}, payload?.tasks || [], commitmentDayStr);
   useEffect(() => {
-    if (!payload?.config || isSyncingFromCache || deadlineMoveState === undefined) return;
+    if (!payload?.config || syncUnconfirmed || deadlineMoveState === undefined) return;
     if ((payload.config.deadlineDailyDoneDate || null) === deadlineMoveState) return;
     saveConfigPatch({ deadlineDailyDoneDate: deadlineMoveState });
-  }, [deadlineMoveState, isSyncingFromCache]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [deadlineMoveState, syncUnconfirmed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFocusSessionDone = () => {
     const task = focusTimer.activeTask;

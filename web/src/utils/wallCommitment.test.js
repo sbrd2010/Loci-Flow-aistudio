@@ -57,29 +57,37 @@ describe("deriveCommitmentDeadlineMove", () => {
   const withDeadline = { deadlineLabel: "Thesis", deadlineDate: "2024-07-01", dailyCommitmentDate: TODAY, dailyCommitmentTaskIds: ["t1"] };
 
   it("is done when the commitment is complete", () => {
-    expect(deriveCommitmentDeadlineMove(withDeadline, [{ uuid: "t1", isCompleted: true }], TODAY)).toBe(TODAY);
+    expect(deriveCommitmentDeadlineMove(withDeadline, [{ uuid: "t1", isCompleted: true, horizonLevel: "today" }], TODAY)).toBe(TODAY);
   });
 
   it("is open when it is not", () => {
-    expect(deriveCommitmentDeadlineMove(withDeadline, [{ uuid: "t1", isCompleted: false }], TODAY)).toBeNull();
+    expect(deriveCommitmentDeadlineMove(withDeadline, [{ uuid: "t1", isCompleted: false, horizonLevel: "today" }], TODAY)).toBeNull();
   });
 
   // Reopening one commitment must not clear a move another already made.
   it("stays done while another of today's commitments stands", () => {
     const config = { ...withDeadline, dailyCommitmentTaskIds: ["t1", "t2"] };
-    const tasks = [{ uuid: "t1", isCompleted: false }, { uuid: "t2", isCompleted: true }];
+    const tasks = [{ uuid: "t1", isCompleted: false, horizonLevel: "today" }, { uuid: "t2", isCompleted: true, horizonLevel: "today" }];
     expect(deriveCommitmentDeadlineMove(config, tasks, TODAY)).toBe(TODAY);
   });
 
+  // Two readers of one field must agree on what counts: a recorded commitment
+  // moved to Week and completed there is dropped by getValidCommittedTaskIds,
+  // so Day Close omits it — this must omit it too.
+  it("ignores a commitment completed after being moved off Today", () => {
+    const tasks = [{ uuid: "t1", isCompleted: true, horizonLevel: "week" }];
+    expect(deriveCommitmentDeadlineMove(withDeadline, tasks, TODAY)).toBeNull();
+  });
+
   it("ignores a deleted task", () => {
-    const tasks = [{ uuid: "t1", isCompleted: true, isDeleted: true }];
+    const tasks = [{ uuid: "t1", isCompleted: true, isDeleted: true, horizonLevel: "today" }];
     expect(deriveCommitmentDeadlineMove(withDeadline, tasks, TODAY)).toBeNull();
   });
 
   // undefined means "no opinion" — the observer in App writes nothing, rather
   // than clearing a field it has no business touching.
   it("has no opinion without a key deadline, or with nothing committed today", () => {
-    const tasks = [{ uuid: "t1", isCompleted: true }];
+    const tasks = [{ uuid: "t1", isCompleted: true, horizonLevel: "today" }];
     expect(deriveCommitmentDeadlineMove({ dailyCommitmentDate: TODAY, dailyCommitmentTaskIds: ["t1"] }, tasks, TODAY)).toBeUndefined();
     expect(deriveCommitmentDeadlineMove({ deadlineLabel: "Thesis" }, tasks, TODAY)).toBeUndefined();
     expect(deriveCommitmentDeadlineMove({ ...withDeadline, dailyCommitmentDate: YESTERDAY }, tasks, TODAY)).toBeUndefined();
