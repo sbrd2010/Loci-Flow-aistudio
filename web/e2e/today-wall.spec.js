@@ -129,27 +129,6 @@ test("mobile reliability: the scattered door on the desk reaches screen 14", asy
   await expect(page.locator(".scattered")).toBeVisible({ timeout: 8_000 });
 });
 
-test("mobile reliability: choosing today's one thing actually commits it", async ({ page }) => {
-  await enterDemo(page);
-
-  // Clear the demo's pinned commitment so the wall asks the question.
-  await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
-  await page.locator(".wall-action", { hasText: "Mark done" }).click();
-  await expect(page.getByText("SO — WHAT'S THE ONE THING TODAY?")).toBeVisible({ timeout: 8_000 });
-
-  await page.locator("button", { hasText: "Choose today's one thing" }).click();
-  const row = page.locator(".focus-now-pick-row").first();
-  const chosen = (await row.locator(".focus-now-pick-title").innerText()).trim();
-  await row.click();
-
-  // The wall stops asking, because the answer was written to isNowFocus on the
-  // task rather than to view-local state. Demo mode holds its payload in
-  // memory, so a reload here would only return to the landing screen — the
-  // assertion that matters is that the wall, which reads the pin, now shows it.
-  await expect(page.locator(".wall-title")).toContainText(chosen, { timeout: 8_000 });
-  await expect(page.getByText("SO — WHAT'S THE ONE THING TODAY?")).toHaveCount(0);
-});
-
 // A fix to a fix: the handler was corrected, but startFocusAndLog's
 // existing-session branch returned before applying the length — so with a
 // session already open the button still promised five minutes and resumed
@@ -171,4 +150,69 @@ test("mobile reliability: five minutes is honoured even with a session already o
   await expect(overlay).toBeVisible({ timeout: 8_000 });
   await expect(overlay.getByText(/\b5:00\b/)).toBeVisible();
   await expect(overlay.getByText(/\b25:00\b/)).toHaveCount(0);
+});
+
+// ── J2a / Addendum K1: the empty wall ─────────────────────────────────────
+// The field creates a task, because the thing you commit to may not exist in
+// the app yet — without that, first launch has no exit.
+
+async function emptyTheWall(page) {
+  await enterDemo(page);
+  await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
+  await page.locator(".wall-action", { hasText: "Mark done" }).click();
+  await expect(page.locator(".wall-commit-field")).toBeVisible({ timeout: 8_000 });
+}
+
+test("mobile reliability: typing on the empty wall creates and commits a task", async ({ page }) => {
+  await emptyTheWall(page);
+
+  const commit = page.locator(".wall-commit-btn");
+  // Screen 10's button survives (K1), disabled until there is text.
+  await expect(commit).toBeDisabled();
+
+  await page.locator(".wall-commit-field").fill("Write the membrane paper intro");
+  await expect(commit).toBeEnabled();
+  await commit.click();
+
+  // It becomes the commitment: the wall stops asking and the task IS the hero.
+  await expect(page.locator(".wall-commit-field")).toHaveCount(0);
+  await expect(page.locator(".wall-title.is-wall")).toContainText("Write the membrane paper intro");
+
+  // K1: no front, so the kicker carries only the fixed words — no front name.
+  await expect(page.locator(".wall-kicker")).toHaveText("YOU COMMITTED TO");
+  // And no subtask: concreteStep is OMITTED rather than set empty, so
+  // normalizePayload does not substitute its "Do first tiny step" default.
+  await expect(page.locator(".wall-support")).toHaveCount(0);
+});
+
+test("mobile reliability: Enter commits, without touching the button", async ({ page }) => {
+  await emptyTheWall(page);
+
+  await page.locator(".wall-commit-field").fill("Reply to the supervisor");
+  await page.locator(".wall-commit-field").press("Enter");
+
+  await expect(page.locator(".wall-title.is-wall")).toContainText("Reply to the supervisor");
+});
+
+test("mobile reliability: the pick rows narrow as you type, and tapping one commits it", async ({ page }) => {
+  await emptyTheWall(page);
+
+  // Unfiltered, the rows show today's open items.
+  const rows = page.locator(".wall-pick-row");
+  await expect(rows.first()).toBeVisible({ timeout: 8_000 });
+  const before = await rows.count();
+  expect(before).toBeGreaterThan(0);
+
+  const firstTitle = (await rows.first().locator(".wall-pick-title").innerText()).trim();
+
+  // Typing part of an existing title narrows to it, so the near-duplicate is
+  // visible before a second copy is created.
+  await page.locator(".wall-commit-field").fill(firstTitle.slice(0, 12));
+  await expect(rows.first()).toContainText(firstTitle.slice(0, 12));
+
+  await rows.first().click();
+
+  // The existing task is committed — not a new one created from the typed text.
+  await expect(page.locator(".wall-title.is-wall")).toContainText(firstTitle);
+  await expect(page.locator(".wall-commit-field")).toHaveCount(0);
 });

@@ -258,14 +258,111 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* — nothing committed yet — */
+/* — nothing committed yet: screen 10's field, on the same ground (J2a/K1) — */
 .wall-empty { padding: 26px 0 8px; }
 .wall-empty-line {
-  margin: 12px 0 0;
+  margin: 14px 0 0;
   font-family: var(--font-serif, var(--font-sans));
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.55;
   color: var(--text-soft, var(--text-secondary));
+}
+
+.wall-commit {
+  display: block;
+  margin-top: 18px;
+}
+/* The field IS the hero here, so it carries the open hero's type: 29/700.
+   Only a bottom rule — a box would make it a form control on a screen whose
+   whole point is that it is a question. */
+.wall-commit-field {
+  display: block;
+  width: 100%;
+  padding: 4px 0 10px;
+  font-family: var(--font-sans);
+  font-size: 29px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.045em;
+  color: var(--ink, var(--text-primary));
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--control-edge, var(--border));
+  border-radius: 0;
+  transition: border-color 0.15s ease;
+}
+.wall-commit-field::placeholder {
+  /* Rule 5 puts the 4.5:1 floor on placeholders explicitly, so this is
+     --text-soft rather than a faint tier. */
+  color: var(--text-soft, var(--text-secondary));
+  font-weight: 700;
+}
+.wall-commit-field:focus {
+  outline: none;
+  border-bottom-color: var(--gold, var(--accent));
+}
+
+.wall-commit-btn {
+  display: block;
+  width: 100%;
+  min-height: 50px;
+  margin-top: 20px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink, var(--text-primary));
+  background: transparent;
+  border: 1px solid var(--control-edge, var(--border));
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.wall-commit-btn:hover:not(:disabled) { background: var(--hover-paper, var(--bg-card-hover)); }
+.wall-commit-btn:focus-visible {
+  outline: 2px solid var(--gold, var(--accent));
+  outline-offset: 2px;
+}
+.wall-commit-btn:disabled {
+  color: var(--text-quiet, var(--text-muted));
+  border-color: var(--divider, var(--border));
+  cursor: default;
+}
+
+/* K1's guard: the rows narrow as you type, so a near-duplicate is visible
+   before a second copy of it is created. Hairline rows, never cards. */
+.wall-pick { margin-top: 26px; }
+.wall-pick-kicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-quiet, var(--text-muted));
+}
+.wall-pick-row {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  text-align: left;
+  color: var(--ink, var(--text-primary));
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--divider, var(--border));
+  cursor: pointer;
+}
+.wall-pick-row:first-of-type { margin-top: 8px; }
+.wall-pick-row:hover { color: var(--gold-deep, var(--accent)); }
+.wall-pick-row:focus-visible {
+  outline: 2px solid var(--gold, var(--accent));
+  outline-offset: 2px;
+}
+.wall-pick-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* — the door into screen 14 — */
@@ -296,6 +393,7 @@
 
 /* J1: mobile <=360px — closed 36/800, open 27/700. */
 @media (max-width: 360px) {
+  .wall-commit-field { font-size: 27px; }
   .wall-title.is-wall.is-42 { font-size: 36px; }
   .wall-title.is-wall.is-34 { font-size: 31px; }
   .wall-title.is-wall.is-29 { font-size: 27px; }

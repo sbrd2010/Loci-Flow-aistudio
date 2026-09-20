@@ -179,12 +179,6 @@ export default function TodayTab({
   const [focusNowMode, setFocusNowMode] = useState(false);
   const [focusNowTaskId, setFocusNowTaskId] = useState(null);
   const [showFocusNowPicker, setShowFocusNowPicker] = useState(false);
-  // The same sheet serves two callers. Opened from the One Task Focus chip it
-  // only stages a task (the pin happens when that view's Start is tapped);
-  // opened from the wall's "Choose today's one thing" the selection IS the
-  // commitment, so it has to reach isNowFocus — otherwise the wall still asks
-  // the question the user just answered, and a reload loses the choice.
-  const [pickerCommits, setPickerCommits] = useState(false);
   // "peekOpen is persisted to localStorage." Closed by default — the wall is
   // the default state, and the peek is how you ask for the rest.
   const [peekOpen, setPeekOpen] = useState(() => {
@@ -431,20 +425,52 @@ export default function TodayTab({
     return pinPromise;
   };
 
+  // K1: the empty wall creates a task from free text. The record is
+  // deliberately sparse — no front, no estimate, no subtask — and pinned
+  // immediately, which is a legal task under Addendum C.
+  //
+  // concreteStep is OMITTED rather than set empty: normalizePayload only
+  // rewrites the field when the key is present, and would substitute "Do first
+  // tiny step" for an empty string — putting a subtask on the one task that is
+  // specified not to have one. The rules accept its absence
+  // (!newData.exists() || ...), and Firebase rejects an explicit undefined.
+  const handleCommitNewTask = (title) => {
+    const clean = String(title || "").trim().slice(0, 1000);
+    if (!clean) return;
+    const now = Date.now();
+    const freshTask = {
+      id: now,
+      userId: config.userId || "",
+      uuid: safeUUID(),
+      title: clean,
+      horizonLevel: "today",
+      priority: "P3",
+      category: "personal",
+      frontId: null,
+      timeEstimateMinutes: 25,
+      deadlineTimestamp: null,
+      reminderAt: null,
+      isCompleted: false,
+      isParked: false,
+      isNowFocus: true,
+      orderIndex: todayTasksAll.length,
+      dateCompletedString: null,
+      isDeleted: false,
+      lastUpdated: now,
+      subSteps: [],
+    };
+    // Exclusive, like every other pin (J5): whatever held isNowFocus lets go.
+    const tasks_ = (tasks || []).map(t => (t.isNowFocus ? { ...t, isNowFocus: false, lastUpdated: now } : t));
+    savePayloadAsync({ ...payload, tasks: [...tasks_, freshTask] })
+      .then(() => writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_created", freshTask, { windows }))))
+      .catch(() => {});
+  };
+
+  // Staging only: the pin happens when One Task Focus's own Start is tapped.
+  // The wall's commitment no longer comes through this sheet — it has its own
+  // field now (J2a) — so this no longer has to serve two callers.
   const handleFocusNowPick = (task) => {
     setShowFocusNowPicker(false);
-    setPickerCommits(false);
-    if (pickerCommits) {
-      // Choosing the day's commitment is not entering One Task mode. Doing
-      // both left the screen stuck on a One Task card for the chosen task
-      // once it was completed — pinnedFocusTask disappears, but focusNowTask
-      // still accepts a completed task, hiding the rest of Today until Exit.
-      //
-      // handlePinTask TOGGLES, so an already-pinned task would be unpinned by
-      // a blind call — the very state this is here to prevent.
-      if (!task.isNowFocus) handlePinTask(task);
-      return;
-    }
     setFocusNowTaskId(task.uuid);
     setFocusNowMode(true);
   };
@@ -876,6 +902,12 @@ export default function TodayTab({
   // the Today horizon until something moves it, so counting them all reported
   // last week's finished work as this morning's progress.
   const wallRemainingCount = todayTasksAll.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).length;
+  // What the empty wall's "Or pick one" rows draw from — the same pool the
+  // peek shows, so the near-duplicate the user is about to retype is the one
+  // they would have seen anyway.
+  const wallPickOptions = todayTasksAll
+    .filter((t) => !t.isCompleted)
+    .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
   const doneTodayCount = countCompletedOn(todayTasksAll, todayStr);
 
   // Focus Now: first incomplete task in Day Map order for today (shown as "Recommended")
@@ -1037,7 +1069,9 @@ export default function TodayTab({
         onMarkDone={() => pinnedFocusTask && handleToggleComplete(pinnedFocusTask)}
         onSplit={() => pinnedFocusTask && setEditingTask(pinnedFocusTask)}
         onStartSmall={() => pinnedFocusTask && startFocusAndLog(pinnedFocusTask, null, { plannedSeconds: LOW_ENERGY_SESSION_SECONDS })}
-        onChooseCommitment={() => { setPickerCommits(true); setShowFocusNowPicker(true); }}
+        onCommitNewTask={handleCommitNewTask}
+        onPickExisting={(t) => { if (!t.isNowFocus) handlePinTask(t); }}
+        pickOptions={wallPickOptions}
         onScattered={onScattered}
       />
 
@@ -1610,11 +1644,11 @@ export default function TodayTab({
 
       {/* ── Focus Now: task picker bottom sheet ─────────────────── */}
       {showFocusNowPicker && (
-        <div className="focus-now-backdrop" onClick={() => { setShowFocusNowPicker(false); setPickerCommits(false); }}>
+        <div className="focus-now-backdrop" onClick={() => setShowFocusNowPicker(false)}>
           <div className="focus-now-sheet" onClick={e => e.stopPropagation()}>
             <div className="focus-now-sheet-header">
               <span className="focus-now-sheet-title">Pick one task</span>
-              <button className="focus-now-sheet-close" onClick={() => { setShowFocusNowPicker(false); setPickerCommits(false); }} aria-label="Close picker">✕</button>
+              <button className="focus-now-sheet-close" onClick={() => setShowFocusNowPicker(false)} aria-label="Close picker">✕</button>
             </div>
             <div className="focus-now-sheet-body">
               {focusNowPickerTasks.length === 0 ? (

@@ -130,11 +130,25 @@ export function frontDaysLeft(front, now = new Date()) {
 }
 
 // The day count the wall shows beside its kicker. J3 reads "MEMBRANE PAPER ·
-// 11d": one front, its own deadline. So the count follows whatever the kicker
-// names — the commitment's front when it has one, and otherwise the legacy key
-// deadline, which is what the deleted Key Deadline strip showed. An overdue
-// deadline is not "days left", and a front with no due date shows no count
-// rather than borrowing an unrelated one.
+// 11d": one front, its own deadline. The count follows whatever the kicker
+// names, and nothing else.
+//
+// With no front, it falls back to the legacy key deadline — and that is a
+// DELIBERATE departure from a literal reading of K1, raised with the designer
+// rather than settled here.
+//
+// K1 says a task committed from the empty wall "renders with no kicker (no
+// front, no day count) until the user gives it one". Read literally, a user
+// who has a key deadline but has not adopted fronts sees no countdown
+// anywhere on Today — and J3 deleted the Key Deadline strip precisely on the
+// grounds that its information had moved here. Both cannot hold at once.
+//
+// K1's context is a brand-new task on first launch, where no key deadline
+// exists either, so it probably was not written against this case. The
+// asymmetry decides it: showing the count when the designer meant K1
+// literally is a one-line correction nobody was harmed by, while hiding it
+// silently removes a figure an existing user relies on and may not notice
+// missing for weeks. An overdue deadline is not "days left".
 export function commitmentDaysLeft(front, config = {}, now = new Date()) {
   const d = frontDaysLeft(front || legacyDeadlineAsFront(config), now);
   return d !== null && d >= 0 ? d : null;

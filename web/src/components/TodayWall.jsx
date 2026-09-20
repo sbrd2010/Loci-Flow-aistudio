@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import LinkifyText from "./LinkifyText";
 import "../styles/todayWall.css";
 
@@ -40,10 +40,15 @@ export default function TodayWall({
   onMarkDone,
   onSplit,
   onStartSmall,
-  onChooseCommitment,
+  onCommitNewTask,
+  onPickExisting,
+  pickOptions = [],
   onScattered,
   openCount = 0,
 }) {
+  // Only the empty wall uses this, but hooks cannot sit behind its early
+  // return.
+  const [draft, setDraft] = useState("");
   // timerLabel is supplied only while a session is already running on this
   // task, where the chip has to name what tapping will resume.
   const resuming = !!timerLabel;
@@ -78,18 +83,72 @@ export default function TodayWall({
   // Nothing committed yet. The handoff says the wall renders the first-launch
   // question inline; that screen is not built, so this asks the same question
   // with the picker the app already has, rather than inventing a second one.
+  // — nothing committed yet: screen 10's field, on the same ground (J2a/K1) —
+  //
+  // The field takes free text and CREATES a task, because the thing you commit
+  // to may not exist in the app yet — without that, first launch has no exit.
+  // The guard against a near-duplicate is not a restriction but a view: the
+  // "Or pick one" rows filter to open items matching what is being typed, so
+  // an existing version of the same thing is visible before it is committed.
+  // Tapping a row commits that task instead of creating a second one. No
+  // fuzzy-merge prompt, no "did you mean".
   if (!task) {
+    const query = draft.trim().toLowerCase();
+    const matches = (query
+      ? pickOptions.filter(t => (t.title || "").toLowerCase().includes(query))
+      : pickOptions
+    ).slice(0, 3);
+    const commit = () => {
+      const title = draft.trim();
+      if (!title) return;
+      setDraft("");
+      onCommitNewTask?.(title);
+    };
     return (
-      <section className={`today-wall${peekOpen ? " is-open" : ""}`}>
+      <section className="today-wall is-empty">
         {header}
         <div className="wall-empty">
-          <div className="wall-kicker">SO — WHAT'S THE ONE THING TODAY?</div>
-          <p className="wall-empty-line">
-            One thing. You can change it whenever — that's not failure.
-          </p>
-          <button type="button" className="wall-primary" onClick={onChooseCommitment}>
-            Choose today's one thing
-          </button>
+          <div className="wall-kicker">TODAY</div>
+          <form
+            className="wall-commit"
+            onSubmit={(e) => { e.preventDefault(); commit(); }}
+          >
+            <input
+              type="text"
+              className="wall-commit-field"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="What's the one thing?"
+              aria-label="Today's one thing"
+              autoComplete="off"
+              maxLength={1000}
+            />
+            <p className="wall-empty-line">
+              You can change it whenever. That&rsquo;s not failure.
+            </p>
+            {/* K1: screen 10's Commit button survives — J2a's "the field is the
+                only affordance" meant no illustration and no onboarding CTA,
+                not a keyboard-only commit. Enter commits too, via the form. */}
+            <button type="submit" className="wall-commit-btn" disabled={!draft.trim()}>
+              Commit
+            </button>
+          </form>
+
+          {matches.length > 0 && (
+            <div className="wall-pick">
+              <div className="wall-pick-kicker">OR PICK ONE</div>
+              {matches.map(t => (
+                <button
+                  key={t.uuid}
+                  type="button"
+                  className="wall-pick-row"
+                  onClick={() => onPickExisting?.(t)}
+                >
+                  <span className="wall-pick-title">{t.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     );
