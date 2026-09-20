@@ -7,6 +7,7 @@ import { frontsFromConfig, commitmentDaysLeft } from "../utils/fronts";
 import { useFocusLedger } from "../hooks/useFocusLedger";
 import { minutesForTaskOn } from "../utils/focusLedger";
 import { buildMomentum } from "../utils/momentum";
+import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import FocusModePage from "./FocusModePage";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
@@ -441,6 +442,11 @@ export default function TodayTab({
   const handleCommitNewTask = (title) => {
     const clean = String(title || "").trim().slice(0, 1000);
     if (!clean) return;
+    // The wall is a third creation path, and Evening Guard is a setting the
+    // user switched on for themselves — a path that quietly ignores it is a
+    // way around their own decision. The wall disables Commit and says why,
+    // so this is a backstop rather than the only check.
+    if (isEveningGuardBlocked(config)) return;
     const now = Date.now();
     const freshTask = {
       id: now,
@@ -486,7 +492,11 @@ export default function TodayTab({
     const tasks_ = (tasks || []).map(t => (t.isNowFocus ? { ...t, isNowFocus: false, lastUpdated: now } : t));
     savePayloadAsync({ ...payload, tasks: [...tasks_, freshTask] })
       .then(() => {
-        const events = [buildTaskMutationEvent("task_created", freshTask, { windows })];
+        // Built with the `now` captured when the user acted, not when the
+        // debounced write confirmed: savePayloadAsync can land 1.5s later, or
+        // later still on a retry, and defaulting the timestamp here files a
+        // task created at 01:59 under the following Loci day.
+        const events = [buildTaskMutationEvent("task_created", freshTask, { windows, now })];
         if (endedFocusSession) {
           events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
         }
@@ -1148,6 +1158,7 @@ export default function TodayTab({
         proposal={wallProposal}
         onCommitProposal={() => wallProposal && handlePinTask(wallProposal)}
         onDismissProposal={() => saveConfigPatch({ wallProposalDismissedDate: todayStr })}
+        commitBlocked={isEveningGuardBlocked(config)}
         onCommitNewTask={handleCommitNewTask}
         onPickExisting={(t) => { if (!t.isNowFocus) handlePinTask(t); }}
         pickOptions={wallPickOptions}

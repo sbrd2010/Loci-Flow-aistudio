@@ -303,3 +303,26 @@ test("mobile reliability: the empty wall does not compete with the old onboardin
   await expect(page.locator(".wall-commit-field")).toBeVisible();
   await expect(page.getByText("tap + to add your first task", { exact: false })).toHaveCount(0);
 });
+
+// TodayWall stays mounted, so a query left in the field reappears if the
+// chosen task is ever unpinned — and an accidental submit then creates
+// exactly the duplicate the pick rows exist to prevent.
+test("mobile reliability: picking an existing task clears the typed query", async ({ page }) => {
+  await emptyTheWall(page);
+
+  const rows = page.locator(".wall-pick-row");
+  await expect(rows.first()).toBeVisible({ timeout: 8_000 });
+  const firstTitle = (await rows.first().locator(".wall-pick-title").innerText()).trim();
+
+  await page.locator(".wall-commit-field").fill(firstTitle.slice(0, 10));
+  await rows.first().click();
+  await expect(page.locator(".wall-title")).toContainText(firstTitle, { timeout: 8_000 });
+
+  // Unpin it and the field comes back — empty, not holding the old query.
+  const pinned = page.locator(".pinned-focus-section .task-row").first();
+  await expect(pinned).toBeVisible({ timeout: 8_000 });
+  await pinned.locator(".task-row-top").click();
+  await page.getByText("Unpin from Focus").click();
+
+  await expect(page.locator(".wall-commit-field")).toHaveValue("", { timeout: 8_000 });
+});

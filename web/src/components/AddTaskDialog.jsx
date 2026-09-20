@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { safeUUID } from "../utils/uuid";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
@@ -217,8 +218,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
     // Evening Guard window block logic
     const now = new Date();
-    const hour = now.getHours();
-    if (payload.config?.eveningGuardWindowActive && hour >= 20) {
+    if (isEveningGuardBlocked(payload.config, now)) {
       setFormError("🌙 Evening Guard is active — no new tasks at or after 8 PM. Go rest!");
       return;
     }
@@ -332,7 +332,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
         <form onSubmit={handleSubmit} className="modal-body">
           {/* Evening Guard upfront warning */}
-          {payload.config?.eveningGuardWindowActive && new Date().getHours() >= 20 && (
+          {isEveningGuardBlocked(payload.config) && (
             <div style={{ background: "rgba(245,158,11,0.12)", border: "1px solid var(--warning)", borderRadius: "var(--radius-sm)", padding: "10px 12px", fontSize: "12.5px", color: "var(--warning)", fontWeight: "600", lineHeight: "1.5", marginBottom: "4px" }}>
               🌙 Evening Guard is active. Adding tasks after 8 PM is blocked — go rest!
             </div>

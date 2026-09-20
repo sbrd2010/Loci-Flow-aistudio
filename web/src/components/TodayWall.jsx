@@ -45,6 +45,7 @@ export default function TodayWall({
   proposal = null,
   onCommitProposal,
   onDismissProposal,
+  commitBlocked = false,
   onCommitNewTask,
   onPickExisting,
   pickOptions = [],
@@ -140,9 +141,17 @@ export default function TodayWall({
     ).slice(0, 3);
     const commit = () => {
       const title = draft.trim();
-      if (!title) return;
+      if (!title || commitBlocked) return;
       setDraft("");
       onCommitNewTask?.(title);
+    };
+    // Picking an existing task clears the draft too. TodayWall stays mounted,
+    // so a query left behind reappears in the field if that task is ever
+    // unpinned — and an accidental submit then creates exactly the duplicate
+    // these rows exist to prevent.
+    const pick = (t) => {
+      setDraft("");
+      onPickExisting?.(t);
     };
     return (
       <section className="today-wall is-empty">
@@ -164,12 +173,14 @@ export default function TodayWall({
               maxLength={1000}
             />
             <p className="wall-empty-line">
-              You can change it whenever. That&rsquo;s not failure.
+              {commitBlocked
+                ? "Evening Guard is on — no new tasks after 8pm. Rest; this will be here tomorrow."
+                : "You can change it whenever. That\u2019s not failure."}
             </p>
             {/* K1: screen 10's Commit button survives — J2a's "the field is the
                 only affordance" meant no illustration and no onboarding CTA,
                 not a keyboard-only commit. Enter commits too, via the form. */}
-            <button type="submit" className="wall-commit-btn" disabled={!draft.trim()}>
+            <button type="submit" className="wall-commit-btn" disabled={!draft.trim() || commitBlocked}>
               Commit
             </button>
           </form>
@@ -182,7 +193,7 @@ export default function TodayWall({
                   key={t.uuid}
                   type="button"
                   className="wall-pick-row"
-                  onClick={() => onPickExisting?.(t)}
+                  onClick={() => pick(t)}
                 >
                   <span className="wall-pick-title">{t.title}</span>
                 </button>
