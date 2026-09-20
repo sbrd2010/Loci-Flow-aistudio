@@ -69,6 +69,10 @@ function taskSnapshotFrom(task) {
   if (task.category) snapshot.category = task.category;
   if (task.priority) snapshot.priority = task.priority;
   if (task.horizonLevel) snapshot.horizonLevel = task.horizonLevel;
+  // The front the task was on WHEN the event happened. Without it the weekly
+  // breakdown reads the live task, so moving a task to another front silently
+  // rewrites last week's figures — history changing with no activity behind it.
+  if (task.frontId) snapshot.frontId = task.frontId;
   return snapshot;
 }
 

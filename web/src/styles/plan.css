@@ -206,6 +206,27 @@
   color: var(--text-quiet, var(--text-muted));
 }
 
+/* Quiet by default — a front's deadline and its next move are what this block
+   is for, and closing one is rare. It is still a 44px target. */
+.plan-front-close {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 4px;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-quiet, var(--text-muted));
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.plan-front-close:hover { color: var(--clay, var(--warning)); }
+.plan-front-close:focus-visible {
+  outline: 2px solid var(--gold, var(--accent));
+  outline-offset: 2px;
+}
+
 /* Only appears at the storage ceiling, in place of the disabled button's
    silence — it says what happened and what to do about it. */
 .plan-limit-note {

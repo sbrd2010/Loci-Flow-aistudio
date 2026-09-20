@@ -94,9 +94,20 @@ export function minutesByFront(events, tasks = []) {
   for (const event of events) {
     const mins = eventMinutes(event);
     if (mins <= 0) continue;
-    // A task deleted since the session was logged has no front to attribute
-    // the time to; it still counts as time, under "no front".
-    const frontId = frontOf.has(event.taskId) ? frontOf.get(event.taskId) : null;
+    // The front the task was ON at the time, recorded in the event itself.
+    // Reading the live task alone meant reassigning a task retroactively moved
+    // all of its past sessions in this breakdown.
+    //
+    // Events written before that snapshot existed carry no frontId, so they
+    // still fall back to the live task — which also covers a task deleted
+    // since the session, whose time counts under "no front". The fallback is
+    // imperfect for one case: an OLD event for a task that had no front then
+    // and has one now still lands on the current front. Sparse snapshots
+    // cannot distinguish "was on no front" from "predates this field", and
+    // inventing a marker to tell them apart is not worth it — every event
+    // written from here on is exact.
+    const frontId = event.taskSnapshot?.frontId
+      || (frontOf.has(event.taskId) ? frontOf.get(event.taskId) : null);
     out.set(frontId, (out.get(frontId) || 0) + mins);
   }
   return out;

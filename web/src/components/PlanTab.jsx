@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import LinkifyText from "./LinkifyText";
+import ConfirmDialog from "./ConfirmDialog";
 import {
   frontsFromConfig,
   normalizeFronts,
@@ -13,6 +14,7 @@ import {
   makeFront,
   FRONT_NAME_MAX,
   FRONT_LIMIT,
+  LEGACY_DEADLINE_FRONT_ID,
 } from "../utils/fronts";
 import "../styles/plan.css";
 
@@ -31,7 +33,7 @@ function countLabel(n) {
   return `${word} ${n === 1 ? "front" : "fronts"}`;
 }
 
-function FrontBlock({ front, tasks, isLead, now }) {
+function FrontBlock({ front, tasks, isLead, now, onClose }) {
   const nextMove = frontNextMove(front, tasks);
   const { done, total } = frontProgress(tasks, front.id);
   const due = frontDueLabel(front, now);
@@ -48,6 +50,16 @@ function FrontBlock({ front, tasks, isLead, now }) {
           <span className={`plan-front-due${pressing ? " is-pressing" : ""}${front.parked ? " is-parked-tag" : ""}`}>
             {due}
           </span>
+        )}
+        {onClose && (
+          <button
+            type="button"
+            className="plan-front-close"
+            aria-label={`Close the front ${front.name}`}
+            onClick={() => onClose(front)}
+          >
+            Close
+          </button>
         )}
       </div>
 
@@ -83,7 +95,24 @@ export default function PlanTab({ payload = {}, savePayload, saveConfigPatch, on
 
   // One `now` per render so every front on screen is measured against the same
   // instant — otherwise a render spanning midnight could show two different days.
-  const now = useMemo(() => new Date(), [tasks, config]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Front deadlines are CALENDAR days parsed at local midnight, so this ticks on
+  // the local date — not the loci day The week uses. Without it, a screen left
+  // open across midnight (or resumed after sleep) kept "1d" instead of "0d" or
+  // OVERDUE, and the ordering, the lead front and the fortnight footer all
+  // stayed on yesterday.
+  const [dayKey, setDayKey] = useState(() => new Date().toDateString());
+  useEffect(() => {
+    const id = setInterval(
+      () => setDayKey(prev => {
+        const next = new Date().toDateString();
+        return next === prev ? prev : next; // same day ⇒ same state ⇒ no render
+      }),
+      60_000,
+    );
+    return () => clearInterval(id);
+  }, []);
+
+  const now = useMemo(() => new Date(), [tasks, config, dayKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const fronts = useMemo(() => sortFronts(frontsFromConfig(config), now), [config, now]);
   const footer = useMemo(() => planFooterSentence(fronts, tasks, now), [fronts, tasks, now]);
   // A task needs no front (Addendum C). Loose tasks are listed, never labelled
@@ -114,6 +143,22 @@ export default function PlanTab({ payload = {}, savePayload, saveConfigPatch, on
         t.uuid === task.uuid ? { ...t, frontId: nextFrontId, lastUpdated: Date.now() } : t
       )),
     });
+  };
+
+  // Closing a front. It is removed from config.fronts; the tasks on it are not
+  // touched and reappear under "Not on a front" (unassignedTasks already counts
+  // a frontId naming no front as loose). Without this the cap was a dead end:
+  // at FRONT_LIMIT the screen told the user to close one and nothing could.
+  //
+  // The legacy Key Deadline front is PROJECTED from config.deadlineLabel at
+  // read time rather than stored, so there is nothing here to remove — it is
+  // closed by clearing the deadline in Settings, and offering a button that
+  // silently did nothing would be worse than offering none.
+  const [closing, setClosing] = useState(null);
+  const closeFront = (front) => {
+    if (!front?.id || typeof saveConfigPatch !== "function") return;
+    saveConfigPatch({ fronts: normalizeFronts(config.fronts).filter(f => f.id !== front.id) });
+    setClosing(null);
   };
 
   const commitFront = () => {
@@ -152,7 +197,7 @@ export default function PlanTab({ payload = {}, savePayload, saveConfigPatch, on
 
       {atFrontLimit && (
         <p className="plan-limit-note">
-          That is {FRONT_LIMIT} fronts — the most Loci holds. Close one before adding another.
+          That is {FRONT_LIMIT} fronts — the most Loci holds. Close one to make room.
         </p>
       )}
 
@@ -194,7 +239,14 @@ export default function PlanTab({ payload = {}, savePayload, saveConfigPatch, on
       ) : (
         <div className="plan-fronts">
           {fronts.map((front, i) => (
-            <FrontBlock key={front.id} front={front} tasks={tasks} isLead={i === 0 && !front.parked} now={now} />
+            <FrontBlock
+              key={front.id}
+              front={front}
+              tasks={tasks}
+              isLead={i === 0 && !front.parked}
+              now={now}
+              onClose={front.id === LEGACY_DEADLINE_FRONT_ID ? undefined : setClosing}
+            />
           ))}
         </div>
       )}
@@ -242,6 +294,17 @@ export default function PlanTab({ payload = {}, savePayload, saveConfigPatch, on
         <button type="button" className="plan-horizons-link" onClick={onOpenHorizons}>
           Plan by time horizon instead
         </button>
+      )}
+
+      {closing && (
+        <ConfirmDialog
+          message={`Close "${closing.name}"?\n\nThe front goes away. Nothing on it is deleted — those tasks move back to "Not on a front".`}
+          confirmLabel="Close the front"
+          cancelLabel="Keep it"
+          danger
+          onConfirm={() => closeFront(closing)}
+          onCancel={() => setClosing(null)}
+        />
       )}
     </div>
   );

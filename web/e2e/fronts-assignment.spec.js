@@ -124,3 +124,44 @@ test("mobile reliability: the task dialog shows a task's front and can change it
   await expect(front.locator(".plan-front-move-empty")).toBeVisible({ timeout: 5_000 });
   await expect(page.locator(".plan-loose-title", { hasText: taskTitle })).toHaveCount(1);
 });
+
+test("mobile reliability: a front can be closed, and its tasks come back rather than vanish", async ({ page }) => {
+  await enterDemo(page);
+  await openPlan(page);
+  await addFront(page, "Temporary front");
+
+  const firstLoose = page.locator(".plan-loose-row").first();
+  const taskTitle = (await firstLoose.locator(".plan-loose-title").innerText()).trim();
+  const looseBefore = await page.locator(".plan-loose-row").count();
+  await firstLoose.locator(".plan-loose-assign").selectOption({ label: "Temporary front" });
+  await expect(page.locator(".plan-loose-row")).toHaveCount(looseBefore - 1);
+
+  const front = page.locator(".plan-front", { has: page.locator(".plan-front-name", { hasText: "Temporary front" }) });
+  await front.getByRole("button", { name: /Close the front Temporary front/ }).click();
+
+  // Destructive, so it asks — and cancelling really cancels.
+  await page.getByRole("button", { name: "Keep it" }).click();
+  await expect(front).toHaveCount(1);
+
+  await front.getByRole("button", { name: /Close the front Temporary front/ }).click();
+  // exact, or it also matches the trigger's aria-label "Close the front <name>".
+  await page.getByRole("button", { name: "Close the front", exact: true }).click();
+
+  await expect(page.locator(".plan-front-name", { hasText: "Temporary front" })).toHaveCount(0);
+  // The task is back in the loose list, not lost with the front.
+  await expect(page.locator(".plan-loose-title", { hasText: taskTitle })).toHaveCount(1);
+  await expect(page.locator(".plan-loose-row")).toHaveCount(looseBefore);
+});
+
+test("mobile reliability: the projected Key Deadline front offers no Close button", async ({ page }) => {
+  await enterDemo(page);
+  await openPlan(page);
+
+  // It is derived from the deadline in Settings rather than stored, so there is
+  // nothing for a Close button here to remove.
+  const closeButtons = page.locator(".plan-front-close");
+  await expect(closeButtons).toHaveCount(0);
+
+  await addFront(page, "A real front");
+  await expect(page.locator(".plan-front-close")).toHaveCount(1);
+});

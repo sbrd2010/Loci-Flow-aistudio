@@ -134,8 +134,12 @@ function reasonFor(chosen, pool, fronts) {
       ? "It's the only thing left with a date on it."
       : "It has the nearest date of everything still standing.";
   }
+  // Any rank that beats another survivor is a priority edge, not just P1/P2.
+  // The old `rank <= 2` gate meant a P3 chosen over a P4 fell through to "it's
+  // first in the order you already put these in" — which pickOne had not done
+  // and which was plainly false whenever the P4 sat higher in that order.
   const rank = priorityRank(chosen);
-  if (rank <= 2 && pool.some(t => priorityRank(t) > rank)) {
+  if (pool.some(t => priorityRank(t) > rank)) {
     return "It's the highest priority of what's left.";
   }
   return "It's first in the order you already put these in.";
