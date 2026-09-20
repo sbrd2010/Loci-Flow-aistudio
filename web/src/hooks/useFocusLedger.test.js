@@ -103,7 +103,7 @@ describe("useFocusLedger", () => {
 
   it("reads nothing at all without a uid — demo mode has none", () => {
     const { result } = renderHook(useFocusLedger, [null]);
-    expect(result.current).toBeNull();
+    expect(result.current.raw).toBeNull();
     expect(onValueMock).not.toHaveBeenCalled();
     expect(refMock).not.toHaveBeenCalled();
   });
@@ -135,7 +135,8 @@ describe("useFocusLedger", () => {
     const events = { "2026-11-04": { e1: { type: "focus_completed", focusElapsedSeconds: 1500 } } };
     onValueMock.mockImplementation((_q, onNext) => { onNext({ val: () => events }); return () => {}; });
     const { result } = renderHook(useFocusLedger, ["alice"]);
-    expect(result.current).toEqual(events);
+    expect(result.current.raw).toEqual(events);
+    expect(result.current.status).toBe("ready");
   });
 
   it("falls back to null when the read is refused, rather than taking the screen down", () => {
@@ -144,7 +145,7 @@ describe("useFocusLedger", () => {
       return () => {};
     });
     const { result } = renderHook(useFocusLedger, ["alice"]);
-    expect(result.current).toBeNull();
+    expect(result.current.raw).toBeNull();
   });
 
   it("unsubscribes on unmount", () => {
@@ -181,6 +182,64 @@ describe("useFocusLedger", () => {
     const { result, rerender } = renderHook(useFocusLedger, ["alice"]);
     rerender([null]);
     expect(unsub).toHaveBeenCalled();
-    expect(result.current).toBeNull();
+    expect(result.current.raw).toBeNull();
+  });
+});
+
+// "The week was empty" and "the week could not be read" are different facts.
+// Returning null for both let The week assert that nothing was logged when it
+// had never looked.
+describe("useFocusLedger — status", () => {
+  beforeEach(() => {
+    states = []; stateSetters = []; refs = []; effects = [];
+    cleanupFuncs = []; lastDeps = [];
+    stateIndex = 0; refIndex = 0; effectIndex = 0;
+    reRunCallback = () => {};
+    vi.clearAllMocks();
+    onValueMock.mockImplementation(() => () => {});
+  });
+
+  it("reports unavailable, not empty, when there is no uid", () => {
+    const { result } = renderHook(useFocusLedger, [null]);
+    expect(result.current.status).toBe("unavailable");
+    expect(result.current.raw).toBeNull();
+    expect(onValueMock).not.toHaveBeenCalled();
+  });
+
+  it("reports loading until the first snapshot lands", () => {
+    const { result } = renderHook(useFocusLedger, ["alice"]);
+    expect(result.current.status).toBe("loading");
+    expect(result.current.raw).toBeNull();
+  });
+
+  it("reports unavailable when the read is refused, not an empty week", () => {
+    onValueMock.mockImplementation((_q, _onNext, onError) => {
+      onError(new Error("permission_denied"));
+      return () => {};
+    });
+    const { result } = renderHook(useFocusLedger, ["alice"]);
+    expect(result.current.status).toBe("unavailable");
+  });
+
+  // The distinction that matters: an empty ledger that WAS read is a fact the
+  // screen may state; an unread one is not.
+  it("calls a genuinely empty ledger ready, not unavailable", () => {
+    onValueMock.mockImplementation((_q, onNext) => { onNext({ val: () => null }); return () => {}; });
+    const { result } = renderHook(useFocusLedger, ["alice"]);
+    expect(result.current.status).toBe("ready");
+    expect(result.current.raw).toBeNull();
+  });
+
+  it("clears the previous account's data when the uid changes", () => {
+    const mine = { "2026-11-04": { e1: { type: "focus_completed", focusElapsedSeconds: 1500 } } };
+    onValueMock.mockImplementation((_q, onNext) => { onNext({ val: () => mine }); return () => {}; });
+    const { result, rerender } = renderHook(useFocusLedger, ["alice"]);
+    expect(result.current.raw).toEqual(mine);
+
+    // Signing in as someone else must not leave alice's minutes on screen.
+    onValueMock.mockImplementation(() => () => {});
+    rerender(["bob"]);
+    expect(result.current.raw).toBeNull();
+    expect(result.current.status).toBe("loading");
   });
 });

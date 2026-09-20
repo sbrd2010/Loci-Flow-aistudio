@@ -158,13 +158,23 @@ export function narrowDown(tasks, config = {}, now = new Date()) {
   }
 
   const fronts = datedFronts(config);
-  const frontCount = new Set(open.map(t => t.frontId).filter(Boolean)).size;
+  // Counted through the fronts that actually EXIST, and the loose work is not
+  // silently folded in. A raw frontId count reported a front the user had
+  // closed, and a mix of assigned and loose tasks read as though everything
+  // sat on the counted fronts — the opening figure of a screen whose whole
+  // claim is that its numbers are real.
+  const liveFrontIds = new Set(frontsFromConfig(config).map(f => f.id));
+  const onFronts = new Set(open.map(t => t.frontId).filter(id => id && liveFrontIds.has(id)));
+  const looseCount = open.filter(t => !t.frontId || !liveFrontIds.has(t.frontId)).length;
+  const frontWord = `${numberWord(onFronts.size).toLowerCase()} ${onFronts.size === 1 ? "front" : "fronts"}`;
   const rows = [{
     key: "open",
     figure: String(open.length),
-    reason: frontCount > 0
-      ? `open across ${numberWord(frontCount).toLowerCase()} ${frontCount === 1 ? "front" : "fronts"}`
-      : "open across your lists",
+    reason: onFronts.size === 0
+      ? "open across your lists"
+      : (looseCount > 0
+        ? `open across ${frontWord}, and ${looseCount} on none`
+        : `open across ${frontWord}`),
   }];
 
   let pool = open;

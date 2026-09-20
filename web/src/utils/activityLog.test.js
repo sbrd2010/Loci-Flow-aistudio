@@ -73,7 +73,7 @@ describe("buildTaskMutationEvent", () => {
     expect(ev.lociDateString).toBe("2026-07-10");
     expect(typeof ev.utcTimestamp).toBe("number");
     expect(ev.source).toBe("user");
-    expect(ev.taskSnapshot).toEqual({ category: "Career", priority: "P1", horizonLevel: "today" });
+    expect(ev.taskSnapshot).toEqual({ category: "Career", priority: "P1", horizonLevel: "today", frontId: "" });
     expect(typeof ev.eventId).toBe("string");
     expect(ev.eventId.length).toBeGreaterThan(0);
   });
@@ -109,13 +109,28 @@ describe("buildTaskMutationEvent", () => {
   it("omits taskSnapshot fields the task is missing, instead of inventing defaults", () => {
     const bareTask = { uuid: "task-2" };
     const ev = buildTaskMutationEvent("task_created", bareTask, { now: dt(2026, 7, 10, 10), windows });
-    expect(ev.taskSnapshot).toEqual({});
+    // frontId is the one deliberate exception to the sparse rule — see below.
+    expect(ev.taskSnapshot).toEqual({ frontId: "" });
   });
 
   it("only includes taskSnapshot fields the task actually has, partial or full", () => {
     const partialTask = { uuid: "task-3", category: "Career" };
     const ev = buildTaskMutationEvent("task_created", partialTask, { now: dt(2026, 7, 10, 10), windows });
-    expect(ev.taskSnapshot).toEqual({ category: "Career" });
+    expect(ev.taskSnapshot).toEqual({ category: "Career", frontId: "" });
+  });
+
+  // For every other field, not knowing is harmless: the reader simply has no
+  // category. frontId is different — an ABSENT frontId means "this event
+  // predates the field, go and ask the live task", and that guess rewrites
+  // history the moment the task joins a front. So "there was no front" has to
+  // be recordable as a fact. The empty string is that fact, not a default.
+  it("records an empty frontId as a fact, so 'no front' is not mistaken for 'not recorded'", () => {
+    const loose = buildTaskMutationEvent("task_created", { uuid: "t" }, { now: dt(2026, 7, 10, 10), windows });
+    expect("frontId" in loose.taskSnapshot).toBe(true);
+    expect(loose.taskSnapshot.frontId).toBe("");
+
+    const assigned = buildTaskMutationEvent("task_created", { uuid: "t", frontId: "f1" }, { now: dt(2026, 7, 10, 10), windows });
+    expect(assigned.taskSnapshot.frontId).toBe("f1");
   });
 
   it("accepts now as an epoch-ms number (not just a Date) without crashing", () => {

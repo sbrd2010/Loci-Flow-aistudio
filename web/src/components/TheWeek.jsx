@@ -73,7 +73,8 @@ export function patternSentence(summary, frontNameOf) {
 export default function TheWeek({ payload = {}, uid, onBack, saveConfigPatch, onOpenOldInsights }) {
   const { tasks = [], config = {} } = payload;
   const windows = useMemo(() => getFocusWindows(config), [config]);
-  const raw = useFocusLedger(uid, 7, windows);
+  const { raw, status } = useFocusLedger(uid, 7, windows);
+  const ledgerReady = status === "ready";
 
   // The current loci day, polled. Nothing else here is clock-driven, so a screen
   // left open across the day boundary kept a `now` from yesterday: the range,
@@ -98,17 +99,33 @@ export default function TheWeek({ payload = {}, uid, onBack, saveConfigPatch, on
   );
 
   const fronts = useMemo(() => frontsFromConfig(config), [config]);
-  const frontNameOf = (id) => fronts.find(f => f.id === id)?.name || "work on no front";
+  // A front that has since been CLOSED still owns its minutes. Collapsing its
+  // id into "work on no front" moved real, assigned work into the unassigned
+  // bucket — a figure changing because of something the user did today, about
+  // a week that is already over.
+  const frontNameOf = (id) => {
+    if (!id) return "work on no front";
+    return fronts.find(f => f.id === id)?.name || "a front you've closed";
+  };
 
   const { perDay, totalMinutes, totalMoves, byFront } = summary;
   const peak = Math.max(...perDay.map(d => d.minutes), 1);
-  const sentence = patternSentence(summary, frontNameOf);
+  // Only a READ week gets a claim made about it. "Nothing is logged this week"
+  // is a statement about the user's week, and it was being made whenever the
+  // ledger could not be reached at all.
+  const sentence = ledgerReady
+    ? patternSentence(summary, frontNameOf)
+    : (status === "loading"
+      ? { before: "Reading your week", bold: "", after: "…" }
+      : (uid
+        ? { before: "Your week couldn't be read just now. ", bold: "Nothing is lost", after: " — the sessions are still on the ledger." }
+        : { before: "Demo mode keeps no ledger, so there is ", bold: "nothing to read here", after: "." }));
 
   // "Protect tomorrow's 08:00?" is only offered when the ledger actually shows
   // a habitual start hour, and only when no focus window already covers it.
   const suggestHour = commonestStartHour(summary.events);
   const alreadyProtected = suggestHour !== null && windows.some(w => isHourInWindow(suggestHour, w));
-  const canSuggest = suggestHour !== null && !alreadyProtected && typeof saveConfigPatch === "function";
+  const canSuggest = ledgerReady && suggestHour !== null && !alreadyProtected && typeof saveConfigPatch === "function";
 
   const protectHour = () => {
     const pad = (n) => String(n).padStart(2, "0");
@@ -141,15 +158,20 @@ export default function TheWeek({ payload = {}, uid, onBack, saveConfigPatch, on
         <span className="week-range">{formatRange(perDay)}</span>
       </header>
 
-      <div className="week-figure">{formatMinutes(totalMinutes)}</div>
+      <div className="week-figure">{ledgerReady ? formatMinutes(totalMinutes) : "—"}</div>
       <div className="week-kicker">
-        {`FOCUSED · ${totalMoves} ${totalMoves === 1 ? "MOVE" : "MOVES"} LOGGED`}
+        {ledgerReady
+          ? `FOCUSED · ${totalMoves} ${totalMoves === 1 ? "MOVE" : "MOVES"} LOGGED`
+          : (status === "loading" ? "READING" : "NO LEDGER TO READ")}
       </div>
 
       <p className="week-sentence">
         {sentence.before}<strong>{sentence.bold}</strong>{sentence.after}
       </p>
 
+      {/* A chart of seven empty bars is a claim about seven days. It renders
+          only when the ledger was actually read. */}
+      {ledgerReady && (
       <div className="week-chart" style={{ height: `${CHART_HEIGHT}px` }}>
         {perDay.map((d, i) => {
           const value = d.minutes;
@@ -167,9 +189,10 @@ export default function TheWeek({ payload = {}, uid, onBack, saveConfigPatch, on
           );
         })}
       </div>
+      )}
 
-      <div className="week-breakdown-kicker">WHERE IT WENT</div>
-      {rows.length === 0 ? (
+      {ledgerReady && <div className="week-breakdown-kicker">WHERE IT WENT</div>}
+      {!ledgerReady ? null : rows.length === 0 ? (
         <p className="week-empty">No sessions yet this week.</p>
       ) : (
         <ul className="week-rows">

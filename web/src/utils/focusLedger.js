@@ -98,16 +98,20 @@ export function minutesByFront(events, tasks = []) {
     // Reading the live task alone meant reassigning a task retroactively moved
     // all of its past sessions in this breakdown.
     //
-    // Events written before that snapshot existed carry no frontId, so they
-    // still fall back to the live task — which also covers a task deleted
-    // since the session, whose time counts under "no front". The fallback is
-    // imperfect for one case: an OLD event for a task that had no front then
-    // and has one now still lands on the current front. Sparse snapshots
-    // cannot distinguish "was on no front" from "predates this field", and
-    // inventing a marker to tell them apart is not worth it — every event
-    // written from here on is exact.
-    const frontId = event.taskSnapshot?.frontId
-      || (frontOf.has(event.taskId) ? frontOf.get(event.taskId) : null);
+    // PRESENCE is what distinguishes a recorded state from a legacy event, not
+    // truthiness: the snapshot stores "" for "was on no front", so an empty
+    // string is an answer and an absent key is "we did not record one". Testing
+    // truthiness instead treated a genuinely unassigned session as legacy and
+    // fell through to the live task — re-attributing it the moment that task
+    // joined a front.
+    //
+    // Only events written before the field existed take the fallback, which
+    // also covers a task deleted since the session — its time counts under
+    // "no front".
+    const snapshotFront = event.taskSnapshot?.frontId;
+    const frontId = typeof snapshotFront === "string"
+      ? (snapshotFront || null)
+      : (frontOf.has(event.taskId) ? frontOf.get(event.taskId) : null);
     out.set(frontId, (out.get(frontId) || 0) + mins);
   }
   return out;

@@ -12,12 +12,19 @@ import { lociDayWindow } from "../utils/focusLedger";
 // entire history. Subscribing to the whole node would work today and get
 // steadily worse for exactly the people who use the app most.
 //
-// Returns the raw { date: { eventId: event } } object for utils/focusLedger to
-// aggregate, or null when there is nothing to read — no uid (demo mode has
-// none), or the read was refused. Callers treat null as "no minutes yet" and
-// render moves instead of durations, which is the addendum's own fallback.
+// Returns { raw, status }.
+//
+// `status` exists because "the week was empty" and "the week could not be read"
+// are different facts, and returning null for both let the screen assert that
+// nothing was logged when it had simply never looked — in demo mode, which has
+// no uid, and on any refused or failed read. A screen whose entire claim is
+// that its figures are real must not do that.
+//
+//   "loading"     — subscribed, first snapshot not in yet
+//   "ready"       — `raw` is what the ledger holds for this window
+//   "unavailable" — no uid, or the read was refused/failed
 export function useFocusLedger(uid, days = 7, windows) {
-  const [raw, setRaw] = useState(null);
+  const [state, setState] = useState(() => ({ raw: null, status: uid ? "loading" : "unavailable", uid }));
   // The oldest day in the window, as a plain "YYYY-MM-DD" string. Depending on
   // THIS rather than on `windows` gives both properties at once: a fresh windows
   // array on every render cannot retrigger the subscription (the string is
@@ -29,9 +36,14 @@ export function useFocusLedger(uid, days = 7, windows) {
 
   useEffect(() => {
     if (!uid) {
-      setRaw(null);
+      setState({ raw: null, status: "unavailable", uid });
       return undefined;
     }
+    // Cleared only when the USER changes, not on every resubscribe: the day
+    // key moves at the loci-day boundary and blanking the screen then would be
+    // a flash for no reason. Signing in as someone else must never leave the
+    // previous account's minutes on screen while the new read lands.
+    setState(prev => (prev.uid === uid ? prev : { raw: null, status: "loading", uid }));
     const eventsQuery = query(
       ref(db, `activityLogs/${uid}/events`),
       orderByKey(),
@@ -39,12 +51,13 @@ export function useFocusLedger(uid, days = 7, windows) {
     );
     return onValue(
       eventsQuery,
-      snapshot => setRaw(snapshot.val()),
-      // A refused or failed read is not an error state worth surfacing: the
-      // figures simply fall back to moves. Never let it take the screen down.
-      () => setRaw(null),
+      snapshot => setState({ raw: snapshot.val(), status: "ready", uid }),
+      // A refused or failed read must never take the screen down — but it is
+      // reported as unavailable rather than as an empty week, so the caller can
+      // say "couldn't read this" instead of "you did nothing".
+      () => setState({ raw: null, status: "unavailable", uid }),
     );
   }, [uid, oldest]);
 
-  return raw;
+  return state;
 }

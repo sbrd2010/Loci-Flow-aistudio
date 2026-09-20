@@ -178,18 +178,44 @@ describe("narrowDown — the reduction ledger", () => {
     expect(out.rows.some(r => r.key === "toobig")).toBe(false);
   });
 
+  // The fronts have to EXIST in config for a task to be on one — a frontId
+  // naming nothing is loose work, exactly as Plan renders it.
+  const withFronts = { ...config, fronts: [{ id: "f1", name: "One" }, { id: "f2", name: "Two" }] };
+
   it("counts fronts when tasks are on them", () => {
     const tasks = [
       task({ uuid: "a", frontId: "f1" }),
       task({ uuid: "b", frontId: "f2" }),
       task({ uuid: "c", frontId: "f1" }),
     ];
-    expect(narrowDown(tasks, config, NOW).rows[0].reason).toBe("open across two fronts");
+    expect(narrowDown(tasks, withFronts, NOW).rows[0].reason).toBe("open across two fronts");
   });
 
   it("says 'one front' rather than 'one fronts'", () => {
     const tasks = [task({ uuid: "a", frontId: "f1" }), task({ uuid: "b", frontId: "f1" })];
-    expect(narrowDown(tasks, config, NOW).rows[0].reason).toBe("open across one front");
+    expect(narrowDown(tasks, withFronts, NOW).rows[0].reason).toBe("open across one front");
+  });
+
+  it("does not fold loose work into the front count", () => {
+    const tasks = [
+      task({ uuid: "a", frontId: "f1" }),
+      task({ uuid: "b" }),
+      task({ uuid: "c" }),
+    ];
+    expect(narrowDown(tasks, withFronts, NOW).rows[0].reason).toBe("open across one front, and 2 on none");
+  });
+
+  it("treats a frontId naming a closed front as loose, not as a front", () => {
+    const tasks = [
+      task({ uuid: "a", frontId: "f1" }),
+      task({ uuid: "b", frontId: "gone" }),
+    ];
+    expect(narrowDown(tasks, withFronts, NOW).rows[0].reason).toBe("open across one front, and 1 on none");
+  });
+
+  it("says 'your lists' when nothing is on a real front", () => {
+    const tasks = [task({ uuid: "a", frontId: "gone" }), task({ uuid: "b" })];
+    expect(narrowDown(tasks, withFronts, NOW).rows[0].reason).toBe("open across your lists");
   });
 
   it("returns an empty result, not a crash, when nothing is open", () => {
