@@ -29,6 +29,7 @@ export default function TodayWall({
   dateLabel,
   hoursLeftLabel,
   focusMinutes = 25,
+  timerLabel = null,
   peekOpen,
   onTogglePeek,
   remainingCount = 0,
@@ -38,11 +39,15 @@ export default function TodayWall({
   onStartFocus,
   onMarkDone,
   onSplit,
+  onStartSmall,
   onChooseCommitment,
   onScattered,
   openCount = 0,
 }) {
-  const timer = `${pad2(focusMinutes)}:00`;
+  // timerLabel is supplied only while a session is already running on this
+  // task, where the chip has to name what tapping will resume.
+  const resuming = !!timerLabel;
+  const timer = timerLabel || `${pad2(focusMinutes)}:00`;
   // "The kicker becomes the front name *or* nothing — never 'Uncategorised'."
   const kicker = frontName ? `${frontName} · YOU COMMITTED TO` : "YOU COMMITTED TO";
   // J3: the day count is --alert ONLY under three days, otherwise --gold-lift.
@@ -109,7 +114,7 @@ export default function TodayWall({
           )}
           <button type="button" className="wall-primary" onClick={onStartFocus}>
             <span className="wall-primary-glyph" aria-hidden="true">▸</span>
-            <span>Start focus</span>
+            <span>{resuming ? "Resume focus" : "Start focus"}</span>
             <span className="wall-primary-figure">· {timer}</span>
           </button>
         </div>
@@ -124,7 +129,7 @@ export default function TodayWall({
           )}
           <span className="wall-start-row">
             <span className="wall-chip">▸ {timer}</span>
-            <span className="wall-start-hint">tap anywhere to begin</span>
+            <span className="wall-start-hint">{resuming ? "tap anywhere to resume" : "tap anywhere to begin"}</span>
           </span>
         </button>
       )}
@@ -132,8 +137,10 @@ export default function TodayWall({
       <div className={`wall-actions${peekOpen ? " is-desk" : ""}`}>
         <button type="button" className="wall-action" onClick={onMarkDone}>Mark done</button>
         {/* Low Energy swaps the split action for a smaller start, per Addendum A.
-            No banner and no badge — a low-energy day must not look degraded. */}
-        <button type="button" className="wall-action" onClick={onSplit}>
+            No banner and no badge — a low-energy day must not look degraded.
+            The handler swaps with the label: a button that says "5 minutes" and
+            opens the task editor is a control that lies about what it does. */}
+        <button type="button" className="wall-action" onClick={lowEnergy ? onStartSmall : onSplit}>
           {lowEnergy ? "Start small — 5 minutes" : (peekOpen ? "Split it" : "Too big — split it")}
         </button>
       </div>

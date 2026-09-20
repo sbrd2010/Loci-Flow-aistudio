@@ -1052,6 +1052,7 @@ export default function App() {
             onOpenDayMap={openDayMap}
             onOpenMindBox={openMindBox}
             onOpenCoach={() => setActiveTab("coach")}
+            onScattered={() => { setRoadmapView("scattered"); setActiveTab("roadmap"); }}
             isAddTaskDialogOpen={showAddTask}
             pendingCheckinSlot={pendingCheckinSlot}
             setPendingCheckinSlot={setPendingCheckinSlot}

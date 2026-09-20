@@ -87,3 +87,65 @@ test("mobile reliability: a deadline a year out is not painted as time pressure"
   await expect(days).toBeVisible();
   await expect(days).not.toHaveClass(/is-pressing/);
 });
+
+// ── Fixes for the Codex review on PR #380 ─────────────────────────────────
+// Each of these asserts a control does what its label says. All three were
+// controls that rendered correctly and did the wrong thing (or nothing) —
+// the same class of defect as the peek that hid nothing.
+
+async function enterDemoWithPeek(page) {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
+  });
+  await enterDemo(page);
+}
+
+test("mobile reliability: Low Energy's smaller start actually starts five minutes", async ({ page }) => {
+  await enterDemoWithPeek(page);
+
+  await page.locator("button.stuck-btn", { hasText: "Low Energy" }).click();
+
+  const smaller = page.locator(".wall-action", { hasText: "Start small — 5 minutes" });
+  await expect(smaller).toBeVisible({ timeout: 8_000 });
+  await smaller.click();
+
+  // A focus session, at five minutes — not the task editor, and not the
+  // task's own 25-minute estimate.
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 8_000 });
+  // The five-minute session presents as one (528db2f) — and the figure is 5:00,
+  // not the task's own 25:00.
+  await expect(overlay.getByText("FIVE MINUTES", { exact: false })).toBeVisible();
+  await expect(overlay.getByText(/\b5:00\b/)).toBeVisible();
+});
+
+test("mobile reliability: the scattered door on the desk reaches screen 14", async ({ page }) => {
+  await enterDemoWithPeek(page);
+
+  const door = page.locator(".wall-scattered-link");
+  await expect(door).toBeVisible({ timeout: 8_000 });
+  await door.click();
+
+  await expect(page.locator(".scattered")).toBeVisible({ timeout: 8_000 });
+});
+
+test("mobile reliability: choosing today's one thing actually commits it", async ({ page }) => {
+  await enterDemo(page);
+
+  // Clear the demo's pinned commitment so the wall asks the question.
+  await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
+  await page.locator(".wall-action", { hasText: "Mark done" }).click();
+  await expect(page.getByText("SO — WHAT'S THE ONE THING TODAY?")).toBeVisible({ timeout: 8_000 });
+
+  await page.locator("button", { hasText: "Choose today's one thing" }).click();
+  const row = page.locator(".focus-now-pick-row").first();
+  const chosen = (await row.locator(".focus-now-pick-title").innerText()).trim();
+  await row.click();
+
+  // The wall stops asking, because the answer was written to isNowFocus on the
+  // task rather than to view-local state. Demo mode holds its payload in
+  // memory, so a reload here would only return to the landing screen — the
+  // assertion that matters is that the wall, which reads the pin, now shows it.
+  await expect(page.locator(".wall-title")).toContainText(chosen, { timeout: 8_000 });
+  await expect(page.getByText("SO — WHAT'S THE ONE THING TODAY?")).toHaveCount(0);
+});

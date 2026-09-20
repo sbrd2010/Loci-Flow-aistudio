@@ -7,7 +7,7 @@ import FocusModePage from "./FocusModePage";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
-import { buildToggleCompletedTasks, byPriorityThenOrder } from "../utils/taskOps";
+import { buildToggleCompletedTasks, byPriorityThenOrder, countCompletedOn } from "../utils/taskOps";
 import { buildParkTaskTasks } from "../utils/coachActions";
 import { shouldStopFocusOnComplete } from "../utils/focusSession";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
@@ -33,6 +33,11 @@ import {
   useSortable, arrayMove
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+
+// Addendum A: on a Low Energy day the wall offers a smaller start instead of
+// "split it". Five minutes, the same length ScatteredFlow's "Just 5 minutes"
+// starts — not the task's own estimate.
+const LOW_ENERGY_SESSION_SECONDS = 5 * 60;
 
 const PencilIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -63,7 +68,7 @@ function SortableTaskItem({ id, interactionStyle, children }) {
 }
 
 export default function TodayTab({
-  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenCoach,
+  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenCoach, onScattered,
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft, setTimerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
@@ -96,7 +101,10 @@ export default function TodayTab({
   // `pinPromise` (optional) is a still-in-flight pin write (e.g. Focus Now's
   // "pin then immediately start" button) — if given, ledger events wait for
   // it to confirm instead of logging for a pin that might not have landed.
-  const startFocusAndLog = (task, pinPromise) => {
+  // `options` is passed straight to startFocusSession — the wall's low-energy
+  // action uses it to start a genuine five-minute session rather than one at
+  // the task's own estimate.
+  const startFocusAndLog = (task, pinPromise, options) => {
     // If this task already has an open session (e.g. the user backed out of
     // the full-screen overlay while the timer kept running, then taps Focus
     // again on the same task), just reopen the overlay — treating this as a
@@ -107,7 +115,7 @@ export default function TodayTab({
       setIsTimerRunning(true);
       return;
     }
-    const session = startFocusSession(task);
+    const session = startFocusSession(task, options);
     (pinPromise || Promise.resolve())
       .then(() => {
         if (session.priorSession && session.priorSession.task) {
@@ -153,6 +161,12 @@ export default function TodayTab({
   const [focusNowMode, setFocusNowMode] = useState(false);
   const [focusNowTaskId, setFocusNowTaskId] = useState(null);
   const [showFocusNowPicker, setShowFocusNowPicker] = useState(false);
+  // The same sheet serves two callers. Opened from the One Task Focus chip it
+  // only stages a task (the pin happens when that view's Start is tapped);
+  // opened from the wall's "Choose today's one thing" the selection IS the
+  // commitment, so it has to reach isNowFocus — otherwise the wall still asks
+  // the question the user just answered, and a reload loses the choice.
+  const [pickerCommits, setPickerCommits] = useState(false);
   // "peekOpen is persisted to localStorage." Closed by default — the wall is
   // the default state, and the peek is how you ask for the rest.
   const [peekOpen, setPeekOpen] = useState(() => {
@@ -457,6 +471,16 @@ export default function TodayTab({
       })
       .catch(() => {});
     return pinPromise;
+  };
+
+  const handleFocusNowPick = (task) => {
+    setFocusNowTaskId(task.uuid);
+    setFocusNowMode(true);
+    setShowFocusNowPicker(false);
+    // handlePinTask TOGGLES, so an already-pinned task would be unpinned by a
+    // blind call — which would be the very state this is here to prevent.
+    if (pickerCommits && !task.isNowFocus) handlePinTask(task);
+    setPickerCommits(false);
   };
 
   const handleFocusBrainDump = (text) => {
@@ -869,9 +893,23 @@ export default function TodayTab({
     return h > 0 ? `${h}h${String(mins % 60).padStart(2, "0")}m LEFT` : `${mins}m LEFT`;
   })();
   const openAcrossFronts = (tasks || []).filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked).length;
+  // A session left running behind the overlay is REOPENED by the wall, not
+  // restarted (see startFocusAndLog) — so the chip has to name the time that
+  // tap will actually resume, not the task's estimate. Advertising 25:00 and
+  // resuming 08:12 is the same lie as a button whose label doesn't match its
+  // handler.
+  const wallSessionLive = !!(pinnedFocusTask && focusSessionId && focusSessionTaskUuid === pinnedFocusTask.uuid);
+  const wallLiveTimerLabel = wallSessionLive && Number.isFinite(timerSecondsLeft)
+    ? `${String(Math.floor(Math.max(0, timerSecondsLeft) / 60)).padStart(2, "0")}:${String(Math.max(0, timerSecondsLeft) % 60).padStart(2, "0")}`
+    : null;
 
   const remainingTasks = todayTasksFiltered.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
   const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted);
+  // The list below keeps showing everything completed that still carries the
+  // Today horizon, which is what that section is for. The wall's "N done" is a
+  // claim about TODAY, so it counts only tasks completed on this Loci day —
+  // otherwise last week's finished work reads as this morning's progress.
+  const doneTodayCount = countCompletedOn(completedTasks, todayStr);
 
   // Focus Now: first incomplete task in Day Map order for today (shown as "Recommended")
   const dayMapNextTask = todayTasksAll
@@ -1013,10 +1051,7 @@ export default function TodayTab({
     <>
       {/* ── The wall / the desk (screen 1). Replaces the greeting-clock-quote
            card: the commitment is what this screen is for, and the handoff
-           allows exactly one dominant element. The Key Deadline strip below
-           still competes with it — folding that into the wall's kicker is the
-           next commit, because one e2e test covers it and that deserves its
-           own diff. ── */}
+           allows exactly one dominant element. ── */}
       <TodayWall
         task={pinnedFocusTask}
         frontName={wallFrontName}
@@ -1027,13 +1062,16 @@ export default function TodayTab({
         peekOpen={peekOpen}
         onTogglePeek={() => setPeekOpen(v => !v)}
         remainingCount={remainingTasks.length}
-        doneCount={completedTasks.length}
+        doneCount={doneTodayCount}
         lowEnergy={!!config.isLowEnergyMode}
         openCount={openAcrossFronts}
+        timerLabel={wallLiveTimerLabel}
         onStartFocus={() => pinnedFocusTask && startFocusAndLog(pinnedFocusTask)}
         onMarkDone={() => pinnedFocusTask && handleToggleComplete(pinnedFocusTask)}
         onSplit={() => pinnedFocusTask && setEditingTask(pinnedFocusTask)}
-        onChooseCommitment={() => setShowFocusNowPicker(true)}
+        onStartSmall={() => pinnedFocusTask && startFocusAndLog(pinnedFocusTask, null, { plannedSeconds: LOW_ENERGY_SESSION_SECONDS })}
+        onChooseCommitment={() => { setPickerCommits(true); setShowFocusNowPicker(true); }}
+        onScattered={onScattered}
       />
 
       {/* ── Day Close (end-of-day reflection) ─────────────────────── */}
@@ -1605,11 +1643,11 @@ export default function TodayTab({
 
       {/* ── Focus Now: task picker bottom sheet ─────────────────── */}
       {showFocusNowPicker && (
-        <div className="focus-now-backdrop" onClick={() => setShowFocusNowPicker(false)}>
+        <div className="focus-now-backdrop" onClick={() => { setShowFocusNowPicker(false); setPickerCommits(false); }}>
           <div className="focus-now-sheet" onClick={e => e.stopPropagation()}>
             <div className="focus-now-sheet-header">
               <span className="focus-now-sheet-title">Pick one task</span>
-              <button className="focus-now-sheet-close" onClick={() => setShowFocusNowPicker(false)} aria-label="Close picker">✕</button>
+              <button className="focus-now-sheet-close" onClick={() => { setShowFocusNowPicker(false); setPickerCommits(false); }} aria-label="Close picker">✕</button>
             </div>
             <div className="focus-now-sheet-body">
               {focusNowPickerTasks.length === 0 ? (
@@ -1621,7 +1659,7 @@ export default function TodayTab({
                       <div className="focus-now-section-label">Recommended · Day Map</div>
                       <button
                         className={`focus-now-pick-row${focusNowTaskId === dayMapNextTask.uuid ? " is-selected" : ""}`}
-                        onClick={() => { setFocusNowTaskId(dayMapNextTask.uuid); setFocusNowMode(true); setShowFocusNowPicker(false); }}
+                        onClick={() => handleFocusNowPick(dayMapNextTask)}
                       >
                         <span className={`focus-now-priority ${(dayMapNextTask.priority || "P3").toLowerCase()}`}>
                           {dayMapNextTask.priority || "P3"}
@@ -1643,7 +1681,7 @@ export default function TodayTab({
                       <button
                         key={task.uuid}
                         className={`focus-now-pick-row${focusNowTaskId === task.uuid ? " is-selected" : ""}`}
-                        onClick={() => { setFocusNowTaskId(task.uuid); setFocusNowMode(true); setShowFocusNowPicker(false); }}
+                        onClick={() => handleFocusNowPick(task)}
                       >
                         <span className={`focus-now-priority ${(task.priority || "P3").toLowerCase()}`}>
                           {task.priority || "P3"}
