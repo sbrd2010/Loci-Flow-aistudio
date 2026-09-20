@@ -3,7 +3,7 @@ import TaskRow from "./TaskRow";
 import AddTaskDialog from "./AddTaskDialog";
 import TodayWall from "./TodayWall";
 import Momentum from "./Momentum";
-import { frontsFromConfig, commitmentDaysLeft } from "../utils/fronts";
+import { frontsFromConfig, commitmentDaysLeft, commitmentKickerFront } from "../utils/fronts";
 import { useFocusLedger } from "../hooks/useFocusLedger";
 import { minutesForTaskOn } from "../utils/focusLedger";
 import { buildMomentum } from "../utils/momentum";
@@ -922,14 +922,16 @@ export default function TodayTab({
   const wallFront = pinnedFocusTask?.frontId
     ? (wallFronts.find(f => f.id === pinnedFocusTask.frontId) || null)
     : null;
-  const wallFrontName = wallFront?.name || null;
+  // L1: front first, then the Key Deadline the user already set, then nothing.
+  const wallKickerFront = commitmentKickerFront(wallFront, config);
+  const wallFrontName = wallKickerFront?.name || null;
   // J3 reads "MEMBRANE PAPER · 11d" — one front, and its own count. Taking the
   // count from the legacy config.deadlineDate while the kicker named a
   // different front put one front's days beside another's name, and hid the
   // named front's own dueAt. The count belongs to whatever the kicker names;
   // with no front, that is the legacy key deadline, as the deleted strip
   // showed. An overdue deadline is not "days left".
-  const wallDaysLeft = commitmentDaysLeft(wallFront, config, new Date());
+  const wallDaysLeft = commitmentDaysLeft(wallKickerFront, new Date());
   const wallDateLabel = wallHeader.dateLabel;
   const wallHoursLeft = wallHeader.hoursLeftLabel;
   const openAcrossFronts = (tasks || []).filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked).length;

@@ -59,8 +59,10 @@ export default function TodayWall({
   // task, where the chip has to name what tapping will resume.
   const resuming = !!timerLabel;
   const timer = timerLabel || `${pad2(focusMinutes)}:00`;
-  // "The kicker becomes the front name *or* nothing — never 'Uncategorised'."
-  const kicker = frontName ? `${frontName} · YOU COMMITTED TO` : "YOU COMMITTED TO";
+  // L1: the kicker names the commitment's front, or the Key Deadline when it
+  // has no front, or nothing at all when there is neither — never
+  // "Uncategorised", and never a bare label with nothing to name.
+  const kicker = frontName ? `${frontName} · YOU COMMITTED TO` : null;
   // J3: the day count is --alert ONLY under three days, otherwise --gold-lift.
   // The Key Deadline strip's information lives here now, and the one alert
   // colour is spent only on something genuinely imminent.
@@ -218,7 +220,7 @@ export default function TodayWall({
       {peekOpen ? (
         // — the desk —
         <div className="wall-body">
-          <div className="wall-kicker">{kicker}</div>
+          {kicker && <div className="wall-kicker">{kicker}</div>}
           <h2 className="wall-title is-desk"><LinkifyText text={task.title} /></h2>
           {support && (
             <div className="wall-support-row">
@@ -235,7 +237,7 @@ export default function TodayWall({
       ) : (
         // — the wall — the task IS the button
         <button type="button" className="wall-hero" onClick={onStartFocus}>
-          <span className="wall-kicker">{kicker}</span>
+          {kicker && <span className="wall-kicker">{kicker}</span>}
           <span className="wall-rule-short" aria-hidden="true" />
           {/* Plain text, not LinkifyText: an <a> inside this <button> is
               invalid nested interactive content, gives assistive technology

@@ -133,24 +133,21 @@ export function frontDaysLeft(front, now = new Date()) {
 // 11d": one front, its own deadline. The count follows whatever the kicker
 // names, and nothing else.
 //
-// With no front, it falls back to the legacy key deadline — and that is a
-// DELIBERATE departure from a literal reading of K1, raised with the designer
-// rather than settled here.
+// Whose name and day count the wall's kicker carries (Addendum L1).
 //
-// K1 says a task committed from the empty wall "renders with no kicker (no
-// front, no day count) until the user gives it one". Read literally, a user
-// who has a key deadline but has not adopted fronts sees no countdown
-// anywhere on Today — and J3 deleted the Key Deadline strip precisely on the
-// grounds that its information had moved here. Both cannot hold at once.
-//
-// K1's context is a brand-new task on first launch, where no key deadline
-// exists either, so it probably was not written against this case. The
-// asymmetry decides it: showing the count when the designer meant K1
-// literally is a one-line correction nobody was harmed by, while hiding it
-// silently removes a figure an existing user relies on and may not notice
-// missing for weeks. An overdue deadline is not "days left".
-export function commitmentDaysLeft(front, config = {}, now = new Date()) {
-  const d = frontDaysLeft(front || legacyDeadlineAsFront(config), now);
+// The order is: the commitment's own front, then the legacy Key Deadline, then
+// nothing. A committed task never suppresses a countdown the user has already
+// set — K1's "no kicker, no day count" was written against the first-launch
+// task, where no Key Deadline exists either, and was not a ruling on the
+// deadline's visibility. With neither, there is no kicker at all.
+export function commitmentKickerFront(front, config = {}) {
+  return front || legacyDeadlineAsFront(config) || null;
+}
+
+// The day count beside that kicker. J3 put it in one place only — the strip it
+// replaced is gone — and an overdue deadline is not "days left".
+export function commitmentDaysLeft(front, now = new Date()) {
+  const d = frontDaysLeft(front, now);
   return d !== null && d >= 0 ? d : null;
 }
 

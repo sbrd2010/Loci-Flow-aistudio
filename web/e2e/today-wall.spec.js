@@ -189,8 +189,10 @@ test("mobile reliability: typing on the empty wall creates and commits a task", 
   // The task is created with the canonical "Personal" category and NO
   // estimate, so no duration is rendered for it as if the user had chosen one.
   await expect(page.locator(".wall-title")).not.toContainText("25m");
-  // K1: no front, so the kicker carries only the fixed words — no front name.
-  await expect(page.locator(".wall-kicker")).toHaveText("YOU COMMITTED TO");
+  // L1: no front, but the demo has a Key Deadline set — so the kicker names
+  // THAT, rather than suppressing a countdown the user already has.
+  await expect(page.locator(".wall-kicker")).toContainText("Project launch");
+  await expect(page.locator(".wall-head-days")).toBeVisible();
   // And no subtask: concreteStep is OMITTED rather than set empty, so
   // normalizePayload does not substitute its "Do first tiny step" default.
   await expect(page.locator(".wall-support")).toHaveCount(0);
