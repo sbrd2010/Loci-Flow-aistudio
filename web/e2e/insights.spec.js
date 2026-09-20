@@ -5,6 +5,14 @@ import { test, expect } from "@playwright/test";
 // specific section visibility, and mobile layout before v0.1 reaches testers.
 
 async function enterDemo(page, viewport = { width: 375, height: 812 }) {
+  // Today's list now lives behind the peek, closed by default (screen 1, "the
+  // wall"). These specs were written when it was always on screen, and their
+  // subject is the list, not the wall — so the precondition is established here
+  // rather than by editing each assertion. today-wall.spec.js covers the
+  // closed-by-default behaviour itself, without this seed.
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
+  });
   await page.setViewportSize(viewport);
   // Fix the clock BEFORE navigating — demoData.js computes `today`/`d1..d6`
   // as module-load-time `new Date()` calls, evaluated once when the bundle

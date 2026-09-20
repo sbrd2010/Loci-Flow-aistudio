@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import TaskRow from "./TaskRow";
 import AddTaskDialog from "./AddTaskDialog";
+import TodayWall from "./TodayWall";
+import { frontsFromConfig } from "../utils/fronts";
 import FocusModePage from "./FocusModePage";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
@@ -152,6 +154,15 @@ export default function TodayTab({
   const [focusNowMode, setFocusNowMode] = useState(false);
   const [focusNowTaskId, setFocusNowTaskId] = useState(null);
   const [showFocusNowPicker, setShowFocusNowPicker] = useState(false);
+  // "peekOpen is persisted to localStorage." Closed by default — the wall is
+  // the default state, and the peek is how you ask for the rest.
+  const [peekOpen, setPeekOpen] = useState(() => {
+    try { return localStorage.getItem("loci_today_peek_open") === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("loci_today_peek_open", peekOpen ? "1" : "0"); } catch { /* private mode */ }
+  }, [peekOpen]);
+
   const [showAnchorSheet, setShowAnchorSheet] = useState(false);
   const [anchorSheetSlot, setAnchorSheetSlot] = useState(null);
 
@@ -854,6 +865,29 @@ export default function TodayTab({
     : config.isLowEnergyMode
       ? todayTasksAll.filter(t => t.priority === "P4")
       : todayTasksAll;
+  // — values the wall's header and kicker read —
+  // The kicker is the front name OR nothing. Never "Uncategorised": a task with
+  // no front is a first-class task (Addendum C).
+  const wallFronts = frontsFromConfig(config);
+  const wallFrontName = pinnedFocusTask?.frontId
+    ? (wallFronts.find(f => f.id === pinnedFocusTask.frontId)?.name || null)
+    : null;
+  const wallDaysLeft = config.deadlineDate
+    ? (() => {
+        const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+        const d = Math.round((new Date(config.deadlineDate + "T00:00:00") - midnight) / 86400000);
+        return d >= 0 ? d : null; // an overdue deadline is not "days left"
+      })()
+    : null;
+  const wallDateLabel = currentDateStr ? currentDateStr.toUpperCase() : "";
+  const wallHoursLeft = (() => {
+    const mins = Math.round(getRemainingFocusMinutes(new Date(), windows));
+    if (mins <= 0) return null;
+    const h = Math.floor(mins / 60);
+    return h > 0 ? `${h}h${String(mins % 60).padStart(2, "0")}m LEFT` : `${mins}m LEFT`;
+  })();
+  const openAcrossFronts = (tasks || []).filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked).length;
+
   const remainingTasks = todayTasksFiltered.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
   const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted);
 
@@ -995,118 +1029,30 @@ export default function TodayTab({
 
   return (
     <>
-      {/* ── Day header: style switchable via Settings → Header Style ── */}
-      {(() => {
-        const startHour = config.dayStartHour ?? 7;
-        const endHour = config.dayEndHour ?? 26;
-        const daySpan = endHour - startHour;
-        const labelCount = daySpan > 10 ? 5 : 3;
-        const timeLabels = Array.from({ length: labelCount }, (_, i) =>
-          formatHourLabel(startHour + Math.round((daySpan / (labelCount - 1)) * i))
-        );
-        const nowHour = new Date().getHours();
-        const greeting = nowHour < 12 ? "Good morning" : nowHour < 17 ? "Good afternoon" : "Good evening";
-        const firstName = (config.userName || "").split(" ")[0];
-        const headerStyle = config.headerStyle === "autohide" ? "frameless" : (config.headerStyle || "full");
-
-        // Option E: Auto-hide — wraps the full card, collapses on scroll
-        if (headerStyle === "autohide") {
-          const fullCard = (
-            <section className="today-time-card" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px 14px" }}>
-              {firstName ? (
-                <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "8px", letterSpacing: "-0.01em" }}>
-                  {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
-                </div>
-              ) : null}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "10px" }}>
-                <div style={{ fontSize: "18px", fontWeight: "800", color: "var(--text-primary)", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-mono)", lineHeight: 1 }}>{currentTimeStr}</div>
-                <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>{currentDateStr}</div>
-              </div>
-              <p style={{ margin: 0, fontSize: "13px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
-                "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
-              </p>
-            </section>
-          );
-          return (
-            <div className={`header-autohide-wrapper${isScrolled ? " header-collapsed" : ""}`}>
-              {fullCard}
-            </div>
-          );
-        }
-
-        // Option C: Compact strip — tap ▾ to reveal full details
-        if (headerStyle === "compact") {
-          return (
-            <section className="today-time-card" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "8px 14px" }}>
-              <div onClick={() => setHeaderExpanded(e => !e)} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", userSelect: "none" }}>
-                <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-mono)", letterSpacing: "-0.02em", flexShrink: 0, flex: 1 }}>
-                  {currentTimeStr}
-                </span>
-                <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600", flexShrink: 0 }}>{currentDateStr}</span>
-                <span style={{ fontSize: "12px", color: "var(--text-muted)", flexShrink: 0 }}>{headerExpanded ? "▴" : "▾"}</span>
-              </div>
-              {headerExpanded && (
-                <div style={{ marginTop: "10px" }}>
-                  {firstName && (
-                    <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "8px" }}>
-                      {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
-                    </div>
-                  )}
-                  <p style={{ margin: 0, fontSize: "13px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
-                    "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
-                  </p>
-                </div>
-              )}
-            </section>
-          );
-        }
-
-        // Option D: Frameless bar — no card border/padding, all info on two rows
-        if (headerStyle === "frameless") {
-          return (
-            <div className="today-time-card" style={{ padding: "4px 2px 8px 2px" }}>
-              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "6px" }}>
-                {firstName ? (
-                  <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>
-                    {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
-                  </span>
-                ) : (
-                  <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{currentTimeStr}</span>
-                )}
-                <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
-                  {firstName && <span style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{currentTimeStr}</span>}
-                  <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>{currentDateStr}</span>
-                </div>
-              </div>
-              <p style={{ margin: 0, fontSize: "13px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.4, fontWeight: "600" }}>
-                "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
-              </p>
-            </div>
-          );
-        }
-
-        // Default ("full"): original 4-row card
-        return (
-          <section className="today-time-card" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px 14px" }}>
-            {firstName ? (
-              <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "8px", letterSpacing: "-0.01em" }}>
-                {greeting}, <span style={{ color: "var(--accent)" }}>{firstName}</span> 👋
-              </div>
-            ) : null}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "10px" }}>
-              <div style={{ fontSize: "18px", fontWeight: "800", color: "var(--text-primary)", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
-                {currentTimeStr}
-              </div>
-              <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>
-                {currentDateStr}
-              </div>
-            </div>
-            <p className="today-quote-secondary" style={{ margin: 0, fontSize: "13px", fontStyle: "italic", color: "var(--accent)", lineHeight: 1.45, fontWeight: "600" }}>
-              "{currentQuote.quote}" <span style={{ fontStyle: "normal", fontWeight: "400", color: "var(--text-muted)", fontSize: "11px" }}>— {currentQuote.author}</span>
-            </p>
-          </section>
-        );
-      })()}
+      {/* ── The wall / the desk (screen 1). Replaces the greeting-clock-quote
+           card: the commitment is what this screen is for, and the handoff
+           allows exactly one dominant element. The Key Deadline strip below
+           still competes with it — folding that into the wall's kicker is the
+           next commit, because one e2e test covers it and that deserves its
+           own diff. ── */}
+      <TodayWall
+        task={pinnedFocusTask}
+        frontName={wallFrontName}
+        daysLeft={wallDaysLeft}
+        dateLabel={wallDateLabel}
+        hoursLeftLabel={wallHoursLeft}
+        focusMinutes={Number(pinnedFocusTask?.timeEstimateMinutes) > 0 ? Number(pinnedFocusTask.timeEstimateMinutes) : 25}
+        peekOpen={peekOpen}
+        onTogglePeek={() => setPeekOpen(v => !v)}
+        remainingCount={remainingTasks.length}
+        doneCount={completedTasks.length}
+        lowEnergy={!!config.isLowEnergyMode}
+        openCount={openAcrossFronts}
+        onStartFocus={() => pinnedFocusTask && startFocusAndLog(pinnedFocusTask)}
+        onMarkDone={() => pinnedFocusTask && handleToggleComplete(pinnedFocusTask)}
+        onSplit={() => pinnedFocusTask && setEditingTask(pinnedFocusTask)}
+        onChooseCommitment={() => setShowFocusNowPicker(true)}
+      />
 
       {/* ── Key Deadline countdown strip */}
       {config.deadlineDate && (() => {
@@ -1408,7 +1354,21 @@ export default function TodayTab({
       })()}
 
       {/* ── Today's Focus — tasks dominate the screen */}
-      <section className="tasks-section" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      {/* The peek IS this section. Closed is the default — that is the wall.
+          With no commitment there is no wall to look at, so the list stays
+          visible rather than leaving the screen empty. */}
+      <section
+        className="tasks-section"
+        style={{
+          // Conditional INLINE, not via a class: this element already carries an
+          // inline display, and an inline style beats any class rule — a
+          // `.is-peek-closed { display: none }` looked right, toggled its class
+          // correctly, and hid nothing at all.
+          display: !peekOpen && pinnedFocusTask ? "none" : "flex",
+          flexDirection: "column",
+          gap: "8px",
+        }}
+      >
         <div className="section-header" style={{ gap: "8px", alignItems: "center", justifyContent: "flex-start" }}>
           <h2 className="section-title" style={{ flex: "0 0 auto", margin: 0 }}>
             Today's Focus

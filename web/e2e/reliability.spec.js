@@ -4,6 +4,14 @@ import { test, expect } from "@playwright/test";
 // These cover important task actions that should remain stable before v0.1 sharing.
 
 async function enterDemo(page) {
+  // Today's list now lives behind the peek, closed by default (screen 1, "the
+  // wall"). These specs were written when it was always on screen, and their
+  // subject is the list, not the wall — so the precondition is established here
+  // rather than by editing each assertion. today-wall.spec.js covers the
+  // closed-by-default behaviour itself, without this seed.
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
+  });
   await page.goto("/");
   await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
   await expect(page.getByTestId("demo-btn")).toBeVisible({ timeout: 25_000 });
