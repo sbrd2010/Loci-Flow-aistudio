@@ -66,6 +66,40 @@ export function buildMorningCommitmentSave(config = {}, taskIds = [], todayStr, 
   };
 }
 
+// The wall's pin IS the day's commitment — J3: "the 'today's move' line is the
+// commitment itself", J5: isNowFocus is the one source of truth. The morning
+// prompt that used to write these fields is gone, so pinning is what records
+// them now; Day Close, buildEndOfDaySummary and the Coach's daily context all
+// go on reading the same fields rather than growing a parallel one.
+//
+// It appends rather than replaces: committing to a second thing after
+// finishing the first is two commitments that day, and "1 of 2 done" is the
+// honest summary. A recorded day that isn't today starts over. Returns null
+// when there is nothing to record, so the caller can skip the write.
+export function buildWallCommitmentSave(config = {}, taskUuid, todayStr, now = Date.now()) {
+  if (!taskUuid || !todayStr) return null;
+  const sameDay = config.dailyCommitmentDate === todayStr;
+  const existing = sameDay && Array.isArray(config.dailyCommitmentTaskIds) ? config.dailyCommitmentTaskIds : [];
+  if (existing.includes(taskUuid)) return null;
+  return {
+    dailyCommitmentDate: todayStr,
+    dailyCommitmentTaskIds: [...existing, taskUuid].slice(-MAX_COMMITMENT_TASKS),
+    dailyCommitmentCreatedAt: (sameDay && config.dailyCommitmentCreatedAt) || now,
+    dailyCommitmentSource: "wall",
+    dailyCommitmentSkippedDate: null,
+    dailyCommitmentSnoozeUntil: null,
+  };
+}
+
+// Today's committed task ids, or an empty list once the recorded day has
+// rolled over. The three existing readers each re-derive this; the wall's
+// completion path needs it too.
+export function committedTaskIdsForDay(config = {}, todayStr) {
+  return config.dailyCommitmentDate === todayStr && Array.isArray(config.dailyCommitmentTaskIds)
+    ? config.dailyCommitmentTaskIds
+    : [];
+}
+
 export function buildMorningCommitmentSkip(config = {}, todayStr, now = Date.now()) {
   return {
     ...config,

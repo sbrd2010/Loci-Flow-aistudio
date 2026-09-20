@@ -60,6 +60,33 @@ function cloneHistory(history) {
   return history && typeof history === "object" && !Array.isArray(history) ? { ...history } : {};
 }
 
+// Whether completing or reopening a task changes the key deadline's daily
+// move, and to what.
+//
+// J3 deleted the Key Deadline strip on the grounds that "the 'today's move'
+// line is the commitment itself" — and with it the only two writers of
+// deadlineDailyDoneDate. Day Close and buildExecutionCoachSignal kept reading
+// it, so for anyone with a key deadline the move read as never made no matter
+// how much they finished. Completing the commitment is that move.
+//
+// `tasks` is the list AFTER the toggle, so the answer is simply "is any of
+// today's committed tasks complete now" — which keeps reopening one while
+// another still stands from wrongly clearing it. Returns an empty patch when
+// the toggled task isn't the commitment, or there is no key deadline at all.
+export function buildCommitmentDeadlineMovePatch(config = {}, tasks = [], toggledTask = {}, todayStr) {
+  if (!hasDeadline(config) || !todayStr) return {};
+  const committed = config.dailyCommitmentDate === todayStr && Array.isArray(config.dailyCommitmentTaskIds)
+    ? config.dailyCommitmentTaskIds
+    : [];
+  // The pinned task counts even when nothing recorded it — other paths pin
+  // (Day Map, Rescue, the Coach) without going through the wall's own record.
+  const relevant = new Set(committed);
+  if (toggledTask.isNowFocus && toggledTask.uuid) relevant.add(toggledTask.uuid);
+  if (!relevant.has(toggledTask.uuid)) return {};
+  const anyDone = tasks.some((t) => t && relevant.has(t.uuid) && t.isCompleted);
+  return { deadlineDailyDoneDate: anyDone ? todayStr : null };
+}
+
 export function markDeadlineMoveDone(config = {}, todayStr = getLocalDateString()) {
   if (!isValidDateString(todayStr)) return config;
   return {

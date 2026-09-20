@@ -16,9 +16,10 @@ import { track } from "../firebase";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
 import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows, getRemainingFocusMinutes } from "../utils/focusWindows";
+import { buildCommitmentDeadlineMovePatch } from "../utils/deadlineCountdown";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import {
-  getValidCommittedTaskIds,
+  getValidCommittedTaskIds, buildWallCommitmentSave,
   shouldShowReflection, buildEndOfDaySummary, buildReflectionSave, buildReflectionSnooze, REFLECTION_MOODS,
 } from "../utils/dailyCoachCheckins";
 import "../styles/focusNow.css";
@@ -278,18 +279,6 @@ export default function TodayTab({
   const todayShownSlots = getTodayShownSlots(config, anchorTodayStr);
   const anchorsCheckedCount = anchors.filter(a => todayCheckedIds.includes(a.id)).length;
   const todayShownSlotsKey = todayShownSlots.join(",");
-  // Patch rather than a whole-config write: `config` here is a render-time
-  // snapshot, and spreading it would send every other field back to RTDB at
-  // this moment's timestamp — including deadline fields this device may not
-  // have re-synced yet, silently reverting an edit made on another device.
-  const handleDeadlineDoneToday = () => {
-    saveConfigPatch({ deadlineDailyDoneDate: todayStr });
-  };
-
-  const handleDeadlineReopenToday = () => {
-    saveConfigPatch({ deadlineDailyDoneDate: null });
-  };
-
   // The wall header's two live figures, refreshed once a minute.
   //
   // This replaces a one-second interval that also maintained a seconds-precise
@@ -382,7 +371,17 @@ export default function TodayTab({
         nextContributions[contrIdx] = { ...nextContributions[contrIdx], count: nextContributions[contrIdx].count - 1, lastUpdated: Date.now() };
       }
     }
-    savePayloadAsync({ ...payload, tasks: updatedTasks, config: { ...config, totalXp: nextXp, lastUpdated: Date.now() }, contributions: nextContributions })
+    // J3 deleted the Key Deadline strip because "the 'today's move' line is
+    // the commitment itself" — which also deleted the only writers of
+    // deadlineDailyDoneDate. Day Close and buildExecutionCoachSignal kept
+    // reading it, so for anyone with a key deadline the move read as never
+    // made, however much they finished. Completing the commitment is that
+    // move; the state is re-derived from whether any of today's committed
+    // tasks is complete AFTER this toggle, so reopening one while another
+    // stands doesn't wrongly clear it.
+    const deadlinePatch = buildCommitmentDeadlineMovePatch(config, updatedTasks, task, todayStr);
+
+    savePayloadAsync({ ...payload, tasks: updatedTasks, config: { ...config, totalXp: nextXp, ...deadlinePatch, lastUpdated: Date.now() }, contributions: nextContributions })
       .then(() => {
         const events = [buildTaskMutationEvent(isCompleted ? "task_completed" : "task_reopened", task, { windows, now: actionAt })];
         if (endedFocusSession) {
@@ -421,11 +420,21 @@ export default function TodayTab({
     // Returned so callers (e.g. the Focus Now button, which pins then
     // immediately starts a session) can wait for this pin to actually
     // confirm before logging events of their own.
-    const pinPromise = savePayloadAsync({ ...payload, tasks: tasks.map((t) => {
-      const newFocus = isPinning && t.uuid === task.uuid;
-      if (t.isNowFocus === newFocus) return t;
-      return { ...t, isNowFocus: newFocus, lastUpdated: now };
-    })});
+    // Pinning is what records the day's commitment now that the morning
+    // prompt is gone (see buildWallCommitmentSave). Day Close, the Coach's
+    // daily context and buildEndOfDaySummary all read those fields, and
+    // nothing had written them since 18087d5 — so Day Close reported no
+    // commitment even on a day the wall's task was chosen and finished.
+    const commitmentPatch = isPinning ? buildWallCommitmentSave(config, task.uuid, todayStr, now) : null;
+    const pinPromise = savePayloadAsync({
+      ...payload,
+      ...(commitmentPatch ? { config: { ...config, ...commitmentPatch, lastUpdated: now } } : {}),
+      tasks: tasks.map((t) => {
+        const newFocus = isPinning && t.uuid === task.uuid;
+        if (t.isNowFocus === newFocus) return t;
+        return { ...t, isNowFocus: newFocus, lastUpdated: now };
+      }),
+    });
     pinPromise
       .then(() => {
         if (endedFocusSession) {
