@@ -18,6 +18,7 @@
 //     not a reduction — it is a dead end shown to someone already overwhelmed.
 
 import { getFocusWindows, getRemainingFocusMinutes } from "./focusWindows";
+import { frontsFromConfig, parseDueDate } from "./fronts";
 
 const STALE_DAYS = 7;
 // Horizons further out than this week are not "due this horizon".
@@ -77,12 +78,36 @@ function priorityRank(task) {
   return m ? Number(m[1]) : 5;
 }
 
+// { id -> { name, dueAt } } for every front that has a date, so a task can
+// inherit one.
+function datedFronts(config) {
+  const out = new Map();
+  for (const front of frontsFromConfig(config)) {
+    const due = parseDueDate(front.dueAt);
+    if (due) out.set(front.id, { name: front.name, dueAt: due.getTime() });
+  }
+  return out;
+}
+
+// A task's deadline is its own, or — failing that — the deadline of the front
+// it sits on. A front IS where a date usually lives now ("Membrane paper, due
+// 4 Nov"), and a task on that front is due with it. Ranking on
+// deadlineTimestamp alone treated such a task as undated and could pass over it
+// for an undated P1, while the screen went on claiming priority was the
+// deciding fact.
+function effectiveDeadline(task, fronts) {
+  const own = Number(task?.deadlineTimestamp);
+  if (Number.isFinite(own) && own > 0) return { at: own, front: null };
+  const front = task?.frontId ? fronts.get(task.frontId) : null;
+  return front ? { at: front.dueAt, front } : null;
+}
+
 // Of what survives, the one to actually do: nearest real deadline first, then
 // priority, then the order the user already put them in.
-function pickOne(pool) {
+function pickOne(pool, fronts) {
   return [...pool].sort((a, b) => {
-    const da = Number(a.deadlineTimestamp) || Infinity;
-    const db = Number(b.deadlineTimestamp) || Infinity;
+    const da = effectiveDeadline(a, fronts)?.at ?? Infinity;
+    const db = effectiveDeadline(b, fronts)?.at ?? Infinity;
     if (da !== db) return da - db;
     const pa = priorityRank(a), pb = priorityRank(b);
     if (pa !== pb) return pa - pb;
@@ -92,10 +117,19 @@ function pickOne(pool) {
 
 // Why this one — stated only from what is demonstrably true of the pool it was
 // chosen from. Never an encouragement, never a guess.
-function reasonFor(chosen, pool) {
+function reasonFor(chosen, pool, fronts) {
   if (!chosen) return null;
-  const dated = pool.filter(t => Number(t.deadlineTimestamp) > 0);
-  if (Number(chosen.deadlineTimestamp) > 0) {
+  const dated = pool.filter(t => effectiveDeadline(t, fronts));
+  const mine = effectiveDeadline(chosen, fronts);
+  if (mine) {
+    // Where the date came from is part of the reason being true. Saying a task
+    // "has a date on it" when the date belongs to its front is the kind of
+    // small dishonesty this screen exists not to commit.
+    if (mine.front) {
+      return dated.length === 1
+        ? `It's the only thing left on a dated front — ${mine.front.name}.`
+        : `Its front, ${mine.front.name}, has the nearest date of everything still standing.`;
+    }
     return dated.length === 1
       ? "It's the only thing left with a date on it."
       : "It has the nearest date of everything still standing.";
@@ -119,6 +153,7 @@ export function narrowDown(tasks, config = {}, now = new Date()) {
     return { total: 0, rows: [], chosen: null, why: null, parked: [], minutesLeft };
   }
 
+  const fronts = datedFronts(config);
   const frontCount = new Set(open.map(t => t.frontId).filter(Boolean)).size;
   const rows = [{
     key: "open",
@@ -149,14 +184,14 @@ export function narrowDown(tasks, config = {}, now = new Date()) {
     pool = kept;
   }
 
-  const chosen = pickOne(pool);
+  const chosen = pickOne(pool, fronts);
   rows.push({ key: "one", figure: "1", reason: "is actually yours, today", isFinal: true });
 
   return {
     total: open.length,
     rows,
     chosen,
-    why: reasonFor(chosen, pool),
+    why: reasonFor(chosen, pool, fronts),
     parked: open.filter(t => t !== chosen),
     minutesLeft,
   };

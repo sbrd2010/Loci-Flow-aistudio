@@ -266,3 +266,54 @@ describe("narrowDown — which one, and why", () => {
     expect(tasks.every(t => !t.isDeleted && !t.isParked)).toBe(true);
   });
 });
+
+
+// Fronts carry deadlines now, and a task on a dated front is due with it. Before
+// assignment existed this could not fire; it can now.
+describe("narrowDown — a task inherits its front's deadline", () => {
+  const CONFIG = {
+    dayEndHour: 26,
+    fronts: [{ id: "f1", name: "Membrane paper", dueAt: "2026-11-05" }],
+  };
+  const base = { horizonLevel: "week", lastUpdated: NOW.getTime(), timeEstimateMinutes: 25 };
+
+  it("prefers a task on a dated front over an undated higher-priority task", () => {
+    const tasks = [
+      { ...base, uuid: "loose", title: "Undated but urgent-looking", priority: "P1", orderIndex: 1 },
+      { ...base, uuid: "onfront", title: "Finish section 3", priority: "P3", frontId: "f1", orderIndex: 2 },
+    ];
+    const out = narrowDown(tasks, CONFIG, NOW);
+    expect(out.chosen.uuid).toBe("onfront");
+  });
+
+  it("says where the date actually came from, rather than claiming the task has one", () => {
+    const tasks = [
+      { ...base, uuid: "loose", title: "Undated", priority: "P1", orderIndex: 1 },
+      { ...base, uuid: "onfront", title: "Finish section 3", priority: "P3", frontId: "f1", orderIndex: 2 },
+    ];
+    const out = narrowDown(tasks, CONFIG, NOW);
+    expect(out.why).toBe("It's the only thing left on a dated front — Membrane paper.");
+    expect(out.why).not.toMatch(/date on it/);
+  });
+
+  it("still prefers a task's OWN nearer deadline over its front's", () => {
+    const tasks = [
+      { ...base, uuid: "onfront", title: "On the front", frontId: "f1", orderIndex: 1 },
+      { ...base, uuid: "own", title: "Due tomorrow", deadlineTimestamp: new Date(2026, 10, 5).getTime() - 86400000, orderIndex: 2 },
+    ];
+    const out = narrowDown(tasks, CONFIG, NOW);
+    expect(out.chosen.uuid).toBe("own");
+  });
+
+  it("ignores a front with no date, and a frontId naming no front", () => {
+    const config = { dayEndHour: 26, fronts: [{ id: "f2", name: "Undated front" }] };
+    const tasks = [
+      { ...base, uuid: "a", title: "On an undated front", frontId: "f2", priority: "P4", orderIndex: 1 },
+      { ...base, uuid: "b", title: "Higher priority", priority: "P1", orderIndex: 2 },
+      { ...base, uuid: "c", title: "Front does not exist", frontId: "ghost", priority: "P4", orderIndex: 3 },
+    ];
+    const out = narrowDown(tasks, config, NOW);
+    expect(out.chosen.uuid).toBe("b"); // priority decides, as before
+    expect(out.why).toBe("It's the highest priority of what's left.");
+  });
+});
