@@ -42,6 +42,11 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
   // than empty for a task that belongs to nothing.
   const [frontId, setFrontId] = useState(editTask?.frontId || "");
   const [estimateMinutes, setEstimateMinutes] = useState(editTask?.timeEstimateMinutes || DEFAULT_ESTIMATE_MINUTES);
+  // A task can legitimately have NO estimate, and the selector shows the
+  // default for one. Comparing the value alone cannot tell "the user chose 25"
+  // from "nobody chose anything", so choosing 25 on such a task — or leaving
+  // and returning to it — would silently not stick. This records the act.
+  const [estimatePicked, setEstimatePicked] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(isEditMode);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
@@ -179,7 +184,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       if (aiSuggestion.microStep) { setConcreteStep(aiSuggestion.microStep); setAdvancedOpen(true); }
       if (["P1","P2","P3","P4"].includes(aiSuggestion.priority)) setPriority(aiSuggestion.priority);
       const est = Number(aiSuggestion.estimateMinutes);
-      if ([15,25,45,60,120,240,360].includes(est)) setEstimateMinutes(est);
+      if ([15,25,45,60,120,240,360].includes(est)) { setEstimateMinutes(est); setEstimatePicked(true); }
       if (["today","week","month","quarter","halfyear","office"].includes(aiSuggestion.horizonLevel)) setHorizonLevel(aiSuggestion.horizonLevel);
       if (aiSuggestion.subSteps.length > 0 && subSteps.length === 0) {
         const now = Date.now();
@@ -262,11 +267,13 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       // estimate and a "Do first tiny step". The spread preserves whatever
       // editTask already had, so omitting the key is how absence survives.
       const hadEstimate = Number(editTask.timeEstimateMinutes) > 0;
-      // Not a plain !== : Number(undefined) is NaN, which differs from
-      // everything, so a task with no estimate would always look "changed".
+      // With no estimate to compare against, "changed" is the act of picking,
+      // not the value: Number(undefined) is NaN and differs from everything,
+      // while comparing to the default cannot tell a deliberate 25 from an
+      // untouched selector.
       const estimateChanged = hadEstimate
         ? newEstimate !== Number(editTask.timeEstimateMinutes)
-        : newEstimate !== DEFAULT_ESTIMATE_MINUTES;
+        : estimatePicked;
       const stepText = concreteStep.trim();
       const updatedTask = {
         ...editTask,
@@ -278,7 +285,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
         priority,
         category,
         frontId: frontId || null,
-        ...(hadEstimate || estimateChanged ? { timeEstimateMinutes: newEstimate } : {}),
+        ...(hadEstimate || estimatePicked ? { timeEstimateMinutes: newEstimate } : {}),
         ...(estimateChanged ? { dayMapDurationMinutes: newEstimate } : {}),
         reminderAt,
         subSteps: effectiveSubSteps,
@@ -537,7 +544,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
                       type="button"
                       className={`selector-btn ${estimateMinutes === est.min ? "selected" : ""}`}
                       style={{ padding: "6px 4px", fontSize: "11.5px" }}
-                      onClick={() => setEstimateMinutes(est.min)}
+                      onClick={() => { setEstimateMinutes(est.min); setEstimatePicked(true); }}
                     >
                       {est.label}
                     </button>

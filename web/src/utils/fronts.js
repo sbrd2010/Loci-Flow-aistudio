@@ -133,6 +133,16 @@ export function frontDaysLeft(front, now = new Date()) {
 // 11d": one front, its own deadline. The count follows whatever the kicker
 // names, and nothing else.
 //
+// The front a commitment sits on, if any. Takes the task the WALL is showing
+// — which after completion is the finished commitment, not the pin, because
+// completing clears isNowFocus. Resolving against the pin alone made the
+// header's countdown jump to an unrelated deadline, or vanish, at the moment
+// the task was finished.
+export function frontForCommitment(task, fronts = []) {
+  if (!task?.frontId) return null;
+  return (fronts || []).find(f => f.id === task.frontId) || null;
+}
+
 // Whose name and day count the wall's kicker carries (Addendum L1).
 //
 // The order is: the commitment's own front, then the legacy Key Deadline, then

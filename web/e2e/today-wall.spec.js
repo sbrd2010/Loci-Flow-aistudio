@@ -353,3 +353,38 @@ test("mobile reliability: editing a wall task keeps its no-estimate, no-subtask 
   await expect(page.locator(".wall-support")).toHaveCount(0);
   await expect(page.getByText("Do first tiny step")).toHaveCount(0);
 });
+
+// A regression guard for the header not lurching when the commitment is
+// finished. Narrow on purpose: the demo has no fronts, so this exercises the
+// legacy-deadline path only — the front case, where the countdown could jump
+// to an unrelated deadline, is pinned down by frontForCommitment's unit tests.
+test("mobile reliability: the done state keeps the finished task's own countdown", async ({ page }) => {
+  await enterDemo(page);
+  await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
+  const before = await page.locator(".wall-head-days").innerText();
+
+  await page.locator(".wall-action", { hasText: "Mark done" }).click();
+  await expect(page.locator(".wall-done-line")).toBeVisible({ timeout: 8_000 });
+
+  await expect(page.locator(".wall-head-days")).toHaveText(before);
+});
+
+// The selector shows 25 for a task that has none, so choosing 25 has to be
+// distinguishable from never touching it — otherwise the estimate cannot be
+// set on a wall-created task at all.
+test("mobile reliability: an estimate can still be chosen for a wall task", async ({ page }) => {
+  await emptyTheWall(page);
+
+  await page.locator(".wall-commit-field").fill("Size this one properly");
+  await page.locator(".wall-commit-btn").click();
+  await expect(page.locator(".wall-title")).toContainText("Size this one properly", { timeout: 8_000 });
+
+  await page.locator(".wall-action", { hasText: "Split it" }).click();
+  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
+  await page.locator(".selector-btn", { hasText: "45m" }).first().click();
+  await page.getByTestId("add-task-submit").click();
+
+  // It sticks: the wall's start control now offers the length the user chose,
+  // not the 25 it falls back to when there is no estimate.
+  await expect(page.locator(".wall-primary")).toContainText("45:00", { timeout: 8_000 });
+});

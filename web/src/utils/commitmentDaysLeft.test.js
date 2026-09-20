@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { commitmentDaysLeft, commitmentKickerFront } from "./fronts";
+import { commitmentDaysLeft, commitmentKickerFront, frontForCommitment } from "./fronts";
 
 // The wall shows "MEMBRANE PAPER · 11d". Before this, the name came from the
 // commitment's front while the count came from the legacy config.deadlineDate
@@ -51,5 +51,29 @@ describe("commitmentDaysLeft", () => {
 
   it("shows nothing when the kicker resolved to nothing", () => {
     expect(commitmentDaysLeft(null, now)).toBeNull();
+  });
+});
+
+describe("frontForCommitment", () => {
+  const fronts = [{ id: "f1", name: "Membrane paper", dueAt: "2024-06-26" }];
+
+  it("finds the front the task sits on", () => {
+    expect(frontForCommitment({ uuid: "t1", frontId: "f1" }, fronts).name).toBe("Membrane paper");
+  });
+
+  // The header must not lurch at the moment of finishing. Completion clears
+  // isNowFocus, so the wall's subject becomes the DONE task — resolving
+  // against the pin alone left the countdown to fall through to an unrelated
+  // deadline, or disappear.
+  it("still finds it for a completed commitment, which no longer holds the pin", () => {
+    const done = { uuid: "t1", frontId: "f1", isCompleted: true, isNowFocus: false };
+    expect(frontForCommitment(done, fronts).name).toBe("Membrane paper");
+    expect(commitmentDaysLeft(commitmentKickerFront(frontForCommitment(done, fronts), legacy), now)).toBe(11);
+  });
+
+  it("is null for a task on no front, or an unknown one", () => {
+    expect(frontForCommitment({ uuid: "t1", frontId: null }, fronts)).toBeNull();
+    expect(frontForCommitment({ uuid: "t1", frontId: "gone" }, fronts)).toBeNull();
+    expect(frontForCommitment(null, fronts)).toBeNull();
   });
 });

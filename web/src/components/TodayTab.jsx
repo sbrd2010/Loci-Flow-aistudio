@@ -3,7 +3,7 @@ import TaskRow from "./TaskRow";
 import AddTaskDialog from "./AddTaskDialog";
 import TodayWall from "./TodayWall";
 import Momentum from "./Momentum";
-import { frontsFromConfig, commitmentDaysLeft, commitmentKickerFront } from "../utils/fronts";
+import { frontsFromConfig, commitmentDaysLeft, commitmentKickerFront, frontForCommitment } from "../utils/fronts";
 import { useFocusLedger } from "../hooks/useFocusLedger";
 import { minutesForTaskOn } from "../utils/focusLedger";
 import { buildMomentum } from "../utils/momentum";
@@ -919,9 +919,26 @@ export default function TodayTab({
   // The kicker is the front name OR nothing. Never "Uncategorised": a task with
   // no front is a first-class task (Addendum C).
   const wallFronts = frontsFromConfig(config);
-  const wallFront = pinnedFocusTask?.frontId
-    ? (wallFronts.find(f => f.id === pinnedFocusTask.frontId) || null)
-    : null;
+  // — J2b: the commitment, finished —
+  //
+  // Completing clears isNowFocus, so pinnedFocusTask is null by the time this
+  // renders. What survives is dailyCommitmentTaskIds, which App's observer
+  // writes for every pin; the done state is the last of today's commitments
+  // that is actually finished today.
+  const doneCommitment = (() => {
+    if (pinnedFocusTask) return null;
+    const ids = committedTaskIdsForDay(config, todayStr);
+    for (let i = ids.length - 1; i >= 0; i--) {
+      const t = todayTasksAll.find(x => x.uuid === ids[i]);
+      if (t && t.isCompleted && t.dateCompletedString === todayStr) return t;
+    }
+    return null;
+  })();
+  // The done state has no pinned task — completion clears the flag — so the
+  // header would otherwise resolve against the legacy Key Deadline and the
+  // countdown would jump to an unrelated one, or vanish, the instant the task
+  // was finished. It follows the task the wall is actually showing.
+  const wallFront = frontForCommitment(pinnedFocusTask || doneCommitment, wallFronts);
   // L1: front first, then the Key Deadline the user already set, then nothing.
   const wallKickerFront = commitmentKickerFront(wallFront, config);
   const wallFrontName = wallKickerFront?.name || null;
@@ -959,21 +976,6 @@ export default function TodayTab({
   // What the empty wall's "Or pick one" rows draw from — the same pool the
   // peek shows, so the near-duplicate the user is about to retype is the one
   // they would have seen anyway.
-  // — J2b: the commitment, finished —
-  //
-  // Completing clears isNowFocus, so pinnedFocusTask is null by the time this
-  // renders. What survives is dailyCommitmentTaskIds, which App's observer
-  // writes for every pin; the done state is the last of today's commitments
-  // that is actually finished today.
-  const doneCommitment = (() => {
-    if (pinnedFocusTask) return null;
-    const ids = committedTaskIdsForDay(config, todayStr);
-    for (let i = ids.length - 1; i >= 0; i--) {
-      const t = todayTasksAll.find(x => x.uuid === ids[i]);
-      if (t && t.isCompleted && t.dateCompletedString === todayStr) return t;
-    }
-    return null;
-  })();
   // K2: minutes on THAT task today, not the day's total. An unreadable ledger
   // (demo mode has no uid, a refused read) yields 0, which renders as a bare
   // "Done." — the same as a genuine zero, and never a figure that isn't real.
