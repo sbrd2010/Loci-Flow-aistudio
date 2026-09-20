@@ -773,9 +773,27 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lociDayTick, payload?.config?.dayStartHour, payload?.config?.dayEndHour, payload?.config?.focusWindows]
   );
+  //
+  // A pin observed while sync is still unconfirmed is REMEMBERED, not dropped.
+  // The user can pin and complete inside that window, and completing clears
+  // isNowFocus — so by the time this effect is allowed to write there would be
+  // nothing left to observe, and that commitment would be lost permanently:
+  // Day Close omits it, and the deadline observer below has no same-day
+  // commitment to mark progress from. Only a deferral from the same Loci day
+  // is flushed, so an app reopened the next morning doesn't record yesterday's.
+  const deferredCommitmentRef = useRef(null);
   useEffect(() => {
-    if (!payload?.config || isSyncingFromCache || !commitmentPinnedUuid) return;
-    const patch = buildWallCommitmentSave(payload.config, commitmentPinnedUuid, commitmentDayStr);
+    if (!payload?.config) return;
+    if (isSyncingFromCache) {
+      if (commitmentPinnedUuid) deferredCommitmentRef.current = { uuid: commitmentPinnedUuid, day: commitmentDayStr };
+      return;
+    }
+    const deferred = deferredCommitmentRef.current;
+    deferredCommitmentRef.current = null;
+    const uuid = commitmentPinnedUuid
+      || (deferred && deferred.day === commitmentDayStr ? deferred.uuid : null);
+    if (!uuid) return;
+    const patch = buildWallCommitmentSave(payload.config, uuid, commitmentDayStr);
     if (patch) saveConfigPatch(patch);
   }, [commitmentPinnedUuid, commitmentDayStr, isSyncingFromCache]); // eslint-disable-line react-hooks/exhaustive-deps
 
