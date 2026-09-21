@@ -29,7 +29,7 @@ import FloatingFocusTimer from "./components/FloatingFocusTimer";
 import ConfirmDialog from "./components/ConfirmDialog";
 import { useFocusTimer } from "./hooks/useFocusTimer";
 import { useTodayStr } from "./hooks/useTodayStr";
-import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload } from "./utils/focusSession";
+import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload, extendMinutesForSession } from "./utils/focusSession";
 import { celebrate } from "./utils/celebrations";
 import { safeUUID } from "./utils/uuid";
 import { submitOnEnter } from "./utils/formEvents";
@@ -712,6 +712,49 @@ export default function App() {
     setActiveTab("today");
     focusTimer.setIsFocusMode(true);
   };
+
+  // K4, the 00:00 hold: the ledger entry is written AT THE BELL, before
+  // either button is touched — background, lock or kill the app and the
+  // minutes are already banked. Until now the terminal event was written
+  // only when the user acted, so a session that rang and was then walked
+  // away from logged nothing at all.
+  //
+  // An observer, not a call site: the bell is one setter inside the hook
+  // (shouldTriggerSessionComplete) but the session can be closed out from
+  // 24 places afterwards, and every one of them must amend THIS entry
+  // rather than write its own. They do, because endFocusSession now hands
+  // back the identity markFocusLedgerEntry pins here and they all spread
+  // its result into buildFocusTerminalEvent.
+  //
+  // "focus_abandoned" is the honest provisional: the block ran its course
+  // but the task was not completed, which is exactly what this type means
+  // everywhere else in the app (see focusLedger's FOCUS_TERMINAL_TYPES —
+  // both types count their minutes, so nothing is lost by the choice). If
+  // the user then finishes the task, the amend rewrites the type; if they
+  // never come back, this stands and is correct as written.
+  //
+  // The mark is taken BEFORE the write, deliberately: writeActivityEvents
+  // fails soft after retries, and pinning the identity first means the
+  // eventual stop amends that same path and simply creates the entry then.
+  // Marking only on success would let a failed bell write and a later stop
+  // become two entries, which is the one outcome that must never happen.
+  //
+  // Every bell re-banks, rather than the first one winning. A session that
+  // rings, takes "+Nm" and rings again is ONE entry throughout — the pinned
+  // identity sees to that — so the later bell can safely rewrite it with the
+  // accumulated figures. Skipping it would leave someone who extends and
+  // then kills the app credited with only the first block: still the lost
+  // work K4 exists to prevent, just less of it.
+  useEffect(() => {
+    if (!focusTimer.sessionCompletePending) return;
+    const session = focusTimer.peekFocusSession("timer_elapsed");
+    if (!session?.task) return;
+    const event = buildFocusTerminalEvent("focus_abandoned", session.task, session.focusSessionId, {
+      ...session, windows: getFocusWindows(payload?.config || {}),
+    });
+    focusTimer.markFocusLedgerEntry(event);
+    writeActivityEvents(eventPatch(activityUid, event));
+  }, [focusTimer.sessionCompletePending]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEndFocusSession = () => {
     const ended = focusTimer.endFocusSession("user_abandoned");
@@ -1399,7 +1442,7 @@ export default function App() {
       {focusTimer.showExtendPicker && focusTimer.activeTask && (
         <div
           className="focus-now-backdrop"
-          onClick={() => focusTimer.extendTimer(Math.round(focusTimer.timerMaxSeconds / 60) || 15)}
+          onClick={() => focusTimer.extendTimer(extendMinutesForSession(focusTimer.timerMaxSeconds))}
         >
           <div className="focus-now-sheet" onClick={e => e.stopPropagation()}>
             <div className="focus-now-sheet-header">

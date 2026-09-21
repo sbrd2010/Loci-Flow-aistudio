@@ -65,6 +65,16 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // them, so it doesn't need this — only extendTimer does.
   const focusSessionAccumulatedElapsedRef = useRef(0);
   const focusSessionAccumulatedPlannedRef = useRef(0);
+  // The ledger entry the 00:00 hold already banked for the open session
+  // (K4), as { eventId, lociDateString } — null until the bell rings. The
+  // hold writes the entry while the session stays OPEN, which is precisely
+  // what endFocusSession's null-the-ref one-shot does NOT protect against:
+  // that guard stops a second endFocusSession, not a second ENTRY for the
+  // same session. Carrying the identity here and handing it back from
+  // endFocusSession is what makes the eventual real write amend that entry
+  // instead of appending a second one. Lives and dies with focusSessionIdRef
+  // — every site that clears one clears the other.
+  const focusLedgerEntryRef = useRef(null);
   const [focusSessionId, setFocusSessionId] = useState(null);
   // Lets the activeTask-sync effect tell "switched to a different task" apart
   // from "same task, duration edited mid-session" (the two need different responses).
@@ -310,6 +320,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusSessionTaskRef.current = null;
     focusSessionAccumulatedElapsedRef.current = 0;
     focusSessionAccumulatedPlannedRef.current = 0;
+    focusLedgerEntryRef.current = null;
     setFocusSessionId(null);
 
     closePiP(); // Close pop-out on account switch
@@ -562,6 +573,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusSessionTaskRef.current = task;
     focusSessionAccumulatedElapsedRef.current = 0;
     focusSessionAccumulatedPlannedRef.current = 0;
+    focusLedgerEntryRef.current = null;
     setFocusSessionId(sessionId);
     if (enterFocusMode) setIsFocusMode(true);
     setIsTimerRunning(true);
@@ -598,15 +610,15 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     };
   };
 
-  // Consumes the active session (if any) and returns everything needed to
-  // build its terminal (focus_completed/focus_abandoned) event, or null if
-  // there's nothing to end — either no session was ever started, or an
-  // earlier call already consumed it. This is what guarantees at most one
-  // terminal event per focusSessionId no matter which UI path ends it.
-  const endFocusSession = (focusEndReason) => {
+  // The open session's numbers, read without consuming it. endFocusSession
+  // and the 00:00 hold MUST report the same figures for the same session —
+  // the hold's entry is the one the stop then amends — so both read them
+  // here rather than each assembling its own copy.
+  const readOpenSession = (focusEndReason) => {
     const sessionId = focusSessionIdRef.current;
     if (!sessionId) return null;
-    const result = {
+    const entry = focusLedgerEntryRef.current;
+    return {
       focusSessionId: sessionId,
       focusStartedAt: focusStartedAtRef.current,
       focusInitialPlannedSeconds: focusInitialPlannedSecondsRef.current,
@@ -616,13 +628,46 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       focusElapsedSeconds: focusSessionAccumulatedElapsedRef.current + Math.max(0, timerMaxSeconds - timerSecondsLeft),
       focusEndReason,
       task: focusSessionTaskRef.current,
+      // Spread only when the hold actually banked an entry: the keys have to
+      // be ABSENT otherwise, not present-and-undefined, so a caller passing
+      // this straight into buildFocusTerminalEvent mints a fresh id for an
+      // ordinary session and pins the held one only when there is one.
+      ...(entry ? { eventId: entry.eventId, lociDateString: entry.lociDateString } : {}),
     };
+  };
+
+  // Read the open session without ending it — what the 00:00 hold needs to
+  // bank its entry while the session stays open for a possible "+Nm".
+  const peekFocusSession = (focusEndReason) => readOpenSession(focusEndReason);
+
+  // Record the entry the hold just wrote, so every later terminal write for
+  // this session amends it instead of appending beside it. Ignored once the
+  // session is gone (nothing to amend) and never overwritten once set — a
+  // session banks exactly one entry, and a second bell on the same session
+  // is a re-ring of the hold, not a new entry to write.
+  const markFocusLedgerEntry = (entry) => {
+    if (!focusSessionIdRef.current) return null;
+    if (focusLedgerEntryRef.current) return focusLedgerEntryRef.current;
+    if (!entry?.eventId || !entry?.lociDateString) return null;
+    focusLedgerEntryRef.current = { eventId: entry.eventId, lociDateString: entry.lociDateString };
+    return focusLedgerEntryRef.current;
+  };
+
+  // Consumes the active session (if any) and returns everything needed to
+  // build its terminal (focus_completed/focus_abandoned) event, or null if
+  // there's nothing to end — either no session was ever started, or an
+  // earlier call already consumed it. This is what guarantees at most one
+  // terminal event per focusSessionId no matter which UI path ends it.
+  const endFocusSession = (focusEndReason) => {
+    const result = readOpenSession(focusEndReason);
+    if (!result) return null;
     focusSessionIdRef.current = null;
     focusStartedAtRef.current = null;
     focusInitialPlannedSecondsRef.current = null;
     focusSessionTaskRef.current = null;
     focusSessionAccumulatedElapsedRef.current = 0;
     focusSessionAccumulatedPlannedRef.current = 0;
+    focusLedgerEntryRef.current = null;
     setFocusSessionId(null);
     return result;
   };
@@ -642,6 +687,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     pipOpen,
     handleOpenPiP,
     focusSessionId, startFocusSession, endFocusSession,
+    peekFocusSession, markFocusLedgerEntry,
     // Which task the currently open session (if any) actually belongs to —
     // NOT necessarily the same as `activeTask`, which reflects the current
     // isNowFocus pin and can point at a different task than the still-open
