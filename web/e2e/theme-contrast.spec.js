@@ -33,11 +33,41 @@ const contrast = (fg, bg) => {
   return Number(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)).toFixed(2));
 };
 
-// The painted backdrop, not the element's own transparent background.
+// The painted backdrop. Walking up for the first NON-TRANSPARENT colour is not
+// enough: the unscheduled strip stacks a 7% white chip on a 4% white strip over
+// the ground, and stopping at the first rgba reports a colour nothing renders.
+// That is exactly how a 3.91:1 tag was measured at 4.89 and called fine. So the
+// translucent layers are composited down to the first opaque one, source-over.
 const PAINTED_BG = `(el) => {
-  let bg = "rgba(0, 0, 0, 0)", n = el;
-  while (n && bg === "rgba(0, 0, 0, 0)") { bg = getComputedStyle(n).backgroundColor; n = n.parentElement; }
-  return { fg: getComputedStyle(el).color, bg };
+  const parse = (s) => {
+    // [0-9.] not [\\d.]: this function's source is a template literal, where a
+    // backslash is consumed as an escape and \\d would collapse to a literal d.
+    const m = String(s).match(/[0-9.]+/g);
+    if (!m) return null;
+    return { r: +m[0], g: +m[1], b: +m[2], a: m.length > 3 ? +m[3] : 1 };
+  };
+  const layers = [];
+  let n = el, base = { r: 255, g: 255, b: 255, a: 1 };
+  while (n) {
+    const c = parse(getComputedStyle(n).backgroundColor);
+    if (c && c.a > 0) {
+      if (c.a >= 1) { base = c; break; }
+      layers.push(c);
+    }
+    n = n.parentElement;
+  }
+  // Composite outermost-inwards over the opaque base.
+  let out = base;
+  for (let i = layers.length - 1; i >= 0; i--) {
+    const t = layers[i];
+    out = {
+      r: t.r * t.a + out.r * (1 - t.a),
+      g: t.g * t.a + out.g * (1 - t.a),
+      b: t.b * t.a + out.b * (1 - t.a),
+      a: 1,
+    };
+  }
+  return { fg: getComputedStyle(el).color, bg: \`rgb(\${Math.round(out.r)}, \${Math.round(out.g)}, \${Math.round(out.b)})\` };
 }`;
 
 async function enterDemo(page, theme) {
@@ -66,16 +96,28 @@ for (const theme of THEMES) {
   test(`${theme}: rethemed text stays legible and tappable`, async ({ page }) => {
     await enterDemo(page, theme);
 
-    // Every priority tag on a route card — all four, because a P4-only
-    // override is exactly what survived the last collapse into one rule.
     await page.locator(".day-map-nav-btn").click();
+
+    // The unscheduled strip FIRST, before auto-fill empties it. Its chip sits
+    // on a lighter composited backdrop than a route card, so one foreground is
+    // not automatically legible on both — asserting only the card, or only
+    // that the two share a colour, is what let a 3.91:1 tag through.
+    const stripTags = await page.locator(".day-map-chip-row .day-map-priority")
+      .evaluateAll((els, fn) => els.map(eval(fn)), PAINTED_BG);
+    expect(stripTags.length, "the strip should have tags before auto-fill").toBeGreaterThan(0);
+    for (const t of stripTags) {
+      expect(contrast(t.fg, t.bg), `unscheduled strip tag on ${theme}`).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    }
+
+    // Then every priority tag on a route card — all four, because a P4-only
+    // override is exactly what survived the last collapse into one rule.
     await page.getByRole("button", { name: /auto-fill/i }).click();
     await expect(page.locator(".dm-card .day-map-priority").first()).toBeVisible();
     const tags = await page.locator(".dm-card .day-map-priority")
       .evaluateAll((els, fn) => els.map(eval(fn)), PAINTED_BG);
     expect(tags.length).toBeGreaterThan(0);
     for (const t of tags) {
-      expect(contrast(t.fg, t.bg), `priority tag on ${theme}`).toBeGreaterThanOrEqual(MIN_CONTRAST);
+      expect(contrast(t.fg, t.bg), `route card tag on ${theme}`).toBeGreaterThanOrEqual(MIN_CONTRAST);
     }
     await page.locator(".day-map-back").click();
 

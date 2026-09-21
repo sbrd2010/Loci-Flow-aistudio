@@ -745,11 +745,19 @@
    amber, teal and blue on a screen whose whole point was that those four
    colours are gone. Stated once here, at the base, so there is no second
    place for them to survive. */
+/* One foreground, two backdrops. A route card is solid --surface, but the
+   unscheduled chip stacks a 7% white layer on the strip's 4% over the ground,
+   compositing to rgb(47, 45, 43) — measured from rendered pixels, not derived.
+   --text-quiet cleared 4.5:1 on the card at 4.89 and missed it on the strip at
+   3.91. --text-secondary is the tier above and is pinned inside
+   .day-map-page, so unlike --text-soft (defined only on Evening and Paper,
+   and dark ink on Paper) it is the same on every theme: 7.36 on the card,
+   5.89 on the strip. */
 .day-map-priority.p1,
 .day-map-priority.p2,
 .day-map-priority.p3,
 .day-map-priority.p4 {
-  color: var(--text-quiet, var(--text-muted));
+  color: var(--text-secondary);
   background: none;
   border: 1px solid var(--divider, rgba(255, 255, 255, 0.14));
 }

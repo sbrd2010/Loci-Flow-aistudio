@@ -2194,6 +2194,9 @@ textarea.text-input {
   text-transform: uppercase;
   /* Same legacy-theme fallback as .plan-view: --text-muted is the faint tier. */
   color: var(--text-quiet, var(--text-secondary));
+  /* Width is the button's own, not an overlay's — see the note on ::after. */
+  min-width: 44px;
+  justify-content: center;
   white-space: nowrap;
   transition: color 0.15s;
   /* And the same hit area. These are the only way to switch horizon, and as a
@@ -2203,20 +2206,22 @@ textarea.text-input {
   position: relative;
 }
 
-/* left/right: 0 only made the target taller — it keeps the button's intrinsic
-   width, and horizon labels are user-facing and variable. A short one such as
-   "Work" measured 28.8px across. min-width raises just those to 44px while the
-   long ones keep their own width; centring means a widened overlay grows 7-8px
-   into an 18px gap, so neighbours never overlap. */
+/* The overlay is the right tool for HEIGHT, which no layout depends on, but
+   the wrong one for width: an overlay centred on a button narrower than 44px
+   overflows both ways, and on the FIRST kicker that overflow lands left of a
+   scroll container which cannot scroll past zero — unreachable, so the target
+   stays short however wide the overlay is drawn. Widening the button removes
+   the overflow rather than hiding it, and the row's own scrollWidth then
+   accounts for it. A short label's gold underline spans 44px instead of the
+   glyphs; that is the visible cost, and it is the smaller one. */
 .horizon-pill::after {
   content: "";
   position: absolute;
-  left: 50%;
+  left: 0;
+  right: 0;
   top: 50%;
-  width: 100%;
-  min-width: 44px;
   height: 44px;
-  transform: translate(-50%, -50%);
+  transform: translateY(-50%);
 }
 
 .horizon-pill:hover { color: var(--ink, var(--text-primary)); }
