@@ -898,3 +898,160 @@
   }
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Screen 3 — the Focus session, rebuilt to the handoff.
+   "One task, one number, two exits."
+
+   The ground is pinned to Evening's values rather than read from --ground.
+   The design's rule is "light to plan, dark to execute", so this screen is
+   dark on EVERY theme — reading --ground would hand it Paper's light ground
+   on the light theme. The handoff's own names (--dark-bg, --dark-border,
+   --dark-border-2) do not exist in this file; these are the same values under
+   the names this repo settled on in #379.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.focus-mode-overlay {
+  --fs-ground:       #171512;
+  --fs-ink:          #f2efe9;
+  --fs-text-soft:    #b0a99e;
+  --fs-text-quiet:   #8f887d;
+  --fs-divider:      #2e2a24;   /* the handoff's --dark-border */
+  --fs-control-edge: #6b655c;   /* --dark-border-2: the edge of a clickable thing */
+  --fs-gold:         #a8863f;
+  --fs-gold-lift:    #d8ad63;
+}
+
+/* "SESSION 3" — mono, top right. The handoff reads "SESSION 3 OF 4"; the
+   denominator is omitted because no daily session target exists to count
+   against, and printing one would be a figure the app never agreed to. */
+/* In the flow of the top-right group, not positioned over it. Absolutely
+   positioning it at the same coordinates put it underneath Sounds, Rescue and
+   Pop out, which paint later — invisible at phone widths. */
+.focus-mode-session-count {
+  align-self: center;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--fs-text-quiet);
+}
+
+/* The task, above the number. 25/600/1.22 per the handoff. */
+.focus-mode-task-panel .focus-mode-task-title {
+  font-size: 25px;
+  font-weight: 600;
+  line-height: 1.22;
+  letter-spacing: -0.01em;
+  color: var(--fs-ink);
+  margin: 0;
+}
+
+/* The concrete step, carried in from screen 14, with the gold rule that marks
+   it as the smaller thing you actually start with. */
+.focus-mode-task-panel .focus-mode-concrete-step {
+  position: relative;
+  margin: 10px 0 0;
+  padding-left: 12px;
+  font-family: var(--font-serif);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--fs-text-soft);
+}
+.focus-mode-task-panel .focus-mode-concrete-step::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  background: var(--fs-gold);
+}
+
+/* One number, 74px mono, and a 2px track — not a ring. The ring reported how
+   much was LEFT; the track reports what has been done, and holds still at
+   00:00 rather than animating past its own end. */
+.focus-mode-timer-block {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.focus-mode-timer-block .focus-mode-time-digits {
+  font-family: var(--font-mono);
+  font-size: 74px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--fs-ink);
+  text-align: center;
+}
+
+.focus-mode-track {
+  height: 2px;
+  width: 100%;
+  background: var(--fs-divider);
+  overflow: hidden;
+}
+.focus-mode-track-fill {
+  height: 100%;
+  background: var(--fs-gold-lift);
+  transition: width 1s linear;
+}
+
+.focus-mode-figures {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--fs-text-quiet);
+}
+
+/* K4's hold. "+Nm" is the filled one — it is what the screen suggests —
+   and "Stop here" is outlined, because leaving is always available and never
+   needs selling. */
+.focus-mode-hold-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 420px;
+  margin-top: 4px;
+}
+.focus-mode-hold-keep,
+.focus-mode-hold-stop {
+  min-height: 54px;
+  border-radius: var(--radius, 4px);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.focus-mode-hold-keep {
+  background: var(--fs-gold-lift);
+  color: var(--fs-ground);   /* near-black on gold: the one place gold fills */
+  border: 0;
+}
+.focus-mode-hold-stop {
+  background: transparent;
+  color: var(--fs-ink);
+  border: 1px solid var(--fs-control-edge);
+}
+
+/* At 00:00 the hold is the whole offer: the duration picker and the
+   play/pause controls have nothing left to act on, and "Done" would be a
+   third choice the design does not give. */
+.focus-mode-overlay.is-complete .focus-mode-done-btn,
+.focus-mode-overlay.is-complete .focus-mode-duration-row {
+  display: none;
+}
+
+@media (max-width: 380px) {
+  .focus-mode-timer-block .focus-mode-time-digits { font-size: 60px; }
+  .focus-mode-task-panel .focus-mode-task-title { font-size: 22px; }
+}

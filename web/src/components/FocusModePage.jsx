@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { minutesFromSeconds } from "../utils/focusLedger";
-import { getTimerState } from "../utils/focusSession";
+import { getTimerState, extendMinutesForSession } from "../utils/focusSession";
 import { BINAURAL_TRACK_ID } from "../utils/binauralBeat";
 import { SOUND_CATEGORIES, getCategoryKeyForTrack, getTrackTitle } from "../utils/soundLibrary";
 import LinkifyText from "./LinkifyText";
@@ -71,10 +71,23 @@ export default function FocusModePage({
   onDone,
   onExit,
   onChangeDuration,
+  // The hold's two actions. Neither is the ordinary overlay exit: "Keep going"
+  // has to restart the timer AND clear the completion state, and "Stop here"
+  // has to end the session, not merely hide the screen it is on.
+  onKeepGoing,
+  onStopHere,
+  startedAt,
+  elapsedSeconds,
   onAddBrainDump,
   onRescue,
   pipOpen,
   onOpenPiP,
+  // Which session of the day this is. The spec reads "SESSION 3 OF 4"; there
+  // is no "of 4" — the app has no daily session target, and inventing a
+  // denominator would print a number nothing in the app ever agreed to. The
+  // count alone is data that exists, and it still does the job the kicker is
+  // for: telling you where you are in the day.
+  sessionNumber = 0,
   selectedTrack,
   volume,
   trackLoadState,
@@ -83,7 +96,6 @@ export default function FocusModePage({
   reshuffleTrack,
   changeVolume,
 }) {
-  const autoExitRef = useRef(null);
   const isComplete = secondsLeft === 0;
   // Addendum D: the five-minute session is "the same FocusSession, three
   // deltas", not a new component. Keyed off the planned length rather than a
@@ -101,16 +113,11 @@ export default function FocusModePage({
 
   const [showSoundsDrawer, setShowSoundsDrawer] = useState(false);
 
-  useEffect(() => {
-    if (isComplete) {
-      autoExitRef.current = setTimeout(() => {
-        onExit();
-      }, 3000);
-    }
-    return () => {
-      if (autoExitRef.current) clearTimeout(autoExitRef.current);
-    };
-  }, [isComplete]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The three-second auto-close that used to live here is gone. Addendum D
+  // delta 3 is explicit — "Running out of time is never a failure event: no
+  // sound, no modal, no auto-close" — and it was doing real damage beyond the
+  // wording: K4's hold offers two choices at 00:00, and a screen that closed
+  // itself after three seconds took both away before they could be read.
 
   const submitDump = () => {
     if (!dumpText.trim()) return;
@@ -120,15 +127,10 @@ export default function FocusModePage({
     setTimeout(() => setDumpSaved(false), 1500);
   };
 
-  const R = 110;
-  const circ = 2 * Math.PI * R;
   const ratio = maxSeconds > 0 ? secondsLeft / maxSeconds : 0;
-  const strokeDashoffset = circ * (1 - ratio);
 
   // Visual state color mappings — always cyan, no shift as time runs out
   const timerState = getTimerState(secondsLeft, maxSeconds);
-  // Warm gold on the ink ground — the session screen is the design's one dark island.
-  const ringStroke = "#d8ad63";
 
   const mins = Math.floor(secondsLeft / 60);
   const secs = String(secondsLeft % 60).padStart(2, "0");
@@ -141,22 +143,54 @@ export default function FocusModePage({
   // minutesFromSeconds is the ledger's OWN conversion, not a reimplementation
   // of it: a label that floored while the ledger rounds read "log 1m" at 90
   // seconds and then booked 2.
-  const loggedMinutes = minutesFromSeconds(Math.max(0, maxSeconds - secondsLeft));
+  // Whole-session, from the hook's own figure — not this block's
+  // (maxSeconds - secondsLeft), which after a "Keep Going" extension reports
+  // only the new block and contradicts the ledger.
+  const loggedMinutes = minutesFromSeconds(
+    Number.isFinite(Number(elapsedSeconds)) ? Number(elapsedSeconds) : Math.max(0, maxSeconds - secondsLeft)
+  );
   const loggedLabel = isFiveMinute && loggedMinutes >= 1 ? `${loggedMinutes}m` : null;
   const currentDurMins = Math.round(maxSeconds / 60);
+  // "STARTED 09:41". Omitted rather than faked when the caller has no start
+  // time to give — a session reopened from a previous mount has none.
+  const startedLabel = Number(startedAt) > 0
+    ? new Date(Number(startedAt)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+    : null;
+  // K4's hold, on the screen it belongs to. The extension scales to the block
+  // just run rather than offering a flat +20m, and the companion label names
+  // the real figure the ledger will hold — both through the same helpers the
+  // ledger uses, so neither can drift from what is actually written.
+  const holdExtendMinutes = extendMinutesForSession(maxSeconds);
+  const holdLogMinutes = loggedMinutes;
 
   return (
     <div className={`focus-mode-overlay${isRunning ? " is-running" : ""}${isComplete ? " is-complete" : ""} timer-state-${timerState}`}>
-      <button
-        type="button"
-        className="focus-mode-exit-btn"
-        onClick={onExit}
-        aria-label="Exit focus mode"
-      >
-        Exit
-      </button>
+      {/* Hidden at 00:00. The hold offers two choices and this was a third
+          that behaved like neither: plain onExit leaves the session open and
+          hands the user the global modal — the same bug "Stop here" had, via
+          the other button in the same header. "Stop here" is the way out
+          while the hold is showing, so nothing is trapped by removing this. */}
+      {!isComplete && (
+        <button
+          type="button"
+          className="focus-mode-exit-btn"
+          onClick={onExit}
+          aria-label="Exit focus mode"
+        >
+          Exit
+        </button>
+      )}
 
       <div className="focus-mode-top-right-actions">
+        {/* Inside the group, not absolutely positioned over it: Sounds is
+            always rendered here and Rescue and Pop out often are, and they
+            paint later — so a separately positioned count sat underneath
+            them at phone widths. */}
+        {sessionNumber > 0 && (
+          <span className="focus-mode-session-count" aria-label={`Session ${sessionNumber} today`}>
+            SESSION {sessionNumber}
+          </span>
+        )}
         {!isComplete && onRescue && (
           <button
             type="button"
@@ -202,40 +236,37 @@ export default function FocusModePage({
           <span className="focus-mode-state-pill">{stateLabel}</span>
         </div>
 
-        <div className="focus-mode-ring-wrapper">
-          <svg
-            className="focus-mode-svg"
-            viewBox="0 0 260 260"
-            aria-hidden="true"
-          >
-            <circle
-              className="focus-mode-ring-bg"
-              cx="130"
-              cy="130"
-              r={R}
-              strokeWidth="8"
-            />
-            <circle
-              className="focus-mode-ring-progress"
-              cx="130"
-              cy="130"
-              r={R}
-              strokeWidth="8"
-              stroke={ringStroke}
-              style={{
-                strokeDasharray: circ,
-                strokeDashoffset,
-              }}
-            />
-          </svg>
+        <section className="focus-mode-task-panel" aria-label="Focused task">
+          <div className="focus-mode-task-kicker">Now focusing on</div>
+          <h1 className="focus-mode-task-title"><LinkifyText text={task.title} /></h1>
+          {task.concreteStep && (
+            <p className="focus-mode-concrete-step"><LinkifyText text={task.concreteStep} /></p>
+          )}
+        </section>
 
-          <div className="focus-mode-time-overlay">
-            <span className="focus-mode-time-digits">
-              {mins}:{secs}
-            </span>
-            {isComplete && (
-              <span className="focus-mode-complete-text">Session complete</span>
-            )}
+        {/* Screen 3's figure: one number, 74px mono, with a 2px track under
+            it rather than the ring. The ring drew attention to how much was
+            LEFT; the track reports how much has been done and then stops
+            asking. It also holds still at 00:00 — K4 freezes the timer there,
+            and a ring animating past its own end would read as overtime the
+            app has no claim on. */}
+        <div className="focus-mode-timer-block">
+          <span className="focus-mode-time-digits" aria-live="off">
+            {mins}:{secs}
+          </span>
+          <div
+            className="focus-mode-track"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={maxSeconds}
+            aria-valuenow={Math.max(0, maxSeconds - secondsLeft)}
+            aria-label="Session progress"
+          >
+            <div className="focus-mode-track-fill" style={{ width: `${Math.min(100, Math.max(0, (1 - ratio) * 100))}%` }} />
+          </div>
+          <div className="focus-mode-figures">
+            {startedLabel && <span>STARTED {startedLabel}</span>}
+            {loggedMinutes >= 1 && <span>+{loggedMinutes}m LOGGED SO FAR</span>}
           </div>
         </div>
 
@@ -255,14 +286,6 @@ export default function FocusModePage({
             ))}
           </div>
         )}
-
-        <section className="focus-mode-task-panel" aria-label="Focused task">
-          <div className="focus-mode-task-kicker">Now focusing on</div>
-          <h1 className="focus-mode-task-title"><LinkifyText text={task.title} /></h1>
-          {task.concreteStep && (
-            <p className="focus-mode-concrete-step"><LinkifyText text={task.concreteStep} /></p>
-          )}
-        </section>
 
         {!isComplete && (
           <div className="focus-mode-controls" aria-label="Timer controls">
@@ -291,6 +314,30 @@ export default function FocusModePage({
               >
                 {isRunning ? "⏸" : "▶"}
               </span>
+            </button>
+          </div>
+        )}
+
+        {/* K4's hold, at 00:00: two choices and nothing else. The timer above
+            is already frozen — no overtime is tracked, displayed or logged —
+            and the minutes are already in the ledger, so neither button is a
+            gate on the data. "+Nm" extends this same session; "Stop here"
+            only dismisses the hold. */}
+        {isComplete && (
+          <div className="focus-mode-hold-actions" aria-label="Session complete">
+            <button
+              type="button"
+              className="focus-mode-hold-keep"
+              onClick={() => onKeepGoing?.(holdExtendMinutes)}
+            >
+              Keep going · +{holdExtendMinutes}m
+            </button>
+            <button
+              type="button"
+              className="focus-mode-hold-stop"
+              onClick={onStopHere || onExit}
+            >
+              Stop here{holdLogMinutes >= 1 ? ` — log ${holdLogMinutes}m` : ""}
             </button>
           </div>
         )}

@@ -429,7 +429,12 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     if (shouldTriggerSessionComplete({ isTimerRunning, timerSecondsLeft })) {
       setIsTimerRunning(false);
       setSessionCompletePending(true);
-      notifyFocusComplete(activeTask?.title);
+      // Only when the user is somewhere else. D3's "no sound" is about the
+      // session screen, which now shows the hold inline — an alert for
+      // something already on screen is the failure event that rule removes.
+      // A bell ringing while they are on Coach, Plan or another app still
+      // has to reach them, and that is what this call is for.
+      if (!isFocusMode) notifyFocusComplete(activeTask?.title);
     }
   }, [timerSecondsLeft, isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -638,6 +643,14 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     };
   };
 
+  // How much of the open session has been worked: every banked block plus the
+  // one running. Screen 3 prints this as "+Nm LOGGED SO FAR", and
+  // readOpenSession writes it to the ledger — so they read it from here rather
+  // than each deriving it, which is how a label starts disagreeing with what
+  // was actually recorded.
+  const currentElapsedSeconds = () =>
+    focusSessionAccumulatedElapsedRef.current + Math.max(0, timerMaxSeconds - timerSecondsLeft);
+
   // The open session's numbers, read without consuming it. endFocusSession
   // and the 00:00 hold MUST report the same figures for the same session —
   // the hold's entry is the one the stop then amends — so both read them
@@ -653,7 +666,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       // Sum of every earlier "Keep Going" block's numbers plus the current
       // (final) block's — see extendTimer's accumulation above.
       focusFinalPlannedSeconds: focusSessionAccumulatedPlannedRef.current + timerMaxSeconds,
-      focusElapsedSeconds: focusSessionAccumulatedElapsedRef.current + Math.max(0, timerMaxSeconds - timerSecondsLeft),
+      focusElapsedSeconds: currentElapsedSeconds(),
       focusEndReason,
       task: focusSessionTaskRef.current,
       // Spread only when the hold actually banked an entry: the keys have to
@@ -715,6 +728,16 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     pipOpen,
     handleOpenPiP,
     focusSessionId, startFocusSession, endFocusSession,
+    // When the open session began — screen 3 prints it as "STARTED 09:41".
+    // Read from the ref each render rather than held in state: it is set once
+    // per session and never changes within one, so it needs no re-render of
+    // its own.
+    focusStartedAt: focusStartedAtRef.current,
+    // What screen 3's "+Nm LOGGED SO FAR" reports. Whole-session, not
+    // current-block: after a "Keep Going" extension the earlier blocks live in
+    // the accumulator, and a figure ignoring them tells the user they logged
+    // five minutes while the ledger holds thirty.
+    focusElapsedSeconds: currentElapsedSeconds(),
     peekFocusSession, markFocusLedgerEntry,
     // Which task the currently open session (if any) actually belongs to —
     // NOT necessarily the same as `activeTask`, which reflects the current

@@ -1,4 +1,5 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import { notifyFocusComplete } from "../utils/focusNotifications";
 
 // Minimal React hooks mock, same pattern as useFocusAudio.test.js, so this
 // hook (which is App-level and not wrapped by a DOM renderer in this repo's
@@ -656,6 +657,36 @@ describe("useFocusTimer", () => {
       result.current.startFocusSession(t);
       rerender([[t], {}, "u1"]);
       expect(result.current.sessionCompletePending).toBe(false);
+    });
+
+    it("does not alert for a bell the user is already looking at", () => {
+      // D3: reaching 00:00 is never a failure event — no sound, no modal. The
+      // modal was suppressed in this PR; the notification was not, so the
+      // screen showing the hold also fired an OS alert about it.
+      const t = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[t], {}, "u1"]);
+      result.current.startFocusSession(t);       // enterFocusMode defaults true
+      rerender([[t], {}, "u1"]);
+      notifyFocusComplete.mockClear();
+
+      result.current.setTimerSecondsLeft(0);
+      rerender([[t], {}, "u1"]);
+
+      expect(result.current.sessionCompletePending).toBe(true);
+      expect(notifyFocusComplete).not.toHaveBeenCalled();
+    });
+
+    it("still alerts when the bell rings on another screen", () => {
+      const t = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[t], {}, "u1"]);
+      result.current.startFocusSession(t, { enterFocusMode: false });
+      rerender([[t], {}, "u1"]);
+      notifyFocusComplete.mockClear();
+
+      result.current.setTimerSecondsLeft(0);
+      rerender([[t], {}, "u1"]);
+
+      expect(notifyFocusComplete).toHaveBeenCalled();
     });
 
     it("keeps the first entry if the bell somehow marks twice", () => {
