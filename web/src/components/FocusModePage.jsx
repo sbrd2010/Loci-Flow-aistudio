@@ -71,8 +71,13 @@ export default function FocusModePage({
   onDone,
   onExit,
   onChangeDuration,
-  onAddTime,
+  // The hold's two actions. Neither is the ordinary overlay exit: "Keep going"
+  // has to restart the timer AND clear the completion state, and "Stop here"
+  // has to end the session, not merely hide the screen it is on.
+  onKeepGoing,
+  onStopHere,
   startedAt,
+  elapsedSeconds,
   onAddBrainDump,
   onRescue,
   pipOpen,
@@ -138,7 +143,12 @@ export default function FocusModePage({
   // minutesFromSeconds is the ledger's OWN conversion, not a reimplementation
   // of it: a label that floored while the ledger rounds read "log 1m" at 90
   // seconds and then booked 2.
-  const loggedMinutes = minutesFromSeconds(Math.max(0, maxSeconds - secondsLeft));
+  // Whole-session, from the hook's own figure — not this block's
+  // (maxSeconds - secondsLeft), which after a "Keep Going" extension reports
+  // only the new block and contradicts the ledger.
+  const loggedMinutes = minutesFromSeconds(
+    Number.isFinite(Number(elapsedSeconds)) ? Number(elapsedSeconds) : Math.max(0, maxSeconds - secondsLeft)
+  );
   const loggedLabel = isFiveMinute && loggedMinutes >= 1 ? `${loggedMinutes}m` : null;
   const currentDurMins = Math.round(maxSeconds / 60);
   // "STARTED 09:41". Omitted rather than faked when the caller has no start
@@ -151,7 +161,7 @@ export default function FocusModePage({
   // the real figure the ledger will hold — both through the same helpers the
   // ledger uses, so neither can drift from what is actually written.
   const holdExtendMinutes = extendMinutesForSession(maxSeconds);
-  const holdLogMinutes = minutesFromSeconds(maxSeconds);
+  const holdLogMinutes = loggedMinutes;
 
   return (
     <div className={`focus-mode-overlay${isRunning ? " is-running" : ""}${isComplete ? " is-complete" : ""} timer-state-${timerState}`}>
@@ -164,13 +174,16 @@ export default function FocusModePage({
         Exit
       </button>
 
-      {sessionNumber > 0 && (
-        <span className="focus-mode-session-count" aria-label={`Session ${sessionNumber} today`}>
-          SESSION {sessionNumber}
-        </span>
-      )}
-
       <div className="focus-mode-top-right-actions">
+        {/* Inside the group, not absolutely positioned over it: Sounds is
+            always rendered here and Rescue and Pop out often are, and they
+            paint later — so a separately positioned count sat underneath
+            them at phone widths. */}
+        {sessionNumber > 0 && (
+          <span className="focus-mode-session-count" aria-label={`Session ${sessionNumber} today`}>
+            SESSION {sessionNumber}
+          </span>
+        )}
         {!isComplete && onRescue && (
           <button
             type="button"
@@ -308,14 +321,14 @@ export default function FocusModePage({
             <button
               type="button"
               className="focus-mode-hold-keep"
-              onClick={() => onAddTime?.(holdExtendMinutes)}
+              onClick={() => onKeepGoing?.(holdExtendMinutes)}
             >
               Keep going · +{holdExtendMinutes}m
             </button>
             <button
               type="button"
               className="focus-mode-hold-stop"
-              onClick={onExit}
+              onClick={onStopHere || onExit}
             >
               Stop here{holdLogMinutes >= 1 ? ` — log ${holdLogMinutes}m` : ""}
             </button>

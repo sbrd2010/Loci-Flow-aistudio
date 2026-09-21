@@ -73,13 +73,13 @@ test("mobile reliability: the session names when it started and what it has logg
   await expect(overlay.locator(".focus-mode-figures")).toContainText(/\+\d+m LOGGED SO FAR/);
 });
 
-test("mobile reliability: the session says which one of the day it is, with no invented target", async ({ page }) => {
+test("mobile reliability: no ordinal is claimed when the ledger cannot be read", async ({ page }) => {
   const overlay = await openSession(page);
-  const count = overlay.locator(".focus-mode-session-count");
-  await expect(count).toBeVisible();
-  // "SESSION 1" — never "SESSION 1 OF 4". The app has no daily session target
-  // to count against, and printing one would be a number it never agreed to.
-  await expect(count).toHaveText(/^SESSION \d+$/);
+  // Demo mode has no uid, so useFocusLedger reports "unavailable" — the same
+  // state as a refused or still-loading read. Showing "SESSION 1" there would
+  // assert an ordinal to someone who may have done four already. The honest
+  // answer to "I don't know" is to say nothing.
+  await expect(overlay.locator(".focus-mode-session-count")).toHaveCount(0);
 });
 
 test("mobile reliability: reaching 00:00 holds, with two choices and no modal", async ({ page }) => {
@@ -96,4 +96,38 @@ test("mobile reliability: reaching 00:00 holds, with two choices and no modal", 
 
   // The global completion dialog must not cover them.
   await expect(page.locator(".confirm-dialog, .modal-backdrop")).toHaveCount(0);
+});
+
+// The two specs below CLICK the buttons rather than asserting they exist.
+// Both of these actions shipped broken behind a spec that only checked
+// visibility: "Keep going" was wired to addTimeToSession, which returns
+// immediately while a completion is pending, and "Stop here" was wired to the
+// ordinary overlay exit, which left the session open and handed the user
+// straight to the global modal. Presence is not behaviour.
+
+test("mobile reliability: Keep going actually restarts the timer", async ({ page }) => {
+  const overlay = await openSession(page);
+  await page.clock.runFor(26 * 60_000);
+  await expect(overlay.locator(".focus-mode-time-digits")).toHaveText("0:00");
+
+  await overlay.getByRole("button", { name: /Keep going · \+\d+m/ }).click();
+
+  // A running countdown on a fresh block, not a frozen 0:00.
+  await expect(overlay.locator(".focus-mode-time-digits")).not.toHaveText("0:00");
+  await expect(overlay.getByLabel("Pause timer")).toBeVisible();
+  // And the hold is gone, because the session is no longer complete.
+  await expect(overlay.getByRole("button", { name: /Stop here/ })).toHaveCount(0);
+});
+
+test("mobile reliability: Stop here ends the session without handing over to a modal", async ({ page }) => {
+  const overlay = await openSession(page);
+  await page.clock.runFor(26 * 60_000);
+
+  await overlay.getByRole("button", { name: /Stop here/ }).click();
+
+  await expect(overlay).toHaveCount(0);
+  // The whole point of the inline hold: leaving it must not summon the
+  // dialog it replaced.
+  await expect(page.locator(".confirm-dialog, .modal-backdrop")).toHaveCount(0);
+  await expect(page.getByText(/Focus block complete/i)).toHaveCount(0);
 });

@@ -90,7 +90,7 @@ export default function TodayTab({
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
   pipOpen, handleOpenPiP, isAddTaskDialogOpen, startFocusSession, endFocusSession, focusSessionId, focusSessionTaskUuid, changeFocusDuration,
-  addTimeToSession, focusStartedAt,
+  extendTimer, dismissSessionComplete, focusStartedAt, focusElapsedSeconds,
   selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
   isSyncingFromCache = false,
   pendingCheckinSlot, setPendingCheckinSlot,
@@ -531,6 +531,29 @@ export default function TodayTab({
     changeFocusDuration(minutes);
   };
 
+  // K4's "Stop here". The minutes are already banked, so this is only a
+  // question about what happens next — but it still has to END the session,
+  // not merely leave the screen. onExit alone set isFocusMode false, which
+  // both left the session open and flipped shouldShowFocusCompletionPrompt
+  // back to true: the user was taken from the inline hold straight into the
+  // global modal D3 exists to remove.
+  const handleStopHere = () => {
+    const ended = endFocusSession("user_abandoned");
+    dismissSessionComplete();
+    setIsTimerRunning(false);
+    setIsFocusMode(false);
+    setFocusSessionActive(false);
+    // Use ended.task, not activeTask — a pin moved mid-session without
+    // ending it would otherwise misattribute this to the newer task. Same
+    // reasoning as every other terminal write in this file.
+    if (ended?.task) {
+      writeActivityEvents(eventPatch(uid, buildFocusTerminalEvent(
+        "focus_abandoned", ended.task, ended.focusSessionId, { ...ended, windows, now: Date.now() }
+      )));
+    }
+  };
+
+
   const handleToggleMVD = (task) => {
     savePayload({ ...payload, tasks: tasks.map(t => t.uuid === task.uuid ? { ...t, isMVD: !t.isMVD, lastUpdated: Date.now() } : t) });
   };
@@ -901,7 +924,21 @@ export default function TodayTab({
   // Thirty days rather than seven: the strip needs only five bars, but the
   // sentence counts a run, and a run longer than the window fetched would be
   // silently truncated. It undercounts at the edge rather than guessing.
-  const { raw: ledgerRaw } = useFocusLedger(uid, 30, windows);
+  const { raw: ledgerRaw, status: ledgerStatus } = useFocusLedger(uid, 30, windows);
+
+  // "SESSION N" — which session of today this is.
+  //
+  // Two things it must not do. It must not add one to a session already in
+  // the ledger: the bell banks the open session, the live subscription picks
+  // it up, and an unconditional +1 would tick the same overlay from N to N+1
+  // at 00:00 without a new session having begun. And it must not answer at
+  // all from an unreadable ledger — useFocusLedger reports loading, refused
+  // and unavailable alike as raw: null, and treating that as "no sessions
+  // yet" asserts SESSION 1 to someone who may have done four. Zero here
+  // hides the label, which is the honest answer to "I don't know".
+  const focusSessionOrdinal = ledgerStatus === "ready"
+    ? sessionsOnDay(ledgerRaw, todayStr) + (sessionCompletePending ? 0 : 1)
+    : 0;
 
   const todayTasksAll = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isParked);
   const committedTaskIds = new Set(config.dailyCommitmentDate === anchorTodayStr ? getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds) : []);
@@ -1658,9 +1695,11 @@ export default function TodayTab({
           onDone={() => { handleToggleComplete(activeTask); setIsFocusMode(false); }}
           onExit={() => setIsFocusMode(false)}
           onChangeDuration={handleChangeFocusDuration}
-          onAddTime={addTimeToSession}
+          onKeepGoing={extendTimer}
+          onStopHere={handleStopHere}
           startedAt={focusStartedAt}
-          sessionNumber={sessionsOnDay(ledgerRaw, todayStr) + 1}
+          elapsedSeconds={focusElapsedSeconds}
+          sessionNumber={focusSessionOrdinal}
           onAddBrainDump={handleFocusBrainDump}
           onRescue={openRescueMode}
           pipOpen={pipOpen}

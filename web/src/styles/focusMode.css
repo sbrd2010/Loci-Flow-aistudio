@@ -925,11 +925,12 @@
 /* "SESSION 3" — mono, top right. The handoff reads "SESSION 3 OF 4"; the
    denominator is omitted because no daily session target exists to count
    against, and printing one would be a figure the app never agreed to. */
+/* In the flow of the top-right group, not positioned over it. Absolutely
+   positioning it at the same coordinates put it underneath Sounds, Rescue and
+   Pop out, which paint later — invisible at phone widths. */
 .focus-mode-session-count {
-  position: absolute;
-  top: calc(14px + env(safe-area-inset-top, 0px));
-  right: 16px;
-  z-index: 2;
+  align-self: center;
+  white-space: nowrap;
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.12em;
