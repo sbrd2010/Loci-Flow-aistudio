@@ -87,7 +87,7 @@ function FrontBlock({ front, tasks, isLead, now, onClose }) {
   );
 }
 
-export default function PlanTab({ payload = {}, savePayload, saveConfigPatch, onOpenHorizons, onScattered }) {
+export default function PlanTab({ payload = {}, savePayload, saveConfigPatch, onOpenHorizons, onOpenDayMap, onScattered }) {
   const { tasks = [], config = {} } = payload;
   const [adding, setAdding] = useState(false);
   const [draftName, setDraftName] = useState("");
@@ -195,6 +195,38 @@ export default function PlanTab({ payload = {}, savePayload, saveConfigPatch, on
         </button>
       </header>
 
+      {/* Addendum I: Plan's three views under one control, replacing the
+          temporary "Plan by time horizon instead" link. Fronts answer what a
+          project's next move is, Day Map answers when today, and Horizons
+          answers when beyond today — one row, because they are three answers
+          to the same question rather than three places.
+
+          FRONTS renders beneath; the other two navigate to the views that
+          already exist. The handoff describes Day Map as a pane swapped in
+          here, which is deferred deliberately: it is a full-screen page that
+          hides the nav and the header, and re-housing it is exactly the
+          "rebuild its logic or its blocks" the same paragraph rules out.
+          Flagged for the designer rather than guessed at.
+
+          So this is a nav, not a tablist. Two of the three move you to another
+          screen, and role="tab" would promise panels that swap in place, a
+          roving tabIndex and arrow-key selection — none of which is true here.
+          The segmented look is the same; only the claim it makes is honest.
+          FRONTS is the page you are on, so it is not a button at all. */}
+      <nav className="plan-views" aria-label="Plan views">
+        <span className="plan-view is-active" aria-current="page">FRONTS</span>
+        {onOpenDayMap && (
+          <button type="button" className="plan-view" onClick={onOpenDayMap}>
+            DAY MAP
+          </button>
+        )}
+        {onOpenHorizons && (
+          <button type="button" className="plan-view" onClick={onOpenHorizons}>
+            HORIZONS
+          </button>
+        )}
+      </nav>
+
       {atFrontLimit && (
         <p className="plan-limit-note">
           That is {FRONT_LIMIT} fronts — the most Loci holds. Close one to make room.
@@ -287,12 +319,6 @@ export default function PlanTab({ payload = {}, savePayload, saveConfigPatch, on
       {onScattered && (
         <button type="button" className="plan-scattered" onClick={onScattered}>
           I'm scattered
-        </button>
-      )}
-
-      {onOpenHorizons && (
-        <button type="button" className="plan-horizons-link" onClick={onOpenHorizons}>
-          Plan by time horizon instead
         </button>
       )}
 

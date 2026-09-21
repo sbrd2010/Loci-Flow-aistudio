@@ -64,7 +64,7 @@ for (const viewport of MOBILE_VIEWPORTS) {
     await expect(page.getByText("ONE NEXT MOVE EACH")).toBeVisible({ timeout: 8_000 });
     await expectNoHorizontalOverflow(page);
 
-    await page.getByRole("button", { name: "Plan by time horizon instead" }).click();
+    await page.getByRole("button", { name: "HORIZONS" }).click();
     await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible({ timeout: 8_000 });
     await expectNoHorizontalOverflow(page);
 

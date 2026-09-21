@@ -253,20 +253,73 @@
   line-height: 1.6;
   color: var(--text-quiet, var(--text-muted));
 }
-.plan-horizons-link {
-  display: block;
-  margin-top: 18px;
-  padding: 10px 0;
-  font-family: var(--font-sans);
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-quiet, var(--text-muted));
-  background: transparent;
+/* Plan's three views. A row of mono kickers under a hairline, not pills:
+   the same restraint the rest of the sheet uses, so switching view reads as
+   moving along one surface rather than leaving for another screen. */
+.plan-views {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  padding: 0 0 10px;
+  margin: 0 0 14px;
+  border-bottom: 1px solid var(--divider, var(--border));
+}
+
+.plan-view {
+  appearance: none;
+  background: none;
   border: 0;
-  border-bottom: 1px solid var(--gold, var(--accent));
+  padding: 2px 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  /* Evening and Paper define --text-quiet; the thirteen legacy themes do not,
+     and their --text-muted is a deliberately faint tier that puts a 10px
+     kicker at 2.58:1 on Teal and 2.64:1 on Coral. --text-secondary is the
+     legible tier those themes actually intend for small labels. */
+  color: var(--text-quiet, var(--text-secondary));
+}
+
+/* Only the two that go somewhere are buttons; the current view is a span, and
+   should not offer a pointer or a hover it cannot honour.
+
+   A 10px kicker is a 15px-tall tap target, and these two buttons are now the
+   only way into Day Map and Horizons from here. The row is meant to stay tight,
+   so the hit area is extended past the glyphs with a pseudo-element rather than
+   by growing the button: 44px tall, centred, which is the same minimum
+   .plan-new-front and .plan-front-close already use. */
+button.plan-view {
+  position: relative;
   cursor: pointer;
 }
-.plan-horizons-link:hover { color: var(--ink, var(--text-primary)); }
+
+button.plan-view::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 44px;
+  transform: translateY(-50%);
+}
+
+button.plan-view:hover { color: var(--ink, var(--text-primary)); }
+
+button.plan-view:focus-visible {
+  outline: 2px solid var(--gold, var(--accent));
+  outline-offset: 3px;
+}
+
+/* The view you are on: named in ink, underlined in gold. One accent. */
+.plan-view.is-active {
+  color: var(--ink, var(--text-primary));
+  box-shadow: inset 0 -2px 0 var(--gold, var(--accent));
+}
+
+.plan-view:focus-visible {
+  outline: 2px solid var(--gold, var(--accent));
+  outline-offset: 3px;
+}
 
 @media (max-width: 430px) {
   .plan-tab { padding-left: 20px; padding-right: 20px; }

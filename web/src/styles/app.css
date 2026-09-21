@@ -2136,10 +2136,8 @@ textarea.text-input {
 }
 
 @media (min-width: 768px) {
-  .roadmap-compact-layout .horizon-pill {
-    font-size: 13px;
-    padding: 8px 16px;
-  }
+  /* The desktop pill size bump is gone with the pills: a kicker is 10px mono at
+     every width by design. The panel height override stays. */
   .roadmap-compact-layout .horizon-panel {
     max-height: 72vh;
   }
@@ -2147,7 +2145,25 @@ textarea.text-input {
 
 .horizon-pills {
   display: flex;
-  gap: 6px;
+  gap: 18px;
+  /* The 44px hit overlay on each kicker is absolutely positioned, and an
+     absolutely positioned child still contributes to a scroll container's
+     scrollable overflow. In a 24px-tall row that produced 8px of VERTICAL
+     scroll here — overflow-x: auto makes the y axis compute to auto too — so
+     the row could be dragged up and down on touch. Giving the row the same
+     44px the overlay needs removes the overflow at its source. The kickers
+     stay their own height and centred, so the active underline still hugs
+     the label rather than sitting at the bottom of a tall box. */
+  align-items: center;
+  /* 50, not 44. box-sizing is border-box globally, so a 44px row minus its 4px
+     bottom padding and 1px bottom border leaves a 39px content box, and the
+     44px hit overlay centred in it protruded 2.5px above the scrollport —
+     where overflow-x: auto clips it and nothing can scroll above zero, so
+     those pixels took no taps. Content height must be at least 44: with
+     H - 5 >= 44, H >= 49; 50 leaves half a pixel of slack against rounding. */
+  min-height: 50px;
+  border-bottom: 1px solid var(--divider, var(--border));
+  margin-bottom: 12px;
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -2158,46 +2174,100 @@ textarea.text-input {
   display: none;
 }
 
+/* Addendum I, the horizon board rethemed: "column headers are mono kickers:
+   WEEK · 6". Pills become kickers — no fill, no radius, no badge chip. The
+   count keeps its own element so the markup is untouched; the separator is
+   drawn by .pill-badge::before. Retheme only: the columns, the drag-and-drop
+   across horizons and the persistence are all exactly as they were.
+
+   These are the rules the board actually reads. An earlier pass added a second
+   copy inside the desktop media query and left these untouched, so the retheme
+   never rendered at any width — a stylesheet can be wrong in a way no test
+   notices. Declared once, here, at top level. */
 .horizon-pill {
   flex-shrink: 0;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 7px 13px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 700;
+  gap: 4px;
+  padding: 4px 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
   cursor: pointer;
-  background: var(--bg-secondary);
-  border: 1.5px solid var(--border);
-  color: var(--text-secondary);
-  white-space: nowrap;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-
-.horizon-pill.active {
-  background: var(--accent);
-  color: var(--btn-text, #fff);
-  border-color: var(--accent);
-}
-
-.pill-badge {
-  background: rgba(0, 0, 0, 0.12);
-  border-radius: 8px;
-  padding: 1px 5px;
+  font-family: var(--font-mono);
   font-size: 10px;
-  font-weight: 800;
-  line-height: 1.4;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  /* Same legacy-theme fallback as .plan-view: --text-muted is the faint tier. */
+  color: var(--text-quiet, var(--text-secondary));
+  /* Width is the button's own, not an overlay's — see the note on ::after. */
+  min-width: 44px;
+  justify-content: center;
+  white-space: nowrap;
+  transition: color 0.15s;
+  /* And the same hit area. These are the only way to switch horizon, and as a
+     10px kicker with 4px padding they measured ~20px tall against the 44px
+     this codebase already applies elsewhere. Extended past the glyphs rather
+     than by growing the button, so the row keeps its proportions. */
+  position: relative;
 }
+
+/* The overlay is the right tool for HEIGHT, which no layout depends on, but
+   the wrong one for width: an overlay centred on a button narrower than 44px
+   overflows both ways, and on the FIRST kicker that overflow lands left of a
+   scroll container which cannot scroll past zero — unreachable, so the target
+   stays short however wide the overlay is drawn. Widening the button removes
+   the overflow rather than hiding it, and the row's own scrollWidth then
+   accounts for it. A short label's gold underline spans 44px instead of the
+   glyphs; that is the visible cost, and it is the smaller one. */
+.horizon-pill::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 44px;
+  transform: translateY(-50%);
+}
+
+.horizon-pill:hover { color: var(--ink, var(--text-primary)); }
+
+/* The column you are in. One accent, as a rule under the label — the same
+   language Plan's view switcher uses, because it is the same kind of move. */
+.horizon-pill.active {
+  color: var(--ink, var(--text-primary));
+  box-shadow: inset 0 -2px 0 var(--gold, var(--accent));
+}
+
+.horizon-pill:focus-visible {
+  outline: 2px solid var(--gold, var(--accent));
+  outline-offset: 3px;
+}
+
+/* "WEEK · 6" — the count reads as part of the kicker, not as a badge on it. */
+.pill-badge {
+  background: none;
+  border-radius: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  line-height: inherit;
+  color: var(--text-quiet, var(--text-secondary));
+}
+
+.pill-badge::before { content: "\00b7 "; }
 
 .horizon-pill.active .pill-badge {
-  background: rgba(255, 255, 255, 0.3);
+  background: none;
+  color: var(--ink, var(--text-primary));
 }
 
 .horizon-panel {
-  background: var(--bg-card);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius);
+  background: none;
+  border: 0;
+  border-radius: 0;
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
