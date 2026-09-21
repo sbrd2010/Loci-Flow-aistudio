@@ -429,7 +429,12 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     if (shouldTriggerSessionComplete({ isTimerRunning, timerSecondsLeft })) {
       setIsTimerRunning(false);
       setSessionCompletePending(true);
-      notifyFocusComplete(activeTask?.title);
+      // Only when the user is somewhere else. D3's "no sound" is about the
+      // session screen, which now shows the hold inline — an alert for
+      // something already on screen is the failure event that rule removes.
+      // A bell ringing while they are on Coach, Plan or another app still
+      // has to reach them, and that is what this call is for.
+      if (!isFocusMode) notifyFocusComplete(activeTask?.title);
     }
   }, [timerSecondsLeft, isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
 

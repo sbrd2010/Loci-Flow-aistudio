@@ -105,6 +105,19 @@ test("mobile reliability: reaching 00:00 holds, with two choices and no modal", 
 // ordinary overlay exit, which left the session open and handed the user
 // straight to the global modal. Presence is not behaviour.
 
+test("mobile reliability: the hold offers two ways out, not a third broken one", async ({ page }) => {
+  const overlay = await openSession(page);
+  await expect(overlay.getByRole("button", { name: "Exit focus mode" })).toBeVisible();
+
+  await page.clock.runFor(26 * 60_000);
+
+  // The header Exit called the plain overlay-exit, which left the session
+  // open and summoned the global modal — the same bug "Stop here" had, via
+  // the other button in the same header. "Stop here" is the way out now.
+  await expect(overlay.getByRole("button", { name: "Exit focus mode" })).toHaveCount(0);
+  await expect(overlay.getByRole("button", { name: /Stop here/ })).toBeVisible();
+});
+
 test("mobile reliability: Keep going actually restarts the timer", async ({ page }) => {
   const overlay = await openSession(page);
   await page.clock.runFor(26 * 60_000);

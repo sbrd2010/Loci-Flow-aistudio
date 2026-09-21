@@ -165,14 +165,21 @@ export default function FocusModePage({
 
   return (
     <div className={`focus-mode-overlay${isRunning ? " is-running" : ""}${isComplete ? " is-complete" : ""} timer-state-${timerState}`}>
-      <button
-        type="button"
-        className="focus-mode-exit-btn"
-        onClick={onExit}
-        aria-label="Exit focus mode"
-      >
-        Exit
-      </button>
+      {/* Hidden at 00:00. The hold offers two choices and this was a third
+          that behaved like neither: plain onExit leaves the session open and
+          hands the user the global modal — the same bug "Stop here" had, via
+          the other button in the same header. "Stop here" is the way out
+          while the hold is showing, so nothing is trapped by removing this. */}
+      {!isComplete && (
+        <button
+          type="button"
+          className="focus-mode-exit-btn"
+          onClick={onExit}
+          aria-label="Exit focus mode"
+        >
+          Exit
+        </button>
+      )}
 
       <div className="focus-mode-top-right-actions">
         {/* Inside the group, not absolutely positioned over it: Sounds is
