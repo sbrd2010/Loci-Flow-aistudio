@@ -313,7 +313,12 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
 
       {/* ── Appearance (screen 10c) ──────────────────────────────────────── */}
       <section className="card">
-        <AppearanceSettings theme={theme} onThemeChange={onThemeChange} />
+        <AppearanceSettings
+          theme={theme}
+          onThemeChange={onThemeChange}
+          momentumEnabled={config.momentumEnabled !== false}
+          onMomentumChange={(on) => saveConfigPatch({ momentumEnabled: on })}
+        />
       </section>
 
       {/* ── Profile ──────────────────────────────────────────────────────── */}

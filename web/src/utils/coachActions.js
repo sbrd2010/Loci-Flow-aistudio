@@ -21,6 +21,7 @@
 // clearly requesting that kind of action before any tag is allowed to mutate.
 
 import { buildToggleCompletedTasks } from "./taskOps";
+import { isEveningGuardBlocked } from "./eveningGuard";
 import { isActiveLociTask } from "./lociAIContext";
 import { safeUUID } from "./uuid";
 import { normalizeForClassification } from "./coachContextMode";
@@ -536,7 +537,7 @@ export function applyCoachActions(payload, actions, { lociDateStr, localDateStr,
         continue;
       }
       // Mirrors AddTaskDialog's Evening Guard block: no new tasks at/after 8 PM.
-      if (nextPayload.config?.eveningGuardWindowActive && new Date(now).getHours() >= 20) {
+      if (isEveningGuardBlocked(nextPayload.config, new Date(now))) {
         results.push({ ...action, matched: false, eveningGuardBlocked: true });
         continue;
       }

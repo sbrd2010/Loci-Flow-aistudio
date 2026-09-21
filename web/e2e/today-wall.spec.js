@@ -129,27 +129,6 @@ test("mobile reliability: the scattered door on the desk reaches screen 14", asy
   await expect(page.locator(".scattered")).toBeVisible({ timeout: 8_000 });
 });
 
-test("mobile reliability: choosing today's one thing actually commits it", async ({ page }) => {
-  await enterDemo(page);
-
-  // Clear the demo's pinned commitment so the wall asks the question.
-  await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
-  await page.locator(".wall-action", { hasText: "Mark done" }).click();
-  await expect(page.getByText("SO — WHAT'S THE ONE THING TODAY?")).toBeVisible({ timeout: 8_000 });
-
-  await page.locator("button", { hasText: "Choose today's one thing" }).click();
-  const row = page.locator(".focus-now-pick-row").first();
-  const chosen = (await row.locator(".focus-now-pick-title").innerText()).trim();
-  await row.click();
-
-  // The wall stops asking, because the answer was written to isNowFocus on the
-  // task rather than to view-local state. Demo mode holds its payload in
-  // memory, so a reload here would only return to the landing screen — the
-  // assertion that matters is that the wall, which reads the pin, now shows it.
-  await expect(page.locator(".wall-title")).toContainText(chosen, { timeout: 8_000 });
-  await expect(page.getByText("SO — WHAT'S THE ONE THING TODAY?")).toHaveCount(0);
-});
-
 // A fix to a fix: the handler was corrected, but startFocusAndLog's
 // existing-session branch returned before applying the length — so with a
 // session already open the button still promised five minutes and resumed
@@ -171,4 +150,241 @@ test("mobile reliability: five minutes is honoured even with a session already o
   await expect(overlay).toBeVisible({ timeout: 8_000 });
   await expect(overlay.getByText(/\b5:00\b/)).toBeVisible();
   await expect(overlay.getByText(/\b25:00\b/)).toHaveCount(0);
+});
+
+// ── J2a / Addendum K1: the empty wall ─────────────────────────────────────
+// The field creates a task, because the thing you commit to may not exist in
+// the app yet — without that, first launch has no exit.
+
+// Reaching the empty wall means having no commitment AND none finished today
+// — completing one gives the done state (J2b), which stands for the rest of
+// the day. So this unpins instead, from the pinned row's own menu.
+async function emptyTheWall(page) {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
+  });
+  await enterDemo(page);
+  const pinned = page.locator(".pinned-focus-section .task-row").first();
+  await expect(pinned).toBeVisible({ timeout: 10_000 });
+  await pinned.locator(".task-row-top").click();
+  await page.getByText("Unpin from Focus").click();
+  await expect(page.locator(".wall-commit-field")).toBeVisible({ timeout: 8_000 });
+}
+
+test("mobile reliability: typing on the empty wall creates and commits a task", async ({ page }) => {
+  await emptyTheWall(page);
+
+  const commit = page.locator(".wall-commit-btn");
+  // Screen 10's button survives (K1), disabled until there is text.
+  await expect(commit).toBeDisabled();
+
+  await page.locator(".wall-commit-field").fill("Write the membrane paper intro");
+  await expect(commit).toBeEnabled();
+  await commit.click();
+
+  // It becomes the commitment: the wall stops asking and the task IS the hero.
+  await expect(page.locator(".wall-commit-field")).toHaveCount(0);
+  await expect(page.locator(".wall-title")).toContainText("Write the membrane paper intro");
+
+  // The task is created with the canonical "Personal" category and NO
+  // estimate, so no duration is rendered for it as if the user had chosen one.
+  await expect(page.locator(".wall-title")).not.toContainText("25m");
+  // L1: no front, but the demo has a Key Deadline set — so the kicker names
+  // THAT, rather than suppressing a countdown the user already has.
+  await expect(page.locator(".wall-kicker")).toContainText("Project launch");
+  await expect(page.locator(".wall-head-days")).toBeVisible();
+  // And no subtask: concreteStep is OMITTED rather than set empty, so
+  // normalizePayload does not substitute its "Do first tiny step" default.
+  await expect(page.locator(".wall-support")).toHaveCount(0);
+});
+
+test("mobile reliability: Enter commits, without touching the button", async ({ page }) => {
+  await emptyTheWall(page);
+
+  await page.locator(".wall-commit-field").fill("Reply to the supervisor");
+  await page.locator(".wall-commit-field").press("Enter");
+
+  await expect(page.locator(".wall-title")).toContainText("Reply to the supervisor");
+});
+
+test("mobile reliability: the pick rows narrow as you type, and tapping one commits it", async ({ page }) => {
+  await emptyTheWall(page);
+
+  // Unfiltered, the rows show today's open items.
+  const rows = page.locator(".wall-pick-row");
+  await expect(rows.first()).toBeVisible({ timeout: 8_000 });
+  const before = await rows.count();
+  expect(before).toBeGreaterThan(0);
+
+  const firstTitle = (await rows.first().locator(".wall-pick-title").innerText()).trim();
+
+  // Typing part of an existing title narrows to it, so the near-duplicate is
+  // visible before a second copy is created.
+  await page.locator(".wall-commit-field").fill(firstTitle.slice(0, 12));
+  await expect(rows.first()).toContainText(firstTitle.slice(0, 12));
+
+  await rows.first().click();
+
+  // The existing task is committed — not a new one created from the typed text.
+  await expect(page.locator(".wall-title")).toContainText(firstTitle);
+  await expect(page.locator(".wall-commit-field")).toHaveCount(0);
+});
+
+// ── J2b / Addendum K2, K3: the commitment, finished ───────────────────────
+
+test("mobile reliability: finishing the commitment gives the done state, not the empty wall", async ({ page }) => {
+  await enterDemo(page);
+  await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
+  const title = (await page.locator(".wall-title.is-wall").innerText()).trim();
+
+  await page.locator(".wall-action", { hasText: "Mark done" }).click();
+
+  // The closing line is the hero; the finished title is struck above it.
+  await expect(page.locator(".wall-done-line")).toBeVisible({ timeout: 8_000 });
+  await expect(page.locator(".wall-done-was")).toContainText(title);
+  // K2: no session was run, so zero minutes — the line is a bare "Done.",
+  // never "0m logged".
+  await expect(page.locator(".wall-done-line")).toHaveText("Done.");
+  // And NOT the empty wall's field, which would be asking the question again.
+  await expect(page.locator(".wall-commit-field")).toHaveCount(0);
+});
+
+test("mobile reliability: the proposal never auto-commits, and Not now holds", async ({ page }) => {
+  await enterDemo(page);
+  await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
+  await page.locator(".wall-action", { hasText: "Mark done" }).click();
+
+  const proposal = page.locator(".wall-proposal");
+  await expect(proposal).toBeVisible({ timeout: 8_000 });
+  await expect(proposal.locator(".wall-proposal-kicker")).toHaveText("NEXT, IF YOU WANT");
+
+  // Nothing is committed until the user says so: the done line still stands.
+  await expect(page.locator(".wall-done-line")).toBeVisible();
+
+  await proposal.locator(".wall-proposal-not-now").click();
+
+  // K3: "Not now" leaves the done state standing, and does not propose
+  // something else in its place.
+  await expect(page.locator(".wall-proposal")).toHaveCount(0);
+  await expect(page.locator(".wall-done-line")).toBeVisible();
+});
+
+test("mobile reliability: Commit to this makes the proposal the new commitment", async ({ page }) => {
+  await enterDemo(page);
+  await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
+  await page.locator(".wall-action", { hasText: "Mark done" }).click();
+
+  const proposal = page.locator(".wall-proposal");
+  await expect(proposal).toBeVisible({ timeout: 8_000 });
+  const next = (await proposal.locator(".wall-proposal-title").innerText()).trim();
+
+  await proposal.locator(".wall-proposal-commit").click();
+
+  await expect(page.locator(".wall-title.is-wall")).toContainText(next, { timeout: 8_000 });
+});
+
+// ── J4: Momentum ─────────────────────────────────────────────────────────
+// Demo mode has no uid, so the ledger is unreadable and there is no history.
+// That is exactly the case the design is strictest about: nothing renders. An
+// empty frame is a scoreboard of what you haven't done.
+
+test("mobile reliability: Momentum does not render an empty frame", async ({ page }) => {
+  await enterDemo(page);
+  await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
+
+  await expect(page.locator(".momentum")).toHaveCount(0);
+  await expect(page.locator(".momentum-bar")).toHaveCount(0);
+});
+
+// The wall asks the question itself, so the legacy first-run panel must not
+// render beneath it — two competing creation flows on first launch is the
+// screen this redesign exists to remove.
+test("mobile reliability: the empty wall does not compete with the old onboarding panel", async ({ page }) => {
+  await emptyTheWall(page);
+
+  await expect(page.locator(".wall-commit-field")).toBeVisible();
+  await expect(page.getByText("tap + to add your first task", { exact: false })).toHaveCount(0);
+});
+
+// TodayWall stays mounted, so a query left in the field reappears if the
+// chosen task is ever unpinned — and an accidental submit then creates
+// exactly the duplicate the pick rows exist to prevent.
+test("mobile reliability: picking an existing task clears the typed query", async ({ page }) => {
+  await emptyTheWall(page);
+
+  const rows = page.locator(".wall-pick-row");
+  await expect(rows.first()).toBeVisible({ timeout: 8_000 });
+  const firstTitle = (await rows.first().locator(".wall-pick-title").innerText()).trim();
+
+  await page.locator(".wall-commit-field").fill(firstTitle.slice(0, 10));
+  await rows.first().click();
+  await expect(page.locator(".wall-title")).toContainText(firstTitle, { timeout: 8_000 });
+
+  // Unpin it and the field comes back — empty, not holding the old query.
+  const pinned = page.locator(".pinned-focus-section .task-row").first();
+  await expect(pinned).toBeVisible({ timeout: 8_000 });
+  await pinned.locator(".task-row-top").click();
+  await page.getByText("Unpin from Focus").click();
+
+  await expect(page.locator(".wall-commit-field")).toHaveValue("", { timeout: 8_000 });
+});
+
+// A task committed from the wall has no estimate and no subtask by design
+// (K1). Editing it must not quietly materialise the form's defaults: renaming
+// it should not give it a 25-minute estimate and a "Do first tiny step" it
+// never had.
+test("mobile reliability: editing a wall task keeps its no-estimate, no-subtask state", async ({ page }) => {
+  await emptyTheWall(page);
+
+  await page.locator(".wall-commit-field").fill("Draft the membrane abstract");
+  await page.locator(".wall-commit-btn").click();
+  await expect(page.locator(".wall-title")).toContainText("Draft the membrane abstract", { timeout: 8_000 });
+  // No subtask to begin with.
+  await expect(page.locator(".wall-support")).toHaveCount(0);
+
+  // Open the editor from the wall and change ONLY the title.
+  await page.locator(".wall-action", { hasText: "Split it" }).click();
+  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
+  await page.getByPlaceholder("e.g. Write cover letter draft").fill("Draft the abstract properly");
+  await page.getByTestId("add-task-submit").click();
+
+  await expect(page.locator(".wall-title")).toContainText("Draft the abstract properly", { timeout: 8_000 });
+  // Still no invented subtask, and still no duration presented as chosen.
+  await expect(page.locator(".wall-support")).toHaveCount(0);
+  await expect(page.getByText("Do first tiny step")).toHaveCount(0);
+});
+
+// A regression guard for the header not lurching when the commitment is
+// finished. Narrow on purpose: the demo has no fronts, so this exercises the
+// legacy-deadline path only — the front case, where the countdown could jump
+// to an unrelated deadline, is pinned down by frontForCommitment's unit tests.
+test("mobile reliability: the done state keeps the finished task's own countdown", async ({ page }) => {
+  await enterDemo(page);
+  await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
+  const before = await page.locator(".wall-head-days").innerText();
+
+  await page.locator(".wall-action", { hasText: "Mark done" }).click();
+  await expect(page.locator(".wall-done-line")).toBeVisible({ timeout: 8_000 });
+
+  await expect(page.locator(".wall-head-days")).toHaveText(before);
+});
+
+// The selector shows 25 for a task that has none, so choosing 25 has to be
+// distinguishable from never touching it — otherwise the estimate cannot be
+// set on a wall-created task at all.
+test("mobile reliability: an estimate can still be chosen for a wall task", async ({ page }) => {
+  await emptyTheWall(page);
+
+  await page.locator(".wall-commit-field").fill("Size this one properly");
+  await page.locator(".wall-commit-btn").click();
+  await expect(page.locator(".wall-title")).toContainText("Size this one properly", { timeout: 8_000 });
+
+  await page.locator(".wall-action", { hasText: "Split it" }).click();
+  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
+  await page.locator(".selector-btn", { hasText: "45m" }).first().click();
+  await page.getByTestId("add-task-submit").click();
+
+  // It sticks: the wall's start control now offers the length the user chose,
+  // not the 25 it falls back to when there is no estimate.
+  await expect(page.locator(".wall-primary")).toContainText("45:00", { timeout: 8_000 });
 });

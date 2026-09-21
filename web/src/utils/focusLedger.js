@@ -91,6 +91,20 @@ export function dailyTotals(events) {
   return totals;
 }
 
+// Minutes logged against ONE task on ONE Loci day. K2: the done line's figure
+// is "minutes logged against that task today", not the day's total — finishing
+// your commitment after two hours on something else must not read as two hours
+// on the commitment.
+//
+// Sums every terminal event for the task that day, because a task worked in
+// three sittings has three of them.
+export function minutesForTaskOn(raw, taskId, dateStr) {
+  if (!taskId || !dateStr) return 0;
+  return flattenFocusEvents(raw)
+    .filter((e) => e.taskId === taskId && e.lociDateString === dateStr)
+    .reduce((total, e) => total + eventMinutes(e), 0);
+}
+
 // "WHERE IT WENT" — minutes per front, joining taskId back to the live tasks.
 // Work on no front is collected under a null key rather than invented into one.
 export function minutesByFront(events, tasks = []) {

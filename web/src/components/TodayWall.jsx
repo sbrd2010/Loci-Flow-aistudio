@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import LinkifyText from "./LinkifyText";
 import "../styles/todayWall.css";
 
@@ -40,16 +40,29 @@ export default function TodayWall({
   onMarkDone,
   onSplit,
   onStartSmall,
-  onChooseCommitment,
+  doneTask = null,
+  doneMinutes = 0,
+  proposal = null,
+  onCommitProposal,
+  onDismissProposal,
+  commitBlocked = false,
+  onCommitNewTask,
+  onPickExisting,
+  pickOptions = [],
   onScattered,
   openCount = 0,
 }) {
+  // Only the empty wall uses this, but hooks cannot sit behind its early
+  // return.
+  const [draft, setDraft] = useState("");
   // timerLabel is supplied only while a session is already running on this
   // task, where the chip has to name what tapping will resume.
   const resuming = !!timerLabel;
   const timer = timerLabel || `${pad2(focusMinutes)}:00`;
-  // "The kicker becomes the front name *or* nothing — never 'Uncategorised'."
-  const kicker = frontName ? `${frontName} · YOU COMMITTED TO` : "YOU COMMITTED TO";
+  // L1: the kicker names the commitment's front, or the Key Deadline when it
+  // has no front, or nothing at all when there is neither — never
+  // "Uncategorised", and never a bare label with nothing to name.
+  const kicker = frontName ? `${frontName} · YOU COMMITTED TO` : null;
   // J3: the day count is --alert ONLY under three days, otherwise --gold-lift.
   // The Key Deadline strip's information lives here now, and the one alert
   // colour is spent only on something genuinely imminent.
@@ -78,18 +91,121 @@ export default function TodayWall({
   // Nothing committed yet. The handoff says the wall renders the first-launch
   // question inline; that screen is not built, so this asks the same question
   // with the picker the app already has, rather than inventing a second one.
-  if (!task) {
+  // — the commitment, finished (J2b/K2/K3) —
+  //
+  // The hero becomes the closing line, not the proposal: what you did is the
+  // dominant element, and what you might do next is offered beneath it. There
+  // is NO auto-commit, ever — "Not now" leaves this standing for the rest of
+  // the day rather than proposing something else.
+  if (doneTask && !task) {
     return (
-      <section className={`today-wall${peekOpen ? " is-open" : ""}`}>
+      <section className="today-wall is-done">
+        {header}
+        <div className="wall-done">
+          <div className="wall-done-was">{doneTask.title}</div>
+          {/* K2: the figure is minutes on THIS task today. Zero reads just
+              "Done." — no "0m logged", no "no time logged", no apology. */}
+          <h2 className="wall-done-line">
+            {doneMinutes > 0 ? `Done. ${doneMinutes}m logged.` : "Done."}
+          </h2>
+
+          {proposal && (
+            <div className="wall-proposal">
+              <div className="wall-proposal-kicker">NEXT, IF YOU WANT</div>
+              <p className="wall-proposal-title">{proposal.title}</p>
+              <button type="button" className="wall-proposal-commit" onClick={onCommitProposal}>
+                Commit to this
+              </button>
+              <button type="button" className="wall-proposal-not-now" onClick={onDismissProposal}>
+                Not now
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  // — nothing committed yet: screen 10's field, on the same ground (J2a/K1) —
+  //
+  // The field takes free text and CREATES a task, because the thing you commit
+  // to may not exist in the app yet — without that, first launch has no exit.
+  // The guard against a near-duplicate is not a restriction but a view: the
+  // "Or pick one" rows filter to open items matching what is being typed, so
+  // an existing version of the same thing is visible before it is committed.
+  // Tapping a row commits that task instead of creating a second one. No
+  // fuzzy-merge prompt, no "did you mean".
+  if (!task) {
+    const query = draft.trim().toLowerCase();
+    const matches = (query
+      ? pickOptions.filter(t => (t.title || "").toLowerCase().includes(query))
+      : pickOptions
+    ).slice(0, 3);
+    const commit = () => {
+      const title = draft.trim();
+      if (!title) return;
+      // The handler decides, and the draft is cleared only if it accepted.
+      // commitBlocked is a render-time value that can be up to a minute
+      // stale, so a wall left open across 20:00 would otherwise swallow what
+      // the user typed: cleared here, rejected there, nothing to show for it.
+      if (onCommitNewTask?.(title) === false) return;
+      setDraft("");
+    };
+    // Picking an existing task clears the draft too. TodayWall stays mounted,
+    // so a query left behind reappears in the field if that task is ever
+    // unpinned — and an accidental submit then creates exactly the duplicate
+    // these rows exist to prevent.
+    const pick = (t) => {
+      setDraft("");
+      onPickExisting?.(t);
+    };
+    return (
+      <section className="today-wall is-empty">
         {header}
         <div className="wall-empty">
-          <div className="wall-kicker">SO — WHAT'S THE ONE THING TODAY?</div>
-          <p className="wall-empty-line">
-            One thing. You can change it whenever — that's not failure.
-          </p>
-          <button type="button" className="wall-primary" onClick={onChooseCommitment}>
-            Choose today's one thing
-          </button>
+          <div className="wall-kicker">TODAY</div>
+          <form
+            className="wall-commit"
+            onSubmit={(e) => { e.preventDefault(); commit(); }}
+          >
+            <input
+              type="text"
+              className="wall-commit-field"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="What's the one thing?"
+              aria-label="Today's one thing"
+              autoComplete="off"
+              maxLength={1000}
+            />
+            <p className="wall-empty-line">
+              {commitBlocked
+                ? "Evening Guard is on — no new tasks after 8pm. Rest; this will be here tomorrow."
+                : "You can change it whenever. That\u2019s not failure."}
+            </p>
+            {/* K1: screen 10's Commit button survives — J2a's "the field is the
+                only affordance" meant no illustration and no onboarding CTA,
+                not a keyboard-only commit. Enter commits too, via the form. */}
+            <button type="submit" className="wall-commit-btn" disabled={!draft.trim() || commitBlocked}>
+              Commit
+            </button>
+          </form>
+
+          {matches.length > 0 && (
+            <div className="wall-pick">
+              <div className="wall-pick-kicker">OR PICK ONE</div>
+              {matches.map(t => (
+                <button
+                  key={t.uuid}
+                  type="button"
+                  className="wall-pick-row"
+                  onClick={() => pick(t)}
+                >
+                  <span className="wall-pick-title">{t.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     );
@@ -104,7 +220,7 @@ export default function TodayWall({
       {peekOpen ? (
         // — the desk —
         <div className="wall-body">
-          <div className="wall-kicker">{kicker}</div>
+          {kicker && <div className="wall-kicker">{kicker}</div>}
           <h2 className="wall-title is-desk"><LinkifyText text={task.title} /></h2>
           {support && (
             <div className="wall-support-row">
@@ -121,7 +237,7 @@ export default function TodayWall({
       ) : (
         // — the wall — the task IS the button
         <button type="button" className="wall-hero" onClick={onStartFocus}>
-          <span className="wall-kicker">{kicker}</span>
+          {kicker && <span className="wall-kicker">{kicker}</span>}
           <span className="wall-rule-short" aria-hidden="true" />
           {/* Plain text, not LinkifyText: an <a> inside this <button> is
               invalid nested interactive content, gives assistive technology

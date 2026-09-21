@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { safeUUID } from "../utils/uuid";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
@@ -24,6 +25,10 @@ function parseManualSubSteps(raw) {
 }
 
 
+// What the estimate selector shows for a task that has none. Named because
+// the save path has to tell "the user chose 25" from "nobody chose anything".
+const DEFAULT_ESTIMATE_MINUTES = 25;
+
 export default function AddTaskDialog({ email, payload, savePayload, savePayloadAsync, userProfile, defaultHorizon, onClose, editTask, uid, writeActivityEvents }) {
   const windows = getFocusWindows(payload.config || {});
   const isEditMode = !!editTask;
@@ -36,7 +41,12 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
   // "" means no front. Stored as null, never "", so the field is absent rather
   // than empty for a task that belongs to nothing.
   const [frontId, setFrontId] = useState(editTask?.frontId || "");
-  const [estimateMinutes, setEstimateMinutes] = useState(editTask?.timeEstimateMinutes || 25);
+  const [estimateMinutes, setEstimateMinutes] = useState(editTask?.timeEstimateMinutes || DEFAULT_ESTIMATE_MINUTES);
+  // A task can legitimately have NO estimate, and the selector shows the
+  // default for one. Comparing the value alone cannot tell "the user chose 25"
+  // from "nobody chose anything", so choosing 25 on such a task — or leaving
+  // and returning to it — would silently not stick. This records the act.
+  const [estimatePicked, setEstimatePicked] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(isEditMode);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
@@ -174,7 +184,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       if (aiSuggestion.microStep) { setConcreteStep(aiSuggestion.microStep); setAdvancedOpen(true); }
       if (["P1","P2","P3","P4"].includes(aiSuggestion.priority)) setPriority(aiSuggestion.priority);
       const est = Number(aiSuggestion.estimateMinutes);
-      if ([15,25,45,60,120,240,360].includes(est)) setEstimateMinutes(est);
+      if ([15,25,45,60,120,240,360].includes(est)) { setEstimateMinutes(est); setEstimatePicked(true); }
       if (["today","week","month","quarter","halfyear","office"].includes(aiSuggestion.horizonLevel)) setHorizonLevel(aiSuggestion.horizonLevel);
       if (aiSuggestion.subSteps.length > 0 && subSteps.length === 0) {
         const now = Date.now();
@@ -217,8 +227,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
     // Evening Guard window block logic
     const now = new Date();
-    const hour = now.getHours();
-    if (payload.config?.eveningGuardWindowActive && hour >= 20) {
+    if (isEveningGuardBlocked(payload.config, now)) {
       setFormError("🌙 Evening Guard is active — no new tasks at or after 8 PM. Go rest!");
       return;
     }
@@ -251,16 +260,32 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       // When it did change, mirror DayMap's own duration edit (DayMapPage.jsx's
       // changeDuration), which writes both fields so DayMap doesn't keep showing
       // a stale duration (DayMap's getEstimate prefers dayMapDurationMinutes).
-      const estimateChanged = newEstimate !== Number(editTask.timeEstimateMinutes);
+      // A task can legitimately have NO estimate and NO subtask — the wall's
+      // commit field creates exactly that (K1). Writing the form's defaults
+      // back on an edit that never touched those fields invents data the user
+      // never entered: rename a wall task and it silently gained a 25-minute
+      // estimate and a "Do first tiny step". The spread preserves whatever
+      // editTask already had, so omitting the key is how absence survives.
+      const hadEstimate = Number(editTask.timeEstimateMinutes) > 0;
+      // With no estimate to compare against, "changed" is the act of picking,
+      // not the value: Number(undefined) is NaN and differs from everything,
+      // while comparing to the default cannot tell a deliberate 25 from an
+      // untouched selector.
+      const estimateChanged = hadEstimate
+        ? newEstimate !== Number(editTask.timeEstimateMinutes)
+        : estimatePicked;
+      const stepText = concreteStep.trim();
       const updatedTask = {
         ...editTask,
         title: title.trim(),
-        concreteStep: concreteStep.trim() || editTask.concreteStep || "Do first tiny step",
+        // Clearing the field on a task that HAD a step still keeps the old
+        // one, exactly as before — the spread does it.
+        ...(stepText ? { concreteStep: stepText } : {}),
         horizonLevel,
         priority,
         category,
         frontId: frontId || null,
-        timeEstimateMinutes: newEstimate,
+        ...(hadEstimate || estimatePicked ? { timeEstimateMinutes: newEstimate } : {}),
         ...(estimateChanged ? { dayMapDurationMinutes: newEstimate } : {}),
         reminderAt,
         subSteps: effectiveSubSteps,
@@ -332,7 +357,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
         <form onSubmit={handleSubmit} className="modal-body">
           {/* Evening Guard upfront warning */}
-          {payload.config?.eveningGuardWindowActive && new Date().getHours() >= 20 && (
+          {isEveningGuardBlocked(payload.config) && (
             <div style={{ background: "rgba(245,158,11,0.12)", border: "1px solid var(--warning)", borderRadius: "var(--radius-sm)", padding: "10px 12px", fontSize: "12.5px", color: "var(--warning)", fontWeight: "600", lineHeight: "1.5", marginBottom: "4px" }}>
               🌙 Evening Guard is active. Adding tasks after 8 PM is blocked — go rest!
             </div>
@@ -519,7 +544,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
                       type="button"
                       className={`selector-btn ${estimateMinutes === est.min ? "selected" : ""}`}
                       style={{ padding: "6px 4px", fontSize: "11.5px" }}
-                      onClick={() => setEstimateMinutes(est.min)}
+                      onClick={() => { setEstimateMinutes(est.min); setEstimatePicked(true); }}
                     >
                       {est.label}
                     </button>

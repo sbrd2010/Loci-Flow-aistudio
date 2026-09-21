@@ -130,13 +130,34 @@ export function frontDaysLeft(front, now = new Date()) {
 }
 
 // The day count the wall shows beside its kicker. J3 reads "MEMBRANE PAPER ·
-// 11d": one front, its own deadline. So the count follows whatever the kicker
-// names — the commitment's front when it has one, and otherwise the legacy key
-// deadline, which is what the deleted Key Deadline strip showed. An overdue
-// deadline is not "days left", and a front with no due date shows no count
-// rather than borrowing an unrelated one.
-export function commitmentDaysLeft(front, config = {}, now = new Date()) {
-  const d = frontDaysLeft(front || legacyDeadlineAsFront(config), now);
+// 11d": one front, its own deadline. The count follows whatever the kicker
+// names, and nothing else.
+//
+// The front a commitment sits on, if any. Takes the task the WALL is showing
+// — which after completion is the finished commitment, not the pin, because
+// completing clears isNowFocus. Resolving against the pin alone made the
+// header's countdown jump to an unrelated deadline, or vanish, at the moment
+// the task was finished.
+export function frontForCommitment(task, fronts = []) {
+  if (!task?.frontId) return null;
+  return (fronts || []).find(f => f.id === task.frontId) || null;
+}
+
+// Whose name and day count the wall's kicker carries (Addendum L1).
+//
+// The order is: the commitment's own front, then the legacy Key Deadline, then
+// nothing. A committed task never suppresses a countdown the user has already
+// set — K1's "no kicker, no day count" was written against the first-launch
+// task, where no Key Deadline exists either, and was not a ruling on the
+// deadline's visibility. With neither, there is no kicker at all.
+export function commitmentKickerFront(front, config = {}) {
+  return front || legacyDeadlineAsFront(config) || null;
+}
+
+// The day count beside that kicker. J3 put it in one place only — the strip it
+// replaced is gone — and an overdue deadline is not "days left".
+export function commitmentDaysLeft(front, now = new Date()) {
+  const d = frontDaysLeft(front, now);
   return d !== null && d >= 0 ? d : null;
 }
 

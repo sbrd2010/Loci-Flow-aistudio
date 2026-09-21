@@ -2,7 +2,12 @@ import React, { useState, useEffect, useRef } from "react";
 import TaskRow from "./TaskRow";
 import AddTaskDialog from "./AddTaskDialog";
 import TodayWall from "./TodayWall";
-import { frontsFromConfig, commitmentDaysLeft } from "../utils/fronts";
+import Momentum from "./Momentum";
+import { frontsFromConfig, commitmentDaysLeft, commitmentKickerFront, frontForCommitment } from "../utils/fronts";
+import { useFocusLedger } from "../hooks/useFocusLedger";
+import { minutesForTaskOn } from "../utils/focusLedger";
+import { buildMomentum } from "../utils/momentum";
+import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import FocusModePage from "./FocusModePage";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
@@ -18,7 +23,7 @@ import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodaySho
 import { getFocusWindows, getRemainingFocusMinutes } from "../utils/focusWindows";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import {
-  getValidCommittedTaskIds,
+  getValidCommittedTaskIds, committedTaskIdsForDay,
   shouldShowReflection, buildEndOfDaySummary, buildReflectionSave, buildReflectionSnooze, REFLECTION_MOODS,
 } from "../utils/dailyCoachCheckins";
 import "../styles/focusNow.css";
@@ -179,12 +184,6 @@ export default function TodayTab({
   const [focusNowMode, setFocusNowMode] = useState(false);
   const [focusNowTaskId, setFocusNowTaskId] = useState(null);
   const [showFocusNowPicker, setShowFocusNowPicker] = useState(false);
-  // The same sheet serves two callers. Opened from the One Task Focus chip it
-  // only stages a task (the pin happens when that view's Start is tapped);
-  // opened from the wall's "Choose today's one thing" the selection IS the
-  // commitment, so it has to reach isNowFocus — otherwise the wall still asks
-  // the question the user just answered, and a reload loses the choice.
-  const [pickerCommits, setPickerCommits] = useState(false);
   // "peekOpen is persisted to localStorage." Closed by default — the wall is
   // the default state, and the peek is how you ask for the rest.
   const [peekOpen, setPeekOpen] = useState(() => {
@@ -267,9 +266,14 @@ export default function TodayTab({
     };
   }, [showMoreMenu]);
 
-  // Auto-exit Focus Now if the selected task is deleted externally
+  // Auto-exit Focus Now if the selected task is deleted externally — or
+  // completed. A completed task leaves the section locked on its "Done" card
+  // while the wall has moved on, hiding the rest of Today until Exit is
+  // pressed. Completion reaches this from several paths (the wall's Mark
+  // done, the row checkbox, the timer, accepting the wall's proposal), so it
+  // is caught here rather than at each of them.
   useEffect(() => {
-    if (focusNowMode && focusNowTaskId && !tasks.find(t => t.uuid === focusNowTaskId && !t.isDeleted)) {
+    if (focusNowMode && focusNowTaskId && !tasks.find(t => t.uuid === focusNowTaskId && !t.isDeleted && !t.isCompleted)) {
       setFocusNowMode(false);
       setFocusNowTaskId(null);
     }
@@ -431,20 +435,87 @@ export default function TodayTab({
     return pinPromise;
   };
 
+  // K1: the empty wall creates a task from free text. The record is
+  // deliberately sparse — no front, no estimate, no subtask — and pinned
+  // immediately, which is a legal task under Addendum C.
+  //
+  // concreteStep is OMITTED rather than set empty: normalizePayload only
+  // rewrites the field when the key is present, and would substitute "Do first
+  // tiny step" for an empty string — putting a subtask on the one task that is
+  // specified not to have one. The rules accept its absence
+  // (!newData.exists() || ...), and Firebase rejects an explicit undefined.
+  const handleCommitNewTask = (title) => {
+    const clean = String(title || "").trim().slice(0, 1000);
+    if (!clean) return;
+    // The wall is a third creation path, and Evening Guard is a setting the
+    // user switched on for themselves — a path that quietly ignores it is a
+    // way around their own decision. The wall disables Commit and says why,
+    // so this is a backstop rather than the only check.
+    if (isEveningGuardBlocked(config)) return false;
+    const now = Date.now();
+    const freshTask = {
+      id: now,
+      userId: config.userId || "",
+      uuid: safeUUID(),
+      title: clean,
+      horizonLevel: "today",
+      priority: "P3",
+      // The canonical value every other creation path stores. Lowercase made a
+      // second bucket in Insights and lost the row's category icon, because
+      // consumers compare the stored string directly.
+      category: "Personal",
+      frontId: null,
+      // timeEstimateMinutes is OMITTED, not set to 25: K1 says no estimate,
+      // and writing one would have lists and Coach present an unsized task as
+      // a deliberate 25-minute one. Every focus-time caller already falls back
+      // to 25 at runtime when the field is absent.
+      deadlineTimestamp: null,
+      reminderAt: null,
+      isCompleted: false,
+      isParked: false,
+      isNowFocus: true,
+      orderIndex: todayTasksAll.length,
+      dateCompletedString: null,
+      isDeleted: false,
+      lastUpdated: now,
+      subSteps: [],
+    };
+    // Exclusive, like every other pin (J5): whatever held isNowFocus lets go.
+    // And ending its session is part of letting go — handlePinTask has done
+    // this since it was written, and clearing the flag without it leaves a
+    // session open against the OLD task while the timer retargets to the new
+    // one, so the eventual terminal event credits the wrong task. The pinned
+    // task can be outside Today (Coach and Mind Box can pin a week task), so
+    // this looks at every task, not just today's.
+    const previouslyFocused = (tasks || []).find(t => t.isNowFocus);
+    const endedFocusSession = previouslyFocused ? endFocusSession("user_abandoned") : null;
+    if (endedFocusSession) {
+      setIsTimerRunning(false);
+      setIsFocusMode(false);
+      setFocusSessionActive(false);
+    }
+    const tasks_ = (tasks || []).map(t => (t.isNowFocus ? { ...t, isNowFocus: false, lastUpdated: now } : t));
+    savePayloadAsync({ ...payload, tasks: [...tasks_, freshTask] })
+      .then(() => {
+        // Built with the `now` captured when the user acted, not when the
+        // debounced write confirmed: savePayloadAsync can land 1.5s later, or
+        // later still on a retry, and defaulting the timestamp here files a
+        // task created at 01:59 under the following Loci day.
+        const events = [buildTaskMutationEvent("task_created", freshTask, { windows, now })];
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+        }
+        writeActivityEvents(eventsPatch(uid, events));
+      })
+      .catch(() => {});
+    return true;
+  };
+
+  // Staging only: the pin happens when One Task Focus's own Start is tapped.
+  // The wall's commitment no longer comes through this sheet — it has its own
+  // field now (J2a) — so this no longer has to serve two callers.
   const handleFocusNowPick = (task) => {
     setShowFocusNowPicker(false);
-    setPickerCommits(false);
-    if (pickerCommits) {
-      // Choosing the day's commitment is not entering One Task mode. Doing
-      // both left the screen stuck on a One Task card for the chosen task
-      // once it was completed — pinnedFocusTask disappears, but focusNowTask
-      // still accepts a completed task, hiding the rest of Today until Exit.
-      //
-      // handlePinTask TOGGLES, so an already-pinned task would be unpinned by
-      // a blind call — the very state this is here to prevent.
-      if (!task.isNowFocus) handlePinTask(task);
-      return;
-    }
     setFocusNowTaskId(task.uuid);
     setFocusNowMode(true);
   };
@@ -824,6 +895,13 @@ export default function TodayTab({
     )});
   };
 
+  // One bounded subscription for both figures the wall needs from the ledger:
+  // the done line's minutes (J2b) and Momentum's days (J4).
+  // Thirty days rather than seven: the strip needs only five bars, but the
+  // sentence counts a run, and a run longer than the window fetched would be
+  // silently truncated. It undercounts at the edge rather than guessing.
+  const { raw: ledgerRaw } = useFocusLedger(uid, 30, windows);
+
   const todayTasksAll = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isParked);
   const committedTaskIds = new Set(config.dailyCommitmentDate === anchorTodayStr ? getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds) : []);
   const pinnedFocusTask = todayTasksAll.find(t => t.isNowFocus && !t.isCompleted && !t.isDeleted) || null;
@@ -841,17 +919,36 @@ export default function TodayTab({
   // The kicker is the front name OR nothing. Never "Uncategorised": a task with
   // no front is a first-class task (Addendum C).
   const wallFronts = frontsFromConfig(config);
-  const wallFront = pinnedFocusTask?.frontId
-    ? (wallFronts.find(f => f.id === pinnedFocusTask.frontId) || null)
-    : null;
-  const wallFrontName = wallFront?.name || null;
+  // — J2b: the commitment, finished —
+  //
+  // Completing clears isNowFocus, so pinnedFocusTask is null by the time this
+  // renders. What survives is dailyCommitmentTaskIds, which App's observer
+  // writes for every pin; the done state is the last of today's commitments
+  // that is actually finished today.
+  const doneCommitment = (() => {
+    if (pinnedFocusTask) return null;
+    const ids = committedTaskIdsForDay(config, todayStr);
+    for (let i = ids.length - 1; i >= 0; i--) {
+      const t = todayTasksAll.find(x => x.uuid === ids[i]);
+      if (t && t.isCompleted && t.dateCompletedString === todayStr) return t;
+    }
+    return null;
+  })();
+  // The done state has no pinned task — completion clears the flag — so the
+  // header would otherwise resolve against the legacy Key Deadline and the
+  // countdown would jump to an unrelated one, or vanish, the instant the task
+  // was finished. It follows the task the wall is actually showing.
+  const wallFront = frontForCommitment(pinnedFocusTask || doneCommitment, wallFronts);
+  // L1: front first, then the Key Deadline the user already set, then nothing.
+  const wallKickerFront = commitmentKickerFront(wallFront, config);
+  const wallFrontName = wallKickerFront?.name || null;
   // J3 reads "MEMBRANE PAPER · 11d" — one front, and its own count. Taking the
   // count from the legacy config.deadlineDate while the kicker named a
   // different front put one front's days beside another's name, and hid the
   // named front's own dueAt. The count belongs to whatever the kicker names;
   // with no front, that is the legacy key deadline, as the deleted strip
   // showed. An overdue deadline is not "days left".
-  const wallDaysLeft = commitmentDaysLeft(wallFront, config, new Date());
+  const wallDaysLeft = commitmentDaysLeft(wallKickerFront, new Date());
   const wallDateLabel = wallHeader.dateLabel;
   const wallHoursLeft = wallHeader.hoursLeftLabel;
   const openAcrossFronts = (tasks || []).filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked).length;
@@ -876,6 +973,35 @@ export default function TodayTab({
   // the Today horizon until something moves it, so counting them all reported
   // last week's finished work as this morning's progress.
   const wallRemainingCount = todayTasksAll.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).length;
+  // What the empty wall's "Or pick one" rows draw from — the same pool the
+  // peek shows, so the near-duplicate the user is about to retype is the one
+  // they would have seen anyway.
+  // K2: minutes on THAT task today, not the day's total. An unreadable ledger
+  // (demo mode has no uid, a refused read) yields 0, which renders as a bare
+  // "Done." — the same as a genuine zero, and never a figure that isn't real.
+  const doneMinutes = doneCommitment ? minutesForTaskOn(ledgerRaw, doneCommitment.uuid, todayStr) : 0;
+  // K3: the proposal is the next open item, and "Not now" holds until the Loci
+  // day turns over — a reload, a relaunch or a theme switch must not resurrect
+  // it. With nothing left to propose it simply does not render; no "nothing
+  // left" celebration replaces it.
+  const proposalDismissed = config.wallProposalDismissedDate === todayStr;
+  const wallProposal = (doneCommitment && !proposalDismissed)
+    ? todayTasksAll
+        .filter(t => !t.isCompleted && t.uuid !== doneCommitment.uuid)
+        .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))[0] || null
+    : null;
+
+  const momentum = buildMomentum(ledgerRaw, new Date(), windows);
+
+  // The wall is asking the question itself (J2a), so the legacy first-run
+  // panel — brain illustration, six steps, "tap + to add your first task" —
+  // must not render beneath it. Two competing creation flows on first launch
+  // is the screen this redesign exists to remove.
+  const wallIsAsking = !pinnedFocusTask && !doneCommitment;
+
+  const wallPickOptions = todayTasksAll
+    .filter((t) => !t.isCompleted)
+    .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
   const doneTodayCount = countCompletedOn(todayTasksAll, todayStr);
 
   // Focus Now: first incomplete task in Day Map order for today (shown as "Recommended")
@@ -1037,7 +1163,15 @@ export default function TodayTab({
         onMarkDone={() => pinnedFocusTask && handleToggleComplete(pinnedFocusTask)}
         onSplit={() => pinnedFocusTask && setEditingTask(pinnedFocusTask)}
         onStartSmall={() => pinnedFocusTask && startFocusAndLog(pinnedFocusTask, null, { plannedSeconds: LOW_ENERGY_SESSION_SECONDS })}
-        onChooseCommitment={() => { setPickerCommits(true); setShowFocusNowPicker(true); }}
+        doneTask={doneCommitment}
+        doneMinutes={doneMinutes}
+        proposal={wallProposal}
+        onCommitProposal={() => wallProposal && handlePinTask(wallProposal)}
+        onDismissProposal={() => saveConfigPatch({ wallProposalDismissedDate: todayStr })}
+        commitBlocked={isEveningGuardBlocked(config)}
+        onCommitNewTask={handleCommitNewTask}
+        onPickExisting={(t) => { if (!t.isNowFocus) handlePinTask(t); }}
+        pickOptions={wallPickOptions}
         onScattered={onScattered}
       />
 
@@ -1361,7 +1495,7 @@ export default function TodayTab({
           )}
 
           {/* ── Normal task list (hidden when Focus Now mode is active) ── */}
-          {(!focusNowMode || !focusNowTask) && todayTasksAll.length === 0 && (() => {
+          {(!focusNowMode || !focusNowTask) && !wallIsAsking && todayTasksAll.length === 0 && (() => {
             const hasEverHadTasks = tasks.filter(t => !t.isDeleted).length > 0;
             if (hasEverHadTasks) {
               return (
@@ -1504,6 +1638,12 @@ export default function TodayTab({
         </div>
       </section>
 
+      {/* ── Momentum (J4). Below the ledger, never beside the hero. Hidden
+           entirely by the Settings switch, and absent on its own with no
+           history — an empty frame is a scoreboard of what you haven't done. ── */}
+      {config.momentumEnabled !== false && momentum && (
+        <Momentum bars={momentum.bars} sentence={momentum.sentence} />
+      )}
 
       {/* ── Full-Screen Focus Mode Overlay */}
       {isFocusMode && activeTask && (
@@ -1610,11 +1750,11 @@ export default function TodayTab({
 
       {/* ── Focus Now: task picker bottom sheet ─────────────────── */}
       {showFocusNowPicker && (
-        <div className="focus-now-backdrop" onClick={() => { setShowFocusNowPicker(false); setPickerCommits(false); }}>
+        <div className="focus-now-backdrop" onClick={() => setShowFocusNowPicker(false)}>
           <div className="focus-now-sheet" onClick={e => e.stopPropagation()}>
             <div className="focus-now-sheet-header">
               <span className="focus-now-sheet-title">Pick one task</span>
-              <button className="focus-now-sheet-close" onClick={() => { setShowFocusNowPicker(false); setPickerCommits(false); }} aria-label="Close picker">✕</button>
+              <button className="focus-now-sheet-close" onClick={() => setShowFocusNowPicker(false)} aria-label="Close picker">✕</button>
             </div>
             <div className="focus-now-sheet-body">
               {focusNowPickerTasks.length === 0 ? (
