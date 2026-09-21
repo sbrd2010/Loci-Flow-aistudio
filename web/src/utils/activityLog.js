@@ -128,17 +128,30 @@ export function buildFocusStartedEvent(task, focusSessionId, { source = "user", 
 // focusStartedAt/focusInitialPlannedSeconds are the SAME values captured on
 // the start event — preserved for correlation by the caller, never
 // recomputed here.
+//
+// eventId/lociDateString are the 00:00 hold's amend (K4): once a session has
+// banked a provisional entry at the bell, the eventual real terminal write
+// has to land on that SAME entry rather than beside it. The ledger path is
+// activityLogs/$uid/$lociDateString/$eventId and nothing downstream dedupes
+// by focusSessionId — dailyTotals and minutesForTaskOn sum every terminal
+// event they see — so a new id, OR the same id under a different day string
+// (a session extended across dayEndHour), books the minutes twice and counts
+// the day's "moves" twice with them. Both are therefore pinned together or
+// not at all; the caller passes what the hold recorded and never recomputes
+// either. Absent (the ordinary case: no hold happened), both are derived as
+// before. `now` still moves: utcTimestamp/focusEndedAt record the real end.
 export function buildFocusTerminalEvent(type, task, focusSessionId, {
   focusStartedAt, focusInitialPlannedSeconds, focusFinalPlannedSeconds,
   focusElapsedSeconds, focusEndReason, now = Date.now(), windows,
+  eventId, lociDateString,
 } = {}) {
   const nowMs = toEpochMs(now);
   return {
-    eventId: safeUUID(),
+    eventId: eventId || safeUUID(),
     schemaVersion: 1,
     type,
     utcTimestamp: nowMs,
-    lociDateString: getLociDayStr(toDateObj(now), resolveWindows(windows)),
+    lociDateString: lociDateString || getLociDayStr(toDateObj(now), resolveWindows(windows)),
     taskId: task.uuid,
     focusSessionId,
     focusStartedAt,

@@ -65,6 +65,16 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // them, so it doesn't need this — only extendTimer does.
   const focusSessionAccumulatedElapsedRef = useRef(0);
   const focusSessionAccumulatedPlannedRef = useRef(0);
+  // The ledger entry the 00:00 hold already banked for the open session
+  // (K4), as { eventId, lociDateString } — null until the bell rings. The
+  // hold writes the entry while the session stays OPEN, which is precisely
+  // what endFocusSession's null-the-ref one-shot does NOT protect against:
+  // that guard stops a second endFocusSession, not a second ENTRY for the
+  // same session. Carrying the identity here and handing it back from
+  // endFocusSession is what makes the eventual real write amend that entry
+  // instead of appending a second one. Lives and dies with focusSessionIdRef
+  // — every site that clears one clears the other.
+  const focusLedgerEntryRef = useRef(null);
   const [focusSessionId, setFocusSessionId] = useState(null);
   // Lets the activeTask-sync effect tell "switched to a different task" apart
   // from "same task, duration edited mid-session" (the two need different responses).
@@ -310,6 +320,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusSessionTaskRef.current = null;
     focusSessionAccumulatedElapsedRef.current = 0;
     focusSessionAccumulatedPlannedRef.current = 0;
+    focusLedgerEntryRef.current = null;
     setFocusSessionId(null);
 
     closePiP(); // Close pop-out on account switch
@@ -326,6 +337,20 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
 
   useEffect(() => {
     const prev = prevActiveTaskRef.current;
+    // While the 00:00 hold is showing, leave the timer's numbers alone.
+    // The branch below keys its reset on !isTimerRunning, which meant "no
+    // session is in progress" before K4 — at the hold that is no longer true:
+    // the timer is stopped but the session is open, and its elapsed time is
+    // already banked in the ledger. Re-deriving from a task estimate edited on
+    // another device would set timerMaxSeconds and timerSecondsLeft to the SAME
+    // value, making elapsed zero, and the terminal amend (an unguarded update()
+    // on the pinned path) would then write that zero over the banked minutes.
+    // Both conditions are required: a hold with no open session has nothing to
+    // protect, and an open session with no hold still syncs as it always did.
+    if (sessionCompletePendingRef.current && focusSessionIdRef.current) {
+      prevActiveTaskRef.current = { uuid: activeTask?.uuid ?? null, timeEstimateMinutes: activeTask?.timeEstimateMinutes ?? null };
+      return;
+    }
     if (skipNextDurationSyncRef.current) {
       // startFocusSession just applied an explicit plannedSeconds override for
       // this exact task becoming active — leave timerMaxSeconds/timerSecondsLeft
@@ -562,6 +587,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusSessionTaskRef.current = task;
     focusSessionAccumulatedElapsedRef.current = 0;
     focusSessionAccumulatedPlannedRef.current = 0;
+    focusLedgerEntryRef.current = null;
     setFocusSessionId(sessionId);
     if (enterFocusMode) setIsFocusMode(true);
     setIsTimerRunning(true);
@@ -575,6 +601,20 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     // countdown either.
     setTimerMaxSeconds(initialPlannedSeconds);
     setTimerSecondsLeft(initialPlannedSeconds);
+    // A new session never inherits the previous one's 00:00 hold. Leaving it
+    // set showed the finished session's prompt over a session that had just
+    // started — and because the flag was already true, the bell ending THIS
+    // session could not transition it false->true, so App's observer never ran
+    // and these minutes were never banked. Reachable whenever a start lands
+    // while a hold is open, e.g. a Coach START_FOCUS resolving after the
+    // current timer rang.
+    //
+    // Cleared AFTER the countdown is reset, not before: between setting the
+    // timer running and giving it a fresh duration, timerSecondsLeft is still
+    // the previous session's 0, which is exactly what the bell effect watches
+    // for. Clearing first leaves that window free to set the flag straight
+    // back to true.
+    setSessionCompletePending(false);
     // `task` becoming `activeTask` (once `tasks` syncs) would otherwise
     // trigger the activeTask-sync effect to immediately re-derive/overwrite
     // this value from task.timeEstimateMinutes — suppress that one pass.
@@ -598,15 +638,15 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     };
   };
 
-  // Consumes the active session (if any) and returns everything needed to
-  // build its terminal (focus_completed/focus_abandoned) event, or null if
-  // there's nothing to end — either no session was ever started, or an
-  // earlier call already consumed it. This is what guarantees at most one
-  // terminal event per focusSessionId no matter which UI path ends it.
-  const endFocusSession = (focusEndReason) => {
+  // The open session's numbers, read without consuming it. endFocusSession
+  // and the 00:00 hold MUST report the same figures for the same session —
+  // the hold's entry is the one the stop then amends — so both read them
+  // here rather than each assembling its own copy.
+  const readOpenSession = (focusEndReason) => {
     const sessionId = focusSessionIdRef.current;
     if (!sessionId) return null;
-    const result = {
+    const entry = focusLedgerEntryRef.current;
+    return {
       focusSessionId: sessionId,
       focusStartedAt: focusStartedAtRef.current,
       focusInitialPlannedSeconds: focusInitialPlannedSecondsRef.current,
@@ -616,13 +656,46 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       focusElapsedSeconds: focusSessionAccumulatedElapsedRef.current + Math.max(0, timerMaxSeconds - timerSecondsLeft),
       focusEndReason,
       task: focusSessionTaskRef.current,
+      // Spread only when the hold actually banked an entry: the keys have to
+      // be ABSENT otherwise, not present-and-undefined, so a caller passing
+      // this straight into buildFocusTerminalEvent mints a fresh id for an
+      // ordinary session and pins the held one only when there is one.
+      ...(entry ? { eventId: entry.eventId, lociDateString: entry.lociDateString } : {}),
     };
+  };
+
+  // Read the open session without ending it — what the 00:00 hold needs to
+  // bank its entry while the session stays open for a possible "+Nm".
+  const peekFocusSession = (focusEndReason) => readOpenSession(focusEndReason);
+
+  // Record the entry the hold just wrote, so every later terminal write for
+  // this session amends it instead of appending beside it. Ignored once the
+  // session is gone (nothing to amend) and never overwritten once set — a
+  // session banks exactly one entry, and a second bell on the same session
+  // is a re-ring of the hold, not a new entry to write.
+  const markFocusLedgerEntry = (entry) => {
+    if (!focusSessionIdRef.current) return null;
+    if (focusLedgerEntryRef.current) return focusLedgerEntryRef.current;
+    if (!entry?.eventId || !entry?.lociDateString) return null;
+    focusLedgerEntryRef.current = { eventId: entry.eventId, lociDateString: entry.lociDateString };
+    return focusLedgerEntryRef.current;
+  };
+
+  // Consumes the active session (if any) and returns everything needed to
+  // build its terminal (focus_completed/focus_abandoned) event, or null if
+  // there's nothing to end — either no session was ever started, or an
+  // earlier call already consumed it. This is what guarantees at most one
+  // terminal event per focusSessionId no matter which UI path ends it.
+  const endFocusSession = (focusEndReason) => {
+    const result = readOpenSession(focusEndReason);
+    if (!result) return null;
     focusSessionIdRef.current = null;
     focusStartedAtRef.current = null;
     focusInitialPlannedSecondsRef.current = null;
     focusSessionTaskRef.current = null;
     focusSessionAccumulatedElapsedRef.current = 0;
     focusSessionAccumulatedPlannedRef.current = 0;
+    focusLedgerEntryRef.current = null;
     setFocusSessionId(null);
     return result;
   };
@@ -642,6 +715,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     pipOpen,
     handleOpenPiP,
     focusSessionId, startFocusSession, endFocusSession,
+    peekFocusSession, markFocusLedgerEntry,
     // Which task the currently open session (if any) actually belongs to —
     // NOT necessarily the same as `activeTask`, which reflects the current
     // isNowFocus pin and can point at a different task than the still-open

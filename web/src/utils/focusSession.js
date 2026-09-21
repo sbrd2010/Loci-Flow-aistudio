@@ -60,6 +60,21 @@ export function shouldTriggerSessionComplete({ isTimerRunning, timerSecondsLeft 
   return !!(isTimerRunning && timerSecondsLeft === 0);
 }
 
+// K4: the extension the app offers at the 00:00 hold is "the same length as
+// the session just run, capped at 20m" — 5m → 5, 10m → 10, 25m → 20, 50m →
+// 20. A fixed +20m is the app arguing with a choice the user just made
+// deliberately: someone who picked five minutes is not asking for twenty.
+// This governs only what the app proposes on the user's behalf; a duration
+// they pick themselves is their call and is not clamped here.
+export const MAX_EXTEND_MINUTES = 20;
+export function extendMinutesForSession(plannedSeconds) {
+  const mins = Math.round(Number(plannedSeconds) / 60);
+  if (!Number.isFinite(mins)) return MAX_EXTEND_MINUTES;
+  // Floor of 1, not of MAX: a sub-minute block offering +20m is the same
+  // argument this rule exists to stop, just in the other direction.
+  return Math.min(MAX_EXTEND_MINUTES, Math.max(1, mins));
+}
+
 // Whether the global Focus completion prompt ("Done! +120 XP" / "+50 XP, keep
 // going") should be shown. Independent of activeTab so it appears on any page.
 export function shouldShowFocusCompletionPrompt({ sessionCompletePending, hasActiveTask }) {

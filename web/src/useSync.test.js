@@ -21,7 +21,7 @@ vi.mock("./firebase", () => ({
   auth: { currentUser: null },
 }));
 
-import { gatePayloadToUid, writeActivityEvents, captureTodaySnapshotIfNeeded, writeWithRetry, readCache, writeCache } from "./useSync";
+import { gatePayloadToUid, writeActivityEvents, writeActivityEventIfNewer, captureTodaySnapshotIfNeeded, writeWithRetry, readCache, writeCache } from "./useSync";
 
 // Tests for the uid-isolation gate that prevents a previous user's payload from
 // being visible to App-level effects during the render cycle that follows a uid change.
@@ -363,5 +363,129 @@ describe("payload cache record (readCache / writeCache)", () => {
     delete globalThis.localStorage;
     expect(() => writeCache("uid-A", payload, null)).not.toThrow();
     expect(readCache("uid-A")).toBeNull();
+  });
+});
+
+// K4's 00:00 hold writes an entry at the bell and amends that SAME path when
+// the session really ends. writeActivityEvents retries on a backoff, so a bell
+// write that fails transiently can still be in flight when the user finishes —
+// and update() is last-write-wins by ARRIVAL, not by recency of content. The
+// guarded write makes the loser of that race a no-op instead of a rollback of
+// the user's finished session.
+//
+// The ordering key is focusElapsedSeconds, not the clock: the accumulator
+// behind it is only ever incremented within a session, so it is monotonic by
+// construction, and a device clock that steps backwards between two bells
+// cannot make a later re-bank look stale.
+describe("writeActivityEventIfNewer", () => {
+  const ev = (elapsed, extra = {}) => ({
+    eventId: "evt-1",
+    lociDateString: "2026-07-10",
+    type: "focus_abandoned",
+    focusElapsedSeconds: elapsed,
+    utcTimestamp: 1000,
+    ...extra,
+  });
+
+  // Runs the transaction updater the way RTDB does: against whatever is
+  // currently at the path, committing only when it returns a value.
+  // Scoped to the EVENT path: a successful write also fires
+  // markInstrumentationStartedIfNeeded, which runs its own transaction on
+  // activityLogs/<uid>/meta/... — capturing that one instead is how the first
+  // draft of this helper reported a bare timestamp as the committed event.
+  const runAgainst = (current) => {
+    let committedValue;
+    runTransactionMock.mockImplementation(async (dbRef, updater) => {
+      const isEventPath = String(dbRef?.__path || "").includes("/events/");
+      const next = updater(isEventPath ? current : null);
+      if (isEventPath) committedValue = next;
+      return { committed: next !== undefined };
+    });
+    return () => committedValue;
+  };
+
+  beforeEach(() => {
+    refMock.mockClear();
+    updateMock.mockReset();
+    runTransactionMock.mockReset();
+  });
+
+  it("returns ok:false without touching the database when uid is missing", async () => {
+    const result = await writeActivityEventIfNewer(null, ev(1500));
+    expect(result).toEqual({ ok: false, reason: "no-uid" });
+    expect(runTransactionMock).not.toHaveBeenCalled();
+  });
+
+  it("returns ok:false when the event carries no path to write to", async () => {
+    expect(await writeActivityEventIfNewer("uid1", { focusElapsedSeconds: 1 })).toEqual({ ok: false, reason: "no-path" });
+    expect(runTransactionMock).not.toHaveBeenCalled();
+  });
+
+  it("writes to the pinned path built from the event's own day and id", async () => {
+    runAgainst(null);
+    await writeActivityEventIfNewer("uid1", ev(1500));
+    expect(refMock).toHaveBeenCalledWith({}, "activityLogs/uid1/events/2026-07-10/evt-1");
+  });
+
+  it("commits when the path is empty — the ordinary bell write", async () => {
+    const committed = runAgainst(null);
+    const result = await writeActivityEventIfNewer("uid1", ev(1500));
+    expect(result.ok).toBe(true);
+    expect(result.committed).toBe(true);
+    expect(committed()).toEqual(ev(1500));
+  });
+
+  it("ABORTS rather than reverting an amend that recorded more work", async () => {
+    // The user took "+20m" and then finished: 45 minutes are on the path. A
+    // stale retry of the first bell must not put 25 back.
+    const committed = runAgainst(ev(2700, { type: "focus_completed" }));
+    const result = await writeActivityEventIfNewer("uid1", ev(1500));
+    expect(result.committed).toBe(false);
+    expect(committed()).toBeUndefined();
+  });
+
+  it("aborts on an equal figure, so a stale retry of the bell the amend matched is a no-op", async () => {
+    // Finishing the task at the bell gives the amend the SAME elapsed figure.
+    // The retry still must not revert focus_completed to focus_abandoned.
+    const committed = runAgainst(ev(1500, { type: "focus_completed" }));
+    const result = await writeActivityEventIfNewer("uid1", ev(1500));
+    expect(result.committed).toBe(false);
+    expect(committed()).toBeUndefined();
+  });
+
+  it("still commits a LATER bell, so a re-bank after '+Nm' is not blocked", async () => {
+    const committed = runAgainst(ev(1500));
+    const result = await writeActivityEventIfNewer("uid1", ev(2700));
+    expect(result.committed).toBe(true);
+    expect(committed()).toEqual(ev(2700));
+  });
+
+  it("orders by work done, not by the clock — a backwards clock cannot block a re-bank", async () => {
+    // The device clock stepped back between the two bells, so the later bell
+    // carries the SMALLER utcTimestamp. It still holds the extension's
+    // minutes, so it must land.
+    const firstBell = ev(1500, { utcTimestamp: 9_000_000 });
+    const laterBellAfterClockWentBack = ev(2700, { utcTimestamp: 1_000_000 });
+    const committed = runAgainst(firstBell);
+    const result = await writeActivityEventIfNewer("uid1", laterBellAfterClockWentBack);
+    expect(result.committed).toBe(true);
+    expect(committed()).toEqual(laterBellAfterClockWentBack);
+  });
+
+  it("aborts when either figure is missing, rather than guessing", async () => {
+    const committedA = runAgainst({ eventId: "evt-1", lociDateString: "2026-07-10" });
+    expect((await writeActivityEventIfNewer("uid1", ev(1500))).committed).toBe(false);
+    expect(committedA()).toBeUndefined();
+
+    const committedB = runAgainst(ev(1500));
+    expect((await writeActivityEventIfNewer("uid1", ev(undefined))).committed).toBe(false);
+    expect(committedB()).toBeUndefined();
+  });
+
+  it("fails soft when the transaction throws, never as if the user's action failed", async () => {
+    runTransactionMock.mockRejectedValue(new Error("permission denied"));
+    const result = await writeActivityEventIfNewer("uid1", ev(1500));
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("write-failed");
   });
 });

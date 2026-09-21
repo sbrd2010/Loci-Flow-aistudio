@@ -532,4 +532,143 @@ describe("useFocusTimer", () => {
       expect(result.current.endFocusSession("user_abandoned")).toBeNull();
     });
   });
+
+  // K4's 00:00 hold banks a ledger entry while the session stays OPEN. The
+  // identity of that entry has to reach every later terminal write for the
+  // same session (so it amends rather than appends), and has to die with the
+  // session (so it can never be applied to a different one — that would
+  // overwrite the earlier session's entry and lose its minutes outright).
+  describe("the 00:00 hold's ledger entry", () => {
+    const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+    const entry = { eventId: "evt-held", lociDateString: "2026-07-10" };
+
+    it("peekFocusSession reports the session without consuming it", () => {
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+
+      const peeked = result.current.peekFocusSession("timer_elapsed");
+      expect(peeked.focusSessionId).toBe(result.current.focusSessionId);
+      expect(peeked.focusEndReason).toBe("timer_elapsed");
+      // Still open: the hold is not a stop.
+      expect(result.current.endFocusSession("user_abandoned")).not.toBeNull();
+    });
+
+    it("hands the marked entry back to whichever path ends the session", () => {
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+
+      result.current.markFocusLedgerEntry(entry);
+      const ended = result.current.endFocusSession("user_abandoned");
+      expect(ended.eventId).toBe("evt-held");
+      expect(ended.lociDateString).toBe("2026-07-10");
+    });
+
+    it("omits the keys entirely for a session that never rang", () => {
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+
+      const ended = result.current.endFocusSession("user_abandoned");
+      // Absent, not present-and-undefined — buildFocusTerminalEvent must mint
+      // a fresh id here, and a spread `eventId: undefined` would be a
+      // different kind of bug to read back.
+      expect("eventId" in ended).toBe(false);
+      expect("lociDateString" in ended).toBe(false);
+    });
+
+    it("does not carry a held entry into the NEXT session", () => {
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+      result.current.markFocusLedgerEntry(entry);
+      result.current.endFocusSession("user_abandoned");
+
+      result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+      const ended = result.current.endFocusSession("user_abandoned");
+      // Reusing the previous session's eventId here would not double-count —
+      // it would OVERWRITE that session's entry and lose its minutes.
+      expect("eventId" in ended).toBe(false);
+    });
+
+    it("drops a held entry on an account switch, like the session itself", () => {
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+      result.current.markFocusLedgerEntry(entry);
+
+      rerender([[task], {}, "u2"]);
+      result.current.startFocusSession(task);
+      rerender([[task], {}, "u2"]);
+      const ended = result.current.endFocusSession("user_abandoned");
+      // The path is keyed by uid: an entry minted under u1 must never be
+      // amended by a write built for u2.
+      expect("eventId" in ended).toBe(false);
+    });
+
+    it("ignores a mark when no session is open", () => {
+      const { result } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      expect(result.current.markFocusLedgerEntry(entry)).toBeNull();
+    });
+
+    it("does not let an estimate edited elsewhere zero the banked time", () => {
+      // At the hold the timer is stopped but the session is OPEN and its
+      // minutes are already in the ledger. The sync effect's reset branch keys
+      // on !isTimerRunning, so without the hold guard it would set max and
+      // left to the same value — elapsed 0 — and the amend would write that
+      // zero over what the bell banked.
+      const t = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[t], {}, "u1"]);
+      result.current.startFocusSession(t);
+      rerender([[t], {}, "u1"]);
+
+      // Run the block out: the bell stops the timer and opens the hold.
+      result.current.setTimerSecondsLeft(0);
+      rerender([[t], {}, "u1"]);
+      result.current.setIsTimerRunning(false);
+      rerender([[t], {}, "u1"]);
+      expect(result.current.sessionCompletePending).toBe(true);
+      expect(result.current.peekFocusSession("timer_elapsed").focusElapsedSeconds).toBe(25 * 60);
+
+      // Another device edits the task's estimate while the hold is showing.
+      rerender([[{ ...t, timeEstimateMinutes: 50 }], {}, "u1"]);
+
+      const ended = result.current.endFocusSession("user_abandoned");
+      expect(ended.focusElapsedSeconds).toBe(25 * 60);
+    });
+
+    it("does not carry a finished session's hold into the session that replaces it", () => {
+      // A start landing while a hold is open (e.g. a Coach START_FOCUS
+      // resolving after the current timer rang) left sessionCompletePending
+      // true. App's bell observer keys on that flag going false->true, so the
+      // replacement session's own bell could never trigger it and its minutes
+      // were never banked.
+      const t = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[t], {}, "u1"]);
+      result.current.startFocusSession(t);
+      rerender([[t], {}, "u1"]);
+      result.current.setTimerSecondsLeft(0);
+      rerender([[t], {}, "u1"]);
+      expect(result.current.sessionCompletePending).toBe(true);
+
+      result.current.startFocusSession(t);
+      rerender([[t], {}, "u1"]);
+      expect(result.current.sessionCompletePending).toBe(false);
+    });
+
+    it("keeps the first entry if the bell somehow marks twice", () => {
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task);
+      rerender([[task], {}, "u1"]);
+
+      result.current.markFocusLedgerEntry(entry);
+      result.current.markFocusLedgerEntry({ eventId: "evt-second", lociDateString: "2026-07-11" });
+      const ended = result.current.endFocusSession("user_abandoned");
+      // A session banks ONE entry. Accepting the second would orphan the
+      // first, leaving its minutes in the ledger unamendable.
+      expect(ended.eventId).toBe("evt-held");
+    });
+  });
 });

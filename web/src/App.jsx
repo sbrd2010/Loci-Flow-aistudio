@@ -29,11 +29,11 @@ import FloatingFocusTimer from "./components/FloatingFocusTimer";
 import ConfirmDialog from "./components/ConfirmDialog";
 import { useFocusTimer } from "./hooks/useFocusTimer";
 import { useTodayStr } from "./hooks/useTodayStr";
-import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload } from "./utils/focusSession";
+import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload, extendMinutesForSession } from "./utils/focusSession";
 import { celebrate } from "./utils/celebrations";
 import { safeUUID } from "./utils/uuid";
 import { submitOnEnter } from "./utils/formEvents";
-import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "./utils/activityLog";
+import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch, activityEventPath } from "./utils/activityLog";
 
 const EXTEND_DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
 
@@ -349,7 +349,8 @@ export default function App() {
     saveSubPath: rtdbSaveSub, saveSubPathAsync: rtdbSaveSubAsync,
     saveSubPaths: rtdbSaveSubs, saveSubPathsAsync: rtdbSaveSubsAsync,
     saveConfigPatch: rtdbSaveConfigPatch,
-    writeActivityEvents: rtdbWriteActivityEvents, captureTodaySnapshotIfNeeded: rtdbCaptureTodaySnapshot,
+    writeActivityEvents: rtdbWriteActivityEvents, writeActivityEventIfNewer: rtdbWriteActivityEventIfNewer,
+    captureTodaySnapshotIfNeeded: rtdbCaptureTodaySnapshot,
     flushNow: rtdbFlushNow, clearCache: rtdbClearCache,
   } = useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
@@ -369,6 +370,7 @@ export default function App() {
   // than needing a separate demo branch, so every write-path call site can
   // call them unconditionally regardless of demoMode.
   const writeActivityEvents = rtdbWriteActivityEvents;
+  const writeActivityEventIfNewer = rtdbWriteActivityEventIfNewer;
   const captureTodaySnapshotIfNeeded = rtdbCaptureTodaySnapshot;
   // Ledger event paths are keyed by the real Firebase uid — never build one
   // from a demo session (uid is null then, which is already the state
@@ -698,10 +700,22 @@ export default function App() {
           // orphaned terminal event. Only if nothing newer has already
           // started (live-ref check, not this closure's stale focusTimer).
           if (focusTimerRef.current.focusSessionId === session.focusSessionId) {
-            focusTimerRef.current.endFocusSession?.("user_abandoned");
+            const rolledBack = focusTimerRef.current.endFocusSession?.("user_abandoned");
             focusTimerRef.current.setIsTimerRunning?.(false);
             focusTimerRef.current.setIsFocusMode?.(false);
             focusTimerRef.current.setFocusSessionActive?.(false);
+            // If this session ran long enough to ring, the 00:00 hold already
+            // banked an entry for it. The pin it depended on has now been
+            // rejected, so the session never legitimately began — leaving the
+            // entry would credit minutes to work the ledger has no
+            // focus_started for. Deleting it is the same rollback as clearing
+            // the session state above, and `null` at the path is how RTDB's
+            // update() removes a key.
+            if (rolledBack?.eventId && rolledBack?.lociDateString) {
+              writeActivityEvents({
+                [activityEventPath(activityUid, rolledBack.lociDateString, rolledBack.eventId)]: null,
+              });
+            }
           }
         });
       setPendingFocusOpen(false);
@@ -712,6 +726,57 @@ export default function App() {
     setActiveTab("today");
     focusTimer.setIsFocusMode(true);
   };
+
+  // K4, the 00:00 hold: the ledger entry is written AT THE BELL, before
+  // either button is touched — background, lock or kill the app and the
+  // minutes are already banked. Until now the terminal event was written
+  // only when the user acted, so a session that rang and was then walked
+  // away from logged nothing at all.
+  //
+  // An observer, not a call site: the bell is one setter inside the hook
+  // (shouldTriggerSessionComplete) but the session can be closed out from
+  // 24 places afterwards, and every one of them must amend THIS entry
+  // rather than write its own. They do, because endFocusSession now hands
+  // back the identity markFocusLedgerEntry pins here and they all spread
+  // its result into buildFocusTerminalEvent.
+  //
+  // "focus_abandoned" is the honest provisional: the block ran its course
+  // but the task was not completed, which is exactly what this type means
+  // everywhere else in the app (see focusLedger's FOCUS_TERMINAL_TYPES —
+  // both types count their minutes, so nothing is lost by the choice). If
+  // the user then finishes the task, the amend rewrites the type; if they
+  // never come back, this stands and is correct as written.
+  //
+  // The mark is taken BEFORE the write, deliberately: the write fails soft,
+  // and pinning the identity first means the eventual stop amends that same
+  // path and simply creates the entry then. Marking only on success would let
+  // a failed bell write and a later stop become two entries, which is the one
+  // outcome that must never happen.
+  //
+  // writeActivityEventIfNewer, not writeActivityEvents: this write and the
+  // amend target ONE path, and a bell write that fails transiently can still
+  // be mid-retry when the user finishes the session — landing after the amend
+  // and reverting the finished event to this provisional one. The guarded
+  // write compares utcTimestamp at the path and aborts when something newer
+  // is already there. The amends stay plain update() calls, because they are
+  // always the newest write for their session.
+  //
+  // Every bell re-banks, rather than the first one winning. A session that
+  // rings, takes "+Nm" and rings again is ONE entry throughout — the pinned
+  // identity sees to that — so the later bell can safely rewrite it with the
+  // accumulated figures. Skipping it would leave someone who extends and
+  // then kills the app credited with only the first block: still the lost
+  // work K4 exists to prevent, just less of it.
+  useEffect(() => {
+    if (!focusTimer.sessionCompletePending) return;
+    const session = focusTimer.peekFocusSession("timer_elapsed");
+    if (!session?.task) return;
+    const event = buildFocusTerminalEvent("focus_abandoned", session.task, session.focusSessionId, {
+      ...session, windows: getFocusWindows(payload?.config || {}),
+    });
+    focusTimer.markFocusLedgerEntry(event);
+    writeActivityEventIfNewer(event);
+  }, [focusTimer.sessionCompletePending]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEndFocusSession = () => {
     const ended = focusTimer.endFocusSession("user_abandoned");
@@ -1399,7 +1464,7 @@ export default function App() {
       {focusTimer.showExtendPicker && focusTimer.activeTask && (
         <div
           className="focus-now-backdrop"
-          onClick={() => focusTimer.extendTimer(Math.round(focusTimer.timerMaxSeconds / 60) || 15)}
+          onClick={() => focusTimer.extendTimer(extendMinutesForSession(focusTimer.timerMaxSeconds))}
         >
           <div className="focus-now-sheet" onClick={e => e.stopPropagation()}>
             <div className="focus-now-sheet-header">
