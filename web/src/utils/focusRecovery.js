@@ -30,7 +30,7 @@ export function focusSnapshotKey(uid) {
 export function buildFocusSnapshot({
   uid, focusSessionId, focusStartedAt, focusInitialPlannedSeconds,
   accumulatedElapsedSeconds, accumulatedPlannedSeconds, blockPlannedSeconds,
-  deadlineAt, bellAt, running, rang, task, entry,
+  deadlineAt, bellAt, running, rang, task, entry, ended,
 }) {
   if (!uid || !focusSessionId || !task?.uuid) return null;
   return {
@@ -51,7 +51,18 @@ export function buildFocusSnapshot({
       ...(task.category ? { category: task.category } : {}),
       ...(task.priority ? { priority: task.priority } : {}),
       ...(task.horizonLevel ? { horizonLevel: task.horizonLevel } : {}),
+      // frontId is carried even when there is none, as "" — the same rule
+      // taskSnapshotFrom states and for the same reason: a merely absent key
+      // cannot be told apart from an event logged before the field existed,
+      // so an unassigned session would be re-attributed to whatever front its
+      // task joined later. Without this, recovered minutes read as unassigned
+      // in "WHERE IT WENT" no matter what they were worked on.
+      frontId: typeof task.frontId === "string" ? task.frontId : "",
     },
+    // Set when the session has been closed but its ledger write is not known
+    // to have landed. The record then stops describing a live session and
+    // becomes a pending write, kept until something confirms it.
+    ended: !!ended,
     entry: entry?.eventId && entry?.lociDateString
       ? { eventId: entry.eventId, lociDateString: entry.lociDateString }
       : null,
@@ -77,24 +88,51 @@ export function bellMomentFor(snapshot, now = Date.now()) {
 // Timestamped at the BELL, never at the recovery. A session whose block ended
 // on Tuesday night must land on Tuesday's Loci day even if the app is next
 // opened on Friday — every figure downstream buckets by lociDateString.
+// What a snapshot is owed: the completed work it can account for, and when.
+// Two independent sources, because the current block's fate says nothing about
+// the blocks before it:
+//   - the current block, IF it reached its end (or rang);
+//   - the accumulator, which only ever holds time already measured — earlier
+//     blocks that rang, and any partial block banked by a duration change.
+// A session that rang, took "+Nm" and was then killed mid-extension is owed
+// the first block even though the second cannot be judged.
+export function recoverableWork(snapshot, now = Date.now()) {
+  if (!snapshot) return null;
+  const banked = Number(snapshot.accumulatedElapsedSeconds) || 0;
+  const bankedPlanned = Number(snapshot.accumulatedPlannedSeconds) || 0;
+  const block = Number(snapshot.blockPlannedSeconds) || 0;
+  const bellAt = bellMomentFor(snapshot, now);
+  if (bellAt && block > 0) {
+    return { elapsed: banked + block, planned: bankedPlanned + block, at: bellAt };
+  }
+  if (banked > 0) {
+    // Dated by the last bell this session actually reached. Falling back to
+    // the start is a last resort, and still lands on the right Loci day for
+    // any session short of one spanning a whole day boundary.
+    return {
+      elapsed: banked,
+      planned: bankedPlanned,
+      at: snapshot.bellAt || snapshot.focusStartedAt || null,
+    };
+  }
+  return null;
+}
+
 export function recoverableFocusEntry(snapshot, { uid, now = Date.now(), windows } = {}) {
   if (!snapshot || snapshot.v !== SNAPSHOT_VERSION) return null;
   // Never recover one account's session into another's ledger.
   if (!uid || snapshot.uid !== uid) return null;
-  const bellAt = bellMomentFor(snapshot, now);
-  if (!bellAt) return null;
-  const blockSeconds = snapshot.blockPlannedSeconds;
-  if (!(blockSeconds > 0)) return null;
+  const owed = recoverableWork(snapshot, now);
+  if (!owed || !owed.at || !(owed.elapsed > 0)) return null;
+  const bellAt = owed.at;
   return {
     task: snapshot.task,
     focusSessionId: snapshot.focusSessionId,
     options: {
       focusStartedAt: snapshot.focusStartedAt,
       focusInitialPlannedSeconds: snapshot.focusInitialPlannedSeconds,
-      focusFinalPlannedSeconds: snapshot.accumulatedPlannedSeconds + blockSeconds,
-      // The block ran to its end, so its whole planned length is elapsed —
-      // that is what reaching 00:00 means.
-      focusElapsedSeconds: snapshot.accumulatedElapsedSeconds + blockSeconds,
+      focusFinalPlannedSeconds: owed.planned,
+      focusElapsedSeconds: owed.elapsed,
       focusEndReason: "timer_elapsed_recovered",
       now: bellAt,
       windows,

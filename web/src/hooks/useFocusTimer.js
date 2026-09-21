@@ -85,7 +85,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // Whether this mount has had a session of its own. Distinguishes "no session
   // yet, on a fresh launch" from "the session just ended" — only the second
   // should clear the persisted record.
-  const hadSessionRef = useRef(false);
+  const hadSessionRef = useRef(null);
   const [focusSessionId, setFocusSessionId] = useState(null);
   // Lets the activeTask-sync effect tell "switched to a different task" apart
   // from "same task, duration edited mid-session" (the two need different responses).
@@ -446,7 +446,12 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       // twice. Deriving the id from focusSessionId makes them agree by
       // construction: a session has exactly one hold entry, so the session's
       // own id names it, and neither writer has to learn it from the other.
-      if (focusSessionIdRef.current && !focusLedgerEntryRef.current) {
+      if (focusSessionIdRef.current) {
+        // The bell TIME is refreshed on every ring; only the entry's IDENTITY
+        // is pinned once. A session that rings, takes "+Nm" and rings again
+        // has two bells, and a recovery that credits the fuller duration must
+        // date it by the later one — markFocusLedgerEntry refuses to move the
+        // identity, so the two cannot drift apart.
         const bellAt = Date.now();
         focusBellAtRef.current = bellAt;
         // Through markFocusLedgerEntry, not by assigning the ref, so there is
@@ -478,15 +483,17 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   useEffect(() => {
     if (!uid) return;
     if (!focusSessionIdRef.current) {
-      // Only clear a record this mount actually wrote. On a fresh launch there
-      // is no session yet, and the record sitting in storage is precisely the
-      // abandoned one the recovery is about to read — clearing it here would
-      // delete the evidence before anyone looked at it, since this hook's
-      // effects run before App's.
-      if (hadSessionRef.current) clearFocusSnapshot(uid);
+      // Only clear a record this hook wrote FOR THIS ACCOUNT. On a fresh
+      // launch there is no session yet, and the record in storage is precisely
+      // the abandoned one the recovery is about to read — clearing it would
+      // delete the evidence before anyone looked, since this hook's effects
+      // run before App's. Scoped to the uid, not to the mount: signing out and
+      // in without a reload leaves the marker set, and an unscoped one would
+      // then delete the NEW account's abandoned record on their first render.
+      if (hadSessionRef.current === uid) clearFocusSnapshot(uid);
       return;
     }
-    hadSessionRef.current = true;
+    hadSessionRef.current = uid;
     writeFocusSnapshot(uid, buildFocusSnapshot({
       uid,
       focusSessionId: focusSessionIdRef.current,
@@ -761,6 +768,41 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   const endFocusSession = (focusEndReason) => {
     const result = readOpenSession(focusEndReason);
     if (!result) return null;
+    // Ending the session does NOT mean its minutes are safely in the ledger.
+    // The terminal write the caller is about to make is asynchronous, and
+    // while offline it only joins Firebase's in-memory queue — so a process
+    // killed here loses that write AND the bell's earlier one. Deleting the
+    // record now would leave nothing to recover from.
+    //
+    // So the record survives the session whenever anything is still owed,
+    // re-marked as a closed, unconfirmed write. It is cleared on the next
+    // launch, and only once a write actually confirms. Re-banking something
+    // that did land is harmless: the identity is pinned and the guarded write
+    // refuses to replace an entry recording more work.
+    const owesWrite = !!focusLedgerEntryRef.current || focusSessionAccumulatedElapsedRef.current > 0;
+    if (uid && owesWrite) {
+      writeFocusSnapshot(uid, buildFocusSnapshot({
+        uid,
+        focusSessionId: focusSessionIdRef.current,
+        focusStartedAt: focusStartedAtRef.current,
+        focusInitialPlannedSeconds: focusInitialPlannedSecondsRef.current,
+        accumulatedElapsedSeconds: focusSessionAccumulatedElapsedRef.current,
+        accumulatedPlannedSeconds: focusSessionAccumulatedPlannedRef.current,
+        blockPlannedSeconds: timerMaxSeconds,
+        deadlineAt: null,
+        bellAt: focusBellAtRef.current,
+        running: false,
+        rang: !!focusLedgerEntryRef.current,
+        task: focusSessionTaskRef.current,
+        entry: focusLedgerEntryRef.current,
+        ended: true,
+      }));
+      // Hand the marker back so the persistence effect, which runs next and
+      // sees no open session, does not clear what was just left deliberately.
+      hadSessionRef.current = null;
+    } else if (uid) {
+      clearFocusSnapshot(uid);
+    }
     focusSessionIdRef.current = null;
     focusStartedAtRef.current = null;
     focusInitialPlannedSecondsRef.current = null;

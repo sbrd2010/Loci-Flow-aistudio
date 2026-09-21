@@ -703,6 +703,76 @@ describe("useFocusTimer", () => {
       delete globalThis.localStorage;
     });
 
+    it("keeps the record after the session ends, while a write is still owed", () => {
+      // Ending the session does not mean its minutes reached the ledger: the
+      // terminal write is async, and offline it only joins an in-memory queue.
+      // The record is a pending write, not a copy of a live session.
+      const store = new Map();
+      globalThis.localStorage = {
+        getItem: (k) => (store.has(k) ? store.get(k) : null),
+        setItem: (k, v) => { store.set(k, String(v)); },
+        removeItem: (k) => { store.delete(k); },
+      };
+      const t = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[t], {}, "u1"]);
+      result.current.startFocusSession(t);
+      rerender([[t], {}, "u1"]);
+
+      // Ring the bell, so the session owes a ledger entry.
+      result.current.setTimerSecondsLeft(0);
+      rerender([[t], {}, "u1"]);
+
+      result.current.endFocusSession("completed_task");
+      rerender([[t], {}, "u1"]);
+
+      const kept = readFocusSnapshot("u1");
+      expect(kept).not.toBeNull();
+      expect(kept.ended).toBe(true);
+      expect(kept.rang).toBe(true);
+      delete globalThis.localStorage;
+    });
+
+    it("clears the record when the session ends owing nothing", () => {
+      const store = new Map();
+      globalThis.localStorage = {
+        getItem: (k) => (store.has(k) ? store.get(k) : null),
+        setItem: (k, v) => { store.set(k, String(v)); },
+        removeItem: (k) => { store.delete(k); },
+      };
+      const t = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[t], {}, "u1"]);
+      result.current.startFocusSession(t);
+      rerender([[t], {}, "u1"]);
+      // Abandoned before any bell: nothing measured, nothing owed.
+      result.current.endFocusSession("user_abandoned");
+      rerender([[t], {}, "u1"]);
+      expect(readFocusSnapshot("u1")).toBeNull();
+      delete globalThis.localStorage;
+    });
+
+    it("does not delete the NEXT account's record after a sign-out", () => {
+      // The SPA switches accounts without reloading. An unscoped marker left
+      // this hook believing it had written the record it now sees, so it
+      // deleted the incoming account's abandoned session on first render.
+      const store = new Map();
+      globalThis.localStorage = {
+        getItem: (k) => (store.has(k) ? store.get(k) : null),
+        setItem: (k, v) => { store.set(k, String(v)); },
+        removeItem: (k) => { store.delete(k); },
+      };
+      const t = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[t], {}, "u1"]);
+      result.current.startFocusSession(t);
+      rerender([[t], {}, "u1"]);
+
+      // u2 has an abandoned session from a previous launch.
+      store.set(focusSnapshotKey("u2"), JSON.stringify({ v: 1, uid: "u2", focusSessionId: "u2-session" }));
+
+      rerender([[t], {}, "u2"]);
+      expect(readFocusSnapshot("u2")?.focusSessionId).toBe("u2-session");
+      delete globalThis.localStorage;
+    });
+
     it("keeps the first entry if the bell somehow marks twice", () => {
       const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
       result.current.startFocusSession(task);

@@ -34,12 +34,20 @@ describe("buildFocusSnapshot", () => {
 
   it("keeps only the task fields the ledger records, never free text", () => {
     const s = snap({ task: { ...task, title: "Something private", notes: "and more" } });
-    expect(s.task).toEqual({ uuid: "task-1", category: "Career", priority: "P1", horizonLevel: "today" });
+    expect(s.task).toEqual({ uuid: "task-1", category: "Career", priority: "P1", horizonLevel: "today", frontId: "" });
   });
 
   it("omits task fields that are absent rather than inventing defaults", () => {
     const s = snap({ task: { uuid: "task-2" } });
-    expect(s.task).toEqual({ uuid: "task-2" });
+    // frontId is the one exception, and taskSnapshotFrom states the rule: it
+    // is written even when empty, or the recovered minutes get re-attributed
+    // to whatever front the task joins later.
+    expect(s.task).toEqual({ uuid: "task-2", frontId: "" });
+  });
+
+  it("carries the front the task was on, so recovered minutes are attributed", () => {
+    const s = snap({ task: { ...task, frontId: "front-9" } });
+    expect(s.task.frontId).toBe("front-9");
   });
 });
 
@@ -133,6 +141,37 @@ describe("recoverableFocusEntry", () => {
 
   it("owes nothing for a block with no length to credit", () => {
     expect(recoverableFocusEntry(snap({ blockPlannedSeconds: 0 }), opts())).toBeNull();
+  });
+});
+
+describe("work owed when the current block never finished", () => {
+  const opts = (over = {}) => ({ uid: "uid1", now: at(2026, 7, 11, 9, 0), windows, ...over });
+
+  it("still credits blocks that DID ring when a later one is unjudgeable", () => {
+    // 25m rang and was banked, "+20m" taken, then the app died mid-extension.
+    // The first block is owed regardless of what became of the second.
+    const s = snap({
+      accumulatedElapsedSeconds: 1500, accumulatedPlannedSeconds: 1500,
+      blockPlannedSeconds: 1200, running: false, rang: false,
+      bellAt: at(2026, 7, 10, 22, 0), deadlineAt: null,
+    });
+    const r = recoverableFocusEntry(s, opts());
+    expect(r.options.focusElapsedSeconds).toBe(1500);
+    expect(r.options.focusFinalPlannedSeconds).toBe(1500);
+  });
+
+  it("dates that credit by the bell it reached, not by the recovery", () => {
+    const s = snap({
+      accumulatedElapsedSeconds: 1500, accumulatedPlannedSeconds: 1500,
+      blockPlannedSeconds: 1200, running: false, rang: false,
+      bellAt: at(2026, 7, 10, 22, 0), deadlineAt: null,
+    });
+    expect(recoverableFocusEntry(s, opts()).options.lociDateString).toBe("2026-07-10");
+  });
+
+  it("still owes nothing when no block ever rang", () => {
+    // A single block abandoned part-way. Nothing measured, nothing credited.
+    expect(recoverableFocusEntry(snap({ running: false, rang: false }), opts())).toBeNull();
   });
 });
 

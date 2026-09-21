@@ -752,24 +752,39 @@ export default function App() {
   // Loci-day boundary (dayEndHour can be 26), and recovering against default
   // windows would file a late-night block on the wrong day. Ledger writes
   // elsewhere in this file are likewise not gated on sync confirmation.
-  const focusRecoveryDoneRef = useRef(false);
+  // Scoped to the account, not to App's lifetime: signing out and in without
+  // a reload would otherwise skip the second account's record entirely, and
+  // it would only be reconsidered after a page reload.
+  const focusRecoveryDoneForUidRef = useRef(null);
   useEffect(() => {
-    if (!activityUid || !payload?.config || focusRecoveryDoneRef.current) return;
-    focusRecoveryDoneRef.current = true;
+    if (!activityUid || !payload?.config) return;
+    if (focusRecoveryDoneForUidRef.current === activityUid) return;
+    focusRecoveryDoneForUidRef.current = activityUid;
     const snapshot = readFocusSnapshot(activityUid);
     if (!snapshot) return;
     // A session still open in THIS process is the live one the hook is
     // already tracking, not an abandoned one — leave its record alone.
-    if (snapshot.focusSessionId === focusTimer.focusSessionId) return;
+    if (!snapshot.ended && snapshot.focusSessionId === focusTimer.focusSessionId) return;
     const owed = recoverableFocusEntry(snapshot, {
       uid: activityUid,
       windows: getFocusWindows(payload?.config || {}),
     });
-    clearFocusSnapshot(activityUid);
-    if (!owed) return;
+    if (!owed) {
+      // Nothing recoverable in it, so nothing is lost by dropping it.
+      clearFocusSnapshot(activityUid);
+      return;
+    }
+    // Cleared only once the write actually lands. writeActivityEventIfNewer
+    // fails soft and returns { ok: false } when offline or refused — clearing
+    // before that resolves would throw away the only durable copy and leave
+    // the next launch nothing to retry, which is precisely the loss this
+    // whole record exists to prevent. A record kept too long costs one
+    // redundant, idempotent write; a record dropped too early costs the work.
     writeActivityEventIfNewer(
       buildFocusTerminalEvent("focus_abandoned", owed.task, owed.focusSessionId, owed.options)
-    );
+    ).then((result) => {
+      if (result?.ok) clearFocusSnapshot(activityUid);
+    }).catch(() => {});
   }, [activityUid, !!payload?.config]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // K4, the 00:00 hold: the ledger entry is written AT THE BELL, before
