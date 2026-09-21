@@ -2155,7 +2155,13 @@ textarea.text-input {
      stay their own height and centred, so the active underline still hugs
      the label rather than sitting at the bottom of a tall box. */
   align-items: center;
-  min-height: 44px;
+  /* 50, not 44. box-sizing is border-box globally, so a 44px row minus its 4px
+     bottom padding and 1px bottom border leaves a 39px content box, and the
+     44px hit overlay centred in it protruded 2.5px above the scrollport —
+     where overflow-x: auto clips it and nothing can scroll above zero, so
+     those pixels took no taps. Content height must be at least 44: with
+     H - 5 >= 44, H >= 49; 50 leaves half a pixel of slack against rounding. */
+  min-height: 50px;
   border-bottom: 1px solid var(--divider, var(--border));
   margin-bottom: 12px;
   overflow-x: auto;
