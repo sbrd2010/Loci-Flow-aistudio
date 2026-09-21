@@ -285,9 +285,12 @@
   white-space: nowrap;
 }
 
+/* Gold ground needs the dark ink token, not white: white on #d8ad63 is
+   2.08:1. It was legible on the old indigo accent, which is why it survived
+   the retheme unnoticed. */
 .day-map-actions button:first-child {
   background: var(--accent);
-  color: #fff;
+  color: var(--button-text, #171512);
   border-color: var(--accent);
 }
 
@@ -857,7 +860,7 @@
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: var(--accent);
-  color: #fff;
+  color: var(--button-text, #171512);
   font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 800;

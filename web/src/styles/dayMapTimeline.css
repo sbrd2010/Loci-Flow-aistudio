@@ -247,8 +247,8 @@
   position: absolute;
   right: calc(100% + 2px);
   top: 9px;
-  background: #2563eb;
-  color: #ffffff;
+  background: var(--gold, var(--accent));
+  color: var(--button-text, #171512);
   border-radius: 4px;
   padding: 2px 5px;
   font-family: var(--font-sans);
@@ -305,11 +305,13 @@
   border-left-color: var(--gold-lift, var(--accent));
 }
 
-/* NOW card — priority-specific glow */
-.dm-card.dm-card-p1.dm-card-is-now { box-shadow: 0 3px 20px rgba(244, 63, 94, 0.22), 0 0 0 1px rgba(244, 63, 94, 0.22); }
-.dm-card.dm-card-p2.dm-card-is-now { box-shadow: 0 3px 20px rgba(245, 158, 11, 0.22), 0 0 0 1px rgba(245, 158, 11, 0.22); }
-.dm-card.dm-card-p3.dm-card-is-now { box-shadow: 0 3px 20px rgba(20, 184, 166, 0.22), 0 0 0 1px rgba(20, 184, 166, 0.22); }
-.dm-card.dm-card-p4.dm-card-is-now { box-shadow: 0 3px 18px rgba(255, 255, 255, 0.10), 0 0 0 1px rgba(255, 255, 255, 0.12); }
+/* NOW card — one state treatment, not four priority ones. These selectors
+   carried the same rose/amber/teal the route lines used, at a higher
+   specificity than .dm-card-is-now above, so the current card kept glowing
+   its priority colour after that colour was deleted everywhere else. */
+.dm-card.dm-card-is-now {
+  box-shadow: 0 3px 20px rgba(0, 0, 0, 0.45);
+}
 
 /* Main content row — also the drag surface */
 .dm-card-main {
@@ -384,9 +386,18 @@
 }
 
 /* Priority badges inside dark cards */
-.dm-card .day-map-priority.p1 { background: rgba(244, 63, 94, 0.25);   color: #fda4af; border: 1px solid rgba(244,63,94,0.35); }
-.dm-card .day-map-priority.p2 { background: rgba(245, 158, 11, 0.25);  color: #fcd34d; border: 1px solid rgba(245,158,11,0.35); }
-.dm-card .day-map-priority.p3 { background: rgba(20, 184, 166, 0.25);  color: #5eead4; border: 1px solid rgba(20,184,166,0.35); }
+/* The mono tag. Priority is an attribute of the task, so it is stated, not
+   painted: one hairline, one quiet ink, at every level. The coloured chips
+   these replace were also the least readable thing on the screen — P1 was
+   rose text on a rose fill at 1.94:1. */
+.dm-card .day-map-priority.p1,
+.dm-card .day-map-priority.p2,
+.dm-card .day-map-priority.p3,
+.dm-card .day-map-priority.p4 {
+  background: none;
+  color: var(--text-quiet, var(--text-muted));
+  border: 1px solid var(--divider, rgba(255, 255, 255, 0.14));
+}
 .dm-card .day-map-priority.p4 { background: rgba(255, 255, 255, 0.08); color: rgba(232, 238, 255, 0.50); border: 1px solid rgba(255,255,255,0.12); }
 
 /* ⋮ menu button */
@@ -427,7 +438,7 @@
   border-radius: 7px;
   border: none;
   background: var(--accent);
-  color: #fff;
+  color: var(--button-text, #171512);
   font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 900;

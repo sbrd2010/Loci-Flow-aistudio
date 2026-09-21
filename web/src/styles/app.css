@@ -2136,11 +2136,38 @@ textarea.text-input {
 }
 
 @media (min-width: 768px) {
-  .roadmap-compact-layout /* Addendum I, the horizon board rethemed: "column headers are mono kickers:
+  /* The desktop pill size bump is gone with the pills: a kicker is 10px mono at
+     every width by design. The panel height override stays. */
+  .roadmap-compact-layout .horizon-panel {
+    max-height: 72vh;
+  }
+}
+
+.horizon-pills {
+  display: flex;
+  gap: 18px;
+  border-bottom: 1px solid var(--divider, var(--border));
+  margin-bottom: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 4px;
+}
+
+.horizon-pills::-webkit-scrollbar {
+  display: none;
+}
+
+/* Addendum I, the horizon board rethemed: "column headers are mono kickers:
    WEEK · 6". Pills become kickers — no fill, no radius, no badge chip. The
    count keeps its own element so the markup is untouched; the separator is
-   drawn here. Retheme only: the columns, the drag-and-drop across horizons
-   and the persistence are all exactly as they were. */
+   drawn by .pill-badge::before. Retheme only: the columns, the drag-and-drop
+   across horizons and the persistence are all exactly as they were.
+
+   These are the rules the board actually reads. An earlier pass added a second
+   copy inside the desktop media query and left these untouched, so the retheme
+   never rendered at any width — a stylesheet can be wrong in a way no test
+   notices. Declared once, here, at top level. */
 .horizon-pill {
   flex-shrink: 0;
   display: inline-flex;
@@ -2187,67 +2214,11 @@ textarea.text-input {
   color: var(--text-quiet, var(--text-muted));
 }
 
-.pill-badge::before { content: "· "; }
+.pill-badge::before { content: "\00b7 "; }
 
 .horizon-pill.active .pill-badge {
   background: none;
   color: var(--ink, var(--text-primary));
-}
-
-.horizon-panel {
-    max-height: 72vh;
-  }
-}
-
-.horizon-pills {
-  display: flex;
-  gap: 18px;
-  border-bottom: 1px solid var(--divider, var(--border));
-  margin-bottom: 12px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  padding-bottom: 4px;
-}
-
-.horizon-pills::-webkit-scrollbar {
-  display: none;
-}
-
-.horizon-pill {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 7px 13px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  background: var(--bg-secondary);
-  border: 1.5px solid var(--border);
-  color: var(--text-secondary);
-  white-space: nowrap;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-
-.horizon-pill.active {
-  background: var(--accent);
-  color: var(--btn-text, #fff);
-  border-color: var(--accent);
-}
-
-.pill-badge {
-  background: rgba(0, 0, 0, 0.12);
-  border-radius: 8px;
-  padding: 1px 5px;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1.4;
-}
-
-.horizon-pill.active .pill-badge {
-  background: rgba(255, 255, 255, 0.3);
 }
 
 .horizon-panel {

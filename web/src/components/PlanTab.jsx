@@ -206,22 +206,26 @@ export default function PlanTab({ payload = {}, savePayload, saveConfigPatch, on
           here, which is deferred deliberately: it is a full-screen page that
           hides the nav and the header, and re-housing it is exactly the
           "rebuild its logic or its blocks" the same paragraph rules out.
-          Flagged for the designer rather than guessed at. */}
-      <div className="plan-views" role="tablist" aria-label="Plan views">
-        <button type="button" role="tab" aria-selected="true" className="plan-view is-active">
-          FRONTS
-        </button>
+          Flagged for the designer rather than guessed at.
+
+          So this is a nav, not a tablist. Two of the three move you to another
+          screen, and role="tab" would promise panels that swap in place, a
+          roving tabIndex and arrow-key selection — none of which is true here.
+          The segmented look is the same; only the claim it makes is honest.
+          FRONTS is the page you are on, so it is not a button at all. */}
+      <nav className="plan-views" aria-label="Plan views">
+        <span className="plan-view is-active" aria-current="page">FRONTS</span>
         {onOpenDayMap && (
-          <button type="button" role="tab" aria-selected="false" className="plan-view" onClick={onOpenDayMap}>
+          <button type="button" className="plan-view" onClick={onOpenDayMap}>
             DAY MAP
           </button>
         )}
         {onOpenHorizons && (
-          <button type="button" role="tab" aria-selected="false" className="plan-view" onClick={onOpenHorizons}>
+          <button type="button" className="plan-view" onClick={onOpenHorizons}>
             HORIZONS
           </button>
         )}
-      </div>
+      </nav>
 
       {atFrontLimit && (
         <p className="plan-limit-note">

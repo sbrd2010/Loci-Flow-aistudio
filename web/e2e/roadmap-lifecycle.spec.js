@@ -22,7 +22,7 @@ async function enterDemo(page) {
 
 async function openRoadmap(page) {
   await page.locator(".bottom-nav").getByRole("button", { name: "Roadmap" }).click();
-  await page.getByRole("tab", { name: "HORIZONS" }).click();
+  await page.getByRole("button", { name: "HORIZONS" }).click();
   await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible({ timeout: 8_000 });
 }
 

@@ -968,7 +968,18 @@ export default function App() {
 
   const goToday = () => { setFabExpanded(false); setActiveTab("today"); };
 
-  const openDayMap = () => { setFabExpanded(false); setActiveTab("daymap"); track("day_map_open"); };
+  // Day Map is a full-screen page with two doors into it — Today's "Day Map"
+  // button and Plan's view switcher — so "close" has to mean "back where I came
+  // from", not a fixed destination. Recorded at open time rather than derived
+  // on close, because by then activeTab is already "daymap".
+  const [dayMapReturnTab, setDayMapReturnTab] = useState("today");
+  const openDayMap = () => {
+    setFabExpanded(false);
+    setDayMapReturnTab(activeTab === "daymap" ? "today" : activeTab);
+    setActiveTab("daymap");
+    track("day_map_open");
+  };
+  const closeDayMap = () => { setFabExpanded(false); setActiveTab(dayMapReturnTab); };
 
   const handleSwitchUser = () => {
     // Flush any pending debounced write before signing out, then wipe the
@@ -1248,7 +1259,7 @@ export default function App() {
             payload={payload}
             savePayload={savePayload}
             savePayloadAsync={savePayloadAsync}
-            onClose={goToday}
+            onClose={closeDayMap}
             onStartFocus={(pinPromise) => { pendingFocusPinPromiseRef.current = pinPromise; setPendingFocusOpen(true); goToday(); }}
             onAddTask={() => openAddTask("today")}
             flushNow={flushNow}

@@ -184,7 +184,7 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
         <div className={`dm-tl-segment${isNow ? " is-now" : ""}`} aria-hidden="true" />
         {isNow && <div className="dm-now-badge-route">▶ NOW</div>}
         {isNow && <div className="dm-node-now-ring" />}
-        <div className={`dm-stop-node${isFirst ? " dm-node-now" : ""}`} />
+        <div className={`dm-stop-node${isNow ? " dm-node-now" : ""}`} />
       </div>
 
       <div className={`dm-card dm-card-${pClass}${isDragging ? " is-dragging" : ""}${isNow ? " dm-card-is-now" : ""}`}>

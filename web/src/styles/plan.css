@@ -270,14 +270,22 @@
   background: none;
   border: 0;
   padding: 2px 0;
-  cursor: pointer;
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.12em;
   color: var(--text-quiet, var(--text-muted));
 }
 
-.plan-view:hover { color: var(--ink, var(--text-primary)); }
+/* Only the two that go somewhere are buttons; the current view is a span, and
+   should not offer a pointer or a hover it cannot honour. */
+button.plan-view { cursor: pointer; }
+
+button.plan-view:hover { color: var(--ink, var(--text-primary)); }
+
+button.plan-view:focus-visible {
+  outline: 2px solid var(--gold, var(--accent));
+  outline-offset: 3px;
+}
 
 /* The view you are on: named in ink, underlined in gold. One accent. */
 .plan-view.is-active {
