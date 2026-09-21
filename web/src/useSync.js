@@ -113,10 +113,24 @@ export async function writeActivityEvents(uid, pathsToValues, retries = 3) {
 //
 // Guarded by runTransaction for the same reason captureTodaySnapshotIfNeeded is:
 // the decision has to be made against what is actually at the path, not what
-// this client last saw. utcTimestamp is the version — a later bell (a re-bank
-// after "+Nm") is newer and proceeds; a stale retry is older and aborts. The
-// amends themselves stay plain update() calls: they are always the newest write
-// for their session, so they need no guard and no call-site change.
+// this client last saw.
+//
+// The version is focusElapsedSeconds, NOT utcTimestamp. Wall-clock time is not
+// a safe ordering key: a device clock that steps backwards between two bells
+// (an NTP correction, a manual change) gives the later bell the smaller stamp,
+// and the re-bank carrying the extension's minutes would be rejected as stale.
+// Elapsed seconds have no such problem — the accumulator behind them is only
+// ever incremented, or zeroed when a session begins or ends
+// (useFocusTimer.js:481,500 vs 321,574,668), so within one session the figure
+// is monotonic by construction and independent of any clock.
+//
+// It is also the rule this guard actually wants: NEVER REPLACE AN ENTRY WITH
+// ONE THAT RECORDS LESS WORK. A stale bell retry always records less than the
+// amend that overtook it, so it aborts; a later bell always records more, so
+// it lands. Anything it cannot prove — a missing or non-numeric figure on
+// either side — aborts too, because the safe direction here is always to
+// leave what is there. The amends stay plain update() calls: each is the
+// newest write for its session and needs no guard and no call-site change.
 //
 // Standalone and uid-parameterized, same testability rationale as the two above.
 export async function writeActivityEventIfNewer(uid, event) {
@@ -126,8 +140,12 @@ export async function writeActivityEventIfNewer(uid, event) {
     const result = await runTransaction(
       ref(db, activityEventPath(uid, event.lociDateString, event.eventId)),
       (current) => {
-        // Abort (return undefined) when what's there is at least as new.
-        if (current && Number(current.utcTimestamp) >= Number(event.utcTimestamp)) return;
+        if (current) {
+          const there = Number(current.focusElapsedSeconds);
+          const mine = Number(event.focusElapsedSeconds);
+          // Abort (return undefined) unless this strictly records more work.
+          if (!Number.isFinite(mine) || !Number.isFinite(there) || mine <= there) return;
+        }
         return event;
       }
     );

@@ -372,8 +372,20 @@ describe("payload cache record (readCache / writeCache)", () => {
 // and update() is last-write-wins by ARRIVAL, not by recency of content. The
 // guarded write makes the loser of that race a no-op instead of a rollback of
 // the user's finished session.
+//
+// The ordering key is focusElapsedSeconds, not the clock: the accumulator
+// behind it is only ever incremented within a session, so it is monotonic by
+// construction, and a device clock that steps backwards between two bells
+// cannot make a later re-bank look stale.
 describe("writeActivityEventIfNewer", () => {
-  const at = (ms) => ({ eventId: "evt-1", lociDateString: "2026-07-10", utcTimestamp: ms, type: "focus_abandoned" });
+  const ev = (elapsed, extra = {}) => ({
+    eventId: "evt-1",
+    lociDateString: "2026-07-10",
+    type: "focus_abandoned",
+    focusElapsedSeconds: elapsed,
+    utcTimestamp: 1000,
+    ...extra,
+  });
 
   // Runs the transaction updater the way RTDB does: against whatever is
   // currently at the path, committing only when it returns a value.
@@ -399,62 +411,80 @@ describe("writeActivityEventIfNewer", () => {
   });
 
   it("returns ok:false without touching the database when uid is missing", async () => {
-    const result = await writeActivityEventIfNewer(null, at(1000));
+    const result = await writeActivityEventIfNewer(null, ev(1500));
     expect(result).toEqual({ ok: false, reason: "no-uid" });
     expect(runTransactionMock).not.toHaveBeenCalled();
   });
 
   it("returns ok:false when the event carries no path to write to", async () => {
-    expect(await writeActivityEventIfNewer("uid1", { utcTimestamp: 1 })).toEqual({ ok: false, reason: "no-path" });
+    expect(await writeActivityEventIfNewer("uid1", { focusElapsedSeconds: 1 })).toEqual({ ok: false, reason: "no-path" });
     expect(runTransactionMock).not.toHaveBeenCalled();
   });
 
   it("writes to the pinned path built from the event's own day and id", async () => {
     runAgainst(null);
-    await writeActivityEventIfNewer("uid1", at(1000));
+    await writeActivityEventIfNewer("uid1", ev(1500));
     expect(refMock).toHaveBeenCalledWith({}, "activityLogs/uid1/events/2026-07-10/evt-1");
   });
 
   it("commits when the path is empty — the ordinary bell write", async () => {
     const committed = runAgainst(null);
-    const result = await writeActivityEventIfNewer("uid1", at(1000));
+    const result = await writeActivityEventIfNewer("uid1", ev(1500));
     expect(result.ok).toBe(true);
     expect(result.committed).toBe(true);
-    expect(committed()).toEqual(at(1000));
+    expect(committed()).toEqual(ev(1500));
   });
 
-  it("ABORTS rather than reverting a newer amend already at the path", async () => {
-    // The user finished the session while the bell write was mid-retry: a
-    // focus_completed event is already there, stamped later. The stale retry
-    // must not put focus_abandoned back.
-    const newer = { eventId: "evt-1", lociDateString: "2026-07-10", utcTimestamp: 9000, type: "focus_completed" };
-    const committed = runAgainst(newer);
-    const result = await writeActivityEventIfNewer("uid1", at(1000));
+  it("ABORTS rather than reverting an amend that recorded more work", async () => {
+    // The user took "+20m" and then finished: 45 minutes are on the path. A
+    // stale retry of the first bell must not put 25 back.
+    const committed = runAgainst(ev(2700, { type: "focus_completed" }));
+    const result = await writeActivityEventIfNewer("uid1", ev(1500));
     expect(result.committed).toBe(false);
     expect(committed()).toBeUndefined();
   });
 
-  it("aborts on an equal timestamp too, so a duplicate delivery is a no-op", async () => {
-    const committed = runAgainst(at(1000));
-    const result = await writeActivityEventIfNewer("uid1", at(1000));
+  it("aborts on an equal figure, so a stale retry of the bell the amend matched is a no-op", async () => {
+    // Finishing the task at the bell gives the amend the SAME elapsed figure.
+    // The retry still must not revert focus_completed to focus_abandoned.
+    const committed = runAgainst(ev(1500, { type: "focus_completed" }));
+    const result = await writeActivityEventIfNewer("uid1", ev(1500));
     expect(result.committed).toBe(false);
     expect(committed()).toBeUndefined();
   });
 
   it("still commits a LATER bell, so a re-bank after '+Nm' is not blocked", async () => {
-    // The guard is on recency, not on existence: the second bell of an
-    // extended session carries the fuller figures and must land.
-    const firstBell = at(1000);
-    const secondBell = { ...at(5000), focusElapsedSeconds: 2700 };
-    const committed = runAgainst(firstBell);
-    const result = await writeActivityEventIfNewer("uid1", secondBell);
+    const committed = runAgainst(ev(1500));
+    const result = await writeActivityEventIfNewer("uid1", ev(2700));
     expect(result.committed).toBe(true);
-    expect(committed()).toEqual(secondBell);
+    expect(committed()).toEqual(ev(2700));
+  });
+
+  it("orders by work done, not by the clock — a backwards clock cannot block a re-bank", async () => {
+    // The device clock stepped back between the two bells, so the later bell
+    // carries the SMALLER utcTimestamp. It still holds the extension's
+    // minutes, so it must land.
+    const firstBell = ev(1500, { utcTimestamp: 9_000_000 });
+    const laterBellAfterClockWentBack = ev(2700, { utcTimestamp: 1_000_000 });
+    const committed = runAgainst(firstBell);
+    const result = await writeActivityEventIfNewer("uid1", laterBellAfterClockWentBack);
+    expect(result.committed).toBe(true);
+    expect(committed()).toEqual(laterBellAfterClockWentBack);
+  });
+
+  it("aborts when either figure is missing, rather than guessing", async () => {
+    const committedA = runAgainst({ eventId: "evt-1", lociDateString: "2026-07-10" });
+    expect((await writeActivityEventIfNewer("uid1", ev(1500))).committed).toBe(false);
+    expect(committedA()).toBeUndefined();
+
+    const committedB = runAgainst(ev(1500));
+    expect((await writeActivityEventIfNewer("uid1", ev(undefined))).committed).toBe(false);
+    expect(committedB()).toBeUndefined();
   });
 
   it("fails soft when the transaction throws, never as if the user's action failed", async () => {
     runTransactionMock.mockRejectedValue(new Error("permission denied"));
-    const result = await writeActivityEventIfNewer("uid1", at(1000));
+    const result = await writeActivityEventIfNewer("uid1", ev(1500));
     expect(result.ok).toBe(false);
     expect(result.reason).toBe("write-failed");
   });
