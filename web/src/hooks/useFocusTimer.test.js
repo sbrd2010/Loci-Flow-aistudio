@@ -613,6 +613,51 @@ describe("useFocusTimer", () => {
       expect(result.current.markFocusLedgerEntry(entry)).toBeNull();
     });
 
+    it("does not let an estimate edited elsewhere zero the banked time", () => {
+      // At the hold the timer is stopped but the session is OPEN and its
+      // minutes are already in the ledger. The sync effect's reset branch keys
+      // on !isTimerRunning, so without the hold guard it would set max and
+      // left to the same value — elapsed 0 — and the amend would write that
+      // zero over what the bell banked.
+      const t = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[t], {}, "u1"]);
+      result.current.startFocusSession(t);
+      rerender([[t], {}, "u1"]);
+
+      // Run the block out: the bell stops the timer and opens the hold.
+      result.current.setTimerSecondsLeft(0);
+      rerender([[t], {}, "u1"]);
+      result.current.setIsTimerRunning(false);
+      rerender([[t], {}, "u1"]);
+      expect(result.current.sessionCompletePending).toBe(true);
+      expect(result.current.peekFocusSession("timer_elapsed").focusElapsedSeconds).toBe(25 * 60);
+
+      // Another device edits the task's estimate while the hold is showing.
+      rerender([[{ ...t, timeEstimateMinutes: 50 }], {}, "u1"]);
+
+      const ended = result.current.endFocusSession("user_abandoned");
+      expect(ended.focusElapsedSeconds).toBe(25 * 60);
+    });
+
+    it("does not carry a finished session's hold into the session that replaces it", () => {
+      // A start landing while a hold is open (e.g. a Coach START_FOCUS
+      // resolving after the current timer rang) left sessionCompletePending
+      // true. App's bell observer keys on that flag going false->true, so the
+      // replacement session's own bell could never trigger it and its minutes
+      // were never banked.
+      const t = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[t], {}, "u1"]);
+      result.current.startFocusSession(t);
+      rerender([[t], {}, "u1"]);
+      result.current.setTimerSecondsLeft(0);
+      rerender([[t], {}, "u1"]);
+      expect(result.current.sessionCompletePending).toBe(true);
+
+      result.current.startFocusSession(t);
+      rerender([[t], {}, "u1"]);
+      expect(result.current.sessionCompletePending).toBe(false);
+    });
+
     it("keeps the first entry if the bell somehow marks twice", () => {
       const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
       result.current.startFocusSession(task);

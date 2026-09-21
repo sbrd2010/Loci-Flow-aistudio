@@ -337,6 +337,20 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
 
   useEffect(() => {
     const prev = prevActiveTaskRef.current;
+    // While the 00:00 hold is showing, leave the timer's numbers alone.
+    // The branch below keys its reset on !isTimerRunning, which meant "no
+    // session is in progress" before K4 — at the hold that is no longer true:
+    // the timer is stopped but the session is open, and its elapsed time is
+    // already banked in the ledger. Re-deriving from a task estimate edited on
+    // another device would set timerMaxSeconds and timerSecondsLeft to the SAME
+    // value, making elapsed zero, and the terminal amend (an unguarded update()
+    // on the pinned path) would then write that zero over the banked minutes.
+    // Both conditions are required: a hold with no open session has nothing to
+    // protect, and an open session with no hold still syncs as it always did.
+    if (sessionCompletePendingRef.current && focusSessionIdRef.current) {
+      prevActiveTaskRef.current = { uuid: activeTask?.uuid ?? null, timeEstimateMinutes: activeTask?.timeEstimateMinutes ?? null };
+      return;
+    }
     if (skipNextDurationSyncRef.current) {
       // startFocusSession just applied an explicit plannedSeconds override for
       // this exact task becoming active — leave timerMaxSeconds/timerSecondsLeft
@@ -587,6 +601,20 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     // countdown either.
     setTimerMaxSeconds(initialPlannedSeconds);
     setTimerSecondsLeft(initialPlannedSeconds);
+    // A new session never inherits the previous one's 00:00 hold. Leaving it
+    // set showed the finished session's prompt over a session that had just
+    // started — and because the flag was already true, the bell ending THIS
+    // session could not transition it false->true, so App's observer never ran
+    // and these minutes were never banked. Reachable whenever a start lands
+    // while a hold is open, e.g. a Coach START_FOCUS resolving after the
+    // current timer rang.
+    //
+    // Cleared AFTER the countdown is reset, not before: between setting the
+    // timer running and giving it a fresh duration, timerSecondsLeft is still
+    // the previous session's 0, which is exactly what the bell effect watches
+    // for. Clearing first leaves that window free to set the flag straight
+    // back to true.
+    setSessionCompletePending(false);
     // `task` becoming `activeTask` (once `tasks` syncs) would otherwise
     // trigger the activeTask-sync effect to immediately re-derive/overwrite
     // this value from task.timeEstimateMinutes — suppress that one pass.
