@@ -1449,6 +1449,7 @@ export default function App() {
       {shouldShowFocusCompletionPrompt({
         sessionCompletePending: focusTimer.sessionCompletePending,
         hasActiveTask: !!focusTimer.activeTask,
+        isFocusMode: focusTimer.isFocusMode,
       }) && (
         <ConfirmDialog
           message={`Focus block complete!\n\nYou've completed your deep focus block for:\n"${focusTimer.activeTask.title}"\n\nWould you like to mark this task as finished, or keep going?`}

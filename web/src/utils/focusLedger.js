@@ -105,6 +105,24 @@ export function minutesForTaskOn(raw, taskId, dateStr) {
     .reduce((total, e) => total + eventMinutes(e), 0);
 }
 
+// How many sessions were logged on one Loci day. Screen 3's "SESSION N"
+// kicker, which orients you in the day without scoring you.
+//
+// The spec's wording is "SESSION 3 OF 4". There is no "of 4": the app has no
+// daily session target, and inventing a denominator would put a number on the
+// screen that nothing in the app ever agreed to — the same objection K2 makes
+// to printing an unverified figure, and J4 to an empty Momentum frame. The
+// count of sessions actually logged is data that exists; the target is not.
+//
+// Counts only sessions that logged a countable minute, so a mis-tap does not
+// advance the number — the same threshold dailyTotals uses for "moves".
+export function sessionsOnDay(raw, dateStr) {
+  if (!dateStr) return 0;
+  return flattenFocusEvents(raw)
+    .filter((e) => e.lociDateString === dateStr && eventMinutes(e) >= MIN_COUNTABLE_MINUTES)
+    .length;
+}
+
 // "WHERE IT WENT" — minutes per front, joining taskId back to the live tasks.
 // Work on no front is collected under a null key rather than invented into one.
 export function minutesByFront(events, tasks = []) {

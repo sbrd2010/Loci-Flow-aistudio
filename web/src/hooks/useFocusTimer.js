@@ -715,6 +715,11 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     pipOpen,
     handleOpenPiP,
     focusSessionId, startFocusSession, endFocusSession,
+    // When the open session began — screen 3 prints it as "STARTED 09:41".
+    // Read from the ref each render rather than held in state: it is set once
+    // per session and never changes within one, so it needs no re-render of
+    // its own.
+    focusStartedAt: focusStartedAtRef.current,
     peekFocusSession, markFocusLedgerEntry,
     // Which task the currently open session (if any) actually belongs to —
     // NOT necessarily the same as `activeTask`, which reflects the current

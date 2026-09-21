@@ -216,3 +216,23 @@ describe("buildResetFocusState", () => {
     expect(buildResetFocusState({ pomodoroDurationMinutes: -10 })).toMatchObject({ timerSecondsLeft: 1500 });
   });
 });
+
+// Addendum D delta 3: at 00:00 there is no modal. Screen 3 carries K4's hold
+// inline — a frozen timer and two buttons — and a dialog over it would both
+// contradict "never a failure event" and cover the choices it offers.
+describe("shouldShowFocusCompletionPrompt — not over the Focus session", () => {
+  it("shows on every other screen, as before", () => {
+    expect(shouldShowFocusCompletionPrompt({ sessionCompletePending: true, hasActiveTask: true })).toBe(true);
+  });
+
+  it("is suppressed inside focus mode, where the hold is already on screen", () => {
+    expect(shouldShowFocusCompletionPrompt({
+      sessionCompletePending: true, hasActiveTask: true, isFocusMode: true,
+    })).toBe(false);
+  });
+
+  it("still needs a pending bell and a task, focus mode or not", () => {
+    expect(shouldShowFocusCompletionPrompt({ sessionCompletePending: false, hasActiveTask: true })).toBe(false);
+    expect(shouldShowFocusCompletionPrompt({ sessionCompletePending: true, hasActiveTask: false })).toBe(false);
+  });
+});

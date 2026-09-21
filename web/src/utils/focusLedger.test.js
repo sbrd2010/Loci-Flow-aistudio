@@ -10,6 +10,7 @@ import {
   formatMinutes,
   weekSummary,
   commonestStartHour,
+  sessionsOnDay,
 } from "./focusLedger";
 
 const NOW = new Date(2026, 10, 4, 12, 0); // 4 Nov 2026, midday
@@ -266,5 +267,40 @@ describe("commonestStartHour", () => {
 
   it("breaks a tie toward the earlier hour — that is the one worth defending", () => {
     expect(commonestStartHour([at(8), at(8), at(8), at(16), at(16), at(16)])).toBe(8);
+  });
+});
+
+// Screen 3's "SESSION N" kicker. The spec says "SESSION 3 OF 4"; there is no
+// "of 4" to show, so this counts what actually happened and the screen omits
+// the denominator rather than inventing one.
+describe("sessionsOnDay", () => {
+  const ev = (dateStr, secs, id) => ({
+    eventId: id, type: "focus_abandoned", lociDateString: dateStr,
+    taskId: "t1", focusElapsedSeconds: secs,
+  });
+  const raw = (...events) => {
+    const out = {};
+    for (const e of events) (out[e.lociDateString] ||= {})[e.eventId] = e;
+    return out;
+  };
+
+  it("counts the day's logged sessions", () => {
+    expect(sessionsOnDay(raw(ev("2026-07-10", 1500, "a"), ev("2026-07-10", 300, "b")), "2026-07-10")).toBe(2);
+  });
+
+  it("counts only the day asked for", () => {
+    expect(sessionsOnDay(raw(ev("2026-07-10", 1500, "a"), ev("2026-07-11", 1500, "b")), "2026-07-10")).toBe(1);
+  });
+
+  it("does not let a mis-tap advance the number", () => {
+    // Under a minute rounds to zero and is not a session, the same threshold
+    // dailyTotals uses for a "move".
+    expect(sessionsOnDay(raw(ev("2026-07-10", 40, "a")), "2026-07-10")).toBe(0);
+  });
+
+  it("is zero for an empty or unreadable ledger", () => {
+    expect(sessionsOnDay(null, "2026-07-10")).toBe(0);
+    expect(sessionsOnDay(raw(), "2026-07-10")).toBe(0);
+    expect(sessionsOnDay(raw(ev("2026-07-10", 1500, "a")), null)).toBe(0);
   });
 });

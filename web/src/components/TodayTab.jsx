@@ -5,7 +5,7 @@ import TodayWall from "./TodayWall";
 import Momentum from "./Momentum";
 import { frontsFromConfig, commitmentDaysLeft, commitmentKickerFront, frontForCommitment } from "../utils/fronts";
 import { useFocusLedger } from "../hooks/useFocusLedger";
-import { minutesForTaskOn } from "../utils/focusLedger";
+import { minutesForTaskOn, sessionsOnDay } from "../utils/focusLedger";
 import { buildMomentum } from "../utils/momentum";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import FocusModePage from "./FocusModePage";
@@ -90,6 +90,7 @@ export default function TodayTab({
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
   pipOpen, handleOpenPiP, isAddTaskDialogOpen, startFocusSession, endFocusSession, focusSessionId, focusSessionTaskUuid, changeFocusDuration,
+  addTimeToSession, focusStartedAt,
   selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
   isSyncingFromCache = false,
   pendingCheckinSlot, setPendingCheckinSlot,
@@ -1657,6 +1658,9 @@ export default function TodayTab({
           onDone={() => { handleToggleComplete(activeTask); setIsFocusMode(false); }}
           onExit={() => setIsFocusMode(false)}
           onChangeDuration={handleChangeFocusDuration}
+          onAddTime={addTimeToSession}
+          startedAt={focusStartedAt}
+          sessionNumber={sessionsOnDay(ledgerRaw, todayStr) + 1}
           onAddBrainDump={handleFocusBrainDump}
           onRescue={openRescueMode}
           pipOpen={pipOpen}

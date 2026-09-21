@@ -76,9 +76,17 @@ export function extendMinutesForSession(plannedSeconds) {
 }
 
 // Whether the global Focus completion prompt ("Done! +120 XP" / "+50 XP, keep
-// going") should be shown. Independent of activeTab so it appears on any page.
-export function shouldShowFocusCompletionPrompt({ sessionCompletePending, hasActiveTask }) {
-  return !!(sessionCompletePending && hasActiveTask);
+// going") should be shown. Independent of activeTab so it appears on any page
+// — EXCEPT the Focus session itself, which now carries K4's hold inline.
+//
+// Addendum D delta 3: "Running out of time is never a failure event — no
+// sound, no modal, no auto-close." A modal over the screen whose whole job is
+// to hold still at 00:00 is the failure event it rules out, and it would sit
+// on top of the two buttons that screen already offers. Everywhere else the
+// prompt stays: a bell that rings while the user is on Coach or Plan still
+// has to tell them something.
+export function shouldShowFocusCompletionPrompt({ sessionCompletePending, hasActiveTask, isFocusMode = false }) {
+  return !!(sessionCompletePending && hasActiveTask && !isFocusMode);
 }
 
 // Build the updated payload for completing the focused task from the global
