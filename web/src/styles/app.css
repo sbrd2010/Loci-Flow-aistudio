@@ -2146,6 +2146,16 @@ textarea.text-input {
 .horizon-pills {
   display: flex;
   gap: 18px;
+  /* The 44px hit overlay on each kicker is absolutely positioned, and an
+     absolutely positioned child still contributes to a scroll container's
+     scrollable overflow. In a 24px-tall row that produced 8px of VERTICAL
+     scroll here — overflow-x: auto makes the y axis compute to auto too — so
+     the row could be dragged up and down on touch. Giving the row the same
+     44px the overlay needs removes the overflow at its source. The kickers
+     stay their own height and centred, so the active underline still hugs
+     the label rather than sitting at the bottom of a tall box. */
+  align-items: center;
+  min-height: 44px;
   border-bottom: 1px solid var(--divider, var(--border));
   margin-bottom: 12px;
   overflow-x: auto;

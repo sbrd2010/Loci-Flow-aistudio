@@ -96,3 +96,29 @@ test("priority tags are mono wherever Day Map draws them", async ({ page }) => {
   // One declaration site means one colour; two means they can drift apart.
   expect(cardColor).toBe(stripColor);
 });
+
+test("the 44px hit overlays do not scroll or steal clicks", async ({ page }) => {
+  await enterDemo(page);
+  await page.locator(".bottom-nav").getByRole("button", { name: "Roadmap" }).click();
+
+  // An absolutely positioned child still counts toward a scroll container's
+  // scrollable overflow. .horizon-pills is overflow-x: auto, which makes the
+  // y axis compute to auto as well, so a 44px overlay in a 24px row gave the
+  // kickers 8px of vertical scroll — the row could be dragged up and down on
+  // touch. The row is sized to fit the overlay instead of clipping it.
+  await page.getByRole("button", { name: "HORIZONS" }).click();
+  await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible();
+  const row = await page.locator(".horizon-pills").evaluate((el) => ({
+    scrollH: el.scrollHeight, clientH: el.clientHeight,
+    scrollW: el.scrollWidth, clientW: el.clientWidth,
+  }));
+  expect(row.scrollH, "the kicker row must not scroll vertically").toBeLessThanOrEqual(row.clientH);
+  // ...while still scrolling sideways, which is what the container is for.
+  expect(row.scrollW).toBeGreaterThan(row.clientW);
+
+  // The overlays sit above their own buttons, so a neighbour must still get
+  // its own clicks: the point is a bigger target, not a bigger button.
+  await page.locator(".bottom-nav").getByRole("button", { name: "Roadmap" }).click();
+  await page.getByRole("button", { name: "New front" }).click();
+  await expect(page.locator(".plan-new-form")).toBeVisible();
+});
