@@ -5,10 +5,18 @@
 
 /* ── Today-tab launcher banner ──────────────────────────────────────────────── */
 
-/* Dark canvas — overrides screen-content padding/bg when Day Map is active */
+/* Dark canvas — overrides screen-content padding/bg when Day Map is active.
+
+   This shell is the PARENT of .day-map-page, so it cannot read --ground from
+   the token block below: custom properties inherit downwards only. Declaring
+   the token here instead puts it at the top of the Day Map subtree, where both
+   this background and every descendant can read it — writing
+   var(--ground) here without this declaration would silently fall back and
+   leave the canvas on the old cool palette. */
 .screen-content-day-map {
+  --ground: #171512;
   padding: 0;
-  background: #0d0f14;
+  background: var(--ground);
   gap: 0;
 }
 
@@ -128,7 +136,10 @@
   /* Bleed to full width by cancelling the parent 16px padding */
   margin: 0 -16px;
   padding: 10px 16px 12px;
-  background: rgba(13, 15, 20, 0.88);
+  /* #171512 at 88%, so the sticky bar reads as the canvas showing through
+     rather than as a second surface. Stated as rgba because the alpha has to
+     be baked in and --ground carries no alpha channel. */
+  background: rgba(23, 21, 18, 0.88);
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -721,10 +732,20 @@
   flex-shrink: 0;
 }
 
-.day-map-priority.p1 { color: var(--p1-text); background: var(--p1-bg); }
-.day-map-priority.p2 { color: var(--p2-text); background: var(--p2-bg); }
-.day-map-priority.p3 { color: var(--p3-text); background: var(--p3-bg); }
-.day-map-priority.p4 { color: var(--p4-text); background: var(--p4-bg); }
+/* The mono tag, for every priority and every place one is drawn. Day Map
+   renders these in two spots — on a route card and in the unscheduled strip —
+   and an earlier pass styled only the card, leaving the strip's tags red,
+   amber, teal and blue on a screen whose whole point was that those four
+   colours are gone. Stated once here, at the base, so there is no second
+   place for them to survive. */
+.day-map-priority.p1,
+.day-map-priority.p2,
+.day-map-priority.p3,
+.day-map-priority.p4 {
+  color: var(--text-quiet, var(--text-muted));
+  background: none;
+  border: 1px solid var(--divider, rgba(255, 255, 255, 0.14));
+}
 
 /* ================================================================
    Responsive

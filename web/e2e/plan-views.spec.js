@@ -66,3 +66,33 @@ test("Horizon kickers render as kickers, not as the legacy pills", async ({ page
   expect(style.bg).toBe("rgba(0, 0, 0, 0)");
   expect(style.family.toLowerCase()).toMatch(/mono/);
 });
+
+test("priority tags are mono wherever Day Map draws them", async ({ page }) => {
+  await enterDemo(page);
+  await page.locator(".day-map-nav-btn").click();
+  await expect(page.locator(".day-map-page")).toBeVisible();
+
+  // Day Map draws a priority tag in two places: in the unscheduled strip, and
+  // on a route card. An earlier pass styled only the card — the selector was
+  // scoped to .dm-card — so the strip kept painting red, amber, teal and blue
+  // on the one screen whose point is that those four colours are gone. Both
+  // sites are asserted, because fixing the site you are looking at and missing
+  // its twin is how every colour in this PR survived its own deletion.
+  const mono = async (locator, where) => {
+    const style = await locator.first().evaluate((el) => {
+      const c = getComputedStyle(el);
+      return { bg: c.backgroundColor, color: c.color };
+    });
+    expect(style.bg, `${where} tag should have no fill`).toBe("rgba(0, 0, 0, 0)");
+    return style.color;
+  };
+
+  const stripColor = await mono(page.locator(".day-map-chip-row .day-map-priority"), "unscheduled strip");
+
+  await page.getByRole("button", { name: /auto-fill/i }).click();
+  await expect(page.locator(".dm-card .day-map-priority").first()).toBeVisible();
+  const cardColor = await mono(page.locator(".dm-card .day-map-priority"), "route card");
+
+  // One declaration site means one colour; two means they can drift apart.
+  expect(cardColor).toBe(stripColor);
+});

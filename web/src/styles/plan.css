@@ -277,8 +277,27 @@
 }
 
 /* Only the two that go somewhere are buttons; the current view is a span, and
-   should not offer a pointer or a hover it cannot honour. */
-button.plan-view { cursor: pointer; }
+   should not offer a pointer or a hover it cannot honour.
+
+   A 10px kicker is a 15px-tall tap target, and these two buttons are now the
+   only way into Day Map and Horizons from here. The row is meant to stay tight,
+   so the hit area is extended past the glyphs with a pseudo-element rather than
+   by growing the button: 44px tall, centred, which is the same minimum
+   .plan-new-front and .plan-front-close already use. */
+button.plan-view {
+  position: relative;
+  cursor: pointer;
+}
+
+button.plan-view::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 44px;
+  transform: translateY(-50%);
+}
 
 button.plan-view:hover { color: var(--ink, var(--text-primary)); }
 
