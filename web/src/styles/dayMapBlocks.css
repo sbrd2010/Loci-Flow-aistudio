@@ -66,11 +66,12 @@
   flex-direction: column;
 }
 
-/* Priority tints — border + subtle background */
-.dmb-p1 { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.07); }
-.dmb-p2 { border-left-color: #f59e0b; background: rgba(245, 158, 11, 0.07); }
-.dmb-p3 { border-left-color: #14b8a6; background: rgba(20, 184, 166, 0.07); }
-.dmb-p4 { border-left-color: var(--border); background: var(--bg-card); }
+/* Priority tints deleted, as on the route's cards: the four colours go, and
+   priority reads from the mono tag. One hairline edge for every block. */
+.dmb-p1, .dmb-p2, .dmb-p3, .dmb-p4 {
+  border-left-color: var(--divider, rgba(255, 255, 255, 0.14));
+  background: var(--surface, var(--bg-card));
+}
 
 /* Size classes — minimum heights give visual weight to longer tasks */
 .dmb-sm { min-height: 82px; }

@@ -24,7 +24,6 @@ import "../styles/dayMapTimeline.css";
 const TRANSITION_BUFFER = 5;
 const DURATION_OPTIONS = [15, 25, 45, 60, 90, 120, 180, 240, 360];
 const PRIORITY_RANK = { P1: 1, P2: 2, P3: 3, P4: 4 };
-const PRIORITY_LINE_COLORS = { P1: '#f43f5e', P2: '#f59e0b', P3: '#14b8a6', P4: 'rgba(255,255,255,0.20)' };
 const PERIOD_LABELS = { morning: "Morning", afternoon: "Afternoon", evening: "Evening", night: "Night" };
 
 function getTaskId(task) { return String(task.uuid || task.id); }
@@ -159,7 +158,6 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
   const p = normalizePriority(task.priority);
   const pClass = p.toLowerCase();
   const isNow = isFirst && start <= currentDayMinutes() + 15;
-  const lineColor = PRIORITY_LINE_COLORS[p] || PRIORITY_LINE_COLORS.P4;
   const subSteps = task.subSteps || [];
   const doneSubStepsCount = subSteps.filter(s => s.done).length;
   const orderedSubSteps = [...subSteps.filter(s => !s.done), ...subSteps.filter(s => s.done)];
@@ -179,10 +177,14 @@ function TimelineStop({ task, isFirst, isExpanded, onToggle, onRemove, onDuratio
       </div>
 
       <div className="dm-stop-spine">
-        <div className="dm-tl-segment" style={{ background: lineColor }} aria-hidden="true" />
+        {/* The spine carries STATE, not priority — a route should read as
+            "where am I on it". Priority is still here, as the mono tag on the
+            card: it is an attribute of the task, not of your position in the
+            day. The four priority colours it used to paint are deleted. */}
+        <div className={`dm-tl-segment${isNow ? " is-now" : ""}`} aria-hidden="true" />
         {isNow && <div className="dm-now-badge-route">▶ NOW</div>}
-        {isNow && <div className="dm-node-now-ring" style={{ borderColor: lineColor }} />}
-        <div className={`dm-stop-node dm-node-${pClass}${isFirst ? " dm-node-now" : ""}`} />
+        {isNow && <div className="dm-node-now-ring" />}
+        <div className={`dm-stop-node${isFirst ? " dm-node-now" : ""}`} />
       </div>
 
       <div className={`dm-card dm-card-${pClass}${isDragging ? " is-dragging" : ""}${isNow ? " dm-card-is-now" : ""}`}>

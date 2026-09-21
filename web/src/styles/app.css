@@ -2136,18 +2136,74 @@ textarea.text-input {
 }
 
 @media (min-width: 768px) {
-  .roadmap-compact-layout .horizon-pill {
-    font-size: 13px;
-    padding: 8px 16px;
-  }
-  .roadmap-compact-layout .horizon-panel {
+  .roadmap-compact-layout /* Addendum I, the horizon board rethemed: "column headers are mono kickers:
+   WEEK · 6". Pills become kickers — no fill, no radius, no badge chip. The
+   count keeps its own element so the markup is untouched; the separator is
+   drawn here. Retheme only: the columns, the drag-and-drop across horizons
+   and the persistence are all exactly as they were. */
+.horizon-pill {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-quiet, var(--text-muted));
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+
+.horizon-pill:hover { color: var(--ink, var(--text-primary)); }
+
+/* The column you are in. One accent, as a rule under the label — the same
+   language Plan's view switcher uses, because it is the same kind of move. */
+.horizon-pill.active {
+  color: var(--ink, var(--text-primary));
+  box-shadow: inset 0 -2px 0 var(--gold, var(--accent));
+}
+
+.horizon-pill:focus-visible {
+  outline: 2px solid var(--gold, var(--accent));
+  outline-offset: 3px;
+}
+
+/* "WEEK · 6" — the count reads as part of the kicker, not as a badge on it. */
+.pill-badge {
+  background: none;
+  border-radius: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  line-height: inherit;
+  color: var(--text-quiet, var(--text-muted));
+}
+
+.pill-badge::before { content: "· "; }
+
+.horizon-pill.active .pill-badge {
+  background: none;
+  color: var(--ink, var(--text-primary));
+}
+
+.horizon-panel {
     max-height: 72vh;
   }
 }
 
 .horizon-pills {
   display: flex;
-  gap: 6px;
+  gap: 18px;
+  border-bottom: 1px solid var(--divider, var(--border));
+  margin-bottom: 12px;
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -2195,9 +2251,9 @@ textarea.text-input {
 }
 
 .horizon-panel {
-  background: var(--bg-card);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius);
+  background: none;
+  border: 0;
+  border-radius: 0;
   padding: 12px 14px;
   display: flex;
   flex-direction: column;

@@ -73,7 +73,7 @@ test("mobile reliability: Brain Dump item is addable from Mind Box, browsable on
   // The nav tab lands on Plan by design; the Inbox is a column on the horizon
   // board behind it. (The "N notes waiting" deep link above goes straight
   // there, which is why it needs no hop.)
-  await page.getByRole("button", { name: "Plan by time horizon instead" }).click();
+  await page.getByRole("tab", { name: "HORIZONS" }).click();
   await page.getByRole("tab", { name: /Inbox/ }).click();
   await expect(dumpItem).toBeVisible({ timeout: 5_000 });
 

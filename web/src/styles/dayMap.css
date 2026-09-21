@@ -78,17 +78,30 @@
 /* ── Page shell ──────────────────────────────────────────────────────────────── */
 
 .day-map-page {
-  /* ── Dark surface CSS variable overrides (cascade to all children) ── */
-  --bg-card:        rgba(255, 255, 255, 0.07);
-  --bg-card-hover:  rgba(255, 255, 255, 0.11);
-  --bg-secondary:   rgba(255, 255, 255, 0.04);
-  --border:         rgba(255, 255, 255, 0.10);
-  --text-primary:   #e8eeff;
-  --text-secondary: rgba(232, 238, 255, 0.72);
-  --text-muted:     rgba(232, 238, 255, 0.42);
-  --accent:         #6366f1;
-  --accent-ring:    rgba(99, 102, 241, 0.20);
-  --button-text:    #ffffff;
+  /* ── The page's own palette, retuned to the handoff ──
+     This block redefines the vocabulary for everything beneath it, which is
+     why Day Map kept its old look while the rest of the app moved: the 160-odd
+     var(--…) references below were reading THESE values, not the theme's. The
+     indigo accent and the cool blue-white ink are replaced with the same
+     Evening values screen 3 uses — Day Map is an execution surface, so it
+     stays dark on both themes, and pinning the values is what keeps it dark
+     on Paper.
+     Retheme only: no layout, no logic, no blocks changed. */
+  --ground:         #171512;
+  --surface:        #1e1b17;
+  --divider:        #2e2a24;
+  --control-edge:   #6b655c;
+  --gold-lift:      #d8ad63;
+  --bg-card:        #1e1b17;
+  --bg-card-hover:  #26221c;
+  --bg-secondary:   #1e1b17;
+  --border:         #2e2a24;
+  --text-primary:   #f2efe9;
+  --text-secondary: #b0a99e;
+  --text-muted:     #8f887d;
+  --accent:         #d8ad63;
+  --accent-ring:    rgba(216, 173, 99, 0.20);
+  --button-text:    #171512;
 
   /* ── Layout ── */
   display: flex;
@@ -128,7 +141,7 @@
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.28);
   background: rgba(255, 255, 255, 0.14);
-  color: #e8eeff;
+  color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 800;
@@ -246,7 +259,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent), #38bdf8, #f59e0b);
+  background: var(--accent);
 }
 
 /* ── Action buttons ──────────────────────────────────────────────────────────── */
@@ -263,7 +276,7 @@
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.08);
-  color: #e8eeff;
+  color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 800;
@@ -273,9 +286,9 @@
 }
 
 .day-map-actions button:first-child {
-  background: #6366f1;
+  background: var(--accent);
   color: #fff;
-  border-color: #6366f1;
+  border-color: var(--accent);
 }
 
 .day-map-actions button:disabled {
@@ -353,7 +366,7 @@
   border: 1px solid rgba(255, 255, 255, 0.11);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.07);
-  color: #e8eeff;
+  color: var(--text-primary);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -471,7 +484,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent), #38bdf8, #f59e0b);
+  background: var(--accent);
 }
 
 /* ── Task stack ──────────────────────────────────────────────────────────────── */
@@ -826,7 +839,7 @@
   font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 800;
-  color: #e8eeff;
+  color: var(--text-primary);
   white-space: nowrap;
 }
 
@@ -870,7 +883,7 @@
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.07);
-  color: #e8eeff;
+  color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 800;
@@ -886,7 +899,7 @@
 
 .day-map-anchor-select option {
   background-color: #1a1c24;
-  color: #e8eeff;
+  color: var(--text-primary);
 }
 
 .day-map-now-btn {

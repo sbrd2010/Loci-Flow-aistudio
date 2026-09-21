@@ -1260,6 +1260,7 @@ export default function App() {
             savePayload={savePayload}
             saveConfigPatch={saveConfigPatch}
             onOpenHorizons={() => setRoadmapView("horizons")}
+            onOpenDayMap={openDayMap}
             onScattered={() => setRoadmapView("scattered")}
           />
         )}
