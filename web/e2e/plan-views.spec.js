@@ -116,6 +116,26 @@ test("the 44px hit overlays do not scroll or steal clicks", async ({ page }) => 
   // ...while still scrolling sideways, which is what the container is for.
   expect(row.scrollW).toBeGreaterThan(row.clientW);
 
+  // left/right: 0 would only make the target taller. Horizon labels are
+  // user-facing and variable, and a short one ("Work") measured 28.8px across,
+  // so the overlay carries a min-width too. Both axes are asserted, and so is
+  // the absence of overlap: a widened overlay grows sideways into the gap, and
+  // one that reached its neighbour would hand taps to the wrong column.
+  const targets = await page.locator(".horizon-pill").evaluateAll((els) => els.map((el) => {
+    const r = el.getBoundingClientRect();
+    const after = getComputedStyle(el, "::after");
+    const width = Math.max(r.width, parseFloat(after.minWidth) || 0);
+    const centre = r.x + r.width / 2;
+    return { label: el.textContent.trim(), width, left: centre - width / 2, right: centre + width / 2 };
+  }));
+  for (const t of targets) {
+    expect(t.width, `"${t.label}" target width`).toBeGreaterThanOrEqual(44);
+  }
+  for (let i = 1; i < targets.length; i++) {
+    expect(targets[i].left, `"${targets[i].label}" must not overlap "${targets[i - 1].label}"`)
+      .toBeGreaterThanOrEqual(targets[i - 1].right);
+  }
+
   // The overlays sit above their own buttons, so a neighbour must still get
   // its own clicks: the point is a bigger target, not a bigger button.
   await page.locator(".bottom-nav").getByRole("button", { name: "Roadmap" }).click();

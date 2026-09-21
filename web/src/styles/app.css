@@ -2203,14 +2203,20 @@ textarea.text-input {
   position: relative;
 }
 
+/* left/right: 0 only made the target taller — it keeps the button's intrinsic
+   width, and horizon labels are user-facing and variable. A short one such as
+   "Work" measured 28.8px across. min-width raises just those to 44px while the
+   long ones keep their own width; centring means a widened overlay grows 7-8px
+   into an 18px gap, so neighbours never overlap. */
 .horizon-pill::after {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 50%;
   top: 50%;
+  width: 100%;
+  min-width: 44px;
   height: 44px;
-  transform: translateY(-50%);
+  transform: translate(-50%, -50%);
 }
 
 .horizon-pill:hover { color: var(--ink, var(--text-primary)); }
