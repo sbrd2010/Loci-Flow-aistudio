@@ -96,6 +96,13 @@
      on Paper.
      Retheme only: no layout, no logic, no blocks changed. */
   --ground:         #171512;
+  /* Day Map is dark under EVERY theme, so the quiet ink has to be pinned here
+     as well. Paper defines --text-quiet at the root as dark ink for a light
+     page; var(--text-quiet, var(--text-muted)) then never reaches its fallback,
+     because the variable IS defined — just wrong for this canvas — and the
+     priority tags rendered #5c5a55 on #1e1b17 at 2.49:1. A var() fallback
+     guards against undefined, not against wrong-for-the-context. */
+  --text-quiet:     #8f887d;
   --surface:        #1e1b17;
   --divider:        #2e2a24;
   --control-edge:   #6b655c;

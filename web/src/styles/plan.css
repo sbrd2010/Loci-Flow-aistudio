@@ -273,7 +273,11 @@
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.12em;
-  color: var(--text-quiet, var(--text-muted));
+  /* Evening and Paper define --text-quiet; the thirteen legacy themes do not,
+     and their --text-muted is a deliberately faint tier that puts a 10px
+     kicker at 2.58:1 on Teal and 2.64:1 on Coral. --text-secondary is the
+     legible tier those themes actually intend for small labels. */
+  color: var(--text-quiet, var(--text-secondary));
 }
 
 /* Only the two that go somewhere are buttons; the current view is a span, and

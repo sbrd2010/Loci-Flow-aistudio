@@ -387,8 +387,9 @@
 
 /* Priority badges inside dark cards */
 /* The mono tag is declared once, at its base in dayMap.css, so that it covers
-   the unscheduled strip as well as the route cards. Nothing to restate here. */
-.dm-card .day-map-priority.p4 { background: rgba(255, 255, 255, 0.08); color: rgba(232, 238, 255, 0.50); border: 1px solid rgba(255,255,255,0.12); }
+   the unscheduled strip as well as the route cards. Nothing to restate here —
+   a P4 override used to sit on this line, below that very sentence, and kept
+   the legacy chip on exactly one of the four priorities. */
 
 /* ⋮ menu button */
 .dm-btn-menu {

@@ -2182,9 +2182,25 @@ textarea.text-input {
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--text-quiet, var(--text-muted));
+  /* Same legacy-theme fallback as .plan-view: --text-muted is the faint tier. */
+  color: var(--text-quiet, var(--text-secondary));
   white-space: nowrap;
   transition: color 0.15s;
+  /* And the same hit area. These are the only way to switch horizon, and as a
+     10px kicker with 4px padding they measured ~20px tall against the 44px
+     this codebase already applies elsewhere. Extended past the glyphs rather
+     than by growing the button, so the row keeps its proportions. */
+  position: relative;
+}
+
+.horizon-pill::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 44px;
+  transform: translateY(-50%);
 }
 
 .horizon-pill:hover { color: var(--ink, var(--text-primary)); }
@@ -2211,7 +2227,7 @@ textarea.text-input {
   font-weight: 400;
   letter-spacing: 0.12em;
   line-height: inherit;
-  color: var(--text-quiet, var(--text-muted));
+  color: var(--text-quiet, var(--text-secondary));
 }
 
 .pill-badge::before { content: "\00b7 "; }
