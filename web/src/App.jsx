@@ -33,7 +33,7 @@ import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCom
 import { celebrate } from "./utils/celebrations";
 import { safeUUID } from "./utils/uuid";
 import { submitOnEnter } from "./utils/formEvents";
-import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "./utils/activityLog";
+import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch, activityEventPath } from "./utils/activityLog";
 
 const EXTEND_DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
 
@@ -349,7 +349,8 @@ export default function App() {
     saveSubPath: rtdbSaveSub, saveSubPathAsync: rtdbSaveSubAsync,
     saveSubPaths: rtdbSaveSubs, saveSubPathsAsync: rtdbSaveSubsAsync,
     saveConfigPatch: rtdbSaveConfigPatch,
-    writeActivityEvents: rtdbWriteActivityEvents, captureTodaySnapshotIfNeeded: rtdbCaptureTodaySnapshot,
+    writeActivityEvents: rtdbWriteActivityEvents, writeActivityEventIfNewer: rtdbWriteActivityEventIfNewer,
+    captureTodaySnapshotIfNeeded: rtdbCaptureTodaySnapshot,
     flushNow: rtdbFlushNow, clearCache: rtdbClearCache,
   } = useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
@@ -369,6 +370,7 @@ export default function App() {
   // than needing a separate demo branch, so every write-path call site can
   // call them unconditionally regardless of demoMode.
   const writeActivityEvents = rtdbWriteActivityEvents;
+  const writeActivityEventIfNewer = rtdbWriteActivityEventIfNewer;
   const captureTodaySnapshotIfNeeded = rtdbCaptureTodaySnapshot;
   // Ledger event paths are keyed by the real Firebase uid — never build one
   // from a demo session (uid is null then, which is already the state
@@ -698,10 +700,22 @@ export default function App() {
           // orphaned terminal event. Only if nothing newer has already
           // started (live-ref check, not this closure's stale focusTimer).
           if (focusTimerRef.current.focusSessionId === session.focusSessionId) {
-            focusTimerRef.current.endFocusSession?.("user_abandoned");
+            const rolledBack = focusTimerRef.current.endFocusSession?.("user_abandoned");
             focusTimerRef.current.setIsTimerRunning?.(false);
             focusTimerRef.current.setIsFocusMode?.(false);
             focusTimerRef.current.setFocusSessionActive?.(false);
+            // If this session ran long enough to ring, the 00:00 hold already
+            // banked an entry for it. The pin it depended on has now been
+            // rejected, so the session never legitimately began — leaving the
+            // entry would credit minutes to work the ledger has no
+            // focus_started for. Deleting it is the same rollback as clearing
+            // the session state above, and `null` at the path is how RTDB's
+            // update() removes a key.
+            if (rolledBack?.eventId && rolledBack?.lociDateString) {
+              writeActivityEvents({
+                [activityEventPath(activityUid, rolledBack.lociDateString, rolledBack.eventId)]: null,
+              });
+            }
           }
         });
       setPendingFocusOpen(false);
@@ -733,11 +747,19 @@ export default function App() {
   // the user then finishes the task, the amend rewrites the type; if they
   // never come back, this stands and is correct as written.
   //
-  // The mark is taken BEFORE the write, deliberately: writeActivityEvents
-  // fails soft after retries, and pinning the identity first means the
-  // eventual stop amends that same path and simply creates the entry then.
-  // Marking only on success would let a failed bell write and a later stop
-  // become two entries, which is the one outcome that must never happen.
+  // The mark is taken BEFORE the write, deliberately: the write fails soft,
+  // and pinning the identity first means the eventual stop amends that same
+  // path and simply creates the entry then. Marking only on success would let
+  // a failed bell write and a later stop become two entries, which is the one
+  // outcome that must never happen.
+  //
+  // writeActivityEventIfNewer, not writeActivityEvents: this write and the
+  // amend target ONE path, and a bell write that fails transiently can still
+  // be mid-retry when the user finishes the session — landing after the amend
+  // and reverting the finished event to this provisional one. The guarded
+  // write compares utcTimestamp at the path and aborts when something newer
+  // is already there. The amends stay plain update() calls, because they are
+  // always the newest write for their session.
   //
   // Every bell re-banks, rather than the first one winning. A session that
   // rings, takes "+Nm" and rings again is ONE entry throughout — the pinned
@@ -753,7 +775,7 @@ export default function App() {
       ...session, windows: getFocusWindows(payload?.config || {}),
     });
     focusTimer.markFocusLedgerEntry(event);
-    writeActivityEvents(eventPatch(activityUid, event));
+    writeActivityEventIfNewer(event);
   }, [focusTimer.sessionCompletePending]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEndFocusSession = () => {

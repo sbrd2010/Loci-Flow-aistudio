@@ -3,7 +3,7 @@ import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } f
 import { db } from "./firebase";
 import { safeUUID } from "./utils/uuid";
 import { normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, configValuesEqual, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules, applyEditsSince } from "./utils/normalizePayload";
-import { activitySnapshotPath, activityMetaPath, buildTodaySnapshot } from "./utils/activityLog";
+import { activitySnapshotPath, activityMetaPath, activityEventPath, buildTodaySnapshot } from "./utils/activityLog";
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
 // This lets the app show specific messages at each stage instead of just "loading".
@@ -99,6 +99,45 @@ export async function writeActivityEvents(uid, pathsToValues, retries = 3) {
       }
       await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
     }
+  }
+}
+
+// Writes ONE activity event, but never over a newer one already at its path.
+//
+// The 00:00 hold (K4) pins an entry's path at the bell and amends it when the
+// session really ends. Those are two writes to one path, and writeActivityEvents
+// retries on a 500ms/1s backoff — so a bell write that fails transiently can
+// still be mid-retry when the user finishes the session, and would then land
+// AFTER the amend and clobber the final event back to the provisional payload.
+// update() is last-write-wins by arrival, which is the wrong order here.
+//
+// Guarded by runTransaction for the same reason captureTodaySnapshotIfNeeded is:
+// the decision has to be made against what is actually at the path, not what
+// this client last saw. utcTimestamp is the version — a later bell (a re-bank
+// after "+Nm") is newer and proceeds; a stale retry is older and aborts. The
+// amends themselves stay plain update() calls: they are always the newest write
+// for their session, so they need no guard and no call-site change.
+//
+// Standalone and uid-parameterized, same testability rationale as the two above.
+export async function writeActivityEventIfNewer(uid, event) {
+  if (!uid) return { ok: false, reason: "no-uid" };
+  if (!event?.eventId || !event?.lociDateString) return { ok: false, reason: "no-path" };
+  try {
+    const result = await runTransaction(
+      ref(db, activityEventPath(uid, event.lociDateString, event.eventId)),
+      (current) => {
+        // Abort (return undefined) when what's there is at least as new.
+        if (current && Number(current.utcTimestamp) >= Number(event.utcTimestamp)) return;
+        return event;
+      }
+    );
+    markInstrumentationStartedIfNeeded(uid); // fire-and-forget, as elsewhere
+    return { ok: true, committed: result.committed };
+  } catch (err) {
+    // Fails soft, same rationale as writeActivityEvents: an analytics write
+    // must never surface as if the user's action failed.
+    console.error("[Loci activity ledger] Guarded event write failed:", err);
+    return { ok: false, reason: "write-failed", error: err };
   }
 }
 
@@ -1041,6 +1080,7 @@ export function useSync(uid, email) {
     saveSubPaths, saveSubPathsAsync,
     saveConfigPatch,
     writeActivityEvents: (pathsToValues, retries) => writeActivityEvents(uid, pathsToValues, retries),
+    writeActivityEventIfNewer: (event) => writeActivityEventIfNewer(uid, event),
     captureTodaySnapshotIfNeeded: (tasks, windows) => captureTodaySnapshotIfNeeded(uid, tasks, windows),
     flushNow, clearCache,
   };
