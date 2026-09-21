@@ -1,4 +1,5 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import { readFocusSnapshot, focusSnapshotKey } from "../utils/focusRecovery";
 
 // Minimal React hooks mock, same pattern as useFocusAudio.test.js, so this
 // hook (which is App-level and not wrapped by a DOM renderer in this repo's
@@ -656,6 +657,50 @@ describe("useFocusTimer", () => {
       result.current.startFocusSession(t);
       rerender([[t], {}, "u1"]);
       expect(result.current.sessionCompletePending).toBe(false);
+    });
+
+    it("leaves an abandoned record alone on a fresh launch", () => {
+      // This hook's effects run before App's, so a mount that cleared storage
+      // merely because no session was open yet would delete the very record
+      // the recovery exists to read — silently disabling the whole feature.
+      const store = new Map();
+      globalThis.localStorage = {
+        getItem: (k) => (store.has(k) ? store.get(k) : null),
+        setItem: (k, v) => { store.set(k, String(v)); },
+        removeItem: (k) => { store.delete(k); },
+      };
+      store.set(focusSnapshotKey("u1"), JSON.stringify({ v: 1, uid: "u1", focusSessionId: "from-last-launch" }));
+
+      const t = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { rerender } = renderHook(useFocusTimer, [[t], {}, "u1"]);
+      rerender([[t], {}, "u1"]);
+
+      expect(readFocusSnapshot("u1")?.focusSessionId).toBe("from-last-launch");
+      delete globalThis.localStorage;
+    });
+
+    it("persists the open session, and clears it once that session ends", () => {
+      const store = new Map();
+      globalThis.localStorage = {
+        getItem: (k) => (store.has(k) ? store.get(k) : null),
+        setItem: (k, v) => { store.set(k, String(v)); },
+        removeItem: (k) => { store.delete(k); },
+      };
+
+      const t = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
+      const { result, rerender } = renderHook(useFocusTimer, [[t], {}, "u1"]);
+      result.current.startFocusSession(t);
+      rerender([[t], {}, "u1"]);
+
+      const saved = readFocusSnapshot("u1");
+      expect(saved.focusSessionId).toBe(result.current.focusSessionId);
+      expect(saved.task.uuid).toBe("a");
+      expect(saved.blockPlannedSeconds).toBe(25 * 60);
+
+      result.current.endFocusSession("user_abandoned");
+      rerender([[t], {}, "u1"]);
+      expect(readFocusSnapshot("u1")).toBeNull();
+      delete globalThis.localStorage;
     });
 
     it("keeps the first entry if the bell somehow marks twice", () => {

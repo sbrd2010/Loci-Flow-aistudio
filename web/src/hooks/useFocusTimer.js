@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotifications";
 import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete } from "../utils/focusSession";
 import { safeUUID } from "../utils/uuid";
+import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
+import { buildFocusSnapshot, writeFocusSnapshot, clearFocusSnapshot } from "../utils/focusRecovery";
 
 // Lifts the Focus timer state to the App level so it survives tab switches
 // (TodayTab unmounts when the user navigates to another tab) and can be
@@ -75,6 +77,15 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // instead of appending a second one. Lives and dies with focusSessionIdRef
   // — every site that clears one clears the other.
   const focusLedgerEntryRef = useRef(null);
+  // When the bell actually rang. deadlineRef is nulled the moment the timer
+  // stops, so without this the persisted record could not say when the block
+  // ended — and a recovery days later would have to guess, or file the
+  // minutes on the wrong Loci day.
+  const focusBellAtRef = useRef(null);
+  // Whether this mount has had a session of its own. Distinguishes "no session
+  // yet, on a fresh launch" from "the session just ended" — only the second
+  // should clear the persisted record.
+  const hadSessionRef = useRef(false);
   const [focusSessionId, setFocusSessionId] = useState(null);
   // Lets the activeTask-sync effect tell "switched to a different task" apart
   // from "same task, duration edited mid-session" (the two need different responses).
@@ -321,6 +332,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusSessionAccumulatedElapsedRef.current = 0;
     focusSessionAccumulatedPlannedRef.current = 0;
     focusLedgerEntryRef.current = null;
+    focusBellAtRef.current = null;
     setFocusSessionId(null);
 
     closePiP(); // Close pop-out on account switch
@@ -427,11 +439,70 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // fires even while the user is on Roadmap/MindBox/Coach/Settings.
   useEffect(() => {
     if (shouldTriggerSessionComplete({ isTimerRunning, timerSecondsLeft })) {
+      // Pin the hold's ledger identity HERE, not in the caller that writes it.
+      // Two writers can bank this block — App's bell observer now, and the
+      // recovery on a later launch if this process dies before that write
+      // lands — and they must agree on the path or the session is credited
+      // twice. Deriving the id from focusSessionId makes them agree by
+      // construction: a session has exactly one hold entry, so the session's
+      // own id names it, and neither writer has to learn it from the other.
+      if (focusSessionIdRef.current && !focusLedgerEntryRef.current) {
+        const bellAt = Date.now();
+        focusBellAtRef.current = bellAt;
+        // Through markFocusLedgerEntry, not by assigning the ref, so there is
+        // exactly one place that pins a hold's identity and one rule about
+        // never overwriting it. Effects run after the component body, so the
+        // const below is initialised by the time this reads it.
+        markFocusLedgerEntry({
+          eventId: focusSessionIdRef.current,
+          lociDateString: getLociDayStr(new Date(bellAt), getFocusWindows(config)),
+        });
+      }
       setIsTimerRunning(false);
       setSessionCompletePending(true);
       notifyFocusComplete(activeTask?.title);
     }
   }, [timerSecondsLeft, isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The session, on disk. localStorage is synchronous and survives process
+  // death, which is the one property Firebase's in-memory write queue does
+  // not have — so this is what lets a block that ran to its end be credited
+  // on the next launch even though the app was killed before anything could
+  // be written. Declared after the interval effect above so deadlineRef is
+  // already re-anchored for this commit when it is read here.
+  //
+  // Keyed on the transitions that change the session's SHAPE — it begins or
+  // ends, the timer starts or stops, the bell rings, the block's length
+  // changes — never on timerSecondsLeft, which would write every second for
+  // a figure the recovery can derive from the deadline anyway.
+  useEffect(() => {
+    if (!uid) return;
+    if (!focusSessionIdRef.current) {
+      // Only clear a record this mount actually wrote. On a fresh launch there
+      // is no session yet, and the record sitting in storage is precisely the
+      // abandoned one the recovery is about to read — clearing it here would
+      // delete the evidence before anyone looked at it, since this hook's
+      // effects run before App's.
+      if (hadSessionRef.current) clearFocusSnapshot(uid);
+      return;
+    }
+    hadSessionRef.current = true;
+    writeFocusSnapshot(uid, buildFocusSnapshot({
+      uid,
+      focusSessionId: focusSessionIdRef.current,
+      focusStartedAt: focusStartedAtRef.current,
+      focusInitialPlannedSeconds: focusInitialPlannedSecondsRef.current,
+      accumulatedElapsedSeconds: focusSessionAccumulatedElapsedRef.current,
+      accumulatedPlannedSeconds: focusSessionAccumulatedPlannedRef.current,
+      blockPlannedSeconds: timerMaxSeconds,
+      deadlineAt: deadlineRef.current,
+      bellAt: focusBellAtRef.current,
+      running: isTimerRunning,
+      rang: sessionCompletePending,
+      task: focusSessionTaskRef.current,
+      entry: focusLedgerEntryRef.current,
+    }));
+  }, [uid, focusSessionId, isTimerRunning, sessionCompletePending, timerMaxSeconds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stop timer automatically if the focused task is deleted or completed mid-session
   useEffect(() => {
@@ -588,6 +659,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusSessionAccumulatedElapsedRef.current = 0;
     focusSessionAccumulatedPlannedRef.current = 0;
     focusLedgerEntryRef.current = null;
+    focusBellAtRef.current = null;
     setFocusSessionId(sessionId);
     if (enterFocusMode) setIsFocusMode(true);
     setIsTimerRunning(true);
@@ -696,6 +768,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusSessionAccumulatedElapsedRef.current = 0;
     focusSessionAccumulatedPlannedRef.current = 0;
     focusLedgerEntryRef.current = null;
+    focusBellAtRef.current = null;
     setFocusSessionId(null);
     return result;
   };

@@ -6,6 +6,7 @@ import { isNativeApp, refreshNativePermission, addNativeNotificationClickListene
 import { signInWithGoogleNative } from "./utils/nativeAuth";
 import { isCheckinDue, buildCheckinResumeMessage, isDuplicateCheckinResume } from "./utils/coachCheckin";
 import { getFocusWindows, getLociDayStr } from "./utils/focusWindows";
+import { readFocusSnapshot, clearFocusSnapshot, recoverableFocusEntry } from "./utils/focusRecovery";
 import { buildWallCommitmentSave } from "./utils/dailyCoachCheckins";
 import { deriveCommitmentDeadlineMove } from "./utils/deadlineCountdown";
 import { createDemoPayload } from "./utils/demoData";
@@ -727,6 +728,50 @@ export default function App() {
     focusTimer.setIsFocusMode(true);
   };
 
+  // The other half of K4's promise: what the bell could not write.
+  //
+  // #382 banked the minutes when the bell rang, but only into Firebase's
+  // in-memory queue — the RTDB web client has no durable offline persistence,
+  // so a process killed during that write lost it, and a process killed
+  // BEFORE the bell lost the whole session. useFocusTimer now keeps a small
+  // record of the open session in localStorage, which does survive process
+  // death. This drains it.
+  //
+  // Runs once the account is known and settled. Safe to run against a session
+  // that was written after all, and safe to run twice: the entry's identity
+  // comes from the session id, so every attempt targets the same path, and
+  // writeActivityEventIfNewer refuses to replace an entry recording more work.
+  // Between them, recovery can only fill a gap — never double-count, never
+  // overwrite a fuller figure.
+  //
+  // Only a block that reached its end is credited. A session killed mid-block
+  // is left alone: we cannot know when the process died, and putting invented
+  // minutes in someone's own time log is worse than recording none.
+  //
+  // Waits for config, not for the sync state: what this needs from it is the
+  // Loci-day boundary (dayEndHour can be 26), and recovering against default
+  // windows would file a late-night block on the wrong day. Ledger writes
+  // elsewhere in this file are likewise not gated on sync confirmation.
+  const focusRecoveryDoneRef = useRef(false);
+  useEffect(() => {
+    if (!activityUid || !payload?.config || focusRecoveryDoneRef.current) return;
+    focusRecoveryDoneRef.current = true;
+    const snapshot = readFocusSnapshot(activityUid);
+    if (!snapshot) return;
+    // A session still open in THIS process is the live one the hook is
+    // already tracking, not an abandoned one — leave its record alone.
+    if (snapshot.focusSessionId === focusTimer.focusSessionId) return;
+    const owed = recoverableFocusEntry(snapshot, {
+      uid: activityUid,
+      windows: getFocusWindows(payload?.config || {}),
+    });
+    clearFocusSnapshot(activityUid);
+    if (!owed) return;
+    writeActivityEventIfNewer(
+      buildFocusTerminalEvent("focus_abandoned", owed.task, owed.focusSessionId, owed.options)
+    );
+  }, [activityUid, !!payload?.config]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // K4, the 00:00 hold: the ledger entry is written AT THE BELL, before
   // either button is touched — background, lock or kill the app and the
   // minutes are already banked. Until now the terminal event was written
@@ -771,10 +816,14 @@ export default function App() {
     if (!focusTimer.sessionCompletePending) return;
     const session = focusTimer.peekFocusSession("timer_elapsed");
     if (!session?.task) return;
+    // The identity is already pinned by the hook, at the bell, and arrives
+    // here through `...session` — App no longer mints it. That matters now
+    // that a second writer exists: the recovery on a later launch reads the
+    // same identity from the persisted record, so a bell write lost to a
+    // killed process is completed rather than duplicated.
     const event = buildFocusTerminalEvent("focus_abandoned", session.task, session.focusSessionId, {
       ...session, windows: getFocusWindows(payload?.config || {}),
     });
-    focusTimer.markFocusLedgerEntry(event);
     writeActivityEventIfNewer(event);
   }, [focusTimer.sessionCompletePending]); // eslint-disable-line react-hooks/exhaustive-deps
 
