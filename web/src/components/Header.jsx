@@ -1,7 +1,6 @@
 import React from "react";
-import ThemeSwitcher from "./ThemeSwitcher";
 
-export default function Header({ userName, onGoHome, theme, onThemeChange }) {
+export default function Header({ userName, onGoHome }) {
   // Show first name, fall back to first two letters of whatever was given
   const firstName = userName ? userName.split(" ")[0] : "";
   const display = firstName || "Me";
@@ -20,7 +19,6 @@ export default function Header({ userName, onGoHome, theme, onThemeChange }) {
         <span className="header-subtitle">Your daily focus companion.</span>
       </div>
       <div className="header-right">
-        <ThemeSwitcher theme={theme} onThemeChange={onThemeChange} />
         <span className="user-badge" style={{ fontWeight: "700" }}>
           {display}
         </span>

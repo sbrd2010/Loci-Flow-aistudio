@@ -33,6 +33,7 @@ import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCom
 import { celebrate } from "./utils/celebrations";
 import { safeUUID } from "./utils/uuid";
 import { submitOnEnter } from "./utils/formEvents";
+import { migrateStoredTheme, resolveTheme, watchColorScheme } from "./utils/theme";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch, activityEventPath } from "./utils/activityLog";
 
 const EXTEND_DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
@@ -52,10 +53,11 @@ export default function App() {
   const [preselectedHorizon, setPreselectedHorizon] = useState("today");
   const [editingTask, setEditingTask] = useState(null);
   const [fabExpanded, setFabExpanded] = useState(false);
+  // "light" | "dark" | "auto" — see utils/theme.js.
   const [theme, setTheme] = useState(() => {
-    const stored = localStorage.getItem("loci_theme") || "glassy";
-    const removed = ["sage", "option-b-linear", "option-f-chronos"];
-    return removed.includes(stored) ? "glassy" : stored;
+    let stored = null;
+    try { stored = localStorage.getItem("loci_theme"); } catch { /* storage blocked */ }
+    return migrateStoredTheme(stored);
   });
   const [roadmapView, setRoadmapView] = useState("plan");
   const [signingIn, setSigningIn] = useState(false);
@@ -245,8 +247,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("loci_theme", theme);
+    try { localStorage.setItem("loci_theme", theme); } catch { /* storage blocked */ }
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    const apply = () => document.documentElement.setAttribute("data-theme", resolveTheme(theme, !!media?.matches));
+    apply();
+    // Auto follows the device live, not just at launch.
+    if (theme !== "auto" || !media) return undefined;
+    return watchColorScheme(media, apply);
   }, [theme]);
 
   // Handle redirect sign-in result (iOS, Brave, and Android popup-blocked fallback)
@@ -1224,8 +1231,6 @@ export default function App() {
         <Header
           userName={demoMode ? "Demo User" : (payload?.config?.userName || user?.displayName || user?.email)}
           onGoHome={goToday}
-          theme={theme}
-          onThemeChange={setTheme}
         />
       )}
 

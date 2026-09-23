@@ -188,7 +188,7 @@
   pointer-events: none;
 }
 
-.dm-tl-segment.is-now { background: var(--gold-lift, var(--accent)); }
+.dm-tl-segment.is-now { background: var(--accent); }
 
 /* Node circle — hollow by default, filled only for the stop you are on.
    "Priority becomes a mono tag plus filled/hollow node": the route shows
@@ -210,8 +210,8 @@
   width: 16px;
   height: 16px;
   margin-top: 10px;
-  background: var(--gold-lift, var(--accent));
-  border-color: var(--gold-lift, var(--accent));
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 /* End cap */
@@ -230,7 +230,7 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 1.5px solid var(--gold-lift, var(--accent));
+  border: 1.5px solid var(--accent);
   opacity: 0.50;
   animation: dm-pulse 2.4s ease-in-out infinite;
   pointer-events: none;
@@ -247,7 +247,7 @@
   position: absolute;
   right: calc(100% + 2px);
   top: 9px;
-  background: var(--gold, var(--accent));
+  background: var(--accent);
   color: var(--button-text, #171512);
   border-radius: 4px;
   padding: 2px 5px;
@@ -302,7 +302,7 @@
 
 /* The stop you are on is the one thing the route highlights. */
 .dm-card-is-now {
-  border-left-color: var(--gold-lift, var(--accent));
+  border-left-color: var(--accent);
 }
 
 /* NOW card — one state treatment, not four priority ones. These selectors

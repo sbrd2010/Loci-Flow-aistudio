@@ -1,7 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { paintedBackdrop, contrastRatio, parseRgb } from "./helpers/pixels.js";
+import { THEME_CHOICES } from "../src/utils/theme.js";
 
 // The rethemed surfaces, checked against every theme a user can actually pick.
 //
@@ -26,20 +25,17 @@ import { paintedBackdrop, contrastRatio, parseRgb } from "./helpers/pixels.js";
 // non-transparent layer, then by ignoring background-image, which the glassy
 // theme uses for the radial gradients behind these very kickers.
 
-// The themes come from the switcher itself, so a theme added there is covered
-// here without anyone remembering to update a list. An earlier hardcoded array
-// silently omitted four.
-const THEMES = [...readFileSync(
-  fileURLToPath(new URL("../src/components/ThemeSwitcher.jsx", import.meta.url)), "utf8",
-).matchAll(/\{\s*id:\s*"([^"]+)"/g)].map((m) => m[1]);
+// The themes come from utils/theme.js, so a theme added there is covered here
+// without anyone remembering to update a list. An earlier hardcoded array
+// silently omitted four. Auto is not a palette of its own — it resolves to
+// Light or Dark — so it gets the behaviour test at the bottom instead.
+const THEMES = THEME_CHOICES.filter((t) => t !== "auto");
 
 const MIN_CONTRAST = 4.5;
 const MIN_TOUCH_PX = 44;
 
-test("the theme list is read from the switcher, not guessed", () => {
-  expect(THEMES.length).toBeGreaterThanOrEqual(15);
-  expect(THEMES).toContain("evening");
-  expect(THEMES).toContain("option-e-slate");
+test("the theme list is read from utils/theme.js, not guessed", () => {
+  expect(THEMES).toEqual(["light", "dark"]);
 });
 
 async function enterDemo(page, theme) {
@@ -124,3 +120,14 @@ for (const theme of THEMES) {
       `horizon kicker hit area on ${theme}`).toBeGreaterThanOrEqual(MIN_TOUCH_PX);
   });
 }
+
+// Auto follows the device, live: flipping the OS setting while the app is open
+// repaints it without a reload.
+test("auto follows the device's dark-mode setting", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await enterDemo(page, "auto");
+  const html = page.locator("html");
+  await expect(html).toHaveAttribute("data-theme", "dark");
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(html).toHaveAttribute("data-theme", "light");
+});
