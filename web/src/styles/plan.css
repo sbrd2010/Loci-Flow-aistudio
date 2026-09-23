@@ -30,7 +30,7 @@
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--gold-deep, var(--accent));
+  color: var(--accent);
 }
 /* The design gives this button nowrap + no shrink: "New front" wrapping to two
    lines is what breaks this header at 320px. */
@@ -80,7 +80,7 @@
   border-radius: 0;
 }
 .plan-new-input:focus-visible {
-  outline: 2px solid var(--gold, var(--accent));
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .plan-new-actions { display: flex; gap: 8px; }
@@ -90,14 +90,14 @@
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 600;
-  color: var(--paper, var(--btn-text, #fff));
-  background: var(--ink, var(--text-primary));
+  color: var(--on-accent);
+  background: var(--accent);
   border: 1px solid transparent;
   border-radius: var(--radius-sm, 4px);
   cursor: pointer;
 }
 .plan-new-commit:disabled { opacity: 0.45; cursor: not-allowed; }
-.plan-new-commit:not(:disabled):hover { background: var(--ink-hover, var(--text-secondary)); }
+.plan-new-commit:not(:disabled):hover { background: var(--accent-edge); }
 .plan-new-cancel {
   min-height: 44px;
   padding: 0 14px;
@@ -169,7 +169,7 @@
   background: var(--divider, var(--border));
 }
 /* A gold rule marks the front you are actually on. */
-.plan-front.is-lead .plan-front-rule { background: var(--gold, var(--accent)); }
+.plan-front.is-lead .plan-front-rule { background: var(--accent); }
 .plan-front-move-text {
   min-width: 0;
   font-size: 14px;
@@ -195,7 +195,7 @@
 }
 .plan-front-fill {
   height: 100%;
-  background: var(--gold, var(--accent));
+  background: var(--accent);
   transition: width 0.18s ease-out;
 }
 .plan-front-figure {
@@ -223,7 +223,7 @@
 }
 .plan-front-close:hover { color: var(--clay, var(--warning)); }
 .plan-front-close:focus-visible {
-  outline: 2px solid var(--gold, var(--accent));
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -306,18 +306,18 @@ button.plan-view::after {
 button.plan-view:hover { color: var(--ink, var(--text-primary)); }
 
 button.plan-view:focus-visible {
-  outline: 2px solid var(--gold, var(--accent));
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 
 /* The view you are on: named in ink, underlined in gold. One accent. */
 .plan-view.is-active {
   color: var(--ink, var(--text-primary));
-  box-shadow: inset 0 -2px 0 var(--gold, var(--accent));
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .plan-view:focus-visible {
-  outline: 2px solid var(--gold, var(--accent));
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 
@@ -383,7 +383,7 @@ button.plan-view:focus-visible {
   cursor: pointer;
 }
 .plan-loose-assign:focus-visible {
-  outline: 2px solid var(--gold, var(--accent));
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -400,9 +400,9 @@ button.plan-view:focus-visible {
   font-weight: 600;
   color: var(--ink, var(--text-primary));
   background: transparent;
-  border: 1px solid var(--gold, var(--accent));
+  border: 1px solid var(--accent);
   border-radius: var(--radius-sm, 4px);
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.plan-scattered:hover { background: var(--gold-tint, var(--accent-light)); }
+.plan-scattered:hover { background: var(--accent-tint); }

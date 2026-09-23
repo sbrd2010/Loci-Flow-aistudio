@@ -6,14 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Loci Focus — Your daily focus companion</title>
     <meta name="description" content="Loci Focus helps you break through inertia, protect your focus, and build daily momentum — one committed task at a time." />
-    <!-- Apply theme instantly to prevent flash of unstyled content -->
-    <script>(function(){var t=localStorage.getItem('loci_theme')||'glassy';document.documentElement.setAttribute('data-theme',t);})()</script>
-    <!-- Montserrat (headings/identity) + Inter (body/UI) + Space Mono (timer/stats) + Playfair Display (classic theme) -->
+    <!-- Apply theme instantly to prevent a flash of the wrong theme.
+         Mirrors migrateStoredTheme + resolveTheme in src/utils/theme.js;
+         theme.test.js runs this script to keep the two in step. -->
+    <script id="theme-boot">(function(){var t=null;try{t=localStorage.getItem('loci_theme');}catch(e){}var c=t==='light'||t==='dark'||t==='auto'?t:!t?'auto':['glassy','evening','midnight-neon','regal-amethyst','option-e-slate'].indexOf(t)>=0?'dark':'light';var d=c==='auto'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):c;document.documentElement.setAttribute('data-theme',d);})()</script>
+    <!-- Manrope (UI) + Lora (coach replies, long reading) + Space Mono (times, counts, kickers) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Focus Sounds CDN variations are hosted on jsDelivr; warm the connection early -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@600;700;800&family=Space+Mono:wght@400;700&family=Playfair+Display:wght@400;600;700;800&family=Manrope:wght@400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Cormorant+Garamond:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   </head>
   <body>
     <div id="root"></div>

@@ -50,7 +50,7 @@
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--gold-deep, var(--accent));
+  color: var(--accent);
 }
 
 .week-sentence {
@@ -93,7 +93,7 @@
   transition: height 0.18s ease-out;
 }
 /* Today is the only bar that carries the accent. */
-.week-bar.is-today { background: var(--gold, var(--accent)); }
+.week-bar.is-today { background: var(--accent); }
 .week-tick {
   margin-top: 7px;
   font-family: var(--font-mono);
@@ -109,7 +109,7 @@
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--gold-deep, var(--accent));
+  color: var(--accent);
 }
 .week-rows { margin: 12px 0 0; padding: 0; list-style: none; }
 .week-row {
@@ -169,12 +169,12 @@
   font-weight: 600;
   color: var(--ink, var(--text-primary));
   background: transparent;
-  border: 1px solid var(--gold, var(--accent));
+  border: 1px solid var(--accent);
   border-radius: var(--radius-sm, 4px);
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.week-block:hover { background: var(--gold-tint, var(--accent-light)); }
+.week-block:hover { background: var(--accent-tint); }
 
 .week-old-link {
   display: block;
@@ -186,7 +186,7 @@
   color: var(--text-quiet, var(--text-muted));
   background: transparent;
   border: 0;
-  border-bottom: 1px solid var(--gold, var(--accent));
+  border-bottom: 1px solid var(--accent);
   cursor: pointer;
 }
 .week-old-link:hover { color: var(--ink, var(--text-primary)); }

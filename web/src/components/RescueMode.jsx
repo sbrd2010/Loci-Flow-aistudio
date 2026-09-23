@@ -238,7 +238,7 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
   // ─── shared elements ────────────────────────────────────────────────────────
   const overlay = { position: "fixed", inset: 0, background: "#000", zIndex: 9999,
     display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-    fontFamily: "'Inter', system-ui, sans-serif", padding: "24px", overflowY: "auto" };
+    fontFamily: "var(--font-sans)", padding: "24px", overflowY: "auto" };
 
   const badge = (
     <div style={{ background: "#fecb00", color: "#000", padding: "4px 14px", fontSize: "10px",

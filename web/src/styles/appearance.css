@@ -11,7 +11,7 @@
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--gold-deep, var(--accent));
+  color: var(--accent);
   margin-bottom: 4px;
 }
 
@@ -37,45 +37,35 @@
   color: var(--text-quiet, var(--text-muted));
 }
 
-/* — the two named themes — */
+/* — Theme: a segmented control (turn 44b). Options are 44px, not the
+   drawn 40, to meet the 44px tap-target rule (Addendum AA). — */
 .appearance-themes {
   display: flex;
-  gap: 8px;
-  padding-bottom: 4px;
+  width: 220px;
+  max-width: 100%;
+  padding: 3px;
+  margin-bottom: 4px;
+  background: var(--panel);
+  border-radius: 8px;
 }
 .appearance-theme {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-height: 56px;
-  padding: 10px 12px;
-  text-align: left;
+  min-height: 44px;
   font-family: var(--font-sans);
-  color: var(--ink, var(--text-primary));
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink-2);
   background: transparent;
-  border: 1px solid var(--divider, var(--border));
-  border-radius: var(--radius-sm, 4px);
+  border: 0;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background 0.15s ease, box-shadow 0.15s ease;
 }
-.appearance-theme:hover { background: var(--hover-paper, var(--bg-card-hover)); }
-/* A border means "act on this"; the chosen one carries the gold. */
 .appearance-theme.is-active {
-  border-color: var(--gold, var(--accent));
-  box-shadow: inset 0 0 0 1px var(--gold, var(--accent));
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
-.appearance-theme-name { font-size: 14px; font-weight: 600; }
-.appearance-theme-blurb {
-  font-size: 12px;
-  color: var(--text-quiet, var(--text-muted));
+.appearance-theme:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
-
-.appearance-other {
-  margin: 10px 0 0;
-  font-family: var(--font-serif, var(--font-sans));
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: var(--text-quiet, var(--text-muted));
-}
-
