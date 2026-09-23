@@ -44,7 +44,6 @@
   width: 220px;
   max-width: 100%;
   padding: 3px;
-  margin-bottom: 4px;
   background: var(--panel);
   border-radius: 8px;
 }
@@ -64,6 +63,13 @@
   color: var(--ink);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+}
+/* The line under the control (turn 49, 44b). */
+.appearance-theme-note {
+  margin: 6px 0 4px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-2);
 }
 .appearance-theme:focus-visible {
   outline: 2px solid var(--accent);
