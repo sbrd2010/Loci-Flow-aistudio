@@ -40,7 +40,7 @@ test("mobile reliability: Coach chat sends reasoning_effort low to Groq", async 
 
   await enterDemo(page);
 
-  await page.locator(".bottom-nav").getByRole("button", { name: "AI Coach" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
   await expect(page.getByRole("heading", { name: /Chat with/ })).toBeVisible({ timeout: 8_000 });
 
   await page.getByPlaceholder(/Shift\+Enter for a new line/).fill("I feel a bit scattered right now");
@@ -95,7 +95,7 @@ test("mobile reliability: Coach chat never reaches the AI provider on crisis lan
   }
 
   await enterDemo(page);
-  await page.locator(".bottom-nav").getByRole("button", { name: "AI Coach" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
 
   const composer = page.getByPlaceholder(/Shift\+Enter for a new line/);
   await expect(composer).toBeVisible({ timeout: 10_000 });
@@ -131,7 +131,7 @@ test("mobile reliability: Coach still reaches the provider for an ordinary messa
   }
 
   await enterDemo(page);
-  await page.locator(".bottom-nav").getByRole("button", { name: "AI Coach" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
   const composer = page.getByPlaceholder(/Shift\+Enter for a new line/);
   await expect(composer).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(1500);

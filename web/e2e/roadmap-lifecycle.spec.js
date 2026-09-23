@@ -21,7 +21,7 @@ async function enterDemo(page) {
 }
 
 async function openRoadmap(page) {
-  await page.locator(".bottom-nav").getByRole("button", { name: "Roadmap" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
   await page.getByRole("button", { name: "HORIZONS" }).click();
   await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible({ timeout: 8_000 });
 }
@@ -80,7 +80,7 @@ test("reliability: roadmap task can be added, edited, and moved to Today", async
   await page.getByRole("button", { name: /Move to Today/i }).click();
   await expect(roadmapCard(page, editedTitle)).not.toBeVisible({ timeout: 5_000 });
 
-  await page.locator(".bottom-nav").getByRole("button", { name: "Today" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
   await expect(page.getByTestId("today-tasks-list").getByText(editedTitle)).toBeVisible({ timeout: 5_000 });
 });
 

@@ -75,7 +75,7 @@ test("mobile reliability: Deep Focus overlay supports pause, resume, and brain-d
   await overlay.getByLabel("Exit focus mode").click();
   await expect(overlay).not.toBeVisible({ timeout: 5_000 });
 
-  await page.locator(".bottom-nav").getByRole("button", { name: "Mind Box" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Mind Box", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 8_000 });
   // Brain dump items live in inbox only — open it to verify the captured thought is there
   await page.getByTestId("brain-dump-inbox-btn").click();
@@ -305,7 +305,7 @@ test("mobile reliability: Opening Rescue chat without typing still hands off con
   await expect(page.getByRole("heading", { name: "What's happening right now?" })).not.toBeVisible({ timeout: 5_000 });
 
   groqRequestBodies.length = 0;
-  await page.locator(".bottom-nav").getByRole("button", { name: "AI Coach" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
   await expect(page.getByRole("heading", { name: /Chat with/ })).toBeVisible({ timeout: 8_000 });
   await page.getByPlaceholder(/Shift\+Enter for a new line/).fill("I feel a bit scattered right now");
   await page.getByRole("button", { name: "Send" }).click();

@@ -20,7 +20,7 @@ import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
 import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
-import { getFocusWindows, getRemainingFocusMinutes } from "../utils/focusWindows";
+import { getFocusWindows } from "../utils/focusWindows";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import {
   getValidCommittedTaskIds, committedTaskIdsForDay,
@@ -41,20 +41,6 @@ import { CSS } from "@dnd-kit/utilities";
 // "split it". Five minutes, the same length ScatteredFlow's "Just 5 minutes"
 // starts — not the task's own estimate.
 const LOW_ENERGY_SESSION_SECONDS = 5 * 60;
-
-// The wall header: "SAT, JUN 15 · 8h19m LEFT". Both figures change at most
-// once a minute, so they are built together on a minute tick rather than
-// recomputed on every render.
-function buildWallHeader(now, windows) {
-  const mins = Math.round(getRemainingFocusMinutes(now, windows));
-  const h = Math.floor(mins / 60);
-  return {
-    dateLabel: now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).toUpperCase(),
-    hoursLeftLabel: mins <= 0 ? null
-      : h > 0 ? `${h}h${String(mins % 60).padStart(2, "0")}m LEFT`
-      : `${mins}m LEFT`,
-  };
-}
 
 const PencilIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -289,21 +275,6 @@ export default function TodayTab({
   const todayShownSlots = getTodayShownSlots(config, anchorTodayStr);
   const anchorsCheckedCount = anchors.filter(a => todayCheckedIds.includes(a.id)).length;
   const todayShownSlotsKey = todayShownSlots.join(",");
-  // The wall header's two live figures, refreshed once a minute.
-  //
-  // This replaces a one-second interval that also maintained a seconds-precise
-  // clock string and a timeline progress fraction. Both stopped being rendered
-  // when the greeting-clock-quote card and the Focus Window strip went, so
-  // what was left was a full TodayTab and task-list re-render every second, on
-  // a phone, to keep state nothing read up to date. Neither figure here has
-  // sub-minute precision to lose.
-  const [wallHeader, setWallHeader] = useState(() => buildWallHeader(new Date(), windows));
-  useEffect(() => {
-    const tick = () => setWallHeader(buildWallHeader(new Date(), windows));
-    tick();
-    const id = setInterval(tick, 60000);
-    return () => clearInterval(id);
-  }, [config.dayStartHour, config.dayEndHour, config.focusWindows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const container = document.querySelector('.screen-content');
@@ -987,8 +958,6 @@ export default function TodayTab({
   // with no front, that is the legacy key deadline, as the deleted strip
   // showed. An overdue deadline is not "days left".
   const wallDaysLeft = commitmentDaysLeft(wallKickerFront, new Date());
-  const wallDateLabel = wallHeader.dateLabel;
-  const wallHoursLeft = wallHeader.hoursLeftLabel;
   const openAcrossFronts = (tasks || []).filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked).length;
   // A session left running behind the overlay is REOPENED by the wall, not
   // restarted (see startFocusAndLog) — so the chip has to name the time that
@@ -1187,8 +1156,6 @@ export default function TodayTab({
         task={pinnedFocusTask}
         frontName={wallFrontName}
         daysLeft={wallDaysLeft}
-        dateLabel={wallDateLabel}
-        hoursLeftLabel={wallHoursLeft}
         focusMinutes={Number(pinnedFocusTask?.timeEstimateMinutes) > 0 ? Number(pinnedFocusTask.timeEstimateMinutes) : 25}
         peekOpen={peekOpen}
         onTogglePeek={() => setPeekOpen(v => !v)}

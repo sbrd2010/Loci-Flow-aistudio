@@ -32,7 +32,7 @@ async function expectNoHorizontalOverflow(page) {
       document.documentElement.scrollWidth,
       document.body?.scrollWidth || 0,
     ];
-    document.querySelectorAll(".app-container, .screen-content, .card, .bottom-nav").forEach((el) => {
+    document.querySelectorAll(".app-container, .screen-content, .card, .tab-bar").forEach((el) => {
       measured.push(el.scrollWidth);
     });
     return {
@@ -44,8 +44,14 @@ async function expectNoHorizontalOverflow(page) {
   expect(widths.maxScrollWidth).toBeLessThanOrEqual(widths.innerWidth + 8);
 }
 
+// The four tabs are in the main navigation (the bottom bar on phones and
+// tablets, the header on a laptop); Settings is the header's gear.
 async function openTab(page, name) {
-  await page.getByRole("button", { name }).click();
+  if (name === "Settings") {
+    await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+    return;
+  }
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name, exact: true }).click();
 }
 
 for (const viewport of MOBILE_VIEWPORTS) {
@@ -59,7 +65,7 @@ for (const viewport of MOBILE_VIEWPORTS) {
     // board is one tap behind it. Both need the overflow guard — Plan's header
     // puts a title and a "New front" button on one row, which is exactly the
     // kind of thing that overflows at 320px.
-    await openTab(page, "Roadmap");
+    await openTab(page, "Plan");
     await expect(page.locator(".plan-tab")).toBeVisible({ timeout: 8_000 });
     await expect(page.getByText("ONE NEXT MOVE EACH")).toBeVisible({ timeout: 8_000 });
     await expectNoHorizontalOverflow(page);
@@ -73,7 +79,7 @@ for (const viewport of MOBILE_VIEWPORTS) {
     await expect(page.locator(".braindump-input").first()).toBeVisible({ timeout: 8_000 });
     await expectNoHorizontalOverflow(page);
 
-    await openTab(page, "AI Coach");
+    await openTab(page, "Coach");
     await expect(page.getByRole("heading", { name: /Chat with/i })).toBeVisible({ timeout: 8_000 });
     await expect(page.getByRole("heading", { name: "AI Focus Brief" })).toBeVisible({ timeout: 8_000 });
     await expectNoHorizontalOverflow(page);

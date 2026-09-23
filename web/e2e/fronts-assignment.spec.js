@@ -25,7 +25,7 @@ async function enterDemo(page) {
 }
 
 async function openPlan(page) {
-  await page.locator(".bottom-nav").getByRole("button", { name: "Roadmap" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
   await expect(page.locator(".plan-tab")).toBeVisible({ timeout: 10_000 });
 }
 
@@ -74,7 +74,7 @@ test("mobile reliability: assignment survives leaving and re-entering Plan", asy
 
   // Leaving Plan and coming back must not lose it — the write went to the
   // payload, not to component state.
-  await page.locator(".bottom-nav").getByRole("button", { name: "Today" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
   await openPlan(page);
   await expect(front.locator(".plan-front-move-text")).toHaveText(taskTitle);
   await expect(front.locator(".plan-front-figure")).toHaveText("0/1");
@@ -112,7 +112,7 @@ test("mobile reliability: the task dialog shows a task's front and can change it
 
   // Open that task's editor from Today and confirm the field reflects reality
   // rather than defaulting to blank.
-  await page.locator(".bottom-nav").getByRole("button", { name: "Today" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
   const row = page.locator("[data-testid='task-row']", { hasText: taskTitle }).first();
   await row.scrollIntoViewIfNeeded();
   await row.locator(".task-row-top").click();

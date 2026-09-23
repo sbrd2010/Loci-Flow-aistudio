@@ -196,7 +196,7 @@ test("13. Brain dump long-note gate — move as-is lands in horizon", async ({ p
   await enterDemo(page);
 
   // Navigate to Roadmap and open Brain Dump Inbox
-  await page.locator(".bottom-nav").getByRole("button", { name: "Roadmap" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
   await page.getByRole("button", { name: "HORIZONS" }).click();
   await page.getByRole("tab", { name: /Inbox/ }).click();
 
@@ -224,7 +224,7 @@ test("13. Brain dump long-note gate — move as-is lands in horizon", async ({ p
 test("14. Brain dump inbox delete (Roadmap) requires confirmation before removing an item", async ({ page }) => {
   await enterDemo(page);
 
-  await page.locator(".bottom-nav").getByRole("button", { name: "Roadmap" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
   await page.getByRole("button", { name: "HORIZONS" }).click();
   await page.getByRole("tab", { name: /Inbox/ }).click();
 
@@ -281,10 +281,9 @@ test("12. The deadline strip is gone; its information moved onto the wall", asyn
   await expect(page.getByTestId("deadline-done-btn")).toHaveCount(0);
   await expect(page.getByText("TODAY'S MOVE")).toHaveCount(0);
 
-  // What it carried is now on the wall: one time-remaining figure for the
-  // screen, and the day count beside it.
-  // Lowercase in the DOM; text-transform only changes how it renders.
-  await expect(page.locator(".wall-head-when")).toContainText(/\d+h\d+m LEFT/i);
+  // What it carried is still on screen: the time remaining, now in the app
+  // header (turn 37), and the day count on the wall.
+  await expect(page.locator(".shell-clock")).toContainText(/\d+h\d+m LEFT/);
   await expect(page.locator(".wall-head-days")).toContainText(/^\d+d$/);
 
   // And the commitment itself is the "today's move" — no separate line for it.

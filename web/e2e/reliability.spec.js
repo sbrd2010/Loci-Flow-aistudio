@@ -19,11 +19,11 @@ async function enterDemo(page) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
 }
 
-// Scoped to .bottom-nav so this never collides with in-page buttons that
+// Scoped to the main navigation so this never collides with in-page buttons that
 // happen to contain a tab's name in their own label (e.g. Mind Box's "N
 // notes → Roadmap Inbox" deep-link button).
 async function openTab(page, name) {
-  await page.locator(".bottom-nav").getByRole("button", { name }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name, exact: true }).click();
 }
 
 function taskRowByTitle(page, title) {
@@ -63,7 +63,7 @@ test("reliability: today task can be moved to the roadmap", async ({ page }) => 
   await row.getByText("This Week").click();
 
   await expect(tasksList.getByText(title)).not.toBeVisible({ timeout: 5_000 });
-  await openTab(page, "Roadmap");
+  await openTab(page, "Plan");
   await page.getByRole("button", { name: "HORIZONS" }).click();
   await expect(page.getByText(title)).toBeVisible({ timeout: 5_000 });
 });
@@ -82,7 +82,7 @@ test("reliability: parked roadmap tasks are hidden after Bad Day Reset", async (
   await row.getByText("This Week").click();
 
   await expect(tasksList.getByText(title)).not.toBeVisible({ timeout: 5_000 });
-  await openTab(page, "Roadmap");
+  await openTab(page, "Plan");
   await page.getByRole("button", { name: "HORIZONS" }).click();
   await expect(page.getByText(title)).toBeVisible({ timeout: 5_000 });
 
@@ -90,7 +90,7 @@ test("reliability: parked roadmap tasks are hidden after Bad Day Reset", async (
   await page.getByRole("button", { name: /Bad Day Reset/ }).click();
   await page.getByRole("button", { name: "Yes, restart" }).click();
 
-  await openTab(page, "Roadmap");
+  await openTab(page, "Plan");
   await page.getByRole("button", { name: "HORIZONS" }).click();
   await expect(page.getByText(title)).not.toBeVisible({ timeout: 5_000 });
 });
@@ -131,7 +131,7 @@ test("reliability: brain dump item survives tab switch and is browsable via Road
 
   // Switch away and back — item must survive the tab switch
   await openTab(page, "Mind Box");
-  await openTab(page, "Roadmap");
+  await openTab(page, "Plan");
   await page.getByRole("button", { name: "HORIZONS" }).click();
   await page.getByRole("tab", { name: /Inbox/ }).click();
   await expect(dumpItem).toBeVisible({ timeout: 5_000 });

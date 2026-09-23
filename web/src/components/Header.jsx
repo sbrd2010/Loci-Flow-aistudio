@@ -1,27 +1,50 @@
 import React from "react";
+import { TABS } from "./BottomNav";
+import { IconSettings } from "./ui/icons";
+import "../styles/shell.css";
 
-export default function Header({ userName, onGoHome }) {
-  // Show first name, fall back to first two letters of whatever was given
-  const firstName = userName ? userName.split(" ")[0] : "";
-  const display = firstName || "Me";
-
+// The header on every screen (turns 37, 41): the wordmark, the tabs on a
+// laptop, the day's date and time left, and the Settings gear. On phones and
+// tablets Settings has no tab, so the gear hides while you are in it and a tab
+// takes you back; on a laptop it stays, marked as the current page.
+export default function Header({ activeTab, onTabSelect, onGoHome, dayClock }) {
+  const inSettings = activeTab === "settings";
   return (
-    <header className="app-header">
-      <div
-        className="app-brand"
-        onClick={onGoHome}
-        style={{ cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0px" }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ fontSize: "26px" }}>🧠</span>
-          <span style={{ fontSize: "24px", fontWeight: "900", fontFamily: "var(--font-display)" }}>Loci</span>
-        </div>
-        <span className="header-subtitle">Your daily focus companion.</span>
-      </div>
-      <div className="header-right">
-        <span className="user-badge" style={{ fontWeight: "700" }}>
-          {display}
+    <header className={`shell-header${inSettings ? " is-settings" : ""}`}>
+      <button type="button" className="shell-wordmark" onClick={onGoHome}>Loci</button>
+
+      <nav className="shell-tabs" aria-label="Main navigation">
+        {TABS.map(({ id, label, Icon }) => {
+          const isActive = activeTab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              className={`shell-tab${isActive ? " is-active" : ""}`}
+              onClick={() => onTabSelect(id)}
+              aria-current={isActive ? "page" : undefined}
+            >
+              <Icon size={18} />
+              {label}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="shell-end">
+        <span className="shell-clock">
+          {dayClock.date}
+          {dayClock.left && <> · <span className="shell-clock-left">{dayClock.left}</span> LEFT</>}
         </span>
+        <button
+          type="button"
+          className={`shell-gear${inSettings ? " is-active" : ""}`}
+          onClick={() => onTabSelect("settings")}
+          aria-label="Settings"
+          aria-current={inSettings ? "page" : undefined}
+        >
+          <IconSettings size={21} />
+        </button>
       </div>
     </header>
   );
