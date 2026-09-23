@@ -845,7 +845,7 @@ textarea.text-input {
 
 .braindump-submit:hover {
   background: var(--bg-secondary);
-  color: var(--accent-dark);
+  color: var(--accent);
 }
 
 /* Today's Tasks Section & Rows */

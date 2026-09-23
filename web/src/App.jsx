@@ -33,7 +33,7 @@ import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCom
 import { celebrate } from "./utils/celebrations";
 import { safeUUID } from "./utils/uuid";
 import { submitOnEnter } from "./utils/formEvents";
-import { migrateStoredTheme, resolveTheme } from "./utils/theme";
+import { migrateStoredTheme, resolveTheme, watchColorScheme } from "./utils/theme";
 import { buildDayClock } from "./utils/dayClock";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch, activityEventPath } from "./utils/activityLog";
 
@@ -254,8 +254,7 @@ export default function App() {
     apply();
     // Auto follows the device live, not just at launch.
     if (theme !== "auto" || !media) return undefined;
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
+    return watchColorScheme(media, apply);
   }, [theme]);
 
   // Handle redirect sign-in result (iOS, Brave, and Android popup-blocked fallback)

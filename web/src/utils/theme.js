@@ -27,3 +27,15 @@ export function resolveTheme(choice, prefersDark) {
   if (choice === "auto") return prefersDark ? "dark" : "light";
   return choice === "dark" ? "dark" : "light";
 }
+
+// Calls onChange whenever the device's dark-mode setting flips; returns the
+// unsubscribe. MediaQueryList.addEventListener arrived in Safari 14, so older
+// iOS gets the deprecated addListener instead of a throw.
+export function watchColorScheme(media, onChange) {
+  if (typeof media.addEventListener === "function") {
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }
+  media.addListener(onChange);
+  return () => media.removeListener(onChange);
+}
