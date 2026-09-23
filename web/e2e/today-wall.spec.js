@@ -481,3 +481,20 @@ test("mobile reliability: the peek's + adds a task to Today", async ({ page }) =
   await page.locator(".wall-peek").click();
   await expect(page.getByTestId("today-tasks-list").getByText("Peek plus seed task")).toBeVisible({ timeout: 5_000 });
 });
+
+// A row in Drag anywhere mode is a focusable <div>, and its Space starts a
+// keyboard reorder. The wall must not also start a session from it.
+test("laptop: the wall's keys stay quiet on any focused control", async ({ page }) => {
+  await enterLaptop(page);
+  await page.evaluate(() => {
+    const row = document.createElement("div");
+    row.id = "row-probe";
+    row.tabIndex = 0;
+    document.body.appendChild(row);
+  });
+  await page.locator("#row-probe").focus();
+  await page.keyboard.press(" ");
+  await page.keyboard.press("d");
+  await expect(page.locator(".focus-mode-overlay")).toHaveCount(0);
+  await expect(page.locator(".wall-done-line")).toHaveCount(0);
+});

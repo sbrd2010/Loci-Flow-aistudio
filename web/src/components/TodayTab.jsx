@@ -1039,13 +1039,17 @@ export default function TodayTab({
   useEffect(() => {
     if (wallKeysBlocked) return undefined;
     const onKey = (e) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
       const el = e.target;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      const isNative = el && /^(BUTTON|A)$/.test(el.tagName);
+      // Any other focused control — a row in Drag anywhere mode is a
+      // focusable <div> whose keys drive a keyboard reorder, not the wall.
+      if (el && !isNative && el !== document.body && el !== document.documentElement && el.tabIndex >= 0) return;
       const key = e.key.toLowerCase();
-      // Only Space would also press a focused control; letters would not, and
-      // a tap on "Hide list" leaves focus on it.
-      if (key === " " && el && /^(BUTTON|A)$/.test(el.tagName)) return;
+      // On a button or link only Space would also press it; letters would
+      // not, and a tap on a control leaves focus on it.
+      if (key === " " && isNative) return;
       if (key === "n" && onOpenAddTask) {
         e.preventDefault();
         onOpenAddTask();
