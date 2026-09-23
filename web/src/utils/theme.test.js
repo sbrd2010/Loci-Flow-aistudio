@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { THEME_CHOICES, migrateStoredTheme, resolveTheme } from "./theme";
+import { THEME_CHOICES, migrateStoredTheme, resolveTheme, watchColorScheme } from "./theme";
 
 const OLD_THEMES = [
   "glassy", "coral", "teal", "polymer", "editorial", "midnight-neon", "solar-ember",
@@ -70,5 +70,27 @@ describe("index.html boot script", () => {
     const document = { documentElement: { setAttribute: (_k, v) => { applied = v; } } };
     new Function("window", "localStorage", "document", script)(window, localStorage, document);
     expect(applied).toBe("light");
+  });
+});
+
+describe("watchColorScheme", () => {
+  const fakeMedia = (api) => {
+    const calls = [];
+    const media = {};
+    for (const m of api) media[m] = (...a) => calls.push([m, ...a]);
+    return { media, calls };
+  };
+  const onChange = () => {};
+
+  it("uses addEventListener where it exists", () => {
+    const { media, calls } = fakeMedia(["addEventListener", "removeEventListener"]);
+    watchColorScheme(media, onChange)();
+    expect(calls).toEqual([["addEventListener", "change", onChange], ["removeEventListener", "change", onChange]]);
+  });
+
+  it("falls back to addListener on Safari before 14 instead of throwing", () => {
+    const { media, calls } = fakeMedia(["addListener", "removeListener"]);
+    watchColorScheme(media, onChange)();
+    expect(calls).toEqual([["addListener", onChange], ["removeListener", onChange]]);
   });
 });
