@@ -120,7 +120,7 @@ async function enterDemoWithPeek(page) {
 test("mobile reliability: Low Energy's smaller start actually starts five minutes", async ({ page }) => {
   await enterDemoWithPeek(page);
 
-  await page.locator("button.stuck-btn", { hasText: "Low Energy" }).click();
+  await page.getByRole("switch", { name: "Low energy" }).click();
 
   const smaller = page.locator(".wall-action", { hasText: "Start small — 5 minutes" });
   await expect(smaller).toBeVisible({ timeout: 8_000 });
@@ -161,7 +161,7 @@ test("mobile reliability: five minutes is honoured even with a session already o
   await overlay.locator(".focus-mode-exit-btn").click();
   await expect(overlay).toHaveCount(0);
 
-  await page.locator("button.stuck-btn", { hasText: "Low Energy" }).click();
+  await page.getByRole("switch", { name: "Low energy" }).click();
   await page.locator(".wall-action", { hasText: "Start small — 5 minutes" }).click();
 
   await expect(overlay).toBeVisible({ timeout: 8_000 });
@@ -175,16 +175,23 @@ test("mobile reliability: five minutes is honoured even with a session already o
 
 // Reaching the empty wall means having no commitment AND none finished today
 // — completing one gives the done state (J2b), which stands for the rest of
-// the day. So this unpins instead, from the pinned row's own menu.
+// the day. So this moves the one thing off Today instead, through its editor
+// (Split it), which lets go of the pin as well.
+async function moveWallTaskToThisWeek(page) {
+  await page.locator(".wall-action", { hasText: "Split it" }).click();
+  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "This Week" }).click();
+  await page.getByTestId("add-task-submit").click();
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+}
+
 async function emptyTheWall(page) {
   await page.addInitScript(() => {
     try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
   });
   await enterDemo(page);
-  const pinned = page.locator(".pinned-focus-section .task-row").first();
-  await expect(pinned).toBeVisible({ timeout: 10_000 });
-  await pinned.locator(".task-row-top").click();
-  await page.getByText("Unpin from Focus").click();
+  await expect(page.locator(".wall-title")).toBeVisible({ timeout: 10_000 });
+  await moveWallTaskToThisWeek(page);
   await expect(page.locator(".wall-commit-field")).toBeVisible({ timeout: 8_000 });
 }
 
@@ -317,11 +324,8 @@ test("mobile reliability: committing clears the typed draft", async ({ page }) =
   await page.locator(".wall-commit-field").press("Enter");
   await expect(page.locator(".wall-title")).toContainText("Call the landlord", { timeout: 8_000 });
 
-  // Unpin it and the field comes back — empty, not holding the old query.
-  const pinned = page.locator(".pinned-focus-section .task-row").first();
-  await expect(pinned).toBeVisible({ timeout: 8_000 });
-  await pinned.locator(".task-row-top").click();
-  await page.getByText("Unpin from Focus").click();
+  // Let go of it and the field comes back — empty, not holding the old query.
+  await moveWallTaskToThisWeek(page);
 
   await expect(page.locator(".wall-commit-field")).toHaveValue("", { timeout: 8_000 });
 });
@@ -430,4 +434,50 @@ test("laptop: the wall's keys stay quiet while typing", async ({ page }) => {
   await expect(page.locator(".wall-done-line")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Edit Task" })).toHaveCount(0);
   await expect(page.locator(".focus-mode-overlay")).toHaveCount(0);
+});
+
+test("laptop: N opens Add task for Today, L shows and hides the list", async ({ page }) => {
+  await enterLaptop(page);
+  const list = page.locator(".tasks-section");
+  await expect(list).toBeHidden();
+
+  await page.keyboard.press("l");
+  await expect(list).toBeVisible();
+  // The open list carries its own "Hide list" from 840px; it and L agree.
+  await page.locator(".today-list-hide").click();
+  await expect(list).toBeHidden();
+  await page.keyboard.press("l");
+  await expect(list).toBeVisible();
+  // A tap leaves focus on the control it pressed; the letter keys still work
+  // (only Space would also press it).
+  const all = page.getByRole("button", { name: /^All · \d+$/ });
+  await all.click();
+  await expect(all).toBeFocused();
+  await page.keyboard.press("l");
+  await expect(list).toBeHidden();
+  await page.keyboard.press("l");
+  await expect(list).toBeVisible();
+
+  await page.keyboard.press("n");
+  await expect(page.getByRole("heading", { name: "Add Task" })).toBeVisible({ timeout: 5_000 });
+});
+
+// 49a: on a phone, "+" sits at the right of the closed peek and opens Add task
+// with Horizon = Today.
+test("mobile reliability: the peek's + adds a task to Today", async ({ page }) => {
+  await enterDemo(page);
+  const add = page.getByRole("button", { name: "Add a task to Today" });
+  await expect(add).toBeVisible({ timeout: 10_000 });
+  const box = await add.boundingBox();
+  expect(Math.round(box.width)).toBeGreaterThanOrEqual(44);
+  expect(Math.round(box.height)).toBeGreaterThanOrEqual(44);
+
+  await add.click();
+  await expect(page.getByRole("heading", { name: "Add Task" })).toBeVisible({ timeout: 5_000 });
+  await page.getByTestId("add-task-title").fill("Peek plus seed task");
+  await page.getByTestId("add-task-submit").click();
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+
+  await page.locator(".wall-peek").click();
+  await expect(page.getByTestId("today-tasks-list").getByText("Peek plus seed task")).toBeVisible({ timeout: 5_000 });
 });

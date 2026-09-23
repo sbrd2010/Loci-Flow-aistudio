@@ -480,48 +480,6 @@ textarea.text-input {
   animation: pulse-dot 1.5s infinite;
 }
 
-.stuck-btn {
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.stuck-btn:hover {
-  background: var(--bg-card-hover);
-  color: var(--text-primary);
-}
-
-/* Day Map launcher button — solid indigo pill, clearly distinct from other stuck-btns */
-.day-map-nav-btn {
-  background: rgba(79, 70, 229, 0.38) !important;
-  border-color: rgba(99, 102, 241, 0.70) !important;
-  color: #ffffff !important;
-  animation: day-map-btn-glow 2.8s ease-in-out infinite;
-}
-
-.day-map-nav-btn.has-tasks {
-  background: rgba(79, 70, 229, 0.55) !important;
-  border-color: rgba(99, 102, 241, 0.88) !important;
-  color: #ffffff !important;
-}
-
-.day-map-nav-btn:hover {
-  background: rgba(79, 70, 229, 0.68) !important;
-  border-color: rgba(99, 102, 241, 1.0) !important;
-  color: #ffffff !important;
-}
-
-@keyframes day-map-btn-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.35); }
-  50%       { box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.10); }
-}
-
 .focus-title {
   font-size: 21px;
   font-weight: 700;
@@ -848,120 +806,10 @@ textarea.text-input {
   color: var(--accent);
 }
 
-/* Today's Tasks Section & Rows */
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 10px;
-}
-
-.section-count-badge {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--accent-dark);
-  background: var(--accent-light);
-  padding: 4px 10px;
-  border-radius: 20px;
-}
-
 .tasks-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.task-row {
-  background: var(--accent-ring);
-  border: 1.5px solid var(--accent-light);
-  border-left: 3px solid var(--accent);
-  box-shadow: var(--shadow-lg);
-  border-radius: 12px;
-  padding: 7px 8px 7px 10px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: var(--transition);
-  position: relative;
-}
-
-.task-row:hover {
-  background: var(--bg-card-hover);
-  border-color: var(--border-focus);
-}
-
-.checkbox-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  min-width: 32px;
-  min-height: 38px;
-  flex-shrink: 0;
-}
-
-.custom-checkbox {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  border: 2px solid var(--text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: var(--transition);
-}
-
-.custom-checkbox:hover {
-  border-color: var(--accent);
-}
-
-.custom-checkbox.checked {
-  background: var(--success);
-  border-color: var(--success);
-}
-
-.checkmark {
-  color: #fff;
-  font-size: 11px;
-  font-weight: bold;
-}
-
-.task-middle {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.task-row-top {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: nowrap;
-  min-width: 0;
-}
-
-.task-title-text {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  white-space: normal;
-  min-width: 0;
-  line-height: 1.35;
-}
-
-.task-row.completed {
-  opacity: 0.5;
-}
-
-.task-row.completed .task-title-text {
-  text-decoration: line-through;
-  color: var(--text-muted);
 }
 
 .priority-badge {
@@ -981,50 +829,6 @@ textarea.text-input {
   font-size: 11px;
   line-height: 1;
   flex-shrink: 0;
-}
-
-.task-step-text {
-  font-size: 11px;
-  color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 1.3;
-}
-
-.task-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.action-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 16px;
-  cursor: pointer;
-  transition: var(--transition);
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  flex-shrink: 0;
-}
-
-.action-btn:hover {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-}
-
-.action-btn-pin:hover {
-  color: var(--warning);
-}
-
-.action-btn-delete:hover {
-  color: var(--danger);
 }
 
 .completed-section-title {
@@ -2185,22 +1989,6 @@ textarea.text-input {
   gap: 1px;
 }
 
-.action-btn-reorder {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 10px 8px;
-  line-height: 1;
-  border-radius: 3px;
-}
-
-.action-btn-reorder:hover {
-  color: var(--accent);
-  background: var(--bg-secondary);
-}
-
 @media (max-width: 640px) {
   .reorder-btns { display: none; }
 }
@@ -2473,6 +2261,7 @@ html[data-theme="light"] {
   --shadow-md:    0 8px 24px rgba(15, 31, 22, 0.25);
   --shadow-lg:    0 20px 50px rgba(15, 31, 22, 0.3);
   --scrim:        rgba(15, 31, 22, 0.4);
+  --toast-action: #9FC4AB;  /* Undo on the inverted toast (49) */
 
   /* — 2. compatibility layer — */
   --bg-primary: var(--bg);
@@ -2547,6 +2336,7 @@ html[data-theme="dark"] {
   --shadow-md:    0 8px 24px rgba(0, 0, 0, 0.3);
   --shadow-lg:    0 20px 50px rgba(0, 0, 0, 0.3);
   --scrim:        rgba(0, 0, 0, 0.4);
+  --toast-action: #1F4D36;  /* the toast inverts to a light ground (39) */
 
   /* — 2. compatibility layer (same mapping as Light) — */
   --bg-primary: var(--bg);
@@ -2606,42 +2396,8 @@ html[data-theme="dark"] {
 /* ── Daily Anchors ──────────────────────────────────────────── */
 
 /* Bottom sheet (slides up over focus-now-backdrop) */
-.anchor-sheet {
-  width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
-  background: var(--bg-card);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border-radius: 20px 20px 0 0;
-  border-top: 1px solid var(--border);
-  padding: 20px 18px 28px;
-  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.35);
-}
 
 /* Left-border accent header */
-.anchor-sheet-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding-left: 14px;
-  border-left: 3px solid var(--accent);
-  margin-bottom: 18px;
-}
-.anchor-sheet-icon { font-size: 20px; line-height: 1; flex-shrink: 0; }
-.anchor-sheet-title {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--text-primary);
-  line-height: 1.2;
-  font-family: var(--font-display);
-}
-.anchor-sheet-intro {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 2px;
-  line-height: 1.4;
-}
 
 /* Anchor pill chips */
 .anchor-chips {
@@ -2671,34 +2427,6 @@ html[data-theme="dark"] {
 }
 
 /* Sheet action row */
-.anchor-sheet-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.anchor-btn-primary {
-  padding: 9px 22px;
-  border-radius: 12px;
-  background: var(--accent);
-  color: var(--bg-primary);
-  font-size: 13px;
-  font-weight: 800;
-  border: none;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.anchor-btn-ghost {
-  padding: 8px 14px;
-  border-radius: 12px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 600;
-  border: 1px solid var(--border);
-  cursor: pointer;
-}
-.anchor-btn-ghost:active { opacity: 0.7; }
 
 /* Mind Box anchor management rows */
 .anchor-edit-row {
@@ -2797,11 +2525,7 @@ html[data-theme="dark"] {
 
 /* Mobile: keep actions and chips legible on Pixel 6a / iPhone 11 Pro */
 @media (max-width: 430px) {
-  .anchor-sheet { padding: 18px 14px 32px; }
   .anchor-chip { font-size: 12px; padding: 6px 12px; }
-  .anchor-sheet-actions { gap: 6px; }
-  .anchor-btn-primary { padding: 8px 18px; }
-  .anchor-btn-ghost { padding: 7px 10px; font-size: 11px; }
 }
 
 /* ── Morning Ritual popup (centered) ──────────────────────────── */
@@ -2920,41 +2644,4 @@ html[data-theme="dark"] {
   .morning-ritual-title { font-size: 17px; }
 }
 
-/* ── Pinned Focus section ─────────────────────────────────── */
-.pinned-focus-section {
-  margin-bottom: 2px;
-}
-.pinned-focus-label {
-  display: block;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.07em;
-  color: var(--accent);
-  text-transform: uppercase;
-  padding: 0 2px 4px 2px;
-}
-.pinned-focus-inner {
-  position: relative;
-}
-.pinned-focus-inner > .task-row {
-  padding-right: 88px;
-}
-.pinned-focus-start-btn {
-  position: absolute;
-  top: 7px;
-  right: 8px;
-  background: var(--accent);
-  color: var(--btn-text, #0b1326);
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 5px 12px;
-  cursor: pointer;
-  min-height: 28px;
-  white-space: nowrap;
-  font-family: var(--font-sans);
-  z-index: 1;
-}
-.pinned-focus-start-btn:active { opacity: 0.8; }
 

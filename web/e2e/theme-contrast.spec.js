@@ -96,7 +96,28 @@ for (const theme of THEMES) {
       await assertLegible(page.locator(sel).first(), what, theme);
     }
 
-    await page.locator(".day-map-nav-btn").click();
+    // The list (41a/37b): its quietest text, on the list's own ground.
+    for (const [loc, what] of [
+      [page.locator(".today-list-count"), "list count"],
+      [page.locator(".today-seg-opt[aria-pressed='false']"), "unselected segment"],
+      [page.locator(".today-energy-caption"), "Low energy caption"],
+      [page.locator(".task-row-priority"), "row priority tag"],
+      [page.locator(".today-list-link"), "Day map link"],
+    ]) {
+      await assertLegible(loc.first(), what, theme);
+    }
+
+    // The Undo toast inverts in both themes (39): its line and its action.
+    await page.getByTestId("today-tasks-list").getByTestId("task-checkbox").first().click();
+    const toast = page.getByRole("status").filter({ hasText: "Marked done" });
+    await expect(toast).toBeVisible();
+    await toast.hover();
+    await assertLegible(toast.locator(".undo-toast-text"), "toast line", theme);
+    await assertLegible(toast.locator(".undo-toast-btn"), "toast Undo", theme);
+    await toast.locator(".undo-toast-btn").click();
+    await expect(toast).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Day map →" }).click();
 
     // The unscheduled strip FIRST, before auto-fill empties it. Its chip sits
     // on a lighter composited backdrop than a route card, so one foreground is

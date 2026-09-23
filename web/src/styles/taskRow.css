@@ -1,0 +1,227 @@
+/* A Today row (41a; Addendum AA, Y3). Hairline rows, never cards. Titles wrap
+   and the row grows from 48px (touch) / 44px (laptop). */
+
+.task-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 48px;
+  padding: 12px 0;
+  font-family: var(--font-sans);
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+}
+.task-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.task-row-grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  align-self: center;
+  padding: 2px 4px;
+  color: var(--edge);
+  background: none;
+  border: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+/* The circle is drawn at 20px inside a 44px hit area (AA). */
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  margin: -12px 0 -12px -13px;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.custom-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--on-accent);
+  border: 1.5px solid var(--edge);
+  border-radius: 50%;
+}
+.custom-checkbox.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.checkbox-container:focus-visible .custom-checkbox {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.task-row-priority {
+  flex-shrink: 0;
+  width: 22px;
+  padding-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.task-middle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* Tags sit on the right when there is room and drop under the title when
+   there isn't (Y3). */
+.task-row-top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.task-title-text {
+  flex: 1 1 14rem;
+  min-width: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+.task-row.completed .task-title-text {
+  color: var(--ink-2);
+  text-decoration: line-through;
+}
+
+.task-row-tags {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+.task-tag {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  border-radius: 3px;
+}
+.task-tag.is-must {
+  padding: 0 5px;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+}
+.task-tag.is-goal {
+  padding: 1px 6px;
+  color: var(--gold-label);
+  background: var(--gold-band);
+}
+
+.task-row-meta {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--ink-2);
+}
+.task-row-meta.is-overdue { color: var(--coral); }
+.task-row-retry {
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.task-substeps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.task-substep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+.task-substep-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.task-substep-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: var(--on-accent);
+  border: 1.5px solid var(--edge);
+  border-radius: 3px;
+}
+.task-substep-box.is-done {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.task-substep-text {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--ink-2);
+}
+.task-substep-text.is-done { text-decoration: line-through; }
+.task-substep-remove {
+  flex-shrink: 0;
+  min-width: 32px;
+  min-height: 32px;
+  font-size: 1rem;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.task-row-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  margin: -12px -10px -12px 0;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+/* The row's menu (tap the row). */
+.task-row-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 300;
+  min-width: 200px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+}
+
+@media (min-width: 1024px) {
+  .task-row { min-height: 44px; }
+}

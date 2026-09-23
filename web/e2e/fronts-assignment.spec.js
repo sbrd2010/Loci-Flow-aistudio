@@ -106,7 +106,8 @@ test("mobile reliability: the task dialog shows a task's front and can change it
   await openPlan(page);
   await addFront(page, "Grant proposal");
 
-  const firstLoose = page.locator(".plan-loose-row").first();
+  // A Today task that is not the wall's one thing, so it is a row in the list.
+  const firstLoose = page.locator(".plan-loose-row", { hasText: "25-minute deep work block" }).first();
   const taskTitle = (await firstLoose.locator(".plan-loose-title").innerText()).trim();
   await firstLoose.locator(".plan-loose-assign").selectOption({ label: "Grant proposal" });
 

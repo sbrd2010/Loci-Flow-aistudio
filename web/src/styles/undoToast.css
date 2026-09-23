@@ -1,0 +1,69 @@
+/* The Undo toast (49 notes; 39 for Dark): inverted — the ink as its ground —
+   with the one action in the light act colour. */
+.undo-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: min(420px, calc(100% - 32px));
+  padding: 6px 6px 6px 16px;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  color: var(--bg);
+  background: var(--ink);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+  transform: translateX(-50%);
+}
+.undo-toast-text {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.90625rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.undo-toast-btn {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 0.90625rem;
+  font-weight: 800;
+  color: var(--toast-action);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.undo-toast-btn:focus-visible {
+  outline: 2px solid var(--toast-action);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+/* What is left of the 5 seconds. */
+.undo-toast-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--toast-action);
+  animation-name: undo-toast-drain;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+@keyframes undo-toast-drain {
+  to { width: 0; }
+}
+@media (min-width: 1024px) {
+  .undo-toast { bottom: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .undo-toast-bar { display: none; }
+}

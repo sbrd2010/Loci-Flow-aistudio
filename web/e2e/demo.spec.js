@@ -94,9 +94,8 @@ test("6. User can create a new task", async ({ page }) => {
   const tasksList = page.getByTestId("today-tasks-list");
   const beforeCount = await tasksList.locator(".task-row:not(.completed)").count();
 
-  // Open add-task dialog via FAB speed-dial (two-step: expand then select)
-  await page.getByTestId("fab-add-task").click();
-  await page.getByTestId("fab-add-task-option").click();
+  // Open add-task dialog from the list's "+ Add" (49c)
+  await page.locator(".today-list-add").click();
   await expect(page.locator(".modal-card")).toBeVisible({ timeout: 5_000 });
 
   // Fill in the title and submit
@@ -165,12 +164,12 @@ test("8. User can delete a task", async ({ page }) => {
 test("9. Focus timer starts and pauses", async ({ page }) => {
   await enterDemo(page);
 
-  // Demo task demo-t1 has isNowFocus:true, so pinned section is immediately visible
-  const pinnedSection = page.locator(".pinned-focus-section");
+  // Demo task demo-t1 has isNowFocus:true, so it is the wall's one thing
+  const pinnedSection = page.locator(".today-wall");
   await expect(pinnedSection).toBeVisible({ timeout: 8_000 });
 
-  // Click "Focus →" to open full-screen timer (starts immediately)
-  await pinnedSection.locator(".pinned-focus-start-btn").click();
+  // Start focus opens the full-screen timer (starts immediately)
+  await pinnedSection.locator(".wall-primary").click();
 
   // Overlay should now be visible and timer running
   const overlay = page.locator(".focus-mode-overlay");
@@ -252,7 +251,7 @@ test("14. Brain dump inbox delete (Roadmap) requires confirmation before removin
 // Helper: open Day Map, auto-fill, and return it ready for toggle tests
 async function openDayMapWithTasks(page) {
   await enterDemo(page);
-  await page.getByTitle("Open Day Map").click();
+  await page.getByRole("button", { name: "Day map →" }).click();
   await expect(page.locator(".day-map-page")).toBeVisible({ timeout: 8_000 });
   const autoFill = page.getByRole("button", { name: "Auto-fill" });
   const autoFillVisible = await autoFill.isVisible();

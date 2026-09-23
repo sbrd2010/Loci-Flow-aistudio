@@ -43,95 +43,8 @@
     font-size: 12px !important;
   }
 
-  .tasks-section {
-    gap: 6px !important;
-  }
-
-  .tasks-section .section-header {
-    margin-top: 2px !important;
-    row-gap: 5px !important;
-    align-items: center !important;
-  }
-
-  .tasks-section .section-title {
-    font-size: 17px !important;
-    line-height: 1.15 !important;
-  }
-
-  .tasks-section .stuck-btn,
-  .tasks-section .section-count-badge {
-    min-height: 28px;
-    padding: 4px 8px;
-    border-radius: 8px;
-    font-size: 10.5px;
-    line-height: 1.1;
-  }
-
   .tasks-list {
     gap: 8px;
-  }
-
-  .tasks-section .task-row {
-    padding: 6px 7px 6px 8px;
-    gap: 5px;
-    border-radius: 10px;
-    border-left-width: 3px;
-    box-shadow: var(--shadow-sm);
-    background:
-      linear-gradient(90deg, rgba(46, 125, 82, 0.08), rgba(46, 125, 82, 0.04)),
-      var(--bg-card);
-  }
-
-  /* Restore the gutter the absolutely-positioned "Focus →" button (app.css)
-     depends on — the shorthand padding rule above resets padding-right to
-     7px for every task row, which silently erases that reservation and lets
-     the button overlap the pinned task's title/badges on mobile widths. */
-  .tasks-section .pinned-focus-inner > .task-row {
-    padding-right: 88px;
-  }
-
-  .tasks-section .checkbox-container {
-    min-width: 28px;
-    min-height: 34px;
-  }
-
-  .tasks-section .custom-checkbox {
-    width: 17px;
-    height: 17px;
-    border-radius: 5px;
-  }
-
-  .tasks-section .task-row-top {
-    gap: 4px;
-  }
-
-  .tasks-section .priority-badge {
-    font-size: 8.5px;
-    padding: 1px 5px;
-  }
-
-  .tasks-section .task-title-text {
-    font-size: 13px;
-    line-height: 1.25;
-  }
-
-  .tasks-section .task-step-text {
-    max-width: 100%;
-    font-size: 10.5px;
-    line-height: 1.25;
-  }
-
-  .tasks-section .task-middle > span[style*="inline-flex"] {
-    align-self: flex-start !important;
-    max-width: 100%;
-    font-size: 9.5px !important;
-    padding: 1px 5px !important;
-  }
-
-  .tasks-section .task-row [data-testid="task-menu-btn"] {
-    min-width: 24px !important;
-    min-height: 24px !important;
-    padding: 3px 4px !important;
   }
 
   .fab {
@@ -147,47 +60,6 @@
     padding-right: 10px;
   }
 
-  /* Two-line layout on small phones: heading row 1, chips + ••• row 2.
-     The chip shell shares row 2 with the more-menu trigger (flex: 1 1 auto,
-     not 0 0 100%) so the trigger never gets pushed to its own third line —
-     min-width: 0 lets the shell shrink below its chips' natural width,
-     leaving room for the fixed-size trigger button beside it. */
-  .tasks-section .section-header {
-    flex-wrap: wrap !important;
-  }
-
-  .tasks-section .section-title {
-    flex: 0 0 100% !important;
-  }
-
-  .tasks-section .focus-now-chip-shell {
-    flex: 1 1 auto !important;
-    min-width: 0;
-  }
-
-  .tasks-section .today-more-menu-trigger {
-    flex: 0 0 auto !important;
-  }
-
-  /* Shrink chips to fit one line without needing to scroll, tuned against
-     the narrower of the two target phones (iPhone 11 Pro, 375px) so it
-     also fits comfortably at Pixel 6a's 412px and wider. */
-  .tasks-section .focus-now-chip-row {
-    gap: 4px;
-  }
-
-  .tasks-section .stuck-btn {
-    padding: 4px 6px;
-    font-size: 9.5px;
-  }
-
-  .tasks-section .task-title-text {
-    font-size: 12.8px;
-  }
-
-  .tasks-section .task-row:has(div[style*="margin-top: 5px"]) {
-    align-items: flex-start;
-  }
 }
 
 @supports not selector(:has(*)) {
@@ -281,10 +153,6 @@
 @media (min-width: 641px) and (max-width: 900px) {
   .screen-content {
     gap: 14px;
-  }
-
-  .tasks-section .task-row {
-    box-shadow: var(--shadow-sm);
   }
 
   .day-map-page {

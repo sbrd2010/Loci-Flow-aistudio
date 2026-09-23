@@ -22,9 +22,9 @@ async function openSession(page) {
   await page.getByTestId("demo-btn").click();
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
 
-  const pinnedSection = page.locator(".pinned-focus-section");
+  const pinnedSection = page.locator(".today-wall");
   await pinnedSection.scrollIntoViewIfNeeded();
-  await pinnedSection.locator(".pinned-focus-start-btn").click();
+  await pinnedSection.locator(".wall-primary").click();
 
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 5_000 });
