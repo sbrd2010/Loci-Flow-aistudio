@@ -2,7 +2,7 @@ import React from "react";
 import "../styles/appearance.css";
 
 // Settings › Appearance. Theme is Light / Dark / Auto (turn 44b); Auto
-// follows the device's dark-mode setting — see utils/theme.js.
+// follows the device's dark-mode setting (turn 49) — see utils/theme.js.
 //
 // Rows follow screen 9's shape: a label, an explanation underneath saying what
 // it actually changes, and the control on the right. No icons, no cards.
@@ -43,6 +43,7 @@ export default function AppearanceSettings({ theme, onThemeChange, momentumEnabl
           </button>
         ))}
       </div>
+      <div className="appearance-theme-note">Auto follows your device’s dark mode.</div>
 
       <div
         className="appearance-row appearance-row--switch"

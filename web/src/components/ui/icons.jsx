@@ -1,6 +1,7 @@
 import React from "react";
 
-// Lucide icons (ISC licence), drawn as the design files draw them: 24px grid,
+// Lucide icons (ISC licence, full text in LICENSE-lucide.txt beside this
+// file, turn 49), drawn as the design files draw them: 24px grid,
 // round caps, stroke 1.8 by default and 2.2 when active. Only the icons
 // something renders live here; each phase adds the ones it uses.
 
