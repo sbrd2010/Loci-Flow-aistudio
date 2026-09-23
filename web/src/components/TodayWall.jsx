@@ -43,17 +43,18 @@ function GoalBand({ goal }) {
   );
 }
 
-// The local date's day of the year (1 Jan = 1), counted in UTC so a DST
-// change — a 23- or 25-hour local day — cannot repeat or skip a day.
-export function localDayOfYear(date) {
-  return (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(date.getFullYear(), 0, 0)) / 86400000;
+// An absolute day number for the local date (days since 1970-01-01), counted
+// in UTC so neither a DST change (a 23- or 25-hour local day) nor New Year
+// can repeat or skip a day.
+export function localDayNumber(date) {
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000;
 }
 
 // One anchor a day, in turn; tap for the next (40a). The day's anchor is fixed
 // by the date, so it is the same one each time you open Today.
 function AnchorLine({ anchors }) {
   const [offset, setOffset] = useState(0);
-  const index = (localDayOfYear(new Date()) + offset) % anchors.length;
+  const index = (localDayNumber(new Date()) + offset) % anchors.length;
   return (
     <button
       type="button"
