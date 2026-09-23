@@ -20,8 +20,14 @@ async function enterDemo(page, viewport = { width: 375, height: 812 }) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
 }
 
+// The four tabs are in the main navigation (the bottom bar on phones and
+// tablets, the header on a laptop); Settings is the header's gear.
 async function openTab(page, name) {
-  await page.locator(".bottom-nav").getByRole("button", { name }).click();
+  if (name === "Settings") {
+    await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+    return;
+  }
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name, exact: true }).click();
 }
 
 async function ensureProfileOpen(page) {
@@ -39,7 +45,7 @@ async function expectNoHorizontalOverflow(page) {
       document.body?.scrollWidth || 0,
     ];
     document.querySelectorAll(
-      ".app-container, .screen-content, .card, .modal-card, .bottom-nav"
+      ".app-container, .screen-content, .card, .modal-card, .tab-bar"
     ).forEach((el) => {
       measured.push(el.scrollWidth);
     });

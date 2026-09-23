@@ -26,8 +26,6 @@ export default function TodayWall({
   task,
   frontName,
   daysLeft,
-  dateLabel,
-  hoursLeftLabel,
   focusMinutes = 25,
   timerLabel = null,
   peekOpen,
@@ -77,11 +75,11 @@ export default function TodayWall({
   const titleLen = (task?.title || "").length;
   const wallSize = titleLen <= 40 ? "is-42" : titleLen <= 58 ? "is-34" : "is-29";
 
+  // The date and time left moved to the app header (turn 37), which shows
+  // them on every screen; the day count stays here until Phase 2 moves it
+  // into the goal band.
   const header = (
     <header className="wall-head">
-      <span className="wall-head-when">
-        {dateLabel}{hoursLeftLabel ? ` · ${hoursLeftLabel}` : ""}
-      </span>
       {hasDays && (
         <span className={`wall-head-days${pressing ? " is-pressing" : ""}`}>{daysLeft}d</span>
       )}

@@ -9,20 +9,13 @@
   padding: 0 0 18px;
 }
 
-/* — header: when it is, and how long is left — */
+/* — header: the day count (the date and time left are in the app header) — */
 .wall-head {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   padding: 2px 0 10px;
-}
-.wall-head-when {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-quiet, var(--text-muted));
 }
 /* Clay is time pressure and nothing else — so only the pressing one gets it.
    J3 names --gold-lift for this, but that token is defined "dark grounds

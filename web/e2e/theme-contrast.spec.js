@@ -106,7 +106,7 @@ for (const theme of THEMES) {
     await page.locator(".day-map-back").click();
 
     // Plan's view switcher.
-    await page.locator(".bottom-nav").getByRole("button", { name: "Roadmap" }).click();
+    await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
     await expect(page.getByRole("button", { name: "HORIZONS" })).toBeVisible();
     await assertLegible(page.locator("button.plan-view").first(), "plan kicker", theme);
     expect(await visibleHitHeight(page.getByRole("button", { name: "DAY MAP" })),

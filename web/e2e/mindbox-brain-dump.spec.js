@@ -21,7 +21,7 @@ async function enterDemo(page, viewport = { width: 375, height: 812 }) {
 }
 
 async function openTab(page, name) {
-  await page.locator(".bottom-nav").getByRole("button", { name }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name, exact: true }).click();
 }
 
 async function expectNoHorizontalOverflow(page) {
@@ -69,7 +69,7 @@ test("mobile reliability: Brain Dump item is addable from Mind Box, browsable on
   // Survives navigation away and back.
   await openTab(page, "Today");
   await expect(page.getByTestId("today-tasks-list")).toBeVisible({ timeout: 8_000 });
-  await openTab(page, "Roadmap");
+  await openTab(page, "Plan");
   // The nav tab lands on Plan by design; the Inbox is a column on the horizon
   // board behind it. (The "N notes waiting" deep link above goes straight
   // there, which is why it needs no hop.)

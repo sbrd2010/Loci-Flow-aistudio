@@ -5,28 +5,6 @@
    ================================================================ */
 
 @media (max-width: 640px) {
-  .app-header {
-    min-height: 52px;
-    padding: 8px 14px;
-  }
-
-  .app-brand > div:first-child span:first-child {
-    font-size: 22px !important;
-  }
-
-  .app-brand > div:first-child span:last-child {
-    font-size: 21px !important;
-  }
-
-  .header-subtitle {
-    display: none;
-  }
-
-  .user-badge {
-    padding: 5px 10px;
-    font-size: 11px;
-  }
-
   .screen-content {
     gap: 10px;
     padding-top: 10px;

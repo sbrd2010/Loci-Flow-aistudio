@@ -28,7 +28,7 @@ async function enterDemo(page) {
 }
 
 async function openScattered(page) {
-  await page.locator(".bottom-nav").getByRole("button", { name: "Roadmap" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
   const entry = page.getByRole("button", { name: /I'm scattered/i });
   await entry.scrollIntoViewIfNeeded();
   await entry.click();

@@ -124,61 +124,6 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--accent);
 }
 
-/* Header Component */
-.app-header {
-  min-height: 60px;
-  height: auto;
-  padding: 10px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-primary);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.app-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-display);
-  font-size: 21px;
-  font-weight: 800;
-  color: var(--text-primary);
-}
-
-.app-brand span {
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-/* Subtitle must override the gradient rule above — it's a plain muted label */
-.app-brand .header-subtitle {
-  background: none;
-  -webkit-background-clip: unset;
-  -webkit-text-fill-color: unset;
-  color: var(--text-muted);
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-/* Header subtitle — hidden on narrow phones to free up space */
-.header-subtitle {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--text-muted);
-  letter-spacing: 0.03em;
-  margin-left: 2px;
-  line-height: 1;
-}
-
 /* Initials badge shows on narrow phones, email badge hides */
 .header-initials-badge {
   display: none;
@@ -196,27 +141,7 @@ h1, h2, h3, h4, h5, h6 {
 @media (max-width: 430px) {
   .header-email-badge { display: none; }
   .header-initials-badge { display: flex; }
-  .header-right { gap: 6px; }
   .switch-btn { font-size: 10px; }
-}
-
-.user-badge {
-  font-size: 12px;
-  color: var(--text-secondary);
-  background: var(--bg-secondary);
-  padding: 6px 12px;
-  border-radius: 20px;
-  border: 1px solid var(--border);
-  font-weight: 550;
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-@media (max-width: 480px) {
-  .user-badge {
-    max-width: 90px;
-  }
 }
 
 .switch-btn {
@@ -232,73 +157,6 @@ h1, h2, h3, h4, h5, h6 {
 
 .switch-btn:hover {
   color: var(--accent-dark);
-}
-
-/* Bottom Navigation Component */
-.bottom-nav {
-  height: calc(72px + env(safe-area-inset-bottom, 0px));
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: var(--bg-primary);
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
-  z-index: 100;
-}
-
-@media (min-width: 768px) {
-  .bottom-nav {
-    max-width: 720px;
-  }
-}
-
-.nav-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: opacity 0.18s ease, color 0.18s ease;
-  font-size: 10.5px;
-  font-weight: 600;
-  font-family: var(--font-sans);
-  height: 100%;
-  width: 25%;
-  position: relative;
-  gap: 3px;
-}
-
-.nav-item-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 46px;
-  height: 28px;
-  border-radius: 14px;
-  transition: background 0.2s ease, opacity 0.2s ease, transform 0.18s ease;
-}
-
-.nav-item:hover .nav-item-icon {
-  opacity: 0.65 !important;
-}
-
-.nav-item.active .nav-item-icon {
-  opacity: 1 !important;
-}
-
-.nav-item:hover {
-  color: var(--text-secondary);
-}
-
-.nav-item.active {
-  color: inherit;
 }
 
 /* Elegant Cards */
@@ -325,6 +183,12 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+/* From 1024px the tabs sit in the header (shell.css), so there is no bottom
+   bar to clear. */
+@media (min-width: 1024px) {
+  .screen-content { padding-bottom: 48px; }
 }
 
 @media (max-width: 640px) {
@@ -1272,7 +1136,6 @@ textarea.text-input {
 }
 @media (min-width: 1024px) {
   .fab { right: calc(50% - 530px); }
-  .bottom-nav { max-width: 1100px; }
 }
 
 .fab:hover {
@@ -2269,14 +2132,6 @@ textarea.text-input {
 
 /* Full-width button util */
 .btn-full { width: 100%; }
-
-/* Bottom nav button reset — Fix #25 */
-.bottom-nav .nav-item {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-}
 
 /* Column add button — used in Roadmap */
 .column-add-btn {

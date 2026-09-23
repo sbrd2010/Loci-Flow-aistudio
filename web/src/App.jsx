@@ -34,6 +34,7 @@ import { celebrate } from "./utils/celebrations";
 import { safeUUID } from "./utils/uuid";
 import { submitOnEnter } from "./utils/formEvents";
 import { migrateStoredTheme, resolveTheme, watchColorScheme } from "./utils/theme";
+import { buildDayClock } from "./utils/dayClock";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch, activityEventPath } from "./utils/activityLog";
 
 const EXTEND_DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
@@ -845,6 +846,12 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lociDayTick, payload?.config?.dayStartHour, payload?.config?.dayEndHour, payload?.config?.focusWindows]
   );
+  // The header's "WED 23 SEP · 5h40m LEFT", on the same minute tick.
+  const dayClock = useMemo(
+    () => buildDayClock(new Date(), getFocusWindows(payload?.config || {})),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lociDayTick, payload?.config?.dayStartHour, payload?.config?.dayEndHour, payload?.config?.focusWindows]
+  );
   //
   // A pin observed while sync is still unconfirmed is REMEMBERED, not dropped.
   // The user can pin and complete inside that window, and completing clears
@@ -1229,8 +1236,10 @@ export default function App() {
       {/* Header top bar — hidden on Day Map (full-screen page) */}
       {activeTab !== "daymap" && (
         <Header
-          userName={demoMode ? "Demo User" : (payload?.config?.userName || user?.displayName || user?.email)}
+          activeTab={activeTab}
+          onTabSelect={handleTabSelect}
           onGoHome={goToday}
+          dayClock={dayClock}
         />
       )}
 

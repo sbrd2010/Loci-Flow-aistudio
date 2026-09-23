@@ -26,7 +26,7 @@ async function enterDemo(page, viewport = { width: 375, height: 812 }) {
 }
 
 async function openInsights(page) {
-  await page.locator(".bottom-nav").getByRole("button", { name: "Mind Box" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Mind Box", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 8_000 });
   await page.getByText("Insights", { exact: true }).click();
   await expect(page.locator(".week")).toBeVisible({ timeout: 8_000 });

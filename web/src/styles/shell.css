@@ -1,0 +1,192 @@
+/* The app shell: header and tab bar (turns 37, 38, 41; Addenda AA, AC, S, Z).
+   Phones and tablets under 1024px: tabs at the bottom. From 1024px: tabs in
+   the header and no bottom bar. Values are the design's; sizes that differ by
+   width are listed per breakpoint below. */
+
+/* — Header — */
+.shell-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0 8px 0 20px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.shell-wordmark {
+  min-height: 44px;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.shell-end {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.shell-clock {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.shell-clock-left { color: var(--ink); }
+
+.shell-gear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  padding: 0;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Settings has no tab below 1024px: the gear steps aside while you are in it,
+   and the clock takes its place with a little room at the edge (44a). */
+.shell-header.is-settings .shell-gear { display: none; }
+.shell-header.is-settings .shell-clock { padding-right: 12px; }
+
+.shell-tabs { display: none; }
+
+/* — Tab bar — */
+.tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  width: 100%;
+  max-width: 480px;
+  padding: 6px 0 max(8px, env(safe-area-inset-bottom, 0px));
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+
+.tab-bar-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.tab-bar-item.is-active { color: var(--accent); }
+
+.tab-bar-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 30px;
+  border-radius: 15px;
+}
+.tab-bar-item.is-active .tab-bar-pill { background: var(--accent-tint); }
+
+.shell-wordmark:focus-visible,
+.shell-gear:focus-visible,
+.shell-tab:focus-visible,
+.tab-bar-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* — Widths (Addendum Y6 / Z) — */
+
+/* Compact phone: under 380px wide (iPhone SE, Galaxy S24). */
+@media (max-width: 379px) {
+  .shell-header { padding: 0 4px 0 16px; }
+}
+
+/* Large phone: 430px and up. */
+@media (min-width: 430px) {
+  .shell-header { padding: 0 10px 0 22px; }
+}
+
+@media (min-width: 768px) {
+  .tab-bar { max-width: 720px; }
+}
+
+/* Large tablet, 840–1023px (41i). */
+@media (min-width: 840px) {
+  .shell-header {
+    min-height: 60px;
+    padding: 0 24px 0 36px;
+  }
+  .shell-wordmark { font-size: 18px; }
+  .shell-end { gap: 4px; }
+}
+
+/* Laptop, 1024px and up (41a, 41f): tabs in the header, no bottom bar. */
+@media (min-width: 1024px) {
+  .shell-header { padding: 0 40px 0 48px; }
+  .shell-wordmark { font-size: 19px; }
+  .shell-end { gap: 6px; }
+
+  .shell-tabs {
+    display: flex;
+    gap: 4px;
+  }
+  .shell-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 14px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink-2);
+    background: none;
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .shell-tab.is-active {
+    color: var(--ink);
+    background: var(--accent-tint);
+  }
+
+  .shell-gear { width: 40px; height: 40px; }
+  .shell-gear svg { width: 20px; height: 20px; }
+  .shell-header.is-settings .shell-gear {
+    display: flex;
+    color: var(--ink);
+    background: var(--accent-tint);
+  }
+  .shell-header.is-settings .shell-clock { padding-right: 0; }
+
+  .tab-bar { display: none; }
+}

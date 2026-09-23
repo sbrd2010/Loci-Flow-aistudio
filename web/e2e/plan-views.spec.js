@@ -32,7 +32,7 @@ test("Back from Day Map returns to whichever view opened it", async ({ page }) =
   await enterDemo(page);
 
   // Door 1: Plan. Back must return to Plan, not to Today.
-  await page.locator(".bottom-nav").getByRole("button", { name: "Roadmap" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
   await expect(page.getByRole("button", { name: "HORIZONS" })).toBeVisible();
   await page.getByRole("button", { name: "DAY MAP" }).click();
   await expect(page.locator(".day-map-page")).toBeVisible();
@@ -41,7 +41,7 @@ test("Back from Day Map returns to whichever view opened it", async ({ page }) =
   await expect(page.locator(".day-map-page")).toHaveCount(0);
 
   // Door 2: Today. Back must still return to Today.
-  await page.locator(".bottom-nav").getByRole("button", { name: "Today" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
   await page.locator(".day-map-nav-btn").click();
   await expect(page.locator(".day-map-page")).toBeVisible();
   await page.locator(".day-map-back").click();
@@ -50,7 +50,7 @@ test("Back from Day Map returns to whichever view opened it", async ({ page }) =
 
 test("Horizon kickers render as kickers, not as the legacy pills", async ({ page }) => {
   await enterDemo(page);
-  await page.locator(".bottom-nav").getByRole("button", { name: "Roadmap" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
   await page.getByRole("button", { name: "HORIZONS" }).click();
   await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible({ timeout: 8_000 });
 
@@ -99,7 +99,7 @@ test("priority tags are mono wherever Day Map draws them", async ({ page }) => {
 
 test("the 44px hit overlays do not scroll or steal clicks", async ({ page }) => {
   await enterDemo(page);
-  await page.locator(".bottom-nav").getByRole("button", { name: "Roadmap" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
 
   // An absolutely positioned child still counts toward a scroll container's
   // scrollable overflow. .horizon-pills is overflow-x: auto, which makes the
@@ -138,7 +138,7 @@ test("the 44px hit overlays do not scroll or steal clicks", async ({ page }) => 
 
   // The overlays sit above their own buttons, so a neighbour must still get
   // its own clicks: the point is a bigger target, not a bigger button.
-  await page.locator(".bottom-nav").getByRole("button", { name: "Roadmap" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
   await page.getByRole("button", { name: "New front" }).click();
   await expect(page.locator(".plan-new-form")).toBeVisible();
 });
