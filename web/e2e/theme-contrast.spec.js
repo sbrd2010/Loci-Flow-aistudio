@@ -81,6 +81,21 @@ const visibleHitHeight = (locator) => locator.evaluate((el) => {
 for (const theme of THEMES) {
   test(`${theme}: rethemed text stays legible and tappable`, async ({ page }) => {
     await enterDemo(page, theme);
+
+    // Today's wall: the smallest text on it, on its own grounds — the gold
+    // kicker on the gold band is the tightest pair (4.82:1 by calculation).
+    for (const [sel, what] of [
+      [".wall-goal-kicker", "goal kicker"],
+      [".wall-goal-name", "goal name"],
+      [".wall-anchor-count", "anchor count"],
+      [".wall-kicker", "TODAY, ONE THING"],
+      [".wall-first-step-label", "first step label"],
+      [".wall-primary-figure", "timer on Start focus"],
+      [".wall-peek-label", "peek label"],
+    ]) {
+      await assertLegible(page.locator(sel).first(), what, theme);
+    }
+
     await page.locator(".day-map-nav-btn").click();
 
     // The unscheduled strip FIRST, before auto-fill empties it. Its chip sits

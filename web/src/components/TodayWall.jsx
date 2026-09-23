@@ -1,38 +1,78 @@
 import React, { useState } from "react";
 import LinkifyText from "./LinkifyText";
+import { IconPin, IconPlus } from "./ui/icons";
 import "../styles/todayWall.css";
 
-// Screen 1 — "Today, the wall with a peek". Two states, one screen.
-//
-// CLOSED ("the wall", 9b): the commitment fills the screen and IS the start
-// button. There is deliberately no separate filled primary competing with it —
-// the handoff is explicit that the task itself is what you tap.
-//
-// OPEN ("the desk", 9c): the hero stops being a button and becomes plain
-// markup, the title drops, and a conventional filled "Start focus" button
-// appears. Once the list below is visible an explicit button is needed, or
-// tapping the task competes with the rows for "what does tapping do here".
-//
-// The sizes come from the two-state prose in the handoff (42/800 closed,
-// 29/700 open), not from its type table or its Components list, which both
-// predate Resolved Decision 1's merge of the two heroes and still describe a
-// single 34/700 hero. Raised with the designer.
+// Today's wall (turns 37, 40, 41, 49): the goal band, one anchor line, then the
+// one thing — a large title that wraps and never shrinks, its first step, and
+// one filled "Start focus". The rest of the day is behind the peek.
 
 function pad2(n) {
   return String(n).padStart(2, "0");
 }
 
+// "22 days · 1 of 5" — the count only when the goal has countable items, i.e.
+// it is a front with tasks on it (Addendum M1). An overdue goal has no days.
+function goalFigures(goal, compact) {
+  const parts = [];
+  if (Number.isFinite(goal.daysLeft)) {
+    parts.push(compact ? `${goal.daysLeft}d` : `${goal.daysLeft} ${goal.daysLeft === 1 ? "day" : "days"}`);
+  }
+  if (goal.total > 0) parts.push(compact ? `${goal.done}/${goal.total}` : `${goal.done} of ${goal.total}`);
+  return parts.join(" · ");
+}
+
+function GoalBand({ goal }) {
+  const hasCount = goal.total > 0;
+  const figures = goalFigures(goal, false);
+  const compactFigures = goalFigures(goal, true);
+  return (
+    <div className="wall-goal" role="group" aria-label={`Your goal: ${goal.name}${figures ? `, ${figures}` : ""}`}>
+      <div className="wall-goal-head">
+        <span className="wall-goal-kicker">YOUR GOAL</span>
+        {figures && <span className="wall-goal-figures">{figures}</span>}
+      </div>
+      <div className="wall-goal-name">{goal.name}</div>
+      {compactFigures && <span className="wall-goal-figures is-compact">{compactFigures}</span>}
+      {hasCount && (
+        <span className="wall-goal-track" aria-hidden="true">
+          <span className="wall-goal-fill" style={{ width: `${Math.round((goal.done / goal.total) * 100)}%` }} />
+        </span>
+      )}
+    </div>
+  );
+}
+
+// One anchor a day, in turn; tap for the next (40a). The day's anchor is fixed
+// by the date, so it is the same one each time you open Today.
+function AnchorLine({ anchors }) {
+  const [offset, setOffset] = useState(0);
+  const now = new Date();
+  const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+  const index = (dayOfYear + offset) % anchors.length;
+  return (
+    <button
+      type="button"
+      className="wall-anchor"
+      onClick={() => setOffset(o => o + 1)}
+      aria-label={`Anchor ${index + 1} of ${anchors.length}: ${anchors[index].text}. Show the next one.`}
+    >
+      <IconPin size={16} />
+      <span className="wall-anchor-text">{anchors[index].text}</span>
+      <span className="wall-anchor-count" aria-hidden="true">{index + 1} / {anchors.length} ›</span>
+    </button>
+  );
+}
+
 export default function TodayWall({
   task,
-  frontName,
-  daysLeft,
+  goal = null,
+  anchors = [],
   focusMinutes = 25,
   timerLabel = null,
   peekOpen,
   onTogglePeek,
   remainingCount = 0,
-  doneCount = 0,
-  minutesInLabel,
   lowEnergy = false,
   onStartFocus,
   onMarkDone,
@@ -45,50 +85,26 @@ export default function TodayWall({
   onDismissProposal,
   commitBlocked = false,
   onCommitNewTask,
-  onPickExisting,
-  pickOptions = [],
+  mindBoxCount = 0,
+  onOpenMindBox,
   onScattered,
-  openCount = 0,
+  onRescue,
 }) {
   // Only the empty wall uses this, but hooks cannot sit behind its early
   // return.
   const [draft, setDraft] = useState("");
   // timerLabel is supplied only while a session is already running on this
-  // task, where the chip has to name what tapping will resume.
+  // task, where the button has to name what tapping will resume.
   const resuming = !!timerLabel;
   const timer = timerLabel || `${pad2(focusMinutes)}:00`;
-  // L1: the kicker names the commitment's front, or the Key Deadline when it
-  // has no front, or nothing at all when there is neither — never
-  // "Uncategorised", and never a bare label with nothing to name.
-  const kicker = frontName ? `${frontName} · YOU COMMITTED TO` : null;
-  // J3: the day count is --alert ONLY under three days, otherwise --gold-lift.
-  // The Key Deadline strip's information lives here now, and the one alert
-  // colour is spent only on something genuinely imminent.
-  const hasDays = Number.isFinite(daysLeft) && daysLeft !== null;
-  const pressing = hasDays && daysLeft < 3;
 
-  // J1: "clamped so a long title drops to 34 then 29 rather than wrapping past
-  // three lines". Chosen by length rather than by measuring: at 390px the wall
-  // fits roughly 13 characters per line at 42px and 17 at 34px, so these are
-  // the points where a title would otherwise reach a fourth line. Approximate
-  // by construction — a measured fit would need a layout pass per render.
-  const titleLen = (task?.title || "").length;
-  const wallSize = titleLen <= 40 ? "is-42" : titleLen <= 58 ? "is-34" : "is-29";
-
-  // The date and time left moved to the app header (turn 37), which shows
-  // them on every screen; the day count stays here until Phase 2 moves it
-  // into the goal band.
-  const header = (
-    <header className="wall-head">
-      {hasDays && (
-        <span className={`wall-head-days${pressing ? " is-pressing" : ""}`}>{daysLeft}d</span>
-      )}
-    </header>
+  const top = (
+    <>
+      {goal && <GoalBand goal={goal} />}
+      {anchors.length > 0 && <AnchorLine anchors={anchors} />}
+    </>
   );
 
-  // Nothing committed yet. The handoff says the wall renders the first-launch
-  // question inline; that screen is not built, so this asks the same question
-  // with the picker the app already has, rather than inventing a second one.
   // — the commitment, finished (J2b/K2/K3) —
   //
   // The hero becomes the closing line, not the proposal: what you did is the
@@ -98,7 +114,7 @@ export default function TodayWall({
   if (doneTask && !task) {
     return (
       <section className="today-wall is-done">
-        {header}
+        {top}
         <div className="wall-done">
           <div className="wall-done-was">{doneTask.title}</div>
           {/* K2: the figure is minutes on THIS task today. Zero reads just
@@ -124,21 +140,13 @@ export default function TodayWall({
     );
   }
 
-  // — nothing committed yet: screen 10's field, on the same ground (J2a/K1) —
+  // — nothing committed yet (37f) —
   //
   // The field takes free text and CREATES a task, because the thing you commit
   // to may not exist in the app yet — without that, first launch has no exit.
-  // The guard against a near-duplicate is not a restriction but a view: the
-  // "Or pick one" rows filter to open items matching what is being typed, so
-  // an existing version of the same thing is visible before it is committed.
-  // Tapping a row commits that task instead of creating a second one. No
-  // fuzzy-merge prompt, no "did you mean".
+  // Enter commits. What already exists is one tap away: the Today list below,
+  // and Mind Box.
   if (!task) {
-    const query = draft.trim().toLowerCase();
-    const matches = (query
-      ? pickOptions.filter(t => (t.title || "").toLowerCase().includes(query))
-      : pickOptions
-    ).slice(0, 3);
     const commit = () => {
       const title = draft.trim();
       if (!title) return;
@@ -149,120 +157,96 @@ export default function TodayWall({
       if (onCommitNewTask?.(title) === false) return;
       setDraft("");
     };
-    // Picking an existing task clears the draft too. TodayWall stays mounted,
-    // so a query left behind reappears in the field if that task is ever
-    // unpinned — and an accidental submit then creates exactly the duplicate
-    // these rows exist to prevent.
-    const pick = (t) => {
-      setDraft("");
-      onPickExisting?.(t);
-    };
     return (
       <section className="today-wall is-empty">
-        {header}
         <div className="wall-empty">
-          <div className="wall-kicker">TODAY</div>
+          <div className="wall-kicker">TODAY, ONE THING</div>
+          <h2 className="wall-empty-title">Nothing committed yet.</h2>
+          <p className="wall-empty-line">
+            {commitBlocked
+              ? "Evening Guard is on — no new tasks after 8pm. Rest; this will be here tomorrow."
+              : "Pick one thing. Just one. The rest can wait in Mind Box."}
+          </p>
           <form
             className="wall-commit"
             onSubmit={(e) => { e.preventDefault(); commit(); }}
           >
-            <input
-              type="text"
-              className="wall-commit-field"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="What's the one thing?"
-              aria-label="Today's one thing"
-              autoComplete="off"
-              maxLength={1000}
-            />
-            <p className="wall-empty-line">
-              {commitBlocked
-                ? "Evening Guard is on — no new tasks after 8pm. Rest; this will be here tomorrow."
-                : "You can change it whenever. That\u2019s not failure."}
-            </p>
-            {/* K1: screen 10's Commit button survives — J2a's "the field is the
-                only affordance" meant no illustration and no onboarding CTA,
-                not a keyboard-only commit. Enter commits too, via the form. */}
-            <button type="submit" className="wall-commit-btn" disabled={!draft.trim() || commitBlocked}>
-              Commit
-            </button>
+            <label className="wall-commit-box">
+              <IconPlus size={20} />
+              <input
+                type="text"
+                className="wall-commit-field"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="What's the one thing today?"
+                aria-label="Today's one thing"
+                enterKeyHint="done"
+                autoComplete="off"
+                maxLength={1000}
+              />
+            </label>
           </form>
-
-          {matches.length > 0 && (
-            <div className="wall-pick">
-              <div className="wall-pick-kicker">OR PICK ONE</div>
-              {matches.map(t => (
-                <button
-                  key={t.uuid}
-                  type="button"
-                  className="wall-pick-row"
-                  onClick={() => pick(t)}
-                >
-                  <span className="wall-pick-title">{t.title}</span>
-                </button>
-              ))}
-            </div>
+          {mindBoxCount > 0 && onOpenMindBox && (
+            <p className="wall-empty-or">
+              Or{" "}
+              <button type="button" className="wall-link" onClick={() => onOpenMindBox()}>
+                pick from Mind Box ({mindBoxCount})
+              </button>
+            </p>
           )}
         </div>
       </section>
     );
   }
 
-  const support = task.concreteStep || null;
+  const firstStep = task.concreteStep || null;
 
   return (
     <section className={`today-wall${peekOpen ? " is-open" : ""}`}>
-      {header}
+      {top}
 
-      {peekOpen ? (
-        // — the desk —
-        <div className="wall-body">
-          {kicker && <div className="wall-kicker">{kicker}</div>}
-          <h2 className="wall-title is-desk"><LinkifyText text={task.title} /></h2>
-          {support && (
-            <div className="wall-support-row">
-              <span className="wall-rule" aria-hidden="true" />
-              <span className="wall-support"><LinkifyText text={support} /></span>
-            </div>
-          )}
-          <button type="button" className="wall-primary" onClick={onStartFocus}>
-            <span className="wall-primary-glyph" aria-hidden="true">▸</span>
-            <span>{resuming ? "Resume focus" : "Start focus"}</span>
-            <span className="wall-primary-figure">· {timer}</span>
+      <div className="wall-hero">
+        <div className="wall-kicker">TODAY, ONE THING</div>
+        <h2 className="wall-title"><LinkifyText text={task.title} /></h2>
+        {firstStep && (
+          <p className="wall-first-step">
+            <span className="wall-first-step-label">First step</span> — <LinkifyText text={firstStep} />
+          </p>
+        )}
+
+        <button type="button" className="wall-primary" onClick={onStartFocus}>
+          <span>{resuming ? "Resume focus" : "Start focus"}</span>
+          <span className="wall-primary-figure">{timer}</span>
+          <kbd className="wall-key is-on-fill" aria-hidden="true">Space</kbd>
+        </button>
+
+        <div className="wall-actions">
+          <button type="button" className="wall-action" onClick={onMarkDone}>
+            Mark done <kbd className="wall-key" aria-hidden="true">D</kbd>
           </button>
-        </div>
-      ) : (
-        // — the wall — the task IS the button
-        <button type="button" className="wall-hero" onClick={onStartFocus}>
-          {kicker && <span className="wall-kicker">{kicker}</span>}
-          <span className="wall-rule-short" aria-hidden="true" />
-          {/* Plain text, not LinkifyText: an <a> inside this <button> is
-              invalid nested interactive content, gives assistive technology
-              conflicting button/link semantics, and breaks the "tap anywhere
-              to begin" contract — tapping the linked words would open a tab
-              instead of starting focus. The desk state below is ordinary
-              markup, so links work there. */}
-          <span className={`wall-title is-wall ${wallSize}`}>{task.title}</span>
-          {support && (
-            <span className="wall-support is-wall">{support}</span>
+          {/* Low Energy swaps the split action for a smaller start, per Addendum A.
+              No banner and no badge — a low-energy day must not look degraded.
+              The handler swaps with the label: a button that says "5 minutes" and
+              opens the task editor is a control that lies about what it does. */}
+          {lowEnergy ? (
+            <button type="button" className="wall-action" onClick={onStartSmall}>
+              Start small — 5 minutes
+            </button>
+          ) : (
+            <button type="button" className="wall-action" onClick={onSplit}>
+              Split it <kbd className="wall-key" aria-hidden="true">S</kbd>
+            </button>
           )}
-          <span className="wall-start-row">
-            <span className="wall-chip">▸ {timer}</span>
-            <span className="wall-start-hint">{resuming ? "tap anywhere to resume" : "tap anywhere to begin"}</span>
-          </span>
-        </button>
-      )}
+        </div>
 
-      <div className={`wall-actions${peekOpen ? " is-desk" : ""}`}>
-        <button type="button" className="wall-action" onClick={onMarkDone}>Mark done</button>
-        {/* Low Energy swaps the split action for a smaller start, per Addendum A.
-            No banner and no badge — a low-energy day must not look degraded.
-            The handler swaps with the label: a button that says "5 minutes" and
-            opens the task editor is a control that lies about what it does. */}
-        <button type="button" className="wall-action" onClick={lowEnergy ? onStartSmall : onSplit}>
-          {lowEnergy ? "Start small — 5 minutes" : (peekOpen ? "Split it" : "Too big — split it")}
-        </button>
+        <div className="wall-links">
+          {onScattered && (
+            <button type="button" className="wall-link" onClick={onScattered}>Feeling scattered?</button>
+          )}
+          {onRescue && (
+            <button type="button" className="wall-link" onClick={onRescue}>Open Rescue</button>
+          )}
+        </div>
       </div>
 
       <button
@@ -271,26 +255,11 @@ export default function TodayWall({
         onClick={onTogglePeek}
         aria-expanded={peekOpen}
       >
-        <span className="wall-peek-chevron" aria-hidden="true">{peekOpen ? "⌄" : "⌃"}</span>
+        <span className="wall-peek-grabber" aria-hidden="true" />
         <span className="wall-peek-label">
-          {peekOpen
-            ? `AFTER THAT · ${remainingCount} — TAP TO COLLAPSE`
-            : `${remainingCount} more today${doneCount ? ` · ${doneCount} done` : ""}`}
+          {peekOpen ? "Hide list" : `After that · ${remainingCount}`}
         </span>
-        {minutesInLabel && <span className="wall-peek-figure">{minutesInLabel} IN</span>}
       </button>
-
-      {/* The door into screen 14, where you'd actually reach for it. */}
-      {peekOpen && onScattered && openCount > 0 && (
-        <div className="wall-scattered">
-          <p className="wall-scattered-line">
-            Feeling scattered? There are {openCount} open things across your fronts.
-          </p>
-          <button type="button" className="wall-scattered-link" onClick={onScattered}>
-            Help me narrow it down
-          </button>
-        </div>
-      )}
     </section>
   );
 }

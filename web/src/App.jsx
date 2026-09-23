@@ -13,6 +13,7 @@ import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvi
 import { useSync, CONN } from "./useSync";
 import { useFocusAudio } from "./hooks/useFocusAudio";
 import Header from "./components/Header";
+import { IconWifiOff } from "./components/ui/icons";
 import BottomNav from "./components/BottomNav";
 import TodayTab from "./components/TodayTab";
 import RoadmapTab from "./components/RoadmapTab";
@@ -1179,8 +1180,10 @@ export default function App() {
         </div>
       )}
 
-      {/* Sync warning — shown when RTDB is unreachable (stale cache) or a write failed */}
-      {syncWarning && (
+      {/* Sync warning — a failed write or a blocked task-count drop. Being
+          offline is not an error: it is the neutral banner above the screen
+          content (37g). */}
+      {syncWarning && syncWarning !== "offline" && (
         <div
           role="alert"
           className="bottom-toast"
@@ -1197,11 +1200,7 @@ export default function App() {
         >
           {syncWarning === "write-failed"
             ? "⚠️ Changes saved locally — cloud sync failed. Tap to retry."
-            : syncWarning === "drop-guard"
-            ? "⚠️ A suspicious task-count drop was blocked. Your data was not overwritten."
-            : (!!navigator.brave
-              ? "⚠️ Sync offline. Brave Shields may be blocking — tap to reload."
-              : "⚠️ Sync offline — data may be out of date. Tap to retry.")}
+            : "⚠️ A suspicious task-count drop was blocked. Your data was not overwritten."}
         </div>
       )}
 
@@ -1245,6 +1244,15 @@ export default function App() {
 
       {/* Main Tab Screen Router */}
       <main className={`screen-content${activeTab === "daymap" ? " screen-content-day-map" : ""}`}>
+        {syncWarning === "offline" && (
+          <div className="offline-banner" role="status">
+            <IconWifiOff size={18} />
+            <span className="offline-banner-text">
+              <strong>Offline</strong>
+              <span>Changes save on this <span className="offline-banner-phone">phone</span><span className="offline-banner-device">device</span> and sync when you're back. Coach needs a connection.</span>
+            </span>
+          </div>
+        )}
         {activeTab === "today" && (
           <TodayTab
             payload={payload}
