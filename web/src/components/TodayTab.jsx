@@ -1129,9 +1129,12 @@ export default function TodayTab({
   useEffect(() => {
     if (!pinnedFocusTask || wallKeysBlocked) return undefined;
     const onKey = (e) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
       const el = e.target;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(el.tagName))) return;
+      // Any other focused control too — a row in Drag anywhere mode is a
+      // focusable <div> whose Space starts a keyboard reorder, not a session.
+      if (el && el !== document.body && el !== document.documentElement && el.tabIndex >= 0) return;
       const key = e.key.toLowerCase();
       if (key === " ") {
         e.preventDefault();
