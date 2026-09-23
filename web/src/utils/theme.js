@@ -10,9 +10,11 @@
 export const THEME_CHOICES = ["light", "dark", "auto"];
 
 // The fifteen themes this replaced. The dark-ground ones become Dark and the
-// rest Light, so nobody who picked a look wakes up in its opposite. "glassy"
-// was the default for anyone who never picked, so they land on Dark too.
-const OLD_DARK_THEMES = ["glassy", "evening", "midnight-neon", "regal-amethyst", "option-e-slate"];
+// rest Light, so nobody who picked a look wakes up in its opposite. "Dark"
+// means the theme's --bg-primary was dark (e.g. Bento's #0d1117), measured,
+// not guessed from its name. "glassy" was the default for anyone who never
+// picked, so they land on Dark too.
+const OLD_DARK_THEMES = ["glassy", "evening", "midnight-neon", "regal-amethyst", "option-d-bento", "option-e-slate"];
 
 export function migrateStoredTheme(stored) {
   if (THEME_CHOICES.includes(stored)) return stored;

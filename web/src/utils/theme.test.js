@@ -10,7 +10,7 @@ const OLD_THEMES = [
   // removed before this change, still possibly in someone's storage
   "sage", "option-b-linear", "option-f-chronos",
 ];
-const OLD_DARK = ["glassy", "evening", "midnight-neon", "regal-amethyst", "option-e-slate"];
+const OLD_DARK = ["glassy", "evening", "midnight-neon", "regal-amethyst", "option-d-bento", "option-e-slate"];
 
 describe("migrateStoredTheme", () => {
   it("keeps the three current choices", () => {
