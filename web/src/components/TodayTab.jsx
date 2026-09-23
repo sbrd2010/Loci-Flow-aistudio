@@ -254,7 +254,7 @@ export default function TodayTab({
 
   const [editingTask, setEditingTask] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
-  // The one Undo toast: { kind: "done" | "delete", task, wasPinned, at }.
+  // The one Undo toast: { kind: "done" | "delete" | "unpin", task, wasPinned, at }.
   // Only the task is held — what undoing writes is built from the tasks as
   // they are when Undo is tapped, not as they were 5 seconds earlier.
   const [undo, setUndo] = useState(null);
@@ -526,6 +526,13 @@ export default function TodayTab({
     setUndo({ kind: "delete", task, at: Date.now() });
   };
 
+  // Unpin from the list's NOW row: acts at once, with Undo like the rest.
+  const handleUnpinWallTask = (task) => {
+    if (!task.isNowFocus) return handlePinTask(task);
+    setUndo({ kind: "unpin", task, at: Date.now() });
+    return handlePinTask(task);
+  };
+
   const handleUndo = () => {
     if (!undo) return;
     const { kind, task, wasPinned } = undo;
@@ -535,6 +542,14 @@ export default function TodayTab({
       savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t) })
         .then(() => writeActivityEvents(eventPatch(uid, event)))
         .catch(() => {});
+      return;
+    }
+    if (kind === "unpin") {
+      // Re-pin only if it is still here and nothing else became the one thing.
+      const current = tasks.find(t => t.uuid === task.uuid && !t.isDeleted && !t.isCompleted);
+      if (current && !current.isNowFocus && !tasks.some(t => t.isNowFocus && !t.isDeleted && !t.isCompleted)) {
+        handlePinTask(current);
+      }
       return;
     }
     // Reopen only what is still done: a task reopened or deleted by another
@@ -1221,6 +1236,28 @@ export default function TodayTab({
         </div>
 
         <div className="tasks-list" data-testid="today-tasks-list">
+          {/* The wall's one thing heads the open list, marked NOW, so its row
+              menu can unpin it — the wall itself has no unpin. Not counted
+              in "After that", and not draggable. */}
+          {pinnedFocusTask && (
+            <TaskRow
+              task={pinnedFocusTask}
+              onToggleComplete={handleToggleComplete}
+              onPin={handleUnpinWallTask}
+              onDelete={handleDeleteTask}
+              onEdit={handleStartEdit}
+              onMoveToHorizon={handleMoveToHorizon}
+              onPark={handleParkTask}
+              onBreakdown={handleBreakdown}
+              onSubStepToggle={handleSubStepToggle}
+              onDeleteSubStep={handleDeleteSubStep}
+              isBreakingDown={breakdownLoadingUuid === pinnedFocusTask.uuid}
+              breakdownError={breakdownErrorUuid === pinnedFocusTask.uuid}
+              breakdownNoKey={breakdownNoKeyUuid === pinnedFocusTask.uuid}
+              onToggleMVD={handleToggleMVD}
+              isGoal={!!wallKickerFront && pinnedFocusTask.frontId === wallKickerFront.id}
+            />
+          )}
           {!wallIsAsking && todayTasksAll.length === 0 && (
             <p className="today-list-empty">Nothing else on Today.</p>
           )}
@@ -1353,7 +1390,7 @@ export default function TodayTab({
       {undo && (
         <UndoToast
           key={undo.at}
-          message={`${undo.kind === "done" ? "Marked done" : "Deleted"}: ${undo.task.title}`}
+          message={`${{ done: "Marked done", delete: "Deleted", unpin: "Unpinned" }[undo.kind]}: ${undo.task.title}`}
           onUndo={handleUndo}
           onClose={() => setUndo(null)}
         />

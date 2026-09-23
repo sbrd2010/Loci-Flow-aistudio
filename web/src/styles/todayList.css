@@ -177,8 +177,6 @@
 }
 
 @media (min-width: 1024px) {
-  /* Laptop adds with N or the list's "+ Add" (49 notes). */
-  .wall-peek-add { display: none; }
   .today-list-head { padding: 14px 22px 12px; }
   .today-list-tools { padding: 10px 22px; }
   .today-list .tasks-list { padding: 0 22px 8px; }

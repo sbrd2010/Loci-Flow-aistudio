@@ -102,6 +102,7 @@ for (const theme of THEMES) {
       [page.locator(".today-seg-opt[aria-pressed='false']"), "unselected segment"],
       [page.locator(".today-energy-caption"), "Low energy caption"],
       [page.locator(".task-row-priority"), "row priority tag"],
+      [page.locator(".task-tag.is-now"), "NOW tag"],
       [page.locator(".today-list-link"), "Day map link"],
     ]) {
       await assertLegible(loc.first(), what, theme);

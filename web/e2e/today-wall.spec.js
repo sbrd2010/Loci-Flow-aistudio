@@ -175,14 +175,12 @@ test("mobile reliability: five minutes is honoured even with a session already o
 
 // Reaching the empty wall means having no commitment AND none finished today
 // — completing one gives the done state (J2b), which stands for the rest of
-// the day. So this moves the one thing off Today instead, through its editor
-// (Split it), which lets go of the pin as well.
-async function moveWallTaskToThisWeek(page) {
-  await page.locator(".wall-action", { hasText: "Split it" }).click();
-  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
-  await page.getByRole("button", { name: "This Week" }).click();
-  await page.getByTestId("add-task-submit").click();
-  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+// the day. So this unpins instead, from the NOW row that heads the open list.
+async function unpinFromList(page) {
+  const now = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { has: page.locator(".task-tag.is-now") });
+  await expect(now).toHaveCount(1, { timeout: 10_000 });
+  await now.locator(".task-row-top").click();
+  await page.getByText("Unpin from Focus").click();
 }
 
 async function emptyTheWall(page) {
@@ -191,7 +189,7 @@ async function emptyTheWall(page) {
   });
   await enterDemo(page);
   await expect(page.locator(".wall-title")).toBeVisible({ timeout: 10_000 });
-  await moveWallTaskToThisWeek(page);
+  await unpinFromList(page);
   await expect(page.locator(".wall-commit-field")).toBeVisible({ timeout: 8_000 });
 }
 
@@ -324,8 +322,8 @@ test("mobile reliability: committing clears the typed draft", async ({ page }) =
   await page.locator(".wall-commit-field").press("Enter");
   await expect(page.locator(".wall-title")).toContainText("Call the landlord", { timeout: 8_000 });
 
-  // Let go of it and the field comes back — empty, not holding the old query.
-  await moveWallTaskToThisWeek(page);
+  // Unpin it and the field comes back — empty, not holding the old query.
+  await unpinFromList(page);
 
   await expect(page.locator(".wall-commit-field")).toHaveValue("", { timeout: 8_000 });
 });
@@ -497,4 +495,37 @@ test("laptop: the wall's keys stay quiet on any focused control", async ({ page 
   await page.keyboard.press("d");
   await expect(page.locator(".focus-mode-overlay")).toHaveCount(0);
   await expect(page.locator(".wall-done-line")).toHaveCount(0);
+});
+
+// The wall has no unpin of its own: the one thing heads the open list, marked
+// NOW, and its row menu lets go of it — with Undo, like every other action.
+test("mobile reliability: the one thing can be unpinned from the list, and Undo pins it back", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  const title = (await page.locator(".wall-title").innerText()).trim();
+
+  const now = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']").first();
+  await expect(now.locator(".task-tag.is-now")).toHaveText("NOW");
+  await expect(now.locator(".task-title-text")).toHaveText(title);
+  // Not counted in "After that": the figure is the rest of the day.
+  const count = await page.locator(".today-list-count").innerText();
+  const rows = await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").count();
+  expect(Number(count.split(" ")[0])).toBe(rows - 1);
+
+  await now.locator(".task-row-top").click();
+  await page.getByText("Unpin from Focus").click();
+  await expect(page.locator(".wall-commit-field")).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByRole("status").filter({ hasText: `Unpinned: ${title}` })).toBeVisible();
+
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(".wall-title")).toHaveText(title, { timeout: 8_000 });
+});
+
+// A + is on screen at every width: on a laptop with the list hidden, too.
+test("laptop: the peek's + is there with the list hidden", async ({ page }) => {
+  await enterLaptop(page);
+  await expect(page.locator(".tasks-section")).toBeHidden();
+  const add = page.getByRole("button", { name: "Add a task to Today" });
+  await expect(add).toBeVisible();
+  await add.click();
+  await expect(page.getByRole("heading", { name: "Add Task" })).toBeVisible({ timeout: 5_000 });
 });

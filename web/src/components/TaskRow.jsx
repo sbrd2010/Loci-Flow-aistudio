@@ -223,8 +223,9 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
       <div className="task-middle">
         <div className="task-row-top">
           <span className="task-title-text"><LinkifyText text={title} /></span>
-          {!isCompleted && (isMVD || isGoal) && (
+          {!isCompleted && (isNowFocus || isMVD || isGoal) && (
             <span className="task-row-tags">
+              {isNowFocus && <span className="task-tag is-now" aria-label="Today's one thing">NOW</span>}
               {isMVD && <span className="task-tag is-must" aria-label="Must-do">MUST</span>}
               {isGoal && <span className="task-tag is-goal" aria-label="Goal task">GOAL</span>}
             </span>

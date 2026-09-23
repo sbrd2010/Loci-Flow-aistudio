@@ -120,6 +120,12 @@
   color: var(--ink);
   border: 1px solid var(--ink);
 }
+/* The wall's one thing, when it shows in the list (so it can be unpinned). */
+.task-tag.is-now {
+  padding: 1px 6px;
+  color: var(--on-accent);
+  background: var(--accent);
+}
 .task-tag.is-goal {
   padding: 1px 6px;
   color: var(--gold-label);
