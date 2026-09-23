@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 
-// Screen 1 — the wall and the desk.
+// Today's wall (turns 37, 40, 41, 49): the goal band, one anchor line, and
+// the one thing with one filled "Start focus".
 //
 // Deliberately does NOT seed loci_today_peek_open, unlike every other spec:
 // this one is about the default, and the default is the wall. If it ever seeds
@@ -18,13 +19,11 @@ async function enterDemo(page) {
 test("mobile reliability: Today opens on the wall, with the list put away", async ({ page }) => {
   await enterDemo(page);
 
-  // The commitment is the dominant element and IS the start control.
+  // The commitment is the dominant element, with exactly one filled action.
   await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
-  await expect(page.locator(".wall-title.is-wall")).toBeVisible();
-  await expect(page.getByText("tap anywhere to begin")).toBeVisible();
-
-  // No second filled primary competing with it.
-  await expect(page.locator(".wall-primary")).toHaveCount(0);
+  await expect(page.locator(".wall-title")).toBeVisible();
+  await expect(page.locator(".wall-primary")).toHaveCount(1);
+  await expect(page.locator(".wall-primary")).toContainText("Start focus");
 
   // The list is genuinely gone, not merely scrolled past. This asserts the
   // computed style because the section carries an INLINE display, and a class
@@ -37,14 +36,13 @@ test("mobile reliability: Today opens on the wall, with the list put away", asyn
 test("mobile reliability: the peek opens the desk and closes back to the wall", async ({ page }) => {
   await enterDemo(page);
 
+  await expect(page.locator(".wall-peek-label")).toContainText(/After that · \d+/);
   await page.locator(".wall-peek").click();
 
-  // The hero stops being a button; an explicit primary appears instead.
-  await expect(page.locator(".wall-hero")).toHaveCount(0);
-  await expect(page.locator(".wall-title.is-desk")).toBeVisible();
+  // The list opens below; the one thing stays as it was.
   await expect(page.locator(".wall-primary")).toBeVisible();
   await expect(page.locator(".tasks-section")).toBeVisible();
-  await expect(page.locator(".wall-peek-label")).toContainText(/AFTER THAT/);
+  await expect(page.locator(".wall-peek-label")).toHaveText("Hide list");
 
   // Two-way: the toggle is a button in both states, so you can always get back.
   await page.locator(".wall-peek").click();
@@ -56,7 +54,7 @@ test("mobile reliability: the peek opens the desk and closes back to the wall", 
 test("mobile reliability: the peek state survives a reload", async ({ page }) => {
   await enterDemo(page);
   await page.locator(".wall-peek").click();
-  await expect(page.locator(".wall-title.is-desk")).toBeVisible();
+  await expect(page.locator(".tasks-section")).toBeVisible();
 
   await page.reload();
   await expect(page.getByTestId("demo-btn")).toBeVisible({ timeout: 25_000 });
@@ -64,28 +62,47 @@ test("mobile reliability: the peek state survives a reload", async ({ page }) =>
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
 
   // peekOpen is persisted to localStorage, per the handoff.
-  await expect(page.locator(".wall-title.is-desk")).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(".tasks-section")).toBeVisible({ timeout: 10_000 });
 });
 
-test("mobile reliability: tapping the wall starts a focus session on the commitment", async ({ page }) => {
+test("mobile reliability: Start focus starts a focus session on the commitment", async ({ page }) => {
   await enterDemo(page);
 
-  const title = (await page.locator(".wall-title.is-wall").innerText()).trim();
-  await page.locator(".wall-hero").click();
+  const title = (await page.locator(".wall-title").innerText()).trim();
+  await page.locator(".wall-primary").click();
 
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 10_000 });
   await expect(overlay.getByRole("heading", { name: title })).toBeVisible();
 });
 
-test("mobile reliability: a deadline a year out is not painted as time pressure", async ({ page }) => {
+test("mobile reliability: the goal band names the goal and its days, in gold", async ({ page }) => {
   await enterDemo(page);
 
-  // Clay is the one alert colour and the design reserves it for real pressure.
-  // The demo's deadline is ~365 days away, so the figure shows but stays quiet.
-  const days = page.locator(".wall-head-days");
-  await expect(days).toBeVisible();
-  await expect(days).not.toHaveClass(/is-pressing/);
+  // Addendum M: the demo has a Key Deadline and no front, so the band names
+  // the deadline, with its days and no count (nothing countable).
+  const band = page.locator(".wall-goal");
+  await expect(band).toBeVisible();
+  await expect(band.locator(".wall-goal-name")).toHaveText("Project launch");
+  await expect(band.locator(".wall-goal-figures").first()).toHaveText(/^\d+ days$/);
+  // Gold is the goal and nothing else: the band is the gold band token.
+  const bg = await band.evaluate(el => getComputedStyle(el).backgroundColor);
+  expect(bg).toBe("rgb(241, 223, 178)");
+});
+
+// 40a: one anchor, the day's own, and a tap shows the next.
+test("mobile reliability: the anchor line shows one anchor and a tap moves to the next", async ({ page }) => {
+  await enterDemo(page);
+
+  const line = page.locator(".wall-anchor");
+  await expect(line).toBeVisible();
+  const first = (await line.locator(".wall-anchor-text").innerText()).trim();
+  await expect(line.locator(".wall-anchor-count")).toHaveText(/^\d+ \/ 5 ›$/);
+
+  await line.click();
+  await expect(line.locator(".wall-anchor-text")).not.toHaveText(first);
+  // No pop-up over the list, ever (40a).
+  await expect(page.locator(".focus-now-backdrop")).toHaveCount(0);
 });
 
 // ── Fixes for the Codex review on PR #380 ─────────────────────────────────
@@ -122,7 +139,7 @@ test("mobile reliability: Low Energy's smaller start actually starts five minute
 test("mobile reliability: the scattered door on the desk reaches screen 14", async ({ page }) => {
   await enterDemoWithPeek(page);
 
-  const door = page.locator(".wall-scattered-link");
+  const door = page.locator(".wall-link", { hasText: "Feeling scattered?" });
   await expect(door).toBeVisible({ timeout: 8_000 });
   await door.click();
 
@@ -174,13 +191,10 @@ async function emptyTheWall(page) {
 test("mobile reliability: typing on the empty wall creates and commits a task", async ({ page }) => {
   await emptyTheWall(page);
 
-  const commit = page.locator(".wall-commit-btn");
-  // Screen 10's button survives (K1), disabled until there is text.
-  await expect(commit).toBeDisabled();
-
+  // 37f: the field is the whole form; Enter commits.
+  await expect(page.locator(".wall-empty-title")).toHaveText("Nothing committed yet.");
   await page.locator(".wall-commit-field").fill("Write the membrane paper intro");
-  await expect(commit).toBeEnabled();
-  await commit.click();
+  await page.locator(".wall-commit-field").press("Enter");
 
   // It becomes the commitment: the wall stops asking and the task IS the hero.
   await expect(page.locator(".wall-commit-field")).toHaveCount(0);
@@ -189,13 +203,13 @@ test("mobile reliability: typing on the empty wall creates and commits a task", 
   // The task is created with the canonical "Personal" category and NO
   // estimate, so no duration is rendered for it as if the user had chosen one.
   await expect(page.locator(".wall-title")).not.toContainText("25m");
-  // L1: no front, but the demo has a Key Deadline set — so the kicker names
+  // L1: no front, but the demo has a Key Deadline set — so the goal band names
   // THAT, rather than suppressing a countdown the user already has.
-  await expect(page.locator(".wall-kicker")).toContainText("Project launch");
-  await expect(page.locator(".wall-head-days")).toBeVisible();
-  // And no subtask: concreteStep is OMITTED rather than set empty, so
+  await expect(page.locator(".wall-goal-name")).toHaveText("Project launch");
+  await expect(page.locator(".wall-goal-figures").first()).toBeVisible();
+  // And no first step: concreteStep is OMITTED rather than set empty, so
   // normalizePayload does not substitute its "Do first tiny step" default.
-  await expect(page.locator(".wall-support")).toHaveCount(0);
+  await expect(page.locator(".wall-first-step")).toHaveCount(0);
 });
 
 test("mobile reliability: Enter commits, without touching the button", async ({ page }) => {
@@ -207,27 +221,14 @@ test("mobile reliability: Enter commits, without touching the button", async ({ 
   await expect(page.locator(".wall-title")).toContainText("Reply to the supervisor");
 });
 
-test("mobile reliability: the pick rows narrow as you type, and tapping one commits it", async ({ page }) => {
+// 37f: what already exists is one tap away — Mind Box, with its count.
+test("mobile reliability: the empty wall offers Mind Box with its count", async ({ page }) => {
   await emptyTheWall(page);
 
-  // Unfiltered, the rows show today's open items.
-  const rows = page.locator(".wall-pick-row");
-  await expect(rows.first()).toBeVisible({ timeout: 8_000 });
-  const before = await rows.count();
-  expect(before).toBeGreaterThan(0);
-
-  const firstTitle = (await rows.first().locator(".wall-pick-title").innerText()).trim();
-
-  // Typing part of an existing title narrows to it, so the near-duplicate is
-  // visible before a second copy is created.
-  await page.locator(".wall-commit-field").fill(firstTitle.slice(0, 12));
-  await expect(rows.first()).toContainText(firstTitle.slice(0, 12));
-
-  await rows.first().click();
-
-  // The existing task is committed — not a new one created from the typed text.
-  await expect(page.locator(".wall-title")).toContainText(firstTitle);
-  await expect(page.locator(".wall-commit-field")).toHaveCount(0);
+  const link = page.locator(".wall-link", { hasText: /^pick from Mind Box \(\d+\)$/ });
+  await expect(link).toBeVisible();
+  await link.click();
+  await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 8_000 });
 });
 
 // ── J2b / Addendum K2, K3: the commitment, finished ───────────────────────
@@ -235,7 +236,7 @@ test("mobile reliability: the pick rows narrow as you type, and tapping one comm
 test("mobile reliability: finishing the commitment gives the done state, not the empty wall", async ({ page }) => {
   await enterDemo(page);
   await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
-  const title = (await page.locator(".wall-title.is-wall").innerText()).trim();
+  const title = (await page.locator(".wall-title").innerText()).trim();
 
   await page.locator(".wall-action", { hasText: "Mark done" }).click();
 
@@ -280,7 +281,7 @@ test("mobile reliability: Commit to this makes the proposal the new commitment",
 
   await proposal.locator(".wall-proposal-commit").click();
 
-  await expect(page.locator(".wall-title.is-wall")).toContainText(next, { timeout: 8_000 });
+  await expect(page.locator(".wall-title")).toContainText(next, { timeout: 8_000 });
 });
 
 // ── J4: Momentum ─────────────────────────────────────────────────────────
@@ -306,19 +307,15 @@ test("mobile reliability: the empty wall does not compete with the old onboardin
   await expect(page.getByText("tap + to add your first task", { exact: false })).toHaveCount(0);
 });
 
-// TodayWall stays mounted, so a query left in the field reappears if the
-// chosen task is ever unpinned — and an accidental submit then creates
-// exactly the duplicate the pick rows exist to prevent.
-test("mobile reliability: picking an existing task clears the typed query", async ({ page }) => {
+// TodayWall stays mounted, so a draft left in the field would reappear if the
+// committed task is ever unpinned — and an accidental Enter then creates a
+// duplicate of it.
+test("mobile reliability: committing clears the typed draft", async ({ page }) => {
   await emptyTheWall(page);
 
-  const rows = page.locator(".wall-pick-row");
-  await expect(rows.first()).toBeVisible({ timeout: 8_000 });
-  const firstTitle = (await rows.first().locator(".wall-pick-title").innerText()).trim();
-
-  await page.locator(".wall-commit-field").fill(firstTitle.slice(0, 10));
-  await rows.first().click();
-  await expect(page.locator(".wall-title")).toContainText(firstTitle, { timeout: 8_000 });
+  await page.locator(".wall-commit-field").fill("Call the landlord");
+  await page.locator(".wall-commit-field").press("Enter");
+  await expect(page.locator(".wall-title")).toContainText("Call the landlord", { timeout: 8_000 });
 
   // Unpin it and the field comes back — empty, not holding the old query.
   const pinned = page.locator(".pinned-focus-section .task-row").first();
@@ -337,10 +334,10 @@ test("mobile reliability: editing a wall task keeps its no-estimate, no-subtask 
   await emptyTheWall(page);
 
   await page.locator(".wall-commit-field").fill("Draft the membrane abstract");
-  await page.locator(".wall-commit-btn").click();
+  await page.locator(".wall-commit-field").press("Enter");
   await expect(page.locator(".wall-title")).toContainText("Draft the membrane abstract", { timeout: 8_000 });
-  // No subtask to begin with.
-  await expect(page.locator(".wall-support")).toHaveCount(0);
+  // No first step to begin with.
+  await expect(page.locator(".wall-first-step")).toHaveCount(0);
 
   // Open the editor from the wall and change ONLY the title.
   await page.locator(".wall-action", { hasText: "Split it" }).click();
@@ -350,7 +347,7 @@ test("mobile reliability: editing a wall task keeps its no-estimate, no-subtask 
 
   await expect(page.locator(".wall-title")).toContainText("Draft the abstract properly", { timeout: 8_000 });
   // Still no invented subtask, and still no duration presented as chosen.
-  await expect(page.locator(".wall-support")).toHaveCount(0);
+  await expect(page.locator(".wall-first-step")).toHaveCount(0);
   await expect(page.getByText("Do first tiny step")).toHaveCount(0);
 });
 
@@ -361,12 +358,13 @@ test("mobile reliability: editing a wall task keeps its no-estimate, no-subtask 
 test("mobile reliability: the done state keeps the finished task's own countdown", async ({ page }) => {
   await enterDemo(page);
   await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
-  const before = await page.locator(".wall-head-days").innerText();
+  const figures = page.locator(".wall-goal-figures").first();
+  const before = await figures.innerText();
 
   await page.locator(".wall-action", { hasText: "Mark done" }).click();
   await expect(page.locator(".wall-done-line")).toBeVisible({ timeout: 8_000 });
 
-  await expect(page.locator(".wall-head-days")).toHaveText(before);
+  await expect(figures).toHaveText(before);
 });
 
 // The selector shows 25 for a task that has none, so choosing 25 has to be
@@ -376,7 +374,7 @@ test("mobile reliability: an estimate can still be chosen for a wall task", asyn
   await emptyTheWall(page);
 
   await page.locator(".wall-commit-field").fill("Size this one properly");
-  await page.locator(".wall-commit-btn").click();
+  await page.locator(".wall-commit-field").press("Enter");
   await expect(page.locator(".wall-title")).toContainText("Size this one properly", { timeout: 8_000 });
 
   await page.locator(".wall-action", { hasText: "Split it" }).click();
@@ -387,4 +385,66 @@ test("mobile reliability: an estimate can still be chosen for a wall task", asyn
   // It sticks: the wall's start control now offers the length the user chose,
   // not the 25 it falls back to when there is no estimate.
   await expect(page.locator(".wall-primary")).toContainText("45:00", { timeout: 8_000 });
+});
+
+// 37l / 41a: laptop keys on the wall — Space starts focus, D marks done, S
+// splits — and none of them fire while typing.
+async function enterLaptop(page) {
+  await enterDemo(page);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(page.locator(".wall-primary .wall-key")).toBeVisible();
+}
+
+test("laptop: Space starts focus on the commitment", async ({ page }) => {
+  await enterLaptop(page);
+  const title = (await page.locator(".wall-title").innerText()).trim();
+  await page.keyboard.press(" ");
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 8_000 });
+  await expect(overlay.getByRole("heading", { name: title })).toBeVisible();
+});
+
+test("laptop: D marks the commitment done", async ({ page }) => {
+  await enterLaptop(page);
+  await page.keyboard.press("d");
+  await expect(page.locator(".wall-done-line")).toBeVisible({ timeout: 8_000 });
+});
+
+test("laptop: S opens the commitment to split it", async ({ page }) => {
+  await enterLaptop(page);
+  await page.keyboard.press("s");
+  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
+});
+
+test("laptop: the wall's keys stay quiet while typing", async ({ page }) => {
+  await enterLaptop(page);
+  // Any text field on the page — the guard is on the element, not the screen.
+  await page.evaluate(() => {
+    const input = document.createElement("input");
+    input.id = "typing-probe";
+    document.body.appendChild(input);
+  });
+  await page.locator("#typing-probe").focus();
+  await page.keyboard.type("d s ");
+  await expect(page.locator("#typing-probe")).toHaveValue("d s ");
+  await expect(page.locator(".wall-done-line")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Edit Task" })).toHaveCount(0);
+  await expect(page.locator(".focus-mode-overlay")).toHaveCount(0);
+});
+
+// A row in Drag anywhere mode is a focusable <div>, and its Space starts a
+// keyboard reorder. The wall must not also start a session from it.
+test("laptop: the wall's keys stay quiet on any focused control", async ({ page }) => {
+  await enterLaptop(page);
+  await page.evaluate(() => {
+    const row = document.createElement("div");
+    row.id = "row-probe";
+    row.tabIndex = 0;
+    document.body.appendChild(row);
+  });
+  await page.locator("#row-probe").focus();
+  await page.keyboard.press(" ");
+  await page.keyboard.press("d");
+  await expect(page.locator(".focus-mode-overlay")).toHaveCount(0);
+  await expect(page.locator(".wall-done-line")).toHaveCount(0);
 });

@@ -3,7 +3,7 @@ import TaskRow from "./TaskRow";
 import AddTaskDialog from "./AddTaskDialog";
 import TodayWall from "./TodayWall";
 import Momentum from "./Momentum";
-import { frontsFromConfig, commitmentDaysLeft, commitmentKickerFront, frontForCommitment } from "../utils/fronts";
+import { frontsFromConfig, commitmentDaysLeft, commitmentKickerFront, frontForCommitment, frontProgress } from "../utils/fronts";
 import { useFocusLedger } from "../hooks/useFocusLedger";
 import { minutesForTaskOn, sessionsOnDay } from "../utils/focusLedger";
 import { buildMomentum } from "../utils/momentum";
@@ -12,7 +12,7 @@ import FocusModePage from "./FocusModePage";
 import RescueMode from "./RescueMode";
 import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
-import { buildToggleCompletedTasks, byPriorityThenOrder, countCompletedOn } from "../utils/taskOps";
+import { buildToggleCompletedTasks, byPriorityThenOrder } from "../utils/taskOps";
 import { buildParkTaskTasks } from "../utils/coachActions";
 import { shouldStopFocusOnComplete } from "../utils/focusSession";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
@@ -274,7 +274,6 @@ export default function TodayTab({
   const todayCheckedIds = getTodayCheckedIds(config, anchorTodayStr);
   const todayShownSlots = getTodayShownSlots(config, anchorTodayStr);
   const anchorsCheckedCount = anchors.filter(a => todayCheckedIds.includes(a.id)).length;
-  const todayShownSlotsKey = todayShownSlots.join(",");
 
   useEffect(() => {
     const container = document.querySelector('.screen-content');
@@ -604,29 +603,6 @@ export default function TodayTab({
     };
   }, []);
 
-  // ── Daily Anchors / Morning Ritual auto-show ───────────────────────────────
-  useEffect(() => {
-    if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || rescueActive) return;
-    // The morning ritual popup is gone (Addendum B: "no popup ever opens on app
-    // launch"). What remains is the anchors sheet, which Addendum A moves onto
-    // Day Map as pinned stops — it stays here until that move is built, rather
-    // than leaving anchors with nowhere to live.
-    let slot = null;
-    const anchorSlot = getCurrentAnchorSlot(new Date(), windows);
-    if (anchorSlot && anchorSlot !== "morning" && anchors.length && !todayShownSlots.includes(anchorSlot)) {
-      const snoozeUntil = config.anchorsSnoozeUntil;
-      if (!snoozeUntil || Date.now() >= snoozeUntil) slot = anchorSlot;
-    }
-    if (!slot) return;
-    setAnchorSheetSlot(slot);
-    const timer = setTimeout(() => setShowAnchorSheet(true), 2500);
-    return () => clearTimeout(timer);
-  }, [
-    anchors.length, todayShownSlotsKey, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending,
-    isAddTaskDialogOpen, showAnchorSheet, showDailyCheckin, rescueActive, config.anchorsSnoozeUntil,
-    visibilityTick,
-  ]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ── Day Close auto-show — the one scheduled interruption, at day's end ──
   useEffect(() => {
     if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || rescueActive) return;
@@ -950,7 +926,6 @@ export default function TodayTab({
   const wallFront = frontForCommitment(pinnedFocusTask || doneCommitment, wallFronts);
   // L1: front first, then the Key Deadline the user already set, then nothing.
   const wallKickerFront = commitmentKickerFront(wallFront, config);
-  const wallFrontName = wallKickerFront?.name || null;
   // J3 reads "MEMBRANE PAPER · 11d" — one front, and its own count. Taking the
   // count from the legacy config.deadlineDate while the kicker named a
   // different front put one front's days beside another's name, and hid the
@@ -958,7 +933,11 @@ export default function TodayTab({
   // with no front, that is the legacy key deadline, as the deleted strip
   // showed. An overdue deadline is not "days left".
   const wallDaysLeft = commitmentDaysLeft(wallKickerFront, new Date());
-  const openAcrossFronts = (tasks || []).filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked).length;
+  // The goal band (Addendum M): the same front, with its done/total when it
+  // has tasks on it. With no front and no Key Deadline there is no band.
+  const wallGoal = wallKickerFront
+    ? { name: wallKickerFront.name, daysLeft: wallDaysLeft, ...frontProgress(tasks, wallKickerFront.id) }
+    : null;
   // A session left running behind the overlay is REOPENED by the wall, not
   // restarted (see startFocusAndLog) — so the chip has to name the time that
   // tap will actually resume, not the task's estimate. Advertising 25:00 and
@@ -1005,11 +984,6 @@ export default function TodayTab({
   // must not render beneath it. Two competing creation flows on first launch
   // is the screen this redesign exists to remove.
   const wallIsAsking = !pinnedFocusTask && !doneCommitment;
-
-  const wallPickOptions = todayTasksAll
-    .filter((t) => !t.isCompleted)
-    .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
-  const doneTodayCount = countCompletedOn(todayTasksAll, todayStr);
 
   // Focus Now: first incomplete task in Day Map order for today (shown as "Recommended")
   const dayMapNextTask = todayTasksAll
@@ -1147,22 +1121,53 @@ export default function TodayTab({
       .catch(() => {});
   };
 
+  // Laptop keys for the wall (37l): Space starts focus, D marks done, S splits.
+  // Never while typing, never on a focused control (Space would also press it),
+  // never with a modifier, and never while anything is open over Today.
+  const wallKeysBlocked = isFocusMode || !!editingTask || isAddTaskDialogOpen || !!confirmDialog
+    || rescueActive || showAnchorSheet || showDailyCheckin || showFocusNowPicker || sessionCompletePending
+    // One Task mode shows a different task than the wall's; its keys would
+    // act on the hidden one.
+    || focusNowMode;
+  useEffect(() => {
+    if (!pinnedFocusTask || wallKeysBlocked) return undefined;
+    const onKey = (e) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      const el = e.target;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(el.tagName))) return;
+      // Any other focused control too — a row in Drag anywhere mode is a
+      // focusable <div> whose Space starts a keyboard reorder, not a session.
+      if (el && el !== document.body && el !== document.documentElement && el.tabIndex >= 0) return;
+      const key = e.key.toLowerCase();
+      if (key === " ") {
+        e.preventDefault();
+        startFocusAndLog(pinnedFocusTask);
+      } else if (key === "d") {
+        handleToggleComplete(pinnedFocusTask);
+      } else if (key === "s" && !config.isLowEnergyMode) {
+        setEditingTask(pinnedFocusTask);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   return (
     <>
-      {/* ── The wall / the desk (screen 1). Replaces the greeting-clock-quote
-           card: the commitment is what this screen is for, and the handoff
-           allows exactly one dominant element. ── */}
+      {/* ── Today (turns 37, 41). On a laptop the wall is a 420px column with
+           the list beside it once the list is open (41a); on phones and
+           tablets the two stack. ── */}
+      <div className={`today-layout${peekOpen || !pinnedFocusTask ? " is-list-open" : ""}`}>
+      <div className="today-layout-main">
       <TodayWall
         task={pinnedFocusTask}
-        frontName={wallFrontName}
-        daysLeft={wallDaysLeft}
+        goal={wallGoal}
+        anchors={anchors.filter(a => a && typeof a.text === "string" && a.text.trim())}
         focusMinutes={Number(pinnedFocusTask?.timeEstimateMinutes) > 0 ? Number(pinnedFocusTask.timeEstimateMinutes) : 25}
         peekOpen={peekOpen}
         onTogglePeek={() => setPeekOpen(v => !v)}
         remainingCount={wallRemainingCount}
-        doneCount={doneTodayCount}
         lowEnergy={!!config.isLowEnergyMode}
-        openCount={openAcrossFronts}
         timerLabel={wallLiveTimerLabel}
         onStartFocus={() => pinnedFocusTask && startFocusAndLog(pinnedFocusTask)}
         onMarkDone={() => pinnedFocusTask && handleToggleComplete(pinnedFocusTask)}
@@ -1175,9 +1180,10 @@ export default function TodayTab({
         onDismissProposal={() => saveConfigPatch({ wallProposalDismissedDate: todayStr })}
         commitBlocked={isEveningGuardBlocked(config)}
         onCommitNewTask={handleCommitNewTask}
-        onPickExisting={(t) => { if (!t.isNowFocus) handlePinTask(t); }}
-        pickOptions={wallPickOptions}
+        mindBoxCount={(payload.brainDump || []).length}
+        onOpenMindBox={onOpenMindBox}
         onScattered={onScattered}
+        onRescue={openRescueMode}
       />
 
       {/* ── Day Close (end-of-day reflection) ─────────────────────── */}
@@ -1234,6 +1240,8 @@ export default function TodayTab({
           </div>
         );
       })()}
+
+      </div>
 
       {/* ── Today's Focus — tasks dominate the screen */}
       {/* The peek IS this section. Closed is the default — that is the wall.
@@ -1642,6 +1650,7 @@ export default function TodayTab({
           )}
         </div>
       </section>
+      </div>
 
       {/* ── Momentum (J4). Below the ledger, never beside the hero. Hidden
            entirely by the Settings switch, and absent on its own with no

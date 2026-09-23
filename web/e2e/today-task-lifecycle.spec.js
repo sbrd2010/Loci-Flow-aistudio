@@ -352,3 +352,24 @@ test("mobile reliability: deleting a sub-step requires confirmation and can be c
   await expect(row).not.toContainText("Remove this step");
   await expect(row).toContainText("Keep this step");
 });
+
+// One Task mode shows a task other than the wall's; the wall's keys must not
+// reach past it and act on the hidden pinned task.
+test("mobile reliability: the wall's keys do nothing while One Task mode shows another task", async ({ page }) => {
+  await enterDemo(page);
+
+  const title = "One Task key guard seed task";
+  await openAddTask(page);
+  await page.getByTestId("add-task-title").fill(title);
+  await page.getByTestId("add-task-submit").click();
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+
+  const pinnedTitle = (await page.locator(".wall-title").innerText()).trim();
+  await enterOneTaskMode(page, title);
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press("d");
+  await page.keyboard.press(" ");
+  await expect(page.locator(".focus-mode-overlay")).toHaveCount(0);
+  await expect(page.locator(".wall-done-line")).toHaveCount(0);
+  await expect(page.locator(".wall-title")).toHaveText(pinnedTitle);
+});

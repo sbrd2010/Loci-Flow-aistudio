@@ -1,254 +1,253 @@
-/* Screen 1 — the wall and the desk. One screen, two states.
-
-   Tokens fall back to the app's existing vocabulary so this renders under the
-   thirteen legacy themes too, not only Evening and Paper. */
+/* Today's wall (turns 37, 40, 41, 49): goal band, anchor line, the one thing.
+   Values are the design's; sizes are rem so they follow the system text
+   size (brief 3.2). Titles wrap and never shrink. */
 
 .today-wall {
-  font-family: var(--font-sans);
-  color: var(--ink, var(--text-primary));
-  padding: 0 0 18px;
-}
-
-/* — header: the day count (the date and time left are in the app header) — */
-.wall-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 2px 0 10px;
-}
-/* Clay is time pressure and nothing else — so only the pressing one gets it.
-   J3 names --gold-lift for this, but that token is defined "dark grounds
-   only" and measures about 1.85:1 on Paper's #f4f1e9 — below rule 5's 4.5:1
-   floor, which the handoff applies to every piece of text. --gold-deep is
-   the token defined for gold used AS TEXT (5.3:1). Rule 5 wins. */
-.wall-head-days {
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-}
-.wall-head-days.is-pressing { color: var(--clay, var(--warning)); }
-
-.wall-kicker {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--accent);
-  line-height: 1.4;
-}
-
-/* — CLOSED: the task is the button — */
-.wall-hero {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
-  width: 100%;
-  min-height: 46vh;
-  padding: 18px 0 20px;
-  text-align: left;
-  font-family: inherit;
-  color: inherit;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-sm, 4px);
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.wall-hero:hover { background: var(--hover-paper, var(--bg-card-hover)); }
-.wall-hero:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  gap: 14px;
+  font-family: var(--font-sans);
+  color: var(--ink);
 }
 
-.wall-rule-short {
-  display: block;
-  width: 34px;
-  height: 1px;
-  margin: 10px 0 14px;
-  background: var(--accent);
-}
-
-.wall-title {
-  display: block;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-/* J1: 42/800 closed, 29/700 open — the type table's 41/800 and the Components
-   list's 34/700 predate the 7b/7c merge and are explicitly withdrawn. */
-.wall-title.is-wall {
-  font-weight: 800;
-  line-height: 1.01;
-  letter-spacing: -0.055em;
-}
-/* Clamped down a step at a time rather than wrapping past three lines. */
-.wall-title.is-wall.is-42 { font-size: 42px; }
-.wall-title.is-wall.is-34 { font-size: 34px; }
-.wall-title.is-wall.is-29 { font-size: 29px; letter-spacing: -0.045em; }
-.wall-title.is-desk {
-  margin-top: 8px;
-  font-size: 29px;
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.045em;
-}
-
-.wall-support {
-  display: block;
-  font-size: 15px;
-  line-height: 1.5;
-  color: var(--text-soft, var(--text-secondary));
-}
-.wall-support.is-wall { margin-top: 16px; }
-
-.wall-start-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 26px;
-}
-/* A border means "act on this". */
-.wall-chip {
-  flex-shrink: 0;
-  padding: 9px 12px;
+.wall-kicker {
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 0.6875rem;          /* 11px */
   font-weight: 700;
+  letter-spacing: 0.16em;
   color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-sm, 4px);
-  font-variant-numeric: tabular-nums;
-}
-.wall-start-hint {
-  font-size: 13px;
-  color: var(--text-quiet, var(--text-muted));
 }
 
-/* — OPEN: plain markup plus an explicit primary — */
-.wall-body { padding: 16px 0 4px; }
-
-.wall-support-row {
+/* — the goal band (37a, 41a; Addendum M): gold is the goal and nothing else — */
+.wall-goal {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  background: var(--gold-band);
+  border-radius: 8px;
+}
+.wall-goal-head {
   display: flex;
   align-items: baseline;
-  gap: 9px;
-  margin-top: 10px;
+  justify-content: space-between;
+  gap: 10px;
 }
-.wall-rule {
-  flex-shrink: 0;
-  width: 22px;
-  height: 1px;
-  background: var(--accent);
-  transform: translateY(-4px);
-}
-
-/* The one genuine divergence between the themes — Evening fills this with
-   gold, Paper with ink. Both are declared as tokens, so this rule is the same
-   in both. */
-.wall-primary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  width: 100%;
-  min-height: 52px;
-  margin-top: 20px;
-  font-family: var(--font-sans);
-  font-size: 15.5px;
-  font-weight: 700;
-  color: var(--fill-primary-text, var(--btn-text, #fff));
-  background: var(--fill-primary, var(--accent));
-  border: 0;
-  border-radius: var(--radius-sm, 4px);
-  cursor: pointer;
-  transition: filter 0.15s ease;
-}
-.wall-primary:hover { filter: brightness(1.07); }
-.wall-primary:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.wall-primary-glyph { font-size: 12px; }
-.wall-primary-figure {
+.wall-goal-kicker {
   font-family: var(--font-mono);
+  font-size: 0.6875rem;
   font-weight: 700;
-  color: var(--fill-primary-figure, var(--fill-primary-text, #fff));
-  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.16em;
+  color: var(--gold-label);
 }
-
-/* — the action stack — */
-.wall-actions {
+.wall-goal-figures {
+  font-size: 0.8125rem;          /* 13px */
+  font-weight: 800;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.wall-goal-figures.is-compact { display: none; }
+.wall-goal-name {
+  font-size: 0.9375rem;          /* 15px */
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.wall-goal-track {
   display: flex;
-  gap: 8px;
-  margin-top: 14px;
+  height: 4px;
+  background: var(--gold-track);
+  border-radius: 2px;
 }
-.wall-action {
-  flex: 1;
-  min-height: 44px;
-  padding: 0 10px;
-  font-family: var(--font-sans);
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--ink, var(--text-primary));
-  background: transparent;
-  border: 1px solid var(--control-edge, var(--border));
-  border-radius: var(--radius-sm, 4px);
-  cursor: pointer;
-  transition: background 0.15s ease;
+.wall-goal-fill {
+  background: var(--gold);
+  border-radius: 2px;
 }
-.wall-action:hover { background: var(--hover-paper, var(--bg-card-hover)); }
-.wall-action:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-/* "The action buttons drop to 40px" once the list is showing. */
-.wall-actions.is-desk .wall-action { min-height: 40px; font-size: 13px; }
 
-/* — the peek toggle: two-way in both states — */
-.wall-peek {
+/* — one anchor (40a) — */
+.wall-anchor {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
   min-height: 44px;
-  margin-top: 16px;
-  padding: 0 12px;
-  font-family: var(--font-sans);
-  font-size: 12.5px;
-  font-weight: 600;
+  padding: 0 4px;
+  color: var(--ink-2);
   text-align: left;
-  color: var(--text-soft, var(--text-secondary));
-  background: var(--surface, var(--bg-card));
-  border: 1px solid var(--divider, var(--border));
-  border-radius: var(--radius-sm, 4px);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
   cursor: pointer;
-  transition: background 0.15s ease;
 }
-.wall-peek:hover { background: var(--hover-row, var(--bg-card-hover)); }
-.wall-peek:focus-visible {
+.wall-anchor-text {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-serif);
+  font-size: 0.9375rem;
+  font-style: italic;
+  color: var(--ink);
+}
+.wall-anchor-count {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* — the one thing — */
+.wall-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 10px;
+}
+.wall-title {
+  margin: 0;
+  font-size: 2.25rem;            /* 36px phone; 48px laptop below */
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.wall-first-step {
+  margin: 0;
+  font-size: 0.96875rem;         /* 15.5px */
+  line-height: 1.5;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.wall-first-step-label {
+  font-weight: 800;
+  color: var(--accent);
+}
+
+/* The screen's one filled action. */
+.wall-primary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 56px;
+  margin-top: 6px;
+  padding: 14px 16px;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 0;
+  border-radius: 6px;
+  box-shadow: 0 2px 0 var(--accent-edge);
+  cursor: pointer;
+}
+.wall-primary-figure {
+  font-family: var(--font-mono);
+  color: var(--accent-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.wall-actions {
+  display: flex;
+  gap: 10px;
+}
+.wall-action {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 12px;
+  font-family: var(--font-sans);
+  font-size: 0.90625rem;         /* 14.5px */
+  font-weight: 700;
+  text-align: center;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.wall-action:hover { background: var(--panel); }
+
+/* Keyboard hints show on a laptop only (37l, 41a). */
+.wall-key {
+  display: none;
+  padding: 1px 6px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--ink-2);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+}
+.wall-key.is-on-fill {
+  color: var(--accent-soft);
+  border-color: var(--accent-soft);
+}
+
+.wall-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+}
+.wall-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;           /* 14px */
+  font-weight: 700;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 4px;
+}
+
+.wall-primary:focus-visible,
+.wall-action:focus-visible,
+.wall-link:focus-visible,
+.wall-anchor:focus-visible,
+.wall-peek:focus-visible,
+.wall-proposal-commit:focus-visible,
+.wall-proposal-not-now:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.wall-peek-chevron { color: var(--text-quiet, var(--text-muted)); }
-.wall-peek-label {
-  min-width: 0;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+
+/* — the peek: the rest of today (49a; the "+" and the sheet come with the
+   list in 2b) — */
+.wall-peek {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  padding: 4px 0;
+  font-family: var(--font-sans);
+  color: var(--ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
 }
-.wall-peek-figure {
-  margin-left: auto;
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
+.wall-peek-grabber {
+  width: 36px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--edge);
+  opacity: 0.6;
+}
+.wall-peek-label {
+  font-size: 0.90625rem;
+  font-weight: 800;
 }
 
 /* — the commitment, finished (J2b) — */
@@ -328,146 +327,81 @@
   cursor: pointer;
 }
 
-/* — nothing committed yet: screen 10's field, on the same ground (J2a/K1) — */
-.wall-empty { padding: 26px 0 8px; }
-.wall-empty-line {
-  margin: 14px 0 0;
-  font-family: var(--font-serif, var(--font-sans));
-  font-size: 15px;
-  line-height: 1.55;
-  color: var(--text-soft, var(--text-secondary));
+/* — nothing committed yet (37f) — */
+.wall-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 10px;
 }
-
-.wall-commit {
-  display: block;
-  margin-top: 18px;
-}
-/* The field IS the hero here, so it carries the open hero's type: 29/700.
-   Only a bottom rule — a box would make it a form control on a screen whose
-   whole point is that it is a question. */
-.wall-commit-field {
-  display: block;
-  width: 100%;
-  padding: 4px 0 10px;
-  font-family: var(--font-sans);
-  font-size: 29px;
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.045em;
-  color: var(--ink, var(--text-primary));
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--control-edge, var(--border));
-  border-radius: 0;
-  transition: border-color 0.15s ease;
-}
-.wall-commit-field::placeholder {
-  /* Rule 5 puts the 4.5:1 floor on placeholders explicitly, so this is
-     --text-soft rather than a faint tier. */
-  color: var(--text-soft, var(--text-secondary));
-  font-weight: 700;
-}
-.wall-commit-field:focus {
-  outline: none;
-  border-bottom-color: var(--accent);
-}
-
-.wall-commit-btn {
-  display: block;
-  width: 100%;
-  min-height: 50px;
-  margin-top: 20px;
-  font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ink, var(--text-primary));
-  background: transparent;
-  border: 1px solid var(--control-edge, var(--border));
-  border-radius: var(--radius-sm, 4px);
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.wall-commit-btn:hover:not(:disabled) { background: var(--hover-paper, var(--bg-card-hover)); }
-.wall-commit-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.wall-commit-btn:disabled {
-  color: var(--text-quiet, var(--text-muted));
-  border-color: var(--divider, var(--border));
-  cursor: default;
-}
-
-/* K1's guard: the rows narrow as you type, so a near-duplicate is visible
-   before a second copy of it is created. Hairline rows, never cards. */
-.wall-pick { margin-top: 26px; }
-.wall-pick-kicker {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-quiet, var(--text-muted));
-}
-.wall-pick-row {
-  display: block;
-  width: 100%;
-  min-height: 44px;
-  padding: 11px 0;
-  font-family: var(--font-sans);
-  font-size: 15px;
-  text-align: left;
-  color: var(--ink, var(--text-primary));
-  background: transparent;
-  border: 0;
-  border-top: 1px solid var(--divider, var(--border));
-  cursor: pointer;
-}
-.wall-pick-row:first-of-type { margin-top: 8px; }
-.wall-pick-row:hover { color: var(--accent); }
-.wall-pick-row:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.wall-pick-title {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* — the door into screen 14 — */
-.wall-scattered {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid var(--divider, var(--border));
-}
-.wall-scattered-line {
+.wall-empty-title {
   margin: 0;
-  font-family: var(--font-serif, var(--font-sans));
-  font-size: 13.5px;
-  line-height: 1.55;
-  color: var(--text-quiet, var(--text-muted));
+  font-size: 2rem;               /* 32px */
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
 }
-.wall-scattered-link {
-  margin-top: 8px;
-  padding: 6px 0;
+.wall-empty-line {
+  margin: 0;
+  font-size: 0.96875rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.wall-commit { margin: 0; }
+.wall-commit-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 14px;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  cursor: text;
+}
+.wall-commit-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.wall-commit-field {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0;
   font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink, var(--text-primary));
+  font-size: 0.96875rem;
+  color: var(--ink);
   background: transparent;
   border: 0;
-  border-bottom: 1px solid var(--accent);
-  cursor: pointer;
+}
+.wall-commit-field::placeholder { color: var(--placeholder); }
+.wall-commit-field:focus { outline: none; }
+.wall-empty-or {
+  margin: 0;
+  font-size: 0.90625rem;
+  color: var(--ink-2);
+}
+.wall-empty-or .wall-link { min-height: 44px; font-size: inherit; }
+
+/* — widths (Addendum Y6 / Z) — */
+
+/* Compact phone: the goal band drops to one line and the title to 29px. */
+@media (max-width: 379px) {
+  .wall-goal { flex-direction: row; align-items: baseline; gap: 10px; }
+  .wall-goal-head, .wall-goal-track { display: none; }
+  .wall-goal-name { flex: 1; min-width: 0; }
+  .wall-goal-figures.is-compact { display: inline; }
+  .wall-title { font-size: 1.8125rem; }   /* 29px */
+  .wall-primary { min-height: 52px; }
+  .wall-action { min-height: 44px; }
 }
 
-/* J1: mobile <=360px — closed 36/800, open 27/700. */
-@media (max-width: 360px) {
-  .wall-commit-field { font-size: 27px; }
-  .wall-title.is-wall.is-42 { font-size: 36px; }
-  .wall-title.is-wall.is-34 { font-size: 31px; }
-  .wall-title.is-wall.is-29 { font-size: 27px; }
-  .wall-title.is-desk { font-size: 27px; }
+/* Laptop (41a): the title is 48px (brief 3.2), keyboard hints appear. */
+@media (min-width: 1024px) {
+  .wall-goal { padding: 14px 18px; }
+  .wall-goal-name { font-size: 0.96875rem; }
+  .wall-title { font-size: 3rem; line-height: 1.04; }
+  .wall-primary { padding: 12px 18px; font-size: 0.96875rem; }
+  .wall-action { padding: 10px 16px; }
+  .wall-key { display: inline-block; }
 }
 
 /* — Momentum: Today's footer (J4/K5) — */
@@ -509,4 +443,26 @@
   font-family: var(--font-serif, var(--font-sans));
   font-size: 13.5px;
   color: var(--text-soft, var(--text-secondary));
+}
+
+/* — Today's layout (41a): on a laptop the wall is a 420px column and the
+   list sits beside it while it is open. Phones and tablets stack. — */
+.today-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.today-layout-main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .today-layout.is-list-open {
+    display: grid;
+    grid-template-columns: 420px minmax(0, 1fr);
+    align-items: start;
+    gap: 36px;
+  }
 }

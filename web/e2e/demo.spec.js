@@ -282,9 +282,9 @@ test("12. The deadline strip is gone; its information moved onto the wall", asyn
   await expect(page.getByText("TODAY'S MOVE")).toHaveCount(0);
 
   // What it carried is still on screen: the time remaining, now in the app
-  // header (turn 37), and the day count on the wall.
+  // header (turn 37), and the day count in the goal band.
   await expect(page.locator(".shell-clock")).toContainText(/\d+h\d+m LEFT/);
-  await expect(page.locator(".wall-head-days")).toContainText(/^\d+d$/);
+  await expect(page.locator(".wall-goal-figures").first()).toHaveText(/^\d+ days$/);
 
   // And the commitment itself is the "today's move" — no separate line for it.
   await expect(page.locator(".wall-title")).toBeVisible();

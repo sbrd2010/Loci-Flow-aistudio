@@ -190,3 +190,32 @@
 
   .tab-bar { display: none; }
 }
+
+/* — Offline (37g, 41h): neutral, not red — nothing is wrong with you. — */
+.offline-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  color: var(--ink-2);
+  background: var(--panel);
+  border-radius: 8px;
+}
+.offline-banner svg { flex-shrink: 0; margin-top: 1px; }
+.offline-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.offline-banner-text strong {
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+.offline-banner-device { display: none; }
+@media (min-width: 840px) {
+  .offline-banner-phone { display: none; }
+  .offline-banner-device { display: inline; }
+}
