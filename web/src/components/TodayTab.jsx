@@ -1125,7 +1125,10 @@ export default function TodayTab({
   // Never while typing, never on a focused control (Space would also press it),
   // never with a modifier, and never while anything is open over Today.
   const wallKeysBlocked = isFocusMode || !!editingTask || isAddTaskDialogOpen || !!confirmDialog
-    || rescueActive || showAnchorSheet || showDailyCheckin || showFocusNowPicker || sessionCompletePending;
+    || rescueActive || showAnchorSheet || showDailyCheckin || showFocusNowPicker || sessionCompletePending
+    // One Task mode shows a different task than the wall's; its keys would
+    // act on the hidden one.
+    || focusNowMode;
   useEffect(() => {
     if (!pinnedFocusTask || wallKeysBlocked) return undefined;
     const onKey = (e) => {
