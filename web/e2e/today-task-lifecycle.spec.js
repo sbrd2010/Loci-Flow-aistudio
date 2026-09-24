@@ -351,6 +351,32 @@ test("mobile reliability: a row's menu is reachable from the keyboard", async ({
   await expect(page.locator(".wall-commit-field")).toBeVisible({ timeout: 8_000 });
 });
 
+// In Drag anywhere mode the visible kebab is the menu trigger. Escape from a
+// focused menu action must return keyboard focus to that same button.
+test("mobile reliability: Escape returns focus to the drag-anywhere menu trigger", async ({ page }) => {
+  await enterDemo(page);
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  const toggle = page.locator(".toggle-row", { hasText: "Drag-anywhere task rows" }).locator('input[type="checkbox"]');
+  if (!(await toggle.isVisible())) {
+    await page.getByRole("button", { name: /Your Profile/i }).click();
+  }
+  await toggle.check();
+  await page.getByRole("button", { name: "Save Profile" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
+
+  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first();
+  const trigger = row.getByRole("button", { name: "Task options" });
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  const menu = row.getByTestId("task-options-menu");
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("Shift+Tab");
+  await expect(menu.locator(":focus")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
 // "N done" counts what was finished today, and the Completed section shows
 // the same set — a task done yesterday that still sits on Today is neither.
 test("mobile reliability: the Completed section and 'N done' agree across a day change", async ({ page }) => {
