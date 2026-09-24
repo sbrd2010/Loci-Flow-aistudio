@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLociCoreInstruction, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
+import { buildLociCoreInstruction, buildLociAnchorsContext, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
 import { getFocusWindows } from "./focusWindows";
 
 describe("lociAIContext", () => {
@@ -741,5 +741,19 @@ describe("buildLociVelocityContext", () => {
 
     expect(context).toContain("Last 3 days: 0 tasks completed");
     expect(context).toContain("Last 7 days: 0 tasks completed");
+  });
+});
+
+describe("buildLociAnchorsContext", () => {
+  it("lists anchors as principles, with no done/not-done marks", () => {
+    const text = buildLociAnchorsContext([{ id: "a1", text: "Move your body today" }, { id: "a2", text: "One thing at a time" }]);
+    expect(text).toContain("DAILY ANCHORS");
+    expect(text).toContain("- Move your body today");
+    expect(text).toContain("- One thing at a time");
+    expect(text).not.toMatch(/\[[ ✓]\]/);
+  });
+
+  it("is empty without anchors", () => {
+    expect(buildLociAnchorsContext([])).toBe("");
   });
 });

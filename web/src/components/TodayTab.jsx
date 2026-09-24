@@ -29,7 +29,7 @@ import {
 import "../styles/focusNow.css";
 import "../styles/todayList.css";
 import "../styles/todaySheet.css";
-import UndoToast from "./ui/UndoToast";
+import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import {
   DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor,
   useSensor, useSensors, DragOverlay
@@ -580,6 +580,8 @@ export default function TodayTab({
     setUndo({ kind: "unpin", task, at: Date.now() });
     return handlePinTask(task);
   };
+
+  const undoText = undo ? `${{ done: "Marked done", delete: "Deleted", unpin: "Unpinned" }[undo.kind]}: ${undo.task.title}` : "";
 
   const handleUndo = () => {
     if (!undo) return;
@@ -1489,11 +1491,12 @@ export default function TodayTab({
         />
       )}
 
-      {/* ── Undo (done, delete) */}
+      {/* ── Undo (done, delete, unpin) */}
+      <UndoAnnouncer message={undoText} />
       {undo && (
         <UndoToast
           key={undo.at}
-          message={`${{ done: "Marked done", delete: "Deleted", unpin: "Unpinned" }[undo.kind]}: ${undo.task.title}`}
+          message={undoText}
           onUndo={handleUndo}
           onClose={() => setUndo(null)}
         />

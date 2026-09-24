@@ -294,3 +294,17 @@ test("mobile reliability: deleting a sub-step requires confirmation and can be c
   await expect(row).not.toContainText("Remove this step");
   await expect(row).toContainText("Keep this step");
 });
+
+// The toast's live region is always on the page and only its text changes —
+// a region inserted already holding its message is often not announced.
+test("mobile reliability: Undo is announced through a live region that was already there", async ({ page }) => {
+  await enterDemo(page);
+  const region = page.locator("[role='status'][aria-live='polite']").filter({ hasNotText: /./ }).first();
+  await expect(region).toHaveCount(1);
+  const handle = await region.elementHandle();
+  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").last();
+  const title = (await row.locator(".task-title-text").innerText()).trim();
+  await row.getByTestId("task-checkbox").click();
+  // The same element, now carrying the words.
+  await expect.poll(() => handle.evaluate(el => el.textContent)).toBe(`Marked done: ${title}. Undo available.`);
+});
