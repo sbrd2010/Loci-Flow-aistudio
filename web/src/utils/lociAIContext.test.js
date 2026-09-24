@@ -771,4 +771,10 @@ describe("buildLociTaskContext: tasks moved to tomorrow", () => {
     expect(nextDay).toMatch(/TODAY \(2\):/);
     expect(nextDay).not.toMatch(/TOMORROW/);
   });
+  it("with a window to 02:00, at 00:30 the moved task is still tomorrow's", () => {
+    const tasks = [{ uuid: "b", title: "Call Prof. Hale", horizonLevel: "today", priority: "P2", deferredUntil: "2026-09-25" }];
+    const late = getFocusWindows({ dayEndHour: 26 });
+    expect(buildLociTaskContext(tasks, new Date("2026-09-25T00:30:00"), late)).toMatch(/TOMORROW \(moved off today\) \(1\)/);
+    expect(buildLociTaskContext(tasks, new Date("2026-09-25T02:30:00"), late)).toMatch(/TODAY \(1\):/);
+  });
 });

@@ -44,14 +44,13 @@ export function getDeadlineMissStreak(config = {}, date = new Date()) {
 export function buildExecutionCoachSignal(payload = {}, date = new Date()) {
   const tasks = payload.tasks || [];
   const config = payload.config || {};
-  const todayStr = getLocalDateString(date);
   const lociTodayStr = getLociDayStr(date, getFocusWindows(config));
-  const todayTasks = tasks.filter(task => isOnToday(task) && !task.isDeleted && !task.isParked);
+  const todayTasks = tasks.filter(task => isOnToday(task, lociTodayStr) && !task.isDeleted && !task.isParked);
   const activeToday = todayTasks.filter(isActiveTask).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
   const completedToday = tasks.filter(task => !task.isDeleted && task.isCompleted && task.dateCompletedString === lociTodayStr);
   const nowFocus = activeToday.find(task => task.isNowFocus) || null;
   const dayMapNext = activeToday
-    .filter(task => task.dayMapDate === todayStr && task.dayMapOrder != null)
+    .filter(task => task.dayMapDate === lociTodayStr && task.dayMapOrder != null)
     .sort((a, b) => (a.dayMapOrder ?? 999) - (b.dayMapOrder ?? 999))[0] || null;
   const totalPlannedMinutes = activeToday.reduce((sum, task) => sum + taskEstimate(task), 0);
   const p1Count = activeToday.filter(task => task.priority === "P1").length;

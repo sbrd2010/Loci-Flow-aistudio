@@ -411,8 +411,8 @@ describe("computeDailyCheckinTimes (native pre-scheduling)", () => {
   });
 
   it("anchors targets to the correct calendar day for an overnight window's early-morning tail", () => {
-    // Default 7am-2am overnight window; "now" at 1am is still yesterday's Loci day.
-    const windows = getFocusWindows({}); // default 7am-2am
+    // A 7am-2am overnight window; "now" at 1am is still yesterday's Loci day.
+    const windows = getFocusWindows({ dayEndHour: 26 });
     const now = new Date(2024, 5, 15, 1, 0); // 1am June 15 — Loci day is June 14
     const todayStr = getLociDayStr(now, windows);
     expect(todayStr).toBe("2024-06-14");

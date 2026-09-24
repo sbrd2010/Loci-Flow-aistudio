@@ -3,7 +3,7 @@
 // since midnight, 0-1439). Falls back to dayStartHour/dayEndHour when
 // config.focusWindows is missing or invalid, so existing configs keep working.
 
-const DEFAULT_WINDOWS = [{ startMin: 420, endMin: 120, overnight: true }]; // 7am-2am
+const DEFAULT_WINDOWS = [{ startMin: 420, endMin: 0, overnight: true }]; // 7am to midnight
 
 // Parses "HH:MM" (00:00-23:59) to minutes since midnight, or null if invalid.
 export function parseTimeToMinutes(timeStr) {
@@ -35,7 +35,8 @@ export function hasConfiguredFocusWindow(config = {}) {
 
 // Returns normalized, start-sorted [{startMin, endMin, overnight}], always non-empty.
 // Uses config.focusWindows if it has at least one valid {start, end} entry,
-// otherwise falls back to dayStartHour/dayEndHour (defaults 7/26).
+// otherwise falls back to dayStartHour/dayEndHour (defaults 7/24: someone who
+// never set a window gets a day that ends at midnight).
 export function getFocusWindows(config = {}) {
   const cfg = config || {};
   if (Array.isArray(cfg.focusWindows) && cfg.focusWindows.length > 0) {
@@ -51,7 +52,7 @@ export function getFocusWindows(config = {}) {
   }
 
   const dayStartHour = Number.isFinite(cfg.dayStartHour) ? cfg.dayStartHour : 7;
-  const dayEndHour = Number.isFinite(cfg.dayEndHour) ? cfg.dayEndHour : 26;
+  const dayEndHour = Number.isFinite(cfg.dayEndHour) ? cfg.dayEndHour : 24;
   const startMin = (((Math.round(dayStartHour * 60) % 1440) + 1440) % 1440);
   const endMin = (((Math.round(dayEndHour * 60) % 1440) + 1440) % 1440);
   if (startMin === endMin) return DEFAULT_WINDOWS;

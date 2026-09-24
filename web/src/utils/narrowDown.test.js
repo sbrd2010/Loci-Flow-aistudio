@@ -1,3 +1,4 @@
+import { getFocusWindows } from "./focusWindows";
 import { describe, it, expect } from "vitest";
 import {
   numberWord,
@@ -54,6 +55,12 @@ describe("openTasks", () => {
     const tasks = [task({ uuid: "a" }), task({ uuid: "b", deferredUntil: "2024-06-16" })];
     expect(openTasks(tasks, new Date(2024, 5, 15, 10)).map(t => t.uuid)).toEqual(["a"]);
     expect(openTasks(tasks, new Date(2024, 5, 16, 10)).map(t => t.uuid)).toEqual(["a", "b"]);
+  });
+  it("judges 'tomorrow' by the Loci day: with a window to 02:00, 00:30 is still yesterday", () => {
+    const late = getFocusWindows({ dayEndHour: 26 });
+    const tasks = [task({ uuid: "a" }), task({ uuid: "b", deferredUntil: "2024-06-16" })];
+    expect(openTasks(tasks, new Date(2024, 5, 16, 0, 30), late).map(t => t.uuid)).toEqual(["a"]);
+    expect(openTasks(tasks, new Date(2024, 5, 16, 2, 30), late).map(t => t.uuid)).toEqual(["a", "b"]);
   });
   it("survives a non-array", () => {
     expect(openTasks(null)).toEqual([]);

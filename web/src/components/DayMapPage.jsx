@@ -19,7 +19,7 @@ import { dayLeftFrom, formatClock24, formatSpan, moveToTomorrow, nextDateStr, pl
 import { getFocusWindows } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
 import { commitmentKickerFront, frontForCommitment, frontsFromConfig } from "../utils/fronts";
-import { useTodayStr } from "../hooks/useTodayStr";
+import { useLociDayStr } from "../hooks/useTodayStr";
 import LinkifyText from "./LinkifyText";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import { IconArrowLeft, IconEllipsisVertical, IconX } from "./ui/icons";
@@ -242,11 +242,13 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [undo, setUndo] = useState(null);
 
-  const todayStr = useTodayStr();
-  const tomorrowStr = nextDateStr(todayStr);
   const tasks = payload?.tasks || [];
   const config = payload?.config || {};
+  // The Loci day, not the calendar date: with a window past midnight, the
+  // route and "tomorrow" both hold until that window ends.
   const windows = getFocusWindows(config);
+  const todayStr = useLociDayStr(windows);
+  const tomorrowStr = nextDateStr(todayStr);
 
   const payloadRef = useRef(payload);
   payloadRef.current = payload;

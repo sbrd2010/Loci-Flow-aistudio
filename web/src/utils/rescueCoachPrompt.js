@@ -5,6 +5,7 @@ import { buildLociMemoryContext, isMemoryEnabled } from "./coachMemory";
 import { messageSeemsActionLike } from "./coachActions";
 import { buildLocalSafetyReply, CRISIS_RE, MEDICAL_RISK_RE } from "./crisisSafety";
 import { isOnToday } from "./deferral";
+import { getFocusWindows, getLociDayStr } from "./focusWindows";
 
 const ENTRY_POINT_LABELS = {
   deep_focus: "Deep Focus session",
@@ -12,7 +13,7 @@ const ENTRY_POINT_LABELS = {
   mindbox: "Mind Box",
 };
 
-export function buildRescueTaskList(allTasks, { entryPoint = "today", focusTask = null } = {}) {
+export function buildRescueTaskList(allTasks, { entryPoint = "today", focusTask = null, dayStr } = {}) {
   const active = (allTasks || []).filter(t => !t.isDeleted && !t.isCompleted && !t.isParked);
   if (active.length === 0) return null;
 
@@ -27,7 +28,7 @@ export function buildRescueTaskList(allTasks, { entryPoint = "today", focusTask 
     return `${task.title}${meta}${step}`;
   };
 
-  const todayTasks = active.filter(t => isOnToday(t));
+  const todayTasks = active.filter(t => isOnToday(t, dayStr));
   const visibleFocusTask = entryPoint === "deep_focus"
     ? (focusTask || active.find(t => t.isNowFocus))
     : todayTasks.find(t => t.isNowFocus);
@@ -124,7 +125,7 @@ export function filterApplicableRescueActions(actions = [], { lastUserText = "",
 
 export function buildRescuePrompt({ reason, firstName = "friend", task = null, allTasks = [], entryPoint = "today", config = {}, includeMemory = true }) {
   const name = firstName || "friend";
-  const taskList = buildRescueTaskList(allTasks, { entryPoint, focusTask: task });
+  const taskList = buildRescueTaskList(allTasks, { entryPoint, focusTask: task, dayStr: getLociDayStr(new Date(), getFocusWindows(config)) });
   const entryContext = buildEntryPointContext(entryPoint, task, taskList);
   const personaInstruction = buildPersonaInstruction(config, name);
   const profileContext = buildProfileContext(config);

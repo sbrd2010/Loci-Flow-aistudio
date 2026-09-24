@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 
 // Day map's honest day end (Addendum Y5; 33a, 34c, 37d). Demo mode, so
-// nothing reaches Firebase. The demo's focus window runs 07:00–02:00, so at
-// 21:00 the day has 5h left and ends at 02:00.
+// nothing reaches Firebase. The demo sets its focus window to 07:00–02:00, so
+// at 21:00 the day has 5h left and ends at 02:00.
 
 async function openDayMapAt(page, time, viewport = { width: 412, height: 892 }) {
   await page.addInitScript(() => {
@@ -103,6 +103,31 @@ test("the next day, moved tasks open tomorrow's route at the top, timed from its
   await expect(page.locator(".dm-time", { hasText: "00:00" })).toHaveCount(0);
   // Yesterday's other stops are not carried over; they wait in Unscheduled.
   await expect(page.getByText("Unscheduled · 2")).toBeVisible();
+});
+
+// The demo's window runs to 02:00. Tomorrow is the next Loci day, not the next
+// calendar date: at 00:30 the day is still going, so the task stays off it.
+test("with a window to 02:00, a moved task stays off Today past midnight and returns when the day turns", async ({ page }) => {
+  await openDayMapAt(page, "2024-06-15T21:00:00");
+  await overfill(page);
+  const moved = (await page.locator(".dm-stop.is-over .dm-title").innerText()).trim();
+  await page.getByRole("button", { name: "Move 1 to tomorrow" }).click();
+  await page.locator(".dm-back").click();
+  const list = page.getByTestId("today-tasks-list");
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  const revisitToday = async () => {
+    await nav.getByRole("button", { name: "Plan", exact: true }).click();
+    await nav.getByRole("button", { name: "Today", exact: true }).click();
+    await expect(list).toBeVisible();
+  };
+
+  await page.clock.setFixedTime(new Date("2024-06-16T00:30:00"));
+  await revisitToday();
+  await expect(list.getByText(moved)).toHaveCount(0);
+
+  await page.clock.setFixedTime(new Date("2024-06-16T02:30:00"));
+  await revisitToday();
+  await expect(list.getByText(moved)).toHaveCount(1);
 });
 
 // A 09:00–17:00 window, opened at 18:00: the day is over, so every stop is
