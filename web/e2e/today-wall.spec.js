@@ -605,6 +605,7 @@ test("mobile reliability: Escape puts the sheet away", async ({ page }) => {
   await page.locator(".today-sheet-grabber").focus();
   await page.keyboard.press("Escape");
   await expect(page.locator(".tasks-section")).toBeHidden();
+  await expect(page.locator(".wall-peek")).toBeFocused();
 });
 
 test("tablet under 840: the sheet is 640px wide and centred", async ({ page }) => {
@@ -716,4 +717,65 @@ test("mobile reliability: with a session left running, the sheet says Resume and
   const rowBox = await lastRow.boundingBox();
   const timerBox = await page.locator(".floating-focus-timer").boundingBox();
   expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(timerBox.y + 1);
+});
+
+test("mobile reliability: Must-do filter updates the sheet's announced row count", async ({ page }) => {
+  await enterDemo(page);
+  await openSheet(page);
+  await page.getByRole("button", { name: /^Must-do · \d+$/ }).click();
+  const rows = await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").count();
+  await expect(page.locator(".tasks-section")).toHaveAttribute("aria-label", `Today's list, ${rows} ${rows === 1 ? "task" : "tasks"}`);
+});
+
+test("mobile reliability: Escape closes a row menu before the sheet", async ({ page }) => {
+  await enterDemo(page);
+  await openSheet(page);
+  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first();
+  const options = row.getByRole("button", { name: /^Options:/ });
+  await options.focus();
+  await page.keyboard.press("Enter");
+  const menu = row.getByTestId("task-options-menu");
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(options).toBeFocused();
+  await expect(page.locator(".tasks-section")).toBeVisible();
+});
+
+test("mobile reliability: the full sheet removes covered wall controls from keyboard focus", async ({ page }) => {
+  await enterDemo(page);
+  await openSheet(page);
+  const grabber = page.getByRole("button", { name: "Expand the list" });
+  await grabber.focus();
+  await page.keyboard.press("Enter");
+  const wall = page.locator(".today-layout-main");
+  await expect(wall).toHaveAttribute("inert", "");
+  await expect(wall).toHaveAttribute("aria-hidden", "true");
+  await page.keyboard.press("Shift+Tab");
+  expect(await wall.evaluate(el => el.contains(document.activeElement))).toBe(false);
+
+  // At laptop width the list is inline, so the wall becomes interactive again.
+  await page.setViewportSize({ width: 900, height: 1100 });
+  await expect(wall).not.toHaveAttribute("inert", "");
+  await expect(wall).not.toHaveAttribute("aria-hidden", "true");
+});
+
+test("mobile reliability: canceling a sheet drag does not change its height", async ({ page }) => {
+  await enterDemo(page);
+  await openSheet(page);
+  const grabber = page.locator(".today-sheet-grabber");
+  await grabber.evaluate(el => {
+    const box = el.getBoundingClientRect();
+    const x = box.left + box.width / 2;
+    const y = box.top + box.height / 2;
+    const event = (type, clientY) => new PointerEvent(type, {
+      bubbles: true, pointerId: 42, pointerType: "touch", isPrimary: true, clientX: x, clientY,
+    });
+    el.dispatchEvent(event("pointerdown", y));
+    window.dispatchEvent(event("pointermove", y - 140));
+    window.dispatchEvent(event("pointercancel", y - 140));
+  });
+  await expect(grabber).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  expect(await page.locator(".tasks-section").evaluate(el => el.style.transform)).toBe("");
 });
