@@ -236,6 +236,12 @@ describe("buildSetNowFocusTasks", () => {
     expect(result[0]).toBe(other);
     expect(result[1]).toBe(target);
   });
+
+  it("brings a task moved to tomorrow back to today when it is focused", () => {
+    const target = { uuid: "2", title: "B", isNowFocus: false, horizonLevel: "today", deferredUntil: "2024-06-16" };
+    const result = buildSetNowFocusTasks([target], "2", 1000);
+    expect(result[0]).toEqual({ ...target, isNowFocus: true, deferredUntil: null, lastUpdated: 1000 });
+  });
 });
 
 describe("buildParkTaskTasks", () => {

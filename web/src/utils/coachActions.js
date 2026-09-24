@@ -408,11 +408,14 @@ export function findTaskByTitle(tasks = [], rawTitle = "") {
 
 // Pins the given task as Now Focus, unpinning any other — mirrors
 // TodayTab's handlePinTask. Used for both SET_NOW_FOCUS and START_FOCUS.
+// Focusing a task moved to tomorrow brings it back to today first, as the
+// Coach's move-to-today chip does — a pinned task must be on Today's wall.
 export function buildSetNowFocusTasks(tasks, taskUuid, now = Date.now()) {
   return tasks.map(t => {
     const newFocus = t.uuid === taskUuid;
-    if (t.isNowFocus === newFocus) return t;
-    return { ...t, isNowFocus: newFocus, lastUpdated: now };
+    const undefer = newFocus && !!t.deferredUntil;
+    if (t.isNowFocus === newFocus && !undefer) return t;
+    return { ...t, isNowFocus: newFocus, ...(undefer ? { deferredUntil: null } : {}), lastUpdated: now };
   });
 }
 

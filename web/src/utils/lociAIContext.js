@@ -128,7 +128,7 @@ export function buildLociCheckinContext(config = {}, tasks = [], todayStr) {
 
   let committedTasks = [];
   if (config.dailyCommitmentDate === todayStr) {
-    const validIds = getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds);
+    const validIds = getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds, todayStr);
     committedTasks = validIds.map(id => tasks.find(t => t.uuid === id)).filter(Boolean);
   }
 
