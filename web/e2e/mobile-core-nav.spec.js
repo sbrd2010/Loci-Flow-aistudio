@@ -97,6 +97,8 @@ for (const viewport of PHONE_VIEWPORTS) {
   test(`mobile reliability: Today's list header and toolbar fit without overlap on ${viewport.name}`, async ({ page }) => {
     await enterDemo(page, viewport);
     await expect(page.getByTestId("today-tasks-list")).toBeVisible({ timeout: 8_000 });
+    // The sheet slides in; measure once it has settled.
+    await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
 
     // Every control in the header and toolbar is on screen and none overlap.
     const controls = [

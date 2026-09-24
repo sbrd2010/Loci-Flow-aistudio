@@ -20,6 +20,14 @@ async function enterDemo(page, viewport = { width: 375, height: 812 }) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
 }
 
+// On a phone the open list is a sheet over the wall (37b), and Open Rescue
+// sits under it: put the list away first, as a person would.
+async function openRescue(page) {
+  const hide = page.locator(".today-list-hide");
+  if (await hide.isVisible()) await hide.click();
+  await page.getByRole("button", { name: "Open Rescue" }).click();
+}
+
 async function expectNoHorizontalOverflow(page) {
   const widths = await page.evaluate(() => {
     const measured = [
@@ -87,7 +95,7 @@ test("mobile reliability: Rescue Mode is reachable from Today and from inside De
   await enterDemo(page);
 
   // Today: Open Rescue opens the same triage flow Mind Box's button opens.
-  await page.getByRole("button", { name: "Open Rescue" }).click();
+  await openRescue(page);
   await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
   await page.getByText("Exit rescue mode").click();
   await expect(page.getByRole("heading", { name: "What's happening right now?" })).not.toBeVisible({ timeout: 5_000 });
@@ -136,7 +144,7 @@ test("mobile reliability: Rescue chat never reaches the AI provider on crisis la
 
   await enterDemo(page);
 
-  await page.getByRole("button", { name: "Open Rescue" }).click();
+  await openRescue(page);
   await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
   await page.getByText("Anxious / can't start").click();
   await page.getByText("Talk it through").click();
@@ -163,7 +171,7 @@ test("mobile reliability: Rescue chat action tag starts an in-rescue timer", asy
     });
   });
 
-  await page.getByRole("button", { name: "Open Rescue" }).click();
+  await openRescue(page);
   await page.getByText("Low energy / fog").click();
   await page.getByText("Talk to AI Coach").click();
 
@@ -180,7 +188,7 @@ test("mobile reliability: Rescue chat is reachable again after skipping an AI-st
     });
   });
 
-  await page.getByRole("button", { name: "Open Rescue" }).click();
+  await openRescue(page);
   await page.getByText("Low energy / fog").click();
   await page.getByText("Talk to AI Coach").click();
   // The action tag moves the user from chat to the timer screen.
@@ -210,7 +218,7 @@ test("mobile reliability: Rescue does not park the task on an unprompted action 
   // Opens Rescue on the pinned task via Open Rescue on the wall; the opener
   // message ("I'm stuck and need help.") never asks to park/defer/skip it —
   // filterApplicableRescueActions (rescueCoachPrompt.js) must block the tag.
-  await page.getByRole("button", { name: "Open Rescue" }).click();
+  await openRescue(page);
   await page.getByText("Too much going on").click();
   await page.getByText("Talk to AI Coach").click();
   await expect(page.getByText("Let's take a break from it.")).toBeVisible({ timeout: 5_000 });
@@ -235,7 +243,7 @@ test("mobile reliability: Rescue ignores an action tag that resolves after the u
   await pinnedSection.scrollIntoViewIfNeeded();
   await expect(pinnedSection).toContainText("Reply to the important message sitting in your inbox");
 
-  await page.getByRole("button", { name: "Open Rescue" }).click();
+  await openRescue(page);
   await page.getByText("Too much going on").click();
   await page.getByText("Talk to AI Coach").click();
 
@@ -262,7 +270,7 @@ test("mobile reliability: Rescue safety short-circuit does not call AI again", a
     });
   });
 
-  await page.getByRole("button", { name: "Open Rescue" }).click();
+  await openRescue(page);
   await page.getByText("Anxious / can't start").click();
   await page.getByText("Talk it through").click();
   await expect(page.getByText("I’m here with you.")).toBeVisible({ timeout: 5_000 });
@@ -294,7 +302,7 @@ test("mobile reliability: Opening Rescue chat without typing still hands off con
 
   await enterDemo(page);
 
-  await page.getByRole("button", { name: "Open Rescue" }).click();
+  await openRescue(page);
   await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
   await page.getByText("Too much going on").click();
   await page.getByText("Talk to AI Coach").click();

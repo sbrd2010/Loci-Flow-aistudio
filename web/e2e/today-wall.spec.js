@@ -33,21 +33,28 @@ test("mobile reliability: Today opens on the wall, with the list put away", asyn
   expect(display).toBe("none");
 });
 
-test("mobile reliability: the peek opens the desk and closes back to the wall", async ({ page }) => {
+test("mobile reliability: the peek opens the list as a sheet, and it closes back to the wall", async ({ page }) => {
   await enterDemo(page);
 
   await expect(page.locator(".wall-peek-label")).toContainText(/After that · \d+/);
   await page.locator(".wall-peek").click();
 
-  // The list opens below; the one thing stays as it was.
-  await expect(page.locator(".wall-primary")).toBeVisible();
-  await expect(page.locator(".tasks-section")).toBeVisible();
-  await expect(page.locator(".wall-peek-label")).toHaveText("Hide list");
+  // 37b: the list rises as a sheet at half height, and the one thing stays
+  // readable above it — Start focus is still the thing under its own centre.
+  const sheet = page.locator(".tasks-section");
+  await expect(sheet).toBeVisible();
+  await expect(sheet).toHaveCSS("position", "fixed");
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+  const startOnTop = await page.locator(".wall-primary").evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+  });
+  expect(startOnTop).toBe(true);
 
-  // Two-way: the toggle is a button in both states, so you can always get back.
-  await page.locator(".wall-peek").click();
+  // Two-way: the sheet's own Hide list puts it away again.
+  await page.locator(".today-list-hide").click();
   await expect(page.locator(".wall-hero")).toBeVisible();
-  const display = await page.locator(".tasks-section").evaluate(el => getComputedStyle(el).display);
+  const display = await sheet.evaluate(el => getComputedStyle(el).display);
   expect(display).toBe("none");
 });
 
@@ -121,6 +128,7 @@ test("mobile reliability: Low Energy's smaller start actually starts five minute
   await enterDemoWithPeek(page);
 
   await page.getByRole("switch", { name: "Low energy" }).click();
+  await page.locator(".today-list-hide").click();
 
   const smaller = page.locator(".wall-action", { hasText: "Start small — 5 minutes" });
   await expect(smaller).toBeVisible({ timeout: 8_000 });
@@ -139,6 +147,7 @@ test("mobile reliability: Low Energy's smaller start actually starts five minute
 test("mobile reliability: the scattered door on the desk reaches screen 14", async ({ page }) => {
   await enterDemoWithPeek(page);
 
+  await page.locator(".today-list-hide").click();
   const door = page.locator(".wall-link", { hasText: "Feeling scattered?" });
   await expect(door).toBeVisible({ timeout: 8_000 });
   await door.click();
@@ -162,6 +171,7 @@ test("mobile reliability: five minutes is honoured even with a session already o
   await expect(overlay).toHaveCount(0);
 
   await page.getByRole("switch", { name: "Low energy" }).click();
+  await page.locator(".today-list-hide").click();
   await page.locator(".wall-action", { hasText: "Start small — 5 minutes" }).click();
 
   await expect(overlay).toBeVisible({ timeout: 8_000 });
@@ -528,4 +538,95 @@ test("laptop: the peek's + is there with the list hidden", async ({ page }) => {
   await expect(add).toBeVisible();
   await add.click();
   await expect(page.getByRole("heading", { name: "Add Task" })).toBeVisible({ timeout: 5_000 });
+});
+
+// ── 2b-2a: the phone sheet (37b half, 37c full, 38g–h tablet) ─────────────
+
+async function openSheet(page) {
+  await page.locator(".wall-peek").click();
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+}
+
+test("mobile reliability: the sheet's grabber toggles half and full; full shows the NOW card", async ({ page }) => {
+  await enterDemo(page);
+  const title = (await page.locator(".wall-title").innerText()).trim();
+  await openSheet(page);
+
+  const sheet = page.locator(".tasks-section");
+  await expect(sheet).toHaveAttribute("aria-label", /^Today's list, \d+ tasks?$/);
+  const grabber = page.getByRole("button", { name: "Expand the list" });
+  await expect(page.locator(".today-sheet-now")).toBeHidden();
+  const halfHeight = (await sheet.boundingBox()).height;
+
+  await grabber.click();
+  await expect(page.getByRole("button", { name: "Collapse the list" })).toHaveAttribute("aria-expanded", "true");
+  await page.waitForTimeout(300);
+  expect((await sheet.boundingBox()).height).toBeGreaterThan(halfHeight + 100);
+  const now = page.locator(".today-sheet-now");
+  await expect(now).toBeVisible();
+  await expect(now.locator(".today-sheet-now-title")).toHaveText(title);
+
+  // Start on the NOW card starts the one thing.
+  await now.getByRole("button", { name: "Start" }).click();
+  await expect(page.locator(".focus-mode-overlay").getByRole("heading", { name: title })).toBeVisible({ timeout: 8_000 });
+});
+
+test("mobile reliability: dragging the grabber goes up to full and down to closed", async ({ page }) => {
+  await enterDemo(page);
+  await openSheet(page);
+  const g = await page.locator(".today-sheet-grabber").boundingBox();
+  const x = g.x + g.width / 2, y = g.y + g.height / 2;
+
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y - 80, { steps: 6 });
+  await page.mouse.move(x, y - 160, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.locator(".today-sheet-now")).toBeVisible();
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+
+  const g2 = await page.locator(".today-sheet-grabber").boundingBox();
+  const y2 = g2.y + g2.height / 2;
+  await page.mouse.move(x, y2);
+  await page.mouse.down();
+  await page.mouse.move(x, y2 + 150, { steps: 6 });
+  await page.mouse.move(x, y2 + 320, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.locator(".tasks-section")).toBeHidden();
+  await expect(page.locator(".wall-peek-label")).toContainText(/After that · \d+/);
+});
+
+test("mobile reliability: Escape puts the sheet away", async ({ page }) => {
+  await enterDemo(page);
+  await openSheet(page);
+  await page.locator(".today-sheet-grabber").focus();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".tasks-section")).toBeHidden();
+});
+
+test("tablet under 840: the sheet is 640px wide and centred", async ({ page }) => {
+  await enterDemo(page);
+  await page.setViewportSize({ width: 800, height: 1100 });
+  await openSheet(page);
+  const box = await page.locator(".tasks-section").boundingBox();
+  expect(Math.round(box.width)).toBe(640);
+  expect(Math.abs(box.x - (800 - box.width) / 2)).toBeLessThanOrEqual(1);
+});
+
+test("tablet from 840: the list is inline, not a sheet", async ({ page }) => {
+  await enterDemo(page);
+  await page.setViewportSize({ width: 900, height: 1200 });
+  await page.locator(".wall-peek").click();
+  const sheet = page.locator(".tasks-section");
+  await expect(sheet).toBeVisible();
+  await expect(sheet).toHaveCSS("position", "static");
+  await expect(page.locator(".today-sheet-grabber")).toBeHidden();
+});
+
+test("mobile reliability: with Reduce Motion the sheet fades instead of sliding", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await enterDemo(page);
+  await page.locator(".wall-peek").click();
+  await expect(page.locator(".tasks-section")).toHaveCSS("animation-name", "today-sheet-fade");
 });
