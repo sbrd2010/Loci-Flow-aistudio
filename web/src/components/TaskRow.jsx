@@ -136,6 +136,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   const [showRoadmapOptions, setShowRoadmapOptions] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef(null);
+  const optionsBtnRef = useRef(null);
   const copyTimeoutRef = useRef(null);
 
   useEffect(() => () => { if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current); }, []);
@@ -291,10 +292,28 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         )}
       </div>
 
+      {/* Keyboard and screen-reader way into the menu, in the default mode
+          (Drag anywhere has its visible ⋮). Hidden until focused, so the row
+          looks as drawn; placed before the menu so Tab walks into it. */}
+      {!isDragAnywhere && hasActions && (
+        <button
+          type="button"
+          className="task-row-options"
+          ref={optionsBtnRef}
+          aria-label={`Options: ${title}`}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
+        >
+          Options
+        </button>
+      )}
+
       {/* options dropdown — triggered by tapping the card body */}
       {menuOpen && (
         <div
           data-testid="task-options-menu"
+          onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setMenuOpen(false); optionsBtnRef.current?.focus(); } }}
           onClick={e => e.stopPropagation()}
           onMouseDown={e => e.stopPropagation()}
           onTouchStart={e => e.stopPropagation()}
