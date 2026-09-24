@@ -16,10 +16,10 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { shouldReflowPastRoute } from "../utils/dayMapRoute";
 import { dayLeftFrom, formatClock24, formatSpan, moveToTomorrow, nextDateStr, planDay, restoreSchedule } from "../utils/dayMapPlan";
-import { getFocusWindows } from "../utils/focusWindows";
+import { getFocusWindows, getLociNowMinutes, mergeWindowSpans } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
 import { commitmentKickerFront, frontForCommitment, frontsFromConfig } from "../utils/fronts";
-import { useTodayStr } from "../hooks/useTodayStr";
+import { useLociDayStr } from "../hooks/useTodayStr";
 import LinkifyText from "./LinkifyText";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import { IconArrowLeft, IconEllipsisVertical, IconX } from "./ui/icons";
@@ -41,9 +41,10 @@ function normalizePriority(p) { return String(p || "P3").toUpperCase(); }
 function clamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
 function roundToQuarter(m) { return Math.ceil(m / 15) * 15; }
 
-function currentDayMinutes() {
-  const n = new Date();
-  return n.getHours() * 60 + n.getMinutes();
+// "Now" on the Loci day's clock: past midnight in a window that runs on (to
+// 02:00, say), 00:30 is 1470, not 30 — the same scale as the route's times.
+function currentDayMinutes(windows) {
+  return Math.floor(getLociNowMinutes(new Date(), windows));
 }
 
 function getPeriodForMinutes(m) {
@@ -205,15 +206,20 @@ function RouteStop({ task, isNow, isOver, isGoal, isExpanded, onToggle, onRemove
   );
 }
 
-function StartControl({ anchorMinutes, onChangeAnchor }) {
-  const [actualNow, setActualNow] = useState(currentDayMinutes);
+function StartControl({ anchorMinutes, onChangeAnchor, windows }) {
+  const windowsRef = useRef(windows);
+  windowsRef.current = windows;
+  const [actualNow, setActualNow] = useState(() => currentDayMinutes(windows));
   useEffect(() => {
-    const id = setInterval(() => setActualNow(currentDayMinutes()), 30_000);
+    const id = setInterval(() => setActualNow(currentDayMinutes(windowsRef.current)), 30_000);
     return () => clearInterval(id);
   }, []);
 
+  // Start times run to the end of the day: midnight, or later when the last
+  // window runs past it.
+  const dayEnd = Math.max(1440, ...mergeWindowSpans(windows).map(([, end]) => end));
   const options = [actualNow];
-  for (let m = Math.ceil(actualNow / 15) * 15; m <= actualNow + 600 && m < 1440; m += 15) {
+  for (let m = Math.ceil(actualNow / 15) * 15; m <= actualNow + 600 && m < dayEnd; m += 15) {
     if (m !== actualNow) options.push(m);
   }
   if (!options.includes(anchorMinutes) && anchorMinutes > actualNow) {
@@ -242,11 +248,13 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [undo, setUndo] = useState(null);
 
-  const todayStr = useTodayStr();
-  const tomorrowStr = nextDateStr(todayStr);
   const tasks = payload?.tasks || [];
   const config = payload?.config || {};
+  // The Loci day, not the calendar date: with a window past midnight, the
+  // route and "tomorrow" both hold until that window ends.
   const windows = getFocusWindows(config);
+  const todayStr = useLociDayStr(windows);
+  const tomorrowStr = nextDateStr(todayStr);
 
   const payloadRef = useRef(payload);
   payloadRef.current = payload;
@@ -288,7 +296,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   // Start: config-persisted → inferred from the first stop → now. Clamped to
   // now so a stored past value never produces a past start time.
   const anchorMinutes = useMemo(() => {
-    const now = currentDayMinutes();
+    const now = currentDayMinutes(windows);
     if (config.dayMapDate === todayStr && config.dayMapAnchorMinutes != null) {
       return Math.max(now, Number(config.dayMapAnchorMinutes));
     }
@@ -296,7 +304,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       return Math.max(now, Number(scheduledTasks[0].dayMapStartMinutes));
     }
     return now;
-  }, [config.dayMapDate, config.dayMapAnchorMinutes, scheduledTasks, todayStr]);
+  }, [config.dayMapDate, config.dayMapAnchorMinutes, scheduledTasks, todayStr, windows]);
 
   const plan = useMemo(() => {
     const route = scheduledTasks.map(t => ({ ...t, dayMapDurationMinutes: getEstimate(t) }));
@@ -422,7 +430,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const n = plan.wontFit.length;
   const isOver = n > 0;
   const dayEndLabel = formatClock24(plan.dayEnd);
-  const nowMins = currentDayMinutes();
+  const nowMins = currentDayMinutes(windows);
 
   // The rail: period labels, the stops, and the DAY ENDS line where it falls.
   const routeItems = [];
@@ -471,7 +479,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       ) : (
         <div className="dm-layout">
           <div className="dm-controls">
-            <StartControl anchorMinutes={anchorMinutes} onChangeAnchor={setAnchor} />
+            <StartControl anchorMinutes={anchorMinutes} onChangeAnchor={setAnchor} windows={windows} />
             <button type="button" className="dm-btn-outline" onClick={autoFill} disabled={!unscheduledTasks.length}>Auto-fill</button>
             <button type="button" className="dm-link" onClick={clearRoute} disabled={!scheduledTasks.length}>Clear route</button>
           </div>

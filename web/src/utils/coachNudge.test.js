@@ -76,8 +76,8 @@ describe("getCoachNudge", () => {
   // getLociDayStr, not the calendar date, or a nudge cleared late on June 13
   // would wrongly reappear at 1am on June 14.
   it("uses the Loci day, not the calendar date, for the once-per-day gate", () => {
-    const earlyMorning = new Date(2026, 5, 14, 1, 0); // 1am June 14 → still June 13's Loci day
-    const payload = { tasks: [task({ isNowFocus: true })], config: { coachNudgeClearedDate: "2026-06-13" } };
+    const earlyMorning = new Date(2026, 5, 14, 1, 0); // 1am June 14 → still June 13's Loci day (window to 02:00)
+    const payload = { tasks: [task({ isNowFocus: true })], config: { dayEndHour: 26, coachNudgeClearedDate: "2026-06-13" } };
     expect(getCoachNudge(payload, earlyMorning)).toBeNull();
   });
 
@@ -95,8 +95,8 @@ describe("buildCoachNudgeClearedConfig", () => {
   });
 
   it("stamps the previous Loci day in the early-morning tail of an overnight window", () => {
-    const earlyMorning = new Date(2026, 5, 14, 1, 0); // 1am June 14 → Loci day "2026-06-13"
-    expect(buildCoachNudgeClearedConfig({ config: {} }, earlyMorning)).toEqual({ coachNudgeClearedDate: "2026-06-13" });
+    const earlyMorning = new Date(2026, 5, 14, 1, 0); // 1am June 14 → Loci day "2026-06-13" (window to 02:00)
+    expect(buildCoachNudgeClearedConfig({ config: { dayEndHour: 26 } }, earlyMorning)).toEqual({ coachNudgeClearedDate: "2026-06-13" });
   });
 });
 

@@ -17,7 +17,7 @@
 //     always land on one task, and a reduction that eliminates everything is
 //     not a reduction — it is a dead end shown to someone already overwhelmed.
 
-import { getFocusWindows, getRemainingFocusMinutes } from "./focusWindows";
+import { getFocusWindows, getLociDayStr, getRemainingFocusMinutes } from "./focusWindows";
 import { frontsFromConfig, parseDueDate } from "./fronts";
 import { isDeferred } from "./deferral";
 
@@ -37,9 +37,9 @@ export function numberWord(n) {
 
 // A task moved to tomorrow is not open today: picking it would start a session
 // on a task Today's wall doesn't show.
-export function openTasks(tasks, now = new Date()) {
+export function openTasks(tasks, now = new Date(), windows = getFocusWindows({})) {
   if (!Array.isArray(tasks)) return [];
-  const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const day = getLociDayStr(now, windows);
   return tasks.filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked && !isDeferred(t, day));
 }
 
@@ -159,7 +159,7 @@ function reasonFor(chosen, pool, fronts) {
  * when there is nothing open, which the screen renders as its empty state.
  */
 export function narrowDown(tasks, config = {}, now = new Date()) {
-  const open = openTasks(tasks, now);
+  const open = openTasks(tasks, now, getFocusWindows(config));
   const minutesLeft = minutesLeftToday(config, now);
   if (open.length === 0) {
     return { total: 0, rows: [], chosen: null, why: null, parked: [], minutesLeft };

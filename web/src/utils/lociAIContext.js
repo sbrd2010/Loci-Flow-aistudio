@@ -39,18 +39,18 @@ export function isActiveLociTask(task) {
 // anything checking "is this actually visible to the model" (e.g.
 // buildLociCategoryFilterContext) must use this instead of the full active
 // list, or it can miss a mismatch the model genuinely can't see either.
-function inGroup(task, group, date) {
-  const dateStr = getLocalDateString(date);
+function inGroup(task, group, dateStr) {
   if (group === "today") return task.horizonLevel === "today" && !isDeferred(task, dateStr);
   if (group === "tomorrow") return task.horizonLevel === "today" && isDeferred(task, dateStr);
   return task.horizonLevel === group;
 }
 
-export function getVisibleLociTasks(allTasks = [], date = new Date()) {
+export function getVisibleLociTasks(allTasks = [], date = new Date(), windows = getFocusWindows({})) {
   const active = (allTasks || []).filter(isActiveLociTask);
+  const dayStr = getLociDayStr(date, windows);
   const visible = [];
   for (const horizon of HORIZON_ORDER) {
-    const horizonTasks = active.filter(task => inGroup(task, horizon, date));
+    const horizonTasks = active.filter(task => inGroup(task, horizon, dayStr));
     if (horizonTasks.length === 0) continue;
     const cap = HORIZON_CAPS[horizon] || 8;
     visible.push(...horizonTasks.slice(0, cap));
@@ -64,11 +64,12 @@ export function getLocalDateString(date = new Date()) {
 
 export function buildLociTaskContext(allTasks = [], date = new Date(), windows = getFocusWindows({})) {
   const active = allTasks.filter(isActiveLociTask);
+  const dayStr = getLociDayStr(date, windows);
   const lines = [];
   let total = 0;
 
   for (const horizon of HORIZON_ORDER) {
-    const horizonTasks = active.filter(task => inGroup(task, horizon, date));
+    const horizonTasks = active.filter(task => inGroup(task, horizon, dayStr));
     if (horizonTasks.length === 0) continue;
 
     total += horizonTasks.length;
@@ -345,12 +346,12 @@ export function buildLociLowEnergyContext(config = {}) {
 // comes from coachContextMode.js's detectRequestedCategories (an array —
 // "my health and work priorities" can name more than one); [] means this is
 // silent unless there's something to flag.
-export function buildLociCategoryFilterContext(tasks = [], requestedCategories = []) {
+export function buildLociCategoryFilterContext(tasks = [], requestedCategories = [], windows) {
   if (!requestedCategories || requestedCategories.length === 0) return "";
   // Uses the capped visible set, not the full active list — a matching task
   // that exists but falls beyond its horizon's cap (shown only as "+X more")
   // is just as invisible to the model as one that doesn't exist at all.
-  const visible = getVisibleLociTasks(tasks);
+  const visible = getVisibleLociTasks(tasks, new Date(), windows);
   // Case-insensitive: a task's own category string isn't guaranteed to match
   // the canonical Title Case labels detectRequestedCategories returns (e.g.
   // an older/imported task could carry "work" instead of "Work") — an exact

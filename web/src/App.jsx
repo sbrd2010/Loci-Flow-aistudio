@@ -468,9 +468,9 @@ export default function App() {
   }, [payload?.config?.lastVisitDate, user?.uid, isSyncingFromCache, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Capture today's carryover snapshot once per Loci day (not calendar day —
-  // deliberately a separate guard from the visit-streak effect above). The
-  // default focus window (7am-2am) means the Loci day can still be
-  // "yesterday" between midnight and 7am even though the calendar date has
+  // deliberately a separate guard from the visit-streak effect above). A
+  // focus window that runs past midnight (7am-2am, say) means the Loci day can
+  // still be "yesterday" after midnight even though the calendar date has
   // already rolled over; piggybacking on the calendar-day guard would both
   // mis-key the snapshot (captureTodaySnapshotIfNeeded's own getLociDayStr
   // call would correctly write it under yesterday's date) AND consume that
@@ -832,15 +832,6 @@ export default function App() {
   // capture above: a config write stamped off a stale cache can overwrite
   // newer config from another device.
   //
-  // The predicate matches the wall's own (TodayTab's pinnedFocusTask): the
-  // commitment is a live Today task. Coach's plain Focus action and Mind
-  // Box's Rescue can pin a week or month task without moving it to Today —
-  // one the wall cannot render, that getValidCommittedTaskIds strips back
-  // out of Day Close, but whose completion would still have marked the
-  // deadline move done.
-  const commitmentPinnedUuid = (payload?.tasks || []).find(t =>
-    t?.isNowFocus && isOnToday(t) && !t.isDeleted && !t.isParked && !t.isCompleted
-  )?.uuid || null;
   // Driven by a clock, not by rendering. Read once per render, this value
   // would only change when something else re-rendered App — so an app left
   // open across the Loci-day boundary (which can be 2am, not midnight) would
@@ -857,6 +848,15 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lociDayTick, payload?.config?.dayStartHour, payload?.config?.dayEndHour, payload?.config?.focusWindows]
   );
+  // The predicate matches the wall's own (TodayTab's pinnedFocusTask): the
+  // commitment is a live Today task. Coach's plain Focus action and Mind
+  // Box's Rescue can pin a week or month task without moving it to Today —
+  // one the wall cannot render, that getValidCommittedTaskIds strips back
+  // out of Day Close, but whose completion would still have marked the
+  // deadline move done.
+  const commitmentPinnedUuid = (payload?.tasks || []).find(t =>
+    t?.isNowFocus && isOnToday(t, commitmentDayStr) && !t.isDeleted && !t.isParked && !t.isCompleted
+  )?.uuid || null;
   // The header's "WED 23 SEP · 5h40m LEFT", on the same minute tick.
   const dayClock = useMemo(
     () => buildDayClock(new Date(), getFocusWindows(payload?.config || {})),

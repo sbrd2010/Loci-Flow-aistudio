@@ -53,9 +53,15 @@ describe("getFocusWindows", () => {
     ]);
   });
 
-  it("falls back to 7am-2am defaults when config has neither field", () => {
-    expect(getFocusWindows({})).toEqual([{ startMin: 420, endMin: 120, overnight: true }]);
-    expect(getFocusWindows()).toEqual([{ startMin: 420, endMin: 120, overnight: true }]);
+  it("falls back to 7am-midnight when config has neither field (someone who skipped setting one)", () => {
+    // endMin 0 is midnight: the window closes as the calendar day ends.
+    expect(getFocusWindows({})).toEqual([{ startMin: 420, endMin: 0, overnight: true }]);
+    expect(getFocusWindows()).toEqual([{ startMin: 420, endMin: 0, overnight: true }]);
+  });
+
+  it("with the fallback, the Loci day turns at midnight", () => {
+    expect(getLociDayStr(new Date(2024, 5, 16, 0, 30), getFocusWindows({}))).toBe("2024-06-16");
+    expect(getLociDayStr(new Date(2024, 5, 15, 23, 30), getFocusWindows({}))).toBe("2024-06-15");
   });
 
   it("falls back when focusWindows is an empty array", () => {
@@ -373,7 +379,7 @@ describe("overlapping windows are measured consistently", () => {
 describe("isHourInWindow", () => {
   const plain = { startMin: 540, endMin: 720, overnight: false };   // 09:00-12:00
   const night = { startMin: 1320, endMin: 120, overnight: true };   // 22:00-02:00
-  const fallback = getFocusWindows({})[0];                          // 07:00-02:00
+  const fallback = getFocusWindows({})[0];                          // 07:00-00:00
 
   it("covers a plain window, end-exclusive", () => {
     expect(isHourInWindow(9, plain)).toBe(true);
@@ -393,11 +399,12 @@ describe("isHourInWindow", () => {
     expect(isHourInWindow(12, night)).toBe(false);
   });
 
-  // The default schedule is overnight, so a hand-rolled containment test got
-  // the answer wrong for most of the working day.
-  it("covers the ordinary working hours of the fallback window", () => {
+  // The default schedule ends at midnight, stored as an overnight window whose
+  // end is 00:00 — so a hand-rolled containment test got the answer wrong for
+  // the whole working day.
+  it("covers the ordinary working hours of the fallback window, and ends at midnight", () => {
     expect(fallback.overnight).toBe(true);
-    for (const h of [8, 9, 14, 20, 23, 1]) expect(isHourInWindow(h, fallback)).toBe(true);
-    for (const h of [3, 5, 6]) expect(isHourInWindow(h, fallback)).toBe(false);
+    for (const h of [7, 8, 9, 14, 20, 23]) expect(isHourInWindow(h, fallback)).toBe(true);
+    for (const h of [0, 1, 3, 5, 6]) expect(isHourInWindow(h, fallback)).toBe(false);
   });
 });

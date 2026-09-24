@@ -184,9 +184,9 @@ describe("buildMiddayProgressSummary", () => {
   ];
 
   it("13. ignores missing/deleted/moved committed task IDs safely", () => {
-    expect(getValidCommittedTaskIds(tasks, ["t1", "t2", "t3", "t4", "missing-id"])).toEqual(["t1", "t2"]);
-    expect(getValidCommittedTaskIds(tasks, undefined)).toEqual([]);
-    expect(() => getValidCommittedTaskIds(tasks, ["missing-id"])).not.toThrow();
+    expect(getValidCommittedTaskIds(tasks, ["t1", "t2", "t3", "t4", "missing-id"], TODAY)).toEqual(["t1", "t2"]);
+    expect(getValidCommittedTaskIds(tasks, undefined, TODAY)).toEqual([]);
+    expect(() => getValidCommittedTaskIds(tasks, ["missing-id"], TODAY)).not.toThrow();
   });
 
   it("counts done/remaining among valid committed tasks only", () => {
@@ -411,8 +411,8 @@ describe("computeDailyCheckinTimes (native pre-scheduling)", () => {
   });
 
   it("anchors targets to the correct calendar day for an overnight window's early-morning tail", () => {
-    // Default 7am-2am overnight window; "now" at 1am is still yesterday's Loci day.
-    const windows = getFocusWindows({}); // default 7am-2am
+    // A 7am-2am overnight window; "now" at 1am is still yesterday's Loci day.
+    const windows = getFocusWindows({ dayEndHour: 26 });
     const now = new Date(2024, 5, 15, 1, 0); // 1am June 15 — Loci day is June 14
     const todayStr = getLociDayStr(now, windows);
     expect(todayStr).toBe("2024-06-14");
