@@ -6,7 +6,7 @@ import { buildLocalSafetyReply } from "../utils/crisisSafety";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
 import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "../utils/lociAIContext";
-import { getTodayCheckedIds, getLociDayStr } from "../utils/dailyAnchors";
+import { getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
 import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin } from "../utils/reminders";
@@ -619,10 +619,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const todayActive = tasks.filter(t => t.horizonLevel === "today" && isActiveLociTask(t));
     const taskContext = buildLociTaskContext(tasks, new Date(), getFocusWindows(config));
     const todayStr = getLociDayStr(new Date(), getFocusWindows(config));
-    const anchorContext = buildLociAnchorsContext(
-      config.dailyAnchors || [],
-      getTodayCheckedIds(config, todayStr)
-    );
+    const anchorContext = buildLociAnchorsContext(config.dailyAnchors || []);
     const checkinContext = buildLociCheckinContext(config, tasks, todayStr);
     const focusSessionContext = buildLociFocusSessionContext(focusTimer);
     const nowFocusContext = buildLociNowFocusContext(tasks);
@@ -1492,10 +1489,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const totalTodayHours = (totalTodayMins / 60).toFixed(1);
     const p1Count = backlog.filter(t => t.priority === "P1").length;
     const p1Ratio = p1Count / backlog.length;
-    const briefingAnchorContext = buildLociAnchorsContext(
-      config.dailyAnchors || [],
-      getTodayCheckedIds(config, getLociDayStr(new Date(), getFocusWindows(config)))
-    );
+    const briefingAnchorContext = buildLociAnchorsContext(config.dailyAnchors || []);
     const prompt = `You are ${config.mentorName || "Loci AI Coach"}, an expert productivity mentor inside Loci Focus — an app built to help people close the gap between intention and action.
 
 USER: ${config.userName || "friend"} | Challenge: ${challengeDesc}

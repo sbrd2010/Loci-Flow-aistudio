@@ -3,9 +3,11 @@ import { IconUndo } from "./icons";
 import "../../styles/undoToast.css";
 
 // "Undo, not confirm" (brief; README checklist): the action has already
-// happened, and this offers it back for 5 seconds. A live region, and it
-// stays while it has focus or the pointer is on it. Remount it (a new key)
-// for each action so the 5 seconds start again.
+// happened, and this offers it back for 5 seconds. It stays while it has
+// focus or the pointer is on it. Remount it (a new key) for each action so
+// the 5 seconds start again. It is not itself the live region: a region
+// inserted already holding its text is often not announced, so the parent
+// keeps an always-present one (UndoAnnouncer) and changes its text.
 const UNDO_MS = 5000;
 
 export default function UndoToast({ message, onUndo, onClose }) {
@@ -29,7 +31,6 @@ export default function UndoToast({ message, onUndo, onClose }) {
   return (
     <div
       className="undo-toast"
-      role="status"
       onMouseEnter={hold}
       onMouseLeave={release}
       onFocus={hold}
@@ -49,5 +50,15 @@ export default function UndoToast({ message, onUndo, onClose }) {
         />
       )}
     </div>
+  );
+}
+
+// The polite live region for the toast, rendered once and always present;
+// only its text changes (37 table: "Done. Undo available.").
+export function UndoAnnouncer({ message }) {
+  return (
+    <span className="sr-only" role="status" aria-live="polite">
+      {message ? `${message}. Undo available.` : ""}
+    </span>
   );
 }

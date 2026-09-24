@@ -117,7 +117,7 @@ for (const theme of THEMES) {
 
     // The Undo toast inverts in both themes (39): its line and its action.
     await page.getByTestId("today-tasks-list").getByTestId("task-checkbox").first().click();
-    const toast = page.getByRole("status").filter({ hasText: "Marked done" });
+    const toast = page.locator(".undo-toast").filter({ hasText: "Marked done" });
     await expect(toast).toBeVisible();
     await toast.hover();
     await assertLegible(toast.locator(".undo-toast-text"), "toast line", theme);
