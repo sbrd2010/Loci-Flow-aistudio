@@ -81,9 +81,9 @@ export default function SplitTaskSheet({ task, onClose, onSplit }) {
         const parsed = JSON.parse(match ? match[0] : raw);
         const good = (Array.isArray(parsed) ? parsed : [])
           .filter(s => s && typeof s.text === "string" && s.text.trim())
-          .slice(0, 6)
           .map(s => ({ text: s.text.trim(), minutes: STEP_MINUTE_OPTIONS.includes(Number(s.minutes)) ? Number(s.minutes) : 25 }));
-        if (!good.length) throw new Error("empty");
+        // The ask is two to four; anything else is not the suggestion asked for.
+        if (good.length < 2 || good.length > 4) throw new Error("out of range");
         if (live) { setSteps(withIds(good)); setSuggested(good.length); }
       })
       .catch(() => { if (live) setSource("manual"); })
@@ -108,12 +108,18 @@ export default function SplitTaskSheet({ task, onClose, onSplit }) {
   const ready = steps.filter(s => s.text.trim());
   const total = ready.reduce((sum, s) => sum + s.minutes, 0);
 
-  // A dialog: Escape closes, Tab stays inside.
+  // A dialog: focus moves in on open and back to the opener on close; Escape
+  // closes, Tab stays inside.
   const cardRef = useRef(null);
+  useEffect(() => {
+    const opener = document.activeElement;
+    cardRef.current?.querySelector(".add-close")?.focus();
+    return () => { if (opener && document.contains(opener)) opener.focus?.(); };
+  }, []);
   const onKeyDown = (e) => {
     if (e.key === "Escape") { e.stopPropagation(); onClose(); return; }
     if (e.key !== "Tab") return;
-    const items = [...(cardRef.current?.querySelectorAll("button:not([disabled]), textarea, select") || [])];
+    const items = [...(cardRef.current?.querySelectorAll("button:enabled, textarea:enabled, select:enabled") || [])];
     if (!items.length) return;
     const first = items[0], last = items[items.length - 1];
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
@@ -141,6 +147,8 @@ export default function SplitTaskSheet({ task, onClose, onSplit }) {
 
         <p className="split-lede" aria-live="polite">{lede}</p>
 
+        {/* Locked while the AI works, so its answer never overwrites edits. */}
+        <fieldset className="split-fieldset" disabled={loading}>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={steps.map(s => s.id)} strategy={verticalListSortingStrategy}>
             <ol className="split-steps">
@@ -152,6 +160,7 @@ export default function SplitTaskSheet({ task, onClose, onSplit }) {
         </DndContext>
 
         <button type="button" className="split-add" onClick={add}><IconPlus size={16} /> Add a step</button>
+        </fieldset>
 
         <p className="split-total">
           <span>Total</span>

@@ -1088,3 +1088,58 @@ test("Split it with no sub-steps and no AI key: write the steps; two are needed;
   // Nothing changed.
   await expect(page.locator(".wall-title")).toContainText("Prepare the Brightlab slides");
 });
+
+// Codex review of #399. The sheet takes focus when it opens, so Escape and
+// Tab work at once, and gives it back when it closes.
+test("Split a task takes focus on open and gives it back on close", async ({ page }) => {
+  await emptyTheWall(page);
+  await page.locator(".wall-commit-field").fill("Prepare the Brightlab slides");
+  await page.locator(".wall-commit-field").press("Enter");
+  await expect(page.locator(".wall-title")).toContainText("Prepare the Brightlab slides", { timeout: 8_000 });
+  await page.locator(".today-list-hide").click();
+  const opener = page.locator(".wall-action", { hasText: "Split it" });
+  await opener.click();
+  const dialog = page.getByRole("dialog", { name: "Split a task" });
+  await expect(dialog.locator(":focus")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
+// The AI is asked for two to four steps. Anything else falls back to writing
+// them by hand; and while it works the rows are locked, so its answer never
+// overwrites what was typed.
+test("Split a task: rows are locked while the AI works, and an answer outside two to four is not used", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); } catch { /* private mode */ }
+  });
+  let release;
+  const held = new Promise(r => { release = r; });
+  await page.route("https://api.groq.com/**", async (route) => {
+    await held;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(
+        ["One", "Two", "Three", "Four", "Five"].map(text => ({ text: `${text} part`, minutes: 15 }))
+      ) } }] }),
+    });
+  });
+  await emptyTheWall(page);
+  await page.locator(".wall-commit-field").fill("Prepare the Brightlab slides");
+  await page.locator(".wall-commit-field").press("Enter");
+  await expect(page.locator(".wall-title")).toContainText("Prepare the Brightlab slides", { timeout: 8_000 });
+  await page.locator(".today-list-hide").click();
+  await page.locator(".wall-action", { hasText: "Split it" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Split a task" });
+  await expect(dialog.locator(".split-lede")).toHaveText("Finding steps of 45 minutes or less…");
+  await expect(dialog.getByLabel("Step 1", { exact: true })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "Add a step" })).toBeDisabled();
+  release();
+
+  await expect(dialog.locator(".split-lede")).toHaveText("Break it into steps of 45 minutes or less. Reorder or remove any.");
+  await expect(dialog.locator(".split-step")).toHaveCount(2);
+  await expect(dialog.getByLabel("Step 1", { exact: true })).toBeEnabled();
+  await expect(dialog.getByLabel("Step 1", { exact: true })).toHaveValue("");
+});

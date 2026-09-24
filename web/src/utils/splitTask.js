@@ -30,7 +30,8 @@ export function stepsFromSubSteps(task) {
   const open = (task?.subSteps || []).filter(s => s && !s.done && String(s.text || "").trim());
   if (open.length < 2) return [];
   const minutes = evenMinutes(task.timeEstimateMinutes || 25 * open.length, open.length);
-  return open.slice(0, 8).map((s, i) => ({ text: String(s.text).trim(), minutes: minutes[i] }));
+  // Every one: the original is replaced, so a step left out would be lost.
+  return open.map((s, i) => ({ text: String(s.text).trim(), minutes: minutes[i] }));
 }
 
 // The tasks the split creates, in the original's place, and the list with the
@@ -39,6 +40,13 @@ export function stepsFromSubSteps(task) {
 export function buildSplit(allTasks, original, steps, { now = Date.now(), makeId } = {}) {
   const real = steps.filter(s => String(s.text || "").trim());
   const base = Number(original.orderIndex) || 0;
+  // The new tasks share the gap up to the next task on the same horizon, so
+  // splitting a task a split made (3, 3.25, 3.5…) never interleaves or ties.
+  const after = allTasks
+    .filter(t => t.uuid !== original.uuid && !t.isDeleted && t.horizonLevel === original.horizonLevel)
+    .map(t => Number(t.orderIndex))
+    .filter(o => Number.isFinite(o) && o > base);
+  const gap = after.length ? Math.min(...after) - base : 1;
   const created = real.map((s, i) => ({
     id: now + i,
     uuid: makeId(),
@@ -52,7 +60,7 @@ export function buildSplit(allTasks, original, steps, { now = Date.now(), makeId
     timeEstimateMinutes: Math.min(MAX_STEP_MINUTES, Number(s.minutes) || 25),
     // Fractions keep the new tasks together at the original's place; the list
     // re-numbers order on its next reorder.
-    orderIndex: base + i / real.length,
+    orderIndex: base + (i * gap) / real.length,
     isNowFocus: !!original.isNowFocus && i === 0,
     isCompleted: false,
     isParked: false,

@@ -15,6 +15,10 @@ describe("stepsFromSubSteps", () => {
     const task = { timeEstimateMinutes: 60, subSteps: [{ text: "Collect figures", done: false }, { text: "Old", done: true }, { text: "Draft slides", done: false }] };
     expect(stepsFromSubSteps(task)).toEqual([{ text: "Collect figures", minutes: 30 }, { text: "Draft slides", minutes: 30 }]);
   });
+  it("keeps every open sub-step, however many — the original is replaced", () => {
+    const subSteps = Array.from({ length: 10 }, (_, i) => ({ text: `Step ${i + 1}`, done: false }));
+    expect(stepsFromSubSteps({ timeEstimateMinutes: 200, subSteps }).map(s => s.text)).toEqual(subSteps.map(s => s.text));
+  });
   it("offers nothing for one or no sub-step", () => {
     expect(stepsFromSubSteps({ subSteps: [{ text: "Only", done: false }] })).toEqual([]);
     expect(stepsFromSubSteps({})).toEqual([]);
@@ -35,6 +39,16 @@ describe("buildSplit / undoSplit", () => {
     expect(created[1].isNowFocus).toBe(false);
     expect(created.every(t => t.orderIndex >= 3 && t.orderIndex < 4)).toBe(true);
     expect(tasks.find(t => t.uuid === "o")).toMatchObject({ isDeleted: true, isNowFocus: false });
+  });
+
+  it("splitting a task a split made stays inside its own gap: no interleaving, no ties", () => {
+    const { tasks: once, created: four } = buildSplit([original, other], original, ["A", "B", "C", "D"].map(text => ({ text, minutes: 30 })), { now: 1, makeId });
+    expect(four.map(t => t.orderIndex)).toEqual([3, 3.25, 3.5, 3.75]);
+    const { tasks: twice, created: two } = buildSplit(once, four[0], [{ text: "A1", minutes: 15 }, { text: "A2", minutes: 15 }], { now: 2, makeId });
+    const order = twice.filter(t => !t.isDeleted).sort((a, b) => a.orderIndex - b.orderIndex).map(t => t.title);
+    expect(order).toEqual(["A1", "A2", "B", "C", "D", "Other"]);
+    expect(new Set(twice.filter(t => !t.isDeleted).map(t => t.orderIndex)).size).toBe(6);
+    expect(two.every(t => t.orderIndex >= 3 && t.orderIndex < 3.25)).toBe(true);
   });
 
   it("Undo brings the original back, pinned, and removes what the split made", () => {

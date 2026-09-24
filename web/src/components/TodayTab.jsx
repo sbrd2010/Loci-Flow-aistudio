@@ -719,7 +719,9 @@ export default function TodayTab({
         buildTaskMutationEvent("task_restored", task, { windows, now }),
         ...made.map(t => buildTaskMutationEvent("task_deleted", t, { windows, now })),
       ];
-      savePayloadAsync({ ...payload, tasks: undoSplit(tasks, task, undo.created, now) })
+      // Undoing a split into four or more removes three or more tasks at once,
+      // which the sync drop guard blocks unless it is told they are expected.
+      savePayloadAsync({ ...payload, tasks: undoSplit(tasks, task, undo.created, now) }, { expectedRemovals: undo.created })
         .then(() => writeActivityEvents(eventsPatch(uid, events)))
         .catch(() => {});
       return;
