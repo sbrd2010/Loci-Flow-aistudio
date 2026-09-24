@@ -105,8 +105,8 @@ test("reliability: pinning a task sets Now Focus", async ({ page }) => {
   await row.locator(".task-row-top").click();
   await row.getByText("Pin to Focus").click();
 
-  // Task appears in pinned section — overlay does not auto-open on pin
-  const pinnedSection = page.locator(".pinned-focus-section");
+  // The task becomes the wall's one thing — the overlay does not auto-open on pin
+  const pinnedSection = page.locator(".today-wall");
   await expect(pinnedSection).toBeVisible({ timeout: 5_000 });
   await expect(pinnedSection).toContainText(title);
 });
@@ -137,53 +137,49 @@ test("reliability: brain dump item survives tab switch and is browsable via Road
   await expect(dumpItem).toBeVisible({ timeout: 5_000 });
 });
 
-test("reliability: low-energy mode filters to low-energy tasks and can be toggled off", async ({ page }) => {
+test("reliability: Low energy is a switch that changes how a task starts, not which tasks show", async ({ page }) => {
   await enterDemo(page);
 
   const tasksList = page.getByTestId("today-tasks-list");
-  // "25-minute deep work block" is P2 — visible in normal mode
+  const lowEnergy = page.getByRole("switch", { name: "Low energy" });
   await expect(tasksList.getByText("25-minute deep work block")).toBeVisible({ timeout: 8_000 });
+  await expect(lowEnergy).toHaveAttribute("aria-checked", "false");
 
-  await page.locator("button.stuck-btn", { hasText: "Low Energy" }).click();
+  // 37b: "Small starts drop to 5 min". The list is not filtered (Y4: Must-do
+  // is the list's only filter), and the wall offers the smaller start.
+  await lowEnergy.click();
+  await expect(lowEnergy).toHaveAttribute("aria-checked", "true");
+  await expect(tasksList.getByText("25-minute deep work block")).toBeVisible();
+  await expect(tasksList.getByText("10-minute walk")).toBeVisible();
+  await expect(page.locator(".wall-action", { hasText: "Start small — 5 minutes" })).toBeVisible();
+  await expect(page.locator(".wall-action", { hasText: "Split it" })).toHaveCount(0);
 
-  // Low energy shows only P4 tasks; P4 "10-minute walk" visible, P2 block hidden
-  await expect(tasksList.getByText("10-minute walk")).toBeVisible({ timeout: 5_000 });
-  await expect(tasksList.getByText("25-minute deep work block")).not.toBeVisible({ timeout: 5_000 });
-
-  await page.locator("button.stuck-btn", { hasText: "Low Energy ON" }).click();
-  await expect(tasksList.getByText("25-minute deep work block")).toBeVisible({ timeout: 5_000 });
+  await lowEnergy.click();
+  await expect(lowEnergy).toHaveAttribute("aria-checked", "false");
+  await expect(page.locator(".wall-action", { hasText: "Split it" })).toBeVisible();
 });
 
-test("reliability: Today's overflow menu reveals Anchors and Must-Do, closes on outside click", async ({ page }) => {
+test("reliability: All · Must-do filters the list to must-dos and back", async ({ page }) => {
   await enterDemo(page);
 
-  const chipRow = page.locator(".focus-now-chip-row");
-  await expect(chipRow.getByText("One Task", { exact: false })).toBeVisible({ timeout: 8_000 });
-  // Anchors and Must-Do are no longer always-visible chips in the row.
-  await expect(chipRow.getByRole("button", { name: "Anchors", exact: false })).toHaveCount(0);
-  await expect(chipRow.getByRole("button", { name: "Must-Do", exact: false })).toHaveCount(0);
+  const tasksList = page.getByTestId("today-tasks-list");
+  const all = page.getByRole("button", { name: /^All · \d+$/ });
+  const must = page.getByRole("button", { name: /^Must-do · \d+$/ });
+  await expect(all).toHaveAttribute("aria-pressed", "true", { timeout: 8_000 });
+  await expect(must).toHaveText("Must-do · 0");
 
-  await page.getByRole("button", { name: "More options" }).click();
-  const menu = page.getByTestId("today-more-menu");
-  await expect(menu).toBeVisible({ timeout: 5_000 });
-  await expect(menu.getByText("Anchors", { exact: false })).toBeVisible();
-  await expect(menu.getByText("Must-Do", { exact: false })).toBeVisible();
+  const title = "10-minute walk";
+  const row = taskRowByTitle(page, title);
+  await row.locator(".task-row-top").click();
+  await page.getByText("Mark as must-do").click();
+  await expect(row.locator(".task-tag.is-must")).toHaveText("MUST", { timeout: 5_000 });
+  await expect(must).toHaveText("Must-do · 1");
 
-  // Regression guard: the menu must render outside the horizontally-scrolling,
-  // overflow-clipped chip row/shell, or it would be invisible/unreachable in
-  // a real browser despite passing a shallow visibility check.
-  await expect(chipRow.getByTestId("today-more-menu")).toHaveCount(0);
-  const menuBox = await menu.boundingBox();
-  expect(menuBox?.height).toBeGreaterThan(20);
+  await must.click();
+  await expect(must).toHaveAttribute("aria-pressed", "true");
+  await expect(tasksList.getByText(title)).toBeVisible();
+  await expect(tasksList.getByText("25-minute deep work block")).not.toBeVisible();
 
-  // Clicking Must-Do toggles the mode and closes the menu.
-  await menu.getByText("Must-Do", { exact: false }).click();
-  await expect(menu).not.toBeVisible({ timeout: 5_000 });
-  await expect(page.getByText("MUST-DOS")).toBeVisible({ timeout: 5_000 });
-
-  // Reopen, then click outside — menu should close without acting.
-  await page.getByRole("button", { name: "More options" }).click();
-  await expect(page.getByTestId("today-more-menu")).toBeVisible({ timeout: 5_000 });
-  await page.locator("body").click({ position: { x: 5, y: 5 } });
-  await expect(page.getByTestId("today-more-menu")).not.toBeVisible({ timeout: 5_000 });
+  await all.click();
+  await expect(tasksList.getByText("25-minute deep work block")).toBeVisible({ timeout: 5_000 });
 });

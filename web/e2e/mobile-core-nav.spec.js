@@ -94,45 +94,41 @@ for (const viewport of MOBILE_VIEWPORTS) {
 const PHONE_VIEWPORTS = MOBILE_VIEWPORTS.filter((v) => v.name !== "Tablet portrait");
 
 for (const viewport of PHONE_VIEWPORTS) {
-  test(`mobile reliability: Today's Focus chip row, more-menu, and Pinned Focus don't overlap on ${viewport.name}`, async ({ page }) => {
+  test(`mobile reliability: Today's list header and toolbar fit without overlap on ${viewport.name}`, async ({ page }) => {
     await enterDemo(page, viewport);
     await expect(page.getByTestId("today-tasks-list")).toBeVisible({ timeout: 8_000 });
 
-    // Issue 1: the quick-action chip row must fit without needing to scroll.
-    const chipRow = page.locator(".focus-now-chip-row");
-    const chipOverflow = await chipRow.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
-    expect(chipOverflow).toBe(false);
+    // Every control in the header and toolbar is on screen and none overlap.
+    const controls = [
+      page.getByRole("button", { name: "Day map →" }),
+      page.locator(".today-list-add"),
+      page.getByRole("button", { name: /^All · \d+$/ }),
+      page.getByRole("button", { name: /^Must-do · \d+$/ }),
+      page.getByRole("switch", { name: "Low energy" }),
+    ];
+    const boxes = [];
+    for (const control of controls) {
+      await expect(control).toBeVisible();
+      const box = await control.boundingBox();
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+      boxes.push(box);
+    }
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i], b = boxes[j];
+        const overlap = a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+        expect(overlap, `controls ${i} and ${j} overlap`).toBe(false);
+      }
+    }
 
-    // Issue 2: the "..." more-menu trigger must sit on the same line as the
-    // chip row (not wrapped to its own line), and its dropdown must actually
-    // open on tap.
-    const chipShellBox = await page.locator(".focus-now-chip-shell").boundingBox();
-    const triggerBox = await page.locator(".today-more-menu-trigger").boundingBox();
-    expect(Math.abs(chipShellBox.y - triggerBox.y)).toBeLessThan(5);
-
-    await page.locator(".today-more-menu-trigger > button").click();
-    await expect(page.getByTestId("today-more-menu")).toBeVisible({ timeout: 5_000 });
-    await page.locator(".today-more-menu-trigger > button").click();
-
-    // Issue 3: the pinned task's "Focus →" button must not overlap its title.
-    // Asserted unconditionally (not just when a pinned task happens to exist) —
-    // demo data always pins one, so a future change that silently stopped
-    // rendering it should fail this test, not skip the check.
-    const pinnedSection = page.locator(".pinned-focus-section");
-    await expect(pinnedSection).toHaveCount(1);
-    const focusBtnBox = await page.locator(".pinned-focus-start-btn").boundingBox();
-    const titleBox = await page.locator(".pinned-focus-inner .task-title-text").first().boundingBox();
-    expect(titleBox.x + titleBox.width).toBeLessThanOrEqual(focusBtnBox.x);
+    // The switch is the system size (51×31) inside the row.
+    const switchBox = boxes[4];
+    expect(Math.round(switchBox.width)).toBe(51);
+    expect(Math.round(switchBox.height)).toBe(31);
 
     await expectNoHorizontalOverflow(page);
-
-    // The chip row's "no scroll" budget was tuned against the default chip
-    // labels — confirm it still holds once "Low Energy" grows to "Low Energy
-    // ON", the longest label variant this row can show.
-    await page.locator(".focus-now-chip-row button", { hasText: "Low Energy" }).click();
-    await expect(page.locator(".focus-now-chip-row button", { hasText: "Low Energy ON" })).toBeVisible({ timeout: 5_000 });
-    const chipOverflowWithLowEnergyOn = await chipRow.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
-    expect(chipOverflowWithLowEnergyOn).toBe(false);
+    await page.getByRole("switch", { name: "Low energy" }).click();
     await expectNoHorizontalOverflow(page);
   });
 }

@@ -19,7 +19,7 @@ import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
-import { getCurrentAnchorSlot, getAnchorVariant, getTodayCheckedIds, getTodayShownSlots, getLociDayStr } from "../utils/dailyAnchors";
+import { getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import {
@@ -27,6 +27,8 @@ import {
   shouldShowReflection, buildEndOfDaySummary, buildReflectionSave, buildReflectionSnooze, REFLECTION_MOODS,
 } from "../utils/dailyCoachCheckins";
 import "../styles/focusNow.css";
+import "../styles/todayList.css";
+import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import {
   DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor,
   useSensor, useSensors, DragOverlay
@@ -71,7 +73,7 @@ function SortableTaskItem({ id, interactionStyle, children }) {
 }
 
 export default function TodayTab({
-  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenCoach, onScattered,
+  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenCoach, onScattered, onOpenAddTask,
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft, setTimerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
@@ -161,16 +163,11 @@ export default function TodayTab({
 
   const [headerExpanded, setHeaderExpanded] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const moreMenuRef = useRef(null);
   const [rescueActive, setRescueActive] = useState(false);
   const [rescueTask, setRescueTask] = useState(null);
   const [rescueEntryPoint, setRescueEntryPoint] = useState("today");
   const [isMVDMode, setIsMVDMode] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState(null);
-  const [focusNowMode, setFocusNowMode] = useState(false);
-  const [focusNowTaskId, setFocusNowTaskId] = useState(null);
-  const [showFocusNowPicker, setShowFocusNowPicker] = useState(false);
   // "peekOpen is persisted to localStorage." Closed by default — the wall is
   // the default state, and the peek is how you ask for the rest.
   const [peekOpen, setPeekOpen] = useState(() => {
@@ -179,9 +176,6 @@ export default function TodayTab({
   useEffect(() => {
     try { localStorage.setItem("loci_today_peek_open", peekOpen ? "1" : "0"); } catch { /* private mode */ }
   }, [peekOpen]);
-
-  const [showAnchorSheet, setShowAnchorSheet] = useState(false);
-  const [anchorSheetSlot, setAnchorSheetSlot] = useState(null);
 
   // The one surviving scheduled prompt: "reflection" (Day Close). Addendum B
   // deleted the morning commitment and the midday progress check outright.
@@ -240,40 +234,11 @@ export default function TodayTab({
     if (isTimerRunning) setIsTimerRunning(false);
   };
 
-  useEffect(() => {
-    if (!showMoreMenu) return;
-    const handler = (e) => {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setShowMoreMenu(false);
-    };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("touchstart", handler, { passive: true });
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("touchstart", handler);
-    };
-  }, [showMoreMenu]);
-
-  // Auto-exit Focus Now if the selected task is deleted externally — or
-  // completed. A completed task leaves the section locked on its "Done" card
-  // while the wall has moved on, hiding the rest of Today until Exit is
-  // pressed. Completion reaches this from several paths (the wall's Mark
-  // done, the row checkbox, the timer, accepting the wall's proposal), so it
-  // is caught here rather than at each of them.
-  useEffect(() => {
-    if (focusNowMode && focusNowTaskId && !tasks.find(t => t.uuid === focusNowTaskId && !t.isDeleted && !t.isCompleted)) {
-      setFocusNowMode(false);
-      setFocusNowTaskId(null);
-    }
-  }, [tasks, focusNowMode, focusNowTaskId]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const todayStr = getLociDayStr(new Date(), windows);
 
   // ── Daily Anchors derived state ────────────────────────────────────────────
   const anchors = config.dailyAnchors || [];
   const anchorTodayStr = todayStr;
-  const todayCheckedIds = getTodayCheckedIds(config, anchorTodayStr);
-  const todayShownSlots = getTodayShownSlots(config, anchorTodayStr);
-  const anchorsCheckedCount = anchors.filter(a => todayCheckedIds.includes(a.id)).length;
 
   useEffect(() => {
     const container = document.querySelector('.screen-content');
@@ -289,8 +254,10 @@ export default function TodayTab({
 
   const [editingTask, setEditingTask] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
-  const [undoTask, setUndoTask] = useState(null);
-  const undoTimeoutRef = useRef(null);
+  // The one Undo toast: { kind: "done" | "delete" | "unpin", task, wasPinned, at }.
+  // Only the task is held — what undoing writes is built from the tasks as
+  // they are when Undo is tapped, not as they were 5 seconds earlier.
+  const [undo, setUndo] = useState(null);
 
   const getTodayDateString = () => {
     const d = new Date();
@@ -309,7 +276,9 @@ export default function TodayTab({
     return newContributions;
   };
 
-  const handleToggleComplete = (task) => {
+  // restorePin: Undo of a Mark done puts the task back on the wall — but only
+  // if nothing else has been made the one thing in the meantime.
+  const handleToggleComplete = (task, { restorePin = false } = {}) => {
     // Captured now, not inside the .then() below — that only runs once
     // savePayloadAsync's debounced write actually confirms (up to 1500ms,
     // more with retries), which could land the event's lociDateString on
@@ -334,7 +303,11 @@ export default function TodayTab({
       setIsFocusMode(false);
       setFocusSessionActive(false);
     }
-    const updatedTasks = buildToggleCompletedTasks(tasks, task.uuid, isCompleted, todayStr);
+    let updatedTasks = buildToggleCompletedTasks(tasks, task.uuid, isCompleted, todayStr);
+    if (restorePin && !isCompleted && !tasks.some(t => t.isNowFocus && !t.isDeleted && !t.isCompleted)) {
+      updatedTasks = updatedTasks.map(t => t.uuid === task.uuid ? { ...t, isNowFocus: true } : t);
+    }
+    if (isCompleted) setUndo({ kind: "done", task, wasPinned: !!task.isNowFocus, at: actionAt });
     if (isCompleted) {
       celebrate();
       track("task_completed", { horizon: task.horizonLevel });
@@ -482,15 +455,6 @@ export default function TodayTab({
     return true;
   };
 
-  // Staging only: the pin happens when One Task Focus's own Start is tapped.
-  // The wall's commitment no longer comes through this sheet — it has its own
-  // field now (J2a) — so this no longer has to serve two callers.
-  const handleFocusNowPick = (task) => {
-    setShowFocusNowPicker(false);
-    setFocusNowTaskId(task.uuid);
-    setFocusNowMode(true);
-  };
-
   const handleFocusBrainDump = (text) => {
     if (!text.trim()) return;
     const newItem = { id: `bd_${Date.now()}`, text: text.trim(), createdAt: Date.now() };
@@ -559,33 +523,41 @@ export default function TodayTab({
         writeActivityEvents(eventsPatch(uid, events));
       })
       .catch(() => {});
-    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
-    setUndoTask(task);
-    undoTimeoutRef.current = setTimeout(() => setUndoTask(null), 5000);
+    setUndo({ kind: "delete", task, at: Date.now() });
   };
 
-  const handleUndoDelete = () => {
-    if (!undoTask) return;
-    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
-    const event = buildTaskMutationEvent("task_restored", undoTask, { windows });
-    savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === undoTask.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t) })
-      .then(() => writeActivityEvents(eventPatch(uid, event)))
-      .catch(() => {});
-    setUndoTask(null);
+  // Unpin from the list's NOW row: acts at once, with Undo like the rest.
+  const handleUnpinWallTask = (task) => {
+    if (!task.isNowFocus) return handlePinTask(task);
+    setUndo({ kind: "unpin", task, at: Date.now() });
+    return handlePinTask(task);
   };
 
-  const handleEnergyToggle = () => {
-    const enabling = !config.isLowEnergyMode;
-    if (enabling) setIsMVDMode(false);
-    saveConfigPatch({ isLowEnergyMode: enabling });
-  };
+  const undoText = undo ? `${{ done: "Marked done", delete: "Deleted", unpin: "Unpinned" }[undo.kind]}: ${undo.task.title}` : "";
 
-  const handleMVDModeToggle = () => {
-    const enabling = !isMVDMode;
-    if (enabling && config.isLowEnergyMode) {
-      saveConfigPatch({ isLowEnergyMode: false });
+  const handleUndo = () => {
+    if (!undo) return;
+    const { kind, task, wasPinned } = undo;
+    setUndo(null);
+    if (kind === "delete") {
+      const event = buildTaskMutationEvent("task_restored", task, { windows });
+      savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t) })
+        .then(() => writeActivityEvents(eventPatch(uid, event)))
+        .catch(() => {});
+      return;
     }
-    setIsMVDMode(enabling);
+    if (kind === "unpin") {
+      // Re-pin only if it is still here and nothing else became the one thing.
+      const current = tasks.find(t => t.uuid === task.uuid && !t.isDeleted && !t.isCompleted);
+      if (current && !current.isNowFocus && !tasks.some(t => t.isNowFocus && !t.isDeleted && !t.isCompleted)) {
+        handlePinTask(current);
+      }
+      return;
+    }
+    // Reopen only what is still done: a task reopened or deleted by another
+    // path in those 5 seconds is left as it is.
+    const current = tasks.find(t => t.uuid === task.uuid && !t.isDeleted);
+    if (current?.isCompleted) handleToggleComplete(current, { restorePin: wasPinned });
   };
 
   // Re-check auto-show eligibility when the app/tab regains visibility or
@@ -605,7 +577,7 @@ export default function TodayTab({
 
   // ── Day Close auto-show — the one scheduled interruption, at day's end ──
   useEffect(() => {
-    if (isFocusMode || focusNowMode || editingTask || showFocusNowPicker || sessionCompletePending || isAddTaskDialogOpen || showAnchorSheet || showDailyCheckin || rescueActive) return;
+    if (isFocusMode || editingTask || sessionCompletePending || isAddTaskDialogOpen || showDailyCheckin || rescueActive) return;
     const now = new Date();
     // Addendum B: the morning commitment and the midday progress check are
     // gone, and so is the morning ritual popup — "an app that interrupts an
@@ -638,41 +610,12 @@ export default function TodayTab({
     }, 2500);
     return () => clearTimeout(timer);
   }, [
-    anchorTodayStr, isFocusMode, focusNowMode, !!editingTask, showFocusNowPicker, sessionCompletePending, isAddTaskDialogOpen,
-    showAnchorSheet, showDailyCheckin, rescueActive, pendingCheckinSlot, config.anchorsSnoozeUntil,
+    anchorTodayStr, isFocusMode, !!editingTask, sessionCompletePending, isAddTaskDialogOpen,
+    showDailyCheckin, rescueActive, pendingCheckinSlot, config.anchorsSnoozeUntil,
     visibilityTick,
     config.dailyCommitmentDate, config.dailyCommitmentSkippedDate, config.dailyCommitmentSnoozeUntil, config.dailyCommitmentTaskIds,
     config.dailyMiddayCheckDate, config.dailyMiddayCheckSnoozeUntil, config.dailyReflectionDate, config.dailyReflectionSnoozeUntil, config.dailyCheckinsEnabled,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleAnchorCheck = (id) => {
-    const next = todayCheckedIds.includes(id)
-      ? todayCheckedIds.filter(x => x !== id)
-      : [...todayCheckedIds, id];
-    saveConfigPatch({ anchorsCheckedIds: next, anchorsCheckedDate: anchorTodayStr });
-  };
-
-  const handleAnchorSheetDone = () => {
-    const slot = anchorSheetSlot ?? getCurrentAnchorSlot(new Date(), windows);
-    const nextSlots = slot && !todayShownSlots.includes(slot) ? [...todayShownSlots, slot] : todayShownSlots;
-    saveConfigPatch({ anchorsShownSlots: nextSlots, anchorsSlotsDate: anchorTodayStr,
-      anchorsSnoozeUntil: null });
-    setShowAnchorSheet(false);
-    setAnchorSheetSlot(null);
-  };
-
-  const handleAnchorLater = () => {
-    saveConfigPatch({ anchorsSnoozeUntil: Date.now() + 90 * 60 * 1000 });
-    setShowAnchorSheet(false);
-    setAnchorSheetSlot(null);
-  };
-
-  const handleAnchorSkipToday = () => {
-    saveConfigPatch({ anchorsShownSlots: ["afternoon", "evening"], anchorsSlotsDate: anchorTodayStr,
-      anchorsSnoozeUntil: null });
-    setShowAnchorSheet(false);
-    setAnchorSheetSlot(null);
-  };
 
   // ── Daily Coach Check-in handlers ──────────────────────────────────────────
   const closeDailyCheckin = () => {
@@ -888,18 +831,50 @@ export default function TodayTab({
     : 0;
 
   const todayTasksAll = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isParked);
-  const committedTaskIds = new Set(config.dailyCommitmentDate === anchorTodayStr ? getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds) : []);
   const pinnedFocusTask = todayTasksAll.find(t => t.isNowFocus && !t.isCompleted && !t.isDeleted) || null;
-  const _d = new Date();
-  const _todayStr = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, "0")}-${String(_d.getDate()).padStart(2, "0")}`;
-  const _dayMapActive = todayTasksAll.filter(t => !t.isCompleted);
-  const dayMapTotal = _dayMapActive.length;
-  const dayMapPlaced = _dayMapActive.filter(t => t.dayMapDate === _todayStr && t.dayMapPeriod).length;
-  const todayTasksFiltered = isMVDMode
-    ? todayTasksAll.filter(t => t.isMVD)
-    : config.isLowEnergyMode
-      ? todayTasksAll.filter(t => t.priority === "P4")
-      : todayTasksAll;
+
+  // The wall's task edited off Today (Split it opens the task editor, which
+  // can change the horizon). AddTaskDialog's edit-save spreads ...editTask,
+  // so isNowFocus survives the move: the task would stay the app's active
+  // focus task with its session orphaned, while no longer on Today at all.
+  // Let go of it the way handleMoveToHorizon does for the row menu. Only the
+  // task that was on the wall is watched — a Coach pin on another horizon
+  // never was, and is left alone.
+  const wallTaskUuidRef = useRef(null);
+  if (pinnedFocusTask) {
+    wallTaskUuidRef.current = pinnedFocusTask.uuid;
+  } else if (wallTaskUuidRef.current && !tasks.some(t => t.uuid === wallTaskUuidRef.current && t.isNowFocus)) {
+    // Let go of by any other path: forget it, so a later deliberate pin of
+    // the same task elsewhere is not undone here.
+    wallTaskUuidRef.current = null;
+  }
+  const leftToday = wallTaskUuidRef.current
+    ? tasks.find(t => t.uuid === wallTaskUuidRef.current && t.isNowFocus && !t.isDeleted && !t.isCompleted && t.horizonLevel !== "today")
+    : null;
+  useEffect(() => {
+    if (!leftToday) return;
+    wallTaskUuidRef.current = null;
+    const actionAt = Date.now();
+    const endedFocusSession = endFocusSession("user_abandoned");
+    setIsTimerRunning(false);
+    setIsFocusMode(false);
+    setFocusSessionActive(false);
+    savePayloadAsync({ ...payload, tasks: tasks.map(t =>
+      t.uuid === leftToday.uuid ? { ...t, isNowFocus: false, lastUpdated: Date.now() } : t
+    )})
+      .then(() => {
+        if (endedFocusSession) {
+          writeActivityEvents(eventPatch(
+            uid,
+            buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt })
+          ));
+        }
+      })
+      .catch(() => {});
+  }, [leftToday?.uuid]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Must-do is the list's one filter (Y4). Low energy changes how a task
+  // starts, not which tasks show: "Small starts drop to 5 min" (37b).
+  const todayTasksFiltered = isMVDMode ? todayTasksAll.filter(t => t.isMVD) : todayTasksAll;
   // — values the wall's header and kicker read —
   // The kicker is the front name OR nothing. Never "Uncategorised": a task with
   // no front is a first-class task (Addendum C).
@@ -949,7 +924,10 @@ export default function TodayTab({
     : null;
 
   const remainingTasks = todayTasksFiltered.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
-  const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted);
+  // Finished today — the same set the header's "N done" counts. A task done
+  // on an earlier day keeps the Today horizon until something moves it, and
+  // showing it here put "0 done" above a list of done rows.
+  const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted && t.dateCompletedString === todayStr);
   // The wall's two figures are claims about the whole day, so they come from
   // todayTasksAll — the Must-Do and Low Energy filters narrow the LIST below,
   // not the day. Reading them off the filtered list let the wall say "0 more
@@ -959,6 +937,12 @@ export default function TodayTab({
   // the Today horizon until something moves it, so counting them all reported
   // last week's finished work as this morning's progress.
   const wallRemainingCount = todayTasksAll.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).length;
+  // The list header's figures (41a: "11 · 0 done", "All · 11", "Must-do · 2").
+  // "Done" is done TODAY — a finished task keeps the Today horizon until
+  // something moves it.
+  const listAllCount = wallRemainingCount;
+  const listMustCount = todayTasksAll.filter((t) => t.isMVD && !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).length;
+  const listDoneCount = todayTasksAll.filter((t) => t.isCompleted && t.dateCompletedString === todayStr).length;
   // What the empty wall's "Or pick one" rows draw from — the same pool the
   // peek shows, so the near-duplicate the user is about to retype is the one
   // they would have seen anyway.
@@ -984,61 +968,6 @@ export default function TodayTab({
   // must not render beneath it. Two competing creation flows on first launch
   // is the screen this redesign exists to remove.
   const wallIsAsking = !pinnedFocusTask && !doneCommitment;
-
-  // Focus Now: first incomplete task in Day Map order for today (shown as "Recommended")
-  const dayMapNextTask = todayTasksAll
-    .filter(t => !t.isCompleted && t.dayMapDate === _todayStr && t.dayMapOrder != null)
-    .sort((a, b) => (a.dayMapOrder ?? 999) - (b.dayMapOrder ?? 999))[0] || null;
-
-  // All incomplete today tasks for the picker (unfiltered by mode chips)
-  const focusNowPickerTasks = todayTasksAll
-    .filter(t => !t.isCompleted)
-    .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
-
-  // The currently selected Focus Now task (null if deleted mid-session)
-  const focusNowTask = (focusNowMode && focusNowTaskId)
-    ? tasks.find(t => t.uuid === focusNowTaskId && !t.isDeleted)
-    : null;
-
-  // Editing the focused task (via One Task mode's own edit button) can move
-  // it off "today" (Week/Month/etc.). focusNowTask is looked up only by
-  // uuid/!isDeleted above, so without this it would keep rendering — and
-  // stay startable/completable — inside One Task mode even though it no
-  // longer belongs in Today. Exit back to the normal Today view instead,
-  // same as if the task had been deleted mid-session.
-  useEffect(() => {
-    if (!focusNowMode || !focusNowTask || focusNowTask.horizonLevel === "today") return;
-    setFocusNowMode(false);
-    setFocusNowTaskId(null);
-    // AddTaskDialog's edit-save spreads ...editTask, so isNowFocus survives
-    // a horizon change untouched — a task that was actively pinned/focused
-    // can leave Today still flagged isNowFocus, orphaning any running timer/
-    // session (no terminal event, later mis-attributed as an unrelated
-    // abandonment). Clean that up exactly like handleMoveToHorizon already
-    // does for the equivalent normal-list action — task_moved was already
-    // written by AddTaskDialog's own save, so only the focus_abandoned
-    // event is new here.
-    if (focusNowTask.isNowFocus) {
-      const abandonedTaskUuid = focusNowTask.uuid;
-      const actionAt = Date.now();
-      const endedFocusSession = endFocusSession("user_abandoned");
-      setIsTimerRunning(false);
-      setIsFocusMode(false);
-      setFocusSessionActive(false);
-      savePayloadAsync({ ...payload, tasks: tasks.map(t =>
-        t.uuid === abandonedTaskUuid ? { ...t, isNowFocus: false, lastUpdated: Date.now() } : t
-      )})
-        .then(() => {
-          if (endedFocusSession) {
-            writeActivityEvents(eventPatch(
-              uid,
-              buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt })
-            ));
-          }
-        })
-        .catch(() => {});
-    }
-  }, [focusNowMode, focusNowTask?.horizonLevel]);
 
   const progressRatio = timerMaxSeconds > 0 ? timerSecondsLeft / timerMaxSeconds : 0;
   const strokeDashoffset = 439.8 * (1 - progressRatio);
@@ -1121,25 +1050,35 @@ export default function TodayTab({
       .catch(() => {});
   };
 
-  // Laptop keys for the wall (37l): Space starts focus, D marks done, S splits.
-  // Never while typing, never on a focused control (Space would also press it),
+  // Laptop keys for Today (37l, 41a, 49): Space starts focus, D marks done,
+  // S splits, N adds a task, L shows or hides the list.
+  // Never while typing, Space never on a focused control,
   // never with a modifier, and never while anything is open over Today.
   const wallKeysBlocked = isFocusMode || !!editingTask || isAddTaskDialogOpen || !!confirmDialog
-    || rescueActive || showAnchorSheet || showDailyCheckin || showFocusNowPicker || sessionCompletePending
-    // One Task mode shows a different task than the wall's; its keys would
-    // act on the hidden one.
-    || focusNowMode;
+    || rescueActive || showDailyCheckin || sessionCompletePending;
   useEffect(() => {
-    if (!pinnedFocusTask || wallKeysBlocked) return undefined;
+    if (wallKeysBlocked) return undefined;
     const onKey = (e) => {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
       const el = e.target;
-      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(el.tagName))) return;
-      // Any other focused control too — a row in Drag anywhere mode is a
-      // focusable <div> whose Space starts a keyboard reorder, not a session.
-      if (el && el !== document.body && el !== document.documentElement && el.tabIndex >= 0) return;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      const isNative = el && /^(BUTTON|A)$/.test(el.tagName);
+      // Any other focused control — a row in Drag anywhere mode is a
+      // focusable <div> whose keys drive a keyboard reorder, not the wall.
+      if (el && !isNative && el !== document.body && el !== document.documentElement && el.tabIndex >= 0) return;
       const key = e.key.toLowerCase();
-      if (key === " ") {
+      // On a button or link only Space would also press it; letters would
+      // not, and a tap on a control leaves focus on it.
+      if (key === " " && isNative) return;
+      if (key === "n" && onOpenAddTask) {
+        e.preventDefault();
+        onOpenAddTask();
+        return;
+      }
+      if (!pinnedFocusTask) return;
+      if (key === "l") {
+        setPeekOpen(v => !v);
+      } else if (key === " ") {
         e.preventDefault();
         startFocusAndLog(pinnedFocusTask);
       } else if (key === "d") {
@@ -1166,6 +1105,7 @@ export default function TodayTab({
         focusMinutes={Number(pinnedFocusTask?.timeEstimateMinutes) > 0 ? Number(pinnedFocusTask.timeEstimateMinutes) : 25}
         peekOpen={peekOpen}
         onTogglePeek={() => setPeekOpen(v => !v)}
+        onAdd={onOpenAddTask}
         remainingCount={wallRemainingCount}
         lowEnergy={!!config.isLowEnergyMode}
         timerLabel={wallLiveTimerLabel}
@@ -1243,332 +1183,93 @@ export default function TodayTab({
 
       </div>
 
-      {/* ── Today's Focus — tasks dominate the screen */}
-      {/* The peek IS this section. Closed is the default — that is the wall.
-          With no commitment there is no wall to look at, so the list stays
-          visible rather than leaving the screen empty. */}
+      {/* ── After that: the rest of today (41a, 37b, 49c). The peek IS this
+           section. Closed is the default — that is the wall. With no
+           commitment there is no wall to look at, so the list stays visible
+           rather than leaving the screen empty. */}
       <section
-        className="tasks-section"
-        style={{
-          // Conditional INLINE, not via a class: this element already carries an
-          // inline display, and an inline style beats any class rule — a
-          // `.is-peek-closed { display: none }` looked right, toggled its class
-          // correctly, and hid nothing at all.
-          display: !peekOpen && pinnedFocusTask ? "none" : "flex",
-          flexDirection: "column",
-          gap: "8px",
-        }}
+        className="tasks-section today-list"
+        aria-label="After that"
+        // Conditional INLINE, not via a class: an inline display beats any
+        // class rule, and this element needs one for the open state.
+        style={{ display: !peekOpen && pinnedFocusTask ? "none" : "flex" }}
       >
-        <div className="section-header" style={{ gap: "8px", alignItems: "center", justifyContent: "flex-start" }}>
-          <h2 className="section-title" style={{ flex: "0 0 auto", margin: 0 }}>
-            Today's Focus
-            {isMVDMode && (
-              <span style={{ color: "var(--warning)", fontSize: "11px", fontWeight: "700", marginLeft: "8px" }}>
-                ⭐ MUST-DOS
-              </span>
+        <div className="today-list-head">
+          <h2 className="today-list-title">After that</h2>
+          <span className="today-list-count">{listAllCount} · {listDoneCount} done</span>
+          <span className="today-list-head-end">
+            {onOpenDayMap && (
+              <button type="button" className="today-list-link" onClick={onOpenDayMap}>Day map →</button>
             )}
-            {!isMVDMode && config.isLowEnergyMode && (
-              <span style={{ color: "var(--warning)", fontSize: "11px", fontWeight: "700", marginLeft: "8px" }}>
-                ⚡ LOW ENERGY
-              </span>
+            {onOpenAddTask && (
+              <button type="button" className="today-list-add" onClick={onOpenAddTask}>
+                + Add <kbd className="wall-key" aria-hidden="true">N</kbd>
+              </button>
             )}
-          </h2>
-          <div className="focus-now-chip-shell">
-            <div className="focus-now-chip-row">
-              <button
-                className={`stuck-btn focus-now-chip${focusNowMode ? " focus-now-chip--active" : ""}`}
-                onClick={() => {
-                  if (focusNowMode) {
-                    setFocusNowMode(false);
-                    setFocusNowTaskId(null);
-                  } else {
-                    setShowFocusNowPicker(true);
-                  }
-                }}
-                title={focusNowMode ? "Exit One Task Focus" : "One Task Focus"}
-              >
-                🎯 One Task
+            {pinnedFocusTask && (
+              <button type="button" className="today-list-hide" onClick={() => setPeekOpen(false)}>
+                Hide list <kbd className="wall-key" aria-hidden="true">L</kbd>
               </button>
-              {onOpenDayMap && (
-                <button
-                  className={`stuck-btn day-map-nav-btn${dayMapPlaced > 0 ? " has-tasks" : ""}`}
-                  onClick={onOpenDayMap}
-                  title="Open Day Map"
-                >
-                  Day Map
-                </button>
-              )}
-              <button
-                className="stuck-btn"
-                onClick={handleEnergyToggle}
-                title={config.isLowEnergyMode ? "Low Energy ON — tap to disable" : "Enable Low Energy mode"}
-                style={{
-                  background: config.isLowEnergyMode ? "var(--success)" : "var(--bg-secondary)",
-                  color: config.isLowEnergyMode ? "#fff" : "var(--text-secondary)"
-                }}
-              >
-                🔋 {config.isLowEnergyMode ? "Low Energy ON" : "Low Energy"}
-              </button>
-              <button
-                className="stuck-btn"
-                onClick={openRescueMode}
-                title="Feeling stuck? Get help getting unstuck"
-              >
-                🛟 Rescue
-              </button>
-            </div>
-          </div>
-          {/* Rendered outside .focus-now-chip-shell/.focus-now-chip-row on purpose —
-              those are clipped/horizontally-scrolling containers (focusNow.css), which
-              would clip this dropdown instead of letting it render below its trigger. */}
-          <div ref={moreMenuRef} className="today-more-menu-trigger" style={{ position: "relative", flexShrink: 0 }}>
-            <button
-              className="stuck-btn"
-              onClick={() => setShowMoreMenu(v => !v)}
-              aria-label="More options"
-              aria-expanded={showMoreMenu}
-              title="More options"
-            >
-              •••
-            </button>
-            {showMoreMenu && (
-              <div
-                data-testid="today-more-menu"
-                style={{
-                  position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 300,
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "16px",
-                  boxShadow: "0 16px 48px rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.18)",
-                  minWidth: "180px",
-                  padding: "6px",
-                  backdropFilter: "blur(20px)",
-                  WebkitBackdropFilter: "blur(20px)"
-                }}
-              >
-                {anchors.length > 0 && (
-                  <button
-                    onClick={() => { setAnchorSheetSlot(null); setShowAnchorSheet(true); setShowMoreMenu(false); }}
-                    style={{
-                      display: "flex", alignItems: "center", width: "100%",
-                      background: "transparent", border: "none", padding: "9px 12px",
-                      cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "500",
-                      color: anchorsCheckedCount === anchors.length ? "var(--success)" : "var(--text-primary)",
-                      borderRadius: "9px", fontFamily: "var(--font-sans)"
-                    }}
-                  >
-                    &#128204;&nbsp;Anchors{anchorsCheckedCount > 0 ? ` (${anchorsCheckedCount}/${anchors.length})` : ""}
-                  </button>
-                )}
-                <button
-                  onClick={() => { handleMVDModeToggle(); setShowMoreMenu(false); }}
-                  style={{
-                    display: "flex", alignItems: "center", width: "100%",
-                    background: "transparent", border: "none", padding: "9px 12px",
-                    cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "500",
-                    color: isMVDMode ? "var(--warning)" : "var(--text-primary)",
-                    borderRadius: "9px", fontFamily: "var(--font-sans)"
-                  }}
-                >
-                  ⭐&nbsp;{isMVDMode ? "Must-Do mode ON" : "Must-Do"}
-                </button>
-              </div>
             )}
-          </div>
+          </span>
         </div>
 
-        {!focusNowMode && pinnedFocusTask && (
-          <div className="pinned-focus-section">
-            <span className="pinned-focus-label">📍 PINNED FOCUS</span>
-            <div className="pinned-focus-inner">
-              <TaskRow
-                task={pinnedFocusTask}
-                onToggleComplete={handleToggleComplete}
-                onPin={handlePinTask}
-                onDelete={handleDeleteTask}
-                onEdit={handleStartEdit}
-                onMoveToHorizon={handleMoveToHorizon}
-                onPark={handleParkTask}
-                onBreakdown={handleBreakdown}
-                onSubStepToggle={handleSubStepToggle}
-                onDeleteSubStep={handleDeleteSubStep}
-                isBreakingDown={breakdownLoadingUuid === pinnedFocusTask.uuid}
-                breakdownError={breakdownErrorUuid === pinnedFocusTask.uuid}
-                breakdownNoKey={breakdownNoKeyUuid === pinnedFocusTask.uuid}
-                onToggleMVD={handleToggleMVD}
-                isCommitted={committedTaskIds.has(pinnedFocusTask.uuid)}
-              />
-              <button
-                type="button"
-                className="pinned-focus-start-btn"
-                aria-label={`Start focus on ${pinnedFocusTask.title}`}
-                onClick={() => startFocusAndLog(pinnedFocusTask)}
-              >
-                Focus →
-              </button>
-            </div>
+        <div className="today-list-tools">
+          {/* Must-do is a filter on the list (Y4); Low energy is not. */}
+          <div className="today-seg" role="group" aria-label="Show">
+            <button type="button" className="today-seg-opt" aria-pressed={!isMVDMode} onClick={() => setIsMVDMode(false)}>
+              All · {listAllCount}
+            </button>
+            <button type="button" className="today-seg-opt" aria-pressed={isMVDMode} onClick={() => setIsMVDMode(true)}>
+              Must-do · {listMustCount}
+            </button>
           </div>
-        )}
+          <label className="today-energy">
+            <span className="today-energy-text">
+              <span className="today-energy-label">Low energy</span>
+              <span className="today-energy-caption">Small starts drop to 5 min</span>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              className="today-energy-switch"
+              aria-checked={!!config.isLowEnergyMode}
+              aria-label="Low energy"
+              onClick={() => saveConfigPatch({ isLowEnergyMode: !config.isLowEnergyMode })}
+            />
+          </label>
+        </div>
 
         <div className="tasks-list" data-testid="today-tasks-list">
-          {/* ── Focus Now single-task view ─────────────────────────── */}
-          {focusNowMode && focusNowTask && (
-            <div className="focus-now-view">
-              <p className="focus-now-headline">Stay here. This task. This moment.</p>
-
-              {focusNowTask.isCompleted ? (
-                <div className="focus-now-completed">
-                  <div className="focus-now-completed-icon">✓</div>
-                  <p className="focus-now-completed-text">Done. That&apos;s one down.</p>
-                  <div className="focus-now-completed-actions">
-                    <button
-                      className="focus-now-btn focus-now-btn--done"
-                      onClick={() => setShowFocusNowPicker(true)}
-                    >
-                      Pick next task
-                    </button>
-                    <button
-                      className="focus-now-btn focus-now-btn--ghost"
-                      onClick={() => { setFocusNowMode(false); setFocusNowTaskId(null); }}
-                    >
-                      Exit
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="focus-now-card">
-                    <div className="focus-now-card-header">
-                      <span className={`focus-now-priority ${(focusNowTask.priority || "P3").toLowerCase()}`}>
-                        {focusNowTask.priority || "P3"}
-                      </span>
-                      {focusNowTask.timeEstimateMinutes > 0 && (
-                        <span className="focus-now-card-dur">{focusNowTask.timeEstimateMinutes}m</span>
-                      )}
-                      <button
-                        type="button"
-                        className="focus-now-edit-btn"
-                        onClick={() => handleStartEdit(focusNowTask)}
-                        title="Edit task"
-                        aria-label="Edit task"
-                        data-testid="focus-now-edit-btn"
-                      >
-                        <PencilIcon />
-                      </button>
-                    </div>
-                    <h3 className="focus-now-card-title">{focusNowTask.title}</h3>
-                    {focusNowTask.concreteStep && (
-                      <p className="focus-now-card-step">{focusNowTask.concreteStep}</p>
-                    )}
-                    {focusNowTask.subSteps && focusNowTask.subSteps.filter(s => !s.done).length > 0 && (
-                      <div className="focus-now-substeps">
-                        {focusNowTask.subSteps.filter(s => !s.done).map(s => (
-                          <div key={s.id} className="focus-now-substep">· {s.text}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="focus-now-actions">
-                    <button
-                      className="focus-now-btn focus-now-btn--primary"
-                      onClick={() => {
-                        const pinPromise = focusNowTask.isNowFocus ? null : handlePinTask(focusNowTask);
-                        startFocusAndLog(focusNowTask, pinPromise);
-                      }}
-                    >
-                      ▶ Start Focus
-                    </button>
-                    <button
-                      className="focus-now-btn focus-now-btn--done"
-                      onClick={() => handleToggleComplete(focusNowTask)}
-                    >
-                      ✓ Done
-                    </button>
-                    <div className="focus-now-actions-row">
-                      <button
-                        className="focus-now-btn focus-now-btn--ghost"
-                        onClick={() => setShowFocusNowPicker(true)}
-                      >
-                        Switch Task
-                      </button>
-                      <button
-                        className="focus-now-btn focus-now-btn--ghost"
-                        onClick={() => { setFocusNowMode(false); setFocusNowTaskId(null); }}
-                      >
-                        Exit
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <p className="focus-now-hidden-note">Other tasks are hidden while you focus.</p>
-            </div>
+          {/* The wall's one thing heads the open list, marked NOW, so its row
+              menu can unpin it — the wall itself has no unpin. Not counted
+              in "After that", and not draggable. */}
+          {pinnedFocusTask && (
+            <TaskRow
+              task={pinnedFocusTask}
+              onToggleComplete={handleToggleComplete}
+              onPin={handleUnpinWallTask}
+              onDelete={handleDeleteTask}
+              onEdit={handleStartEdit}
+              onMoveToHorizon={handleMoveToHorizon}
+              onPark={handleParkTask}
+              onBreakdown={handleBreakdown}
+              onSubStepToggle={handleSubStepToggle}
+              onDeleteSubStep={handleDeleteSubStep}
+              isBreakingDown={breakdownLoadingUuid === pinnedFocusTask.uuid}
+              breakdownError={breakdownErrorUuid === pinnedFocusTask.uuid}
+              breakdownNoKey={breakdownNoKeyUuid === pinnedFocusTask.uuid}
+              onToggleMVD={handleToggleMVD}
+              isGoal={!!wallKickerFront && pinnedFocusTask.frontId === wallKickerFront.id}
+            />
           )}
-
-          {/* ── Normal task list (hidden when Focus Now mode is active) ── */}
-          {(!focusNowMode || !focusNowTask) && !wallIsAsking && todayTasksAll.length === 0 && (() => {
-            const hasEverHadTasks = tasks.filter(t => !t.isDeleted).length > 0;
-            if (hasEverHadTasks) {
-              return (
-                <div style={{ textAlign: "center", padding: "24px 16px", background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", border: "1px dashed var(--border)" }}>
-                  <div style={{ fontSize: "32px", marginBottom: "10px" }}>🎉</div>
-                  <p style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "6px" }}>All clear for today!</p>
-                  <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: "1.6" }}>
-                    No tasks scheduled for today. Tap <strong style={{ color: "var(--accent)" }}>+</strong> to add one, or check other horizons on the Plan tab.
-                  </p>
-                </div>
-              );
-            }
-            return (
-              <div style={{ padding: "20px 16px", background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", border: "1px dashed var(--border)" }}>
-                <div style={{ fontSize: "28px", marginBottom: "8px", textAlign: "center" }}>🧠</div>
-                <p style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "14px", textAlign: "center" }}>
-                  Your first focus cycle
-                </p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
-                  {[
-                    { n: "1", icon: "💭", text: "Dump what's on your mind", sub: "Tap 📝 above to capture thoughts" },
-                    { n: "2", icon: "➕", text: "Add it as a task", sub: "Tap + below — AI breaks it into a micro-step" },
-                    { n: "3", icon: "🎯", text: "Pick what matters Today", sub: "You're already on the right tab" },
-                    { n: "4", icon: "📍", text: "Pin a task to start the timer", sub: "Tap ••• on any task → Pin to Focus" },
-                    { n: "5", icon: "▶", text: "Work for 25 minutes", sub: "Use the focus timer — single task only" },
-                    { n: "6", icon: "✓", text: "Done or reset gently", sub: "Complete it, or use Bad Day Reset — no shame" },
-                  ].map(item => (
-                    <div key={item.n} style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
-                      <span style={{ fontSize: "10px", fontWeight: "900", color: "var(--accent)", minWidth: "14px", paddingTop: "3px" }}>{item.n}</span>
-                      <span style={{ fontSize: "16px", lineHeight: "1", paddingTop: "1px" }}>{item.icon}</span>
-                      <div>
-                        <span style={{ fontSize: "12.5px", fontWeight: "700", color: "var(--text-primary)" }}>{item.text}</span>
-                        <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "block", marginTop: "1px" }}>{item.sub}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <p style={{ fontSize: "12px", color: "var(--accent)", fontWeight: "700", textAlign: "center" }}>
-                  Start with step 2 — tap + to add your first task.
-                </p>
-              </div>
-            );
-          })()}
-          {(!focusNowMode || !focusNowTask) && todayTasksAll.length > 0 && todayTasksFiltered.length === 0 && isMVDMode && (
-            <div style={{ textAlign: "center", padding: "20px 14px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
-              <p style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "6px" }}>No must-do tasks marked yet.</p>
-              <p style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: "1.5" }}>
-                Tap ••• on any task and choose <strong>⭐ Mark as must-do</strong> to add it to your minimum viable day.
-              </p>
-            </div>
+          {!wallIsAsking && todayTasksAll.length === 0 && (
+            <p className="today-list-empty">Nothing else on Today.</p>
           )}
-          {(!focusNowMode || !focusNowTask) && todayTasksAll.length > 0 && todayTasksFiltered.length === 0 && !isMVDMode && config.isLowEnergyMode && (
-            <div style={{ textAlign: "center", padding: "20px 14px", color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
-              <p style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "6px" }}>No low-energy tasks available.</p>
-              <p style={{ fontSize: "12px", lineHeight: "1.5" }}>
-                Tag a task P4 to surface it here, or tap 🌱 Clean Slate in Mind Box for a fresh start.
-              </p>
-            </div>
+          {todayTasksAll.length > 0 && todayTasksFiltered.length === 0 && isMVDMode && (
+            <p className="today-list-empty">No must-dos yet. Tap a task and choose “Mark as must-do”.</p>
           )}
-          {(!focusNowMode || !focusNowTask) && todayTasksFiltered.length > 0 && (
+          {todayTasksFiltered.length > 0 && (
             <>
               <DndContext
                 sensors={sensors}
@@ -1605,7 +1306,7 @@ export default function TodayTab({
                             dragHandleAttributes={dragHandleAttributes}
                             dragActivatorRef={dragActivatorRef}
                             interactionStyle={taskRowInteractionStyle}
-                            isCommitted={committedTaskIds.has(task.uuid)}
+                            isGoal={!!wallKickerFront && task.frontId === wallKickerFront.id}
                           />
                         )}
                       </SortableTaskItem>
@@ -1690,17 +1391,15 @@ export default function TodayTab({
         />
       )}
 
-      {/* ── Undo Delete Toast */}
-      {undoTask && (
-        <div className="bottom-toast" style={{ position: "fixed", bottom: "calc(76px + env(safe-area-inset-bottom, 0px))", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "20px", padding: "10px 16px", display: "flex", alignItems: "center", gap: "12px", boxShadow: "0 4px 20px rgba(0,0,0,0.35)", zIndex: 200, fontSize: "12.5px", whiteSpace: "nowrap" }}>
-          <span style={{ color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis" }}>
-            "{undoTask.title.length > 28 ? undoTask.title.substring(0, 28) + "…" : undoTask.title}" deleted
-          </span>
-          <button onClick={handleUndoDelete}
-            style={{ background: "var(--accent)", color: "var(--btn-text, #fff)", border: "none", borderRadius: "12px", padding: "5px 14px", fontSize: "12px", fontWeight: "700", cursor: "pointer", flexShrink: 0 }}>
-            Undo
-          </button>
-        </div>
+      {/* ── Undo (done, delete, unpin) */}
+      <UndoAnnouncer message={undoText} />
+      {undo && (
+        <UndoToast
+          key={undo.at}
+          message={undoText}
+          onUndo={handleUndo}
+          onClose={() => setUndo(null)}
+        />
       )}
 
       {editingTask && (
@@ -1726,104 +1425,6 @@ export default function TodayTab({
           onConfirm={handleConfirmDeleteSubStep}
           onCancel={() => setConfirmDialog(null)}
         />
-      )}
-
-      {/* ── Daily Anchors check-in sheet ────────────────────────── */}
-      {showAnchorSheet && anchorSheetSlot !== "morning" && anchors.length > 0 && (() => {
-        const variant = getAnchorVariant(new Date());
-        return (
-          <div className="focus-now-backdrop" onClick={handleAnchorSheetDone}>
-            <div className="anchor-sheet" onClick={e => e.stopPropagation()}>
-              <div className="anchor-sheet-header" style={{ borderLeftColor: variant.accentColor }}>
-                <span className="anchor-sheet-icon">&#128204;</span>
-                <div>
-                  <div className="anchor-sheet-title">{variant.title}</div>
-                  <div className="anchor-sheet-intro">{variant.intro}</div>
-                </div>
-              </div>
-              <div className="anchor-chips">
-                {anchors.map(a => {
-                  const checked = todayCheckedIds.includes(a.id);
-                  return (
-                    <button
-                      key={a.id}
-                      className={`anchor-chip${checked ? " anchor-chip--checked" : ""}`}
-                      style={{ borderColor: checked ? "transparent" : variant.accentColor, color: checked ? "var(--success)" : variant.accentColor }}
-                      onClick={() => handleAnchorCheck(a.id)}
-                    >
-                      {checked ? "✓ " : ""}{a.text}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="anchor-sheet-actions">
-                <button className="anchor-btn-primary" onClick={handleAnchorSheetDone}>All good</button>
-                <button className="anchor-btn-ghost" onClick={handleAnchorLater}>Later</button>
-                <button className="anchor-btn-ghost" onClick={handleAnchorSkipToday}>Skip today</button>
-                <button className="anchor-btn-ghost" onClick={() => { setShowAnchorSheet(false); onOpenMindBox?.("anchors"); }}>Manage</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── Focus Now: task picker bottom sheet ─────────────────── */}
-      {showFocusNowPicker && (
-        <div className="focus-now-backdrop" onClick={() => setShowFocusNowPicker(false)}>
-          <div className="focus-now-sheet" onClick={e => e.stopPropagation()}>
-            <div className="focus-now-sheet-header">
-              <span className="focus-now-sheet-title">Pick one task</span>
-              <button className="focus-now-sheet-close" onClick={() => setShowFocusNowPicker(false)} aria-label="Close picker">✕</button>
-            </div>
-            <div className="focus-now-sheet-body">
-              {focusNowPickerTasks.length === 0 ? (
-                <p className="focus-now-empty">No tasks to focus on yet. Add a task to get started.</p>
-              ) : (
-                <>
-                  {dayMapNextTask && (
-                    <>
-                      <div className="focus-now-section-label">Recommended · Day Map</div>
-                      <button
-                        className={`focus-now-pick-row${focusNowTaskId === dayMapNextTask.uuid ? " is-selected" : ""}`}
-                        onClick={() => handleFocusNowPick(dayMapNextTask)}
-                      >
-                        <span className={`focus-now-priority ${(dayMapNextTask.priority || "P3").toLowerCase()}`}>
-                          {dayMapNextTask.priority || "P3"}
-                        </span>
-                        <span className="focus-now-pick-title">{dayMapNextTask.title}</span>
-                        {dayMapNextTask.timeEstimateMinutes > 0 && (
-                          <span className="focus-now-pick-dur">{dayMapNextTask.timeEstimateMinutes}m</span>
-                        )}
-                        <span className="focus-now-pick-recommended">Next up</span>
-                      </button>
-                    </>
-                  )}
-                  <div className="focus-now-section-label">
-                    {dayMapNextTask ? "All tasks" : "Today's tasks"}
-                  </div>
-                  {focusNowPickerTasks
-                    .filter(t => !dayMapNextTask || t.uuid !== dayMapNextTask.uuid)
-                    .map(task => (
-                      <button
-                        key={task.uuid}
-                        className={`focus-now-pick-row${focusNowTaskId === task.uuid ? " is-selected" : ""}`}
-                        onClick={() => handleFocusNowPick(task)}
-                      >
-                        <span className={`focus-now-priority ${(task.priority || "P3").toLowerCase()}`}>
-                          {task.priority || "P3"}
-                        </span>
-                        <span className="focus-now-pick-title">{task.title}</span>
-                        {task.timeEstimateMinutes > 0 && (
-                          <span className="focus-now-pick-dur">{task.timeEstimateMinutes}m</span>
-                        )}
-                      </button>
-                    ))
-                  }
-                </>
-              )}
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Rescue Mode — triggered by the Rescue chip or Deep Focus's Stuck? button */}

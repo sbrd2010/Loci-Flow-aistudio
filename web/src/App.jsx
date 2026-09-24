@@ -1347,8 +1347,10 @@ export default function App() {
         )}
       </main>
 
-      {/* FAB — single + expands to two options */}
-      {(activeTab === "today" || activeTab === "roadmap") && (
+      {/* FAB — single + expands to two options. Plan only: Today adds from
+          its own "+" on the peek and "+ Add" in the list (49a–d). Plan keeps
+          this until its own "+ Add" lands (Phase 3). */}
+      {activeTab === "roadmap" && (
         <>
           {fabExpanded && (
             <div
@@ -1378,7 +1380,7 @@ export default function App() {
           <button
             className="fab-option"
             data-testid="fab-add-task-option"
-            onClick={() => { setFabExpanded(false); openAddTask(activeTab === "roadmap" ? "week" : "today"); }}
+            onClick={() => { setFabExpanded(false); openAddTask("week"); }}
             style={{
               opacity: fabExpanded ? 1 : 0,
               transform: fabExpanded ? "translateY(0) scale(1)" : "translateY(20px) scale(0.85)",

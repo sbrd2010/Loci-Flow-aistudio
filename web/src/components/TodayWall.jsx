@@ -77,6 +77,7 @@ export default function TodayWall({
   timerLabel = null,
   peekOpen,
   onTogglePeek,
+  onAdd,
   remainingCount = 0,
   lowEnergy = false,
   onStartFocus,
@@ -110,6 +111,18 @@ export default function TodayWall({
     </>
   );
 
+  // Rescue sits beside "Feeling scattered?" on every Today state (Y4).
+  const links = (onScattered || onRescue) && (
+    <div className="wall-links">
+      {onScattered && (
+        <button type="button" className="wall-link" onClick={onScattered}>Feeling scattered?</button>
+      )}
+      {onRescue && (
+        <button type="button" className="wall-link" onClick={onRescue}>Open Rescue</button>
+      )}
+    </div>
+  );
+
   // — the commitment, finished (J2b/K2/K3) —
   //
   // The hero becomes the closing line, not the proposal: what you did is the
@@ -140,6 +153,7 @@ export default function TodayWall({
               </button>
             </div>
           )}
+          {links}
         </div>
       </section>
     );
@@ -199,6 +213,7 @@ export default function TodayWall({
               </button>
             </p>
           )}
+          {links}
         </div>
       </section>
     );
@@ -244,27 +259,28 @@ export default function TodayWall({
           )}
         </div>
 
-        <div className="wall-links">
-          {onScattered && (
-            <button type="button" className="wall-link" onClick={onScattered}>Feeling scattered?</button>
-          )}
-          {onRescue && (
-            <button type="button" className="wall-link" onClick={onRescue}>Open Rescue</button>
-          )}
-        </div>
+        {links}
       </div>
 
-      <button
-        type="button"
-        className="wall-peek"
-        onClick={onTogglePeek}
-        aria-expanded={peekOpen}
-      >
-        <span className="wall-peek-grabber" aria-hidden="true" />
-        <span className="wall-peek-label">
-          {peekOpen ? "Hide list" : `After that · ${remainingCount}`}
-        </span>
-      </button>
+      {/* 49a: "+" at the right of the peek, within a thumb's reach. */}
+      <div className="wall-peek-row">
+        <button
+          type="button"
+          className="wall-peek"
+          onClick={onTogglePeek}
+          aria-expanded={peekOpen}
+        >
+          <span className="wall-peek-grabber" aria-hidden="true" />
+          <span className="wall-peek-label">
+            {peekOpen ? "Hide list" : `After that · ${remainingCount}`}
+          </span>
+        </button>
+        {onAdd && (
+          <button type="button" className="wall-peek-add" onClick={onAdd} aria-label="Add a task to Today">
+            <IconPlus size={20} />
+          </button>
+        )}
+      </div>
     </section>
   );
 }

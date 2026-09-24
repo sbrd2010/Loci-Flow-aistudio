@@ -42,10 +42,10 @@ test("Back from Day Map returns to whichever view opened it", async ({ page }) =
 
   // Door 2: Today. Back must still return to Today.
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
-  await page.locator(".day-map-nav-btn").click();
+  await page.getByRole("button", { name: "Day map →" }).click();
   await expect(page.locator(".day-map-page")).toBeVisible();
   await page.locator(".day-map-back").click();
-  await expect(page.locator(".day-map-nav-btn")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Day map →" })).toBeVisible();
 });
 
 test("Horizon kickers render as kickers, not as the legacy pills", async ({ page }) => {
@@ -69,7 +69,7 @@ test("Horizon kickers render as kickers, not as the legacy pills", async ({ page
 
 test("priority tags are mono wherever Day Map draws them", async ({ page }) => {
   await enterDemo(page);
-  await page.locator(".day-map-nav-btn").click();
+  await page.getByRole("button", { name: "Day map →" }).click();
   await expect(page.locator(".day-map-page")).toBeVisible();
 
   // Day Map draws a priority tag in two places: in the unscheduled strip, and

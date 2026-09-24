@@ -27,7 +27,7 @@ async function enterDemo(page, viewport) {
 }
 
 async function openDayMap(page) {
-  const dayMapButton = page.locator("button.stuck-btn", { hasText: "Day Map" });
+  const dayMapButton = page.getByRole("button", { name: "Day map →" });
   await expect(dayMapButton).toBeVisible({ timeout: 8_000 });
   await dayMapButton.click();
   await expect(page.getByRole("heading", { name: "Day Map" })).toBeVisible({ timeout: 8_000 });
@@ -89,7 +89,7 @@ test("reliability: Day Map route persists after closing and reopening", async ({
   await expectVisibleRouteTimeLabels(page);
 
   await page.getByRole("button", { name: "Back" }).click();
-  await expect(page.locator("button.stuck-btn", { hasText: "Day Map" })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("button", { name: "Day map →" })).toBeVisible({ timeout: 5_000 });
 
   await openDayMap(page);
   await expect(page.getByText("3 / 3")).toBeVisible({ timeout: 5_000 });

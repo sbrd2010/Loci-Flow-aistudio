@@ -43,14 +43,14 @@ async function expectNoHorizontalOverflow(page) {
 test("mobile reliability: Deep Focus overlay supports pause, resume, and brain-dump capture", async ({ page }) => {
   await enterDemo(page);
 
-  // Demo task demo-t1 is pinned — pinned section is immediately visible
-  const pinnedSection = page.locator(".pinned-focus-section");
+  // Demo task demo-t1 is pinned — it is the wall's one thing
+  const pinnedSection = page.locator(".today-wall");
   await pinnedSection.scrollIntoViewIfNeeded();
   await expect(pinnedSection).toBeVisible({ timeout: 8_000 });
-  await expect(pinnedSection).toContainText("PINNED FOCUS");
+  await expect(pinnedSection).toContainText("TODAY, ONE THING");
 
-  // Open full-screen timer via Focus → button (starts timer immediately)
-  await pinnedSection.locator(".pinned-focus-start-btn").click();
+  // Open full-screen timer via Start focus (starts timer immediately)
+  await pinnedSection.locator(".wall-primary").click();
 
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 5_000 });
@@ -86,16 +86,16 @@ test("mobile reliability: Deep Focus overlay supports pause, resume, and brain-d
 test("mobile reliability: Rescue Mode is reachable from Today and from inside Deep Focus", async ({ page }) => {
   await enterDemo(page);
 
-  // Today tab: the Rescue chip opens the same triage flow Mind Box's button opens.
-  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  // Today: Open Rescue opens the same triage flow Mind Box's button opens.
+  await page.getByRole("button", { name: "Open Rescue" }).click();
   await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
   await page.getByText("Exit rescue mode").click();
   await expect(page.getByRole("heading", { name: "What's happening right now?" })).not.toBeVisible({ timeout: 5_000 });
 
   // Start a Deep Focus session, then reach Rescue Mode from inside it.
-  const pinnedSection = page.locator(".pinned-focus-section");
+  const pinnedSection = page.locator(".today-wall");
   await pinnedSection.scrollIntoViewIfNeeded();
-  await pinnedSection.locator(".pinned-focus-start-btn").click();
+  await pinnedSection.locator(".wall-primary").click();
 
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 5_000 });
@@ -136,7 +136,7 @@ test("mobile reliability: Rescue chat never reaches the AI provider on crisis la
 
   await enterDemo(page);
 
-  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await page.getByRole("button", { name: "Open Rescue" }).click();
   await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
   await page.getByText("Anxious / can't start").click();
   await page.getByText("Talk it through").click();
@@ -163,7 +163,7 @@ test("mobile reliability: Rescue chat action tag starts an in-rescue timer", asy
     });
   });
 
-  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await page.getByRole("button", { name: "Open Rescue" }).click();
   await page.getByText("Low energy / fog").click();
   await page.getByText("Talk to AI Coach").click();
 
@@ -180,7 +180,7 @@ test("mobile reliability: Rescue chat is reachable again after skipping an AI-st
     });
   });
 
-  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await page.getByRole("button", { name: "Open Rescue" }).click();
   await page.getByText("Low energy / fog").click();
   await page.getByText("Talk to AI Coach").click();
   // The action tag moves the user from chat to the timer screen.
@@ -203,14 +203,14 @@ test("mobile reliability: Rescue does not park the task on an unprompted action 
     });
   });
 
-  const pinnedSection = page.locator(".pinned-focus-section");
+  const pinnedSection = page.locator(".today-wall");
   await pinnedSection.scrollIntoViewIfNeeded();
   await expect(pinnedSection).toContainText("Reply to the important message sitting in your inbox");
 
-  // Opens Rescue on the pinned task via the Today-tab chip; the opener
+  // Opens Rescue on the pinned task via Open Rescue on the wall; the opener
   // message ("I'm stuck and need help.") never asks to park/defer/skip it —
   // filterApplicableRescueActions (rescueCoachPrompt.js) must block the tag.
-  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await page.getByRole("button", { name: "Open Rescue" }).click();
   await page.getByText("Too much going on").click();
   await page.getByText("Talk to AI Coach").click();
   await expect(page.getByText("Let's take a break from it.")).toBeVisible({ timeout: 5_000 });
@@ -231,11 +231,11 @@ test("mobile reliability: Rescue ignores an action tag that resolves after the u
     });
   });
 
-  const pinnedSection = page.locator(".pinned-focus-section");
+  const pinnedSection = page.locator(".today-wall");
   await pinnedSection.scrollIntoViewIfNeeded();
   await expect(pinnedSection).toContainText("Reply to the important message sitting in your inbox");
 
-  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await page.getByRole("button", { name: "Open Rescue" }).click();
   await page.getByText("Too much going on").click();
   await page.getByText("Talk to AI Coach").click();
 
@@ -262,7 +262,7 @@ test("mobile reliability: Rescue safety short-circuit does not call AI again", a
     });
   });
 
-  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await page.getByRole("button", { name: "Open Rescue" }).click();
   await page.getByText("Anxious / can't start").click();
   await page.getByText("Talk it through").click();
   await expect(page.getByText("I’m here with you.")).toBeVisible({ timeout: 5_000 });
@@ -294,7 +294,7 @@ test("mobile reliability: Opening Rescue chat without typing still hands off con
 
   await enterDemo(page);
 
-  await page.locator("button.stuck-btn", { hasText: "Rescue" }).click();
+  await page.getByRole("button", { name: "Open Rescue" }).click();
   await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
   await page.getByText("Too much going on").click();
   await page.getByText("Talk to AI Coach").click();

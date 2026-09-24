@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { formatReminderLabel } from "../utils/reminders";
-import { CATEGORY_ICONS } from "../utils/taskOps";
 import { safeCopyToClipboard } from "../utils/clipboard";
 import LinkifyText from "./LinkifyText";
+import "../styles/taskRow.css";
 
 const GripIcon = () => (
   <svg width="10" height="15" viewBox="0 0 10 15" fill="currentColor">
@@ -103,12 +103,10 @@ function MenuItem({ onClick, color, danger, testId, children }) {
       onTouchEnd={() => setHovered(false)}
       style={{
         display: "flex", alignItems: "center", gap: "10px", width: "100%",
-        background: hovered
-          ? (danger ? "rgba(248,113,113,0.10)" : "rgba(255,255,255,0.06)")
-          : "transparent",
+        background: hovered ? (danger ? "var(--coral-tint)" : "var(--panel)") : "transparent",
         border: "none", padding: "9px 12px",
         cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "500",
-        color: color || "var(--text-primary)",
+        color: color || "var(--ink)",
         transition: "background 0.12s",
         borderRadius: "9px",
         fontFamily: "var(--font-sans)",
@@ -129,12 +127,16 @@ const ROADMAP_HORIZONS = [
   { key: "office",   label: "Work" },
 ];
 
-export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onPark, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, onToggleMVD, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isCommitted = false }) {
-  const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD, category } = task;
+// A Today row (41a; Addendum AA): a 20px circle in a 44px tap area (tap it to
+// mark done), a mono priority tag, a title that wraps and grows the row, and
+// MUST / GOAL tags. Tapping the row opens its menu.
+export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onPark, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, onToggleMVD, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false }) {
+  const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const [showRoadmapOptions, setShowRoadmapOptions] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef(null);
+  const optionsBtnRef = useRef(null);
   const copyTimeoutRef = useRef(null);
 
   useEffect(() => () => { if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current); }, []);
@@ -190,158 +192,132 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         <button
           {...dragHandleListeners}
           {...(dragHandleAttributes || {})}
+          className="task-row-grip"
           onClick={e => e.stopPropagation()}
           aria-label="Drag to reorder"
           title="Drag to reorder"
-          style={{
-            background: "none", border: "none",
-            cursor: "grab",
-            flexShrink: 0,
-            color: "var(--text-muted)",
-            opacity: 0.35,
-            padding: "2px 4px",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            touchAction: "none",
-          }}
         >
           <GripIcon />
         </button>
       )}
 
-      {/* Checkbox */}
-      <div
+      {/* The circle: 20px, in a 44px tap area. */}
+      <button
+        type="button"
         className="checkbox-container"
         data-testid="task-checkbox"
+        aria-label={isCompleted ? `Mark not done: ${title}` : `Mark done: ${title}`}
+        aria-pressed={!!isCompleted}
         onClick={e => { e.stopPropagation(); onToggleComplete(task); }}
         onMouseDown={e => e.stopPropagation()}
         onTouchStart={e => e.stopPropagation()}
       >
-        <div className={`custom-checkbox ${isCompleted ? "checked" : ""}`}>
-          {isCompleted && <span className="checkmark">✓</span>}
-        </div>
-      </div>
+        <span className={`custom-checkbox ${isCompleted ? "checked" : ""}`}>
+          {isCompleted && <CheckIcon />}
+        </span>
+      </button>
 
-      {/* Task content */}
+      {priority && (
+        <span className="task-row-priority" aria-label={`Priority ${priority.replace(/\D/g, "")}`}>{priority}</span>
+      )}
+
       <div className="task-middle">
-        {isMVD && !isCompleted && (
-          <span style={{ fontSize: "8px", fontWeight: "800", color: "var(--accent)", background: "var(--accent-ring, rgba(99,102,241,0.10))", padding: "1px 5px", borderRadius: "3px", letterSpacing: "0.04em", alignSelf: "flex-start" }}>★ MUST-DO</span>
-        )}
         <div className="task-row-top">
-          <span className={`priority-badge ${(priority || "P4").toLowerCase()}`}>{priority || "P4"}</span>
-          {CATEGORY_ICONS[category] && (
-            <span className="task-category-icon" title={category} aria-label={category}>
-              {CATEGORY_ICONS[category]}
+          <span className="task-title-text"><LinkifyText text={title} /></span>
+          {!isCompleted && (isNowFocus || isMVD || isGoal) && (
+            <span className="task-row-tags">
+              {isNowFocus && <span className="task-tag is-now" aria-label="Today's one thing">NOW</span>}
+              {isMVD && <span className="task-tag is-must" aria-label="Must-do">MUST</span>}
+              {isGoal && <span className="task-tag is-goal" aria-label="Goal task">GOAL</span>}
             </span>
           )}
-          {isNowFocus && !isCompleted && (
-            <span style={{ fontSize: "8px", fontWeight: "800", color: "var(--warning)", background: "rgba(245,158,11,0.12)", padding: "1px 5px", borderRadius: "3px", letterSpacing: "0.04em" }}>FOCUS</span>
-          )}
-          {isCommitted && !isCompleted && (
-            <span style={{ fontSize: "8px", fontWeight: "800", color: "var(--accent)", background: "var(--accent-ring, rgba(99,102,241,0.10))", padding: "1px 5px", borderRadius: "3px", letterSpacing: "0.04em" }}>🎯 TODAY'S PICK</span>
-          )}
-          <span className="task-title-text" title={title}><LinkifyText text={title} /></span>
         </div>
-        {concreteStep && concreteStep !== "Do first tiny step" && (
-          <span className="task-step-text">⚡ <LinkifyText text={concreteStep} /></span>
-        )}
         {reminderAt && !isCompleted && (
-          <span style={{
-            display: "inline-flex", alignItems: "center", gap: "3px",
-            fontSize: "10px", fontWeight: "600",
-            color: reminderAt < Date.now() ? "var(--danger)" : "var(--accent)",
-            background: reminderAt < Date.now() ? "rgba(248,113,113,0.1)" : "var(--accent-ring, rgba(99,102,241,0.08))",
-            padding: "1px 6px", borderRadius: "4px", marginTop: "1px"
-          }}>
-            🔔 {formatReminderLabel(reminderAt)}{reminderAt < Date.now() ? " (overdue)" : ""}
+          <span className={`task-row-meta${reminderAt < Date.now() ? " is-overdue" : ""}`}>
+            Reminder · {formatReminderLabel(reminderAt)}{reminderAt < Date.now() ? " (overdue)" : ""}
           </span>
         )}
 
         {/* Sub-steps checklist */}
         {hasSubSteps && (
-          <div style={{ marginTop: "5px", display: "flex", flexDirection: "column", gap: "4px" }}>
+          <div className="task-substeps">
             {[...activeSubSteps, ...doneSubSteps].map(step => (
-              <div key={step.id} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "3px 0" }}>
+              <div key={step.id} className="task-substep">
                 <div
+                  className="task-substep-main"
                   onClick={e => { e.stopPropagation(); onSubStepToggle && onSubStepToggle(task, step.id); }}
                   onMouseDown={e => e.stopPropagation()}
                   onTouchStart={e => e.stopPropagation()}
-                  style={{ display: "flex", alignItems: "center", gap: "8px", cursor: onSubStepToggle ? "pointer" : "default", flex: 1, minWidth: 0 }}
+                  style={{ cursor: onSubStepToggle ? "pointer" : "default" }}
                 >
-                  <div style={{
-                    width: "14px", height: "14px", borderRadius: "3px", flexShrink: 0,
-                    border: step.done ? "none" : "1.5px solid var(--border)",
-                    background: step.done ? "var(--success)" : "var(--bg-secondary)",
-                    display: "flex", alignItems: "center", justifyContent: "center"
-                  }}>
-                    {step.done && <span style={{ color: "#fff", fontSize: "9px", fontWeight: "800", lineHeight: 1 }}>✓</span>}
-                  </div>
-                  <span style={{
-                    fontSize: "12px", fontWeight: "500", lineHeight: "1.3",
-                    color: step.done ? "var(--text-muted)" : "var(--text-secondary)",
-                    textDecoration: step.done ? "line-through" : "none"
-                  }}>{step.text}</span>
+                  <span className={`task-substep-box${step.done ? " is-done" : ""}`}>
+                    {step.done && <CheckIcon />}
+                  </span>
+                  <span className={`task-substep-text${step.done ? " is-done" : ""}`}>{step.text}</span>
                 </div>
                 {onDeleteSubStep && (
                   <button
+                    className="task-substep-remove"
                     onClick={e => { e.stopPropagation(); onDeleteSubStep(task, step.id); }}
                     onMouseDown={e => e.stopPropagation()}
                     onTouchStart={e => e.stopPropagation()}
-                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "var(--text-muted)", padding: "0 2px", lineHeight: 1, flexShrink: 0, opacity: 0.55 }}
                     title="Remove step"
                     aria-label="Remove step"
                   >×</button>
                 )}
               </div>
             ))}
-            <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "2px" }}>
-              {doneSubSteps.length}/{subSteps.length} steps done
-            </div>
+            <div className="task-row-meta">{doneSubSteps.length}/{subSteps.length} steps done</div>
           </div>
         )}
 
         {isBreakingDown && (
-          <span style={{ fontSize: "11px", color: "var(--accent)", fontStyle: "italic", marginTop: "6px", display: "block" }}>
-            ✨ Breaking it down…
-          </span>
+          <span className="task-row-meta">Breaking it down…</span>
         )}
 
         {breakdownNoKey && !isBreakingDown && (
-          <span style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "6px", display: "block" }}>
-            🔑 Add an AI key in Settings → AI Keys to use this.
-          </span>
+          <span className="task-row-meta">Add an AI key in Settings to use this.</span>
         )}
 
         {breakdownError && !breakdownNoKey && !isBreakingDown && (
-          <span style={{ fontSize: "11px", color: "var(--danger)", marginTop: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
-            Couldn't break this down.
+          <span className="task-row-meta is-overdue">
+            Couldn't break this down.{" "}
             <button
+              className="task-row-retry"
               onClick={e => { e.stopPropagation(); onBreakdown(task); }}
               onMouseDown={e => e.stopPropagation()}
               onTouchStart={e => e.stopPropagation()}
-              style={{ background: "none", border: "none", padding: 0, fontSize: "11px", fontWeight: "700", color: "var(--accent)", cursor: "pointer", textDecoration: "underline" }}
             >Try again</button>
           </span>
         )}
       </div>
 
+      {/* Keyboard and screen-reader way into the menu, in the default mode
+          (Drag anywhere has its visible ⋮). Hidden until focused, so the row
+          looks as drawn; placed before the menu so Tab walks into it. */}
+      {!isDragAnywhere && hasActions && (
+        <button
+          type="button"
+          className="task-row-options"
+          ref={optionsBtnRef}
+          aria-label={`Options: ${title}`}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
+        >
+          Options
+        </button>
+      )}
+
       {/* options dropdown — triggered by tapping the card body */}
       {menuOpen && (
         <div
           data-testid="task-options-menu"
+          onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setMenuOpen(false); optionsBtnRef.current?.focus(); } }}
           onClick={e => e.stopPropagation()}
           onMouseDown={e => e.stopPropagation()}
           onTouchStart={e => e.stopPropagation()}
-          style={{
-          position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 300,
-          background: "var(--bg-card)",
-          border: "1px solid var(--border)",
-          borderRadius: "16px",
-          boxShadow: "0 16px 48px rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.18)",
-          minWidth: "200px",
-          padding: "6px",
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)"
-        }}>
+          className="task-row-menu">
           {onPin && (
             <MenuItem onClick={() => { onPin(task); setMenuOpen(false); }} color={isNowFocus ? "var(--warning)" : "var(--text-primary)"}>
               {isNowFocus ? <UnpinIcon /> : <PinIcon />}
@@ -431,16 +407,18 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
       )}
       {isCompleted && onDelete && (
         <button
-          className="action-btn action-btn-delete"
+          className="task-row-delete"
           onClick={e => { e.stopPropagation(); onDelete(task); }}
           onMouseDown={e => e.stopPropagation()}
           onTouchStart={e => e.stopPropagation()}
+          aria-label={`Delete: ${title}`}
           title="Delete"
-        >🗑</button>
+        ><TrashIcon /></button>
       )}
       {isDragAnywhere && hasActions && (
         <button
           className="task-row-kebab-btn"
+          ref={optionsBtnRef}
           onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
           onMouseDown={e => e.stopPropagation()}
           onTouchStart={e => e.stopPropagation()}
