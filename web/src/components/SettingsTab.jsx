@@ -17,7 +17,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
   const recentObservations = config.coachMemory?.recentObservations || [];
   const coachMemoryEnabled = isMemoryEnabled(config);
 
-  // ── XP / Progress computed values ────────────────────────────────────────
+  // ── Progress computed values ────────────────────────────────────────
   const contributions = payload.contributions || [];
 
   const normalizeChallengeKey = (key) => {
@@ -989,8 +989,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
             {[
               { label: "Account", value: config.userId || "Active User" },
               { label: "Last Sync", value: formatRelativeTime(lastSyncedAt || payload.timestamp) },
-              { label: "Active Tasks", value: `${(payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).length} tasks` },
-              { label: "Total XP", value: `${Number(config.totalXp) || 0} XP` }
+              { label: "Active Tasks", value: `${(payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).length} tasks` }
             ].map(row => (
               <div key={row.label} style={{ display: "flex", justifyContent: "space-between", fontSize: "12.5px" }}>
                 <span style={{ color: "var(--text-muted)", fontWeight: "600" }}>{row.label}</span>

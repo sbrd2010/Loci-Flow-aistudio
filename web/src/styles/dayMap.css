@@ -183,6 +183,7 @@
   gap: 8px 18px;
   margin-top: 12px;
 }
+.dm-btn-alert:disabled { opacity: 0.5; cursor: default; }
 .dm-btn-alert {
   flex: 1 1 auto;
   color: var(--ink);

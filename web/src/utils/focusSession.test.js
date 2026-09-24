@@ -158,10 +158,10 @@ describe("buildFocusCompletionPayload", () => {
     expect(result.contributions[0].dateString).toBe("2026-06-11");
   });
 
-  it("awards 120 XP", () => {
+  it("leaves config alone (no XP)", () => {
     const payload = { tasks: [task], config: { totalXp: 100 }, contributions: [] };
     const result = buildFocusCompletionPayload(payload, task, "2026-06-10");
-    expect(result.config.totalXp).toBe(220);
+    expect(result.config).toBe(payload.config);
   });
 
   it("does not touch other tasks", () => {
