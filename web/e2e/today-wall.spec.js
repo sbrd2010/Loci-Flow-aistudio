@@ -630,3 +630,43 @@ test("mobile reliability: with Reduce Motion the sheet fades instead of sliding"
   await page.locator(".wall-peek").click();
   await expect(page.locator(".tasks-section")).toHaveCSS("animation-name", "today-sheet-fade");
 });
+
+test("mobile reliability: the sheet's name counts the open rows it holds, NOW row included", async ({ page }) => {
+  await enterDemo(page);
+  await openSheet(page);
+  const rows = await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").count();
+  await expect(page.locator(".tasks-section")).toHaveAttribute("aria-label", `Today's list, ${rows} ${rows === 1 ? "task" : "tasks"}`);
+});
+
+test("mobile reliability: Escape puts the sheet away even with focus left behind it", async ({ page }) => {
+  await enterDemo(page);
+  await page.locator(".wall-peek").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  await expect(page.locator(".wall-peek")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".tasks-section")).toBeHidden();
+});
+
+test("mobile reliability: pinning a longer task with the sheet open re-measures it", async ({ page }) => {
+  await enterDemo(page);
+  // A tall phone, so the half height is set by Start focus, not its floor.
+  await page.setViewportSize({ width: 430, height: 1000 });
+  await openSheet(page);
+  const sheet = page.locator(".tasks-section");
+  const halfBefore = parseInt(await sheet.evaluate(el => el.style.getPropertyValue("--sheet-half")), 10);
+  const long = "A very long task title that wraps over many lines on a phone, so the wall grows and Start focus moves down";
+  await page.locator(".today-list-add").click();
+  await page.getByTestId("add-task-title").fill(long);
+  await page.getByTestId("add-task-submit").click();
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: "A very long task title" });
+  await row.locator(".task-row-top").click();
+  await page.getByText("Pin to Focus", { exact: true }).click();
+  await expect(page.locator(".wall-title")).toHaveText(long);
+  await expect(sheet).toBeVisible();
+  // The wall grew, so the sheet's half height shrinks to keep Start in view.
+  await expect.poll(async () => parseInt(await sheet.evaluate(el => el.style.getPropertyValue("--sheet-half")), 10))
+    .toBeLessThan(halfBefore);
+});
+

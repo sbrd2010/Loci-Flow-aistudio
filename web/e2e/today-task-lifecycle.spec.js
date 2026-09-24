@@ -21,6 +21,11 @@ async function enterDemo(page, viewport = { width: 375, height: 812 }) {
   await expect(page.getByTestId("today-tasks-list")).toBeVisible({ timeout: 8_000 });
 }
 
+async function putListAway(page) {
+  const hide = page.locator(".today-list-hide");
+  if (await hide.isVisible()) await hide.click();
+}
+
 function todayRow(page, title) {
   return page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: title }).first();
 }
@@ -100,6 +105,9 @@ test("mobile reliability: Today task can be added, edited, focused, completed, r
   await page.getByText("Pin to Focus", { exact: true }).click();
   const wallTitle = page.locator(".wall-title");
   await expect(wallTitle).toHaveText(editedTitle, { timeout: 5_000 });
+  // The list is a sheet over the wall on a phone; put it away before using
+  // the wall's own controls, as a person would.
+  await putListAway(page);
   await page.locator(".wall-primary").click();
   const focusOverlay = page.locator(".focus-mode-overlay");
   await expect(focusOverlay).toBeVisible({ timeout: 5_000 });
@@ -110,6 +118,7 @@ test("mobile reliability: Today task can be added, edited, focused, completed, r
   await expect(wallTitle).toHaveText(editedTitle);
 
   // Mark done on the wall, then Undo: the task comes back as the one thing.
+  await putListAway(page);
   await page.locator(".wall-action", { hasText: "Mark done" }).click();
   await expect(wallTitle).toHaveCount(0, { timeout: 5_000 });
   await page.getByRole("button", { name: "Undo" }).click();
@@ -249,6 +258,7 @@ test("mobile reliability: editing the wall's task off Today clears its focus/pin
   await expect(page.locator(".wall-title")).toHaveText(title, { timeout: 5_000 });
 
   // Split it opens the task editor, which can move the task off Today.
+  await putListAway(page);
   await page.locator(".wall-action", { hasText: "Split it" }).click();
   await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
   await page.getByRole("button", { name: "This Week" }).click();

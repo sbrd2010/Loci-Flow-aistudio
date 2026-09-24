@@ -904,8 +904,16 @@ export default function TodayTab({
     };
     measure();
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [sheetOpen]);
+    // The wall changes size when another task becomes the one thing (a
+    // longer title, a first step) — re-measure then too.
+    const wall = document.querySelector(".today-wall");
+    const ro = wall && typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
+    ro?.observe(wall);
+    return () => {
+      window.removeEventListener("resize", measure);
+      ro?.disconnect();
+    };
+  }, [sheetOpen, pinnedFocusTask?.uuid]);
 
   // The wall's task edited off Today (Split it opens the task editor, which
   // can change the horizon). AddTaskDialog's edit-save spreads ...editTask,
@@ -1011,6 +1019,9 @@ export default function TodayTab({
   // the Today horizon until something moves it, so counting them all reported
   // last week's finished work as this morning's progress.
   const wallRemainingCount = todayTasksAll.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).length;
+  // The open rows the list holds: the rest of the day, plus the NOW row that
+  // heads it — what the sheet's accessible name reports.
+  const listOpenRows = wallRemainingCount + (pinnedFocusTask ? 1 : 0);
   // The list header's figures (41a: "11 · 0 done", "All · 11", "Must-do · 2").
   // "Done" is done TODAY — a finished task keeps the Today horizon until
   // something moves it.
@@ -1128,6 +1139,20 @@ export default function TodayTab({
   // S splits, N adds a task, L shows or hides the list.
   // Never while typing, Space never on a focused control,
   // never with a modifier, and never while anything is open over Today.
+  // Escape puts the sheet away wherever focus is — opening it from the peek
+  // or with L leaves focus behind it. Not while something sits over Today
+  // (a dialog, a row menu handles its own Escape first).
+  useEffect(() => {
+    if (!sheetOpen) return undefined;
+    const onEsc = (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (isFocusMode || editingTask || isAddTaskDialogOpen || confirmDialog || rescueActive || showDailyCheckin) return;
+      closeSheet();
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  });
+
   const wallKeysBlocked = isFocusMode || !!editingTask || isAddTaskDialogOpen || !!confirmDialog
     || rescueActive || showDailyCheckin || sessionCompletePending;
   useEffect(() => {
@@ -1264,8 +1289,7 @@ export default function TodayTab({
       <section
         ref={sheetRef}
         className={`tasks-section today-list${pinnedFocusTask ? " is-sheet" : ""}${sheetFull ? " is-full" : ""}`}
-        aria-label={`Today's list, ${listAllCount} ${listAllCount === 1 ? "task" : "tasks"}`}
-        onKeyDown={(e) => { if (e.key === "Escape" && pinnedFocusTask) { e.stopPropagation(); closeSheet(); } }}
+        aria-label={`Today's list, ${listOpenRows} ${listOpenRows === 1 ? "task" : "tasks"}`}
         // Conditional INLINE, not via a class: an inline display beats any
         // class rule, and this element needs one for the open state.
         style={{ display: !peekOpen && pinnedFocusTask ? "none" : "flex" }}
