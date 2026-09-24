@@ -324,3 +324,29 @@ test("mobile reliability: a focused Undo stays after the mouse passes over and l
   await expect(toast).toBeVisible();
   await expect(toast.getByRole("button", { name: "Undo" })).toBeFocused();
 });
+
+// The row menu (Unpin, Put on a front, moves…) must be reachable without a
+// pointer: a focus-revealed "Options" button opens it, Tab walks into it,
+// and Escape closes it and returns focus.
+test("mobile reliability: a row's menu is reachable from the keyboard", async ({ page }) => {
+  await enterDemo(page);
+  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first();
+  const title = (await row.locator(".task-title-text").innerText()).trim();
+  const options = page.getByRole("button", { name: `Options: ${title}` });
+  await options.focus();
+  await expect(options).toBeVisible();
+  await page.keyboard.press("Enter");
+  const menu = row.getByTestId("task-options-menu");
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(menu.locator(":focus")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(options).toBeFocused();
+
+  // And it reaches what only the menu offers — here, Unpin on the NOW row.
+  await page.keyboard.press("Enter");
+  await menu.getByText("Unpin from Focus").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".wall-commit-field")).toBeVisible({ timeout: 8_000 });
+});
