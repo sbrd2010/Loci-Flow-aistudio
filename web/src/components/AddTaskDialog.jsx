@@ -186,7 +186,9 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       if (aiSuggestion.microStep) { setConcreteStep(aiSuggestion.microStep); setAdvancedOpen(true); }
       if (["P1","P2","P3","P4"].includes(aiSuggestion.priority)) setPriority(aiSuggestion.priority);
       const est = Number(aiSuggestion.estimateMinutes);
-      if ([15,25,45,60,120,240,360].includes(est)) { setEstimateMinutes(est); setEstimatePicked(true); }
+      // A value with no chip of its own shows under Other, so it is never
+      // chosen without being seen.
+      if ([15,25,45,60,120,240,360].includes(est)) { setEstimateMinutes(est); setEstimatePicked(true); setOtherOpen(![15, 30, 60, 120].includes(est)); }
       if (["today","week","month","quarter","halfyear","office"].includes(aiSuggestion.horizonLevel)) setHorizonLevel(aiSuggestion.horizonLevel);
       if (aiSuggestion.subSteps.length > 0 && subSteps.length === 0) {
         const now = Date.now();
@@ -199,7 +201,8 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
   // 45a/45k: five horizons and three priorities. Work and P4 still exist in
   // the data; they are offered only to a task that already has them, so
-  // editing it never silently changes them.
+  // editing it never silently changes them — or when the AI suggests P4, so
+  // the chosen priority is always one you can see.
   const horizons = [
     { key: "today", label: "Today" },
     { key: "week", label: "Week" },
@@ -208,7 +211,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     { key: "halfyear", label: "6 mo" },
     ...(editTask?.horizonLevel === "office" || defaultHorizon === "office" ? [{ key: "office", label: "Work" }] : []),
   ];
-  const priorities = ["P1", "P2", "P3", ...(editTask?.priority === "P4" ? ["P4"] : [])];
+  const priorities = ["P1", "P2", "P3", ...(editTask?.priority === "P4" || priority === "P4" ? ["P4"] : [])];
   const categories = ["Career", "Health", "Work", "Personal"];
   const parsedSubStepDraft = parseManualSubSteps(subStepDraft);
   const hasSubStepDraft = parsedSubStepDraft.length > 0;
@@ -325,7 +328,9 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       priority,
       category,
       frontId: frontId || null,
-      timeEstimateMinutes: Number(estimateMinutes),
+      // No time chosen means no estimate, as for a task from the wall (K1) —
+      // never an unshown default.
+      ...(estimatePicked ? { timeEstimateMinutes: Number(estimateMinutes) } : {}),
       deadlineTimestamp: null,
       reminderAt,
       isCompleted: false,

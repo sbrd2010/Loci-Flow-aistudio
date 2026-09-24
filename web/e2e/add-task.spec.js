@@ -94,3 +94,61 @@ test("editing: no note, no ring, Save changes, and the extras sit under More det
   await expect(dialog.getByRole("button", { name: /More details/ })).toHaveAttribute("aria-expanded", "true");
   await expect(dialog.getByText("First step", { exact: true })).toBeVisible();
 });
+
+// The AI can suggest P4 and a length with no chip of its own (45m). Applying
+// it must show both, not leave every chip unpressed while saving them.
+test("an AI suggestion of P4 and 45m shows P4 and opens Other at 45m", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); } catch { /* private mode */ }
+  });
+  await page.route("https://api.groq.com/**", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ choices: [{ message: { content: JSON.stringify({
+      title: "File the June field notes", microStep: "Open the notes folder", priority: "P4",
+      estimateMinutes: 45, horizonLevel: "today", subSteps: [],
+    }) } }] }),
+  }));
+  await enterDemo(page);
+  await openFromToday(page);
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await expect(dialog.getByRole("button", { name: "Priority 4" })).toHaveCount(0);
+  await dialog.getByTestId("add-task-title").fill("field notes");
+  await dialog.getByRole("button", { name: "Ask AI to improve this" }).click();
+  await dialog.getByRole("button", { name: "Apply", exact: true }).click();
+
+  await expect(dialog.getByRole("button", { name: "Priority 4" })).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByRole("button", { name: "Other", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByLabel("Minutes")).toHaveValue("45");
+});
+
+// With no time chosen, nothing is shown as chosen — so nothing is saved: the
+// task has no estimate, like one added from the wall, not a hidden 25m.
+test("a task added without choosing a time is saved with no estimate", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); } catch { /* private mode */ }
+  });
+  const bodies = [];
+  await page.route("https://api.groq.com/**", (route) => {
+    bodies.push(route.request().postData() || "");
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "One small step." } }] }) });
+  });
+  await enterDemo(page);
+  await openFromToday(page);
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByTestId("add-task-title").fill("Sort the museum receipts");
+  for (const name of ["15m", "30m", "1h", "2h", "Other"]) {
+    await expect(dialog.getByRole("button", { name, exact: true })).toHaveAttribute("aria-pressed", "false");
+  }
+  await dialog.getByTestId("add-task-submit").click();
+  await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
+
+  // Coach's task context writes "(Nmin)" after a title only when it has one.
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  await page.getByPlaceholder(/Shift\+Enter for a new line/).fill("what are my tasks");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect.poll(() => bodies.some(b => b.includes("Sort the museum receipts")), { timeout: 8_000 }).toBe(true);
+  const body = bodies.find(b => b.includes("Sort the museum receipts"));
+  expect(body).toContain("Sort the museum receipts {");
+  expect(body).not.toContain("Sort the museum receipts (25min)");
+});
