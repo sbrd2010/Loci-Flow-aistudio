@@ -717,3 +717,48 @@ test("mobile reliability: a vertical drag on a row is a scroll, not a swipe", as
   await expect(page.getByRole("button", { name: "This week" })).toBeHidden();
   await expect(page.locator(".undo-toast")).toHaveCount(0);
 });
+
+test("mobile reliability: an interrupted swipe (pointercancel) commits nothing", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  const box = await row.boundingBox();
+  const x = box.x + box.width / 2, y = box.y + 20;
+  const at = (cx) => ({ pointerType: "touch", pointerId: 11, isPrimary: true, bubbles: true, clientX: cx, clientY: y });
+  await row.dispatchEvent("pointerdown", at(x));
+  for (let i = 1; i <= 6; i++) await row.dispatchEvent("pointermove", at(x + (150 * i) / 6));
+  await row.dispatchEvent("pointercancel", at(x + 150));
+  await expect(row).not.toHaveClass(/completed/);
+  await expect(page.locator(".undo-toast")).toHaveCount(0);
+  await expect(row).not.toHaveAttribute("style", /translateX/);
+});
+
+test("mobile reliability: a long-press then a slide is a reorder, not a swipe", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  const box = await row.boundingBox();
+  const x = box.x + box.width / 2, y = box.y + 20;
+  const at = (cx) => ({ pointerType: "touch", pointerId: 12, isPrimary: true, bubbles: true, clientX: cx, clientY: y });
+  await row.dispatchEvent("pointerdown", at(x));
+  await page.waitForTimeout(260);
+  for (let i = 1; i <= 6; i++) await row.dispatchEvent("pointermove", at(x + (150 * i) / 6));
+  await row.dispatchEvent("pointerup", at(x + 150));
+  await expect(row).not.toHaveClass(/completed/);
+  await expect(page.locator(".undo-toast")).toHaveCount(0);
+});
+
+test("mobile reliability: a gesture on the drag grip is never a swipe", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  const grip = row.locator(".task-row-grip");
+  const box = await grip.boundingBox();
+  const x = box.x + box.width / 2, y = box.y + box.height / 2;
+  const at = (cx) => ({ pointerType: "touch", pointerId: 13, isPrimary: true, bubbles: true, clientX: cx, clientY: y });
+  await grip.dispatchEvent("pointerdown", at(x));
+  for (let i = 1; i <= 6; i++) await grip.dispatchEvent("pointermove", at(x + (150 * i) / 6));
+  await grip.dispatchEvent("pointerup", at(x + 150));
+  await expect(row).not.toHaveClass(/completed/);
+  await expect(page.locator(".undo-toast")).toHaveCount(0);
+});

@@ -123,6 +123,8 @@ function MenuItem({ onClick, color, danger, testId, children }) {
 // the row opens by SWIPE_REVEAL, the width of its two actions.
 const SWIPE_DONE = 96;
 const SWIPE_REVEAL = 176;
+// Resting this long before moving makes it a long-press (reorder), not a swipe.
+const SWIPE_LONG_PRESS_MS = 180;
 
 export const ROADMAP_HORIZONS = [
   { key: "week",     label: "This Week" },
@@ -181,7 +183,10 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   const suppressClickRef = useRef(false);
   const onSwipeDown = (e) => {
     if (!canSwipe || e.pointerType !== "touch") return;
-    swipeRef.current = { x: e.clientX, y: e.clientY, base: revealed ? -SWIPE_REVEAL : 0, active: false };
+    // The grip is drag-to-reorder's; a gesture that starts there is never a
+    // swipe.
+    if (e.target.closest?.(".task-row-grip")) return;
+    swipeRef.current = { x: e.clientX, y: e.clientY, t: e.timeStamp, base: revealed ? -SWIPE_REVEAL : 0, active: false };
   };
   const onSwipeMove = (e) => {
     const sw = swipeRef.current;
@@ -189,6 +194,12 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
     const dx = e.clientX - sw.x;
     const dy = e.clientY - sw.y;
     if (!sw.active) {
+      // A finger that rested first is a long-press — drag-to-reorder's (its
+      // touch sensor waits 200ms) — not a swipe. Swipes move at once.
+      if (e.timeStamp - sw.t >= SWIPE_LONG_PRESS_MS) {
+        swipeRef.current = null;
+        return;
+      }
       if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.5) {
         sw.active = true;
         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
@@ -222,6 +233,15 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
       setRevealed(false);
     }
   };
+  // An interrupted gesture (the browser takes it over, a call comes in)
+  // commits nothing: the row goes back to where it was.
+  const onSwipeCancel = () => {
+    const sw = swipeRef.current;
+    swipeRef.current = null;
+    if (!sw?.active) return;
+    setSwipeX(sw.base);
+    setRevealed(sw.base !== 0);
+  };
   const closeSwipe = () => { setSwipeX(0); setRevealed(false); };
 
   const setRowRef = useCallback(node => {
@@ -241,7 +261,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         if (revealed) { closeSwipe(); return; }
         if (hasActions) setMenuOpen(o => !o);
       } : undefined}
-      {...(canSwipe ? { onPointerDown: onSwipeDown, onPointerMove: onSwipeMove, onPointerUp: onSwipeUp, onPointerCancel: onSwipeUp } : {})}
+      {...(canSwipe ? { onPointerDown: onSwipeDown, onPointerMove: onSwipeMove, onPointerUp: onSwipeUp, onPointerCancel: onSwipeCancel } : {})}
       {...(isDragAnywhere ? {
         ...dragHandleListeners,
         tabIndex: dragHandleAttributes?.tabIndex,
