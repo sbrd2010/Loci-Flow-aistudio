@@ -19,6 +19,7 @@
 
 import { getFocusWindows, getRemainingFocusMinutes } from "./focusWindows";
 import { frontsFromConfig, parseDueDate } from "./fronts";
+import { isDeferred } from "./deferral";
 
 const STALE_DAYS = 7;
 // Horizons further out than this week are not "due this horizon".
@@ -34,9 +35,12 @@ export function numberWord(n) {
   return NUMBER_WORDS[n] ?? String(n);
 }
 
-export function openTasks(tasks) {
+// A task moved to tomorrow is not open today: picking it would start a session
+// on a task Today's wall doesn't show.
+export function openTasks(tasks, now = new Date()) {
   if (!Array.isArray(tasks)) return [];
-  return tasks.filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked);
+  const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return tasks.filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked && !isDeferred(t, day));
 }
 
 // Focus minutes left today, measured the way the rest of the app measures them.
@@ -151,7 +155,7 @@ function reasonFor(chosen, pool, fronts) {
  * when there is nothing open, which the screen renders as its empty state.
  */
 export function narrowDown(tasks, config = {}, now = new Date()) {
-  const open = openTasks(tasks);
+  const open = openTasks(tasks, now);
   const minutesLeft = minutesLeftToday(config, now);
   if (open.length === 0) {
     return { total: 0, rows: [], chosen: null, why: null, parked: [], minutesLeft };
