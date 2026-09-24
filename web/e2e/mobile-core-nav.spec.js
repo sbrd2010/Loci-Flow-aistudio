@@ -85,8 +85,8 @@ for (const viewport of MOBILE_VIEWPORTS) {
     await expectNoHorizontalOverflow(page);
 
     await openTab(page, "Settings");
-    await expect(page.getByRole("heading", { name: "Your Profile" })).toBeVisible({ timeout: 8_000 });
-    await expect(page.getByRole("heading", { name: "AI Keys" })).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByRole("button", { name: /^AI provider/ }).first()).toBeVisible({ timeout: 8_000 });
     await expectNoHorizontalOverflow(page);
   });
 }
@@ -139,14 +139,14 @@ test("mobile reliability: Settings Privacy Policy opens and closes on iPhone-siz
   await enterDemo(page, { name: "iPhone 11 Pro", width: 375, height: 812 });
 
   await openTab(page, "Settings");
-  await expect(page.getByRole("heading", { name: "Your Profile" })).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible({ timeout: 8_000 });
 
-  await page.getByRole("button", { name: "Privacy Policy" }).click();
+  await page.getByRole("button", { name: "Privacy policy" }).click();
   await expect(page.getByRole("heading", { name: "Privacy Policy" })).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText("What we store")).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
 
   await page.getByRole("button", { name: "Got it" }).click();
   await expect(page.getByRole("heading", { name: "Privacy Policy" })).not.toBeVisible({ timeout: 5_000 });
-  await expect(page.getByRole("heading", { name: "Your Profile" })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible({ timeout: 5_000 });
 });

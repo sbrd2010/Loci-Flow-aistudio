@@ -1,1203 +1,305 @@
-import React, { useState, useEffect, useMemo } from "react";
-import AppearanceSettings from "./AppearanceSettings";
+import React, { useEffect, useState } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 import PrivacyPolicy from "./PrivacyPolicy";
 import { db, auth } from "../firebase";
 import { ref, push } from "firebase/database";
-import { exportPayloadAsJson, exportTasksAsCsv } from "../utils/exportTasks";
-import { analyzeFocusWindowRows, getTotalPlannedMinutes, formatDuration, formatTime12 } from "../utils/focusWindowHints";
-import { COACH_PERSONAS, normalizeCoachPersona } from "../utils/coachPersona";
-import { COACH_PROFILE_NOTE_MAX_LENGTH } from "../utils/coachProfile";
-import { clearAllMemory, isMemoryEnabled, removePinnedFact, removeRecentObservation } from "../utils/coachMemory";
+import { isMemoryEnabled } from "../utils/coachMemory";
+import { focusWindowsLine } from "../utils/settingsSummary";
 import { isNativeApp, notifPermissionState, requestNotifPermission as nativeRequestPermission, refreshNativePermission } from "../utils/nativeNotifs";
+import { IconX } from "./ui/icons";
+import { Group, Row, SubPage, SwitchRow } from "./settings/ui";
+import {
+  ANCHOR_MODES, AiProviderPage, AnchorsPage, CoachMemoryPage, CoachPage, DataPage, FocusWindowsPage,
+  KeyDeadlinePage, NotificationsPage, ProfilePage, ReminderPage, TimerPage, coachName, providerLine,
+} from "./settings/pages";
+import "../styles/settings.css";
 
-export default function SettingsTab({ payload, savePayload, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut, theme, onThemeChange }) {
-  const { config = {} } = payload;
-  const pinnedFacts = config.coachMemory?.pinnedFacts || [];
-  const recentObservations = config.coachMemory?.recentObservations || [];
-  const coachMemoryEnabled = isMemoryEnabled(config);
+// Settings (44a–k). Phones: one list of groups; each row opens a page with
+// "< Settings" back. From 840px: a list of sections on the left, the chosen
+// section on the right (44k tablet, 44j laptop). Everything saves as it
+// changes — there is no Save button.
 
-  // ── Progress computed values ────────────────────────────────────────
-  const contributions = payload.contributions || [];
+const SECTIONS = [
+  ["profile", "Profile"], ["day", "The day"], ["goal", "Your goal"], ["coach", "Coach"],
+  ["memory", "Coach memory"], ["ai", "AI provider"], ["appearance", "Appearance"],
+  ["notifications", "Notifications"], ["data", "Data"], ["support", "Support"],
+];
+// Pages that live inside "The day" on a wide screen.
+const DAY_PAGES = ["focusWindows", "timer", "reminder", "anchors"];
 
-  const normalizeChallengeKey = (key) => {
-    const legacy = { starting: "initiation", focusing: "momentum", execution: "overplanner", tracking: "overwhelmed" };
-    return legacy[key] || key || "overplanner";
-  };
+const THEMES = [["light", "Light"], ["dark", "Dark"], ["auto", "Auto"]];
 
-
-  // ── Profile form state ────────────────────────────────────────────────────
-  const [editedName, setEditedName] = useState(config.userName || "");
-  const [editedMentor, setEditedMentor] = useState(config.mentorName || "Marcus Aurelius");
-  const [editedPomodoro, setEditedPomodoro] = useState(config.pomodoroDurationMinutes || 25);
-  const [editedNagInterval, setEditedNagInterval] = useState(config.reminderNagIntervalMinutes || 15);
-  const [editedEveningGuard, setEditedEveningGuard] = useState(!!config.eveningGuardWindowActive);
-  const [editedTaskRowStyle, setEditedTaskRowStyle] = useState(config.taskRowInteractionStyle || "classic");
-  const [editedChallenge, setEditedChallenge] = useState(() => normalizeChallengeKey(config.challengeType));
-  const [editedFocusWindows, setEditedFocusWindows] = useState(config.focusWindows || []);
-  // Recomputed each render from the rows as typed, so the length and any
-  // AM/PM warning track the inputs live rather than waiting for a save.
-  const focusWindowHints = useMemo(() => analyzeFocusWindowRows(editedFocusWindows), [editedFocusWindows]);
-  const totalPlannedMinutes = useMemo(() => getTotalPlannedMinutes(editedFocusWindows), [editedFocusWindows]);
-  const [editedCoachNudgesEnabled, setEditedCoachNudgesEnabled] = useState(config.coachNudgesEnabled !== false);
-  const [editedDailyCheckinsEnabled, setEditedDailyCheckinsEnabled] = useState(config.dailyCheckinsEnabled !== false);
-  const [editedCoachPersona, setEditedCoachPersona] = useState(() => normalizeCoachPersona(config.coachPersona));
-  const [editedCoachPersonaNote, setEditedCoachPersonaNote] = useState(config.coachPersonaNote || "");
-  const [editedCoachProfileNote, setEditedCoachProfileNote] = useState(config.coachProfileNote || "");
-  const [editedToolsStyle, setEditedToolsStyle] = useState(config.toolsStyle || "inline");
-  const [editedDeadlineLabel, setEditedDeadlineLabel] = useState(config.deadlineLabel || "");
-  const [editedDeadlineDate, setEditedDeadlineDate] = useState(config.deadlineDate || "");
-  const [editedDeadlineStartDate, setEditedDeadlineStartDate] = useState(config.deadlineStartDate || "");
-  const [editedDeadlineAction, setEditedDeadlineAction] = useState(config.deadlineAction || "");
-
+function useWide() {
+  const query = "(min-width: 840px)";
+  const [wide, setWide] = useState(() => typeof window !== "undefined" && !!window.matchMedia?.(query).matches);
   useEffect(() => {
-    setEditedName(config.userName || "");
-    setEditedMentor(config.mentorName || "Marcus Aurelius");
-    setEditedPomodoro(config.pomodoroDurationMinutes || 25);
-    setEditedNagInterval(config.reminderNagIntervalMinutes || 15);
-    setEditedEveningGuard(!!config.eveningGuardWindowActive);
-    setEditedTaskRowStyle(config.taskRowInteractionStyle || "classic");
-    setEditedChallenge(normalizeChallengeKey(config.challengeType));
-    setEditedFocusWindows(config.focusWindows || []);
-    setEditedCoachNudgesEnabled(config.coachNudgesEnabled !== false);
-    setEditedDailyCheckinsEnabled(config.dailyCheckinsEnabled !== false);
-    setEditedCoachPersona(normalizeCoachPersona(config.coachPersona));
-    setEditedCoachPersonaNote(config.coachPersonaNote || "");
-    setEditedCoachProfileNote(config.coachProfileNote || "");
-    setEditedToolsStyle(config.toolsStyle || "inline");
-    setEditedDeadlineLabel(config.deadlineLabel || "");
-    setEditedDeadlineDate(config.deadlineDate || "");
-    setEditedDeadlineStartDate(config.deadlineStartDate || "");
-    setEditedDeadlineAction(config.deadlineAction || "");
-  }, [config.userName, config.mentorName, config.pomodoroDurationMinutes,
-      config.reminderNagIntervalMinutes, config.eveningGuardWindowActive, config.taskRowInteractionStyle, config.challengeType,
-      config.focusWindows,
-      config.coachNudgesEnabled, config.dailyCheckinsEnabled, config.toolsStyle,
-      config.deadlineLabel, config.deadlineDate,
-      config.deadlineStartDate, config.deadlineAction,
-      config.coachPersona, config.coachPersonaNote, config.coachProfileNote]);
+    const mq = window.matchMedia?.(query);
+    if (!mq) return undefined;
+    const on = () => setWide(mq.matches);
+    mq.addEventListener?.("change", on);
+    return () => mq.removeEventListener?.("change", on);
+  }, []);
+  return wide;
+}
 
-  // ── Focus window editing helpers ─────────────────────────────────────────
-  const handleAddFocusWindow = () => {
-    setEditedFocusWindows([...editedFocusWindows, { start: "09:00", end: "17:00" }]);
-  };
+function relativeTime(ts) {
+  if (!ts) return "never";
+  const secs = Math.floor((Date.now() - ts) / 1000);
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  return hours < 48 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`;
+}
 
-  const handleRemoveFocusWindow = (idx) => {
-    setEditedFocusWindows(editedFocusWindows.filter((_, i) => i !== idx));
-  };
+function shortDeadline(dateStr) {
+  if (!dateStr) return null;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
 
-  const handleFocusWindowChange = (idx, field, value) => {
-    setEditedFocusWindows(editedFocusWindows.map((w, i) => i === idx ? { ...w, [field]: value } : w));
-  };
-
-  const challengeOptions = [
-    {
-      key: "overplanner", icon: "🎯",
-      label: "Help me decide what to work on",
-      desc: "AI Coach focuses on priority clarity. You'll get prompts to narrow down to the one thing that matters right now."
-    },
-    {
-      key: "initiation", icon: "🧊",
-      label: "Help me just start",
-      desc: "Coach uses micro-commitments and tiny first steps. Tasks get broken down to reduce the friction of starting."
-    },
-    {
-      key: "momentum", icon: "⚡",
-      label: "Keep me moving forward",
-      desc: "Coach tracks wins and streaks. Reminders focus on sustaining energy and building on each completed task."
-    },
-    {
-      key: "overwhelmed", icon: "🌱",
-      label: "Help me recover and catch up",
-      desc: "Coach uses gentle, shame-free prompts. Clean Slate and Bad Day Reset tools are always front and center."
-    }
-  ];
-
-  const [confirmDialog, setConfirmDialog] = useState(null);
-  const [profileOpen, setProfileOpen] = useState(!config.userName);
+export default function SettingsTab({ payload, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut, theme, onThemeChange, email, flushNow }) {
+  const config = payload.config || {};
+  const wide = useWide();
+  // Phones: null is the root list. Wide: a section id, or a day page.
+  const [page, setPage] = useState(null);
+  const [confirm, setConfirm] = useState(null);
   const [showPrivacy, setShowPrivacy] = useState(false);
-
-  // ── Bug report form ──────────────────────────────────────────────────────
-  const [showBugForm, setShowBugForm] = useState(false);
-  const [bugWhat, setBugWhat] = useState("");
-  const [bugSteps, setBugSteps] = useState("");
-  const [bugDevice, setBugDevice] = useState("");
-  const [bugSubmitting, setBugSubmitting] = useState(false);
-  const [bugSuccess, setBugSuccess] = useState(false);
-  const [bugError, setBugError] = useState("");
-
-  const handleBugSubmit = async (e) => {
-    e.preventDefault();
-    if (!bugWhat.trim()) return;
-    const uid = auth.currentUser?.uid;
-    if (!uid) {
-      setBugError("Couldn't submit - check your connection and try again.");
-      return;
-    }
-    setBugSubmitting(true);
-    setBugError("");
-    try {
-      await push(ref(db, "bugReports"), {
-        what: bugWhat.trim(),
-        steps: bugSteps.trim(),
-        device: bugDevice.trim(),
-        userId: uid,
-        userEmail: auth.currentUser?.email || null,
-        appVersion: import.meta.env.VITE_APP_VERSION || "dev",
-        submittedAt: Date.now()
-      });
-      setBugSuccess(true);
-      setBugWhat(""); setBugSteps(""); setBugDevice("");
-      setTimeout(() => { setBugSuccess(false); setShowBugForm(false); }, 2500);
-    } catch (_) {
-      setBugError("Couldn't submit - check your connection and try again.");
-    } finally {
-      setBugSubmitting(false);
-    }
-  };
-
-  // ── Notifications ─────────────────────────────────────────────────────────
-  const [notifPermission, setNotifPermission] = useState(() => notifPermissionState());
+  const [showBug, setShowBug] = useState(false);
+  const [permission, setPermission] = useState(() => notifPermissionState());
 
   useEffect(() => {
     if (!isNativeApp()) return;
-    refreshNativePermission().then(p => { if (p) setNotifPermission(p); });
+    refreshNativePermission().then(p => { if (p) setPermission(p); });
   }, []);
+  // A new page starts at its top.
+  useEffect(() => {
+    document.querySelector(".screen-content")?.scrollTo?.({ top: 0 });
+  }, [page]);
 
-  const requestNotifPermission = async () => {
-    const result = await nativeRequestPermission();
-    setNotifPermission(result);
+  const syncLabel = relativeTime(lastSyncedAt || payload.timestamp);
+  const activeCount = (payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).length;
+  const memoryCount = (config.coachMemory?.pinnedFacts || []).length + (config.coachMemory?.recentObservations || []).length;
+  const who = coachName(config);
+  const askConfirm = ({ message, confirmLabel, onConfirm }) => setConfirm({
+    message, confirmLabel, cancelLabel: "Cancel",
+    onConfirm: () => { setConfirm(null); onConfirm(); },
+    onCancel: () => setConfirm(null),
+  });
+  const signOut = () => askConfirm({ message: "Sign out? Your data stays saved.", confirmLabel: "Sign out", onConfirm: () => onSignOut?.() });
+  const resetTracking = () => askConfirm({
+    message: "Reset 7-day tracking?\n\nThis clears the week chart and the streak in Mind Box. Tasks stay. It can't be undone.",
+    confirmLabel: "Reset",
+    onConfirm: () => { saveSubPath("contributions", []); saveConfigPatch({ visitStreakCount: 0 }); },
+  });
+  const requestPermission = async () => setPermission(await nativeRequestPermission());
+
+  // Where "back" goes: on a phone, the root; on a wide screen, a day page goes
+  // back to "The day".
+  const back = wide ? (DAY_PAGES.includes(page) ? () => setPage("day") : undefined) : () => setPage(null);
+  const backLabel = wide ? "The day" : "Settings";
+  const open = (id) => setPage(id);
+
+  // ── the groups, shared by the phone root and the wide sections ──
+  const dayGroup = (
+    <Group label="The day">
+      <Row title="Focus windows" sub={focusWindowsLine(config)} onClick={() => open("focusWindows")} />
+      <Row title="Focus timer" value={`${Number(config.pomodoroDurationMinutes) || 25} min`} onClick={() => open("timer")} />
+      <Row title="Reminder before" value={`${Number(config.reminderNagIntervalMinutes) || 15} min`} onClick={() => open("reminder")} />
+      <SwitchRow title="Low energy" sub="Small starts drop to 5 min; nudges pause" checked={!!config.isLowEnergyMode} onChange={v => saveConfigPatch({ isLowEnergyMode: v })} />
+      <SwitchRow title="Evening guard" sub="No new tasks after 20:00" checked={!!config.eveningGuardWindowActive} onChange={v => saveConfigPatch({ eveningGuardWindowActive: v })} />
+      <Row title="Anchors on Today" value={ANCHOR_MODES.find(m => m.value === (config.anchorsOnToday === "off" ? "off" : "line")).label} onClick={() => open("anchors")} />
+    </Group>
+  );
+  const coachRows = (
+    <>
+      <Row title="Coach memory" sub={isMemoryEnabled(config) ? `${memoryCount} ${memoryCount === 1 ? "note" : "notes"}` : "Off"} onClick={() => open("memory")} />
+      <SwitchRow title="Proactive nudges" sub="Once a day, in Coach only" checked={config.coachNudgesEnabled !== false} onChange={v => saveConfigPatch({ coachNudgesEnabled: v })} />
+      <SwitchRow title="Evening check-in" sub="A short reflection card at the end of the day" checked={config.dailyCheckinsEnabled !== false} onChange={v => saveConfigPatch({ dailyCheckinsEnabled: v })} />
+      <Row title="AI provider" sub={providerLine()} onClick={() => open("ai")} />
+    </>
+  );
+  const appearanceGroup = (
+    <Group label="Appearance">
+      <div className="set-row is-static is-stacked">
+        <span className="set-row-title">Theme</span>
+        <div className="set-segmented" role="radiogroup" aria-label="Theme">
+          {THEMES.map(([id, name]) => (
+            <button key={id} type="button" role="radio" aria-checked={theme === id} className={theme === id ? "is-on" : ""} onClick={() => onThemeChange?.(id)}>{name}</button>
+          ))}
+        </div>
+        <span className="set-row-sub">Auto follows your device’s dark mode.</span>
+      </div>
+      <SwitchRow title="Show momentum" sub="Five bars under Today" checked={config.momentumEnabled !== false} onChange={v => saveConfigPatch({ momentumEnabled: v })} />
+      <SwitchRow title="Drag anywhere" sub="Reorder a task by dragging anywhere on its row" checked={config.taskRowInteractionStyle === "dragAnywhere"} onChange={v => saveConfigPatch({ taskRowInteractionStyle: v ? "dragAnywhere" : "classic" })} />
+    </Group>
+  );
+  const notificationsRow = (
+    <Row
+      title="Notifications"
+      sub={permission === "granted" ? "Allowed · reminders are set per task" : permission === "denied" ? "Blocked in your settings" : "Not allowed yet"}
+      value={permission === "granted" ? "On" : "Off"}
+      onClick={() => open("notifications")}
+    />
+  );
+  const supportRows = (
+    <>
+      <Row title="Report a bug" external onClick={() => setShowBug(true)} />
+      <Row title="Privacy policy" external onClick={() => setShowPrivacy(true)} />
+    </>
+  );
+
+  const pages = {
+    profile: () => <ProfilePage config={config} email={email} saveConfigPatch={saveConfigPatch} onBack={back} />,
+    focusWindows: () => <FocusWindowsPage config={config} saveConfigPatch={saveConfigPatch} onBack={back} backLabel={backLabel} />,
+    timer: () => <TimerPage config={config} saveConfigPatch={saveConfigPatch} onBack={back} backLabel={backLabel} />,
+    reminder: () => <ReminderPage config={config} saveConfigPatch={saveConfigPatch} onBack={back} backLabel={backLabel} />,
+    anchors: () => <AnchorsPage config={config} saveConfigPatch={saveConfigPatch} onBack={back} backLabel={backLabel} />,
+    goal: () => <KeyDeadlinePage config={config} saveConfigPatch={saveConfigPatch} onBack={back} />,
+    coach: () => (
+      <CoachPage config={config} saveConfigPatch={saveConfigPatch} onBack={back}>
+        {wide && <Group label="Coach">{coachRows}</Group>}
+      </CoachPage>
+    ),
+    memory: () => <CoachMemoryPage config={config} saveConfigPatch={saveConfigPatch} onBack={back} onConfirm={askConfirm} />,
+    ai: () => <AiProviderPage onBack={back} />,
+    notifications: () => <NotificationsPage permission={permission} onRequest={requestPermission} onBack={back} />,
+    data: () => (
+      <DataPage payload={payload} email={email} lastSyncLabel={syncLabel} onSyncNow={flushNow} onResetTracking={resetTracking} onBack={back} />
+    ),
+    // Wide-only sections: the groups themselves, as a page.
+    day: () => <SubPage title="The day">{dayGroup}</SubPage>,
+    appearance: () => <SubPage title="Appearance">{appearanceGroup}</SubPage>,
+    support: () => <SubPage title="Support"><div className="set-list">{supportRows}</div></SubPage>,
   };
-  const [syncOpen, setSyncOpen] = useState(false);
-  const [aiKeysOpen, setAiKeysOpen] = useState(false);
-  const [challengeOpen, setChallengeOpen] = useState(false);
-  const [backupOpen, setBackupOpen] = useState(false);
-  const [memoryOpen, setMemoryOpen] = useState(false);
-  const [exportError, setExportError] = useState("");
 
-  const [savedProfile, setSavedProfile] = useState(false);
-  const handleSaveSettings = (e) => {
+  const modals = (
+    <>
+      {confirm && <ConfirmDialog {...confirm} />}
+      {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
+      {showBug && <BugReport onClose={() => setShowBug(false)} />}
+    </>
+  );
+
+  if (wide) {
+    const current = page || "profile";
+    const section = DAY_PAGES.includes(current) ? "day" : current;
+    return (
+      <div className="set-wide">
+        <nav className="set-nav" aria-label="Settings sections">
+          <h2 className="set-nav-title">Settings</h2>
+          {SECTIONS.map(([id, label]) => (
+            <button key={id} type="button" className={`set-nav-item${section === id ? " is-on" : ""}`} aria-current={section === id ? "page" : undefined} onClick={() => setPage(id)}>
+              {label}
+            </button>
+          ))}
+          <button type="button" className="set-nav-signout" onClick={signOut}>Sign out</button>
+        </nav>
+        <div className="set-pane" key={current}>{pages[current]()}</div>
+        {modals}
+      </div>
+    );
+  }
+
+  if (page && pages[page]) {
+    return <div className="set-phone" key={page}>{pages[page]()}{modals}</div>;
+  }
+
+  const name = (config.userName || "").trim();
+  return (
+    <div className="set-phone">
+      <h2 className="set-title">Settings</h2>
+      <button type="button" className="set-profile" onClick={() => open("profile")}>
+        <span className="set-avatar" aria-hidden="true">{(name || "?").slice(0, 1).toUpperCase()}</span>
+        <span className="set-row-text">
+          <span className="set-profile-name">{name || "Your profile"}</span>
+          <span className="set-row-sub">{[email, `synced ${syncLabel}`].filter(Boolean).join(" · ")}</span>
+        </span>
+      </button>
+
+      {dayGroup}
+      <Group label="Your goal">
+        <Row
+          title="Key deadline"
+          sub={config.deadlineLabel || config.deadlineDate ? [config.deadlineLabel, shortDeadline(config.deadlineDate)].filter(Boolean).join(" · ") : "Not set"}
+          onClick={() => open("goal")}
+        />
+      </Group>
+      <Group label="Coach">
+        <Row title={who} sub="Tone and profile" onClick={() => open("coach")} />
+        {coachRows}
+      </Group>
+      {appearanceGroup}
+      <Group label="Notifications">{notificationsRow}</Group>
+      <Group label="Data">
+        <Row title="Sync" sub={`Synced ${syncLabel} · ${activeCount} ${activeCount === 1 ? "task" : "tasks"}`} onClick={() => open("data")} />
+        <Row title="Backup" sub="Download JSON or CSV" onClick={() => open("data")} />
+      </Group>
+      <Group label="Support">{supportRows}</Group>
+      <button type="button" className="set-signout" onClick={signOut}>Sign out of Loci</button>
+      {modals}
+    </div>
+  );
+}
+
+// Report a bug: a dialog, as Add task is. Writes to /bugReports; not in demo.
+function BugReport({ onClose }) {
+  const [what, setWhat] = useState("");
+  const [steps, setSteps] = useState("");
+  const [device, setDevice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (e) => {
     e.preventDefault();
-    // Every key below is an explicit value from this form, so patching writes
-    // exactly what the user just edited. Spreading `...config` as well would
-    // additionally re-send every untouched field from this component's
-    // render-time snapshot — which is how a Key Deadline set on another device
-    // could get reverted by someone merely saving an unrelated setting here.
-    saveConfigPatch({
-      userName: editedName.trim(),
-      mentorName: editedMentor.trim(),
-      challengeType: editedChallenge,
-      pomodoroDurationMinutes: Math.min(120, Math.max(1, parseInt(editedPomodoro) || 25)),
-      reminderNagIntervalMinutes: Math.min(60, Math.max(1, parseInt(editedNagInterval) || 15)),
-      eveningGuardWindowActive: editedEveningGuard,
-      taskRowInteractionStyle: editedTaskRowStyle,
-      focusWindows: editedFocusWindows.filter(w => w.start && w.end && w.start !== w.end),
-      coachNudgesEnabled: editedCoachNudgesEnabled,
-      dailyCheckinsEnabled: editedDailyCheckinsEnabled,
-      coachPersona: editedCoachPersona,
-      coachPersonaNote: editedCoachPersonaNote.trim().slice(0, 300),
-      coachProfileNote: editedCoachProfileNote.trim().slice(0, COACH_PROFILE_NOTE_MAX_LENGTH),
-      toolsStyle: editedToolsStyle,
-      roadmapStyle: "compact",
-      deadlineLabel: editedDeadlineLabel.trim(),
-      deadlineDate: editedDeadlineDate,
-      deadlineStartDate: editedDeadlineStartDate,
-      deadlineAction: editedDeadlineAction.trim(),
-      deadlineCardStyle: "compact",
-    });
-    setSavedProfile(true);
-    setTimeout(() => { setSavedProfile(false); setProfileOpen(false); }, 2000);
+    if (!what.trim()) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) { setError("Couldn't send — sign in and try again."); return; }
+    setBusy(true); setError("");
+    try {
+      await push(ref(db, "bugReports"), {
+        what: what.trim(), steps: steps.trim(), device: device.trim(),
+        userId: uid, userEmail: auth.currentUser?.email || null,
+        appVersion: import.meta.env.VITE_APP_VERSION || "dev", submittedAt: Date.now(),
+      });
+      setDone(true);
+      setTimeout(onClose, 2000);
+    } catch {
+      setError("Couldn't send — check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
   };
-
-  // ── Groq API key ──────────────────────────────────────────────────────────
-  const [groqInput, setGroqInput] = useState(localStorage.getItem("loci_groq_key") || "");
-  const [savedGroq, setSavedGroq] = useState(false);
-  const handleSaveGroq = (e) => {
-    e.preventDefault();
-    try { localStorage.setItem("loci_groq_key", groqInput.trim()); } catch (_) {}
-    setSavedGroq(true);
-    setTimeout(() => setSavedGroq(false), 2000);
-  };
-
-  // ── Gemini API key ────────────────────────────────────────────────────────
-  const [keyInput, setKeyInput] = useState(localStorage.getItem("loci_gemini_key") || "");
-  const [savedKey, setSavedKey] = useState(false);
-  const handleSaveKey = (e) => {
-    e.preventDefault();
-    try { localStorage.setItem("loci_gemini_key", keyInput.trim()); } catch (_) {}
-    setSavedKey(true);
-    setTimeout(() => setSavedKey(false), 2000);
-  };
-
-  // ── NVIDIA API key ────────────────────────────────────────────────────────
-  const [nvidiaInput, setNvidiaInput] = useState(localStorage.getItem("loci_nvidia_key") || "");
-  const [savedNvidia, setSavedNvidia] = useState(false);
-  const handleSaveNvidia = (e) => {
-    e.preventDefault();
-    try { localStorage.setItem("loci_nvidia_key", nvidiaInput.trim()); } catch (_) {}
-    setSavedNvidia(true);
-    setTimeout(() => setSavedNvidia(false), 2000);
-  };
-
-  // ── Cerebras API key ──────────────────────────────────────────────────────
-  const [cerebrasInput, setCerebrasInput] = useState(localStorage.getItem("loci_cerebras_key") || "");
-  const [savedCerebras, setSavedCerebras] = useState(false);
-  const handleSaveCerebras = (e) => {
-    e.preventDefault();
-    try { localStorage.setItem("loci_cerebras_key", cerebrasInput.trim()); } catch (_) {}
-    setSavedCerebras(true);
-    setTimeout(() => setSavedCerebras(false), 2000);
-  };
-
-  // ── Z.ai API key ──────────────────────────────────────────────────────────
-  const [zaiInput, setZaiInput] = useState(localStorage.getItem("loci_zai_key") || "");
-  const [savedZai, setSavedZai] = useState(false);
-  const handleSaveZai = (e) => {
-    e.preventDefault();
-    try { localStorage.setItem("loci_zai_key", zaiInput.trim()); } catch (_) {}
-    setSavedZai(true);
-    setTimeout(() => setSavedZai(false), 2000);
-  };
-
-  // ── Provider preference ───────────────────────────────────────────────────
-  const [providerPref, setProviderPref] = useState(localStorage.getItem("loci_provider_pref") || "auto");
-  const handleProviderPref = (pref) => {
-    setProviderPref(pref);
-    try { localStorage.setItem("loci_provider_pref", pref); } catch (_) {}
-  };
-
-  // ── Sync status ───────────────────────────────────────────────────────────
-  const formatRelativeTime = (ts) => {
-    if (!ts) return "Never";
-    const secs = Math.floor((Date.now() - ts) / 1000);
-    if (secs < 60) return "just now";
-    const mins = Math.floor(secs / 60);
-    if (mins < 60) return `${mins}m ago`;
-    return `${Math.floor(mins / 60)}h ago`;
-  };
-
-  const groqPersonalKey     = localStorage.getItem("loci_groq_key")     || "";
-  const groqBuiltinKey      = import.meta.env.VITE_GROQ_KEY             || "";
-  const nvidiaPersonalKey   = localStorage.getItem("loci_nvidia_key")   || "";
-  const nvidiaBuiltinKey    = import.meta.env.VITE_NVIDIA_KEY           || "";
-  const geminiPersonalKey   = localStorage.getItem("loci_gemini_key")   || "";
-  const geminiBuiltinKey    = import.meta.env.VITE_GEMINI_KEY           || "";
-  const cerebrasPersonalKey = localStorage.getItem("loci_cerebras_key") || "";
-  const cerebrasBuiltinKey  = import.meta.env.VITE_CEREBRAS_KEY         || "";
-  const zaiPersonalKey      = localStorage.getItem("loci_zai_key")      || "";
-  const zaiBuiltinKey       = import.meta.env.VITE_ZAI_KEY              || "";
-  const effectiveGroqKey     = groqPersonalKey     || groqBuiltinKey;
-  const effectiveNvidiaKey   = nvidiaPersonalKey   || nvidiaBuiltinKey;
-  const effectiveGeminiKey   = geminiPersonalKey   || geminiBuiltinKey;
-  const effectiveCerebrasKey = cerebrasPersonalKey || cerebrasBuiltinKey;
-  const effectiveZaiKey      = zaiPersonalKey      || zaiBuiltinKey;
-  const prefOrders = {
-    auto:     ["cerebras", "groq", "zai", "gemini"],
-    groq:     ["groq", "cerebras", "zai", "gemini"],
-    cerebras: ["cerebras", "groq", "zai", "gemini"],
-    zai:      ["zai", "groq", "cerebras", "gemini"],
-    gemini:   ["gemini", "groq", "cerebras", "zai"],
-    nvidia:   ["nvidia", "groq", "cerebras", "zai", "gemini"],
-  };
-  const effectiveKeyMap  = { groq: effectiveGroqKey, nvidia: effectiveNvidiaKey, gemini: effectiveGeminiKey, cerebras: effectiveCerebrasKey, zai: effectiveZaiKey };
-  const personalKeyMap   = { groq: groqPersonalKey, nvidia: nvidiaPersonalKey, gemini: geminiPersonalKey, cerebras: cerebrasPersonalKey, zai: zaiPersonalKey };
-  const providerNameMap  = { groq: "Groq", nvidia: "NVIDIA", gemini: "Gemini", cerebras: "Cerebras", zai: "Z.ai" };
-  const activeProvider   = (prefOrders[providerPref] || prefOrders.auto).find(p => effectiveKeyMap[p]) || null;
-  const hasUsableProvider = !!activeProvider;
-  const keyStatusLabel   = activeProvider
-    ? `✓ ${providerNameMap[activeProvider]} active — ${personalKeyMap[activeProvider] ? "your key" : "built-in"}`
-    : "✗ No AI key — add one below";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-
-      {/* ── Appearance (screen 10c) ──────────────────────────────────────── */}
-      <section className="card">
-        <AppearanceSettings
-          theme={theme}
-          onThemeChange={onThemeChange}
-          momentumEnabled={config.momentumEnabled !== false}
-          onMomentumChange={(on) => saveConfigPatch({ momentumEnabled: on })}
-        />
-      </section>
-
-      {/* ── Profile ──────────────────────────────────────────────────────── */}
-      <section className="card">
-        <button type="button" onClick={() => setProfileOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: profileOpen ? "16px" : 0 }}>
-          <div>
-            <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
-              👤 Your Profile
-            </h2>
-            {!profileOpen && config.userName && (
-              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                {config.userName} · {challengeOptions.find(o => o.key === normalizeChallengeKey(config.challengeType))?.label}
-              </div>
-            )}
-          </div>
-          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: profileOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
-        </button>
-
-        {profileOpen && <form onSubmit={handleSaveSettings} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          <div className="form-group">
-            <label className="form-label" htmlFor="settings-name">Your Name</label>
-            <input id="settings-name" className="text-input" type="text"
-              value={editedName} onChange={e => setEditedName(e.target.value)}
-              placeholder="Your name" required />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="settings-mentor">AI Coach Name</label>
-            <div style={{ display: "flex", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
-              {["Mark", "Steve", "Dianna", "Jenny"].map(name => (
-                <button key={name} type="button" onClick={() => setEditedMentor(name)}
-                  style={{
-                    padding: "5px 16px", borderRadius: "20px", fontSize: "12.5px", fontWeight: "700",
-                    cursor: "pointer", transition: "all 0.15s",
-                    background: editedMentor === name ? "var(--accent)" : "var(--bg-secondary)",
-                    color: editedMentor === name ? "var(--btn-text, #fff)" : "var(--text-secondary)",
-                    border: editedMentor === name ? "2px solid var(--accent)" : "1.5px solid var(--border)"
-                  }}>{name}</button>
-              ))}
-            </div>
-            <input id="settings-mentor" className="text-input" type="text"
-              value={editedMentor} onChange={e => setEditedMentor(e.target.value)}
-              placeholder="Or type any name…" required />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Coach Tone</label>
-            <div style={{ display: "flex", gap: "8px", marginBottom: "6px", flexWrap: "wrap" }}>
-              {COACH_PERSONAS.map(p => (
-                <button key={p.key} type="button" onClick={() => setEditedCoachPersona(p.key)}
-                  style={{
-                    padding: "5px 16px", borderRadius: "20px", fontSize: "12.5px", fontWeight: "700",
-                    cursor: "pointer", transition: "all 0.15s",
-                    background: editedCoachPersona === p.key ? "var(--accent)" : "var(--bg-secondary)",
-                    color: editedCoachPersona === p.key ? "var(--btn-text, #fff)" : "var(--text-secondary)",
-                    border: editedCoachPersona === p.key ? "2px solid var(--accent)" : "1.5px solid var(--border)"
-                  }}>{p.icon} {p.label}</button>
-              ))}
-            </div>
-            <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
-              {COACH_PERSONAS.find(p => p.key === editedCoachPersona)?.desc}
-            </p>
-            <label className="form-label" htmlFor="settings-persona-note" style={{ fontSize: "12px" }}>
-              Tone notes (style only)
-            </label>
-            <input id="settings-persona-note" className="text-input" type="text"
-              value={editedCoachPersonaNote}
-              onChange={e => setEditedCoachPersonaNote(e.target.value)}
-              placeholder="e.g. Keep it short and skip the cheerleading. (style only — for facts about you, use Coach Profile below)"
-              maxLength={300} />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="settings-coach-profile">Coach Profile</label>
-            <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "8px" }}>
-              Stable background about you that helps the coach personalize advice. You control this directly.
-            </p>
-            <textarea
-              id="settings-coach-profile"
-              className="text-input"
-              value={editedCoachProfileNote}
-              onChange={e => setEditedCoachProfileNote(e.target.value)}
-              placeholder="e.g. I am a polymer scientist in Arnhem, currently focused on job-search momentum and low-shame execution."
-              maxLength={COACH_PROFILE_NOTE_MAX_LENGTH}
-              rows={3}
-              style={{ resize: "vertical", minHeight: "72px", fontFamily: "var(--font-sans)" }}
-            />
-          </div>
-
-          <div className="form-group">
-            <button
-              type="button"
-              onClick={() => setChallengeOpen(o => !o)}
-              style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                width: "100%", background: "var(--bg-secondary)", border: "1.5px solid var(--border)",
-                borderRadius: "var(--radius-sm)", padding: "12px 14px", cursor: "pointer",
-                textAlign: "left"
-              }}
-            >
-              <div>
-                <div style={{ fontSize: "11px", fontWeight: "900", letterSpacing: "0.1em", color: "var(--text-primary)", textTransform: "uppercase" }}>
-                  Your Focus Challenge
-                </div>
-                <div style={{ fontSize: "12px", color: "var(--accent)", fontWeight: "700", marginTop: "2px" }}>
-                  {challengeOptions.find(o => o.key === editedChallenge)?.icon} {challengeOptions.find(o => o.key === editedChallenge)?.label}
-                </div>
-              </div>
-              <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: challengeOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
-            </button>
-            {challengeOpen && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
-                {challengeOptions.map(opt => {
-                  const isSelected = editedChallenge === opt.key;
-                  return (
-                    <button
-                      key={opt.key}
-                      type="button"
-                      onClick={() => { setEditedChallenge(opt.key); setChallengeOpen(false); }}
-                      style={{
-                        display: "flex", alignItems: "center", gap: "12px",
-                        padding: "12px 14px", borderRadius: "var(--radius-sm)",
-                        border: isSelected ? "2px solid var(--accent)" : "1.5px solid var(--border)",
-                        background: isSelected ? "var(--accent-ring)" : "var(--bg-secondary)",
-                        cursor: "pointer", textAlign: "left", width: "100%",
-                        transition: "all 0.15s ease"
-                      }}
-                    >
-                      <span style={{ fontSize: "20px", flexShrink: 0 }}>{opt.icon}</span>
-                      <div>
-                        <div style={{
-                          fontSize: "13px", fontWeight: "800",
-                          color: isSelected ? "var(--accent)" : "var(--text-primary)",
-                          marginBottom: "2px"
-                        }}>{opt.label}</div>
-                        <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{opt.desc}</div>
-                      </div>
-                      {isSelected && (
-                        <span style={{ marginLeft: "auto", color: "var(--accent)", fontWeight: "800", fontSize: "16px" }}>✓</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div className="form-group">
-              <label className="form-label" htmlFor="settings-pomodoro">Focus Timer (min)</label>
-              <input id="settings-pomodoro" className="text-input" type="number"
-                min="1" max="120" value={editedPomodoro}
-                onChange={e => setEditedPomodoro(Math.min(120, Math.max(1, Number(e.target.value) || 25)))} />
-            </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="settings-nag">Reminder (min)</label>
-              <input id="settings-nag" className="text-input" type="number"
-                min="1" max="60" value={editedNagInterval}
-                onChange={e => setEditedNagInterval(Math.min(60, Math.max(1, Number(e.target.value) || 15)))} />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Focus Windows</label>
-            <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px", marginBottom: "8px" }}>
-              Add one or more time ranges for when you want to focus. If an end time is earlier than its start time, that window crosses midnight. Defaults to 7:00 AM-2:00 AM if none are set.
-            </p>
-            {editedFocusWindows.map((w, idx) => {
-              const hint = focusWindowHints[idx] || {};
-              const suspect = !!hint.meridiemFix;
-              return (
-                <div key={idx} style={{ marginBottom: "8px" }}>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <input
-                      type="time"
-                      className="text-input"
-                      value={w.start || ""}
-                      onChange={e => handleFocusWindowChange(idx, "start", e.target.value)}
-                      aria-label={`Focus window ${idx + 1} start time`}
-                      style={{ flex: 1, minWidth: 0, ...(suspect ? { borderColor: "var(--danger)" } : {}) }}
-                    />
-                    <span style={{ fontSize: "12px", color: "var(--text-muted)", flexShrink: 0 }}>to</span>
-                    <input
-                      type="time"
-                      className="text-input"
-                      value={w.end || ""}
-                      onChange={e => handleFocusWindowChange(idx, "end", e.target.value)}
-                      aria-label={`Focus window ${idx + 1} end time`}
-                      style={{ flex: 1, minWidth: 0, ...(suspect ? { borderColor: "var(--danger)" } : {}) }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveFocusWindow(idx)}
-                      aria-label={`Remove focus window ${idx + 1}`}
-                      style={{
-                        flexShrink: 0, width: "32px", height: "32px", padding: 0,
-                        borderRadius: "8px", border: "1.5px solid var(--border)",
-                        background: "var(--bg-secondary)", color: "var(--text-muted)",
-                        fontSize: "14px", cursor: "pointer",
-                        display: "flex", alignItems: "center", justifyContent: "center"
-                      }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  {/* The length is shown for every complete row, not only
-                      suspicious ones: a stated "13h 30m" is what makes a
-                      mistyped meridiem visible the moment it happens, and it
-                      states a fact rather than guessing at intent. */}
-                  {hint.durationMin !== null && hint.durationMin !== undefined && (
-                    <div style={{ fontSize: "11px", marginTop: "3px", paddingLeft: "2px",
-                                  color: suspect ? "var(--danger)" : "var(--text-muted)" }}>
-                      {formatDuration(hint.durationMin)}
-                      {suspect && (
-                        <>
-                          {" — that's unusually long. Did you mean "}
-                          <strong>{formatTime12(hint.meridiemFix.value)}</strong>
-                          {"? "}
-                          <button
-                            type="button"
-                            onClick={() => handleFocusWindowChange(idx, hint.meridiemFix.field, hint.meridiemFix.value)}
-                            style={{
-                              border: "none", background: "none", padding: 0,
-                              color: "var(--accent)", fontSize: "11px", fontWeight: "700",
-                              cursor: "pointer", textDecoration: "underline"
-                            }}
-                          >
-                            Fix
-                          </button>
-                        </>
-                      )}
-                      {!suspect && hint.overlapsWith?.length > 0 && (
-                        <span style={{ color: "var(--text-muted)" }}>
-                          {` · overlaps window ${hint.overlapsWith.map(i => i + 1).join(", ")}`}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            {totalPlannedMinutes > 0 && (
-              <div style={{ fontSize: "12px", fontWeight: "700", color: "var(--text-secondary)",
-                            margin: "10px 0 8px", paddingLeft: "2px" }}>
-                {`Total focus time: ${formatDuration(totalPlannedMinutes)}`}
-                <span style={{ fontWeight: "400", color: "var(--text-muted)" }}>
-                  {" — time these windows actually cover"}
-                </span>
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={handleAddFocusWindow}
-              style={{
-                width: "100%", padding: "10px", borderRadius: "var(--radius-sm)",
-                border: "1.5px dashed var(--border)", background: "none",
-                color: "var(--accent)", fontSize: "12.5px", fontWeight: "700", cursor: "pointer"
-              }}
-            >
-              + Add focus window
-            </button>
-          </div>
-
-          <div
-            className="toggle-row"
-            onClick={() => setEditedCoachNudgesEnabled(!editedCoachNudgesEnabled)}
-            style={{ cursor: "pointer" }}
-          >
-            <div>
-              <span style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--text-primary)" }}>
-                🤖 Proactive coach nudges
-              </span>
-              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                Let your coach speak up first — when it notices something worth flagging (a missed deadline move, a pinned focus task, an overloaded day), it opens the Coach transcript with that observation, once a day. Nothing appears unprompted on Today. Skipped during Low Energy Mode and Evening Guard.
-              </p>
-            </div>
-            <input type="checkbox" className="pill-toggle" checked={editedCoachNudgesEnabled} readOnly />
-          </div>
-
-          <div
-            className="toggle-row"
-            onClick={() => setEditedDailyCheckinsEnabled(!editedDailyCheckinsEnabled)}
-            style={{ cursor: "pointer" }}
-          >
-            <div>
-              <span style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--text-primary)" }}>
-                🎯 Daily Coach Check-ins
-              </span>
-              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                A dismissible end-of-day reflection card on Today. Turn off if it feels like noise.
-              </p>
-            </div>
-            <input type="checkbox" className="pill-toggle" checked={editedDailyCheckinsEnabled} readOnly />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">📅 Key Deadline (home screen countdown)</label>
-            <input className="text-input" type="text"
-              value={editedDeadlineLabel}
-              onChange={e => setEditedDeadlineLabel(e.target.value)}
-              placeholder="e.g. Get a job · Exam · Birthday"
-              style={{ marginBottom: "8px" }} />
-            <input className="text-input" type="date"
-              value={editedDeadlineDate}
-              onChange={e => setEditedDeadlineDate(e.target.value)}
-              style={{ marginBottom: "8px" }} />
-            <input className="text-input" type="date"
-              value={editedDeadlineStartDate}
-              onChange={e => setEditedDeadlineStartDate(e.target.value)}
-              placeholder="Start date (for progress bar)"
-              title="Start date — sets the full width of the shrinking progress bar"
-              style={{ marginBottom: "8px" }} />
-            <input className="text-input" type="text"
-              value={editedDeadlineAction}
-              onChange={e => setEditedDeadlineAction(e.target.value)}
-              placeholder="Daily action nudge (e.g. Complete one application step today)"
-              style={{ marginBottom: "8px" }} />
-            {editedDeadlineDate && (
-              <button type="button"
-                onClick={() => {
-                  setEditedDeadlineDate(""); setEditedDeadlineLabel(""); setEditedDeadlineStartDate(""); setEditedDeadlineAction("");
-                  saveConfigPatch({ deadlineLabel: "", deadlineDate: "", deadlineStartDate: "", deadlineAction: "", deadlineCardStyle: "compact" });
-                }}
-                style={{ marginTop: "6px", fontSize: "11px", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                ✕ Clear deadline
-              </button>
-            )}
-          </div>
-
-          <div
-            className="toggle-row"
-            onClick={() => setEditedEveningGuard(!editedEveningGuard)}
-            style={{ cursor: "pointer" }}
-          >
-            <div>
-              <span style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--text-primary)" }}>
-                🌙 Evening Guard (after 8 PM)
-              </span>
-              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                Blocks adding new tasks after 8 PM to protect your wind-down.
-              </p>
-            </div>
-            <input type="checkbox" className="pill-toggle" checked={editedEveningGuard} onChange={() => setEditedEveningGuard(v => !v)} />
-          </div>
-
-          <div
-            className="toggle-row"
-            onClick={() => setEditedTaskRowStyle(s => s === "dragAnywhere" ? "classic" : "dragAnywhere")}
-            style={{ cursor: "pointer" }}
-          >
-            <div>
-              <span style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--text-primary)" }}>
-                ✋ Drag-anywhere task rows
-              </span>
-              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                Reorder by dragging anywhere on a task (Today + Horizon), with a ⋮ menu button instead of the left-side grip.
-              </p>
-            </div>
-            <input
-              type="checkbox"
-              className="pill-toggle"
-              checked={editedTaskRowStyle === "dragAnywhere"}
-              onClick={e => e.stopPropagation()}
-              onChange={() => setEditedTaskRowStyle(s => s === "dragAnywhere" ? "classic" : "dragAnywhere")}
-            />
-          </div>
-
-          <button className="btn" type="submit" style={{ width: "100%", marginTop: "4px" }}>
-            {savedProfile ? "✓ Saved!" : "Save Profile"}
-          </button>
-        </form>}
-      </section>
-
-      {/* ── Coach Memory ─────────────────────────────────────────────────── */}
-      <section className="card">
-        <button type="button" onClick={() => setMemoryOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: memoryOpen ? "16px" : 0 }}>
-          <div>
-            <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
-              🧠 Coach Memory
-            </h2>
-            {!memoryOpen && (
-              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                {coachMemoryEnabled
-                  ? `${pinnedFacts.length} pinned fact${pinnedFacts.length === 1 ? "" : "s"} · ${recentObservations.length} recent note${recentObservations.length === 1 ? "" : "s"}`
-                  : "Off"}
-              </div>
-            )}
-          </div>
-          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: memoryOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
-        </button>
-
-        {memoryOpen && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            <p style={{ fontSize: "11.5px", color: "var(--text-secondary)" }}>
-              Your coach can pick up on durable facts and recent notes during chat so it doesn't start from scratch each time. Remove anything that's wrong or no longer relevant, or turn memory off entirely.
-            </p>
-
-            <div
-              className="toggle-row"
-              onClick={() => saveConfigPatch((latestConfig) => ({ coachMemoryEnabled: !isMemoryEnabled(latestConfig) }))}
-              style={{ cursor: "pointer" }}
-            >
-              <div>
-                <span style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--text-primary)" }}>
-                  Coach Memory
-                </span>
-                <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                  Let your coach save and recall facts and notes across conversations. Turning this off stops new memories from being saved and keeps existing ones out of the chat — they're still listed below until you delete or clear them.
-                </p>
-              </div>
-              <input type="checkbox" className="pill-toggle" checked={coachMemoryEnabled} readOnly />
-            </div>
-
-            {pinnedFacts.length === 0 && recentObservations.length === 0 ? (
-              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)" }}>
-                Nothing saved yet. As you chat, your coach may remember a durable fact (Pinned Fact) or a short-term note (Recent Note) here — you can review, delete, or clear them anytime.
-              </p>
-            ) : (
-              <>
-                {pinnedFacts.length > 0 && (
-                  <div className="form-group">
-                    <label className="form-label">Pinned facts</label>
-                    {pinnedFacts.map((f, idx) => (
-                      <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", padding: "8px 0", borderBottom: idx < pinnedFacts.length - 1 ? "1px solid var(--border)" : "none" }}>
-                        <span style={{ fontSize: "12.5px", color: "var(--text-primary)" }}>{f.text}</span>
-                        <button type="button" onClick={() => saveConfigPatch((latestConfig) => ({ coachMemory: removePinnedFact(latestConfig.coachMemory, idx) }))}
-                          aria-label="Remove pinned fact"
-                          style={{ flexShrink: 0, width: "28px", height: "28px", padding: 0, borderRadius: "8px", border: "1.5px solid var(--border)", background: "var(--bg-secondary)", color: "var(--text-muted)", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {recentObservations.length > 0 && (
-                  <div className="form-group">
-                    <label className="form-label">Recent notes</label>
-                    {recentObservations.map((o, idx) => (
-                      <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", padding: "8px 0", borderBottom: idx < recentObservations.length - 1 ? "1px solid var(--border)" : "none" }}>
-                        <span style={{ fontSize: "12.5px", color: "var(--text-primary)" }}>
-                          {o.text}
-                          {o.lociDayStr && <span style={{ color: "var(--text-muted)" }}> — {o.lociDayStr}</span>}
-                        </span>
-                        <button type="button" onClick={() => saveConfigPatch((latestConfig) => ({ coachMemory: removeRecentObservation(latestConfig.coachMemory, idx) }))}
-                          aria-label="Remove recent note"
-                          style={{ flexShrink: 0, width: "28px", height: "28px", padding: 0, borderRadius: "8px", border: "1.5px solid var(--border)", background: "var(--bg-secondary)", color: "var(--text-muted)", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  className="btn"
-                  style={{ width: "100%", background: "rgba(239,68,68,0.08)", color: "var(--danger)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "12.5px" }}
-                  onClick={() => setConfirmDialog({
-                    message: "Clear all coach memory?\n\nThis removes every pinned fact and recent note. Cannot be undone.",
-                    confirmLabel: "Clear memory", cancelLabel: "Cancel",
-                    onConfirm: () => { saveConfigPatch((latestConfig) => ({ coachMemory: clearAllMemory(latestConfig.coachMemory) })); setConfirmDialog(null); },
-                    onCancel: () => setConfirmDialog(null)
-                  })}
-                >
-                  Clear all memory
-                </button>
-              </>
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* ── AI Keys ─────────────────────────────────────────────────────── */}
-      <section className="card">
-        <button
-          type="button"
-          onClick={() => setAiKeysOpen(o => !o)}
-          style={{
-            display: "flex", justifyContent: "space-between", alignItems: "center",
-            width: "100%", background: "none", border: "none", cursor: "pointer",
-            textAlign: "left", padding: 0, marginBottom: aiKeysOpen ? "12px" : 0
-          }}
-        >
-          <div>
-            <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
-              🤖 AI Keys
-            </h2>
-            <div style={{
-              display: "inline-flex", alignItems: "center", gap: "6px",
-              padding: "4px 10px", borderRadius: "var(--radius-sm)",
-              background: hasUsableProvider ? "rgba(52, 211, 153, 0.08)" : "rgba(248, 113, 113, 0.08)",
-              border: `1px solid ${hasUsableProvider ? "var(--success)" : "var(--danger)"}`,
-              fontSize: "11.5px", fontWeight: "600",
-              color: hasUsableProvider ? "var(--success)" : "var(--danger)"
-            }}>
-              {keyStatusLabel}
-            </div>
-          </div>
-          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: aiKeysOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
-        </button>
-
-        {aiKeysOpen && (
-          <>
-            <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "14px" }}>
-              Built-in private-alpha AI may be preconfigured. You can also add your own key below. Your own keys are stored only in this browser.
-            </p>
-
-            {/* Provider preference */}
-            <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid var(--border)" }}>
-              <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--text-secondary)", marginBottom: "8px", display: "block", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                AI Provider
-              </span>
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                {[
-                  { key: "auto",     label: "Auto",     chain: "Cerebras → Groq → Z.ai → Gemini" },
-                  { key: "groq",     label: "Groq",     chain: "Groq → Cerebras → Z.ai → Gemini" },
-                  { key: "cerebras", label: "Cerebras", chain: "Cerebras → Groq → Z.ai → Gemini" },
-                  { key: "zai",      label: "Z.ai",     chain: "Z.ai → Groq → Cerebras → Gemini" },
-                  { key: "gemini",   label: "Gemini",   chain: "Gemini → Groq → Cerebras → Z.ai" },
-                  { key: "nvidia",   label: "NVIDIA",   chain: "NVIDIA → Groq → Cerebras → Z.ai → Gemini" },
-                ].map(opt => {
-                  const isSelected = providerPref === opt.key;
-                  return (
-                    <button
-                      key={opt.key}
-                      type="button"
-                      onClick={() => handleProviderPref(opt.key)}
-                      style={{
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                        padding: "10px 14px", borderRadius: "var(--radius-sm)", textAlign: "left",
-                        background: isSelected ? "var(--accent)" : "var(--bg-secondary)",
-                        color: isSelected ? "var(--btn-text, #fff)" : "var(--text-primary)",
-                        border: isSelected ? "2px solid var(--accent)" : "1.5px solid var(--border)",
-                        cursor: "pointer"
-                      }}
-                    >
-                      <div>
-                        <span style={{ fontSize: "13px", fontWeight: "700" }}>
-                          {opt.label}{opt.key === "auto" && <span style={{ fontSize: "10px", fontWeight: "600", opacity: 0.75, marginLeft: "6px" }}>recommended</span>}
-                        </span>
-                        {isSelected && (
-                          <div style={{ fontSize: "11px", opacity: 0.8, marginTop: "2px", fontWeight: "400" }}>{opt.chain}</div>
-                        )}
-                      </div>
-                      {isSelected && <span style={{ fontSize: "14px", fontWeight: "800", flexShrink: 0, marginLeft: "12px" }}>✓</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Cerebras — recommended (first in the Auto chain) */}
-            <div style={{ marginBottom: "14px", paddingBottom: "14px", borderBottom: "1px solid var(--border)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                <span style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-primary)" }}>
-                  Cerebras
-                  <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--success)", background: "rgba(52,211,153,0.12)", padding: "2px 6px", borderRadius: "4px", marginLeft: "6px" }}>RECOMMENDED</span>
-                </span>
-                <a href="https://cloud.cerebras.ai" target="_blank" rel="noreferrer" style={{ fontSize: "11.5px", color: "var(--accent)", fontWeight: "600" }}>Get key ↗</a>
-              </div>
-              <form onSubmit={handleSaveCerebras} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <input className="text-input" type="password"
-                  value={cerebrasInput} onChange={e => setCerebrasInput(e.target.value)}
-                  placeholder="csk-..." />
-                <button className="btn" type="submit" style={{ width: "100%" }}>
-                  {savedCerebras ? "✓ Saved" : "Save Cerebras Key"}
-                </button>
-              </form>
-            </div>
-
-            {/* Groq */}
-            <div style={{ marginBottom: "14px", paddingBottom: "14px", borderBottom: "1px solid var(--border)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>🚀 Groq</span>
-                <a href="https://console.groq.com" target="_blank" rel="noreferrer" style={{ fontSize: "11.5px", color: "var(--accent)", fontWeight: "600" }}>Get key ↗</a>
-              </div>
-              <form onSubmit={handleSaveGroq} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <input className="text-input" type="password"
-                  value={groqInput} onChange={e => setGroqInput(e.target.value)}
-                  placeholder="gsk_..." />
-                <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
-                  {savedGroq ? "✓ Saved" : "Save Groq Key"}
-                </button>
-              </form>
-            </div>
-
-            {/* Z.ai */}
-            <div style={{ marginBottom: "14px", paddingBottom: "14px", borderBottom: "1px solid var(--border)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>
-                  Z.ai
-                  <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-secondary)", background: "var(--bg-secondary)", padding: "2px 6px", borderRadius: "4px", marginLeft: "6px" }}>EMERGENCY FALLBACK / FREE-TIER</span>
-                </span>
-                <a href="https://z.ai" target="_blank" rel="noreferrer" style={{ fontSize: "11.5px", color: "var(--accent)", fontWeight: "600" }}>Get key ↗</a>
-              </div>
-              <p style={{ fontSize: "11px", color: "var(--text-secondary)", marginBottom: "8px" }}>
-                Z.ai free fallback has low concurrency, so it is used only when earlier providers fail.
-              </p>
-              <form onSubmit={handleSaveZai} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <input className="text-input" type="password"
-                  value={zaiInput} onChange={e => setZaiInput(e.target.value)}
-                  placeholder="API key" />
-                <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
-                  {savedZai ? "✓ Saved" : "Save Z.ai Key"}
-                </button>
-              </form>
-            </div>
-
-            {/* NVIDIA */}
-            <div style={{ marginBottom: "14px", paddingBottom: "14px", borderBottom: "1px solid var(--border)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>NVIDIA Nemotron</span>
-                <a href="https://build.nvidia.com" target="_blank" rel="noreferrer" style={{ fontSize: "11.5px", color: "var(--accent)", fontWeight: "600" }}>Get key ↗</a>
-              </div>
-              <p style={{ fontSize: "11px", color: "var(--text-secondary)", marginBottom: "8px" }}>
-                Manual/experimental — not part of the Auto, Groq, or Cerebras chains right now.
-              </p>
-              <form onSubmit={handleSaveNvidia} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <input className="text-input" type="password"
-                  value={nvidiaInput} onChange={e => setNvidiaInput(e.target.value)}
-                  placeholder="nvapi-..." />
-                <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
-                  {savedNvidia ? "✓ Saved" : "Save NVIDIA Key"}
-                </button>
-              </form>
-            </div>
-
-            {/* Gemini */}
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>Gemini</span>
-                <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" style={{ fontSize: "11.5px", color: "var(--accent)", fontWeight: "600" }}>Get key ↗</a>
-              </div>
-              <form onSubmit={handleSaveKey} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <input className="text-input" type="password"
-                  value={keyInput} onChange={e => setKeyInput(e.target.value)}
-                  placeholder="AIzaSy..." />
-                <button className="btn" type="submit" style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", boxShadow: "none" }}>
-                  {savedKey ? "✓ Saved" : "Save Gemini Key"}
-                </button>
-              </form>
-            </div>
-          </>
-        )}
-      </section>
-
-      {/* ── Data Sync ────────────────────────────────────────────────────── */}
-      <section className="card">
-        <button type="button" onClick={() => setSyncOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: syncOpen ? "12px" : 0 }}>
-          <div>
-            <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
-              ☁️ Data Sync
-            </h2>
-            {!syncOpen && (
-              <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                Last sync: {formatRelativeTime(lastSyncedAt || payload.timestamp)}
-              </div>
-            )}
-          </div>
-          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: syncOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
-        </button>
-        {syncOpen && <>
-          <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "14px" }}>
-            Your tasks sync instantly with Firebase across all your devices.
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {[
-              { label: "Account", value: config.userId || "Active User" },
-              { label: "Last Sync", value: formatRelativeTime(lastSyncedAt || payload.timestamp) },
-              { label: "Active Tasks", value: `${(payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).length} tasks` }
-            ].map(row => (
-              <div key={row.label} style={{ display: "flex", justifyContent: "space-between", fontSize: "12.5px" }}>
-                <span style={{ color: "var(--text-muted)", fontWeight: "600" }}>{row.label}</span>
-                <span style={{ color: "var(--text-primary)", fontWeight: "700" }}>{row.value}</span>
-              </div>
-            ))}
-          </div>
-        </>}
-      </section>
-
-      {/* ── Data Backup ─────────────────────────────────────────────────── */}
-      <section className="card">
-        <button type="button" onClick={() => { setBackupOpen(o => !o); setExportError(""); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: backupOpen ? "12px" : 0 }}>
-          <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", color: "var(--text-primary)" }}>
-            💾 Data Backup
-          </h2>
-          <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: backupOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: "8px" }}>▼</span>
-        </button>
-        {backupOpen && (
-          <>
-            <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "14px", lineHeight: "1.5" }}>
-              Download a copy of all your Loci tasks. This only creates a local file on your device — it does not change, delete, or re-sync any of your tasks.
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <button
-                className="btn"
-                type="button"
-                style={{ width: "100%" }}
-                onClick={() => {
-                  setExportError("");
-                  try { exportPayloadAsJson(payload); }
-                  catch (_) { setExportError("Export failed. Your tasks were not changed."); }
-                }}
-              >
-                ⬇ Download JSON Backup
-              </button>
-              <button
-                className="btn"
-                type="button"
-                style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1.5px solid var(--border)", boxShadow: "none" }}
-                onClick={() => {
-                  setExportError("");
-                  try { exportTasksAsCsv(payload.tasks || []); }
-                  catch (_) { setExportError("Export failed. Your tasks were not changed."); }
-                }}
-              >
-                ⬇ Download CSV Backup
-              </button>
-              {exportError && (
-                <p style={{ fontSize: "12px", color: "var(--danger)", fontWeight: "600", margin: 0 }}>{exportError}</p>
-              )}
-              <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: 0 }}>
-                Includes all tasks across all horizons — active, completed, and parked. JSON preserves all fields; CSV is readable in Excel and Google Sheets.
-              </p>
-            </div>
-          </>
-        )}
-      </section>
-
-      {/* ── Notifications ────────────────────────────────────────────────── */}
-      <section className="card">
-        <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "10px", color: "var(--text-primary)" }}>
-          🔔 Notifications
-        </h2>
-        {notifPermission === "granted" && (
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "10px" }}>
-            <span style={{ fontSize: "12px", color: "var(--success)", fontWeight: "700" }}>✓ Notifications allowed</span>
-          </div>
-        )}
-        {notifPermission === "denied" && (
-          <p style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "10px" }}>
-            {isNativeApp()
-              ? "Notifications are blocked. Go to Android Settings → Apps → Loci Focus → Notifications → allow."
-              : "Notifications are blocked. Go to browser Settings → Site settings → Notifications → allow for this site."}
-          </p>
-        )}
-        {notifPermission !== "granted" && notifPermission !== "denied" && (
-          <button className="btn" style={{ width: "100%", marginBottom: "10px" }} onClick={requestNotifPermission}>
-            Allow notifications
-          </button>
-        )}
-        <p style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: "1.5" }}>
-          Reminders are set <strong>per task</strong> — tap <strong>+ Add Task</strong> or <strong>✏ Edit</strong> a task and tap <strong>🔔 Set a reminder</strong> to choose the exact date and time.
-        </p>
-      </section>
-
-      {/* ── Account ──────────────────────────────────────────────────────── */}
-      <section className="card">
-        <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "14px", color: "var(--text-primary)" }}>
-          Account
-        </h2>
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          <button
-            className="btn"
-            style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
-            onClick={() => setConfirmDialog({
-              message: "Reset 7-day tracking data?\n\nThis clears the dots AND the streak counter on the Mind Box tab. Cannot be undone.",
-              confirmLabel: "Reset tracking", cancelLabel: "Cancel",
-              onConfirm: () => { saveSubPath("contributions", []); saveConfigPatch({ visitStreakCount: 0 }); setConfirmDialog(null); },
-              onCancel: () => setConfirmDialog(null)
-            })}
-          >
-            🔄 Reset 7-day tracking data
-          </button>
-          <button
-            className="btn"
-            style={{ width: "100%", background: "rgba(239,68,68,0.08)", color: "var(--danger)", border: "1.5px solid var(--border)", boxShadow: "none" }}
-            onClick={() => setShowBugForm(true)}
-          >
-            🐛 Report a bug
-          </button>
-          <button
-            className="btn"
-            style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--text-muted)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "12px" }}
-            onClick={() => setShowPrivacy(true)}
-          >
-            Privacy Policy
-          </button>
-          <button
-            className="btn"
-            style={{ width: "100%", background: "var(--bg-secondary)", color: "var(--danger)", border: "1.5px solid var(--border)", boxShadow: "none" }}
-            onClick={() => setConfirmDialog({
-              message: "Sign out? Your data stays saved.",
-              confirmLabel: "Sign out", cancelLabel: "Cancel",
-              onConfirm: () => { setConfirmDialog(null); onSignOut?.(); },
-              onCancel: () => setConfirmDialog(null)
-            })}
-          >
-            Sign out of Loci
-          </button>
+    <div className="add-overlay" onClick={() => !busy && onClose()}>
+      <div className="add-card set-key-card" role="dialog" aria-modal="true" aria-labelledby="bug-title" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === "Escape" && !busy) onClose(); }}>
+        <div className="add-head">
+          <h2 id="bug-title" className="add-heading">Report a bug</h2>
+          {!busy && <button type="button" className="add-close" onClick={onClose} aria-label="Close"><IconX size={20} /></button>}
         </div>
-      </section>
-
-      {confirmDialog && <ConfirmDialog {...confirmDialog} />}
-      {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
-
-      {/* ── Bug Report Modal ─────────────────────────────────────────────── */}
-      {showBugForm && (
-        <>
-          <div
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 400, backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}
-            onClick={() => { if (!bugSubmitting) setShowBugForm(false); }}
-          />
-          <div style={{
-            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-            width: "calc(100% - 32px)", maxWidth: "420px",
-            background: "var(--bg-card)", borderRadius: "20px",
-            padding: "24px 22px 28px", zIndex: 401,
-            boxShadow: "0 12px 48px rgba(0,0,0,0.3)"
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h3 style={{ fontSize: "16px", fontWeight: "800", margin: 0, color: "var(--text-primary)" }}>🐛 Report a Bug</h3>
-              {!bugSubmitting && (
-                <button onClick={() => setShowBugForm(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "20px", color: "var(--text-muted)", padding: "2px 4px", lineHeight: 1 }}>×</button>
-              )}
-            </div>
-            {bugSuccess ? (
-              <div style={{ textAlign: "center", padding: "24px 0" }}>
-                <div style={{ fontSize: "36px", marginBottom: "10px" }}>✅</div>
-                <p style={{ fontSize: "14px", fontWeight: "700", color: "var(--success)" }}>Bug report submitted!</p>
-                <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "6px" }}>Thank you — we'll look into it.</p>
-              </div>
-            ) : (
-              <form onSubmit={handleBugSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" htmlFor="bug-what">What happened? *</label>
-                  <textarea
-                    id="bug-what"
-                    className="text-input"
-                    placeholder="Describe the issue clearly — what did you expect vs what actually happened?"
-                    value={bugWhat}
-                    onChange={e => setBugWhat(e.target.value)}
-                    rows={3}
-                    style={{ resize: "vertical", minHeight: "72px", fontFamily: "var(--font-sans)" }}
-                    required
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" htmlFor="bug-steps">Steps to reproduce (optional)</label>
-                  <textarea
-                    id="bug-steps"
-                    className="text-input"
-                    placeholder="1. Go to… 2. Tap… 3. See error"
-                    value={bugSteps}
-                    onChange={e => setBugSteps(e.target.value)}
-                    rows={2}
-                    style={{ resize: "vertical", minHeight: "50px", fontFamily: "var(--font-sans)" }}
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" htmlFor="bug-device">Device / browser (optional)</label>
-                  <input
-                    id="bug-device"
-                    className="text-input"
-                    placeholder="e.g. iPhone 14, Safari · Android, Chrome"
-                    value={bugDevice}
-                    onChange={e => setBugDevice(e.target.value)}
-                  />
-                </div>
-                {bugError && <p style={{ fontSize: "12px", color: "var(--danger)", fontWeight: "600" }}>{bugError}</p>}
-                <button className="btn" type="submit" disabled={bugSubmitting || !bugWhat.trim()} style={{ width: "100%", marginTop: "4px" }}>
-                  {bugSubmitting ? "Submitting…" : "Submit Bug Report"}
-                </button>
-              </form>
-            )}
-          </div>
-        </>
-      )}
+        {done ? (
+          <p className="set-lede" role="status">Sent. Thank you — we'll look into it.</p>
+        ) : (
+          <form onSubmit={submit}>
+            <label className="set-field">
+              <span className="set-label">What happened?</span>
+              <textarea id="bug-what" className="set-input set-textarea" rows={3} value={what} onChange={e => setWhat(e.target.value)} placeholder="What did you expect, and what happened instead?" required />
+            </label>
+            <label className="set-field">
+              <span className="set-label">Steps to reproduce (optional)</span>
+              <textarea id="bug-steps" className="set-input set-textarea" rows={2} value={steps} onChange={e => setSteps(e.target.value)} placeholder="1. Go to… 2. Tap… 3. See…" />
+            </label>
+            <label className="set-field">
+              <span className="set-label">Device / browser (optional)</span>
+              <input id="bug-device" className="set-input" value={device} onChange={e => setDevice(e.target.value)} placeholder="e.g. Pixel 8, Chrome" />
+            </label>
+            {error && <p className="set-window-hint" role="alert">{error}</p>}
+            <button type="submit" className="add-submit" disabled={busy || !what.trim()}>{busy ? "Sending…" : "Send report"}</button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

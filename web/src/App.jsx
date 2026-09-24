@@ -1359,6 +1359,8 @@ export default function App() {
             onSignOut={demoMode ? exitDemo : handleSwitchUser}
             theme={theme}
             onThemeChange={setTheme}
+            email={demoMode ? null : user?.email}
+            flushNow={flushNow}
           />
         )}
       </main>

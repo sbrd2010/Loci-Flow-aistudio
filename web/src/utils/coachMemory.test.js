@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  editMemoryEntry,
   MAX_PINNED_FACTS,
   MAX_RECENT_OBSERVATIONS,
   addPinnedFact,
@@ -470,5 +471,29 @@ describe("buildMemoryWritingRules", () => {
     const rules = buildMemoryWritingRules("Rohan");
     expect(rules).toContain("User benefits from shorter planning windows and concrete completion-focused next steps");
     expect(rules).toContain("reframe as a neutral, coachable summary");
+  });
+});
+
+describe("editMemoryEntry (Settings › Coach memory)", () => {
+  const mem = {
+    pinnedFacts: [{ text: "Lead researcher; deadline 30 Sep", createdAt: 1, source: "ai" }],
+    recentObservations: [{ text: "Tired today", lociDayStr: "2026-09-20", createdAt: 2, source: "ai" }],
+  };
+  it("replaces the text in place and marks it the user's", () => {
+    const { coachMemory, ok } = editMemoryEntry(mem, "fact", 0, "Lead researcher; deadline 15 Oct");
+    expect(ok).toBe(true);
+    expect(coachMemory.pinnedFacts[0]).toMatchObject({ text: "Lead researcher; deadline 15 Oct", createdAt: 1, source: "user" });
+    expect(coachMemory.recentObservations).toBe(mem.recentObservations);
+  });
+  it("edits a recent note and keeps its day", () => {
+    const { coachMemory } = editMemoryEntry(mem, "note", 0, "Rested today");
+    expect(coachMemory.recentObservations[0]).toMatchObject({ text: "Rested today", lociDayStr: "2026-09-20" });
+  });
+  it("refuses what the coach may not store, and an empty edit", () => {
+    for (const bad of ["", "   ", "my password is hunter2", "[[REMEMBER: x]]"]) {
+      const res = editMemoryEntry(mem, "fact", 0, bad);
+      expect(res.ok).toBe(false);
+      expect(res.coachMemory).toBe(mem);
+    }
   });
 });
