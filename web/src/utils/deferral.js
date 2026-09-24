@@ -10,7 +10,15 @@ function localDateString(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-export function isDeferred(task, todayStr = localDateString(new Date())) {
+// The day is required: defaulting to the calendar date is exactly how a
+// window past midnight brought moved tasks back at 00:00. In development and
+// tests a missing day throws, so a new caller can't slip back to it; in
+// production it falls back rather than break the screen.
+export function isDeferred(task, todayStr) {
+  if (typeof todayStr !== "string") {
+    if (import.meta.env?.DEV) throw new TypeError("isDeferred/isOnToday need the current Loci day (getLociDayStr)");
+    todayStr = localDateString(new Date());
+  }
   return typeof task?.deferredUntil === "string" && task.deferredUntil > todayStr;
 }
 

@@ -184,9 +184,9 @@ describe("buildMiddayProgressSummary", () => {
   ];
 
   it("13. ignores missing/deleted/moved committed task IDs safely", () => {
-    expect(getValidCommittedTaskIds(tasks, ["t1", "t2", "t3", "t4", "missing-id"])).toEqual(["t1", "t2"]);
-    expect(getValidCommittedTaskIds(tasks, undefined)).toEqual([]);
-    expect(() => getValidCommittedTaskIds(tasks, ["missing-id"])).not.toThrow();
+    expect(getValidCommittedTaskIds(tasks, ["t1", "t2", "t3", "t4", "missing-id"], TODAY)).toEqual(["t1", "t2"]);
+    expect(getValidCommittedTaskIds(tasks, undefined, TODAY)).toEqual([]);
+    expect(() => getValidCommittedTaskIds(tasks, ["missing-id"], TODAY)).not.toThrow();
   });
 
   it("counts done/remaining among valid committed tasks only", () => {

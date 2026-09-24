@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildLocalSafetyReply, buildOfflineRescueReply, buildRescuePrompt, buildRescueTaskList, filterApplicableRescueActions, parseRescueActionTags } from "./rescueCoachPrompt";
 
+const DAY = "2026-09-24";
+
 describe("rescueCoachPrompt", () => {
   const tasks = [
     {
@@ -29,7 +31,7 @@ describe("rescueCoachPrompt", () => {
   ];
 
   it("builds a richer task snapshot with metadata and first steps", () => {
-    const out = buildRescueTaskList(tasks);
+    const out = buildRescueTaskList(tasks, { dayStr: DAY });
     expect(out).toContain("NOW FOCUS: Write grant draft");
     expect(out).toContain("priority P1");
     expect(out).toContain("15 min");
@@ -43,7 +45,7 @@ describe("rescueCoachPrompt", () => {
     const out = buildRescueTaskList([
       ...tasks,
       { uuid: "parked", title: "Parked backlog item", horizonLevel: "today", isParked: true },
-    ]);
+    ], { dayStr: DAY });
     expect(out).not.toContain("Parked backlog item");
   });
 
@@ -52,7 +54,7 @@ describe("rescueCoachPrompt", () => {
     const out = buildRescueTaskList([
       { uuid: "today", title: "Visible today task", horizonLevel: "today" },
       { uuid: "week-focus", title: "Hidden week focus", horizonLevel: "week", isNowFocus: true },
-    ], { entryPoint: "today" });
+    ], { entryPoint: "today", dayStr: DAY });
     expect(out).not.toContain("NOW FOCUS: Hidden week focus");
     expect(out).toContain("TODAY: Visible today task");
     expect(out).toContain("WEEK: Hidden week focus");
@@ -62,7 +64,7 @@ describe("rescueCoachPrompt", () => {
     const out = buildRescueTaskList([
       { uuid: "deep", title: "Deep focus week task", horizonLevel: "week" },
       { uuid: "today", title: "Visible today task", horizonLevel: "today" },
-    ], { entryPoint: "deep_focus", focusTask: { uuid: "deep", title: "Deep focus week task", horizonLevel: "week" } });
+    ], { entryPoint: "deep_focus", focusTask: { uuid: "deep", title: "Deep focus week task", horizonLevel: "week" }, dayStr: DAY });
     expect(out).toContain("NOW FOCUS: Deep focus week task");
   });
 

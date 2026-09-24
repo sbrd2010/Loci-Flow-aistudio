@@ -130,6 +130,20 @@ test("with a window to 02:00, a moved task stays off Today past midnight and ret
   await expect(list.getByText(moved)).toHaveCount(1);
 });
 
+// Past midnight in a window that runs to 02:00, the Day map still counts the
+// day it is in: the route starts now (00:30), not at yesterday evening's 21:00,
+// and 1h30m are left, not 5h.
+test("at 00:30 with a window to 02:00, the route starts now and the day has 1h30m left", async ({ page }) => {
+  await openDayMapAt(page, "2024-06-15T21:00:00");
+  await page.locator(".dm-back").click();
+  await page.clock.setFixedTime(new Date("2024-06-16T00:30:00"));
+  await page.getByRole("button", { name: "Day map →" }).click();
+  const status = page.getByRole("region", { name: "Day plan" });
+  await expect(status).toContainText("/ 1h30m");
+  await expect(page.locator(".dm-stop .dm-main").first()).toHaveAttribute("aria-label", /^Now to 00:\d\d, /);
+  await expect(page.locator(".dm-end")).toContainText("02:00");
+});
+
 // A 09:00–17:00 window, opened at 18:00: the day is over, so every stop is
 // past the line.
 async function dayOverAt18(page, { unpin }) {

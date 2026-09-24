@@ -62,8 +62,8 @@ export function getFocusWindows(config = {}) {
 // Whether a wall-clock hour (0-23) falls inside a window. An overnight window
 // (22:00-02:00) wraps past midnight, so its endMin sits BELOW its startMin and
 // a plain `start <= x < end` test is false for every hour it actually covers.
-// The fallback window is 07:00-02:00 overnight, so callers that test
-// containment by hand get the wrong answer for almost every hour of the day.
+// The fallback window, 07:00 to midnight, is stored the same way (it ends at
+// 00:00), so callers that test containment by hand get it wrong all day.
 export function isHourInWindow(hour, w) {
   const min = hour * 60;
   return w.overnight
