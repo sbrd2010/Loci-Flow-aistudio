@@ -257,9 +257,9 @@ test("mobile reliability: editing the wall's task off Today clears its focus/pin
   await page.getByText("Pin to Focus", { exact: true }).click();
   await expect(page.locator(".wall-title")).toHaveText(title, { timeout: 5_000 });
 
-  // Split it opens the task editor, which can move the task off Today.
-  await putListAway(page);
-  await page.locator(".wall-action", { hasText: "Split it" }).click();
+  // The task editor can move the task off Today.
+  await openTaskMenu(page, title);
+  await page.getByTestId("task-menu-edit").click();
   await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
   await page.getByRole("button", { name: "Week", exact: true }).click();
   await page.getByTestId("add-task-submit").click();

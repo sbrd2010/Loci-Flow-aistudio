@@ -752,7 +752,7 @@ export function useSync(uid, email) {
   // state/cache exactly as before. Returns { blocked: true } if the
   // drop-guard rejected the write (nothing was applied), otherwise
   // { blocked: false, nextPayload }.
-  const applyPayloadLocally = (updatedPayload) => {
+  const applyPayloadLocally = (updatedPayload, { expectedRemovals = [] } = {}) => {
     // Track if savePayload fires before the first RTDB response — used in onValue
     // to distinguish a fake-fresh timestamp (from a premature mount effect) from a
     // legitimate unsaved edit (app killed before the last debounce flushed).
@@ -767,7 +767,7 @@ export function useSync(uid, email) {
     // active (non-deleted) task count by 3 or more. This catches stale-cache
     // overwrites that slipped past earlier defenses. User-triggered one-at-a-time
     // deletes never trigger this (they only drop by 1).
-    if (payloadRef.current?.tasks && isTaskCountDropSuspicious(nextPayload.tasks, payloadRef.current.tasks)) {
+    if (payloadRef.current?.tasks && isTaskCountDropSuspicious(nextPayload.tasks, payloadRef.current.tasks, 3, expectedRemovals)) {
       const currentActive = payloadRef.current.tasks.filter(t => !t.isDeleted).length;
       const nextActive = nextPayload.tasks.filter(t => !t.isDeleted).length;
       const nextUuids = new Set(nextPayload.tasks.map(t => t.uuid).filter(Boolean));
@@ -884,9 +884,9 @@ export function useSync(uid, email) {
   // (possibly debounce-coalesced) write actually reaches RTDB, or rejects if
   // the drop-guard blocked it or the write ultimately failed after retries.
   // Never call this AND savePayload for the same logical action — that would
-  // duplicate the write.
-  const savePayloadAsync = (updatedPayload) => {
-    const result = applyPayloadLocally(updatedPayload);
+  // duplicate the write. `options.expectedRemovals`: see isTaskCountDropSuspicious.
+  const savePayloadAsync = (updatedPayload, options) => {
+    const result = applyPayloadLocally(updatedPayload, options);
     if (result.blocked) {
       return Promise.reject(new Error("savePayloadAsync: write blocked by drop-guard"));
     }

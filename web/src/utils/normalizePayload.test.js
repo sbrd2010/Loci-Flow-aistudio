@@ -755,6 +755,18 @@ describe("isTaskCountDropSuspicious", () => {
   const active = (n) => Array.from({ length: n }, (_, i) => ({ uuid: `t${i}`, isDeleted: false }));
   const deleted = (n) => Array.from({ length: n }, (_, i) => ({ uuid: `d${i}`, isDeleted: true }));
 
+  it("lets a deliberate removal of named tasks through, and still guards the rest", () => {
+    // Undo of a split into four: the original comes back, the four go.
+    const current = [...active(10), { uuid: "orig", isDeleted: true }];
+    const made = ["t2", "t3", "t4", "t5"];
+    const next = [...current.map(t => made.includes(t.uuid) ? { ...t, isDeleted: true } : t.uuid === "orig" ? { ...t, isDeleted: false } : t)];
+    expect(isTaskCountDropSuspicious(next, current)).toBe(true);
+    expect(isTaskCountDropSuspicious(next, current, 3, made)).toBe(false);
+    // Anything else lost alongside them is still caught.
+    const alsoLost = next.map(t => ["t0", "t1", "t6", "orig"].includes(t.uuid) ? { ...t, isDeleted: true } : t);
+    expect(isTaskCountDropSuspicious(alsoLost, current, 3, made)).toBe(true);
+  });
+
   it("returns false when task count stays the same", () => {
     expect(isTaskCountDropSuspicious(active(5), active(5))).toBe(false);
   });

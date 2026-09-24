@@ -193,6 +193,14 @@ async function unpinFromList(page) {
   await page.getByText("Unpin from Focus").click();
 }
 
+// The task editor, for the wall's one thing: its NOW row's menu → Edit. (The
+// wall's "Split it" opens Split a task now, 45d.)
+async function editWallTask(page) {
+  const now = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { has: page.locator(".task-tag.is-now") });
+  await now.locator(".task-row-top").click();
+  await now.getByTestId("task-menu-edit").click();
+}
+
 async function emptyTheWall(page) {
   await page.addInitScript(() => {
     try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
@@ -351,8 +359,8 @@ test("mobile reliability: editing a wall task keeps its no-estimate, no-subtask 
   // No first step to begin with.
   await expect(page.locator(".wall-first-step")).toHaveCount(0);
 
-  // Open the editor from the wall and change ONLY the title.
-  await page.locator(".wall-action", { hasText: "Split it" }).click();
+  // Open the editor for the wall's task and change ONLY the title.
+  await editWallTask(page);
   await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
   await page.getByTestId("add-task-title").fill("Draft the abstract properly");
   await page.getByTestId("add-task-submit").click();
@@ -389,7 +397,7 @@ test("mobile reliability: an estimate can still be chosen for a wall task", asyn
   await page.locator(".wall-commit-field").press("Enter");
   await expect(page.locator(".wall-title")).toContainText("Size this one properly", { timeout: 8_000 });
 
-  await page.locator(".wall-action", { hasText: "Split it" }).click();
+  await editWallTask(page);
   await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
   await page.getByRole("button", { name: "Other", exact: true }).click();
   await page.getByLabel("Minutes").selectOption("45");
@@ -426,7 +434,9 @@ test("laptop: D marks the commitment done", async ({ page }) => {
 test("laptop: S opens the commitment to split it", async ({ page }) => {
   await enterLaptop(page);
   await page.keyboard.press("s");
-  await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("dialog", { name: "Split a task" })).toBeVisible({ timeout: 5_000 });
+  // On a laptop it is a 520px dialog.
+  expect(Math.round((await page.locator(".split-card").boundingBox()).width)).toBe(520);
 });
 
 test("laptop: the wall's keys stay quiet while typing", async ({ page }) => {
@@ -442,6 +452,7 @@ test("laptop: the wall's keys stay quiet while typing", async ({ page }) => {
   await expect(page.locator("#typing-probe")).toHaveValue("d s ");
   await expect(page.locator(".wall-done-line")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Edit task" })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Split a task" })).toHaveCount(0);
   await expect(page.locator(".focus-mode-overlay")).toHaveCount(0);
 });
 
@@ -1023,4 +1034,112 @@ test("mobile reliability: canceling a sheet drag does not change its height", as
   await expect(grabber).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator(".tasks-section")).toBeVisible();
   expect(await page.locator(".tasks-section").evaluate(el => el.style.transform)).toBe("");
+});
+
+// Split a task (45d): the wall's "Split it" opens it for the one thing.
+test("Split it: steps from the task's own sub-steps; Split replaces it, the pin moves to step 1, Undo brings it back", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  const original = (await page.locator(".wall-title").innerText()).trim();
+  await page.locator(".today-list-hide").click();
+  await page.locator(".wall-action", { hasText: "Split it" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Split a task" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator(".split-kicker")).toHaveText(/^SPLITTING · \d+M · P\d$/);
+  // The demo task has two open sub-steps: Loci starts from those.
+  await expect(dialog.locator(".split-lede")).toContainText("Loci suggests two steps of 45 minutes or less");
+  await expect(dialog.locator(".split-step")).toHaveCount(2);
+
+  await dialog.getByRole("button", { name: "Add a step" }).click();
+  await dialog.getByLabel("Step 3", { exact: true }).fill("Send it before lunch");
+  await dialog.getByLabel("Step 3 length").selectOption("10");
+  // The lede counts what Loci suggested, not the rows after an edit.
+  await expect(dialog.locator(".split-lede")).toContainText("Loci suggests two steps");
+  await expect(dialog.locator(".split-total-figure")).toContainText(/ of /);
+  await dialog.getByRole("button", { name: "Split into 3 tasks" }).click();
+
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: `Split into 3 tasks: ${original}` })).toBeVisible();
+  // The first step is now the one thing; the original is gone.
+  await expect(page.locator(".wall-title")).not.toHaveText(original);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(".wall-title")).toHaveText(original);
+});
+
+test("Split it with no sub-steps and no AI key: write the steps; two are needed; Escape closes", async ({ page }) => {
+  await emptyTheWall(page);
+  await page.locator(".wall-commit-field").fill("Prepare the Brightlab slides");
+  await page.locator(".wall-commit-field").press("Enter");
+  await expect(page.locator(".wall-title")).toContainText("Prepare the Brightlab slides", { timeout: 8_000 });
+  await page.locator(".today-list-hide").click();
+  await page.locator(".wall-action", { hasText: "Split it" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Split a task" });
+  await expect(dialog.locator(".split-lede")).toHaveText("Break it into steps of 45 minutes or less. Reorder or remove any.");
+  const go = dialog.locator(".add-submit");
+  await expect(go).toBeDisabled();
+  await expect(go).toHaveText("Write at least two steps");
+  await dialog.getByLabel("Step 1", { exact: true }).fill("Collect the latest figures");
+  await dialog.getByLabel("Step 2", { exact: true }).fill("Draft slides 1–8");
+  await expect(go).toBeEnabled();
+  await expect(go).toHaveText("Split into 2 tasks");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  // Nothing changed.
+  await expect(page.locator(".wall-title")).toContainText("Prepare the Brightlab slides");
+});
+
+// Codex review of #399. The sheet takes focus when it opens, so Escape and
+// Tab work at once, and gives it back when it closes.
+test("Split a task takes focus on open and gives it back on close", async ({ page }) => {
+  await emptyTheWall(page);
+  await page.locator(".wall-commit-field").fill("Prepare the Brightlab slides");
+  await page.locator(".wall-commit-field").press("Enter");
+  await expect(page.locator(".wall-title")).toContainText("Prepare the Brightlab slides", { timeout: 8_000 });
+  await page.locator(".today-list-hide").click();
+  const opener = page.locator(".wall-action", { hasText: "Split it" });
+  await opener.click();
+  const dialog = page.getByRole("dialog", { name: "Split a task" });
+  await expect(dialog.locator(":focus")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
+// The AI is asked for two to four steps. Anything else falls back to writing
+// them by hand; and while it works the rows are locked, so its answer never
+// overwrites what was typed.
+test("Split a task: rows are locked while the AI works, and an answer outside two to four is not used", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); } catch { /* private mode */ }
+  });
+  let release;
+  const held = new Promise(r => { release = r; });
+  await page.route("https://api.groq.com/**", async (route) => {
+    await held;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(
+        ["One", "Two", "Three", "Four", "Five"].map(text => ({ text: `${text} part`, minutes: 15 }))
+      ) } }] }),
+    });
+  });
+  await emptyTheWall(page);
+  await page.locator(".wall-commit-field").fill("Prepare the Brightlab slides");
+  await page.locator(".wall-commit-field").press("Enter");
+  await expect(page.locator(".wall-title")).toContainText("Prepare the Brightlab slides", { timeout: 8_000 });
+  await page.locator(".today-list-hide").click();
+  await page.locator(".wall-action", { hasText: "Split it" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Split a task" });
+  await expect(dialog.locator(".split-lede")).toHaveText("Finding steps of 45 minutes or less…");
+  await expect(dialog.getByLabel("Step 1", { exact: true })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "Add a step" })).toBeDisabled();
+  release();
+
+  await expect(dialog.locator(".split-lede")).toHaveText("Break it into steps of 45 minutes or less. Reorder or remove any.");
+  await expect(dialog.locator(".split-step")).toHaveCount(2);
+  await expect(dialog.getByLabel("Step 1", { exact: true })).toBeEnabled();
+  await expect(dialog.getByLabel("Step 1", { exact: true })).toHaveValue("");
 });

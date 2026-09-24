@@ -214,10 +214,15 @@ export function prepareBrainDumpForSave(updatedPayload = {}, currentPayload = {}
 // and parked tasks are counted as active - only `isDeleted: true` is excluded.
 // The guard is skipped when the current active count is below `threshold` itself
 // (e.g. fresh user, demo mode) so it never fires on an empty or near-empty state.
-export function isTaskCountDropSuspicious(nextTasks, currentTasks, threshold = 3) {
-  const currentActive = arrayOrEmpty(currentTasks).filter(t => !t.isDeleted).length;
+// `expectedRemovals` names tasks a deliberate action removes (undoing a split
+// into four): they are left out of both counts, so every other task is still
+// guarded exactly as before.
+export function isTaskCountDropSuspicious(nextTasks, currentTasks, threshold = 3, expectedRemovals = []) {
+  const expected = new Set(expectedRemovals);
+  const counts = t => !t.isDeleted && !expected.has(t.uuid);
+  const currentActive = arrayOrEmpty(currentTasks).filter(counts).length;
   if (currentActive < threshold) return false;
-  const nextActive = arrayOrEmpty(nextTasks).filter(t => !t.isDeleted).length;
+  const nextActive = arrayOrEmpty(nextTasks).filter(counts).length;
   return (currentActive - nextActive) >= threshold;
 }
 
