@@ -1032,34 +1032,6 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
             });
         }
 
-        // Apply the XP change as a DELTA onto the latest known totalXp (via
-        // saveConfigPatch's function form) rather than writing the absolute
-        // value computed against configRef.current — a concurrent XP change
-        // from another device wouldn't be reflected in configRef.current, and
-        // writing that stale absolute value would silently overwrite the
-        // other device's gain. When XP changed, fold configPatch/memoryPatch
-        // into this same saveConfigPatch call so all of them land as one set
-        // of nested config/<key> writes — saveSubPaths above never touches
-        // "config", so the two calls can't clobber each other regardless of
-        // network ordering.
-        const xpDelta = (Number(updatedPayload.config.totalXp) || 0) - (Number(configRef.current.totalXp) || 0);
-        if (xpDelta !== 0) {
-          // saveConfigPatch's updater runs asynchronously (on the next render),
-          // after this synchronous block finishes — so it must close over
-          // copies of configPatch/memoryPatch, not the `let` bindings below,
-          // which are reset to null immediately after this call.
-          const xpConfigPatch = configPatch;
-          const xpMemoryPatch = memoryPatch;
-          saveConfigPatch((latestConfig) => ({
-            ...xpConfigPatch,
-            ...clearRescueHandoffIfUnchanged(latestConfig),
-            totalXp: (Number(latestConfig.totalXp) || 0) + xpDelta,
-            ...(xpMemoryPatch ? { coachMemory: xpMemoryPatch(latestConfig) } : {}),
-          }));
-          configPatch = null;
-          memoryPatch = null;
-        }
-
         // Assembles success/failure narration from the action results — see
         // buildActionReplyText for how blocked-but-stale tags are silently
         // dropped vs. surfaced as a clarifying question.

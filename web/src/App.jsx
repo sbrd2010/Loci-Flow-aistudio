@@ -489,8 +489,8 @@ export default function App() {
       // Read config from payloadRef.current (live), not the `payload` this
       // effect closed over — payload?.config is deliberately NOT a
       // dependency below, for the same reason payload?.tasks isn't (see
-      // note below): plenty of task actions (e.g. completing a task bumps
-      // config.totalXp) change `config` too, which would re-trigger this
+      // note below): plenty of task actions (e.g. changing a setting mid-day)
+      // change `config` too, which would re-trigger this
       // effect just as readily as a direct task edit did before.
       const currentConfig = payloadRef.current?.config || payload.config;
       const windows = getFocusWindows(currentConfig);
@@ -805,7 +805,7 @@ export default function App() {
     }
   };
 
-  // Global Focus completion prompt: "Done! +120 XP" — completes the task and
+  // Global Focus completion prompt: "Finish task" — completes the task and
   // ends the session, regardless of which tab the user is on.
   // ── The day's commitment, recorded and reconciled in one place ────────
   //
@@ -946,12 +946,9 @@ export default function App() {
     focusTimer.setFocusSessionActive(false);
   };
 
-  // Global Focus completion prompt: "+50 XP, keep going" — awards XP and opens
-  // the duration picker so the same task's timer can be restarted from any tab.
+  // Global Focus completion prompt: "Keep going" — opens the duration picker
+  // so the same task's timer can be restarted from any tab.
   const handleFocusSessionKeepGoing = () => {
-    // Function form: an increment must be computed against the latest known
-    // config, not this render's snapshot, or two quick awards can collide.
-    saveConfigPatch((latestConfig) => ({ totalXp: (Number(latestConfig.totalXp) || 0) + 50 }));
     focusTimer.dismissSessionComplete();
     focusTimer.setShowExtendPicker(true);
   };
@@ -1492,8 +1489,8 @@ export default function App() {
       }) && (
         <ConfirmDialog
           message={`Focus block complete!\n\nYou've completed your deep focus block for:\n"${focusTimer.activeTask.title}"\n\nWould you like to mark this task as finished, or keep going?`}
-          confirmLabel="Finish Task (+120 XP)"
-          cancelLabel="Keep Going (+50 XP)"
+          confirmLabel="Finish task"
+          cancelLabel="Keep going"
           onConfirm={handleFocusSessionDone}
           onCancel={handleFocusSessionKeepGoing}
         />

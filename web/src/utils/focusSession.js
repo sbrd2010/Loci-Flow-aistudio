@@ -75,7 +75,7 @@ export function extendMinutesForSession(plannedSeconds) {
   return Math.min(MAX_EXTEND_MINUTES, Math.max(1, mins));
 }
 
-// Whether the global Focus completion prompt ("Done! +120 XP" / "+50 XP, keep
+// Whether the global Focus completion prompt ("Finish task" / "Keep
 // going") should be shown. Independent of activeTab so it appears on any page
 // — EXCEPT the Focus session itself, which now carries K4's hold inline.
 //
@@ -90,7 +90,7 @@ export function shouldShowFocusCompletionPrompt({ sessionCompletePending, hasAct
 }
 
 // Build the updated payload for completing the focused task from the global
-// Focus completion prompt's "Done! +120 XP" choice — mirrors the XP and
+// Focus completion prompt's "Finish task" choice — mirrors the
 // contribution rules of the existing in-Today completion flow.
 export function buildFocusCompletionPayload(payload, task, todayDateStr, date = new Date()) {
   const { tasks = [], config = {}, contributions = [] } = payload;
@@ -106,7 +106,6 @@ export function buildFocusCompletionPayload(payload, task, todayDateStr, date = 
   return {
     ...payload,
     tasks: buildToggleCompletedTasks(tasks, task.uuid, true, lociTodayStr),
-    config: { ...config, totalXp: (Number(config.totalXp) || 0) + 120, lastUpdated: Date.now() },
     contributions: nextContributions,
   };
 }
