@@ -364,7 +364,8 @@ test("mobile reliability: Escape returns focus to the drag-anywhere menu trigger
   await page.getByRole("button", { name: "Save Profile" }).click();
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
 
-  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first();
+  // The pinned NOW row is not draggable, so pick a row with the drag-mode kebab.
+  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:has(.task-row-kebab-btn)").first();
   const trigger = row.getByRole("button", { name: "Task options" });
   await trigger.focus();
   await page.keyboard.press("Enter");
