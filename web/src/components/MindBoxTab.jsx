@@ -181,9 +181,6 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
 
   useEffect(() => {
     if (ritualDone) {
-      // Function form: the increment is computed against the latest known
-      // config at save time, so it can't be based on a stale render snapshot.
-      saveConfigPatch((latestConfig) => ({ totalXp: (Number(latestConfig.totalXp) || 0) + 80 }));
       setRitualDone(false);
       setRitualSuccess(true);
       setTimeout(() => setRitualSuccess(false), 3500);
@@ -563,7 +560,7 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
     <>
       {ritualSuccess && (
         <div style={{ position: "fixed", top: "80px", left: "50%", transform: "translateX(-50%)", background: "var(--success)", color: "#fff", padding: "12px 24px", borderRadius: "20px", fontWeight: "700", fontSize: "14px", zIndex: 300, boxShadow: "0 4px 20px rgba(0,0,0,0.3)", whiteSpace: "nowrap" }}>
-          Morning Ritual complete! +80 XP
+          Morning Ritual complete!
         </div>
       )}
 
@@ -816,12 +813,6 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
 
       {/* ── Sub-view: 7-Day Progress */}
       {toolPanel === "progress" && (() => {
-        const currentXp = Number(config.totalXp) || 0;
-        const xpInLevel = currentXp % 200;
-        const levelNum = Math.floor(currentXp / 200) + 1;
-        const levelProgress = (xpInLevel / 200) * 100;
-        const levelTitles = ["Focus Seed", "Inertia Crusher", "Momentum Builder", "Flow Finder", "Deep Worker", "Focus Master"];
-        const levelTitle = levelTitles[Math.min(levelNum - 1, levelTitles.length - 1)];
         const totalDone = tasks.filter(t => !t.isDeleted && t.isCompleted).length;
         const activeDays = bentoDays.filter(d => d.count > 0).length;
         return (
@@ -865,9 +856,8 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
             </div>
 
             {/* Stats row */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "16px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
               {[
-                { label: "Total XP", value: currentXp, color: "var(--accent)" },
                 { label: "Tasks Done", value: totalDone, color: "var(--success)" },
                 { label: "Days Active", value: activeDays, color: "var(--text-primary)" }
               ].map(stat => (
@@ -878,22 +868,6 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
               ))}
             </div>
 
-            {/* XP Level card */}
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "16px 18px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "8px" }}>
-                <div>
-                  <span style={{ fontSize: "13px", fontWeight: "800", color: "var(--text-primary)" }}>{levelTitle}</span>
-                  <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--accent)", marginLeft: "6px" }}>L{levelNum}</span>
-                </div>
-                <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{xpInLevel}/200 XP</span>
-              </div>
-              <div className="progress-track" style={{ height: "7px", marginBottom: "12px" }}>
-                <div className="progress-bar" style={{ width: `${levelProgress}%` }} />
-              </div>
-              <div style={{ fontSize: "11.5px", color: "var(--text-muted)", lineHeight: "1.55" }}>
-                <strong style={{ color: "var(--text-secondary)" }}>How you earn XP:</strong> Complete a task (+20 XP) · Complete a Roadmap task (+100 XP) · Finish Morning Ritual (+80 XP). Levels reset every 200 XP — your total keeps growing.
-              </div>
-            </div>
           </>
         );
       })()}
@@ -927,7 +901,7 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ritualActive ? "20px" : "16px" }}>
               <div>
                 <p style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: "0 0 3px" }}>Start your day with intention</p>
-                <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>6 steps · ~7 min · +80 XP</p>
+                <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>6 steps · ~7 min</p>
               </div>
               {!ritualActive ? (
                 <button className="btn" onClick={handleBeginRitual} style={{ padding: "8px 22px", fontSize: "13px", fontWeight: "700", flexShrink: 0 }}>Begin</button>
@@ -1041,7 +1015,7 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
               <span className="mindbox-card-icon mindbox-card-icon--warning"><IconSun /></span>
               <span className="mindbox-card-body">
                 <span className="mindbox-card-title">Morning Ritual</span>
-                <span className="mindbox-card-sub">7 min · +80 XP</span>
+                <span className="mindbox-card-sub">7 min</span>
               </span>
               <span className="mindbox-card-chevron"><IconChevronRight /></span>
             </button>
