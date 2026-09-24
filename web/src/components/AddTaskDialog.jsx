@@ -1,13 +1,15 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { safeUUID } from "../utils/uuid";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
 import { notifPermissionState, requestNotifPermission as nativeRequestPermission } from "../utils/nativeNotifs";
-import { applyAiRewriteToTask, CATEGORY_ICONS } from "../utils/taskOps";
+import { applyAiRewriteToTask } from "../utils/taskOps";
 import { getFocusWindows } from "../utils/focusWindows";
 import { frontsFromConfig, sortFronts } from "../utils/fronts";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
+import { IconCheck, IconChevronRight, IconPencil, IconX } from "./ui/icons";
+import "../styles/addTask.css";
 
 function defaultReminderDateTime() {
   const d = new Date();
@@ -29,7 +31,7 @@ function parseManualSubSteps(raw) {
 // the save path has to tell "the user chose 25" from "nobody chose anything".
 const DEFAULT_ESTIMATE_MINUTES = 25;
 
-export default function AddTaskDialog({ email, payload, savePayload, savePayloadAsync, userProfile, defaultHorizon, onClose, editTask, uid, writeActivityEvents }) {
+export default function AddTaskDialog({ email, payload, savePayload, savePayloadAsync, userProfile, defaultHorizon, openedFrom = null, onClose, editTask, uid, writeActivityEvents }) {
   const windows = getFocusWindows(payload.config || {});
   const isEditMode = !!editTask;
   const [title, setTitle] = useState(editTask?.title || "");
@@ -195,23 +197,26 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     setAiSuggestion(null);
   };
 
+  // 45a/45k: five horizons and three priorities. Work and P4 still exist in
+  // the data; they are offered only to a task that already has them, so
+  // editing it never silently changes them.
   const horizons = [
     { key: "today", label: "Today" },
-    { key: "week", label: "This Week" },
+    { key: "week", label: "Week" },
     { key: "month", label: "Month" },
     { key: "quarter", label: "Quarter" },
-    { key: "halfyear", label: "6 Months" },
-    { key: "office", label: "Work" }
+    { key: "halfyear", label: "6 mo" },
+    ...(editTask?.horizonLevel === "office" || defaultHorizon === "office" ? [{ key: "office", label: "Work" }] : []),
   ];
-
-  const priorities = ["P1", "P2", "P3", "P4"];
+  const priorities = ["P1", "P2", "P3", ...(editTask?.priority === "P4" ? ["P4"] : [])];
   const categories = ["Career", "Health", "Work", "Personal"];
   const parsedSubStepDraft = parseManualSubSteps(subStepDraft);
   const hasSubStepDraft = parsedSubStepDraft.length > 0;
-  const estimates = [
-    { min: 15, label: "15m" }, { min: 25, label: "25m" }, { min: 45, label: "45m" },
-    { min: 60, label: "1h" }, { min: 120, label: "2h" }, { min: 240, label: "4h" }, { min: 360, label: "6h" }
-  ];
+  // Time: 15m · 30m · 1h · 2h · Other (45a). Other holds the rest.
+  const timeChips = [{ min: 15, label: "15m" }, { min: 30, label: "30m" }, { min: 60, label: "1h" }, { min: 120, label: "2h" }];
+  const otherTimes = [10, 20, 25, 45, 90, 180, 240, 360];
+  const onChip = timeChips.some(c => c.min === Number(estimateMinutes));
+  const [otherOpen, setOtherOpen] = useState(() => isEditMode && !timeChips.some(c => c.min === Number(editTask?.timeEstimateMinutes || DEFAULT_ESTIMATE_MINUTES)) && Number(editTask?.timeEstimateMinutes) > 0);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -228,7 +233,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     // Evening Guard window block logic
     const now = new Date();
     if (isEveningGuardBlocked(payload.config, now)) {
-      setFormError("🌙 Evening Guard is active — no new tasks at or after 8 PM. Go rest!");
+      setFormError("Evening Guard is on: no new tasks at or after 8 PM. Rest now.");
       return;
     }
     setFormError("");
@@ -314,7 +319,8 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       userId: email,
       uuid: safeUUID(),
       title: title.trim(),
-      concreteStep: concreteStep.trim() || "Do first tiny step",
+      // Y5: no "Do first tiny step" placeholder; a first step shows only if set.
+      ...(concreteStep.trim() ? { concreteStep: concreteStep.trim() } : {}),
       horizonLevel,
       priority,
       category,
@@ -347,254 +353,233 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     setTimeout(onClose, 900);
   };
 
+  // Where + was tapped sets the horizon (45a): one tinted line says so, and
+  // the Horizon + Priority block wears a 2px ring for about 1.5s on open.
+  const HORIZON_NAMES = { today: "Today", week: "This week", month: "This month", quarter: "This quarter", halfyear: "6 months", office: "Work" };
+  const horizonName = HORIZON_NAMES[horizonLevel] || "Today";
+  const [ringOn, setRingOn] = useState(!isEditMode);
+  useEffect(() => {
+    if (!ringOn) return undefined;
+    const t = setTimeout(() => setRingOn(false), 1500);
+    return () => clearTimeout(t);
+  }, [ringOn]);
+
+  // A dialog: Escape closes it, Tab stays inside it, ⌘↵ / Ctrl↵ submits.
+  const cardRef = useRef(null);
+  const formRef = useRef(null);
+  const onKeyDown = (e) => {
+    if (e.key === "Escape") { e.stopPropagation(); onClose(); return; }
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); formRef.current?.requestSubmit(); return; }
+    if (e.key !== "Tab") return;
+    const items = [...(cardRef.current?.querySelectorAll('button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])') || [])];
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+
+  const chip = (selected) => `add-chip${selected ? " is-selected" : ""}`;
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2 className="modal-title">{isEditMode ? "Edit Task" : "Add Task"}</h2>
-          <button className="close-btn" onClick={onClose}>✕</button>
+    <div className="add-overlay" onClick={onClose}>
+      <div
+        ref={cardRef}
+        className="add-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-task-heading"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={onKeyDown}
+      >
+        <span className="add-grabber" aria-hidden="true" />
+        <div className="add-head">
+          <h2 id="add-task-heading" className="add-heading">{isEditMode ? "Edit task" : "New task"}</h2>
+          <button type="button" className="add-close" onClick={onClose} aria-label="Close"><IconX size={20} /></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="modal-body">
-          {/* Evening Guard upfront warning */}
+        <form ref={formRef} onSubmit={handleSubmit} className="add-body">
           {isEveningGuardBlocked(payload.config) && (
-            <div style={{ background: "rgba(245,158,11,0.12)", border: "1px solid var(--warning)", borderRadius: "var(--radius-sm)", padding: "10px 12px", fontSize: "12.5px", color: "var(--warning)", fontWeight: "600", lineHeight: "1.5", marginBottom: "4px" }}>
-              🌙 Evening Guard is active. Adding tasks after 8 PM is blocked — go rest!
+            <p className="add-warning">Evening Guard is on: adding tasks after 8 PM is blocked. Rest now.</p>
+          )}
+
+          <textarea
+            className="add-title"
+            data-testid="add-task-title"
+            aria-label="Task"
+            placeholder="What do you want to do?"
+            rows={2}
+            maxLength={1000}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+            autoFocus
+          />
+          {hasAnyKey && (
+            <button type="button" className="add-link" onClick={handleAiSuggest} disabled={aiLoading}>
+              {aiLoading ? "Thinking…" : "Ask AI to improve this"}
+            </button>
+          )}
+          {aiError && <p className="add-error-line">{aiError}</p>}
+          {aiSuggestion && (
+            <div className="add-suggestion">
+              <p className="add-kicker">AI suggestion · review before applying</p>
+              <p className="add-suggestion-title">{aiSuggestion.title}</p>
+              {aiSuggestion.microStep && <p className="add-suggestion-line">First step: {aiSuggestion.microStep}</p>}
+              {aiSuggestion.subSteps.length > 0 && (
+                <p className="add-suggestion-line">{aiSuggestion.subSteps.length} key point{aiSuggestion.subSteps.length > 1 ? "s" : ""} saved as sub-steps</p>
+              )}
+              <div className="add-suggestion-actions">
+                <button type="button" className="add-btn-filled" onClick={handleApplyAISuggestion}>Apply</button>
+                <button type="button" className="add-btn-outline" onClick={() => setAiSuggestion(null)}>Keep my text</button>
+              </div>
             </div>
           )}
-          {/* Title + Ask AI */}
-          <div className="form-group">
-            <label className="form-label">WHAT DO YOU WANT TO DO?</label>
-            <textarea
-              className="text-input"
-              data-testid="add-task-title"
-              placeholder="e.g. Write cover letter draft"
-              rows={3}
-              maxLength={1000}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              autoFocus
-            />
-            {hasAnyKey && (
-              <button
-                type="button"
-                onClick={handleAiSuggest}
-                disabled={aiLoading}
-                style={{
-                  marginTop: "8px", width: "100%", padding: "9px",
-                  background: "var(--accent-ring)", color: "var(--accent)",
-                  border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)",
-                  fontSize: "13px", fontWeight: "700", cursor: "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: "6px"
-                }}
-              >
-                {aiLoading ? "✨ Thinking…" : "✨ Ask AI to improve this task"}
-              </button>
-            )}
-            {aiError && (
-              <p style={{ fontSize: "11.5px", color: "var(--danger)", marginTop: "4px" }}>{aiError}</p>
-            )}
-            {aiSuggestion && (
-              <div style={{ background: "var(--accent-ring)", border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)", padding: "10px 12px", marginTop: "8px" }}>
-                <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>✨ AI Suggestion — review before applying</div>
-                <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "3px" }}>{aiSuggestion.title}</div>
-                {aiSuggestion.microStep && <div style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "3px" }}>First step: {aiSuggestion.microStep}</div>}
-                {aiSuggestion.subSteps.length > 0 && (
-                  <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "6px" }}>{aiSuggestion.subSteps.length} key point{aiSuggestion.subSteps.length > 1 ? "s" : ""} saved as sub-steps</div>
-                )}
-                <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-                  <button type="button" onClick={handleApplyAISuggestion} style={{ flex: 1, padding: "8px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: "var(--radius-sm)", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>Apply</button>
-                  <button type="button" onClick={() => setAiSuggestion(null)} style={{ flex: 1, padding: "8px", background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>Keep my text</button>
-                </div>
-              </div>
-            )}
-          </div>
 
-          {/* Horizon Level */}
-          <div className="form-group">
-            <label className="form-label">HORIZON</label>
-            <div className="horizons-grid" style={{ gap: "6px" }}>
-              {horizons.map((h) => (
-                <button
-                  key={h.key}
-                  type="button"
-                  className={`selector-btn ${horizonLevel === h.key ? "selected" : ""}`}
-                  style={{ padding: "6px 4px", fontSize: "11.5px" }}
-                  onClick={() => setHorizonLevel(h.key)}
-                >
-                  {h.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          {!isEditMode && openedFrom && (
+            <p className="add-note">
+              Adding to <strong>{HORIZON_NAMES[defaultHorizon] || horizonName}</strong> because you opened it from {openedFrom}. Change below.
+            </p>
+          )}
 
-          {/* Front — only when there is at least one to join. A native select
-              rather than the button grid the fields above use: there can be up
-              to FRONT_LIMIT fronts with long names, which a grid cannot hold. */}
-          {fronts.length > 0 && (
-            <div className="form-group">
-              <label className="form-label" htmlFor="task-front">FRONT</label>
-              <select
-                id="task-front"
-                className="task-front-select"
-                value={frontId}
-                onChange={e => setFrontId(e.target.value)}
-              >
-                <option value="">Not on a front</option>
-                {fronts.map(f => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
+          <div className={`add-block${ringOn ? " is-ringed" : ""}`}>
+            <div className="add-field" role="group" aria-labelledby="add-horizon-label">
+              <span id="add-horizon-label" className="add-label">Horizon</span>
+              <div className="add-chips">
+                {horizons.map((h) => (
+                  <button key={h.key} type="button" className={chip(horizonLevel === h.key)} aria-pressed={horizonLevel === h.key} onClick={() => setHorizonLevel(h.key)}>
+                    {h.label}
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
-          )}
-
-          {/* Priority */}
-          <div className="form-group">
-            <label className="form-label">PRIORITY</label>
-            <div style={{ display: "flex", gap: "6px" }}>
-              {priorities.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  className={`priority-selector-btn ${priority === p ? `selected ${p.toLowerCase()}` : ""}`}
-                  style={{ padding: "7px 4px", fontSize: "12px" }}
-                  onClick={() => setPriority(p)}
-                >
-                  {p}
-                </button>
-              ))}
+            <div className="add-field" role="group" aria-labelledby="add-priority-label">
+              <span id="add-priority-label" className="add-label">Priority</span>
+              <div className="add-chips">
+                {priorities.map((p) => (
+                  <button key={p} type="button" className={chip(priority === p)} aria-pressed={priority === p} aria-label={`Priority ${p.slice(1)}`} onClick={() => setPriority(p)}>
+                    {p}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Reminder picker */}
-          <div style={{ marginBottom: "4px" }}>
-            <button
-              type="button"
-              onClick={async () => {
-                if (!reminderOn && notifPermissionState() === "default") {
-                  await nativeRequestPermission();
-                }
-                setReminderOn(o => !o);
-              }}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                width: "100%", padding: "10px 14px",
-                background: reminderOn ? "var(--accent-ring, rgba(99,102,241,0.08))" : "var(--bg-secondary)",
-                border: reminderOn ? "1.5px solid var(--accent)" : "1.5px solid var(--border)",
-                borderRadius: "8px", cursor: "pointer", transition: "all 0.15s"
-              }}
-            >
-              <span style={{ fontSize: "13px", fontWeight: "700", color: reminderOn ? "var(--accent)" : "var(--text-secondary)" }}>
-                🔔 {reminderOn ? `Remind me: ${formatReminderLabel(new Date(`${reminderDate}T${reminderTime}`).getTime())}` : "Set a reminder"}
-              </span>
-              <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{reminderOn ? "✕ remove" : "+"}</span>
-            </button>
-            {reminderOn && (
-              <div style={{ display: "flex", gap: "8px", marginTop: "8px", alignItems: "center" }}>
-                <input
-                  type="date"
-                  className="text-input"
-                  value={reminderDate}
-                  min={new Date().toISOString().slice(0, 10)}
-                  onChange={e => setReminderDate(e.target.value)}
-                  style={{ flex: 1.4 }}
-                />
-                <input
-                  type="time"
-                  className="text-input"
-                  value={reminderTime}
-                  onChange={e => setReminderTime(e.target.value)}
-                  style={{ flex: 1 }}
-                />
-              </div>
+          <div className="add-field" role="group" aria-labelledby="add-time-label">
+            <span id="add-time-label" className="add-label">Time</span>
+            <div className="add-chips">
+              {timeChips.map((c) => (
+                <button
+                  key={c.min}
+                  type="button"
+                  className={chip(!otherOpen && Number(estimateMinutes) === c.min && (estimatePicked || isEditMode))}
+                  aria-pressed={!otherOpen && Number(estimateMinutes) === c.min && (estimatePicked || isEditMode)}
+                  onClick={() => { setEstimateMinutes(c.min); setEstimatePicked(true); setOtherOpen(false); }}
+                >
+                  {c.label}
+                </button>
+              ))}
+              <button type="button" className={chip(otherOpen)} aria-pressed={otherOpen} onClick={() => setOtherOpen(true)}>Other</button>
+            </div>
+            {otherOpen && (
+              <label className="add-other">
+                Minutes
+                <select
+                  value={onChip ? "" : Number(estimateMinutes)}
+                  onChange={(e) => { setEstimateMinutes(Number(e.target.value)); setEstimatePicked(true); }}
+                >
+                  {onChip && <option value="" disabled>Choose</option>}
+                  {otherTimes.map((m) => <option key={m} value={m}>{m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? `${m % 60}m` : ""}`}</option>)}
+                </select>
+              </label>
             )}
           </div>
 
-          {/* Advanced toggle — Category + Time Estimate */}
-          <div style={{ marginBottom: "4px" }}>
-            <button type="button" onClick={() => setAdvancedOpen(o => !o)}
-              style={{
-                background: "var(--bg-secondary)", border: "1.5px solid var(--border)",
-                color: "var(--text-secondary)", fontSize: "12.5px", fontWeight: "700",
-                cursor: "pointer", padding: "8px 14px", borderRadius: "8px",
-                display: "flex", alignItems: "center", gap: "6px", width: "100%"
-              }}>
-              {advancedOpen ? "▾" : "▸"} Advanced options
-            </button>
-          </div>
+          {fronts.length > 0 && (
+            <label className="add-row" htmlFor="task-front">
+              <span className="add-row-label">Front</span>
+              <select id="task-front" className="add-row-select" value={frontId} onChange={e => setFrontId(e.target.value)}>
+                <option value="">Not on a front</option>
+                {fronts.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+              <IconChevronRight size={16} />
+            </label>
+          )}
+
+          {/* What the design's sheet doesn't draw but the app already does —
+              first step (Focus shows it), reminder, category, sub-steps —
+              kept one tap away rather than dropped. */}
+          <button type="button" className="add-row add-more" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen(o => !o)}>
+            <span className="add-row-label">More details</span>
+            <span className="add-row-value">First step, reminder, steps</span>
+            <IconChevronRight size={16} />
+          </button>
           {advancedOpen && (
-            <>
-              <div className="form-group">
-                <label className="form-label">MICRO ACTION (FIRST TINY STEP)</label>
+            <div className="add-more-body">
+              <label className="add-field">
+                <span className="add-label">First step</span>
                 <input
                   type="text"
-                  className="text-input"
-                  placeholder="e.g. Open Google Doc and write greeting line"
+                  className="add-input"
+                  placeholder="The smallest start, e.g. open the doc"
                   value={concreteStep}
                   onChange={(e) => setConcreteStep(e.target.value)}
                 />
+              </label>
+
+              <div className="add-field">
+                <span className="add-label">Reminder</span>
+                <button
+                  type="button"
+                  className={chip(reminderOn)}
+                  aria-pressed={reminderOn}
+                  onClick={async () => {
+                    if (!reminderOn && notifPermissionState() === "default") await nativeRequestPermission();
+                    setReminderOn(o => !o);
+                  }}
+                >
+                  {reminderOn ? `Remind me: ${formatReminderLabel(new Date(`${reminderDate}T${reminderTime}`).getTime())}` : "Set a reminder"}
+                </button>
+                {reminderOn && (
+                  <div className="add-inline">
+                    <input type="date" className="add-input" aria-label="Reminder date" value={reminderDate} min={new Date().toISOString().slice(0, 10)} onChange={e => setReminderDate(e.target.value)} />
+                    <input type="time" className="add-input" aria-label="Reminder time" value={reminderTime} onChange={e => setReminderTime(e.target.value)} />
+                  </div>
+                )}
               </div>
-              <div className="form-group">
-                <label className="form-label">TIME ESTIMATE</label>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px" }}>
-                  {estimates.map((est) => (
-                    <button
-                      key={est.min}
-                      type="button"
-                      className={`selector-btn ${estimateMinutes === est.min ? "selected" : ""}`}
-                      style={{ padding: "6px 4px", fontSize: "11.5px" }}
-                      onClick={() => { setEstimateMinutes(est.min); setEstimatePicked(true); }}
-                    >
-                      {est.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="form-group">
-                <label className="form-label">CATEGORY</label>
-                <div className="btn-group" style={{ gap: "4px" }}>
+
+              <div className="add-field" role="group" aria-labelledby="add-category-label">
+                <span id="add-category-label" className="add-label">Category</span>
+                <div className="add-chips">
                   {categories.map((c) => (
-                    <button key={c} type="button"
-                      className={`selector-btn ${category === c ? "selected" : ""}`}
-                      style={{ padding: "6px 2px", fontSize: "11px", whiteSpace: "nowrap" }}
-                      onClick={() => setCategory(c)}>{CATEGORY_ICONS[c]} {c}</button>
+                    <button key={c} type="button" className={chip(category === c)} aria-pressed={category === c} onClick={() => setCategory(c)}>{c}</button>
                   ))}
                 </div>
               </div>
-              <div className="form-group">
-                <label className="form-label">SUB-STEPS</label>
+
+              <div className="add-field">
+                <span className="add-label">Sub-steps</span>
                 <textarea
-                  className="text-input"
+                  className="add-input"
                   data-testid="add-task-substeps-draft"
+                  aria-label="Sub-steps"
                   placeholder="One step per line — bullets, a/b/c, or 1/2/3 all work"
                   rows={3}
                   value={subStepDraft}
                   onChange={(e) => setSubStepDraft(e.target.value)}
                 />
-                <button
-                  type="button"
-                  data-testid="add-task-substeps-add"
-                  onClick={handleAddSubSteps}
-                  disabled={!hasSubStepDraft}
-                  style={{
-                    marginTop: "6px", padding: "7px 10px", borderRadius: "var(--radius-sm)",
-                    border: "1px solid var(--border)", background: "var(--bg-secondary)",
-                    color: "var(--text-secondary)", fontSize: "12px", fontWeight: "700",
-                    cursor: !hasSubStepDraft ? "not-allowed" : "pointer",
-                    opacity: !hasSubStepDraft ? 0.55 : 1
-                  }}
-                >
+                <button type="button" className="add-btn-outline add-btn-small" data-testid="add-task-substeps-add" onClick={handleAddSubSteps} disabled={!hasSubStepDraft}>
                   Add step{subStepDraft.includes("\n") ? "s" : ""}
                 </button>
                 {subSteps.length > 0 && (
-                  <div data-testid="add-task-substeps-list" style={{ display: "flex", flexDirection: "column", gap: "5px", marginTop: "8px" }}>
+                  <ul className="add-steps" data-testid="add-task-substeps-list">
                     {subSteps.map((s) => (
-                      <div key={s.id} style={{ fontSize: "12px", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "8px", padding: "5px 7px", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", background: "var(--bg-secondary)" }}>
+                      <li key={s.id} className="add-step">
                         {editingSubStepId === s.id ? (
                           <>
                             <input
                               type="text"
+                              className="add-input"
+                              aria-label={`Edit step ${s.text}`}
                               value={editingSubStepText}
                               onChange={(e) => setEditingSubStepText(e.target.value)}
                               onKeyDown={(e) => {
@@ -604,76 +589,63 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
                                   if (trimmed) setSubSteps(prev => prev.map(step => step.id === s.id ? { ...step, text: trimmed } : step));
                                   setEditingSubStepId(null);
                                 } else if (e.key === "Escape") {
+                                  e.stopPropagation();
                                   setEditingSubStepId(null);
                                 }
                               }}
                               autoFocus
-                              style={{ flex: 1, minWidth: 0, font: "inherit", color: "inherit", background: "var(--bg-primary)", border: "1px solid var(--accent)", borderRadius: "4px", padding: "3px 6px" }}
                             />
                             <button
                               type="button"
+                              className="add-step-btn"
                               aria-label={`Save step ${s.text}`}
                               onClick={() => {
                                 const trimmed = editingSubStepText.trim();
                                 if (trimmed) setSubSteps(prev => prev.map(step => step.id === s.id ? { ...step, text: trimmed } : step));
                                 setEditingSubStepId(null);
                               }}
-                              style={{ background: "none", border: "none", color: "var(--success)", cursor: "pointer", fontSize: "14px", lineHeight: 1, padding: "0 2px" }}
                             >
-                              ✓
+                              <IconCheck size={16} />
                             </button>
                           </>
                         ) : (
                           <>
-                            <span style={{ flex: 1, minWidth: 0 }}>{s.text}</span>
-                            <button
-                              type="button"
-                              aria-label={`Edit step ${s.text}`}
-                              onClick={() => { setEditingSubStepId(s.id); setEditingSubStepText(s.text); }}
-                              style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "12px", lineHeight: 1, padding: "0 2px" }}
-                            >
-                              <span style={{ display: "inline-block", transform: "scaleX(-1)" }}>✎</span>
+                            <span className="add-step-text">{s.text}</span>
+                            <button type="button" className="add-step-btn" aria-label={`Edit step ${s.text}`} onClick={() => { setEditingSubStepId(s.id); setEditingSubStepText(s.text); }}>
+                              <IconPencil size={15} />
                             </button>
                           </>
                         )}
                         <button
                           type="button"
+                          className="add-step-btn"
                           aria-label={`Remove step ${s.text}`}
                           onClick={() => {
                             if (editingSubStepId === s.id) setEditingSubStepId(null);
                             setSubSteps(prev => prev.filter(step => step.id !== s.id));
                           }}
-                          style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "14px", lineHeight: 1, padding: "0 2px" }}
                         >
-                          ×
+                          <IconX size={15} />
                         </button>
-                      </div>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 )}
               </div>
-            </>
+            </div>
           )}
 
-          {/* Footer controls */}
-          {formError && (
-            <p style={{ fontSize: "12.5px", color: "var(--danger)", fontWeight: "700", textAlign: "center", padding: "8px 12px", background: "rgba(248,113,113,0.08)", borderRadius: "var(--radius-sm)", border: "1px solid var(--danger)" }}>
-              {formError}
-            </p>
-          )}
-          <div className="modal-footer" style={{ padding: "0", marginTop: "8px" }}>
+          {formError && <p className="add-error" role="alert">{formError}</p>}
+
+          <div className="add-foot">
             {saved ? (
-              <div style={{ flex: 1, textAlign: "center", padding: "12px", background: "var(--success)", borderRadius: "var(--radius-sm)", color: "#fff", fontWeight: "700", fontSize: "14px" }}>
-                {isEditMode ? "✓ Saved!" : "✓ Task added!"}
-              </div>
+              <p className="add-saved" role="status">{isEditMode ? "Saved" : `Added to ${horizonName}`}</p>
             ) : (
               <>
-                <button type="button" className="btn btn-cancel" onClick={onClose} style={{ flex: 1 }}>
-                  Cancel
+                <button type="submit" className="add-submit" data-testid="add-task-submit">
+                  {isEditMode ? "Save changes" : `Add to ${horizonName}`}
                 </button>
-                <button type="submit" className="btn" data-testid="add-task-submit" style={{ flex: 1 }}>
-                  {isEditMode ? "Save" : "Add Task"}
-                </button>
+                <kbd className="add-kbd" aria-hidden="true">⌘ ↵</kbd>
               </>
             )}
           </div>

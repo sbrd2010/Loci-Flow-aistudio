@@ -118,7 +118,7 @@ test("mobile reliability: the task dialog shows a task's front and can change it
   await row.scrollIntoViewIfNeeded();
   await row.locator(".task-row-top").click();
   await page.getByTestId("task-menu-edit").click();
-  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
 
   const select = page.locator("#task-front");
   await expect(select).toBeVisible();

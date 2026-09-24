@@ -353,8 +353,8 @@ test("mobile reliability: editing a wall task keeps its no-estimate, no-subtask 
 
   // Open the editor from the wall and change ONLY the title.
   await page.locator(".wall-action", { hasText: "Split it" }).click();
-  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
-  await page.getByPlaceholder("e.g. Write cover letter draft").fill("Draft the abstract properly");
+  await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
+  await page.getByTestId("add-task-title").fill("Draft the abstract properly");
   await page.getByTestId("add-task-submit").click();
 
   await expect(page.locator(".wall-title")).toContainText("Draft the abstract properly", { timeout: 8_000 });
@@ -390,8 +390,9 @@ test("mobile reliability: an estimate can still be chosen for a wall task", asyn
   await expect(page.locator(".wall-title")).toContainText("Size this one properly", { timeout: 8_000 });
 
   await page.locator(".wall-action", { hasText: "Split it" }).click();
-  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
-  await page.locator(".selector-btn", { hasText: "45m" }).first().click();
+  await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "Other", exact: true }).click();
+  await page.getByLabel("Minutes").selectOption("45");
   await page.getByTestId("add-task-submit").click();
 
   // It sticks: the wall's start control now offers the length the user chose,
@@ -425,7 +426,7 @@ test("laptop: D marks the commitment done", async ({ page }) => {
 test("laptop: S opens the commitment to split it", async ({ page }) => {
   await enterLaptop(page);
   await page.keyboard.press("s");
-  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
 });
 
 test("laptop: the wall's keys stay quiet while typing", async ({ page }) => {
@@ -440,7 +441,7 @@ test("laptop: the wall's keys stay quiet while typing", async ({ page }) => {
   await page.keyboard.type("d s ");
   await expect(page.locator("#typing-probe")).toHaveValue("d s ");
   await expect(page.locator(".wall-done-line")).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Edit Task" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Edit task" })).toHaveCount(0);
   await expect(page.locator(".focus-mode-overlay")).toHaveCount(0);
 });
 
@@ -467,7 +468,7 @@ test("laptop: N opens Add task for Today, L shows and hides the list", async ({ 
   await expect(list).toBeVisible();
 
   await page.keyboard.press("n");
-  await expect(page.getByRole("heading", { name: "Add Task" })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("heading", { name: "New task" })).toBeVisible({ timeout: 5_000 });
 });
 
 // 49a: on a phone, "+" sits at the right of the closed peek and opens Add task
@@ -481,10 +482,10 @@ test("mobile reliability: the peek's + adds a task to Today", async ({ page }) =
   expect(Math.round(box.height)).toBeGreaterThanOrEqual(44);
 
   await add.click();
-  await expect(page.getByRole("heading", { name: "Add Task" })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("heading", { name: "New task" })).toBeVisible({ timeout: 5_000 });
   await page.getByTestId("add-task-title").fill("Peek plus seed task");
   await page.getByTestId("add-task-submit").click();
-  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
 
   await page.locator(".wall-peek").click();
   await expect(page.getByTestId("today-tasks-list").getByText("Peek plus seed task")).toBeVisible({ timeout: 5_000 });
@@ -537,7 +538,7 @@ test("laptop: the peek's + is there with the list hidden", async ({ page }) => {
   const add = page.getByRole("button", { name: "Add a task to Today" });
   await expect(add).toBeVisible();
   await add.click();
-  await expect(page.getByRole("heading", { name: "Add Task" })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("heading", { name: "New task" })).toBeVisible({ timeout: 5_000 });
 });
 
 // ── 2b-2a: the phone sheet (37b half, 37c full, 38g–h tablet) ─────────────
@@ -892,7 +893,7 @@ test("mobile reliability: pinning a longer task with the sheet open re-measures 
   await page.locator(".today-list-add").click();
   await page.getByTestId("add-task-title").fill(long);
   await page.getByTestId("add-task-submit").click();
-  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: "A very long task title" });
   await row.locator(".task-row-top").click();
   await page.getByText("Pin to Focus", { exact: true }).click();

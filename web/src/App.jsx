@@ -39,6 +39,9 @@ import { buildDayClock } from "./utils/dayClock";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch, activityEventPath } from "./utils/activityLog";
 import { isOnToday } from "./utils/deferral";
 
+// Plan's column names, as Add task's note says them ("from Plan · Quarter").
+const PLAN_COLUMN_NAMES = { today: "Today", week: "Week", month: "Month", quarter: "Quarter", halfyear: "6 months", office: "Work" };
+
 const EXTEND_DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
 
 function toLocalDateStr(date) {
@@ -54,6 +57,8 @@ export default function App() {
   const [roadmapInitialCol, setRoadmapInitialCol] = useState(null);
   const [showAddTask, setShowAddTask] = useState(false);
   const [preselectedHorizon, setPreselectedHorizon] = useState("today");
+  // Where + was tapped ("Today", "Plan · Quarter"), for Add task's note (45a).
+  const [addOpenedFrom, setAddOpenedFrom] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
   const [fabExpanded, setFabExpanded] = useState(false);
   // "light" | "dark" | "auto" — see utils/theme.js.
@@ -1010,9 +1015,10 @@ export default function App() {
     signOut(auth).then(() => { setUser(null); setActiveTab("today"); });
   };
 
-  const openAddTask = (horizon = "today") => {
+  const openAddTask = (horizon = "today", from = null) => {
     setEditingTask(null);
     setPreselectedHorizon(horizon);
+    setAddOpenedFrom(from);
     setShowAddTask(true);
   };
 
@@ -1263,7 +1269,7 @@ export default function App() {
             isSyncingFromCache={isSyncingFromCache}
             syncWarning={syncWarning}
             saveConfigPatch={saveConfigPatch}
-            onOpenAddTask={() => openAddTask("today")}
+            onOpenAddTask={() => openAddTask("today", "Today")}
             onOpenDayMap={openDayMap}
             onOpenMindBox={openMindBox}
             onOpenCoach={() => setActiveTab("coach")}
@@ -1284,7 +1290,7 @@ export default function App() {
             savePayloadAsync={savePayloadAsync}
             onClose={closeDayMap}
             onStartFocus={(pinPromise) => { pendingFocusPinPromiseRef.current = pinPromise; setPendingFocusOpen(true); goToday(); }}
-            onAddTask={() => openAddTask("today")}
+            onAddTask={() => openAddTask("today", "Day map")}
             onHelpChoose={() => { setRoadmapView("scattered"); setActiveTab("roadmap"); }}
             dayClock={dayClock}
             flushNow={flushNow}
@@ -1326,7 +1332,7 @@ export default function App() {
             payload={payload}
             savePayload={savePayload}
             savePayloadAsync={savePayloadAsync}
-            onOpenAddTask={openAddTask}
+            onOpenAddTask={(h) => openAddTask(h, `Plan · ${PLAN_COLUMN_NAMES[h] || h}`)}
             onEditTask={(task) => { setEditingTask(task); setShowAddTask(true); }}
             initialExpandedCol={roadmapInitialCol}
             uid={activityUid}
@@ -1544,6 +1550,7 @@ export default function App() {
           savePayloadAsync={savePayloadAsync}
           userProfile={userProfile}
           defaultHorizon={preselectedHorizon}
+          openedFrom={editingTask ? null : addOpenedFrom}
           editTask={editingTask}
           onClose={() => { setShowAddTask(false); setEditingTask(null); }}
           uid={activityUid}
