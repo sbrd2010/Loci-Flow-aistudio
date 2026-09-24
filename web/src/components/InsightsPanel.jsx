@@ -356,12 +356,12 @@ export default function InsightsPanel({ payload, onBack, uid }) {
     const session = guardRef.current.begin(identity);
     if (!session) return; // an identical request is already genuinely in flight — no-op
 
-    const { groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
+    const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
     await runRecapGeneration({
       session,
       callAI,
       callAIArgs: {
-        groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey,
+        groqKey, geminiKey, cerebrasKey, zaiKey,
         systemPrompt: buildRecapSystemPrompt({ includeCurrentLoad: recapAvailability === "empty-with-load" }),
         messages: [
           {

@@ -3,8 +3,6 @@ import { appendAIUsageWarning, checkAndRecordAIUsage } from "./aiUsageLimits";
 
 const GROQ_URL     = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL   = "openai/gpt-oss-120b";
-const NVIDIA_URL   = "https://integrate.api.nvidia.com/v1/chat/completions";
-const NVIDIA_MODEL = "nvidia/nemotron-3-super-120b-a12b";
 const CEREBRAS_URL   = "https://api.cerebras.ai/v1/chat/completions";
 const CEREBRAS_MODEL = import.meta.env.VITE_CEREBRAS_MODEL || "gpt-oss-120b";
 const GEMINI_URL   = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
@@ -245,35 +243,6 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens, reasoningEff
     throw new Error("groq_empty");
   }
   return { reply, usage };
-}
-
-async function callNvidia(nvidiaKey, systemPrompt, messages, maxTokens) {
-  const outputMaxTokens = Math.min(maxTokens ?? 1500, 4000);
-  const res = await fetchWithTimeout(NVIDIA_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${nvidiaKey}`
-    },
-    body: JSON.stringify({
-      model: NVIDIA_MODEL,
-      messages: [{ role: "system", content: systemPrompt }, ...messages],
-      max_tokens: outputMaxTokens,
-      temperature: 0.4,
-      top_p: 0.9,
-      reasoning_effort: "high",
-      reasoning_budget: 4096,
-      stream: false
-    })
-  });
-  if (!res.ok) throw statusError("nvidia", res.status, res);
-  const data = await res.json();
-  const reply = extractMessageContent(data.choices?.[0]?.message);
-  if (!reply) {
-    logEmptyReplyDiagnostics("nvidia", data, data.choices?.[0]?.message);
-    throw new Error("nvidia_empty");
-  }
-  return { reply, usage: data.usage };
 }
 
 // Cerebras' gpt-oss-120b is a reasoning model: hidden reasoning tokens count
@@ -580,17 +549,15 @@ async function callZai(zaiKey, systemPrompt, messages, maxTokens) {
 
 // Returns ordered list of providers to try based on user's preference.
 // Providers with no key are skipped automatically.
-export function buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey) {
+export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey) {
   const available = {
     groq:     cleanGroqKey     ? { name: "groq",     key: cleanGroqKey }     : null,
-    nvidia:   cleanNvidiaKey   ? { name: "nvidia",    key: cleanNvidiaKey }   : null,
     gemini:   cleanGeminiKey   ? { name: "gemini",    key: cleanGeminiKey }   : null,
     cerebras: cleanCerebrasKey ? { name: "cerebras",  key: cleanCerebrasKey } : null,
     zai:      cleanZaiKey      ? { name: "zai",       key: cleanZaiKey }      : null,
   };
-  // NVIDIA is excluded from "auto"/"groq"/"gemini" orders — currently
-  // inaccessible due to a backend/provider issue; stays manual/experimental
-  // via the explicit "nvidia" preference only. Z.ai is an emergency-only
+  // An unknown preference (e.g. "nvidia", which Loci no longer offers) falls
+  // back to "auto". Z.ai is an emergency-only
   // fallback (free tier, concurrency limit 1) — placed after Cerebras and
   // before Gemini in every chain except the explicit Gemini/Z.ai preferences.
   // "auto" leads with Cerebras (matches the "cerebras" preset) rather than
@@ -601,20 +568,18 @@ export function buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGemi
     cerebras: ["cerebras", "groq", "zai", "gemini"],
     zai:      ["zai", "groq", "cerebras", "gemini"],
     gemini:   ["gemini", "groq", "cerebras", "zai"],
-    nvidia:   ["nvidia", "groq", "cerebras", "zai", "gemini"],
   };
   return (orders[pref] || orders.auto).map(n => available[n]).filter(Boolean);
 }
 
-export async function callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey, systemPrompt, messages, maxTokens, contextMode, reasoningEffort }) {
+export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPrompt, messages, maxTokens, contextMode, reasoningEffort }) {
   const cleanGroqKey     = (groqKey     || "").trim();
-  const cleanNvidiaKey   = (nvidiaKey   || "").trim();
   const cleanGeminiKey   = (geminiKey   || "").trim();
   const cleanCerebrasKey = (cerebrasKey || "").trim();
   const cleanZaiKey      = (zaiKey      || "").trim();
 
   const pref  = localStorage.getItem("loci_provider_pref") || "auto";
-  const order = buildProviderOrder(pref, cleanGroqKey, cleanNvidiaKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey);
+  const order = buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey);
   if (order.length === 0) throw new Error("no_key");
 
   const usage = checkAndRecordAIUsage({ userId: getAIUsageUserId() });
@@ -623,7 +588,7 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKe
   // Request-local only (cleared every callAI invocation) — tracks every
   // attempted provider's failure so the final error reflects the real
   // bottleneck rather than whichever provider happened to fail last. E.g.
-  // Groq 429 (real rate-limit) + fallback NVIDIA 401 (unrelated/likely
+  // Groq 429 (real rate-limit) + fallback Gemini 401 (unrelated/likely
   // unconfigured) must surface as rate_limit, not invalid_key.
   const attempts = [];
   for (const provider of order) {
@@ -638,8 +603,6 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKe
       let result;
       if (provider.name === "groq") {
         result = await callGroq(provider.key, systemPrompt, messages, maxTokens, reasoningEffort);
-      } else if (provider.name === "nvidia") {
-        result = await callNvidia(provider.key, systemPrompt, messages, maxTokens);
       } else if (provider.name === "cerebras") {
         result = await callCerebras(provider.key, systemPrompt, messages, maxTokens, reasoningEffort);
       } else if (provider.name === "zai") {
@@ -687,13 +650,12 @@ export async function callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKe
 
 // Private-alpha build-key pattern: localStorage (user-entered BYOK) wins,
 // otherwise falls back to a build-time VITE_* env var. This is the same
-// pattern already in use for Groq/NVIDIA/Gemini and is a known, accepted
+// pattern already in use for Groq/Gemini and is a known, accepted
 // exposure for this stage — see SettingsTab.jsx AI Keys section copy and
 // the PR description for the server-side-proxy migration plan.
 export function getAIKeys() {
   return {
     groqKey:     (localStorage.getItem("loci_groq_key")     || import.meta.env.VITE_GROQ_KEY     || "").trim(),
-    nvidiaKey:   (localStorage.getItem("loci_nvidia_key")   || import.meta.env.VITE_NVIDIA_KEY    || "").trim(),
     geminiKey:   (localStorage.getItem("loci_gemini_key")   || import.meta.env.VITE_GEMINI_KEY    || "").trim(),
     cerebrasKey: (localStorage.getItem("loci_cerebras_key") || import.meta.env.VITE_CEREBRAS_KEY  || "").trim(),
     zaiKey:      (localStorage.getItem("loci_zai_key")      || import.meta.env.VITE_ZAI_KEY       || "").trim(),
@@ -701,13 +663,11 @@ export function getAIKeys() {
 }
 
 // True only if the user's selected provider order actually has a usable
-// provider — e.g. an NVIDIA-only key with pref "auto" returns false, since
-// NVIDIA is excluded from the auto/groq/gemini chains and callAI would
-// throw "no_key" for that combination.
+// provider in its chain (callAI would throw "no_key" otherwise).
 export function hasAIKey() {
-  const { groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
+  const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
-  return buildProviderOrder(pref, groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey).length > 0;
+  return buildProviderOrder(pref, groqKey, geminiKey, cerebrasKey, zaiKey).length > 0;
 }
 
 // Parses a JSON array out of an AI reply, tolerating markdown code fences,

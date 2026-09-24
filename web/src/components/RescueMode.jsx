@@ -111,10 +111,10 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
     saveHandoff("accepted");
   };
 
-  const { groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
+  const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const effectiveGeminiKey = geminiKey || (apiKey || "").trim();
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
-  const hasKey = buildProviderOrder(pref, groqKey, nvidiaKey, effectiveGeminiKey, cerebrasKey, zaiKey).length > 0;
+  const hasKey = buildProviderOrder(pref, groqKey, effectiveGeminiKey, cerebrasKey, zaiKey).length > 0;
 
   // Applies whichever actions filterApplicableRescueActions (rescueCoachPrompt.js)
   // let through, and reports whether a mutation was withheld specifically
@@ -156,7 +156,6 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
 
       const reply = await callAI({
         groqKey,
-        nvidiaKey,
         cerebrasKey,
         zaiKey,
         geminiKey: effectiveGeminiKey,

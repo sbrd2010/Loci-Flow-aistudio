@@ -95,7 +95,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   // "Today" is the Loci day: a task moved to tomorrow stays off it until the
   // focus window ends, even one that runs past midnight.
   const lociDayNow = () => getLociDayStr(new Date(), windows);
-  const { groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
+  const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const hasAnyKey = hasAIKey();
 
   // True until RTDB has actually delivered a snapshot for this session — true
@@ -400,7 +400,7 @@ ${buildPersonaInstruction(configRef.current, firstName)}
 ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryContext}\n` : ""}`;
 
         const reply = await callAI({
-          groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey,
+          groqKey, geminiKey, cerebrasKey, zaiKey,
           systemPrompt: systemInstruction,
           messages: [{ role: "user", content: "(Start the conversation.)" }],
           maxTokens: 120,
@@ -740,7 +740,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     if (summaryUpdateNeeded && sessionSummarySectionEnabled) maxTokens += 300;
 
     try {
-      const reply = await callAI({ groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey, systemPrompt: systemInstruction, messages, maxTokens, contextMode, reasoningEffort: "low" });
+      const reply = await callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPrompt: systemInstruction, messages, maxTokens, contextMode, reasoningEffort: "low" });
       if (contextMode === "full_task") {
         localStorage.setItem(`loci_last_full_task_time_${userId}`, String(Date.now()));
       }
@@ -1504,7 +1504,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
 
     try {
       const reply = await callAI({
-        groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey,
+        groqKey, geminiKey, cerebrasKey, zaiKey,
         systemPrompt: `${buildLociCoreInstruction({ firstName })}\n\nYou are ${config.mentorName || "a focus coach"}, an expert productivity coach.`,
         messages: [{ role: "user", content: prompt }],
         maxTokens: 800,

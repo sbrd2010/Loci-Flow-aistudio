@@ -189,7 +189,7 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
   }, [ritualDone]);
 
   // ── AI keys ────────────────────────────────────────────────────────────────
-  const { groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
+  const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const hasAnyKey = hasAIKey();
 
   // ── Helper data ────────────────────────────────────────────────────────────
@@ -397,7 +397,7 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
 
     try {
       const raw = await callAI({
-        groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey,
+        groqKey, geminiKey, cerebrasKey, zaiKey,
         systemPrompt: "You are a productivity coach. Respond ONLY with a valid JSON array, no markdown. Preserve every concrete detail from the input — never compress or summarize away names, dates, deadlines, amounts, or other specifics to save space.",
         messages: [{ role: "user", content: prompt }],
         maxTokens: 4000,

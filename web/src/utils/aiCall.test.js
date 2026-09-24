@@ -4,7 +4,7 @@ vi.mock("../firebase", () => ({
   auth: { currentUser: null },
 }));
 
-import { callAI, classifyAIError, describeAIError, extractJsonArray, resetProviderCooldowns } from "./aiCall";
+import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, resetProviderCooldowns } from "./aiCall";
 
 function makeStorage() {
   const store = new Map();
@@ -33,14 +33,6 @@ function seedUsage(storage, { daily = 0, hourly = 0 } = {}) {
 }
 
 function groqOk(content = "One tiny step is enough.") {
-  return {
-    ok: true,
-    status: 200,
-    json: async () => ({ choices: [{ message: { content } }] }),
-  };
-}
-
-function nvidiaOk(content = "NVIDIA reply.") {
   return {
     ok: true,
     status: 200,
@@ -127,7 +119,6 @@ function providerError(status, headers = {}) {
 function baseRequest(overrides = {}) {
   return {
     groqKey: "test-groq-key",
-    nvidiaKey: "",
     geminiKey: "",
     systemPrompt: "You are a focus coach.",
     messages: [{ role: "user", content: "What should I do next?" }],
@@ -194,27 +185,6 @@ describe("AI call resilience", () => {
     expect(reply).toContain("AI daily limit reached");
     expect(reply).toContain("120/120");
     expect(fetch).not.toHaveBeenCalled();
-  });
-
-  it("calls NVIDIA endpoint when NVIDIA key is provided and pref is nvidia", async () => {
-    storage.setItem("loci_provider_pref", "nvidia");
-    fetch.mockResolvedValue(nvidiaOk("Focus on the one task in front of you."));
-
-    const reply = await callAI(baseRequest({ groqKey: "", nvidiaKey: "test-nvidia-key" }));
-
-    expect(reply).toBe("Focus on the one task in front of you.");
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch.mock.calls[0][0]).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
-  });
-
-  it("sends reasoning_effort high and reasoning_budget 4096 in NVIDIA request body", async () => {
-    storage.setItem("loci_provider_pref", "nvidia");
-    fetch.mockResolvedValue(nvidiaOk("reply"));
-    await callAI(baseRequest({ groqKey: "", nvidiaKey: "test-nvidia-key" }));
-    const body = JSON.parse(fetch.mock.calls[0][1].body);
-    expect(body.reasoning_effort).toBe("high");
-    expect(body.reasoning_budget).toBe(4096);
-    expect(body.stream).toBe(false);
   });
 
   it("does not send reasoning_effort to Groq by default (existing callers unaffected)", async () => {
@@ -317,38 +287,6 @@ describe("AI call resilience", () => {
     expect(loggedText).not.toContain("test-groq-key");
   });
 
-  it("NVIDIA respects a small caller maxTokens (700)", async () => {
-    storage.setItem("loci_provider_pref", "nvidia");
-    fetch.mockResolvedValue(nvidiaOk("reply"));
-    await callAI(baseRequest({ groqKey: "", nvidiaKey: "test-nvidia-key", maxTokens: 700 }));
-    const body = JSON.parse(fetch.mock.calls[0][1].body);
-    expect(body.max_tokens).toBe(700);
-  });
-
-  it("NVIDIA allows a large caller maxTokens (4000)", async () => {
-    storage.setItem("loci_provider_pref", "nvidia");
-    fetch.mockResolvedValue(nvidiaOk("reply"));
-    await callAI(baseRequest({ groqKey: "", nvidiaKey: "test-nvidia-key", maxTokens: 4000 }));
-    const body = JSON.parse(fetch.mock.calls[0][1].body);
-    expect(body.max_tokens).toBe(4000);
-  });
-
-  it("NVIDIA defaults to 1500 when maxTokens is not provided", async () => {
-    storage.setItem("loci_provider_pref", "nvidia");
-    fetch.mockResolvedValue(nvidiaOk("reply"));
-    await callAI(baseRequest({ groqKey: "", nvidiaKey: "test-nvidia-key", maxTokens: undefined }));
-    const body = JSON.parse(fetch.mock.calls[0][1].body);
-    expect(body.max_tokens).toBe(1500);
-  });
-
-  it("NVIDIA caps max_tokens at 4000 when caller requests more", async () => {
-    storage.setItem("loci_provider_pref", "nvidia");
-    fetch.mockResolvedValue(nvidiaOk("reply"));
-    await callAI(baseRequest({ groqKey: "", nvidiaKey: "test-nvidia-key", maxTokens: 9999 }));
-    const body = JSON.parse(fetch.mock.calls[0][1].body);
-    expect(body.max_tokens).toBe(4000);
-  });
-
   it("groq pref falls back through Cerebras then Gemini when Groq fails", async () => {
     storage.setItem("loci_provider_pref", "groq");
     fetch
@@ -384,22 +322,6 @@ describe("AI call resilience", () => {
     expect(fetch.mock.calls[0][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
     expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
     expect(String(fetch.mock.calls[2][0])).toContain("generativelanguage.googleapis.com");
-  });
-
-  it("auto mode does not include NVIDIA even when an NVIDIA key is present", async () => {
-    fetch
-      .mockResolvedValueOnce(providerError(429))   // Groq fails
-      .mockResolvedValueOnce(geminiOk("Gemini skipped NVIDIA."));
-
-    const reply = await callAI(baseRequest({
-      nvidiaKey: "test-nvidia-key",
-      geminiKey: "test-gemini-key",
-    }));
-
-    expect(reply).toBe("Gemini skipped NVIDIA.");
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
-    expect(String(fetch.mock.calls[1][0])).toContain("generativelanguage.googleapis.com");
   });
 
   it("calls Cerebras endpoint with the gpt-oss-120b model when pref is cerebras", async () => {
@@ -614,36 +536,6 @@ describe("AI call resilience", () => {
     expect(fetch.mock.calls[2][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
   });
 
-  it("nvidia pref order still includes Cerebras after Groq", async () => {
-    storage.setItem("loci_provider_pref", "nvidia");
-    fetch
-      .mockResolvedValueOnce(providerError(503))   // NVIDIA fails
-      .mockResolvedValueOnce(providerError(503))   // Groq fails
-      .mockResolvedValueOnce(cerebrasOk("Cerebras via nvidia pref."));
-
-    const reply = await callAI(baseRequest({ nvidiaKey: "test-nvidia-key", cerebrasKey: "test-cerebras-key" }));
-
-    expect(reply).toBe("Cerebras via nvidia pref.");
-    expect(fetch).toHaveBeenCalledTimes(3);
-    expect(fetch.mock.calls[0][0]).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
-    expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
-    expect(fetch.mock.calls[2][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
-  });
-
-  it("uses NVIDIA first then falls back to Groq when pref is nvidia and NVIDIA fails", async () => {
-    storage.setItem("loci_provider_pref", "nvidia");
-    fetch
-      .mockResolvedValueOnce(providerError(503))   // NVIDIA fails
-      .mockResolvedValueOnce(groqOk("Groq saved the day."));
-
-    const reply = await callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }));
-
-    expect(reply).toBe("Groq saved the day.");
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(fetch.mock.calls[0][0]).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
-    expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
-  });
-
   it("uses Gemini first when pref is gemini", async () => {
     storage.setItem("loci_provider_pref", "gemini");
     fetch.mockResolvedValue(geminiOk("Gemini first."));
@@ -672,7 +564,7 @@ describe("AI call resilience", () => {
   });
 
   it("throws no_key when all keys are empty", async () => {
-    await expect(callAI(baseRequest({ groqKey: "", nvidiaKey: "", geminiKey: "" }))).rejects.toThrow("no_key");
+    await expect(callAI(baseRequest({ groqKey: "", geminiKey: "" }))).rejects.toThrow("no_key");
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -688,11 +580,9 @@ describe("AI call resilience", () => {
   it("throws all_providers_failed when all providers fail with non-rate-limit errors", async () => {
     fetch
       .mockResolvedValueOnce(providerError(401))  // Groq 401
-      .mockResolvedValueOnce(providerError(400))  // NVIDIA 400
       .mockResolvedValueOnce(providerError(400)); // Gemini 400
 
     await expect(callAI(baseRequest({
-      nvidiaKey: "test-nvidia-key",
       geminiKey: "test-gemini-key",
     }))).rejects.toThrow("all_providers_failed");
   });
@@ -700,35 +590,35 @@ describe("AI call resilience", () => {
   it("preserves 429 error when all providers are rate-limited", async () => {
     fetch
       .mockResolvedValueOnce(providerError(429))  // Groq 429
-      .mockResolvedValueOnce(providerError(429)); // NVIDIA 429
+      .mockResolvedValueOnce(providerError(429)); // Gemini 429
 
-    await expect(callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }))).rejects.toThrow("429");
+    await expect(callAI(baseRequest({ geminiKey: "test-gemini-key" }))).rejects.toThrow("429");
   });
 
   it("throws invalid_key when every attempted provider fails with 401/403", async () => {
     fetch
       .mockResolvedValueOnce(providerError(401))  // Groq 401
-      .mockResolvedValueOnce(providerError(403)); // NVIDIA 403
+      .mockResolvedValueOnce(providerError(403)); // Gemini 403
 
-    await expect(callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }))).rejects.toThrow("invalid_key");
+    await expect(callAI(baseRequest({ geminiKey: "test-gemini-key" }))).rejects.toThrow("invalid_key");
   });
 
   it("prefers the real rate-limit over a fallback's unrelated auth failure (Groq 429 + backup 401)", async () => {
     fetch
       .mockResolvedValueOnce(providerError(429))  // Groq rate-limited — the real bottleneck
-      .mockResolvedValueOnce(providerError(401)); // NVIDIA backup unauthorized
+      .mockResolvedValueOnce(providerError(401)); // Gemini backup unauthorized
 
     // Must surface as the rate limit, not invalid_key — an unrelated backup
     // failure shouldn't make the user think their primary key is bad.
-    await expect(callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }))).rejects.toThrow("429");
+    await expect(callAI(baseRequest({ geminiKey: "test-gemini-key" }))).rejects.toThrow("429");
   });
 
   it("prefers service_unavailable over a network-only secondary failure (Groq 503 + backup network error)", async () => {
     fetch
       .mockResolvedValueOnce(providerError(503))            // Groq busy
-      .mockRejectedValueOnce(new TypeError("Failed to fetch")); // NVIDIA network failure
+      .mockRejectedValueOnce(new TypeError("Failed to fetch")); // Gemini network failure
 
-    await expect(callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }))).rejects.toThrow("503");
+    await expect(callAI(baseRequest({ geminiKey: "test-gemini-key" }))).rejects.toThrow("503");
   });
 
   it("throws network when every attempted provider fails with a network/fetch error", async () => {
@@ -736,7 +626,7 @@ describe("AI call resilience", () => {
       .mockRejectedValueOnce(new TypeError("Failed to fetch"))
       .mockRejectedValueOnce(new TypeError("Failed to fetch"));
 
-    await expect(callAI(baseRequest({ nvidiaKey: "test-nvidia-key" }))).rejects.toThrow("network");
+    await expect(callAI(baseRequest({ geminiKey: "test-gemini-key" }))).rejects.toThrow("network");
   });
 
   it("attempts each configured provider at most once per call (no hammering)", async () => {
@@ -977,21 +867,6 @@ ${horizonSection("TODAY", 5, 2270)}`;
     expect(zaiCalls.length).toBe(0);
   });
 
-  it("still excludes NVIDIA from the auto order even with a Z.ai key present", async () => {
-    fetch
-      .mockResolvedValueOnce(providerError(503))   // Groq fails
-      .mockResolvedValueOnce(zaiOk("Z.ai, NVIDIA skipped."));
-
-    const reply = await callAI(baseRequest({
-      nvidiaKey: "test-nvidia-key",
-      zaiKey: "test-zai-key",
-    }));
-
-    expect(reply).toBe("Z.ai, NVIDIA skipped.");
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(fetch.mock.calls[1][0]).toBe("https://api.z.ai/api/paas/v4/chat/completions");
-  });
-
   it("keeps the calm all_providers_failed message when Groq, Cerebras, Z.ai, and Gemini all fail", async () => {
     fetch
       .mockResolvedValueOnce(providerError(500))
@@ -1187,7 +1062,7 @@ describe("classifyAIError", () => {
 
   it("classifies provider-prefixed 401/403 as invalid_key", () => {
     expect(classifyAIError(new Error("groq_401"))).toBe("invalid_key");
-    expect(classifyAIError(new Error("nvidia_403"))).toBe("invalid_key");
+    expect(classifyAIError(new Error("gemini_403"))).toBe("invalid_key");
   });
 
   it("classifies a TypeError (fetch/network failure) as network", () => {
@@ -1310,12 +1185,12 @@ describe("AI provider cooldown and fallback", () => {
 
   it("does not block a brand-new key on the same provider after the old key's 429", async () => {
     fetch.mockResolvedValueOnce(providerError(429));
-    await expect(callAI(baseRequest({ nvidiaKey: "", groqKey: "old-key" }))).rejects.toThrow("429");
+    await expect(callAI(baseRequest({ groqKey: "old-key" }))).rejects.toThrow("429");
     expect(fetch).toHaveBeenCalledTimes(1);
 
     // Same provider, brand-new key: must be attempted, not skipped via the old key's cooldown.
     fetch.mockResolvedValueOnce(groqOk("New key works."));
-    const reply = await callAI(baseRequest({ nvidiaKey: "", groqKey: "brand-new-key" }));
+    const reply = await callAI(baseRequest({ groqKey: "brand-new-key" }));
     expect(reply).toBe("New key works.");
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
@@ -1323,11 +1198,11 @@ describe("AI provider cooldown and fallback", () => {
 
   it("still cools down the old key itself on a subsequent call with that same key", async () => {
     fetch.mockResolvedValueOnce(providerError(429));
-    await expect(callAI(baseRequest({ nvidiaKey: "", groqKey: "old-key" }))).rejects.toThrow("429");
+    await expect(callAI(baseRequest({ groqKey: "old-key" }))).rejects.toThrow("429");
     expect(fetch).toHaveBeenCalledTimes(1);
 
     // Same provider, same old key: still on cooldown, skipped entirely.
-    await expect(callAI(baseRequest({ nvidiaKey: "", groqKey: "old-key" }))).rejects.toThrow("429");
+    await expect(callAI(baseRequest({ groqKey: "old-key" }))).rejects.toThrow("429");
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -1412,5 +1287,15 @@ describe("extractJsonArray", () => {
 
   it("throws when the parsed JSON is not an array", () => {
     expect(() => extractJsonArray('{"steps": ["Open the doc"]}')).toThrow();
+  });
+});
+
+describe("buildProviderOrder without NVIDIA", () => {
+  it("a saved 'nvidia' preference (no longer offered) falls back to Auto", () => {
+    expect(buildProviderOrder("nvidia", "g", "", "c", "").map(p => p.name)).toEqual(["cerebras", "groq"]);
+  });
+  it("orders Groq, Gemini, Cerebras and Z.ai by the chosen chain", () => {
+    expect(buildProviderOrder("gemini", "g", "m", "c", "z").map(p => p.name)).toEqual(["gemini", "groq", "cerebras", "zai"]);
+    expect(buildProviderOrder("auto", "g", "m", "c", "z").map(p => p.name)).toEqual(["cerebras", "groq", "zai", "gemini"]);
   });
 });
