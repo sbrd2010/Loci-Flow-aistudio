@@ -24,6 +24,8 @@ export default function FocusModePage({
   onDone,
   onExit,
   onChangeDuration,
+  // Another screen (Rescue) is open on top: its keys are its own.
+  keysOff = false,
   // The hold's two actions. Neither is the ordinary overlay exit: "Keep going"
   // has to restart the timer AND clear the completion state, and "Stop here"
   // has to end the session, not merely hide the screen it is on.
@@ -125,19 +127,22 @@ export default function FocusModePage({
     ? new Date(Date.now() + secondsLeft * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
     : null;
   const notStarted = !isRunning && !isComplete && !(Number(elapsedSeconds) > 0) && secondsLeft === maxSeconds;
+  const paused = !isRunning && !isComplete;
 
   // Laptop keys (45l): Space pauses, D marks done, Esc leaves. Not while
-  // typing, and Esc closes the sounds drawer first.
+  // typing, not while Rescue is open over this screen, and Esc closes the
+  // sounds drawer first — even from its volume slider. A held Space fires once.
   const keysRef = useRef({});
-  keysRef.current = { isComplete, showSoundsDrawer, onPlayPause, onDone, onExit };
+  keysRef.current = { isComplete, showSoundsDrawer, onPlayPause, onDone, onExit, keysOff };
   useEffect(() => {
     const onKey = (e) => {
       const k = keysRef.current;
-      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (k.keysOff || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "Escape" && k.showSoundsDrawer) { setShowSoundsDrawer(false); return; }
       const t = e.target;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      if (e.repeat) return;
       if (e.key === "Escape") {
-        if (k.showSoundsDrawer) { setShowSoundsDrawer(false); return; }
         if (!k.isComplete) { e.preventDefault(); k.onExit?.(); }
         return;
       }
@@ -203,8 +208,8 @@ export default function FocusModePage({
           </p>
         </div>
 
-        {/* Before the first start, the block's length can still be chosen. */}
-        {notStarted && (
+        {/* While the timer is stopped, the block's length can be changed. */}
+        {paused && (
           <div className="focus-mode-duration-row" role="group" aria-label="Focus duration">
             {DURATION_OPTIONS.map(m => (
               <button

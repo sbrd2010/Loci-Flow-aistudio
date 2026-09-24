@@ -1617,6 +1617,7 @@ export default function TodayTab({
           onDone={() => { handleToggleComplete(activeTask); setIsFocusMode(false); }}
           onExit={() => setIsFocusMode(false)}
           onChangeDuration={handleChangeFocusDuration}
+          keysOff={rescueActive}
           onKeepGoing={extendTimer}
           onAddTime={addTimeToSession}
           onStopHere={handleStopHere}
