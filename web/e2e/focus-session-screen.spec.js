@@ -55,8 +55,8 @@ test("mobile reliability: progress is a track, and it reports what is done", asy
   await expect(track).toBeVisible();
 
   const box = await overlay.locator(".focus-mode-track").boundingBox();
-  // 2px per the handoff — a hairline under the figure, not a ring around it.
-  expect(box.height).toBeLessThanOrEqual(3);
+  // A bar under the figure, not a ring around it (45b draws it about 6px).
+  expect(box.height).toBeLessThanOrEqual(7);
 
   // The fill grows with elapsed time rather than shrinking with what is left.
   const before = (await overlay.locator(".focus-mode-track-fill").boundingBox()).width;
@@ -65,12 +65,31 @@ test("mobile reliability: progress is a track, and it reports what is done", asy
   expect(after).toBeGreaterThan(before);
 });
 
-test("mobile reliability: the session names when it started and what it has logged", async ({ page }) => {
+test("mobile reliability: the session names its length and when it ends (45b)", async ({ page }) => {
   const overlay = await openSession(page);
-  await expect(overlay.locator(".focus-mode-figures")).toContainText(/STARTED \d{2}:\d{2}/);
+  await expect(overlay.locator(".focus-mode-figures")).toContainText(/^OF \d+:\d{2} · ENDS \d{2}:\d{2}/);
+});
 
-  await page.clock.runFor(120_000);
-  await expect(overlay.locator(".focus-mode-figures")).toContainText(/\+\d+m LOGGED SO FAR/);
+test("the block can be paused, resumed and given five more minutes, and the keys work", async ({ page }) => {
+  const overlay = await openSession(page);
+  const digits = overlay.locator(".focus-mode-time-digits");
+  await page.clock.runFor(2_000);
+  await overlay.getByRole("button", { name: "Pause timer" }).click();
+  await expect(overlay.getByRole("button", { name: "Resume timer" })).toBeVisible();
+  // A paused block has no end time to claim.
+  await expect(overlay.locator(".focus-mode-figures")).not.toContainText("ENDS");
+  const before = await digits.innerText();
+  await overlay.getByRole("button", { name: "Add 5 minutes" }).click();
+  const [bm, bs] = before.split(":").map(Number);
+  await expect(digits).toHaveText(`${bm + 5}:${String(bs).padStart(2, "0")}`);
+  // The block itself is five minutes longer (the demo wall starts 25:00).
+  await expect(overlay.locator(".focus-mode-figures")).toContainText("OF 30:00");
+  // Space resumes; Esc leaves.
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press("Space");
+  await expect(overlay.getByRole("button", { name: "Pause timer" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(overlay).toHaveCount(0);
 });
 
 test("mobile reliability: no ordinal is claimed when the ledger cannot be read", async ({ page }) => {
@@ -107,14 +126,14 @@ test("mobile reliability: reaching 00:00 holds, with two choices and no modal", 
 
 test("mobile reliability: the hold offers two ways out, not a third broken one", async ({ page }) => {
   const overlay = await openSession(page);
-  await expect(overlay.getByRole("button", { name: "Exit focus mode" })).toBeVisible();
+  await expect(overlay.getByRole("button", { name: "Leave focus" })).toBeVisible();
 
   await page.clock.runFor(26 * 60_000);
 
   // The header Exit called the plain overlay-exit, which left the session
   // open and summoned the global modal — the same bug "Stop here" had, via
   // the other button in the same header. "Stop here" is the way out now.
-  await expect(overlay.getByRole("button", { name: "Exit focus mode" })).toHaveCount(0);
+  await expect(overlay.getByRole("button", { name: "Leave focus" })).toHaveCount(0);
   await expect(overlay.getByRole("button", { name: /Stop here/ })).toBeVisible();
 });
 

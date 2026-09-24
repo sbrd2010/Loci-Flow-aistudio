@@ -176,11 +176,11 @@ test("9. Focus timer starts and pauses", async ({ page }) => {
   await expect(overlay).toBeVisible({ timeout: 3_000 });
 
   const overlayPlayBtn = overlay.getByTestId("timer-play-pause");
-  await expect(overlayPlayBtn).toContainText("⏸", { timeout: 3_000 });
+  await expect(overlayPlayBtn).toContainText("Pause", { timeout: 3_000 });
 
   // Pause the timer from within the overlay
   await overlayPlayBtn.click();
-  await expect(overlayPlayBtn).toContainText("▶", { timeout: 3_000 });
+  await expect(overlayPlayBtn).toContainText(/Start|Resume/, { timeout: 3_000 });
 });
 
 test("10. Demo banner is visible and clearly says data is not saved", async ({ page }) => {

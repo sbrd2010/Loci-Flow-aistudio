@@ -62,7 +62,7 @@ test("mobile reliability: Deep Focus overlay supports pause, resume, and brain-d
 
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 5_000 });
-  await expect(overlay.getByText("Deep Focus")).toBeVisible();
+  await expect(overlay.locator(".focus-mode-header-label")).toHaveText("FOCUS");
   await expect(overlay.getByRole("heading", { name: "Reply to the important message sitting in your inbox" })).toBeVisible();
   await expect(overlay.getByLabel("Pause timer")).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
@@ -80,7 +80,7 @@ test("mobile reliability: Deep Focus overlay supports pause, resume, and brain-d
   await overlay.getByLabel("Save thought to Brain Dump").click();
   await expect(dumpInput).toHaveValue("");
 
-  await overlay.getByLabel("Exit focus mode").click();
+  await overlay.getByLabel("Leave focus").click();
   await expect(overlay).not.toBeVisible({ timeout: 5_000 });
 
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Mind Box", exact: true }).click();
@@ -109,7 +109,7 @@ test("mobile reliability: Rescue Mode is reachable from Today and from inside De
   await expect(overlay).toBeVisible({ timeout: 5_000 });
   await expect(overlay.getByLabel("Pause timer")).toBeVisible({ timeout: 5_000 });
 
-  await page.getByRole("button", { name: "Open Rescue Mode" }).click();
+  await overlay.getByRole("button", { name: "I'm stuck" }).click();
   await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
 
   // Opening Rescue Mode mid-session pauses the underlying focus timer.
@@ -118,9 +118,9 @@ test("mobile reliability: Rescue Mode is reachable from Today and from inside De
   await page.getByText("Exit rescue mode").click();
   await expect(page.getByRole("heading", { name: "What's happening right now?" })).not.toBeVisible({ timeout: 5_000 });
   await expect(overlay).toBeVisible();
-  await expect(overlay.getByLabel("Start timer")).toBeVisible({ timeout: 5_000 });
+  await expect(overlay.getByLabel(/^(Start|Resume) timer$/)).toBeVisible({ timeout: 5_000 });
 
-  await overlay.getByLabel("Exit focus mode").click();
+  await overlay.getByLabel("Leave focus").click();
   await expect(overlay).not.toBeVisible({ timeout: 5_000 });
 });
 

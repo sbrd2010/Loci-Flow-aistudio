@@ -76,11 +76,11 @@ function SortableTaskItem({ id, interactionStyle, children }) {
 
 export default function TodayTab({
   payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenCoach, onScattered, onOpenAddTask,
-  activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft, setTimerSecondsLeft,
+  activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
   pipOpen, handleOpenPiP, isAddTaskDialogOpen, startFocusSession, endFocusSession, focusSessionId, focusSessionTaskUuid, changeFocusDuration,
-  extendTimer, dismissSessionComplete, focusStartedAt, focusElapsedSeconds,
+  extendTimer, addTimeToSession, dismissSessionComplete, focusStartedAt, focusElapsedSeconds,
   selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
   isSyncingFromCache = false,
   pendingCheckinSlot, setPendingCheckinSlot,
@@ -1617,11 +1617,11 @@ export default function TodayTab({
           maxSeconds={timerMaxSeconds}
           isRunning={isTimerRunning}
           onPlayPause={() => setIsTimerRunning(r => !r)}
-          onReset={() => { setIsTimerRunning(false); setTimerSecondsLeft(timerMaxSeconds); }}
           onDone={() => { handleToggleComplete(activeTask); setIsFocusMode(false); }}
           onExit={() => setIsFocusMode(false)}
           onChangeDuration={handleChangeFocusDuration}
           onKeepGoing={extendTimer}
+          onAddTime={addTimeToSession}
           onStopHere={handleStopHere}
           startedAt={focusStartedAt}
           elapsedSeconds={focusElapsedSeconds}

@@ -1,1057 +1,382 @@
-/* ================================================================
-   Focus Mode - quiet full-screen deep focus overlay
-   Mature Loci dark-sage treatment; no neon/game visual language.
-   ================================================================ */
+/* Focus session (45b phone, 45l laptop, 46x Dark). One task, one number:
+   the title wraps (36/48px), one first step in the serif, a mono timer
+   (64/88px), a bar with an aria-label, a filled Mark done, then Pause ·
+   +5 min · I'm stuck. It follows the theme (turn 45 draws it Light). */
 
 .focus-mode-overlay {
   position: fixed;
   inset: 0;
+  /* Over everything, the demo banner included; Rescue (also 9999, later in
+     the DOM) opens on top of it. */
   z-index: 9999;
-  isolation: isolate;
-  background:
-    linear-gradient(180deg, rgba(26, 25, 23, 0.98), rgba(18, 17, 15, 1) 64%),
-    #1a1917;
-  color: #f0eee9;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  padding: 0 24px calc(24px + env(safe-area-inset-bottom, 0px));
+  font-family: var(--font-sans);
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.focus-mode-head {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  min-height: 64px;
   padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  padding-left: env(safe-area-inset-left, 0px);
-  padding-right: env(safe-area-inset-right, 0px);
-  overflow: hidden;
 }
-
-.focus-mode-overlay::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(90deg, rgba(168, 134, 63, 0.06), transparent 22%, transparent 78%, rgba(168, 134, 63, 0.04)),
-    linear-gradient(180deg, rgba(240, 238, 233, 0.035), transparent 32%);
-  opacity: 0.9;
+.focus-mode-kicker {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
 }
-
-.focus-mode-overlay::after {
-  content: "";
-  position: absolute;
-  inset: auto 0 0;
-  height: 42vh;
-  pointer-events: none;
-  background: linear-gradient(180deg, transparent, rgba(168, 134, 63, 0.055));
-}
-
 .focus-mode-exit-btn {
-  position: absolute;
-  top: calc(18px + env(safe-area-inset-top, 0px));
-  left: calc(18px + env(safe-area-inset-left, 0px));
-  z-index: 2;
-  min-height: 38px;
-  padding: 8px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(240, 238, 233, 0.12);
-  background: rgba(240, 238, 233, 0.035);
-  color: rgba(240, 238, 233, 0.68);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  margin-right: -10px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: color 0.18s, border-color 0.18s, background 0.18s, transform 0.12s;
 }
-
-.focus-mode-exit-btn:hover,
-.focus-mode-exit-btn:focus-visible {
-  color: #f0eee9;
-  border-color: rgba(168, 134, 63, 0.42);
-  background: rgba(168, 134, 63, 0.1);
-  outline: none;
-}
-
-.focus-mode-exit-btn:active {
-  transform: scale(0.97);
-}
-
-.focus-mode-pip-btn {
-  position: absolute;
-  top: calc(18px + env(safe-area-inset-top, 0px));
-  right: calc(18px + env(safe-area-inset-right, 0px));
-  z-index: 2;
-  min-height: 38px;
-  padding: 8px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(240, 238, 233, 0.12);
-  background: rgba(240, 238, 233, 0.035);
-  color: rgba(240, 238, 233, 0.68);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: color 0.18s, border-color 0.18s, background 0.18s, transform 0.12s;
-}
-
-.focus-mode-pip-btn:hover,
-.focus-mode-pip-btn:focus-visible {
-  color: #f0eee9;
-  border-color: rgba(168, 134, 63, 0.42);
-  background: rgba(168, 134, 63, 0.1);
-  outline: none;
-}
-
-.focus-mode-pip-btn:active {
-  transform: scale(0.97);
-}
+.focus-mode-leave-word,
+.focus-mode-exit-btn .focus-mode-kbd { display: none; }
 
 .focus-mode-body {
-  position: relative;
-  z-index: 1;
+  display: flex;
   flex: 1;
-  width: min(100%, 620px);
-  min-height: 100dvh;
-  display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: clamp(42px, 8vh, 88px) 24px clamp(28px, 7vh, 72px);
-  box-sizing: border-box;
-}
-
-.focus-mode-session-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: clamp(22px, 4vh, 36px);
-}
-
-.focus-mode-header-label {
-  font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: rgba(240, 238, 233, 0.72);
-}
-
-.focus-mode-state-pill {
-  min-height: 24px;
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid rgba(168, 134, 63, 0.24);
-  border-radius: 999px;
-  padding: 4px 9px;
-  background: rgba(168, 134, 63, 0.08);
-  color: rgba(181, 176, 167, 0.82);
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.focus-mode-ring-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: clamp(218px, 38vw, 328px);
-  height: clamp(218px, 38vw, 328px);
-  margin-bottom: clamp(24px, 5vh, 38px);
-}
-
-.focus-mode-ring-wrapper::before {
-  content: "";
-  position: absolute;
-  inset: 11%;
-  border-radius: 50%;
-  border: 1px solid rgba(240, 238, 233, 0.055);
-  background: rgba(240, 238, 233, 0.015);
-}
-
-.focus-mode-svg {
   width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
+  max-width: 720px;
+  margin: 0 auto;
+  padding-top: 8vh;
 }
-
-.focus-mode-ring-bg {
-  fill: none;
-  stroke: rgba(240, 238, 233, 0.09);
-  stroke-linecap: round;
-}
-
-.focus-mode-ring-progress {
-  fill: none;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 1s linear, stroke 0.45s ease;
-  filter: drop-shadow(0 0 7px rgba(216, 173, 99, 0.22));
-}
-
-.focus-mode-overlay.is-running .focus-mode-ring-progress {
-  filter: drop-shadow(0 0 9px rgba(216, 173, 99, 0.28));
-}
-
-.focus-mode-time-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding-top: 2px;
-}
-
-.focus-mode-time-digits {
-  font-family: var(--font-mono, "Space Mono", "Courier New", monospace);
-  font-size: clamp(50px, 9vw, 74px);
-  font-weight: 700;
-  color: #f0eee9;
-  letter-spacing: 0;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
-}
-
-.focus-mode-complete-text {
-  margin-top: 10px;
-  color: #d8ad63;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: 0;
-  text-align: center;
-  animation: fm-complete-in 0.42s ease-out;
-}
-
-@keyframes fm-complete-in {
-  0% { transform: translateY(6px); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
-}
-
-.focus-mode-task-panel {
-  width: min(100%, 520px);
-  text-align: center;
-  margin-bottom: clamp(22px, 4vh, 32px);
-}
-
-.focus-mode-task-kicker {
-  margin-bottom: 8px;
-  color: rgba(181, 176, 167, 0.58);
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .focus-mode-task-title {
   margin: 0;
-  color: #f0eee9;
-  font-family: var(--font-display);
-  font-size: clamp(22px, 4vw, 30px);
-  font-weight: 900;
-  letter-spacing: 0;
-  line-height: 1.2;
+  font-size: 2.25rem;
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
-
 .focus-mode-concrete-step {
-  width: min(100%, 420px);
-  margin: 10px auto 0;
-  color: rgba(181, 176, 167, 0.7);
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.45;
-}
-
-.focus-mode-controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  margin-bottom: 20px;
-}
-
-.focus-mode-ctrl-btn {
-  width: 48px;
-  height: 48px;
-  border-radius: 999px;
-  border: 1px solid rgba(240, 238, 233, 0.13);
-  background: rgba(240, 238, 233, 0.045);
-  color: rgba(240, 238, 233, 0.78);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.18s, border-color 0.18s, transform 0.1s, color 0.18s;
-  flex-shrink: 0;
-}
-
-.focus-mode-ctrl-btn svg,
-.focus-mode-done-btn svg {
-  width: 21px;
-  height: 21px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.focus-mode-ctrl-btn:hover,
-.focus-mode-ctrl-btn:focus-visible {
-  color: #f0eee9;
-  border-color: rgba(168, 134, 63, 0.4);
-  background: rgba(168, 134, 63, 0.1);
-  outline: none;
-}
-
-.focus-mode-ctrl-btn:active {
-  transform: scale(0.95);
-}
-
-.focus-mode-ctrl-play {
-  width: 62px;
-  height: 62px;
-  border-color: rgba(168, 134, 63, 0.48);
-  background: rgba(168, 134, 63, 0.16);
-  color: #b5b0a7;
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.26);
-}
-
-.focus-mode-ctrl-play svg {
-  width: 26px;
-  height: 26px;
-}
-
-.focus-mode-ctrl-play:hover,
-.focus-mode-ctrl-play:focus-visible {
-  border-color: rgba(216, 173, 99, 0.68);
-  background: rgba(168, 134, 63, 0.22);
-}
-
-.focus-mode-done-btn {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid rgba(216, 173, 99, 0.38);
-  border-radius: 999px;
-  padding: 11px 26px;
-  background: rgba(216, 173, 99, 0.09);
-  color: #b5b0a7;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 900;
-  letter-spacing: 0;
-  cursor: pointer;
-  transition: background 0.18s, border-color 0.18s, transform 0.1s, color 0.18s;
-}
-
-.focus-mode-done-btn svg {
-  width: 18px;
-  height: 18px;
-}
-
-.focus-mode-done-btn:hover,
-.focus-mode-done-btn:focus-visible {
-  color: #f0eee9;
-  border-color: rgba(216, 173, 99, 0.68);
-  background: rgba(216, 173, 99, 0.16);
-  outline: none;
-}
-
-.focus-mode-done-btn:active {
-  transform: scale(0.97);
-}
-
-.focus-mode-overlay.is-complete .focus-mode-done-btn {
-  background: rgba(216, 173, 99, 0.18);
-  border-color: rgba(216, 173, 99, 0.7);
-}
-
-/* ── Duration picker ─────────────────────────────────────────────────────── */
-
-.focus-mode-duration-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: clamp(14px, 3vh, 22px);
-}
-
-.focus-mode-dur-btn {
-  min-height: 30px;
-  padding: 5px 11px;
-  border-radius: 999px;
-  border: 1px solid rgba(240, 238, 233, 0.12);
-  background: rgba(240, 238, 233, 0.04);
-  color: rgba(240, 238, 233, 0.55);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
-}
-
-.focus-mode-dur-btn:hover,
-.focus-mode-dur-btn:focus-visible {
-  color: rgba(240, 238, 233, 0.9);
-  border-color: rgba(168, 134, 63, 0.38);
-  background: rgba(168, 134, 63, 0.1);
-  outline: none;
-}
-
-.focus-mode-dur-btn:active {
-  transform: scale(0.95);
-}
-
-.focus-mode-dur-btn.active {
-  color: #b5b0a7;
-  border-color: rgba(168, 134, 63, 0.55);
-  background: rgba(168, 134, 63, 0.18);
-}
-
-/* ── Brain dump capture row ──────────────────────────────────────────────── */
-
-.focus-mode-dump-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: min(100%, 420px);
-  margin-top: clamp(18px, 4vh, 28px);
-}
-
-.focus-mode-dump-input {
-  flex: 1;
-  min-height: 38px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(240, 238, 233, 0.12);
-  background: rgba(240, 238, 233, 0.04);
-  color: rgba(240, 238, 233, 0.85);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.focus-mode-dump-input::placeholder {
-  color: #8d8880;
-}
-
-.focus-mode-dump-input:focus {
-  border-color: rgba(168, 134, 63, 0.35);
-  background: rgba(240, 238, 233, 0.06);
-}
-
-.focus-mode-dump-btn {
-  min-height: 38px;
-  padding: 8px 16px;
-  border-radius: 999px;
-  border: 1px solid rgba(240, 238, 233, 0.12);
-  background: rgba(240, 238, 233, 0.04);
-  color: rgba(240, 238, 233, 0.6);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
-}
-
-.focus-mode-dump-btn:hover,
-.focus-mode-dump-btn:focus-visible {
-  color: rgba(240, 238, 233, 0.9);
-  border-color: rgba(168, 134, 63, 0.38);
-  background: rgba(168, 134, 63, 0.1);
-  outline: none;
-}
-
-.focus-mode-dump-btn:active {
-  transform: scale(0.96);
-}
-
-.focus-mode-dump-btn.saved {
-  color: #d8ad63;
-  border-color: rgba(216, 173, 99, 0.45);
-  background: rgba(216, 173, 99, 0.1);
-}
-
-@media (max-width: 640px) {
-  .focus-mode-exit-btn {
-    top: calc(12px + env(safe-area-inset-top, 0px));
-    left: calc(12px + env(safe-area-inset-left, 0px));
-    min-height: 34px;
-    padding: 7px 10px;
-    font-size: 12px;
-  }
-
-  .focus-mode-pip-btn {
-    top: calc(12px + env(safe-area-inset-top, 0px));
-    right: calc(12px + env(safe-area-inset-right, 0px));
-    min-height: 34px;
-    padding: 7px 10px;
-    font-size: 12px;
-  }
-
-  .focus-mode-body {
-    width: 100%;
-    padding-left: 18px;
-    padding-right: 18px;
-  }
-
-  .focus-mode-session-meta {
-    margin-bottom: 20px;
-  }
-
-  .focus-mode-ring-wrapper {
-    width: clamp(212px, 64vw, 260px);
-    height: clamp(212px, 64vw, 260px);
-    margin-bottom: 24px;
-  }
-
-  .focus-mode-task-title {
-    font-size: clamp(20px, 6vw, 25px);
-  }
-
-  .focus-mode-concrete-step {
-    font-size: 13px;
-  }
-
-  .focus-mode-controls {
-    gap: 12px;
-  }
-}
-
-@media (max-width: 374px) {
-  .focus-mode-ring-wrapper {
-    width: 200px;
-    height: 200px;
-  }
-
-  .focus-mode-time-digits {
-    font-size: 46px;
-  }
-
-  .focus-mode-ctrl-btn {
-    width: 44px;
-    height: 44px;
-  }
-
-  .focus-mode-ctrl-play {
-    width: 56px;
-    height: 56px;
-  }
-}
-
-/* ================================================================
-   Timer state visual states and transitions
-   ================================================================ */
-.focus-mode-overlay.timer-state-normal,
-.focus-mode-overlay.timer-state-near-end,
-.focus-mode-overlay.timer-state-almost-done {
-  --timer-state-color: #d8ad63;
-  --timer-state-bg: rgba(216, 173, 99, 0.08);
-  --timer-state-border: rgba(216, 173, 99, 0.24);
-}
-.focus-mode-overlay.timer-state-complete {
-  --timer-state-color: #d8ad63;
-  --timer-state-bg: rgba(216, 173, 99, 0.12);
-  --timer-state-border: rgba(216, 173, 99, 0.38);
-}
-
-.focus-mode-state-pill {
-  color: var(--timer-state-color, rgba(181, 176, 167, 0.82)) !important;
-  background: var(--timer-state-bg, rgba(168, 134, 63, 0.08)) !important;
-  border-color: var(--timer-state-border, rgba(168, 134, 63, 0.24)) !important;
-  transition: color 0.4s ease, background 0.4s ease, border-color 0.4s ease;
-}
-
-.focus-mode-time-digits {
-  transition: text-shadow 0.6s ease;
-}
-
-.focus-mode-overlay.is-running .focus-mode-time-digits {
-  text-shadow: 0 0 10px rgba(240, 238, 233, 0.1), 0 0 16px var(--timer-state-color);
-}
-
-.focus-mode-overlay.timer-state-complete .focus-mode-time-digits {
-  text-shadow: 0 0 20px var(--timer-state-color);
-}
-
-/* ================================================================
-   Focus Sounds Custom Components & Drawer
-   ================================================================ */
-
-.focus-mode-top-right-actions {
-  position: absolute;
-  top: calc(18px + env(safe-area-inset-top, 0px));
-  right: calc(18px + env(safe-area-inset-right, 0px));
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* Ensure child action buttons fit cleanly */
-.focus-mode-top-right-actions .focus-mode-pip-btn {
-  position: static;
-  margin: 0;
-}
-
-.focus-mode-sounds-btn,
-.focus-mode-rescue-btn {
-  min-height: 38px;
-  padding: 8px 16px;
-  border-radius: 999px;
-  border: 1px solid rgba(240, 238, 233, 0.12);
-  background: rgba(240, 238, 233, 0.035);
-  color: rgba(240, 238, 233, 0.68);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: color 0.18s, border-color 0.18s, background 0.18s, transform 0.12s;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.focus-mode-sounds-btn::before {
-  content: "🎧";
-  font-size: 13px;
-}
-
-.focus-mode-sounds-btn:hover,
-.focus-mode-sounds-btn:focus-visible,
-.focus-mode-rescue-btn:hover,
-.focus-mode-rescue-btn:focus-visible {
-  color: #f0eee9;
-  border-color: rgba(168, 134, 63, 0.42);
-  background: rgba(168, 134, 63, 0.1);
-  outline: none;
-}
-
-.focus-mode-sounds-btn:active,
-.focus-mode-rescue-btn:active {
-  transform: scale(0.97);
-}
-
-.focus-mode-sounds-btn.active {
-  color: #b5b0a7;
-  border-color: rgba(168, 134, 63, 0.55);
-  background: rgba(168, 134, 63, 0.18);
-}
-
-/* ── Focus Sounds Backdrop ── */
-.focus-sounds-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(4px);
-  animation: fm-fade-in 0.25s ease-out;
-}
-
-@keyframes fm-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* ── Focus Sounds Drawer ── */
-.focus-sounds-drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(100vw, 340px);
-  z-index: 1001;
-  background: rgba(26, 25, 23, 0.96);
-  backdrop-filter: blur(18px);
-  border-left: 1px solid rgba(240, 238, 233, 0.08);
-  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.6);
-  padding: calc(24px + env(safe-area-inset-top, 0px)) 24px calc(24px + env(safe-area-inset-bottom, 0px));
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  transform: translateX(100%);
-  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.focus-sounds-drawer.open {
-  transform: translateX(0);
-}
-
-.focus-sounds-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.focus-sounds-header h3 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 900;
-  color: #f0eee9;
-}
-
-.focus-sounds-close-btn {
-  background: transparent;
-  border: none;
-  color: rgba(240, 238, 233, 0.5);
-  font-size: 16px;
-  cursor: pointer;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.15s;
-}
-
-.focus-sounds-close-btn:hover {
-  color: #f0eee9;
-}
-
-.focus-sounds-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-  overflow-y: auto;
-}
-
-.focus-sounds-tiles {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.sound-tile-row {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-}
-
-.sound-tile {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 16px;
-  border-radius: 16px;
-  border: 1px solid rgba(240, 238, 233, 0.08);
-  background: rgba(240, 238, 233, 0.02);
-  color: rgba(240, 238, 233, 0.75);
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.2s, border-color 0.2s, color 0.2s;
-  width: 100%;
-  box-sizing: border-box;
-  flex: 1;
-  min-width: 0;
-}
-
-.sound-tile-shuffle {
-  flex-shrink: 0;
-  width: 44px;
-  border-radius: 16px;
-  border: 1px solid rgba(168, 134, 63, 0.42);
-  background: rgba(168, 134, 63, 0.12);
-  color: #b5b0a7;
-  font-size: 18px;
-  cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
-}
-
-.sound-tile-shuffle:hover {
-  background: rgba(168, 134, 63, 0.22);
-}
-
-.sound-tile:hover {
-  background: rgba(240, 238, 233, 0.05);
-  border-color: rgba(240, 238, 233, 0.18);
-  color: #f0eee9;
-}
-
-.sound-tile.active {
-  background: rgba(168, 134, 63, 0.12);
-  border-color: rgba(168, 134, 63, 0.42);
-  color: #b5b0a7;
-  box-shadow: 0 4px 12px rgba(168, 134, 63, 0.05);
-}
-
-.sound-tile-icon {
-  font-size: 20px;
-  flex-shrink: 0;
-}
-
-.sound-tile-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.sound-tile-title {
-  font-family: var(--font-sans);
-  font-size: 13.5px;
-  font-weight: 800;
-}
-
-.sound-tile-desc {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  color: #8d8880;
-}
-
-.sound-tile.active .sound-tile-desc {
-  color: rgba(181, 176, 167, 0.6);
-}
-
-.focus-sounds-volume-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  border-top: 1px solid rgba(240, 238, 233, 0.08);
-  padding-top: 20px;
-}
-
-.volume-label-row {
-  display: flex;
-  justify-content: space-between;
-  font-family: var(--font-sans);
-  font-size: 12.5px;
-  font-weight: 800;
-  color: rgba(240, 238, 233, 0.7);
-}
-
-.focus-sounds-volume-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(240, 238, 233, 0.12);
-  outline: none;
-  cursor: pointer;
-}
-
-.focus-sounds-volume-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #a8863f;
-  border: 1px solid rgba(26, 25, 23, 0.5);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-  transition: transform 0.1s, background 0.15s;
-}
-
-.focus-sounds-volume-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
-  background: #d8ad63;
-}
-
-.focus-sounds-volume-slider::-webkit-slider-thumb:active {
-  transform: scale(0.95);
-}
-
-.focus-sounds-volume-slider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #a8863f;
-  border: 1px solid rgba(26, 25, 23, 0.5);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-  transition: transform 0.1s, background 0.15s;
-  cursor: pointer;
-}
-
-.focus-sounds-volume-slider::-moz-range-thumb:hover {
-  transform: scale(1.15);
-  background: #d8ad63;
-}
-
-/* ── Mobile Responsive adjustments ── */
-@media (max-width: 640px) {
-  .focus-mode-top-right-actions {
-    top: calc(12px + env(safe-area-inset-top, 0px));
-    right: calc(12px + env(safe-area-inset-right, 0px));
-    gap: 6px;
-  }
-
-  .focus-mode-sounds-btn,
-  .focus-mode-rescue-btn {
-    min-height: 34px;
-    padding: 7px 10px;
-    font-size: 12px;
-  }
-
-  .focus-sounds-drawer {
-    width: 100vw;
-    border-left: none;
-    border-top: 1px solid rgba(240, 238, 233, 0.08);
-  }
-}
-
-
-/* ══════════════════════════════════════════════════════════════════════════
-   Screen 3 — the Focus session, rebuilt to the handoff.
-   "One task, one number, two exits."
-
-   The ground is pinned to Evening's values rather than read from --ground.
-   The design's rule is "light to plan, dark to execute", so this screen is
-   dark on EVERY theme — reading --ground would hand it Paper's light ground
-   on the light theme. The handoff's own names (--dark-bg, --dark-border,
-   --dark-border-2) do not exist in this file; these are the same values under
-   the names this repo settled on in #379.
-   ══════════════════════════════════════════════════════════════════════ */
-
-.focus-mode-overlay {
-  --fs-ground:       #171512;
-  --fs-ink:          #f2efe9;
-  --fs-text-soft:    #b0a99e;
-  --fs-text-quiet:   #8f887d;
-  --fs-divider:      #2e2a24;   /* the handoff's --dark-border */
-  --fs-control-edge: #6b655c;   /* --dark-border-2: the edge of a clickable thing */
-  --fs-gold:         #a8863f;
-  --fs-gold-lift:    #d8ad63;
-}
-
-/* "SESSION 3" — mono, top right. The handoff reads "SESSION 3 OF 4"; the
-   denominator is omitted because no daily session target exists to count
-   against, and printing one would be a figure the app never agreed to. */
-/* In the flow of the top-right group, not positioned over it. Absolutely
-   positioning it at the same coordinates put it underneath Sounds, Rescue and
-   Pop out, which paint later — invisible at phone widths. */
-.focus-mode-session-count {
-  align-self: center;
-  white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  color: var(--fs-text-quiet);
-}
-
-/* The task, above the number. 25/600/1.22 per the handoff. */
-.focus-mode-task-panel .focus-mode-task-title {
-  font-size: 25px;
-  font-weight: 600;
-  line-height: 1.22;
-  letter-spacing: -0.01em;
-  color: var(--fs-ink);
-  margin: 0;
-}
-
-/* The concrete step, carried in from screen 14, with the gold rule that marks
-   it as the smaller thing you actually start with. */
-.focus-mode-task-panel .focus-mode-concrete-step {
-  position: relative;
-  margin: 10px 0 0;
-  padding-left: 12px;
+  margin: 18px 0 0;
   font-family: var(--font-serif);
-  font-size: 15px;
+  font-size: 1.0625rem;
   line-height: 1.55;
-  color: var(--fs-text-soft);
-}
-.focus-mode-task-panel .focus-mode-concrete-step::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 2px;
-  bottom: 2px;
-  width: 2px;
-  background: var(--fs-gold);
+  color: var(--ink-2);
 }
 
-/* One number, 74px mono, and a 2px track — not a ring. The ring reported how
-   much was LEFT; the track reports what has been done, and holds still at
-   00:00 rather than animating past its own end. */
-.focus-mode-timer-block {
-  width: 100%;
-  max-width: 420px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  align-items: stretch;
-}
-
-.focus-mode-timer-block .focus-mode-time-digits {
+.focus-mode-timer-block { margin-top: 36px; }
+.focus-mode-time-digits {
+  display: block;
   font-family: var(--font-mono);
-  font-size: 74px;
+  font-size: 4rem;
+  font-weight: 700;
   line-height: 1;
+  letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  color: var(--fs-ink);
-  text-align: center;
+  color: var(--accent);
 }
-
 .focus-mode-track {
-  height: 2px;
-  width: 100%;
-  background: var(--fs-divider);
+  height: 6px;
+  margin-top: 28px;
   overflow: hidden;
+  background: var(--panel);
+  border-radius: 3px;
 }
 .focus-mode-track-fill {
   height: 100%;
-  background: var(--fs-gold-lift);
+  background: var(--accent);
+  border-radius: 3px;
   transition: width 1s linear;
 }
-
 .focus-mode-figures {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  margin: 10px 0 0;
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  color: var(--fs-text-quiet);
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+/* The phone shows "OF 15:00 · ENDS 09:55" only (45b). */
+.focus-mode-started { display: none; }
+
+.focus-mode-duration-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+.focus-mode-dur-btn {
+  min-height: 44px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--control-edge);
+  border-radius: 22px;
+  cursor: pointer;
+}
+.focus-mode-dur-btn.active {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
-/* K4's hold. "+Nm" is the filled one — it is what the screen suggests —
-   and "Stop here" is outlined, because leaving is always available and never
-   needs selling. */
+/* The actions sit at the bottom of a phone, under the thumb (45b). */
+.focus-mode-actions,
 .focus-mode-hold-actions {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: 100%;
-  max-width: 420px;
-  margin-top: 4px;
+  margin-top: auto;
+  padding-top: 32px;
 }
-.focus-mode-hold-keep,
-.focus-mode-hold-stop {
-  min-height: 54px;
-  border-radius: var(--radius, 4px);
-  font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 600;
+.focus-mode-done-btn,
+.focus-mode-hold-keep {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 1px solid var(--accent-edge);
+  border-radius: 6px;
   cursor: pointer;
 }
-.focus-mode-hold-keep {
-  background: var(--fs-gold-lift);
-  color: var(--fs-ground);   /* near-black on gold: the one place gold fills */
-  border: 0;
+.focus-mode-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 10px;
 }
+.focus-mode-ctrl-btn,
 .focus-mode-hold-stop {
-  background: transparent;
-  color: var(--fs-ink);
-  border: 1px solid var(--fs-control-edge);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--control-edge);
+  border-radius: 6px;
+  cursor: pointer;
 }
-
-/* At 00:00 the hold is the whole offer: the duration picker and the
-   play/pause controls have nothing left to act on, and "Done" would be a
-   third choice the design does not give. */
-.focus-mode-overlay.is-complete .focus-mode-done-btn,
-.focus-mode-overlay.is-complete .focus-mode-duration-row {
+.focus-mode-kbd {
   display: none;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  opacity: 0.8;
 }
 
-@media (max-width: 380px) {
-  .focus-mode-timer-block .focus-mode-time-digits { font-size: 60px; }
-  .focus-mode-task-panel .focus-mode-task-title { font-size: 22px; }
+/* Sounds · Pop out, and a place to park a stray thought. */
+.focus-mode-extras {
+  display: flex;
+  gap: 18px;
+  margin-top: 14px;
+}
+.focus-mode-extra-link {
+  min-height: 44px;
+  padding: 0;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 4px;
+}
+.focus-mode-extra-link.active { color: var(--ink); text-decoration-color: var(--accent); }
+.focus-mode-dump-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.focus-mode-dump-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.focus-mode-dump-input::placeholder { color: var(--placeholder); }
+.focus-mode-dump-btn {
+  min-height: 44px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* ── Sounds drawer ── */
+.focus-sounds-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: var(--scrim, rgba(0, 0, 0, 0.4));
+}
+.focus-sounds-drawer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 11;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 16px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg);
+  border-radius: 16px 16px 0 0;
+  box-shadow: var(--shadow-lg);
+  transform: translateY(100%);
+  visibility: hidden;
+  transition: transform 0.2s, visibility 0.2s;
+}
+.focus-sounds-drawer.open { transform: none; visibility: visible; }
+.focus-sounds-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.focus-sounds-header h3 { margin: 0; font-size: 1.0625rem; font-weight: 800; }
+.focus-sounds-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.focus-sounds-tiles {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+}
+.sound-tile-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+.sound-tile {
+  flex: 1;
+  min-height: 52px;
+  padding: 8px 0;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.sound-tile-title { font-size: 0.9375rem; font-weight: 700; }
+.sound-tile-desc { font-size: 0.8125rem; color: var(--ink-2); }
+.sound-tile.active .sound-tile-title { color: var(--accent); }
+.sound-tile-shuffle {
+  min-height: 44px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.focus-sounds-volume-section { margin-top: 16px; }
+.volume-label-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.focus-sounds-volume-slider { width: 100%; accent-color: var(--accent); }
+
+.focus-mode-overlay .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.focus-mode-overlay button:focus-visible,
+.focus-mode-overlay input:focus-visible,
+.focus-sounds-drawer button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Laptop (45l): centred column, the actions in one row, keys shown. */
+@media (min-width: 1024px) {
+  .focus-mode-overlay { padding: 0 48px 40px; }
+  .focus-mode-body { justify-content: center; padding-top: 0; }
+  .focus-mode-task-title { font-size: 3rem; }
+  .focus-mode-time-digits { font-size: 5.5rem; }
+  .focus-mode-started { display: inline; }
+  .focus-mode-leave-word,
+  .focus-mode-exit-btn .focus-mode-kbd { display: inline; }
+  .focus-mode-exit-btn svg { display: none; }
+  .focus-mode-kbd {
+    display: inline;
+    padding: 1px 6px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+  .focus-mode-actions,
+  .focus-mode-hold-actions {
+    flex-direction: row;
+    margin-top: 28px;
+    padding-top: 0;
+  }
+  .focus-mode-done-btn { flex: 0 0 240px; }
+  .focus-mode-controls { flex: 1; }
+  .focus-mode-hold-keep,
+  .focus-mode-hold-stop { flex: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focus-mode-track-fill,
+  .focus-sounds-drawer { transition: none; }
 }

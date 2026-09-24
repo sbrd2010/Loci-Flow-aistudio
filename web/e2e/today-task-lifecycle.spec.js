@@ -113,7 +113,7 @@ test("mobile reliability: Today task can be added, edited, focused, completed, r
   await expect(focusOverlay).toBeVisible({ timeout: 5_000 });
   await expect(focusOverlay.getByRole("heading", { name: editedTitle })).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
-  await focusOverlay.getByLabel("Exit focus mode").click();
+  await focusOverlay.getByLabel("Leave focus").click();
   await expect(focusOverlay).not.toBeVisible({ timeout: 5_000 });
   await expect(wallTitle).toHaveText(editedTitle);
 

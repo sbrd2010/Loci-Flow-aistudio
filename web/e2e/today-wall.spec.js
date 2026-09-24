@@ -141,7 +141,7 @@ test("mobile reliability: Low Energy's smaller start actually starts five minute
   // The five-minute session presents as one (528db2f) — and the figure is 5:00,
   // not the task's own 25:00.
   await expect(overlay.getByText("FIVE MINUTES", { exact: false })).toBeVisible();
-  await expect(overlay.getByText(/\b5:00\b/)).toBeVisible();
+  await expect(overlay.locator(".focus-mode-time-digits")).toHaveText("5:00");
 });
 
 test("mobile reliability: the scattered door on the desk reaches screen 14", async ({ page }) => {
@@ -166,7 +166,7 @@ test("mobile reliability: five minutes is honoured even with a session already o
   await page.locator(".wall-primary").click();
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 10_000 });
-  await expect(overlay.getByText(/\b25:00\b/)).toBeVisible();
+  await expect(overlay.locator(".focus-mode-time-digits")).toHaveText("25:00");
   await overlay.locator(".focus-mode-exit-btn").click();
   await expect(overlay).toHaveCount(0);
 
@@ -175,7 +175,7 @@ test("mobile reliability: five minutes is honoured even with a session already o
   await page.locator(".wall-action", { hasText: "Start small — 5 minutes" }).click();
 
   await expect(overlay).toBeVisible({ timeout: 8_000 });
-  await expect(overlay.getByText(/\b5:00\b/)).toBeVisible();
+  await expect(overlay.locator(".focus-mode-time-digits")).toHaveText("5:00");
   await expect(overlay.getByText(/\b25:00\b/)).toHaveCount(0);
 });
 
