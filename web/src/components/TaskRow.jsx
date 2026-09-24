@@ -163,6 +163,13 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   const doneSubSteps = subSteps?.filter(s => s.done) ?? [];
   const hasSubSteps = subSteps && subSteps.length > 0;
   const isDragAnywhere = interactionStyle === "dragAnywhere" && !!dragHandleListeners;
+  const onOptionsEscape = (e) => {
+    if (e.key !== "Escape" || !menuOpen) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuOpen(false);
+    optionsBtnRef.current?.focus();
+  };
 
   const setRowRef = useCallback(node => {
     menuRef.current = node;
@@ -304,6 +311,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
+          onKeyDown={onOptionsEscape}
         >
           Options
         </button>
@@ -313,7 +321,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
       {menuOpen && (
         <div
           data-testid="task-options-menu"
-          onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setMenuOpen(false); optionsBtnRef.current?.focus(); } }}
+          onKeyDown={e => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setMenuOpen(false); optionsBtnRef.current?.focus(); } }}
           onClick={e => e.stopPropagation()}
           onMouseDown={e => e.stopPropagation()}
           onTouchStart={e => e.stopPropagation()}
@@ -424,6 +432,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
           onTouchStart={e => e.stopPropagation()}
           aria-label="Task options"
           aria-expanded={menuOpen}
+          onKeyDown={onOptionsEscape}
           title="Task options"
         >⋮</button>
       )}

@@ -177,44 +177,64 @@ export default function TodayTab({
   // The phone sheet's height when open: half (37b) or full (37c). Every open
   // starts at half; full is a choice made each time.
   const [sheetFull, setSheetFull] = useState(false);
+  const [sheetViewport, setSheetViewport] = useState(() => typeof window !== "undefined" && window.innerWidth < 840);
   useEffect(() => { if (!peekOpen) setSheetFull(false); }, [peekOpen]);
+  useEffect(() => {
+    const update = () => setSheetViewport(window.innerWidth < 840);
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
   const sheetRef = useRef(null);
   const sheetDragRef = useRef(null);
-  const closeSheet = () => setPeekOpen(false);
+  const closeSheet = () => {
+    const hadFocus = sheetRef.current?.contains(document.activeElement);
+    setPeekOpen(false);
+    if (hadFocus) requestAnimationFrame(() => document.querySelector(".wall-peek")?.focus());
+  };
   // Dragging the grabber moves the sheet with the finger (no re-render per
   // move), then settles on the nearest height: up to full, down to half, or
   // far enough down to close. A drag that barely moves is left to the click.
   const onSheetPointerDown = (e) => {
     const el = sheetRef.current;
-    if (!el) return;
+    if (!el || e.isPrimary === false) return;
     sheetDragRef.current = null;
+    const pointerId = e.pointerId;
     const startY = e.clientY;
     const wasFull = sheetFull;
     let dy = 0;
     const move = (ev) => {
+      if (ev.pointerId !== pointerId) return;
       dy = ev.clientY - startY;
       if (Math.abs(dy) < 6) return;
       sheetDragRef.current = true;
       el.style.transition = "none";
       el.style.transform = `translateY(${Math.max(dy, wasFull ? 0 : -el.offsetHeight)}px)`;
     };
-    const up = () => {
+    const cleanup = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", up);
+      window.removeEventListener("pointercancel", cancel);
       el.style.transition = "";
       el.style.transform = "";
+    };
+    const up = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      cleanup();
       if (!sheetDragRef.current) return;
-      // Cleared after the click that may follow this pointerup; a drag that
-      // ends off the grabber fires no click at all.
+      // Keep the drag flag through the click that may follow pointerup.
       setTimeout(() => { sheetDragRef.current = null; }, 0);
       if (dy < -60) setSheetFull(true);
       else if (wasFull && dy > 60 && dy < 240) setSheetFull(false);
       else if (dy > (wasFull ? 240 : 80)) closeSheet();
     };
+    const cancel = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      cleanup();
+      sheetDragRef.current = null;
+    };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", up);
+    window.addEventListener("pointercancel", cancel);
   };
   const onSheetGrabberClick = () => {
     // The click that ends a drag is not a tap.
@@ -886,6 +906,14 @@ export default function TodayTab({
   // of the space between the header and the tab bar. Full height fills that
   // space. Measured, because the title wraps to as many lines as it needs.
   const sheetOpen = peekOpen && !!pinnedFocusTask;
+  const wallCovered = sheetOpen && sheetFull && sheetViewport;
+  useLayoutEffect(() => {
+    if (!wallCovered) return;
+    const sheet = sheetRef.current;
+    if (sheet && !sheet.contains(document.activeElement)) {
+      sheet.querySelector(".today-sheet-grabber")?.focus();
+    }
+  }, [wallCovered]);
   useLayoutEffect(() => {
     if (!sheetOpen) return undefined;
     const el = sheetRef.current;
@@ -1025,7 +1053,7 @@ export default function TodayTab({
   const wallRemainingCount = todayTasksAll.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).length;
   // The open rows the list holds: the rest of the day, plus the NOW row that
   // heads it — what the sheet's accessible name reports.
-  const listOpenRows = wallRemainingCount + (pinnedFocusTask ? 1 : 0);
+  const listOpenRows = remainingTasks.length + (pinnedFocusTask ? 1 : 0);
   // App's floating timer (shown for a session left running behind the
   // overlay) sits over the sheet's bottom edge; the sheet makes room for it.
   const floatingTimerShown = !!(focusSessionActive && activeTask && !isFocusMode && !sessionCompletePending);
@@ -1203,7 +1231,7 @@ export default function TodayTab({
            the list beside it once the list is open (41a); on phones and
            tablets the two stack. ── */}
       <div className={`today-layout${peekOpen || !pinnedFocusTask ? " is-list-open" : ""}`}>
-      <div className="today-layout-main">
+      <div className="today-layout-main" inert={wallCovered ? "" : undefined} aria-hidden={wallCovered ? "true" : undefined}>
       <TodayWall
         task={pinnedFocusTask}
         goal={wallGoal}
@@ -1343,7 +1371,7 @@ export default function TodayTab({
               </button>
             )}
             {pinnedFocusTask && (
-              <button type="button" className="today-list-hide" onClick={() => setPeekOpen(false)}>
+              <button type="button" className="today-list-hide" onClick={closeSheet}>
                 Hide list <kbd className="wall-key" aria-hidden="true">L</kbd>
               </button>
             )}
