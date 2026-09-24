@@ -4,56 +4,10 @@ import { getTimerState, extendMinutesForSession } from "../utils/focusSession";
 import { BINAURAL_TRACK_ID } from "../utils/binauralBeat";
 import { SOUND_CATEGORIES, getCategoryKeyForTrack, getTrackTitle } from "../utils/soundLibrary";
 import LinkifyText from "./LinkifyText";
+import { IconCheck, IconX } from "./ui/icons";
 import "../styles/focusMode.css";
 
 const DURATION_OPTIONS = [15, 20, 25, 30, 45, 60, 90];
-
-function ResetIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M6.8 7.8A7 7 0 1 1 5 12.5" />
-      <path d="M6.8 7.8H3.5V4.5" />
-    </svg>
-  );
-}
-
-function PlayIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M8 5.5v13l10-6.5-10-6.5Z" />
-    </svg>
-  );
-}
-
-function PauseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M8 6v12" />
-      <path d="M16 6v12" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M5 12.5 10 17l9-10" />
-    </svg>
-  );
-}
-
-const hiddenControlTextStyle = {
-  position: "absolute",
-  width: 1,
-  height: 1,
-  margin: -1,
-  padding: 0,
-  overflow: "hidden",
-  clip: "rect(0 0 0 0)",
-  clipPath: "inset(50%)",
-  whiteSpace: "nowrap",
-  border: 0,
-};
 
 const PIP_SUPPORTED = "documentPictureInPicture" in window;
 
@@ -67,14 +21,17 @@ export default function FocusModePage({
   maxSeconds,
   isRunning,
   onPlayPause,
-  onReset,
   onDone,
   onExit,
   onChangeDuration,
+  // Another screen (Rescue) is open on top: its keys are its own.
+  keysOff = false,
   // The hold's two actions. Neither is the ordinary overlay exit: "Keep going"
   // has to restart the timer AND clear the completion state, and "Stop here"
   // has to end the session, not merely hide the screen it is on.
   onKeepGoing,
+  // +5 min on a running block (45b), not the hold's extension.
+  onAddTime,
   onStopHere,
   startedAt,
   elapsedSeconds,
@@ -163,116 +120,97 @@ export default function FocusModePage({
   const holdExtendMinutes = extendMinutesForSession(maxSeconds);
   const holdLogMinutes = loggedMinutes;
 
+  // "OF 15:00 · ENDS 09:55" (45b): the block's length, and when it ends if it
+  // keeps running. Not claimed while paused — a paused block has no end.
+  const blockLabel = `${Math.floor(maxSeconds / 60)}:${String(maxSeconds % 60).padStart(2, "0")}`;
+  const endsLabel = isRunning && !isComplete
+    ? new Date(Date.now() + secondsLeft * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+    : null;
+  const notStarted = !isRunning && !isComplete && !(Number(elapsedSeconds) > 0) && secondsLeft === maxSeconds;
+  const paused = !isRunning && !isComplete;
+
+  // Laptop keys (45l): Space pauses, D marks done, Esc leaves. Not while
+  // typing, not while Rescue is open over this screen, and Esc closes the
+  // sounds drawer first — even from its volume slider. A held Space fires once.
+  const keysRef = useRef({});
+  keysRef.current = { isComplete, showSoundsDrawer, onPlayPause, onDone, onExit, keysOff };
+  useEffect(() => {
+    const onKey = (e) => {
+      const k = keysRef.current;
+      if (k.keysOff || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "Escape" && k.showSoundsDrawer) { setShowSoundsDrawer(false); return; }
+      const t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      if (e.repeat) return;
+      if (e.key === "Escape") {
+        if (!k.isComplete) { e.preventDefault(); k.onExit?.(); }
+        return;
+      }
+      if (k.isComplete || k.showSoundsDrawer) return;
+      if (e.key === " " && !(t && (t.tagName === "BUTTON" || t.tagName === "A"))) { e.preventDefault(); k.onPlayPause?.(); }
+      else if (e.key === "d" || e.key === "D") { e.preventDefault(); k.onDone?.(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const kicker = isFiveMinute
+    ? (isComplete ? "FIVE MINUTES · DONE" : "FIVE MINUTES · THAT'S ALL")
+    : "FOCUS";
+
   return (
     <div className={`focus-mode-overlay${isRunning ? " is-running" : ""}${isComplete ? " is-complete" : ""} timer-state-${timerState}`}>
-      {/* Hidden at 00:00. The hold offers two choices and this was a third
-          that behaved like neither: plain onExit leaves the session open and
-          hands the user the global modal — the same bug "Stop here" had, via
-          the other button in the same header. "Stop here" is the way out
-          while the hold is showing, so nothing is trapped by removing this. */}
-      {!isComplete && (
-        <button
-          type="button"
-          className="focus-mode-exit-btn"
-          onClick={onExit}
-          aria-label="Exit focus mode"
-        >
-          Exit
-        </button>
-      )}
-
-      <div className="focus-mode-top-right-actions">
-        {/* Inside the group, not absolutely positioned over it: Sounds is
-            always rendered here and Rescue and Pop out often are, and they
-            paint later — so a separately positioned count sat underneath
-            them at phone widths. */}
-        {sessionNumber > 0 && (
-          <span className="focus-mode-session-count" aria-label={`Session ${sessionNumber} today`}>
-            SESSION {sessionNumber}
-          </span>
-        )}
-        {!isComplete && onRescue && (
-          <button
-            type="button"
-            className="focus-mode-rescue-btn"
-            onClick={onRescue}
-            title="Feeling stuck or distracted? Get help getting unstuck"
-            aria-label="Open Rescue Mode"
-          >
-            🛟 Stuck?
-          </button>
-        )}
-
+      <header className="focus-mode-head">
+        <p className="focus-mode-kicker">
+          <span className="focus-mode-header-label">{kicker}</span>
+          {sessionNumber > 0 && (
+            <span className="focus-mode-session-count" aria-label={`Session ${sessionNumber} today`}> · SESSION {sessionNumber}</span>
+          )}
+          <span className="sr-only"> · {stateLabel}</span>
+        </p>
+        {/* Hidden at 00:00: the hold offers two choices, and a plain exit
+            that left the session open would be a third that behaves like
+            neither. "Stop here" is the way out then. */}
         {!isComplete && (
-          <button
-            type="button"
-            className={`focus-mode-sounds-btn${showSoundsDrawer ? " active" : ""}`}
-            onClick={() => setShowSoundsDrawer(prev => !prev)}
-            title="Ambient focus sounds"
-            aria-label="Open sounds menu"
-          >
-            Sounds
+          <button type="button" className="focus-mode-exit-btn" onClick={onExit} aria-label="Leave focus">
+            <span className="focus-mode-leave-word">Leave</span>
+            <kbd className="focus-mode-kbd">Esc</kbd>
+            <IconX size={22} />
           </button>
         )}
-
-        {PIP_SUPPORTED && !pipOpen && !isComplete && (
-          <button
-            type="button"
-            className="focus-mode-pip-btn"
-            onClick={onOpenPiP}
-            title="Pop out a floating mini-timer"
-            aria-label="Pop out timer"
-          >
-            Pop out
-          </button>
-        )}
-      </div>
+      </header>
 
       <main className="focus-mode-body" aria-label="Deep focus session">
-        <div className="focus-mode-session-meta">
-          <span className="focus-mode-header-label">
-            {isFiveMinute ? (isComplete ? "FIVE MINUTES · DONE" : "FIVE MINUTES · THAT'S ALL") : "Deep Focus"}
-          </span>
-          <span className="focus-mode-state-pill">{stateLabel}</span>
-        </div>
-
         <section className="focus-mode-task-panel" aria-label="Focused task">
-          <div className="focus-mode-task-kicker">Now focusing on</div>
           <h1 className="focus-mode-task-title"><LinkifyText text={task.title} /></h1>
-          {task.concreteStep && (
-            <p className="focus-mode-concrete-step"><LinkifyText text={task.concreteStep} /></p>
+          {task.concreteStep && task.concreteStep !== "Do first tiny step" && (
+            <p className="focus-mode-concrete-step">First step: <LinkifyText text={task.concreteStep} /></p>
           )}
         </section>
 
-        {/* Screen 3's figure: one number, 74px mono, with a 2px track under
-            it rather than the ring. The ring drew attention to how much was
-            LEFT; the track reports how much has been done and then stops
-            asking. It also holds still at 00:00 — K4 freezes the timer there,
-            and a ring animating past its own end would read as overtime the
-            app has no claim on. */}
         <div className="focus-mode-timer-block">
-          <span className="focus-mode-time-digits" aria-live="off">
-            {mins}:{secs}
-          </span>
+          <span className="focus-mode-time-digits" aria-live="off">{mins}:{secs}</span>
           <div
             className="focus-mode-track"
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={maxSeconds}
             aria-valuenow={Math.max(0, maxSeconds - secondsLeft)}
+            aria-valuetext={`${mins} minutes ${secs} seconds left of ${blockLabel}`}
             aria-label="Session progress"
           >
             <div className="focus-mode-track-fill" style={{ width: `${Math.min(100, Math.max(0, (1 - ratio) * 100))}%` }} />
           </div>
-          <div className="focus-mode-figures">
-            {startedLabel && <span>STARTED {startedLabel}</span>}
-            {loggedMinutes >= 1 && <span>+{loggedMinutes}m LOGGED SO FAR</span>}
-          </div>
+          <p className="focus-mode-figures">
+            <span>OF {blockLabel}</span>
+            {endsLabel && <span> · ENDS {endsLabel}</span>}
+            {startedLabel && <span className="focus-mode-started"> · STARTED {startedLabel}</span>}
+          </p>
         </div>
 
-        {/* Duration picker — only when timer is paused/not started */}
-        {!isRunning && !isComplete && (
-          <div className="focus-mode-duration-row" aria-label="Focus duration">
+        {/* While the timer is stopped, the block's length can be changed. */}
+        {paused && (
+          <div className="focus-mode-duration-row" role="group" aria-label="Focus duration">
             {DURATION_OPTIONS.map(m => (
               <button
                 key={m}
@@ -287,79 +225,80 @@ export default function FocusModePage({
           </div>
         )}
 
-        {!isComplete && (
-          <div className="focus-mode-controls" aria-label="Timer controls">
-            <button
-              type="button"
-              className="focus-mode-ctrl-btn"
-              onClick={onReset}
-              title="Reset timer"
-              aria-label="Reset timer"
-            >
-              <ResetIcon />
-            </button>
-
-            <button
-              type="button"
-              className="focus-mode-ctrl-btn focus-mode-ctrl-play"
-              data-testid="timer-play-pause"
-              onClick={onPlayPause}
-              aria-label={isRunning ? "Pause timer" : "Start timer"}
-            >
-              {isRunning ? <PauseIcon /> : <PlayIcon />}
-              <span
-                className="focus-mode-control-text"
-                aria-hidden="true"
-                style={hiddenControlTextStyle}
-              >
-                {isRunning ? "⏸" : "▶"}
-              </span>
-            </button>
-          </div>
-        )}
-
-        {/* K4's hold, at 00:00: two choices and nothing else. The timer above
-            is already frozen — no overtime is tracked, displayed or logged —
-            and the minutes are already in the ledger, so neither button is a
-            gate on the data. "+Nm" extends this same session; "Stop here"
-            only dismisses the hold. */}
-        {isComplete && (
+        {/* K4's hold, at 00:00: two choices and nothing else. The timer is
+            frozen and the minutes are already in the ledger. */}
+        {isComplete ? (
           <div className="focus-mode-hold-actions" aria-label="Session complete">
-            <button
-              type="button"
-              className="focus-mode-hold-keep"
-              onClick={() => onKeepGoing?.(holdExtendMinutes)}
-            >
+            <button type="button" className="focus-mode-hold-keep" onClick={() => onKeepGoing?.(holdExtendMinutes)}>
               Keep going · +{holdExtendMinutes}m
             </button>
-            <button
-              type="button"
-              className="focus-mode-hold-stop"
-              onClick={onStopHere || onExit}
-            >
+            <button type="button" className="focus-mode-hold-stop" onClick={onStopHere || onExit}>
               Stop here{holdLogMinutes >= 1 ? ` — log ${holdLogMinutes}m` : ""}
             </button>
           </div>
+        ) : (
+          <div className="focus-mode-actions">
+            <button
+              type="button"
+              className="focus-mode-done-btn"
+              onClick={onDone}
+              aria-label={loggedLabel ? `Mark task complete and log ${loggedMinutes} minutes` : "Mark done"}
+            >
+              <span>{loggedLabel ? `Done — log ${loggedLabel}` : "Mark done"}</span>
+              <IconCheck size={18} />
+              <kbd className="focus-mode-kbd">D</kbd>
+            </button>
+            <div className="focus-mode-controls" aria-label="Timer controls">
+              <button
+                type="button"
+                className="focus-mode-ctrl-btn"
+                data-testid="timer-play-pause"
+                onClick={onPlayPause}
+                aria-label={isRunning ? "Pause timer" : notStarted ? "Start timer" : "Resume timer"}
+              >
+                {isRunning ? "Pause" : notStarted ? "Start" : "Resume"}
+                <kbd className="focus-mode-kbd">Space</kbd>
+              </button>
+              {onAddTime && (
+                <button type="button" className="focus-mode-ctrl-btn" onClick={() => onAddTime(5)} aria-label="Add 5 minutes">
+                  +5 min
+                </button>
+              )}
+              {onRescue && (
+                <button type="button" className="focus-mode-ctrl-btn focus-mode-rescue-btn" onClick={onRescue}>
+                  I&apos;m stuck
+                </button>
+              )}
+            </div>
+          </div>
         )}
 
-        <button
-          type="button"
-          className="focus-mode-done-btn"
-          onClick={onDone}
-          aria-label={loggedLabel ? `Mark task complete and log ${loggedMinutes} minutes` : "Mark task complete and exit"}
-        >
-          <CheckIcon />
-          <span>{loggedLabel ? `Done — log ${loggedLabel}` : "Done"}</span>
-        </button>
-
-        {/* Brain dump — capture stray thoughts without breaking focus */}
-        {onAddBrainDump && (
+        {/* Not drawn in 45b, but already part of a session: sounds, the
+            pop-out timer, and a place to drop a stray thought. Quiet, below. */}
+        {!isComplete && (
+          <div className="focus-mode-extras">
+            <button
+              type="button"
+              className={`focus-mode-extra-link focus-mode-sounds-btn${showSoundsDrawer ? " active" : ""}`}
+              onClick={() => setShowSoundsDrawer(prev => !prev)}
+              aria-label="Open sounds menu"
+            >
+              Sounds
+            </button>
+            {PIP_SUPPORTED && !pipOpen && (
+              <button type="button" className="focus-mode-extra-link focus-mode-pip-btn" onClick={onOpenPiP} aria-label="Pop out timer">
+                Pop out
+              </button>
+            )}
+          </div>
+        )}
+        {onAddBrainDump && !isComplete && (
           <div className="focus-mode-dump-row">
             <input
               ref={dumpInputRef}
               type="text"
               className="focus-mode-dump-input"
-              placeholder="Stray thought? Capture it here ↵"
+              placeholder="A stray thought? Park it here"
               value={dumpText}
               onChange={e => setDumpText(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") submitDump(); }}
@@ -371,21 +310,19 @@ export default function FocusModePage({
               onClick={submitDump}
               aria-label="Save thought to Brain Dump"
             >
-              {dumpSaved ? "✓" : "Save"}
+              {dumpSaved ? "Saved" : "Save"}
             </button>
           </div>
         )}
       </main>
 
-      {/* ── Focus Sounds Backdrop */}
       {showSoundsDrawer && (
         <div className="focus-sounds-backdrop" onClick={() => setShowSoundsDrawer(false)} />
       )}
 
-      {/* ── Focus Sounds Drawer */}
       <div className={`focus-sounds-drawer${showSoundsDrawer ? " open" : ""}`} aria-hidden={!showSoundsDrawer}>
         <div className="focus-sounds-header">
-          <h3>Focus Sounds</h3>
+          <h3>Focus sounds</h3>
           <button
             type="button"
             className="focus-sounds-close-btn"
@@ -393,21 +330,21 @@ export default function FocusModePage({
             aria-label="Close sounds menu"
             tabIndex={showSoundsDrawer ? 0 : -1}
           >
-            ✕
+            <IconX size={20} />
           </button>
         </div>
 
         <div className="focus-sounds-content">
           <div className="focus-sounds-tiles">
             {[
-              { id: "none", title: "None", icon: "🚫", desc: "Silent focus" },
-              { id: "rain", title: SOUND_CATEGORIES.rain.title, icon: SOUND_CATEGORIES.rain.icon, desc: "Real rain tracks" },
-              { id: "nature", title: SOUND_CATEGORIES.nature.title, icon: SOUND_CATEGORIES.nature.icon, desc: "Forest & river" },
-              { id: "lofi", title: SOUND_CATEGORIES.lofi.title, icon: SOUND_CATEGORIES.lofi.icon, desc: "Downtempo beats" },
-              { id: "jazz", title: SOUND_CATEGORIES.jazz.title, icon: SOUND_CATEGORIES.jazz.icon, desc: "Smooth jazz" },
-              { id: "piano", title: SOUND_CATEGORIES.piano.title, icon: SOUND_CATEGORIES.piano.icon, desc: "Cozy piano" },
-              { id: "chillhop", title: SOUND_CATEGORIES.chillhop.title, icon: SOUND_CATEGORIES.chillhop.icon, desc: "Melodic beats" },
-              { id: BINAURAL_TRACK_ID, title: "Binaural 40Hz", icon: "🧠", desc: "Focus tone (use headphones)" }
+              { id: "none", title: "None", desc: "Silent focus" },
+              { id: "rain", title: SOUND_CATEGORIES.rain.title, desc: "Real rain tracks" },
+              { id: "nature", title: SOUND_CATEGORIES.nature.title, desc: "Forest & river" },
+              { id: "lofi", title: SOUND_CATEGORIES.lofi.title, desc: "Downtempo beats" },
+              { id: "jazz", title: SOUND_CATEGORIES.jazz.title, desc: "Smooth jazz" },
+              { id: "piano", title: SOUND_CATEGORIES.piano.title, desc: "Cozy piano" },
+              { id: "chillhop", title: SOUND_CATEGORIES.chillhop.title, desc: "Melodic beats" },
+              { id: BINAURAL_TRACK_ID, title: "Binaural 40Hz", desc: "Focus tone (use headphones)" }
             ].map(track => {
               const isActive = activeSoundKey === track.id;
               const isAmbientCategory = Boolean(SOUND_CATEGORIES[track.id]);
@@ -420,13 +357,12 @@ export default function FocusModePage({
                     aria-pressed={isActive}
                     tabIndex={showSoundsDrawer ? 0 : -1}
                   >
-                    <span className="sound-tile-icon">{track.icon}</span>
                     <div className="sound-tile-info">
                       <div className="sound-tile-title">{track.title}</div>
                       <div className="sound-tile-desc">
                         {isActive && isAmbientCategory
                           ? (trackLoadState === "loading" ? "Loading…"
-                            : trackLoadState === "error" ? "Couldn't load — try 🔀"
+                            : trackLoadState === "error" ? "Couldn't load. Try another."
                             : getTrackTitle(selectedTrack))
                           : track.desc}
                       </div>
@@ -438,10 +374,9 @@ export default function FocusModePage({
                       className="sound-tile-shuffle"
                       onClick={() => reshuffleTrack()}
                       aria-label="Play a different variation"
-                      title="Play a different variation"
                       tabIndex={showSoundsDrawer ? 0 : -1}
                     >
-                      🔀
+                      Another
                     </button>
                   )}
                 </div>

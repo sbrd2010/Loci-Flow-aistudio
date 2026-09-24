@@ -89,7 +89,7 @@ test("mobile reliability: a five-minute session presents as one, not as a 25-min
   // would never write. It names what would actually be logged, which at zero
   // is nothing. (This spec previously asserted the promise itself.)
   const done = overlay.locator(".focus-mode-done-btn");
-  await expect(done).toContainText("Done");
+  await expect(done).toContainText(/done/i);
   await expect(done).not.toContainText("5m");
 });
 
@@ -101,6 +101,6 @@ test("mobile reliability: the full session is untouched by the five-minute delta
 
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 10_000 });
-  await expect(overlay.locator(".focus-mode-header-label")).toHaveText("Deep Focus");
+  await expect(overlay.locator(".focus-mode-header-label")).toHaveText("FOCUS");
   await expect(overlay.locator(".focus-mode-done-btn")).not.toContainText("log 5m");
 });

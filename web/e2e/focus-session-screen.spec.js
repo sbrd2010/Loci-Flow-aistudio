@@ -55,8 +55,8 @@ test("mobile reliability: progress is a track, and it reports what is done", asy
   await expect(track).toBeVisible();
 
   const box = await overlay.locator(".focus-mode-track").boundingBox();
-  // 2px per the handoff — a hairline under the figure, not a ring around it.
-  expect(box.height).toBeLessThanOrEqual(3);
+  // A bar under the figure, not a ring around it (45b draws it about 6px).
+  expect(box.height).toBeLessThanOrEqual(7);
 
   // The fill grows with elapsed time rather than shrinking with what is left.
   const before = (await overlay.locator(".focus-mode-track-fill").boundingBox()).width;
@@ -65,12 +65,31 @@ test("mobile reliability: progress is a track, and it reports what is done", asy
   expect(after).toBeGreaterThan(before);
 });
 
-test("mobile reliability: the session names when it started and what it has logged", async ({ page }) => {
+test("mobile reliability: the session names its length and when it ends (45b)", async ({ page }) => {
   const overlay = await openSession(page);
-  await expect(overlay.locator(".focus-mode-figures")).toContainText(/STARTED \d{2}:\d{2}/);
+  await expect(overlay.locator(".focus-mode-figures")).toContainText(/^OF \d+:\d{2} · ENDS \d{2}:\d{2}/);
+});
 
-  await page.clock.runFor(120_000);
-  await expect(overlay.locator(".focus-mode-figures")).toContainText(/\+\d+m LOGGED SO FAR/);
+test("the block can be paused, resumed and given five more minutes, and the keys work", async ({ page }) => {
+  const overlay = await openSession(page);
+  const digits = overlay.locator(".focus-mode-time-digits");
+  await page.clock.runFor(2_000);
+  await overlay.getByRole("button", { name: "Pause timer" }).click();
+  await expect(overlay.getByRole("button", { name: "Resume timer" })).toBeVisible();
+  // A paused block has no end time to claim.
+  await expect(overlay.locator(".focus-mode-figures")).not.toContainText("ENDS");
+  const before = await digits.innerText();
+  await overlay.getByRole("button", { name: "Add 5 minutes" }).click();
+  const [bm, bs] = before.split(":").map(Number);
+  await expect(digits).toHaveText(`${bm + 5}:${String(bs).padStart(2, "0")}`);
+  // The block itself is five minutes longer (the demo wall starts 25:00).
+  await expect(overlay.locator(".focus-mode-figures")).toContainText("OF 30:00");
+  // Space resumes; Esc leaves.
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press("Space");
+  await expect(overlay.getByRole("button", { name: "Pause timer" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(overlay).toHaveCount(0);
 });
 
 test("mobile reliability: no ordinal is claimed when the ledger cannot be read", async ({ page }) => {
@@ -107,14 +126,14 @@ test("mobile reliability: reaching 00:00 holds, with two choices and no modal", 
 
 test("mobile reliability: the hold offers two ways out, not a third broken one", async ({ page }) => {
   const overlay = await openSession(page);
-  await expect(overlay.getByRole("button", { name: "Exit focus mode" })).toBeVisible();
+  await expect(overlay.getByRole("button", { name: "Leave focus" })).toBeVisible();
 
   await page.clock.runFor(26 * 60_000);
 
   // The header Exit called the plain overlay-exit, which left the session
   // open and summoned the global modal — the same bug "Stop here" had, via
   // the other button in the same header. "Stop here" is the way out now.
-  await expect(overlay.getByRole("button", { name: "Exit focus mode" })).toHaveCount(0);
+  await expect(overlay.getByRole("button", { name: "Leave focus" })).toHaveCount(0);
   await expect(overlay.getByRole("button", { name: /Stop here/ })).toBeVisible();
 });
 
@@ -143,4 +162,51 @@ test("mobile reliability: Stop here ends the session without handing over to a m
   // dialog it replaced.
   await expect(page.locator(".confirm-dialog, .modal-backdrop")).toHaveCount(0);
   await expect(page.getByText(/Focus block complete/i)).toHaveCount(0);
+});
+
+// Codex review of #397. The length picker is for a stopped timer: every
+// session opens running, so "before the first start" never came.
+test("paused, the block's length can be changed", async ({ page }) => {
+  const overlay = await openSession(page);
+  await page.clock.runFor(2_000);
+  await expect(overlay.getByRole("group", { name: "Focus duration" })).toHaveCount(0);
+  await overlay.getByRole("button", { name: "Pause timer" }).click();
+  const picker = overlay.getByRole("group", { name: "Focus duration" });
+  await picker.getByRole("button", { name: "45m" }).click();
+  await expect(overlay.locator(".focus-mode-figures")).toContainText("OF 45:00");
+});
+
+test("a held Space toggles the timer once, not on every repeat", async ({ page }) => {
+  const overlay = await openSession(page);
+  await page.clock.runFor(2_000);
+  await page.evaluate(() => document.activeElement?.blur());
+  // One press and one auto-repeat: toggled twice, it would be running again.
+  await page.keyboard.down("Space");
+  await page.keyboard.down("Space");
+  await page.keyboard.up("Space");
+  await expect(overlay.getByRole("button", { name: "Resume timer" })).toBeVisible();
+});
+
+test("Escape closes the sounds drawer even from its volume slider", async ({ page }) => {
+  const overlay = await openSession(page);
+  await overlay.getByRole("button", { name: "Open sounds menu" }).click();
+  const drawer = page.locator(".focus-sounds-drawer");
+  await expect(drawer).toHaveClass(/open/);
+  await page.getByRole("slider", { name: "Adjust volume" }).focus();
+  await page.keyboard.press("Escape");
+  await expect(drawer).not.toHaveClass(/open/);
+  await expect(overlay).toBeVisible();
+});
+
+test("with Rescue open over the session, D and Esc are Rescue's, not the session's", async ({ page }) => {
+  const overlay = await openSession(page);
+  const title = await overlay.getByRole("heading", { level: 1 }).innerText();
+  await overlay.getByRole("button", { name: "I'm stuck" }).click();
+  await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press("d");
+  await page.keyboard.press("Escape");
+  await page.getByText("Exit rescue mode").click();
+  // Still in the same session, and the task is not done.
+  await expect(overlay.getByRole("heading", { level: 1 })).toHaveText(title);
 });
