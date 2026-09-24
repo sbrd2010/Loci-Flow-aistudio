@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { getFocusWindows, getLociDayStr } from "./focusWindows";
 import {
   shouldShowMorningCommitment,
@@ -288,6 +288,21 @@ describe("buildEndOfDaySummary", () => {
     { uuid: "t2", title: "B", isCompleted: true, isDeleted: false, dateCompletedString: TODAY, horizonLevel: "today" },
     { uuid: "t3", title: "C", isCompleted: false, isDeleted: false, horizonLevel: "today" },
   ];
+
+  it("after midnight it still judges the day it summarizes: a task moved off that day stays off", () => {
+    const moved = [...tasks, { uuid: "t4", title: "D", isCompleted: false, isDeleted: false, horizonLevel: "today", deferredUntil: "2024-06-16" }];
+    const config = { dailyCommitmentDate: TODAY, dailyCommitmentTaskIds: ["t1", "t2", "t4"] };
+    // The wall clock reads 2024-06-16 now; the summary is still for TODAY.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2024, 5, 16, 0, 30));
+    try {
+      const summary = buildEndOfDaySummary(moved, config, TODAY);
+      expect(summary.committedTotal).toBe(2);
+      expect(summary.verdict).toBe("You kept your promise today.");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   it("all committed tasks done: kept-promise verdict", () => {
     const config = { dailyCommitmentDate: TODAY, dailyCommitmentTaskIds: ["t1", "t2"] };
