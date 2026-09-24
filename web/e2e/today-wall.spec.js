@@ -550,6 +550,8 @@ async function openSheet(page) {
 
 test("mobile reliability: the sheet's grabber toggles half and full; full shows the NOW card", async ({ page }) => {
   await enterDemo(page);
+  // Tall enough that half height clears Start focus by itself.
+  await page.setViewportSize({ width: 430, height: 1000 });
   const title = (await page.locator(".wall-title").innerText()).trim();
   await openSheet(page);
 
@@ -761,4 +763,103 @@ test("mobile reliability: a gesture on the drag grip is never a swipe", async ({
   await grip.dispatchEvent("pointerup", at(x + 150));
   await expect(row).not.toHaveClass(/completed/);
   await expect(page.locator(".undo-toast")).toHaveCount(0);
+});
+
+test("mobile reliability: the sheet's name counts the open rows it holds, NOW row included", async ({ page }) => {
+  await enterDemo(page);
+  await openSheet(page);
+  const rows = await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").count();
+  await expect(page.locator(".tasks-section")).toHaveAttribute("aria-label", `Today's list, ${rows} ${rows === 1 ? "task" : "tasks"}`);
+});
+
+test("mobile reliability: Escape puts the sheet away even with focus left behind it", async ({ page }) => {
+  await enterDemo(page);
+  await page.locator(".wall-peek").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  await expect(page.locator(".wall-peek")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".tasks-section")).toBeHidden();
+});
+
+test("mobile reliability: pinning a longer task with the sheet open re-measures it", async ({ page }) => {
+  await enterDemo(page);
+  // A tall phone, so the half height is set by Start focus, not its floor.
+  await page.setViewportSize({ width: 430, height: 1000 });
+  await openSheet(page);
+  const sheet = page.locator(".tasks-section");
+  const halfBefore = parseInt(await sheet.evaluate(el => el.style.getPropertyValue("--sheet-half")), 10);
+  const long = "A very long task title that wraps over many lines on a phone, so the wall grows and Start focus moves down";
+  await page.locator(".today-list-add").click();
+  await page.getByTestId("add-task-title").fill(long);
+  await page.getByTestId("add-task-submit").click();
+  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: "A very long task title" });
+  await row.locator(".task-row-top").click();
+  await page.getByText("Pin to Focus", { exact: true }).click();
+  await expect(page.locator(".wall-title")).toHaveText(long);
+  await expect(sheet).toBeVisible();
+  // The wall grew, so the sheet's half height shrinks to keep Start in view.
+  await expect.poll(async () => parseInt(await sheet.evaluate(el => el.style.getPropertyValue("--sheet-half")), 10))
+    .toBeLessThan(halfBefore);
+});
+
+
+test("mobile reliability: on a short phone the half sheet shows the NOW card, so Start is never hidden", async ({ page }) => {
+  // Opened with the list already open (the saved state), at the top of the
+  // page: Start focus sits below the fold, under where the sheet must reach.
+  await page.addInitScript(() => localStorage.setItem("loci_today_peek_open", "1"));
+  await page.setViewportSize({ width: 375, height: 600 });
+  await page.goto("/");
+  await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Expand the list" })).toBeVisible(); // still half
+  const now = page.locator(".today-sheet-now");
+  await expect(now).toBeVisible();
+  await expect(now.getByRole("button", { name: "Start" })).toBeVisible();
+});
+
+
+test("mobile reliability: with a session left running, the sheet says Resume and makes room for the timer", async ({ page }) => {
+  await enterDemo(page);
+  // Start, then leave the overlay with the session still open.
+  await page.locator(".wall-primary").click();
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 10_000 });
+  await overlay.locator(".focus-mode-exit-btn").click();
+  await expect(overlay).toHaveCount(0);
+  await expect(page.locator(".floating-focus-timer")).toBeVisible();
+
+  // The floating timer pill sits over the peek (as before this change), so
+  // open the list from the keyboard.
+  await page.locator(".wall-peek").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+  await page.getByRole("button", { name: "Expand the list" }).click();
+  await expect(page.locator(".today-sheet-now").getByRole("button", { name: "Resume" })).toBeVisible();
+
+  // Scrolled to its end, the last row clears the floating timer.
+  const sheet = page.locator(".tasks-section");
+  await expect(sheet).toHaveClass(/has-floating-timer/);
+  await sheet.evaluate(el => { el.scrollTop = el.scrollHeight; });
+  const lastRow = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']").last();
+  const rowBox = await lastRow.boundingBox();
+  const timerBox = await page.locator(".floating-focus-timer").boundingBox();
+  expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(timerBox.y + 1);
+});
+
+// The sheet's Escape stands down while the front picker sits over it: one
+// Escape closes the picker, not both.
+test("mobile reliability: Escape in the front picker closes the picker, not the sheet", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  await listRow(page, "10-minute walk").locator(".task-row-top").click();
+  await page.getByTestId("task-menu-front").click();
+  const picker = page.getByRole("dialog", { name: /on a front/ });
+  await expect(picker).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+  await expect(page.locator(".tasks-section")).toBeVisible();
 });

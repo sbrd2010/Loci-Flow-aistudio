@@ -956,12 +956,24 @@ export default function TodayTab({
       const underStart = start ? tabTop - (start.getBoundingClientRect().bottom + 12) : avail * 0.5;
       const half = Math.min(Math.max(underStart, avail * 0.3), avail * 0.7);
       el.style.setProperty("--sheet-half", `${Math.round(half)}px`);
+      // When even the smallest half sheet reaches over Start focus (a short
+      // phone, large text, a long title), the NOW card with its own Start
+      // shows at half height too, so the one action is never hidden.
+      el.dataset.coversStart = half > underStart + 1 ? "1" : "0";
       el.style.setProperty("--sheet-full", `${Math.round(avail - 8)}px`);
     };
     measure();
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [sheetOpen]);
+    // The wall changes size when another task becomes the one thing (a
+    // longer title, a first step) — re-measure then too.
+    const wall = document.querySelector(".today-wall");
+    const ro = wall && typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
+    ro?.observe(wall);
+    return () => {
+      window.removeEventListener("resize", measure);
+      ro?.disconnect();
+    };
+  }, [sheetOpen, pinnedFocusTask?.uuid]);
 
   // The wall's task edited off Today (Split it opens the task editor, which
   // can change the horizon). AddTaskDialog's edit-save spreads ...editTask,
@@ -1054,7 +1066,10 @@ export default function TodayTab({
     : null;
 
   const remainingTasks = todayTasksFiltered.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
-  const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted);
+  // Finished today — the same set the header's "N done" counts. A task done
+  // on an earlier day keeps the Today horizon until something moves it, and
+  // showing it here put "0 done" above a list of done rows.
+  const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted && t.dateCompletedString === todayStr);
   // The wall's two figures are claims about the whole day, so they come from
   // todayTasksAll — the Must-Do and Low Energy filters narrow the LIST below,
   // not the day. Reading them off the filtered list let the wall say "0 more
@@ -1064,6 +1079,12 @@ export default function TodayTab({
   // the Today horizon until something moves it, so counting them all reported
   // last week's finished work as this morning's progress.
   const wallRemainingCount = todayTasksAll.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).length;
+  // The open rows the list holds: the rest of the day, plus the NOW row that
+  // heads it — what the sheet's accessible name reports.
+  const listOpenRows = wallRemainingCount + (pinnedFocusTask ? 1 : 0);
+  // App's floating timer (shown for a session left running behind the
+  // overlay) sits over the sheet's bottom edge; the sheet makes room for it.
+  const floatingTimerShown = !!(focusSessionActive && activeTask && !isFocusMode && !sessionCompletePending);
   // The list header's figures (41a: "11 · 0 done", "All · 11", "Must-do · 2").
   // "Done" is done TODAY — a finished task keeps the Today horizon until
   // something moves it.
@@ -1181,6 +1202,24 @@ export default function TodayTab({
   // S splits, N adds a task, L shows or hides the list.
   // Never while typing, Space never on a focused control,
   // never with a modifier, and never while anything is open over Today.
+  // Escape puts the sheet away wherever focus is — opening it from the peek
+  // or with L leaves focus behind it. Not while something sits over Today
+  // (a dialog, a row menu handles its own Escape first).
+  useEffect(() => {
+    if (!sheetOpen) return undefined;
+    const onEsc = (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      // An Escape that starts inside a dialog or menu belongs to it. Checked by
+      // where the key came from, not by state: closing that layer re-renders
+      // before this listener runs, so its state already reads "closed".
+      if (e.target?.closest?.('[role="dialog"], .modal-card, [data-testid="task-options-menu"]')) return;
+      if (isFocusMode || editingTask || isAddTaskDialogOpen || confirmDialog || rescueActive || showDailyCheckin || frontPickerTask) return;
+      closeSheet();
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  });
+
   const wallKeysBlocked = isFocusMode || !!editingTask || isAddTaskDialogOpen || !!confirmDialog
     || rescueActive || showDailyCheckin || sessionCompletePending || !!frontPickerTask;
   useEffect(() => {
@@ -1316,9 +1355,8 @@ export default function TodayTab({
            rather than leaving the screen empty. */}
       <section
         ref={sheetRef}
-        className={`tasks-section today-list${pinnedFocusTask ? " is-sheet" : ""}${sheetFull ? " is-full" : ""}`}
-        aria-label={`Today's list, ${listAllCount} ${listAllCount === 1 ? "task" : "tasks"}`}
-        onKeyDown={(e) => { if (e.key === "Escape" && pinnedFocusTask) { e.stopPropagation(); closeSheet(); } }}
+        className={`tasks-section today-list${pinnedFocusTask ? " is-sheet" : ""}${sheetFull ? " is-full" : ""}${floatingTimerShown ? " has-floating-timer" : ""}`}
+        aria-label={`Today's list, ${listOpenRows} ${listOpenRows === 1 ? "task" : "tasks"}`}
         // Conditional INLINE, not via a class: an inline display beats any
         // class rule, and this element needs one for the open state.
         style={{ display: !peekOpen && pinnedFocusTask ? "none" : "flex" }}
@@ -1344,8 +1382,10 @@ export default function TodayTab({
             <div className="today-sheet-now">
               <span className="today-sheet-now-kicker">NOW</span>
               <span className="today-sheet-now-title">{pinnedFocusTask.title}</span>
+              {/* Names what a tap does: an open session is resumed, as on the
+                  wall's "Resume focus". */}
               <button type="button" className="today-sheet-now-start" onClick={() => startFocusAndLog(pinnedFocusTask)}>
-                Start
+                {wallSessionLive ? "Resume" : "Start"}
               </button>
             </div>
           </>
