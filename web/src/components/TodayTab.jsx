@@ -381,19 +381,16 @@ export default function TodayTab({
       celebrate();
       track("task_completed", { horizon: task.horizonLevel });
     }
-    let nextXp = Number(config.totalXp) || 0;
     let nextContributions = [...contributions];
     if (isCompleted) {
-      nextXp += 100;
       nextContributions = incrementContribution(nextContributions, todayDateStr);
     } else {
-      nextXp = Math.max(0, nextXp - 100);
       const contrIdx = nextContributions.findIndex((c) => c.dateString === todayDateStr);
       if (contrIdx !== -1 && nextContributions[contrIdx].count > 0) {
         nextContributions[contrIdx] = { ...nextContributions[contrIdx], count: nextContributions[contrIdx].count - 1, lastUpdated: Date.now() };
       }
     }
-    savePayloadAsync({ ...payload, tasks: updatedTasks, config: { ...config, totalXp: nextXp, lastUpdated: Date.now() }, contributions: nextContributions })
+    savePayloadAsync({ ...payload, tasks: updatedTasks, contributions: nextContributions })
       .then(() => {
         const events = [buildTaskMutationEvent(isCompleted ? "task_completed" : "task_reopened", task, { windows, now: actionAt })];
         if (endedFocusSession) {

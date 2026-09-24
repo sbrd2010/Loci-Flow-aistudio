@@ -299,7 +299,6 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
       tasks: tasks.map((t) =>
         t.uuid === task.uuid ? { ...t, isCompleted: true, isNowFocus: false, dateCompletedString: lociTodayStr, lastUpdated: Date.now() } : t
       ),
-      config: { ...config, totalXp: (Number(config.totalXp) || 0) + 100, lastUpdated: Date.now() },
       contributions: incrementContribution([...contributions], todayDateStr)
     })
       .then(() => {
@@ -811,7 +810,7 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
                 {copied ? "✓ Copied!" : "📋 Copy"}
               </button>
               <button className="btn" onClick={() => handleMarkDone(selectedTask)} style={{ background: "var(--success)" }}>
-                ✓ Mark Done (+100 XP)
+                ✓ Mark Done
               </button>
               <button className="btn btn-cancel" onClick={() => handleDelete(selectedTask)}
                 style={{ color: "var(--danger)", border: "1.5px solid var(--border)" }}>

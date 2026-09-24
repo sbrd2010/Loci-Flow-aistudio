@@ -93,3 +93,11 @@ test("mobile reliability: Brain Dump item is addable from Mind Box, browsable on
   await expect(page.getByTestId("brain-dump-inbox-btn")).toContainText("4 notes");
   await expectNoHorizontalOverflow(page);
 });
+test("Mind Box Progress shows no XP (brief §2: XP removed)", async ({ page }) => {
+  await enterDemo(page);
+  await openTab(page, "Mind Box");
+  await page.locator(".mindbox-card", { hasText: "Progress" }).click();
+  await expect(page.getByRole("heading", { name: "7-Day Progress" })).toBeVisible();
+  await expect(page.getByText("Tasks Done")).toBeVisible();
+  await expect(page.getByText(/\bXP\b/)).toHaveCount(0);
+});

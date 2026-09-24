@@ -77,7 +77,7 @@ test("mobile reliability: Settings supports profile save, privacy, bug-report mo
   await page.getByRole("button", { name: /Data Sync/i }).click();
   await expect(page.getByText("Your tasks sync instantly with Firebase across all your devices.")).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText("Active Tasks")).toBeVisible({ timeout: 5_000 });
-  await expect(page.getByText("Total XP")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText(/\bXP\b/)).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 
   await page.getByRole("button", { name: "Privacy Policy" }).click();
