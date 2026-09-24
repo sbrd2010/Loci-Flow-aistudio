@@ -418,6 +418,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
       {isDragAnywhere && hasActions && (
         <button
           className="task-row-kebab-btn"
+          ref={optionsBtnRef}
           onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
           onMouseDown={e => e.stopPropagation()}
           onTouchStart={e => e.stopPropagation()}
