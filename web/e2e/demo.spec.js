@@ -96,7 +96,7 @@ test("6. User can create a new task", async ({ page }) => {
 
   // Open add-task dialog from the list's "+ Add" (49c)
   await page.locator(".today-list-add").click();
-  await expect(page.locator(".modal-card")).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).toBeVisible({ timeout: 5_000 });
 
   // Fill in the title and submit
   const newTitle = "Playwright test task";
@@ -104,7 +104,7 @@ test("6. User can create a new task", async ({ page }) => {
   await page.getByTestId("add-task-submit").click();
 
   // Dialog closes (shows success state, then auto-closes after 900ms)
-  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
 
   // New task appears in today list
   await expect(tasksList.getByText(newTitle)).toBeVisible({ timeout: 5_000 });
@@ -125,7 +125,7 @@ test("7. User can edit a task", async ({ page }) => {
   await editBtn.click();
 
   // Full edit dialog (AddTaskDialog) should open
-  await expect(page.locator(".modal-card")).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).toBeVisible({ timeout: 5_000 });
 
   // Change the title
   const editedTitle = "Edited by Playwright";

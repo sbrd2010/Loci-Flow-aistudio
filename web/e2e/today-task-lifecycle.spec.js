@@ -32,7 +32,7 @@ function todayRow(page, title) {
 
 async function openAddTask(page) {
   await page.locator(".today-list-add").click();
-  await expect(page.getByRole("heading", { name: "Add Task" })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("heading", { name: "New task" })).toBeVisible({ timeout: 5_000 });
 }
 
 async function openTaskMenu(page, title) {
@@ -49,7 +49,7 @@ async function expectNoHorizontalOverflow(page) {
       document.body?.scrollWidth || 0,
     ];
     document.querySelectorAll(
-      ".app-container, .screen-content, .tasks-section, .tasks-list, .task-row, .modal-card, .focus-mode-overlay"
+      ".app-container, .screen-content, .tasks-section, .tasks-list, .task-row, .modal-card, .add-card, .focus-mode-overlay"
     ).forEach((el) => {
       measured.push(el.scrollWidth);
     });
@@ -72,17 +72,17 @@ test("mobile reliability: Today task can be added, edited, focused, completed, r
   await page.getByTestId("add-task-title").fill(originalTitle);
   await page.getByTestId("add-task-submit").click();
 
-  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   await expect(todayRow(page, originalTitle)).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
 
   await openTaskMenu(page, originalTitle);
   await page.getByTestId("task-menu-edit").click();
-  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
   await page.getByTestId("add-task-title").fill(editedTitle);
   await page.getByTestId("add-task-submit").click();
 
-  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   await expect(todayRow(page, editedTitle)).toBeVisible({ timeout: 5_000 });
   await expect(todayRow(page, originalTitle)).not.toBeVisible({ timeout: 5_000 });
 
@@ -133,7 +133,7 @@ test("mobile reliability: Today task can be parked from its row menu and disappe
   await openAddTask(page);
   await page.getByTestId("add-task-title").fill(title);
   await page.getByTestId("add-task-submit").click();
-  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   await expect(todayRow(page, title)).toBeVisible({ timeout: 5_000 });
 
   await openTaskMenu(page, title);
@@ -147,7 +147,7 @@ test("mobile reliability: Add Task accepts manual sub-steps from pasted bullets"
   const title = "Manual checklist seed task";
   await openAddTask(page);
   await page.getByTestId("add-task-title").fill(title);
-  await page.getByRole("button", { name: /Advanced options/i }).click();
+  await page.getByRole("button", { name: /More details/i }).click();
   await page.getByTestId("add-task-substeps-draft").fill("- Check visa rules\n2. Compare flight prices\nc) Book refundable hotel");
   await page.getByTestId("add-task-substeps-add").click();
 
@@ -167,7 +167,7 @@ test("mobile reliability: Add Task accepts manual sub-steps from pasted bullets"
   await expect(subStepsList).not.toContainText("Compare flight and train prices");
 
   await page.getByTestId("add-task-submit").click();
-  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   const row = todayRow(page, title);
   await expect(row).toBeVisible({ timeout: 5_000 });
   await expect(row).toContainText("Check visa rules");
@@ -181,7 +181,7 @@ test("mobile reliability: Add Task flushes an in-progress sub-step edit on submi
   const title = "Flush edit on submit seed task";
   await openAddTask(page);
   await page.getByTestId("add-task-title").fill(title);
-  await page.getByRole("button", { name: /Advanced options/i }).click();
+  await page.getByRole("button", { name: /More details/i }).click();
   await page.getByTestId("add-task-substeps-draft").fill("Check visa rules\nCompare flight prices");
   await page.getByTestId("add-task-substeps-add").click();
 
@@ -194,7 +194,7 @@ test("mobile reliability: Add Task flushes an in-progress sub-step edit on submi
   await subStepsList.locator("input").fill("Compare flight and train prices");
   await page.getByTestId("add-task-submit").click();
 
-  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   const row = todayRow(page, title);
   await expect(row).toBeVisible({ timeout: 5_000 });
   await expect(row).toContainText("Compare flight and train prices");
@@ -203,11 +203,11 @@ test("mobile reliability: Add Task flushes an in-progress sub-step edit on submi
 async function addTaskWithSubSteps(page, title, subStepLines) {
   await openAddTask(page);
   await page.getByTestId("add-task-title").fill(title);
-  await page.getByRole("button", { name: /Advanced options/i }).click();
+  await page.getByRole("button", { name: /More details/i }).click();
   await page.getByTestId("add-task-substeps-draft").fill(subStepLines.join("\n"));
   await page.getByTestId("add-task-substeps-add").click();
   await page.getByTestId("add-task-submit").click();
-  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
 }
 
 test("mobile reliability: a Today row shows every sub-step, not capped at 3", async ({ page }) => {
@@ -250,7 +250,7 @@ test("mobile reliability: editing the wall's task off Today clears its focus/pin
   await openAddTask(page);
   await page.getByTestId("add-task-title").fill(title);
   await page.getByTestId("add-task-submit").click();
-  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
 
   // Pin it — isNowFocus: true, the same state a running session leaves.
   await openTaskMenu(page, title);
@@ -260,10 +260,10 @@ test("mobile reliability: editing the wall's task off Today clears its focus/pin
   // Split it opens the task editor, which can move the task off Today.
   await putListAway(page);
   await page.locator(".wall-action", { hasText: "Split it" }).click();
-  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
-  await page.getByRole("button", { name: "This Week" }).click();
+  await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "Week", exact: true }).click();
   await page.getByTestId("add-task-submit").click();
-  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
 
   // The task leaving Today must also clear isNowFocus — otherwise it stays
   // the app's globally "active" focused task (orphaned timer/session) even

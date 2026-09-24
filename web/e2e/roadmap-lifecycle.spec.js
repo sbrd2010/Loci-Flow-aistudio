@@ -56,11 +56,11 @@ test("reliability: roadmap task can be added, edited, and moved to Today", async
   const editedTitle = "Ready for Today smoke task";
 
   await page.locator(".horizon-panel .column-add-btn").click();
-  await expect(page.locator(".modal-card")).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).toBeVisible({ timeout: 5_000 });
   await page.getByTestId("add-task-title").fill(originalTitle);
   await page.getByTestId("add-task-submit").click();
 
-  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   await expect(roadmapCard(page, originalTitle)).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
 
@@ -68,11 +68,11 @@ test("reliability: roadmap task can be added, edited, and moved to Today", async
   await expect(page.getByRole("heading", { name: "Manage Commitment" })).toBeVisible({ timeout: 5_000 });
   await page.getByRole("button", { name: /Edit task/i }).click();
 
-  await expect(page.getByRole("heading", { name: "Edit Task" })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
   await page.getByTestId("add-task-title").fill(editedTitle);
   await page.getByTestId("add-task-submit").click();
 
-  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   await expect(roadmapCard(page, editedTitle)).toBeVisible({ timeout: 5_000 });
   await expect(roadmapCard(page, originalTitle)).not.toBeVisible({ timeout: 5_000 });
 
@@ -90,13 +90,13 @@ test("reliability: manual sub-steps added on a roadmap task are visible on the c
 
   const title = "Roadmap checklist visibility seed task";
   await page.locator(".horizon-panel .column-add-btn").click();
-  await expect(page.locator(".modal-card")).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).toBeVisible({ timeout: 5_000 });
   await page.getByTestId("add-task-title").fill(title);
-  await page.getByRole("button", { name: /Advanced options/i }).click();
+  await page.getByRole("button", { name: /More details/i }).click();
   await page.getByTestId("add-task-substeps-draft").fill("- Check visa rules\n2. Compare flight prices");
   await page.getByTestId("add-task-substeps-add").click();
   await page.getByTestId("add-task-submit").click();
-  await expect(page.locator(".modal-card")).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
 
   const card = roadmapCard(page, title);
   await expect(card).toBeVisible({ timeout: 5_000 });
