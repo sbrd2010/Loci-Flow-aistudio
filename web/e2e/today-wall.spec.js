@@ -821,6 +821,34 @@ test("the front picker keeps focus inside, and gives it back when it closes", as
 });
 
 
+test("mobile reliability: a slide that starts on the open row menu is not a swipe", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  await row.locator(".task-row-top").click();
+  const item = page.getByTestId("task-menu-front");
+  await expect(item).toBeVisible();
+  await slide(page, item);
+  await expect(listRow(page, "10-minute walk")).not.toHaveClass(/completed/);
+  await expect(page.getByRole("status").filter({ hasText: "Marked done" })).toHaveCount(0);
+});
+
+test("the front picker opened from the swipe gives focus to Options, not the hidden Front", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  const title = (await row.locator(".task-title-text").innerText()).trim();
+  await swipe(page, row, -200);
+  const front = page.getByRole("button", { name: "Front", exact: true });
+  await front.focus();
+  await page.keyboard.press("Enter");
+  const picker = page.getByRole("dialog", { name: /on a front/ });
+  await expect(picker).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+  await expect(page.getByRole("button", { name: `Options: ${title}` })).toBeFocused();
+});
+
 test("mobile reliability: a gesture on the drag grip is never a swipe", async ({ page }) => {
   await enterDemoWithPeek(page);
   await page.locator(".today-sheet-grabber").click();

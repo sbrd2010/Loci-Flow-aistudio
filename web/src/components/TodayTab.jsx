@@ -623,7 +623,8 @@ export default function TodayTab({
     if (frontPickerTask || !pickerOpenerRef.current) return;
     const { el, uuid } = pickerOpenerRef.current;
     pickerOpenerRef.current = null;
-    const back = el && el.isConnected && el.offsetParent !== null
+    // The swipe's Front stays mounted once the row closes, only hidden.
+    const back = el && el.isConnected && el.offsetParent !== null && getComputedStyle(el).visibility !== "hidden"
       ? el
       : document.querySelector(`[data-task-uuid="${uuid}"] .task-row-options, [data-task-uuid="${uuid}"] .task-row-kebab-btn`);
     back?.focus?.();

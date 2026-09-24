@@ -124,7 +124,9 @@ function MenuItem({ onClick, color, danger, testId, children }) {
 const SWIPE_DONE = 96;
 const SWIPE_REVEAL = 176;
 // Resting this long before moving makes it a long-press (reorder), not a swipe.
-const SWIPE_LONG_PRESS_MS = 180;
+// It matches the TouchSensor's delay in TodayTab: a move any sooner cancels
+// that pending reorder, so the swipe must take it or nothing would.
+const SWIPE_LONG_PRESS_MS = 200;
 
 export const ROADMAP_HORIZONS = [
   { key: "week",     label: "This Week" },
@@ -192,9 +194,9 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   const onSwipeDown = (e) => {
     // One finger only: the swipe follows the pointer that began it.
     if (!canSwipe || e.pointerType !== "touch" || !e.isPrimary) return;
-    // The grip is drag-to-reorder's; a gesture that starts there is never a
-    // swipe.
-    if (e.target.closest?.(".task-row-grip")) return;
+    // The grip is drag-to-reorder's, and the open menu's items are buttons;
+    // a gesture that starts on either is never a swipe.
+    if (e.target.closest?.(".task-row-grip, .task-row-menu")) return;
     swipeRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, base: revealed ? -SWIPE_REVEAL : 0, active: false };
   };
   const onSwipeMove = (e) => {
