@@ -1,24 +1,34 @@
 import React, { useEffect, useMemo, useState } from "react";
-import LinkifyText from "./LinkifyText";
-import { narrowDown, numberWord } from "../utils/narrowDown";
+import { pickThree } from "../utils/narrowDown";
+import { commitmentKickerFront, frontForCommitment, frontsFromConfig } from "../utils/fronts";
+import { IconChevronLeft, IconChevronRight } from "./ui/icons";
 import "../styles/scattered.css";
 
-// Screen 14 — "When you're scattered". Fourteen open things become one,
-// visibly, because being told "do this one" isn't persuasive but watching
-// thirteen things get eliminated for stated reasons is.
+// Feeling scattered (45c): a lighter flow than Rescue. At most three things,
+// the first showing its smallest start; five minutes on it, or empty your
+// head into Mind Box. Nothing here is written except the pin that starts the
+// session — the rest stay exactly where they are.
 //
-// Every figure here is computed (see narrowDown.js). Nothing on this screen is
-// generated prose, and nothing is written: the tasks that drop out of the
-// ledger are untouched in the payload and still on the user's list. The copy
-// below has to say exactly that. It previously said they were "parked until
-// tomorrow", which is a promise this flow does not keep — and "parked" is
-// already a real state in this app (isParked / task_parked), so it read as a
-// claim that a mutation had happened when none had.
-//
-// Starting a session follows Day Map's pattern rather than driving the timer
-// directly — pin the task, hand the confirmed-write promise up, and let the
-// owner of the session lifecycle open it. Reimplementing that here would risk
-// orphaned sessions and missing ledger events.
+// Starting follows Day map's pattern: pin the task, hand the confirmed-write
+// promise up, and let the owner of the session lifecycle open it.
+
+// The first pick always gets a smallest start: its own first step, else its
+// first open sub-step, else the five minutes this screen offers.
+export function smallestStart(task) {
+  const step = typeof task?.concreteStep === "string" ? task.concreteStep.trim() : "";
+  if (step && step !== "Do first tiny step") return step;
+  const sub = (Array.isArray(task?.subSteps) ? task.subSteps : []).find(s => s && !s.done && String(s.text || "").trim());
+  return sub ? String(sub.text).trim() : "five minutes on it";
+}
+
+function metaFor(task, isGoal, showStart) {
+  const bits = [String(task.priority || "P3").toUpperCase()];
+  const est = Number(task.timeEstimateMinutes);
+  if (est > 0) bits.push(est >= 60 && est % 60 === 0 ? `${est / 60}H` : est >= 60 ? `${Math.floor(est / 60)}H ${est % 60} MIN` : `${est} MIN`);
+  if (isGoal) bits.push("GOAL");
+  if (showStart) bits.push(`SMALLEST START: ${smallestStart(task)}`);
+  return bits.join(" · ");
+}
 
 export default function ScatteredFlow({
   payload = {},
@@ -26,42 +36,44 @@ export default function ScatteredFlow({
   savePayloadAsync,
   flushNow,
   onStartFocus,
+  onOpenMindBox,
   onBack,
+  backLabel = "Back",
 }) {
   const { tasks = [], config = {} } = payload;
-  const [showParked, setShowParked] = useState(false);
 
-  // The entry point sits at the foot of Plan, so without this you arrive
-  // scrolled halfway down with the headline behind the app header — on the one
-  // screen whose whole job is to orient someone who is already overwhelmed.
   useEffect(() => {
     document.querySelector(".screen-content")?.scrollTo?.({ top: 0 });
     window.scrollTo?.({ top: 0 });
   }, []);
 
-  // Nothing on this screen was clock-driven, so the remaining-time cut — and
-  // therefore the chosen task — stayed frozen at the moment it opened. Left
-  // open at 11:30 inside a window ending at noon, it went on claiming thirty
-  // minutes and keeping a 25-minute task that no longer fits. State only
-  // changes when the minute number actually does, so this is not a re-render
-  // every thirty seconds. The trade is that the choice can shift under a
-  // screen left open a long time; a recommendation that cannot be acted on is
-  // the worse of the two.
+  // The picks depend on the focus time left, so they follow the clock — but
+  // only change when the minute does.
   const [minuteTick, setMinuteTick] = useState(() => Math.floor(Date.now() / 60000));
   useEffect(() => {
     const id = setInterval(() => setMinuteTick(Math.floor(Date.now() / 60000)), 30000);
     return () => clearInterval(id);
   }, []);
-
   const now = useMemo(() => new Date(), [tasks, config, minuteTick]); // eslint-disable-line react-hooks/exhaustive-deps
-  const result = useMemo(() => narrowDown(tasks, config, now), [tasks, config, now]);
-  const { total, rows, chosen, why, parked } = result;
+  const suggested = useMemo(() => pickThree(tasks, config, now), [tasks, config, now]);
 
-  const start = (minutes) => {
-    if (!chosen) return;
+  // Tapping a pick makes it the first: "Start 5 minutes on the first" then
+  // always means the one you chose.
+  const [firstId, setFirstId] = useState(null);
+  const picks = useMemo(() => {
+    const i = suggested.findIndex(t => t.uuid === firstId);
+    return i > 0 ? [suggested[i], ...suggested.filter((_, j) => j !== i)] : suggested;
+  }, [suggested, firstId]);
+  const first = picks[0] || null;
+
+  const goalFront = commitmentKickerFront(frontForCommitment(tasks.find(t => t.isNowFocus && !t.isDeleted && !t.isCompleted), frontsFromConfig(config)), config);
+  const isGoal = (t) => !!goalFront && t.frontId === goalFront.id;
+
+  const start = () => {
+    if (!first) return;
     const stamp = Date.now();
     const nextTasks = tasks.map(t => {
-      const shouldFocus = t.uuid === chosen.uuid;
+      const shouldFocus = t.uuid === first.uuid;
       if (t.isNowFocus === shouldFocus) return t;
       return { ...t, isNowFocus: shouldFocus, lastUpdated: stamp };
     });
@@ -70,93 +82,61 @@ export default function ScatteredFlow({
       ? savePayloadAsync(next)
       : (savePayload?.(next), Promise.resolve());
     flushNow?.();
-    onStartFocus?.(pinPromise, minutes);
+    onStartFocus?.(pinPromise, 5);
   };
-
-  if (!chosen) {
-    return (
-      <div className="scattered">
-        <header className="scattered-head">
-          {onBack && <button type="button" className="scattered-back" onClick={onBack}>Back</button>}
-          <span className="scattered-kicker">NOTHING TO NARROW</span>
-        </header>
-        <p className="scattered-empty">
-          There's nothing open. That isn't a gap to fill — it's the state the
-          rest of this app is trying to get you to.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="scattered">
-      <header className="scattered-head">
-        {onBack && <button type="button" className="scattered-back" onClick={onBack}>Back</button>}
-        <span className="scattered-kicker">NARROWING DOWN</span>
-      </header>
+      {onBack && (
+        <button type="button" className="scattered-back" onClick={onBack}>
+          <IconChevronLeft size={18} /> {backLabel}
+        </button>
+      )}
+      <h1 className="scattered-headline">Feeling scattered?</h1>
 
-      <h1 className="scattered-headline">
-        {numberWord(total)} open {total === 1 ? "thing" : "things"}. Let's get it down to one.
-      </h1>
-
-      {/* The reduction, shown rather than summarised. */}
-      <ol className="scattered-ledger">
-        {rows.map(row => (
-          <li key={row.key} className={`scattered-row${row.isFinal ? " is-final" : ""}`}>
-            <span className="scattered-figure">{row.figure}</span>
-            <span className="scattered-reason">{row.reason}</span>
-          </li>
-        ))}
-      </ol>
-
-      <section className="scattered-pick">
-        <div className="scattered-pick-kicker">SO — THIS ONE</div>
-        <h2 className="scattered-pick-title"><LinkifyText text={chosen.title} /></h2>
-        {why && <p className="scattered-why">{why}</p>}
-
-        <div className="scattered-pick-rule" />
-
-        <div className="scattered-small-kicker">START SMALL — 5 MINUTES</div>
-        {chosen.concreteStep ? (
-          <p className="scattered-first-action"><LinkifyText text={chosen.concreteStep} /></p>
-        ) : (
-          <p className="scattered-first-action">
-            Open it and do the smallest visible piece. Badly is fine.
-          </p>
-        )}
-
-        <div className="scattered-actions">
-          <button type="button" className="scattered-primary" onClick={() => start(5)}>
-            Just 5 minutes
-          </button>
-          <button type="button" className="scattered-secondary" onClick={() => start(25)}>
-            Full 25 instead
-          </button>
-        </div>
-      </section>
-
-      {parked.length > 0 && (
-        <footer className="scattered-foot">
-          <p className="scattered-parked-line">
-            The other {parked.length} {parked.length === 1 ? "is" : "are"} out of the way, not gone.{" "}
-            <button type="button" className="scattered-show" onClick={() => setShowParked(v => !v)}>
-              {showParked ? "Hide them" : "Show them"}
+      {first ? (
+        <>
+          <p className="scattered-lede">Pick one. Just five minutes counts. Everything else waits.</p>
+          <ul className="scattered-picks" aria-label="Pick one">
+            {picks.map((t, i) => (
+              <li key={t.uuid || t.id}>
+                <button
+                  type="button"
+                  className={`scattered-pick${i === 0 ? " is-first" : ""}`}
+                  aria-pressed={i === 0}
+                  onClick={() => setFirstId(t.uuid)}
+                >
+                  <span className="scattered-pick-body">
+                    <span className="scattered-pick-title">{t.title}</span>
+                    <span className="scattered-pick-meta">{metaFor(t, isGoal(t), i === 0)}</span>
+                  </span>
+                  <IconChevronRight size={18} />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="scattered-actions">
+            <button type="button" className="scattered-primary" onClick={start}>
+              Start 5 minutes on the first
             </button>
-          </p>
-          {showParked && (
-            <ul className="scattered-parked-list">
-              {parked.map(t => (
-                <li key={t.uuid || t.id} className="scattered-parked-row">
-                  <LinkifyText text={t.title} />
-                </li>
-              ))}
-            </ul>
+            {onOpenMindBox && (
+              <button type="button" className="scattered-secondary" onClick={onOpenMindBox}>
+                Empty my head into Mind Box
+              </button>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="scattered-lede">Nothing is open. That's not a gap to fill — it's where the rest of this app is trying to get you.</p>
+          {onOpenMindBox && (
+            <div className="scattered-actions">
+              <button type="button" className="scattered-secondary" onClick={onOpenMindBox}>
+                Empty my head into Mind Box
+              </button>
+            </div>
           )}
-          <p className="scattered-reassure">
-            Nothing was changed or deleted. They are still on your list, waiting
-            for when you have room for them.
-          </p>
-        </footer>
+        </>
       )}
     </div>
   );

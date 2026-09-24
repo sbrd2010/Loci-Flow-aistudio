@@ -1,14 +1,11 @@
 import { test, expect } from "@playwright/test";
 
-// Screen 14 — "When you're scattered". Runs in demo mode so it never touches
-// Firebase data.
+// Feeling scattered (45c). Runs in demo mode so it never touches Firebase.
 //
-// The point of this screen is the SHORT session: "Just 5 minutes" is the filled
-// primary and "Full 25 instead" the outlined alternative. That only means
-// anything if the button actually starts a five-minute session, which is what
-// these tests pin down — the duration used to be handed to the timer before the
-// session existed, and startFocusSession then reset it from the task's own
-// estimate.
+// The point of this screen is the SHORT session: "Start 5 minutes on the
+// first". That only means anything if it actually starts a five-minute
+// session — the duration used to be handed to the timer before the session
+// existed, and startFocusSession then reset it from the task's own estimate.
 
 async function enterDemo(page) {
   // Today's list now lives behind the peek, closed by default (screen 1, "the
@@ -35,11 +32,11 @@ async function openScattered(page) {
   await expect(page.locator(".scattered-actions")).toBeVisible({ timeout: 10_000 });
 }
 
-test("mobile reliability: 'Just 5 minutes' starts a five-minute session, not the task's estimate", async ({ page }) => {
+test("mobile reliability: 'Start 5 minutes on the first' starts a five-minute session, not the task's estimate", async ({ page }) => {
   await enterDemo(page);
   await openScattered(page);
 
-  await page.getByRole("button", { name: "Just 5 minutes" }).click();
+  await page.getByRole("button", { name: "Start 5 minutes on the first" }).click();
 
   const digits = page.locator(".focus-mode-time-digits");
   await expect(digits).toBeVisible({ timeout: 10_000 });
@@ -49,24 +46,52 @@ test("mobile reliability: 'Just 5 minutes' starts a five-minute session, not the
   expect(mins).toBeLessThan(6);
 });
 
-test("mobile reliability: 'Full 25 instead' starts a twenty-five-minute session", async ({ page }) => {
+test("at most three picks; the first is ringed and shows its smallest start; tapping another makes it the first", async ({ page }) => {
   await enterDemo(page);
   await openScattered(page);
 
-  await page.getByRole("button", { name: "Full 25 instead" }).click();
+  await expect(page.getByRole("heading", { name: "Feeling scattered?" })).toBeVisible();
+  // Plan's floating + would sit on top of this screen's own buttons.
+  await expect(page.getByTestId("fab-add-task")).toHaveCount(0);
+  const picks = page.locator(".scattered-pick");
+  const n = await picks.count();
+  expect(n).toBeGreaterThan(0);
+  expect(n).toBeLessThanOrEqual(3);
+  await expect(picks.first()).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".scattered-pick[aria-pressed='true']")).toHaveCount(1);
+  expect(n).toBeGreaterThan(1);
 
-  const digits = page.locator(".focus-mode-time-digits");
-  await expect(digits).toBeVisible({ timeout: 10_000 });
-  await expect(digits).toHaveText(/^2[45]:\d{2}$/);
+  // Only the first shows a smallest start, and it always has one.
+  await expect(picks.first().locator(".scattered-pick-meta")).toContainText("SMALLEST START: ");
+  await expect(picks.nth(1).locator(".scattered-pick-meta")).not.toContainText("SMALLEST START");
+
+  const second = (await picks.nth(1).locator(".scattered-pick-title").innerText()).trim();
+  await picks.nth(1).click();
+  await expect(picks.first().locator(".scattered-pick-title")).toHaveText(second);
+  await expect(picks.first()).toHaveAttribute("aria-pressed", "true");
+  await expect(picks.first().locator(".scattered-pick-meta")).toContainText("SMALLEST START: ");
+
+  // And five minutes starts on that one.
+  await page.getByRole("button", { name: "Start 5 minutes on the first" }).click();
+  await expect(page.locator(".focus-mode-overlay").getByRole("heading", { level: 1 })).toHaveText(second);
 });
 
-test("mobile reliability: the scattered screen does not claim to park anything", async ({ page }) => {
+test("Empty my head into Mind Box goes to Mind Box, and Back returns through the door it came in", async ({ page }) => {
   await enterDemo(page);
   await openScattered(page);
+  // Opened from Plan, the back link says Plan and goes there.
+  await expect(page.locator(".scattered-back")).toHaveText(/Plan/);
+  await page.locator(".scattered-back").click();
+  await expect(page.locator(".scattered")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /I'm scattered/i })).toBeVisible();
 
-  // "Parked" is a real state in this app (isParked / task_parked). This screen
-  // writes nothing, so it must not borrow the word.
-  await expect(page.locator(".scattered-foot")).not.toContainText(/parked until tomorrow/i);
+  // From Today, the back link says Today and goes there.
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
+  await page.locator(".today-list-hide").click().catch(() => {});
+  await page.locator(".wall-link", { hasText: "Feeling scattered?" }).click();
+  await expect(page.locator(".scattered-back")).toHaveText(/Today/);
+  await page.getByRole("button", { name: "Empty my head into Mind Box" }).click();
+  await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 8_000 });
 });
 
 // Addendum D: the five-minute session is "the same FocusSession, three
@@ -78,7 +103,7 @@ test("mobile reliability: a five-minute session presents as one, not as a 25-min
   await enterDemo(page);
   await openScattered(page);
 
-  await page.getByRole("button", { name: "Just 5 minutes" }).click();
+  await page.getByRole("button", { name: "Start 5 minutes on the first" }).click();
 
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 10_000 });
@@ -95,9 +120,8 @@ test("mobile reliability: a five-minute session presents as one, not as a 25-min
 
 test("mobile reliability: the full session is untouched by the five-minute deltas", async ({ page }) => {
   await enterDemo(page);
-  await openScattered(page);
-
-  await page.getByRole("button", { name: "Full 25 instead" }).click();
+  // An ordinary session, from Today's wall.
+  await page.locator(".today-wall .wall-primary").click();
 
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 10_000 });

@@ -5,6 +5,7 @@ import {
   minutesLeftToday,
   formatMinutesLeft,
   narrowDown,
+  pickThree,
 } from "./narrowDown";
 
 const NOW = new Date(2026, 10, 4, 9, 41); // 4 Nov 2026, 09:41 local
@@ -346,5 +347,28 @@ describe("narrowDown — a task inherits its front's deadline", () => {
     const out = narrowDown(tasks, config, NOW);
     expect(out.chosen.uuid).toBe("b"); // priority decides, as before
     expect(out.why).toBe("It's the highest priority of what's left.");
+  });
+});
+
+describe("pickThree (Feeling scattered, 45c)", () => {
+  const now = new Date("2026-09-24T10:00:00");
+  const t = (uuid, fields = {}) => ({ uuid, title: uuid, horizonLevel: "today", priority: "P3", orderIndex: 0, ...fields });
+
+  it("offers at most three, narrowDown's choice first, then the most urgent of the rest", () => {
+    const tasks = [t("a", { priority: "P3" }), t("b", { priority: "P1" }), t("c", { priority: "P2" }), t("d", { priority: "P3", orderIndex: 5 })];
+    const picks = pickThree(tasks, {}, now);
+    expect(picks).toHaveLength(3);
+    expect(picks[0].uuid).toBe(narrowDown(tasks, {}, now).chosen.uuid);
+    expect(picks.map(p => p.uuid)).toEqual(["b", "c", "a"]);
+  });
+
+  it("offers fewer when fewer are open, and none when nothing is", () => {
+    expect(pickThree([t("a")], {}, now)).toHaveLength(1);
+    expect(pickThree([], {}, now)).toEqual([]);
+  });
+
+  it("never offers a task moved to tomorrow", () => {
+    const tasks = [t("a", { priority: "P1", deferredUntil: "2026-09-25" }), t("b")];
+    expect(pickThree(tasks, {}, now).map(p => p.uuid)).toEqual(["b"]);
   });
 });
