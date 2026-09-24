@@ -487,7 +487,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   }, [isFocusMode]);
 
   // Dismiss the global "session complete" prompt without restarting the timer
-  // (used by the "Done! +120 XP" path, which ends the session instead).
+  // (used by the "Finish task" path, which ends the session instead).
   const dismissSessionComplete = () => setSessionCompletePending(false);
 
   // Restart the timer for the same task with a fresh duration ("Keep going" extension)

@@ -541,7 +541,7 @@ export function useSync(uid, email) {
 
           // Three neutral starter tasks that teach the app's own moves (add,
           // pin and focus, step away), and no invented history: a brand-new
-          // account starts at 0 XP with an empty heatmap. Loci is a planning
+          // account starts with an empty heatmap. Loci is a planning
           // and execution app for anyone, so nothing here assumes a job hunt
           // or any other goal.
           const starterTask = (index, fields) => ({
@@ -594,7 +594,6 @@ export function useSync(uid, email) {
               reminderNagIntervalMinutes: 15,
               visitStreakCount: 1,
               lastVisitDate: todayStr,
-              totalXp: 0,
               intentionMessage: "Start tiny. One action. Right now.",
               isLowEnergyMode: false,
               isOnboardingCompleted: false,

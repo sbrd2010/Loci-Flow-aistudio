@@ -4,7 +4,7 @@
 // CHECKIN_IN the coach is instructed to narrate the action in its visible text.
 //
 // [[SET_NOW_FOCUS:<title>]] - pin a task as Now Focus (unpinning any other)
-// [[COMPLETE_TASK:<title>]] - mark a task complete (+100 XP, +1 contribution)
+// [[COMPLETE_TASK:<title>]] - mark a task complete (+1 contribution)
 // [[ADD_TASK:<title>]]      - create a new Today task (P3, 25min default)
 // [[PARK_TASK:<title>]]     - park a task (mirrors Bad Day Reset's per-task patch)
 // [[START_FOCUS:<title>]] or [[START_FOCUS:<title>|<minutes>]] - pin a task as
@@ -495,7 +495,7 @@ function buildAddTaskPayload(payload, rawTitle, now = Date.now()) {
   return { ...payload, tasks: [...tasks, newTask] };
 }
 
-// Marks a task complete and applies the same +100 XP / +1 contribution
+// Marks a task complete and applies the same +1 contribution
 // bookkeeping as TodayTab's handleToggleComplete.
 function buildCompleteTaskPayload(payload, task, lociDateStr, localDateStr) {
   const { tasks = [], config = {}, contributions = [] } = payload;
@@ -510,7 +510,6 @@ function buildCompleteTaskPayload(payload, task, lociDateStr, localDateStr) {
   return {
     ...payload,
     tasks: buildToggleCompletedTasks(tasks, task.uuid, true, lociDateStr),
-    config: { ...config, totalXp: (Number(config.totalXp) || 0) + 100, lastUpdated: Date.now() },
     contributions: nextContributions,
   };
 }
@@ -609,7 +608,7 @@ export function buildActionReplyText(cleanText, results = [], lastUserMessage = 
     switch (r.type) {
       case "SET_NOW_FOCUS": return `Switched your focus to "${title}".`;
       case "START_FOCUS": return r.durationMinutes != null ? `Started a ${r.durationMinutes}-min focus session on "${title}".` : `Started a focus session on "${title}".`;
-      case "COMPLETE_TASK": return `Marked "${title}" complete — +100 XP!`;
+      case "COMPLETE_TASK": return `Marked "${title}" complete.`;
       case "ADD_TASK": return `Added "${title}" to your Today list.`;
       case "PARK_TASK": return `Parked "${title}" for later.`;
       default: return null;
