@@ -592,6 +592,22 @@ export default function TodayTab({
 
   // "Put on a front": the swipe's Front and the menu item open this picker.
   const [frontPickerTask, setFrontPickerTask] = useState(null);
+  // Focus goes back where it came from when the picker closes — or, if that
+  // control is gone (the menu item, the swipe's Front), to the row's Options.
+  const pickerOpenerRef = useRef(null);
+  const openFrontPicker = (task) => {
+    pickerOpenerRef.current = { el: document.activeElement, uuid: task.uuid };
+    setFrontPickerTask(task);
+  };
+  useEffect(() => {
+    if (frontPickerTask || !pickerOpenerRef.current) return;
+    const { el, uuid } = pickerOpenerRef.current;
+    pickerOpenerRef.current = null;
+    const back = el && el.isConnected && el.offsetParent !== null
+      ? el
+      : document.querySelector(`[data-task-uuid="${uuid}"] .task-row-options, [data-task-uuid="${uuid}"] .task-row-kebab-btn`);
+    back?.focus?.();
+  }, [frontPickerTask]);
   const handlePutOnFront = (task, frontId) => {
     setFrontPickerTask(null);
     const current = tasks.find(t => t.uuid === task.uuid && !t.isDeleted);
@@ -1450,7 +1466,7 @@ export default function TodayTab({
               onMoveToHorizon={handleMoveWithUndo}
               onSwipeDone={handleToggleComplete}
               onSwipeWeek={t => handleMoveWithUndo(t, "week")}
-              onPutOnFront={setFrontPickerTask}
+              onPutOnFront={openFrontPicker}
               onPark={handleParkTask}
               onBreakdown={handleBreakdown}
               onSubStepToggle={handleSubStepToggle}
@@ -1495,7 +1511,7 @@ export default function TodayTab({
                             onMoveToHorizon={handleMoveWithUndo}
                             onSwipeDone={handleToggleComplete}
                             onSwipeWeek={t => handleMoveWithUndo(t, "week")}
-                            onPutOnFront={setFrontPickerTask}
+                            onPutOnFront={openFrontPicker}
                             onPark={handleParkTask}
                             onBreakdown={handleBreakdown}
                             onSubStepToggle={handleSubStepToggle}
@@ -1605,7 +1621,17 @@ export default function TodayTab({
               aria-modal="true"
               aria-label={`Put ${frontPickerTask.title} on a front`}
               onClick={e => e.stopPropagation()}
-              onKeyDown={e => { if (e.key === "Escape") setFrontPickerTask(null); }}
+              onKeyDown={e => {
+                if (e.key === "Escape") { setFrontPickerTask(null); return; }
+                // Modal: Tab and Shift+Tab stay among the picker's buttons.
+                if (e.key !== "Tab") return;
+                const items = [...e.currentTarget.querySelectorAll("button")];
+                if (items.length === 0) return;
+                const i = items.indexOf(document.activeElement);
+                const next = e.shiftKey ? (i <= 0 ? items.length - 1 : i - 1) : (i === items.length - 1 ? 0 : i + 1);
+                e.preventDefault();
+                items[next].focus();
+              }}
             >
               <div className="focus-now-sheet-header">
                 <span className="focus-now-sheet-title">Put on a front</span>

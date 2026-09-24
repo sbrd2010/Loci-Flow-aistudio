@@ -182,39 +182,46 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   const swipeRef = useRef(null);
   const suppressClickRef = useRef(false);
   const onSwipeDown = (e) => {
-    if (!canSwipe || e.pointerType !== "touch") return;
+    // One finger only: the swipe follows the pointer that began it.
+    if (!canSwipe || e.pointerType !== "touch" || !e.isPrimary) return;
     // The grip is drag-to-reorder's; a gesture that starts there is never a
     // swipe.
     if (e.target.closest?.(".task-row-grip")) return;
-    swipeRef.current = { x: e.clientX, y: e.clientY, t: e.timeStamp, base: revealed ? -SWIPE_REVEAL : 0, active: false };
+    swipeRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, base: revealed ? -SWIPE_REVEAL : 0, active: false };
   };
   const onSwipeMove = (e) => {
     const sw = swipeRef.current;
-    if (!sw) return;
+    if (!sw || e.pointerId !== sw.id) return;
     const dx = e.clientX - sw.x;
     const dy = e.clientY - sw.y;
     if (!sw.active) {
-      // A finger that rested first is a long-press — drag-to-reorder's (its
-      // touch sensor waits 200ms) — not a swipe. Swipes move at once.
-      if (e.timeStamp - sw.t >= SWIPE_LONG_PRESS_MS) {
+      // Where the row itself starts a reorder (Drag anywhere), a finger that
+      // rested first is that long-press (its touch sensor waits 200ms), not
+      // a swipe. Elsewhere a hesitant swipe is still a swipe.
+      if (isDragAnywhere && e.timeStamp - sw.t >= SWIPE_LONG_PRESS_MS) {
         swipeRef.current = null;
         return;
       }
       if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.5) {
         sw.active = true;
         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
-      } else if (Math.abs(dy) > 10) {
-        swipeRef.current = null;
+        // Count the move that crossed the line: a quick flick may send only
+        // this one before it lifts.
+      } else {
+        if (Math.abs(dy) > 10) swipeRef.current = null;
+        return;
       }
-      return;
     }
     sw.last = dx;
     setSwipeX(Math.max(-SWIPE_REVEAL - 24, Math.min(SWIPE_DONE + 24, sw.base + dx)));
   };
-  const onSwipeUp = () => {
+  const onSwipeUp = (e) => {
     const sw = swipeRef.current;
+    if (!sw || e.pointerId !== sw.id) return;
     swipeRef.current = null;
-    if (!sw?.active) return;
+    if (!sw.active) return;
+    // Where the finger lifted is the gesture's end (moves may be coalesced).
+    sw.last = e.clientX - sw.x;
     // Only the click this pointerup may produce is swallowed; if it lands
     // elsewhere (or never comes), the next real tap must still open the menu.
     suppressClickRef.current = true;
@@ -235,8 +242,9 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   };
   // An interrupted gesture (the browser takes it over, a call comes in)
   // commits nothing: the row goes back to where it was.
-  const onSwipeCancel = () => {
+  const onSwipeCancel = (e) => {
     const sw = swipeRef.current;
+    if (!sw || e.pointerId !== sw.id) return;
     swipeRef.current = null;
     if (!sw?.active) return;
     setSwipeX(sw.base);
@@ -253,6 +261,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
     <div
       className={`task-row ${isCompleted ? "completed" : ""}`}
       data-testid="task-row"
+      data-task-uuid={task.uuid}
       ref={setRowRef}
       onClick={hasActions || canSwipe ? () => {
         // The click that ends a swipe is not a tap; a tap on an opened row

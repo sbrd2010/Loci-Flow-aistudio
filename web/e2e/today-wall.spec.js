@@ -735,20 +735,90 @@ test("mobile reliability: an interrupted swipe (pointercancel) commits nothing",
   await expect(row).not.toHaveAttribute("style", /translateX/);
 });
 
-test("mobile reliability: a long-press then a slide is a reorder, not a swipe", async ({ page }) => {
+async function slide(page, row, { rest = 0, dx = 150, id = 12, primary = true } = {}) {
+  const box = await row.boundingBox();
+  const x = box.x + box.width / 2, y = box.y + 20;
+  const at = (cx) => ({ pointerType: "touch", pointerId: id, isPrimary: primary, bubbles: true, clientX: cx, clientY: y });
+  await row.dispatchEvent("pointerdown", at(x));
+  if (rest) await page.waitForTimeout(rest);
+  for (let i = 1; i <= 6; i++) await row.dispatchEvent("pointermove", at(x + (dx * i) / 6));
+  await row.dispatchEvent("pointerup", at(x + dx));
+}
+
+async function turnOnDragAnywhere(page) {
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  if (!(await page.locator("#settings-name").isVisible())) {
+    await page.getByRole("button", { name: /Your Profile/i }).click();
+  }
+  await page.getByText("Drag-anywhere task rows").click();
+  await page.getByRole("button", { name: /Save Profile/ }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
+}
+
+test("mobile reliability: in Drag anywhere, a long-press then a slide is a reorder, not a swipe", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await turnOnDragAnywhere(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  await slide(page, row, { rest: 260 });
+  await expect(row).not.toHaveClass(/completed/);
+  await expect(page.locator(".undo-toast")).toHaveCount(0);
+});
+
+test("mobile reliability: in the default mode a hesitant swipe is still a swipe", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  await slide(page, row, { rest: 260 });
+  await expect(listRow(page, "10-minute walk")).toHaveClass(/completed/);
+});
+
+test("mobile reliability: a quick flick whose only move crosses the line still counts", async ({ page }) => {
   await enterDemoWithPeek(page);
   await page.locator(".today-sheet-grabber").click();
   const row = listRow(page, "10-minute walk");
   const box = await row.boundingBox();
   const x = box.x + box.width / 2, y = box.y + 20;
-  const at = (cx) => ({ pointerType: "touch", pointerId: 12, isPrimary: true, bubbles: true, clientX: cx, clientY: y });
+  const at = (cx) => ({ pointerType: "touch", pointerId: 14, isPrimary: true, bubbles: true, clientX: cx, clientY: y });
   await row.dispatchEvent("pointerdown", at(x));
-  await page.waitForTimeout(260);
-  for (let i = 1; i <= 6; i++) await row.dispatchEvent("pointermove", at(x + (150 * i) / 6));
+  await row.dispatchEvent("pointermove", at(x + 150));
   await row.dispatchEvent("pointerup", at(x + 150));
+  await expect(listRow(page, "10-minute walk")).toHaveClass(/completed/);
+});
+
+test("mobile reliability: a second finger does not swipe", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  await slide(page, row, { id: 21, primary: false });
   await expect(row).not.toHaveClass(/completed/);
   await expect(page.locator(".undo-toast")).toHaveCount(0);
 });
+
+test("the front picker keeps focus inside, and gives it back when it closes", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  const title = (await row.locator(".task-title-text").innerText()).trim();
+  const options = page.getByRole("button", { name: `Options: ${title}` });
+  await options.focus();
+  await page.keyboard.press("Enter");
+  await page.getByTestId("task-menu-front").focus();
+  await page.keyboard.press("Enter");
+  const picker = page.getByRole("dialog", { name: /on a front/ });
+  await expect(picker).toBeVisible();
+  const count = await picker.locator("button").count();
+  for (let i = 0; i < count + 2; i++) {
+    await page.keyboard.press("Tab");
+    await expect(picker.locator(":focus")).toHaveCount(1);
+  }
+  await page.keyboard.press("Shift+Tab");
+  await expect(picker.locator(":focus")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+  await expect(options).toBeFocused();
+});
+
 
 test("mobile reliability: a gesture on the drag grip is never a swipe", async ({ page }) => {
   await enterDemoWithPeek(page);
