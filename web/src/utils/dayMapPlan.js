@@ -1,4 +1,4 @@
-import { getRemainingFocusMinutes } from "./focusWindows";
+import { getLociNowMinutes, mergeWindowSpans } from "./focusWindows";
 
 // The Day map's arithmetic (Addendum Y5; 33a, 34c, 37d). The route is a
 // queue of today's tasks laid end to end from a start time; the day ends
@@ -21,14 +21,18 @@ export function formatSpan(minutes) {
   return r ? `${h}h${String(r).padStart(2, "0")}m` : `${h}h`;
 }
 
-// Focus time left from the route's start: the focus windows still ahead of
-// that moment, gaps excluded. The day ends when it runs out ("compute day end
-// from time left", Y5), so with one window it is that window's end.
+// Clock minutes from the route's start to where the day ends: the end of the
+// last focus window (brief: "the day end is the end of the last focus
+// window"). The route runs on the clock, gaps included, so the line must too:
+// with 09:00–12:00 and 14:00–17:00, a route from 10:00 ends its day at 17:00,
+// not at 10:00 plus five hours of focus time.
 export function dayLeftFrom(startMinutes, now, windows) {
   const at = new Date(now);
   at.setHours(0, 0, 0, 0);
   at.setMinutes(startMinutes);
-  return Math.max(0, Math.round(getRemainingFocusMinutes(at, windows)));
+  const lociStart = getLociNowMinutes(at, windows);
+  const lastEnd = Math.max(...mergeWindowSpans(windows).map(([, end]) => end));
+  return Math.max(0, Math.round(lastEnd - lociStart));
 }
 
 // Where the day ends along the route, and what that means for each stop.
@@ -71,7 +75,15 @@ const MOVE_FIELDS = ["dayMapDate", "dayMapPeriod", "dayMapStartMinutes", "dayMap
 // dayMapOrder), which times them from its own start. A pinned one is unpinned:
 // the one thing is today's. Returns the new list and what Undo needs.
 export function moveToTomorrow(allTasks, ids, tomorrowStr, now = Date.now()) {
-  const order = new Map(ids.map((id, i) => [id, i - ids.length]));
+  // A later batch goes after any already moved to that day, still ahead of
+  // the rest of the list (orders below 0): -3..-1 then -0.67, -0.33.
+  const earlier = allTasks
+    .filter(t => t.deferredUntil === tomorrowStr && !ids.includes(String(t.uuid || t.id)))
+    .map(t => Number(t.orderIndex))
+    .filter(n => Number.isFinite(n) && n < 0);
+  const hi = earlier.length ? Math.max(...earlier) : null;
+  const n = ids.length;
+  const order = new Map(ids.map((id, i) => [id, hi === null ? i - n : hi + ((i + 1) * -hi) / (n + 1)]));
   const before = [];
   const tasks = allTasks.map(t => {
     const id = String(t.uuid || t.id);

@@ -376,8 +376,11 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     setExpandedTaskId(null);
   };
 
+  // The pinned task is what you are doing now, and may have a focus session
+  // open that only Today can close properly — so it is never moved from here.
+  const movable = plan.wontFit.filter(t => !t.isNowFocus);
   const moveOverToTomorrow = () => {
-    const ids = plan.wontFit.map(getTaskId);
+    const ids = movable.map(getTaskId);
     if (!ids.length) return;
     const { tasks: nextTasks, before } = moveToTomorrow(latestTasks(), ids, tomorrowStr);
     savePayload({ ...payloadRef.current, tasks: nextTasks, timestamp: Date.now() });
@@ -450,10 +453,19 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         )}
       </div>
 
-      {activeTodayTasks.length === 0 ? (
+      {activeTodayTasks.length === tomorrowTasks.length ? (
         <section className="dm-empty">
-          <h2>Nothing on Today yet</h2>
-          <p>Add a task to Today, then lay it out on the day.</p>
+          {tomorrowTasks.length > 0 ? (
+            <>
+              <h2>Nothing left for today</h2>
+              <p>{tomorrowTasks.length} {tomorrowTasks.length === 1 ? "task starts" : "tasks start"} tomorrow. Add one for today if there's room.</p>
+            </>
+          ) : (
+            <>
+              <h2>Nothing on Today yet</h2>
+              <p>Add a task to Today, then lay it out on the day.</p>
+            </>
+          )}
           <button type="button" className="dm-btn-filled" onClick={onAddTask}>Add a Today task</button>
         </section>
       ) : (
@@ -479,7 +491,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
                   <span>Nothing is deleted. Moved tasks go to the top of tomorrow.</span>
                 </p>
                 <div className="dm-status-actions">
-                  <button type="button" className="dm-btn-alert" onClick={moveOverToTomorrow}>Move {n} to tomorrow</button>
+                  <button type="button" className="dm-btn-alert" onClick={moveOverToTomorrow} disabled={!movable.length}>Move {movable.length} to tomorrow</button>
                   {onHelpChoose && <button type="button" className="dm-link is-alert" onClick={onHelpChoose}>Help me choose</button>}
                 </div>
               </section>

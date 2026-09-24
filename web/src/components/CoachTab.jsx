@@ -1474,7 +1474,7 @@ Priority distribution: ${p1Count} P1 of ${backlog.length} total (${Math.round(p1
 LOCI PHILOSOPHY: The app biases toward doing, not planning. Your briefing must close the activation gap — turn intentions into a specific first step. Never suggest "organize more" or "plan better." Suggest starting.
 
 FULL TASK LIST (key: [priority] [horizon] title | est minutes):
-${backlog.map(t => `[${t.priority}] [${t.horizonLevel}] ${t.title} | ${t.timeEstimateMinutes || 25}min | ${t.category || "–"}`).join("\n")}
+${backlog.map(t => `[${t.priority}] [${t.horizonLevel === "today" && !isOnToday(t) ? "tomorrow" : t.horizonLevel}] ${t.title} | ${t.timeEstimateMinutes || 25}min | ${t.category || "–"}`).join("\n")}
 ${briefingAnchorContext ? `\n${briefingAnchorContext}\n` : ""}
 PRODUCE A FOCUS BRIEFING with these sections:
 
