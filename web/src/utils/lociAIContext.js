@@ -79,10 +79,13 @@ export function buildLociTaskContext(allTasks = [], date = new Date(), windows =
   return total === 0 ? "No active tasks yet." : lines.join("\n");
 }
 
-export function buildLociAnchorsContext(anchors = [], checkedIds = []) {
+// Anchors are principles the user keeps in view (one line on Today, 40a), not
+// a checklist: nothing in the app ticks them off any more, so a check box per
+// anchor would tell the Coach every one was "not done", every day.
+export function buildLociAnchorsContext(anchors = []) {
   if (!anchors || anchors.length === 0) return "";
-  const lines = anchors.map(a => `  [${checkedIds.includes(a.id) ? "✓" : " "}] ${a.text}`);
-  return "DAILY ANCHORS:\n" + lines.join("\n");
+  const lines = anchors.map(a => `  - ${a.text}`);
+  return "DAILY ANCHORS (principles the user keeps in mind, not tasks to tick off):\n" + lines.join("\n");
 }
 
 const REFLECTION_NOTE_MAX_LENGTH = 140;
