@@ -900,6 +900,10 @@ export default function TodayTab({
       const underStart = start ? tabTop - (start.getBoundingClientRect().bottom + 12) : avail * 0.5;
       const half = Math.min(Math.max(underStart, avail * 0.3), avail * 0.7);
       el.style.setProperty("--sheet-half", `${Math.round(half)}px`);
+      // When even the smallest half sheet reaches over Start focus (a short
+      // phone, large text, a long title), the NOW card with its own Start
+      // shows at half height too, so the one action is never hidden.
+      el.dataset.coversStart = half > underStart + 1 ? "1" : "0";
       el.style.setProperty("--sheet-full", `${Math.round(avail - 8)}px`);
     };
     measure();
@@ -1022,6 +1026,9 @@ export default function TodayTab({
   // The open rows the list holds: the rest of the day, plus the NOW row that
   // heads it — what the sheet's accessible name reports.
   const listOpenRows = wallRemainingCount + (pinnedFocusTask ? 1 : 0);
+  // App's floating timer (shown for a session left running behind the
+  // overlay) sits over the sheet's bottom edge; the sheet makes room for it.
+  const floatingTimerShown = !!(focusSessionActive && activeTask && !isFocusMode && !sessionCompletePending);
   // The list header's figures (41a: "11 · 0 done", "All · 11", "Must-do · 2").
   // "Done" is done TODAY — a finished task keeps the Today horizon until
   // something moves it.
@@ -1288,7 +1295,7 @@ export default function TodayTab({
            rather than leaving the screen empty. */}
       <section
         ref={sheetRef}
-        className={`tasks-section today-list${pinnedFocusTask ? " is-sheet" : ""}${sheetFull ? " is-full" : ""}`}
+        className={`tasks-section today-list${pinnedFocusTask ? " is-sheet" : ""}${sheetFull ? " is-full" : ""}${floatingTimerShown ? " has-floating-timer" : ""}`}
         aria-label={`Today's list, ${listOpenRows} ${listOpenRows === 1 ? "task" : "tasks"}`}
         // Conditional INLINE, not via a class: an inline display beats any
         // class rule, and this element needs one for the open state.
@@ -1315,8 +1322,10 @@ export default function TodayTab({
             <div className="today-sheet-now">
               <span className="today-sheet-now-kicker">NOW</span>
               <span className="today-sheet-now-title">{pinnedFocusTask.title}</span>
+              {/* Names what a tap does: an open session is resumed, as on the
+                  wall's "Resume focus". */}
               <button type="button" className="today-sheet-now-start" onClick={() => startFocusAndLog(pinnedFocusTask)}>
-                Start
+                {wallSessionLive ? "Resume" : "Start"}
               </button>
             </div>
           </>

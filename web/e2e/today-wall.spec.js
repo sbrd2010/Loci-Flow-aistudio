@@ -550,6 +550,8 @@ async function openSheet(page) {
 
 test("mobile reliability: the sheet's grabber toggles half and full; full shows the NOW card", async ({ page }) => {
   await enterDemo(page);
+  // Tall enough that half height clears Start focus by itself.
+  await page.setViewportSize({ width: 430, height: 1000 });
   const title = (await page.locator(".wall-title").innerText()).trim();
   await openSheet(page);
 
@@ -670,3 +672,48 @@ test("mobile reliability: pinning a longer task with the sheet open re-measures 
     .toBeLessThan(halfBefore);
 });
 
+
+test("mobile reliability: on a short phone the half sheet shows the NOW card, so Start is never hidden", async ({ page }) => {
+  // Opened with the list already open (the saved state), at the top of the
+  // page: Start focus sits below the fold, under where the sheet must reach.
+  await page.addInitScript(() => localStorage.setItem("loci_today_peek_open", "1"));
+  await page.setViewportSize({ width: 375, height: 600 });
+  await page.goto("/");
+  await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Expand the list" })).toBeVisible(); // still half
+  const now = page.locator(".today-sheet-now");
+  await expect(now).toBeVisible();
+  await expect(now.getByRole("button", { name: "Start" })).toBeVisible();
+});
+
+
+test("mobile reliability: with a session left running, the sheet says Resume and makes room for the timer", async ({ page }) => {
+  await enterDemo(page);
+  // Start, then leave the overlay with the session still open.
+  await page.locator(".wall-primary").click();
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 10_000 });
+  await overlay.locator(".focus-mode-exit-btn").click();
+  await expect(overlay).toHaveCount(0);
+  await expect(page.locator(".floating-focus-timer")).toBeVisible();
+
+  // The floating timer pill sits over the peek (as before this change), so
+  // open the list from the keyboard.
+  await page.locator(".wall-peek").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+  await page.getByRole("button", { name: "Expand the list" }).click();
+  await expect(page.locator(".today-sheet-now").getByRole("button", { name: "Resume" })).toBeVisible();
+
+  // Scrolled to its end, the last row clears the floating timer.
+  const sheet = page.locator(".tasks-section");
+  await expect(sheet).toHaveClass(/has-floating-timer/);
+  await sheet.evaluate(el => { el.scrollTop = el.scrollHeight; });
+  const lastRow = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']").last();
+  const rowBox = await lastRow.boundingBox();
+  const timerBox = await page.locator(".floating-focus-timer").boundingBox();
+  expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(timerBox.y + 1);
+});

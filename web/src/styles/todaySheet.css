@@ -36,6 +36,9 @@
     overflow-y: auto;
     overscroll-behavior: contain;
   }
+  /* Room below the last row for App's floating timer (a 44px pill 82px
+     above the bottom, over the sheet's lower edge). */
+  .today-list.is-sheet.has-floating-timer { padding-bottom: 64px; }
   .today-list.is-sheet > *,
   .today-list.is-sheet .tasks-list > * { flex-shrink: 0; }
 
@@ -73,7 +76,8 @@
   .today-list.is-sheet .today-list-hide { display: inline-flex; }
   .today-list.is-sheet .today-list-hide .wall-key { display: none; }
 
-  .today-list.is-sheet.is-full .today-sheet-now {
+  .today-list.is-sheet.is-full .today-sheet-now,
+  .today-list.is-sheet[data-covers-start="1"] .today-sheet-now {
     display: flex;
     align-items: center;
     gap: 12px;
