@@ -82,6 +82,10 @@ for (const theme of THEMES) {
   test(`${theme}: rethemed text stays legible and tappable`, async ({ page }) => {
     await enterDemo(page, theme);
 
+    // The list opens as a sheet over the wall on a phone; the wall is measured
+    // with it put away, and the list once it is open again and settled.
+    await page.locator(".today-list-hide").click();
+
     // Today's wall: the smallest text on it, on its own grounds — the gold
     // kicker on the gold band is the tightest pair (4.82:1 by calculation).
     for (const [sel, what] of [
@@ -95,6 +99,9 @@ for (const theme of THEMES) {
     ]) {
       await assertLegible(page.locator(sel).first(), what, theme);
     }
+
+    await page.locator(".wall-peek").click();
+    await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
 
     // The list (41a/37b): its quietest text, on the list's own ground.
     for (const [loc, what] of [
