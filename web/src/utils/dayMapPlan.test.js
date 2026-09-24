@@ -89,6 +89,23 @@ describe("moveToTomorrow / restoreSchedule", () => {
     expect(before.map(t => t.uuid)).toEqual(["b", "c"]);
   });
 
+  it("takes them off today until tomorrow, at the top of tomorrow's list, unpinned", () => {
+    const withPin = tasks.map(t => t.uuid === "b" ? { ...t, isNowFocus: true, orderIndex: 4 } : t);
+    const { tasks: next } = moveToTomorrow(withPin, ["b", "c"], "2026-09-24", 1);
+    expect(next[1]).toMatchObject({ deferredUntil: "2026-09-24", orderIndex: -2, isNowFocus: false });
+    expect(next[2]).toMatchObject({ deferredUntil: "2026-09-24", orderIndex: -1 });
+  });
+
+  it("Undo gives the pin back, unless another task was pinned since", () => {
+    const withPin = tasks.map(t => t.uuid === "b" ? { ...t, isNowFocus: true, orderIndex: 4 } : t);
+    const { tasks: moved, before } = moveToTomorrow(withPin, ["b"], "2026-09-24", 1);
+    const back = restoreSchedule(moved, before, 2);
+    expect(back[1]).toMatchObject({ isNowFocus: true, orderIndex: 4 });
+    expect(back[1]).not.toHaveProperty("deferredUntil");
+    const repinned = moved.map(t => t.uuid === "a" ? { ...t, isNowFocus: true } : t);
+    expect(restoreSchedule(repinned, before, 2)[1].isNowFocus).toBe(false);
+  });
+
   it("Undo puts the schedule back and keeps other edits made since", () => {
     const { tasks: moved, before } = moveToTomorrow(tasks, ["b", "c"], "2026-09-24", 1);
     const edited = moved.map(t => t.uuid === "b" ? { ...t, title: "B, renamed" } : t);

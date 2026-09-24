@@ -62,6 +62,8 @@ test("stops after the day end are marked, and Move N to tomorrow takes them off 
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
   await expect(page.locator(".dm-stop")).toHaveCount(3);
   await expect(dayEnd).toContainText(/1 won't fit/i);
+  await page.locator(".dm-back").click();
+  await expect(page.getByTestId("today-tasks-list").locator("[data-testid='task-row']")).toHaveCount(3);
 });
 
 test("on a laptop the plan sits in a side panel with the full sentence", async ({ page }) => {
@@ -81,8 +83,16 @@ test("the next day, moved tasks open tomorrow's route at the top, timed from its
   const moved = (await page.locator(".dm-stop.is-over .dm-title").innerText()).trim();
   await page.getByRole("button", { name: "Move 1 to tomorrow" }).click();
   await page.locator(".dm-back").click();
+  // Tomorrow means not today: it has left Today's list.
+  const list = page.getByTestId("today-tasks-list");
+  await expect(list).toBeVisible();
+  await expect(list.getByText(moved)).toHaveCount(0);
 
   await page.clock.setFixedTime(new Date("2024-06-16T09:00:00"));
+  // The next day it is back, at the top of the list (the NOW row aside).
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
+  await expect(list.locator("[data-testid='task-row']:not(:has(.task-tag.is-now))").first()).toContainText(moved);
   await page.getByRole("button", { name: "Day map →" }).click();
   const first = page.locator(".dm-stop").first();
   await expect(first.locator(".dm-title")).toHaveText(moved);

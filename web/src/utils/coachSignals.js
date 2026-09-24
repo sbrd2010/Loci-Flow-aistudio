@@ -1,4 +1,5 @@
 import { getFocusWindows, getLociDayStr } from "./focusWindows";
+import { isOnToday } from "./deferral";
 
 function getLocalDateString(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -45,7 +46,7 @@ export function buildExecutionCoachSignal(payload = {}, date = new Date()) {
   const config = payload.config || {};
   const todayStr = getLocalDateString(date);
   const lociTodayStr = getLociDayStr(date, getFocusWindows(config));
-  const todayTasks = tasks.filter(task => task.horizonLevel === "today" && !task.isDeleted && !task.isParked);
+  const todayTasks = tasks.filter(task => isOnToday(task) && !task.isDeleted && !task.isParked);
   const activeToday = todayTasks.filter(isActiveTask).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
   const completedToday = tasks.filter(task => !task.isDeleted && task.isCompleted && task.dateCompletedString === lociTodayStr);
   const nowFocus = activeToday.find(task => task.isNowFocus) || null;

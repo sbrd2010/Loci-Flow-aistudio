@@ -39,6 +39,7 @@ import {
   useSortable, arrayMove
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { isOnToday } from "../utils/deferral";
 
 // Addendum A: on a Low Energy day the wall offers a smaller start instead of
 // "split it". Five minutes, the same length ScatteredFlow's "Just 5 minutes"
@@ -971,7 +972,8 @@ export default function TodayTab({
     ? sessionsOnDay(ledgerRaw, todayStr) + (sessionCompletePending ? 0 : 1)
     : 0;
 
-  const todayTasksAll = tasks.filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isParked);
+  // A task moved to tomorrow (deferral.js) is not today's until then.
+  const todayTasksAll = tasks.filter((t) => isOnToday(t) && !t.isDeleted && !t.isParked);
   const pinnedFocusTask = todayTasksAll.find(t => t.isNowFocus && !t.isCompleted && !t.isDeleted) || null;
 
   // Half height leaves the task and its Start focus in view above the sheet

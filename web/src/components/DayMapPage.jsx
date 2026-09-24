@@ -17,6 +17,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { shouldReflowPastRoute } from "../utils/dayMapRoute";
 import { dayLeftFrom, formatClock24, formatSpan, moveToTomorrow, nextDateStr, planDay, restoreSchedule } from "../utils/dayMapPlan";
 import { getFocusWindows } from "../utils/focusWindows";
+import { isDeferred } from "../utils/deferral";
 import { commitmentKickerFront, frontForCommitment, frontsFromConfig } from "../utils/fronts";
 import { useTodayStr } from "../hooks/useTodayStr";
 import LinkifyText from "./LinkifyText";
@@ -268,7 +269,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   // Include old-format tasks (dayMapPeriod set but no dayMapOrder) for backward compat
   const scheduledTasks = useMemo(() => (
     activeTodayTasks
-      .filter(t => t.dayMapDate === todayStr && (t.dayMapOrder != null || !!t.dayMapPeriod))
+      .filter(t => t.dayMapDate === todayStr && !isDeferred(t, todayStr) && (t.dayMapOrder != null || !!t.dayMapPeriod))
       .sort((a, b) => {
         const oa = a.dayMapOrder ?? Infinity;
         const ob = b.dayMapOrder ?? Infinity;
@@ -277,12 +278,12 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       })
   ), [activeTodayTasks, todayStr]);
 
-  // Moved to tomorrow: still Today's, but they start tomorrow's route.
-  const tomorrowTasks = useMemo(() => activeTodayTasks.filter(t => t.dayMapDate === tomorrowStr), [activeTodayTasks, tomorrowStr]);
+  // Moved to tomorrow (deferral.js): not today's, but counted on the end line.
+  const tomorrowTasks = useMemo(() => activeTodayTasks.filter(t => isDeferred(t, todayStr)), [activeTodayTasks, todayStr]);
 
   const unscheduledTasks = useMemo(() => (
-    activeTodayTasks.filter(t => t.dayMapDate !== tomorrowStr && (t.dayMapDate !== todayStr || (t.dayMapOrder == null && !t.dayMapPeriod)))
-  ), [activeTodayTasks, todayStr, tomorrowStr]);
+    activeTodayTasks.filter(t => !isDeferred(t, todayStr) && (t.dayMapDate !== todayStr || (t.dayMapOrder == null && !t.dayMapPeriod)))
+  ), [activeTodayTasks, todayStr]);
 
   // Start: config-persisted → inferred from the first stop → now. Clamped to
   // now so a stored past value never produces a past start time.

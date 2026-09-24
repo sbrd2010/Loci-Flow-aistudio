@@ -13,6 +13,7 @@ import { getLociNowMinutes, getOverallSpan, getFocusProgress, getRemainingFocusM
 import { isMorningRitualSlot } from "./morningRitual";
 import { countTodayCompletedTasks } from "./deadlineProgressMirror";
 import { isDailyDone } from "./deadlineCountdown";
+import { isOnToday } from "./deferral";
 
 export const MAX_COMMITMENT_TASKS = 3;
 const SNOOZE_MS = 90 * 60 * 1000;
@@ -123,7 +124,7 @@ export function buildMorningCommitmentSnooze(config = {}, now = Date.now()) {
 // a task doesn't change its horizon.
 export function getValidCommittedTaskIds(tasks = [], taskIds) {
   if (!Array.isArray(taskIds)) return [];
-  const validIds = new Set((tasks || []).filter(t => !t.isDeleted && t.horizonLevel === "today").map(t => t.uuid));
+  const validIds = new Set((tasks || []).filter(t => !t.isDeleted && isOnToday(t)).map(t => t.uuid));
   return taskIds.filter(id => validIds.has(id));
 }
 

@@ -62,12 +62,14 @@ export function nextDateStr(dateStr) {
   return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
 }
 
-const SCHEDULE_FIELDS = ["dayMapDate", "dayMapPeriod", "dayMapStartMinutes", "dayMapDurationMinutes", "dayMapOrder"];
+// What a move to tomorrow touches, and so what its Undo puts back.
+const MOVE_FIELDS = ["dayMapDate", "dayMapPeriod", "dayMapStartMinutes", "dayMapDurationMinutes", "dayMapOrder", "deferredUntil", "orderIndex"];
 
-// Moves these tasks to the top of tomorrow's route, in their current order.
-// They stay on Today; tomorrow's Day map picks them up first (a negative
-// order sorts ahead of anything already there) and times them from its own
-// start. Returns the new task list and what Undo needs to put them back.
+// Moves these tasks to tomorrow, in their current order. They keep the Today
+// horizon but leave today (deferredUntil, see deferral.js); tomorrow they head
+// both the list (a negative orderIndex) and the Day map's route (a negative
+// dayMapOrder), which times them from its own start. A pinned one is unpinned:
+// the one thing is today's. Returns the new list and what Undo needs.
 export function moveToTomorrow(allTasks, ids, tomorrowStr, now = Date.now()) {
   const order = new Map(ids.map((id, i) => [id, i - ids.length]));
   const before = [];
@@ -76,23 +78,34 @@ export function moveToTomorrow(allTasks, ids, tomorrowStr, now = Date.now()) {
     if (!order.has(id)) return t;
     before.push(t);
     const { dayMapPeriod, dayMapStartMinutes, ...rest } = t; // eslint-disable-line no-unused-vars
-    return { ...rest, dayMapDate: tomorrowStr, dayMapOrder: order.get(id), lastUpdated: now };
+    return {
+      ...rest,
+      dayMapDate: tomorrowStr,
+      dayMapOrder: order.get(id),
+      deferredUntil: tomorrowStr,
+      orderIndex: order.get(id),
+      isNowFocus: false,
+      lastUpdated: now,
+    };
   });
   return { tasks, before };
 }
 
-// Undo for moveToTomorrow: restores only the schedule fields, so an edit made
-// to one of those tasks in the meantime (a new title, say) survives.
+// Undo for moveToTomorrow: restores only what the move changed, so an edit
+// made to one of those tasks in the meantime (a new title, say) survives. A
+// pin comes back only if nothing else was pinned since.
 export function restoreSchedule(allTasks, before, now = Date.now()) {
   const saved = new Map(before.map(t => [String(t.uuid || t.id), t]));
+  const pinnedElsewhere = allTasks.some(t => t.isNowFocus && !t.isDeleted && !t.isCompleted && !saved.has(String(t.uuid || t.id)));
   return allTasks.map(t => {
     const old = saved.get(String(t.uuid || t.id));
     if (!old) return t;
     const next = { ...t, lastUpdated: now };
-    for (const f of SCHEDULE_FIELDS) {
+    for (const f of MOVE_FIELDS) {
       if (old[f] === undefined) delete next[f];
       else next[f] = old[f];
     }
+    if (old.isNowFocus && !pinnedElsewhere) next.isNowFocus = true;
     return next;
   });
 }
