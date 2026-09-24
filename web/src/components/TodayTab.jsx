@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import TaskRow, { ROADMAP_HORIZONS } from "./TaskRow";
 import AddTaskDialog from "./AddTaskDialog";
+import SplitTaskSheet from "./SplitTaskSheet";
+import { buildSplit, undoSplit } from "../utils/splitTask";
 import TodayWall from "./TodayWall";
 import Momentum from "./Momentum";
 import { frontsFromConfig, commitmentDaysLeft, commitmentKickerFront, frontForCommitment, frontProgress } from "../utils/fronts";
@@ -322,6 +324,8 @@ export default function TodayTab({
   const [breakdownNoKeyUuid, setBreakdownNoKeyUuid] = useState(null);
 
   const [editingTask, setEditingTask] = useState(null);
+  // Split a task (45d): the wall's "Split it" and S open it for the one thing.
+  const [splitTask, setSplitTask] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
   // The one Undo toast: { kind: "done" | "delete" | "unpin" | "move" | "front",
   // task (as it was), to, wasPinned, at }.
@@ -597,6 +601,34 @@ export default function TodayTab({
   };
 
   // Unpin from the list's NOW row: acts at once, with Undo like the rest.
+  // Split (45d): the original is replaced by the steps, in its place; the pin
+  // moves to the first. Undo (5s) brings the original back and removes them.
+  const handleSplit = (steps) => {
+    const original = tasks.find(t => t.uuid === splitTask?.uuid && !t.isDeleted);
+    setSplitTask(null);
+    if (!original || steps.length < 2) return;
+    const actionAt = Date.now();
+    let endedFocusSession = null;
+    if (original.isNowFocus) {
+      endedFocusSession = endFocusSession("user_abandoned");
+      setIsTimerRunning(false);
+      setIsFocusMode(false);
+      setFocusSessionActive(false);
+    }
+    const { tasks: nextTasks, created } = buildSplit(tasks, original, steps, { now: actionAt, makeId: safeUUID });
+    const events = [
+      buildTaskMutationEvent("task_deleted", original, { windows, now: actionAt }),
+      ...created.map(t => buildTaskMutationEvent("task_created", t, { windows, now: actionAt })),
+    ];
+    if (endedFocusSession) {
+      events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
+    }
+    setUndo({ kind: "split", task: original, created: created.map(t => t.uuid), at: actionAt });
+    savePayloadAsync({ ...payload, tasks: nextTasks })
+      .then(() => writeActivityEvents(eventsPatch(uid, events)))
+      .catch(() => {});
+  };
+
   const handleUnpinWallTask = (task) => {
     if (!task.isNowFocus) return handlePinTask(task);
     setUndo({ kind: "unpin", task, at: Date.now() });
@@ -644,6 +676,7 @@ export default function TodayTab({
       const label = u.to === "week" ? "This week" : (ROADMAP_HORIZONS.find(h => h.key === u.to)?.label || u.to);
       return `Moved to ${label}: ${title}`;
     }
+    if (u.kind === "split") return `Split into ${u.created.length} tasks: ${title}`;
     if (u.kind === "front") {
       const front = frontsFromConfig(config).find(f => f.id === u.to);
       return front ? `Put on ${front.name}: ${title}` : `Off its front: ${title}`;
@@ -679,6 +712,18 @@ export default function TodayTab({
         lastUpdated: now,
       } : t) })
         .then(() => writeActivityEvents(eventPatch(uid, event)))
+        .catch(() => {});
+      return;
+    }
+    if (kind === "split") {
+      const now = Date.now();
+      const made = tasks.filter(t => undo.created.includes(t.uuid) && !t.isDeleted);
+      const events = [
+        buildTaskMutationEvent("task_restored", task, { windows, now }),
+        ...made.map(t => buildTaskMutationEvent("task_deleted", t, { windows, now })),
+      ];
+      savePayloadAsync({ ...payload, tasks: undoSplit(tasks, task, undo.created, now) })
+        .then(() => writeActivityEvents(eventsPatch(uid, events)))
         .catch(() => {});
       return;
     }
@@ -1260,7 +1305,7 @@ export default function TodayTab({
       // where the key came from, not by state: closing that layer re-renders
       // before this listener runs, so its state already reads "closed".
       if (e.target?.closest?.('[role="dialog"], .modal-card, [data-testid="task-options-menu"]')) return;
-      if (isFocusMode || editingTask || isAddTaskDialogOpen || confirmDialog || rescueActive || showDailyCheckin || frontPickerTask) return;
+      if (isFocusMode || editingTask || splitTask || isAddTaskDialogOpen || confirmDialog || rescueActive || showDailyCheckin || frontPickerTask) return;
       closeSheet();
     };
     window.addEventListener("keydown", onEsc);
@@ -1268,7 +1313,7 @@ export default function TodayTab({
   });
 
   const wallKeysBlocked = isFocusMode || !!editingTask || isAddTaskDialogOpen || !!confirmDialog
-    || rescueActive || showDailyCheckin || sessionCompletePending || !!frontPickerTask;
+    || rescueActive || showDailyCheckin || sessionCompletePending || !!frontPickerTask || !!splitTask;
   useEffect(() => {
     if (wallKeysBlocked) return undefined;
     const onKey = (e) => {
@@ -1297,7 +1342,7 @@ export default function TodayTab({
       } else if (key === "d") {
         handleToggleComplete(pinnedFocusTask);
       } else if (key === "s" && !config.isLowEnergyMode) {
-        setEditingTask(pinnedFocusTask);
+        setSplitTask(pinnedFocusTask);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -1324,7 +1369,7 @@ export default function TodayTab({
         timerLabel={wallLiveTimerLabel}
         onStartFocus={() => pinnedFocusTask && startFocusAndLog(pinnedFocusTask)}
         onMarkDone={() => pinnedFocusTask && handleToggleComplete(pinnedFocusTask)}
-        onSplit={() => pinnedFocusTask && setEditingTask(pinnedFocusTask)}
+        onSplit={() => pinnedFocusTask && setSplitTask(pinnedFocusTask)}
         onStartSmall={() => pinnedFocusTask && startFocusAndLog(pinnedFocusTask, null, { plannedSeconds: LOW_ENERGY_SESSION_SECONDS })}
         doneTask={doneCommitment}
         doneMinutes={doneMinutes}
@@ -1708,6 +1753,9 @@ export default function TodayTab({
         />
       )}
 
+      {splitTask && (
+        <SplitTaskSheet task={splitTask} onClose={() => setSplitTask(null)} onSplit={handleSplit} />
+      )}
       {editingTask && (
         <AddTaskDialog
           email={payload.config?.userId || ""}
