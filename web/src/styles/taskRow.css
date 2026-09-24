@@ -264,3 +264,56 @@
 @media (min-width: 1024px) {
   .task-row { min-height: 44px; }
 }
+
+/* Swipe (37c). The row slides over its actions; overflow-x: clip keeps a
+   slid row from widening the list, and overflow-y stays visible so the row
+   menu can still drop below it. */
+.task-swipe {
+  position: relative;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+.task-swipe > .task-row {
+  background: var(--surface);
+  touch-action: pan-y;
+  transition: transform 0.18s ease-out;
+}
+.task-swipe-done {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: var(--on-accent);
+  background: var(--accent);
+}
+.task-swipe-actions {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: flex;
+}
+.task-swipe-actions button {
+  width: 88px;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  border: 0;
+  cursor: pointer;
+}
+.task-swipe-week {
+  color: var(--ink);
+  background: var(--panel);
+}
+.task-swipe-front {
+  color: var(--gold-label);
+  background: var(--gold-band);
+}
+.task-swipe-actions button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-swipe > .task-row { transition: none; }
+}

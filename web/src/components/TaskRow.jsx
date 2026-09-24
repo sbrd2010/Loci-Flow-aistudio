@@ -119,7 +119,16 @@ function MenuItem({ onClick, color, danger, testId, children }) {
   );
 }
 
-const ROADMAP_HORIZONS = [
+// Swipe distances (px): past SWIPE_DONE to the right marks done; to the left
+// the row opens by SWIPE_REVEAL, the width of its two actions.
+const SWIPE_DONE = 96;
+const SWIPE_REVEAL = 176;
+// Resting this long before moving makes it a long-press (reorder), not a swipe.
+// It matches the TouchSensor's delay in TodayTab: a move any sooner cancels
+// that pending reorder, so the swipe must take it or nothing would.
+const SWIPE_LONG_PRESS_MS = 200;
+
+export const ROADMAP_HORIZONS = [
   { key: "week",     label: "This Week" },
   { key: "month",    label: "Month" },
   { key: "quarter",  label: "Quarter" },
@@ -130,7 +139,7 @@ const ROADMAP_HORIZONS = [
 // A Today row (41a; Addendum AA): a 20px circle in a 44px tap area (tap it to
 // mark done), a mono priority tag, a title that wraps and grows the row, and
 // MUST / GOAL tags. Tapping the row opens its menu.
-export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onPark, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, onToggleMVD, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false }) {
+export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onPark, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, onToggleMVD, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, onSwipeDone, onSwipeWeek, onPutOnFront }) {
   const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
   const [menuOpen, setMenuOpen] = useState(false);
   const [showRoadmapOptions, setShowRoadmapOptions] = useState(false);
@@ -171,17 +180,107 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
     optionsBtnRef.current?.focus();
   };
 
+
+  // Swipe (touch only; 37c): right past a threshold marks done; left opens
+  // "This week" and "Front" behind the row. The same actions are in the row
+  // menu, for screen readers and pointers. Only a clearly horizontal drag is
+  // a swipe — anything else is left to scrolling and to drag-to-reorder
+  // (whose long-press is cancelled by the movement).
+  const canSwipe = !isCompleted && !!(onSwipeDone || onSwipeWeek || onPutOnFront);
+  const [swipeX, setSwipeX] = useState(0);
+  const [revealed, setRevealed] = useState(false);
+  const swipeRef = useRef(null);
+  const suppressClickRef = useRef(false);
+  const onSwipeDown = (e) => {
+    // One finger only: the swipe follows the pointer that began it.
+    if (!canSwipe || e.pointerType !== "touch" || !e.isPrimary) return;
+    // The grip is drag-to-reorder's, and the open menu's items are buttons;
+    // a gesture that starts on either is never a swipe.
+    if (e.target.closest?.(".task-row-grip, .task-row-menu")) return;
+    swipeRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, base: revealed ? -SWIPE_REVEAL : 0, active: false };
+  };
+  const onSwipeMove = (e) => {
+    const sw = swipeRef.current;
+    if (!sw || e.pointerId !== sw.id) return;
+    const dx = e.clientX - sw.x;
+    const dy = e.clientY - sw.y;
+    if (!sw.active) {
+      // Where the row itself starts a reorder (Drag anywhere), a finger that
+      // rested first is that long-press (its touch sensor waits 200ms), not
+      // a swipe. Elsewhere a hesitant swipe is still a swipe.
+      if (isDragAnywhere && e.timeStamp - sw.t >= SWIPE_LONG_PRESS_MS) {
+        swipeRef.current = null;
+        return;
+      }
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        sw.active = true;
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+        // Count the move that crossed the line: a quick flick may send only
+        // this one before it lifts.
+      } else {
+        if (Math.abs(dy) > 10) swipeRef.current = null;
+        return;
+      }
+    }
+    sw.last = dx;
+    setSwipeX(Math.max(-SWIPE_REVEAL - 24, Math.min(SWIPE_DONE + 24, sw.base + dx)));
+  };
+  const onSwipeUp = (e) => {
+    const sw = swipeRef.current;
+    if (!sw || e.pointerId !== sw.id) return;
+    swipeRef.current = null;
+    if (!sw.active) return;
+    // Where the finger lifted is the gesture's end (moves may be coalesced).
+    sw.last = e.clientX - sw.x;
+    // Only the click this pointerup may produce is swallowed; if it lands
+    // elsewhere (or never comes), the next real tap must still open the menu.
+    suppressClickRef.current = true;
+    setTimeout(() => { suppressClickRef.current = false; }, 0);
+    const end = sw.base + (sw.last || 0);
+    if (end >= SWIPE_DONE && onSwipeDone) {
+      setSwipeX(0);
+      setRevealed(false);
+      navigator.vibrate?.(10);
+      onSwipeDone(task);
+    } else if (end <= -SWIPE_REVEAL / 2 && (onSwipeWeek || onPutOnFront)) {
+      setSwipeX(-SWIPE_REVEAL);
+      setRevealed(true);
+    } else {
+      setSwipeX(0);
+      setRevealed(false);
+    }
+  };
+  // An interrupted gesture (the browser takes it over, a call comes in)
+  // commits nothing: the row goes back to where it was.
+  const onSwipeCancel = (e) => {
+    const sw = swipeRef.current;
+    if (!sw || e.pointerId !== sw.id) return;
+    swipeRef.current = null;
+    if (!sw?.active) return;
+    setSwipeX(sw.base);
+    setRevealed(sw.base !== 0);
+  };
+  const closeSwipe = () => { setSwipeX(0); setRevealed(false); };
+
   const setRowRef = useCallback(node => {
     menuRef.current = node;
     if (isDragAnywhere && dragActivatorRef) dragActivatorRef(node);
   }, [isDragAnywhere, dragActivatorRef]);
 
-  return (
+  const row = (
     <div
       className={`task-row ${isCompleted ? "completed" : ""}`}
       data-testid="task-row"
+      data-task-uuid={task.uuid}
       ref={setRowRef}
-      onClick={hasActions ? () => setMenuOpen(o => !o) : undefined}
+      onClick={hasActions || canSwipe ? () => {
+        // The click that ends a swipe is not a tap; a tap on an opened row
+        // closes it.
+        if (suppressClickRef.current) { suppressClickRef.current = false; return; }
+        if (revealed) { closeSwipe(); return; }
+        if (hasActions) setMenuOpen(o => !o);
+      } : undefined}
+      {...(canSwipe ? { onPointerDown: onSwipeDown, onPointerMove: onSwipeMove, onPointerUp: onSwipeUp, onPointerCancel: onSwipeCancel } : {})}
       {...(isDragAnywhere ? {
         ...dragHandleListeners,
         tabIndex: dragHandleAttributes?.tabIndex,
@@ -189,6 +288,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         "aria-describedby": dragHandleAttributes?.["aria-describedby"],
       } : {})}
       style={{
+        ...(swipeX ? { transform: `translateX(${swipeX}px)`, transition: swipeRef.current ? "none" : undefined } : {}),
         ...(menuOpen ? { zIndex: 400, position: "relative" } : {}),
         ...(hasActions ? { cursor: "pointer" } : {}),
         ...(isDragAnywhere ? { cursor: "grab" } : {}),
@@ -348,6 +448,11 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
               <PencilIcon /> Edit task
             </MenuItem>
           )}
+          {onPutOnFront && (
+            <MenuItem testId="task-menu-front" onClick={() => { onPutOnFront(task); setMenuOpen(false); }}>
+              <ArrowRightIcon /> Put on a front
+            </MenuItem>
+          )}
           <MenuItem
             testId="task-menu-copy"
             color={copied ? "var(--success)" : "var(--text-primary)"}
@@ -436,6 +541,25 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
           title="Task options"
         >⋮</button>
       )}
+    </div>
+  );
+
+  if (!canSwipe) return row;
+  const shown = swipeX !== 0;
+  return (
+    <div className="task-swipe">
+      {/* Behind the row: Done on the left (right swipe), This week and Front
+          on the right (left swipe). Hidden from everyone until uncovered. */}
+      <span className="task-swipe-done" aria-hidden="true" style={{ visibility: swipeX > 0 ? "visible" : "hidden" }}>Done</span>
+      <span className="task-swipe-actions" style={{ visibility: shown && swipeX < 0 ? "visible" : "hidden" }}>
+        {onSwipeWeek && (
+          <button type="button" className="task-swipe-week" onClick={() => { closeSwipe(); onSwipeWeek(task); }}>This week</button>
+        )}
+        {onPutOnFront && (
+          <button type="button" className="task-swipe-front" onClick={() => { closeSwipe(); onPutOnFront(task); }}>Front</button>
+        )}
+      </span>
+      {row}
     </div>
   );
 }

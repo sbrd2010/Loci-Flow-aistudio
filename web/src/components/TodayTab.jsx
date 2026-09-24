@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
-import TaskRow from "./TaskRow";
+import TaskRow, { ROADMAP_HORIZONS } from "./TaskRow";
 import AddTaskDialog from "./AddTaskDialog";
 import TodayWall from "./TodayWall";
 import Momentum from "./Momentum";
@@ -322,7 +322,8 @@ export default function TodayTab({
 
   const [editingTask, setEditingTask] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
-  // The one Undo toast: { kind: "done" | "delete" | "unpin", task, wasPinned, at }.
+  // The one Undo toast: { kind: "done" | "delete" | "unpin" | "move" | "front",
+  // task (as it was), to, wasPinned, at }.
   // Only the task is held — what undoing writes is built from the tasks as
   // they are when Undo is tapped, not as they were 5 seconds earlier.
   const [undo, setUndo] = useState(null);
@@ -601,7 +602,54 @@ export default function TodayTab({
     return handlePinTask(task);
   };
 
-  const undoText = undo ? `${{ done: "Marked done", delete: "Deleted", unpin: "Unpinned" }[undo.kind]}: ${undo.task.title}` : "";
+  // Moves from a row (the swipe's "This week", and the menu's horizons) act at
+  // once with Undo. Undo puts back the horizon and place it had, and the pin
+  // if it was the one thing and nothing else has been pinned since.
+  const handleMoveWithUndo = (task, horizon) => {
+    setUndo({ kind: "move", task, to: horizon, wasPinned: !!task.isNowFocus, at: Date.now() });
+    handleMoveToHorizon(task, horizon);
+  };
+
+  // "Put on a front": the swipe's Front and the menu item open this picker.
+  const [frontPickerTask, setFrontPickerTask] = useState(null);
+  // Focus goes back where it came from when the picker closes — or, if that
+  // control is gone (the menu item, the swipe's Front), to the row's Options.
+  const pickerOpenerRef = useRef(null);
+  const openFrontPicker = (task) => {
+    pickerOpenerRef.current = { el: document.activeElement, uuid: task.uuid };
+    setFrontPickerTask(task);
+  };
+  useEffect(() => {
+    if (frontPickerTask || !pickerOpenerRef.current) return;
+    const { el, uuid } = pickerOpenerRef.current;
+    pickerOpenerRef.current = null;
+    // The swipe's Front stays mounted once the row closes, only hidden.
+    const back = el && el.isConnected && el.offsetParent !== null && getComputedStyle(el).visibility !== "hidden"
+      ? el
+      : document.querySelector(`[data-task-uuid="${uuid}"] .task-row-options, [data-task-uuid="${uuid}"] .task-row-kebab-btn`);
+    back?.focus?.();
+  }, [frontPickerTask]);
+  const handlePutOnFront = (task, frontId) => {
+    setFrontPickerTask(null);
+    const current = tasks.find(t => t.uuid === task.uuid && !t.isDeleted);
+    if (!current || (current.frontId || null) === (frontId || null)) return;
+    setUndo({ kind: "front", task: current, to: frontId || null, at: Date.now() });
+    savePayload({ ...payload, tasks: tasks.map(t => t.uuid === current.uuid ? { ...t, frontId: frontId || null, lastUpdated: Date.now() } : t) });
+  };
+
+  const undoMessage = (u) => {
+    const title = u.task.title;
+    if (u.kind === "move") {
+      const label = u.to === "week" ? "This week" : (ROADMAP_HORIZONS.find(h => h.key === u.to)?.label || u.to);
+      return `Moved to ${label}: ${title}`;
+    }
+    if (u.kind === "front") {
+      const front = frontsFromConfig(config).find(f => f.id === u.to);
+      return front ? `Put on ${front.name}: ${title}` : `Off its front: ${title}`;
+    }
+    return `${{ done: "Marked done", delete: "Deleted", unpin: "Unpinned" }[u.kind]}: ${title}`;
+  };
+  const undoText = undo ? undoMessage(undo) : "";
 
   const handleUndo = () => {
     if (!undo) return;
@@ -612,6 +660,31 @@ export default function TodayTab({
       savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t) })
         .then(() => writeActivityEvents(eventPatch(uid, event)))
         .catch(() => {});
+      return;
+    }
+    if (kind === "move") {
+      const current = tasks.find(t => t.uuid === task.uuid && !t.isDeleted);
+      if (!current || current.horizonLevel !== undo.to) return;
+      const now = Date.now();
+      const otherPinned = tasks.some(t => t.isNowFocus && t.uuid !== task.uuid && !t.isDeleted && !t.isCompleted);
+      const event = buildTaskMutationEvent("task_moved", current, {
+        fromState: { horizonLevel: undo.to }, toState: { horizonLevel: task.horizonLevel }, windows, now,
+      });
+      savePayloadAsync({ ...payload, tasks: tasks.map(t => t.uuid === task.uuid ? {
+        ...t,
+        horizonLevel: task.horizonLevel,
+        orderIndex: task.orderIndex,
+        ...(wasPinned && !otherPinned ? { isNowFocus: true } : {}),
+        lastUpdated: now,
+      } : t) })
+        .then(() => writeActivityEvents(eventPatch(uid, event)))
+        .catch(() => {});
+      return;
+    }
+    if (kind === "front") {
+      const current = tasks.find(t => t.uuid === task.uuid && !t.isDeleted);
+      if (!current || (current.frontId || null) !== undo.to) return;
+      savePayload({ ...payload, tasks: tasks.map(t => t.uuid === task.uuid ? { ...t, frontId: task.frontId || null, lastUpdated: Date.now() } : t) });
       return;
     }
     if (kind === "unpin") {
@@ -1181,7 +1254,11 @@ export default function TodayTab({
     if (!sheetOpen) return undefined;
     const onEsc = (e) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
-      if (isFocusMode || editingTask || isAddTaskDialogOpen || confirmDialog || rescueActive || showDailyCheckin) return;
+      // An Escape that starts inside a dialog or menu belongs to it. Checked by
+      // where the key came from, not by state: closing that layer re-renders
+      // before this listener runs, so its state already reads "closed".
+      if (e.target?.closest?.('[role="dialog"], .modal-card, [data-testid="task-options-menu"]')) return;
+      if (isFocusMode || editingTask || isAddTaskDialogOpen || confirmDialog || rescueActive || showDailyCheckin || frontPickerTask) return;
       closeSheet();
     };
     window.addEventListener("keydown", onEsc);
@@ -1189,7 +1266,7 @@ export default function TodayTab({
   });
 
   const wallKeysBlocked = isFocusMode || !!editingTask || isAddTaskDialogOpen || !!confirmDialog
-    || rescueActive || showDailyCheckin || sessionCompletePending;
+    || rescueActive || showDailyCheckin || sessionCompletePending || !!frontPickerTask;
   useEffect(() => {
     if (wallKeysBlocked) return undefined;
     const onKey = (e) => {
@@ -1415,7 +1492,10 @@ export default function TodayTab({
               onPin={handleUnpinWallTask}
               onDelete={handleDeleteTask}
               onEdit={handleStartEdit}
-              onMoveToHorizon={handleMoveToHorizon}
+              onMoveToHorizon={handleMoveWithUndo}
+              onSwipeDone={handleToggleComplete}
+              onSwipeWeek={t => handleMoveWithUndo(t, "week")}
+              onPutOnFront={openFrontPicker}
               onPark={handleParkTask}
               onBreakdown={handleBreakdown}
               onSubStepToggle={handleSubStepToggle}
@@ -1457,7 +1537,10 @@ export default function TodayTab({
                             onEdit={handleStartEdit}
                             onMoveUp={idx > 0 ? t => handleMoveTask(t, "up") : undefined}
                             onMoveDown={idx < remainingTasks.length - 1 ? t => handleMoveTask(t, "down") : undefined}
-                            onMoveToHorizon={handleMoveToHorizon}
+                            onMoveToHorizon={handleMoveWithUndo}
+                            onSwipeDone={handleToggleComplete}
+                            onSwipeWeek={t => handleMoveWithUndo(t, "week")}
+                            onPutOnFront={openFrontPicker}
                             onPark={handleParkTask}
                             onBreakdown={handleBreakdown}
                             onSubStepToggle={handleSubStepToggle}
@@ -1555,7 +1638,64 @@ export default function TodayTab({
         />
       )}
 
-      {/* ── Undo (done, delete, unpin) */}
+      {/* ── Put on a front (the swipe's Front, and the row menu) */}
+      {frontPickerTask && (() => {
+        const fronts = frontsFromConfig(config).filter(f => !f.parked);
+        const currentId = tasks.find(t => t.uuid === frontPickerTask.uuid)?.frontId || null;
+        return (
+          <div className="focus-now-backdrop" onClick={() => setFrontPickerTask(null)}>
+            <div
+              className="focus-now-sheet front-picker"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Put ${frontPickerTask.title} on a front`}
+              onClick={e => e.stopPropagation()}
+              onKeyDown={e => {
+                if (e.key === "Escape") { setFrontPickerTask(null); return; }
+                // Modal: Tab and Shift+Tab stay among the picker's buttons.
+                if (e.key !== "Tab") return;
+                const items = [...e.currentTarget.querySelectorAll("button")];
+                if (items.length === 0) return;
+                const i = items.indexOf(document.activeElement);
+                const next = e.shiftKey ? (i <= 0 ? items.length - 1 : i - 1) : (i === items.length - 1 ? 0 : i + 1);
+                e.preventDefault();
+                items[next].focus();
+              }}
+            >
+              <div className="focus-now-sheet-header">
+                <span className="focus-now-sheet-title">Put on a front</span>
+              </div>
+              <div className="focus-now-sheet-body front-picker-body">
+                {fronts.length === 0 && (
+                  <p className="front-picker-empty">No fronts yet. Add one in Plan.</p>
+                )}
+                {fronts.map((f, i) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    className="front-picker-opt"
+                    aria-pressed={currentId === f.id}
+                    autoFocus={i === 0}
+                    onClick={() => handlePutOnFront(frontPickerTask, f.id)}
+                  >
+                    {f.name}
+                  </button>
+                ))}
+                {currentId && (
+                  <button type="button" className="front-picker-opt is-off" onClick={() => handlePutOnFront(frontPickerTask, null)}>
+                    Not on a front
+                  </button>
+                )}
+                <button type="button" className="front-picker-cancel" autoFocus={fronts.length === 0} onClick={() => setFrontPickerTask(null)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Undo (done, delete, unpin, move, front) */}
       <UndoAnnouncer message={undoText} />
       {undo && (
         <UndoToast

@@ -634,6 +634,236 @@ test("mobile reliability: with Reduce Motion the sheet fades instead of sliding"
   await expect(page.locator(".tasks-section")).toHaveCSS("animation-name", "today-sheet-fade");
 });
 
+// ── 2b-2b: swipe (37c) — touch only; every action also in the row menu ────
+
+async function swipe(page, row, dx, dy = 0) {
+  const box = await row.boundingBox();
+  const x = box.x + box.width / 2, y = box.y + Math.min(24, box.height / 2);
+  const opts = (cx, cy) => ({ pointerType: "touch", pointerId: 7, isPrimary: true, bubbles: true, clientX: cx, clientY: cy });
+  await row.dispatchEvent("pointerdown", opts(x, y));
+  for (let i = 1; i <= 6; i++) await row.dispatchEvent("pointermove", opts(x + (dx * i) / 6, y + (dy * i) / 6));
+  await row.dispatchEvent("pointerup", opts(x + dx, y + dy));
+}
+
+function listRow(page, text) {
+  return page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: text }).first();
+}
+
+test("mobile reliability: swipe right marks a row done, with Undo", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-list-hide").click();
+  await page.locator(".wall-peek").click();
+  await page.locator(".today-sheet-grabber").click(); // full height: room to work
+  const row = listRow(page, "10-minute walk");
+  await swipe(page, row, 140);
+  await expect(page.getByRole("status").filter({ hasText: "Marked done: 10-minute walk" })).toBeVisible();
+  await expect(listRow(page, "10-minute walk")).toHaveClass(/completed/);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(listRow(page, "10-minute walk")).not.toHaveClass(/completed/);
+});
+
+test("mobile reliability: swipe left opens This week and Front; This week moves it, with Undo", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  await swipe(page, row, -200);
+  const week = page.getByRole("button", { name: "This week" });
+  await expect(week).toBeVisible();
+  await expect(page.getByRole("button", { name: "Front", exact: true })).toBeVisible();
+  await week.click();
+  await expect(page.getByRole("status").filter({ hasText: "Moved to This week: 10-minute walk" })).toBeVisible();
+  await expect(listRow(page, "10-minute walk")).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(listRow(page, "10-minute walk")).toBeVisible();
+});
+
+test("mobile reliability: Front puts a row on a front, with Undo; the menu offers it too", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  await expect(row.locator(".task-tag.is-goal")).toHaveCount(0);
+
+  await swipe(page, row, -200);
+  await page.getByRole("button", { name: "Front", exact: true }).click();
+  const picker = page.getByRole("dialog", { name: /on a front/ });
+  await expect(picker).toBeVisible();
+  // The demo's goal (its Key Deadline) is a front; a task on it is GOAL.
+  await picker.getByRole("button", { name: "Project launch" }).click();
+  await expect(picker).toHaveCount(0);
+  await expect(listRow(page, "10-minute walk").locator(".task-tag.is-goal")).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Put on Project launch: 10-minute walk" })).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(listRow(page, "10-minute walk").locator(".task-tag.is-goal")).toHaveCount(0);
+
+  // Parity: the same action from the row menu, for screen readers and mice.
+  await listRow(page, "10-minute walk").locator(".task-row-top").click();
+  await page.getByTestId("task-menu-front").click();
+  await expect(page.getByRole("dialog", { name: /on a front/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: /on a front/ })).toHaveCount(0);
+});
+
+test("mobile reliability: a vertical drag on a row is a scroll, not a swipe", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  const box = await row.boundingBox();
+  const x = box.x + box.width / 2, y = box.y + 20;
+  const at = (cx, cy) => ({ pointerType: "touch", pointerId: 9, isPrimary: true, bubbles: true, clientX: cx, clientY: cy });
+  // Diagonal but mostly vertical: it crosses 10px sideways before it is
+  // clearly a scroll, so the direction test is what decides. Checked while
+  // the finger is still down — a slid row would snap back on release.
+  await row.dispatchEvent("pointerdown", at(x, y));
+  for (let i = 1; i <= 6; i++) await row.dispatchEvent("pointermove", at(x + (40 * i) / 6, y + (50 * i) / 6));
+  await expect(row).not.toHaveAttribute("style", /translateX/);
+  await row.dispatchEvent("pointerup", at(x + 40, y + 50));
+  await expect(page.getByRole("button", { name: "This week" })).toBeHidden();
+  await expect(page.locator(".undo-toast")).toHaveCount(0);
+});
+
+test("mobile reliability: an interrupted swipe (pointercancel) commits nothing", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  const box = await row.boundingBox();
+  const x = box.x + box.width / 2, y = box.y + 20;
+  const at = (cx) => ({ pointerType: "touch", pointerId: 11, isPrimary: true, bubbles: true, clientX: cx, clientY: y });
+  await row.dispatchEvent("pointerdown", at(x));
+  for (let i = 1; i <= 6; i++) await row.dispatchEvent("pointermove", at(x + (150 * i) / 6));
+  await row.dispatchEvent("pointercancel", at(x + 150));
+  await expect(row).not.toHaveClass(/completed/);
+  await expect(page.locator(".undo-toast")).toHaveCount(0);
+  await expect(row).not.toHaveAttribute("style", /translateX/);
+});
+
+async function slide(page, row, { rest = 0, dx = 150, id = 12, primary = true } = {}) {
+  const box = await row.boundingBox();
+  const x = box.x + box.width / 2, y = box.y + 20;
+  const at = (cx) => ({ pointerType: "touch", pointerId: id, isPrimary: primary, bubbles: true, clientX: cx, clientY: y });
+  await row.dispatchEvent("pointerdown", at(x));
+  if (rest) await page.waitForTimeout(rest);
+  for (let i = 1; i <= 6; i++) await row.dispatchEvent("pointermove", at(x + (dx * i) / 6));
+  await row.dispatchEvent("pointerup", at(x + dx));
+}
+
+async function turnOnDragAnywhere(page) {
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  if (!(await page.locator("#settings-name").isVisible())) {
+    await page.getByRole("button", { name: /Your Profile/i }).click();
+  }
+  await page.getByText("Drag-anywhere task rows").click();
+  await page.getByRole("button", { name: /Save Profile/ }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
+}
+
+test("mobile reliability: in Drag anywhere, a long-press then a slide is a reorder, not a swipe", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await turnOnDragAnywhere(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  await slide(page, row, { rest: 260 });
+  await expect(row).not.toHaveClass(/completed/);
+  await expect(page.locator(".undo-toast")).toHaveCount(0);
+});
+
+test("mobile reliability: in the default mode a hesitant swipe is still a swipe", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  await slide(page, row, { rest: 260 });
+  await expect(listRow(page, "10-minute walk")).toHaveClass(/completed/);
+});
+
+test("mobile reliability: a quick flick whose only move crosses the line still counts", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  const box = await row.boundingBox();
+  const x = box.x + box.width / 2, y = box.y + 20;
+  const at = (cx) => ({ pointerType: "touch", pointerId: 14, isPrimary: true, bubbles: true, clientX: cx, clientY: y });
+  await row.dispatchEvent("pointerdown", at(x));
+  await row.dispatchEvent("pointermove", at(x + 150));
+  await row.dispatchEvent("pointerup", at(x + 150));
+  await expect(listRow(page, "10-minute walk")).toHaveClass(/completed/);
+});
+
+test("mobile reliability: a second finger does not swipe", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  await slide(page, row, { id: 21, primary: false });
+  await expect(row).not.toHaveClass(/completed/);
+  await expect(page.locator(".undo-toast")).toHaveCount(0);
+});
+
+test("the front picker keeps focus inside, and gives it back when it closes", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  const title = (await row.locator(".task-title-text").innerText()).trim();
+  const options = page.getByRole("button", { name: `Options: ${title}` });
+  await options.focus();
+  await page.keyboard.press("Enter");
+  await page.getByTestId("task-menu-front").focus();
+  await page.keyboard.press("Enter");
+  const picker = page.getByRole("dialog", { name: /on a front/ });
+  await expect(picker).toBeVisible();
+  const count = await picker.locator("button").count();
+  for (let i = 0; i < count + 2; i++) {
+    await page.keyboard.press("Tab");
+    await expect(picker.locator(":focus")).toHaveCount(1);
+  }
+  await page.keyboard.press("Shift+Tab");
+  await expect(picker.locator(":focus")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+  await expect(options).toBeFocused();
+});
+
+
+test("mobile reliability: a slide that starts on the open row menu is not a swipe", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  await row.locator(".task-row-top").click();
+  const item = page.getByTestId("task-menu-front");
+  await expect(item).toBeVisible();
+  await slide(page, item);
+  await expect(listRow(page, "10-minute walk")).not.toHaveClass(/completed/);
+  await expect(page.getByRole("status").filter({ hasText: "Marked done" })).toHaveCount(0);
+});
+
+test("the front picker opened from the swipe gives focus to Options, not the hidden Front", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  const title = (await row.locator(".task-title-text").innerText()).trim();
+  await swipe(page, row, -200);
+  const front = page.getByRole("button", { name: "Front", exact: true });
+  await front.focus();
+  await page.keyboard.press("Enter");
+  const picker = page.getByRole("dialog", { name: /on a front/ });
+  await expect(picker).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+  await expect(page.getByRole("button", { name: `Options: ${title}` })).toBeFocused();
+});
+
+test("mobile reliability: a gesture on the drag grip is never a swipe", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  const grip = row.locator(".task-row-grip");
+  const box = await grip.boundingBox();
+  const x = box.x + box.width / 2, y = box.y + box.height / 2;
+  const at = (cx) => ({ pointerType: "touch", pointerId: 13, isPrimary: true, bubbles: true, clientX: cx, clientY: y });
+  await grip.dispatchEvent("pointerdown", at(x));
+  for (let i = 1; i <= 6; i++) await grip.dispatchEvent("pointermove", at(x + (150 * i) / 6));
+  await grip.dispatchEvent("pointerup", at(x + 150));
+  await expect(row).not.toHaveClass(/completed/);
+  await expect(page.locator(".undo-toast")).toHaveCount(0);
+});
+
 test("mobile reliability: the sheet's name counts the open rows it holds, NOW row included", async ({ page }) => {
   await enterDemo(page);
   await openSheet(page);
@@ -717,6 +947,20 @@ test("mobile reliability: with a session left running, the sheet says Resume and
   const rowBox = await lastRow.boundingBox();
   const timerBox = await page.locator(".floating-focus-timer").boundingBox();
   expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(timerBox.y + 1);
+});
+
+// The sheet's Escape stands down while the front picker sits over it: one
+// Escape closes the picker, not both.
+test("mobile reliability: Escape in the front picker closes the picker, not the sheet", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  await listRow(page, "10-minute walk").locator(".task-row-top").click();
+  await page.getByTestId("task-menu-front").click();
+  const picker = page.getByRole("dialog", { name: /on a front/ });
+  await expect(picker).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+  await expect(page.locator(".tasks-section")).toBeVisible();
 });
 
 test("mobile reliability: Must-do filter updates the sheet's announced row count", async ({ page }) => {
