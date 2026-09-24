@@ -350,3 +350,22 @@ test("mobile reliability: a row's menu is reachable from the keyboard", async ({
   await page.keyboard.press("Enter");
   await expect(page.locator(".wall-commit-field")).toBeVisible({ timeout: 8_000 });
 });
+
+// "N done" counts what was finished today, and the Completed section shows
+// the same set — a task done yesterday that still sits on Today is neither.
+test("mobile reliability: the Completed section and 'N done' agree across a day change", async ({ page }) => {
+  await enterDemo(page);
+  const list = page.getByTestId("today-tasks-list");
+  const title = "10-minute walk between tasks to reset your focus";
+  await list.locator("[data-testid='task-row']", { hasText: title }).getByTestId("task-checkbox").click();
+  const done = await page.locator(".today-list-count").innerText();
+  const doneToday = Number(done.split("·")[1].trim().split(" ")[0]);
+  await expect(list.locator(".task-row.completed")).toHaveCount(doneToday);
+
+  // Next day: re-render (flip the filter) and look again.
+  await page.clock.setFixedTime(new Date("2024-06-16T10:00:00"));
+  await page.getByRole("button", { name: /^Must-do · \d+$/ }).click();
+  await page.getByRole("button", { name: /^All · \d+$/ }).click();
+  await expect(page.locator(".today-list-count")).toContainText("· 0 done");
+  await expect(list.locator(".task-row.completed")).toHaveCount(0);
+});

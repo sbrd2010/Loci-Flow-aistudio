@@ -998,7 +998,10 @@ export default function TodayTab({
     : null;
 
   const remainingTasks = todayTasksFiltered.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
-  const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted);
+  // Finished today — the same set the header's "N done" counts. A task done
+  // on an earlier day keeps the Today horizon until something moves it, and
+  // showing it here put "0 done" above a list of done rows.
+  const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted && t.dateCompletedString === todayStr);
   // The wall's two figures are claims about the whole day, so they come from
   // todayTasksAll — the Must-Do and Low Energy filters narrow the LIST below,
   // not the day. Reading them off the filtered list let the wall say "0 more
