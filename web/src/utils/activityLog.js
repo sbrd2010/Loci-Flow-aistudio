@@ -1,5 +1,6 @@
 import { safeUUID } from "./uuid";
 import { getLociDayStr, getFocusWindows } from "./focusWindows";
+import { isOnToday } from "./deferral";
 
 // Storage lives at activityLogs/${uid}/... — a separate root the normal
 // sync/${uid} listener never subscribes to, so ordinary app startup never
@@ -174,7 +175,9 @@ export function buildTodaySnapshot(tasks, { now = Date.now(), windows } = {}) {
   const nowMs = toEpochMs(now);
   const lociDateString = getLociDayStr(toDateObj(now), resolveWindows(windows));
   const todayTaskIds = (tasks || [])
-    .filter(t => t.horizonLevel === "today" && !t.isCompleted && !t.isDeleted && !t.isParked)
+    // Judged against the snapshot's own Loci day, which can still be
+    // yesterday after midnight inside a late window.
+    .filter(t => isOnToday(t, lociDateString) && !t.isCompleted && !t.isDeleted && !t.isParked)
     .map(t => t.uuid);
   return {
     schemaVersion: 1,

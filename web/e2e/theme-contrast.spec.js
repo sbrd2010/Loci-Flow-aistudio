@@ -130,7 +130,7 @@ for (const theme of THEMES) {
     // The unscheduled strip FIRST, before auto-fill empties it. Its chip sits
     // on a lighter composited backdrop than a route card, so one foreground is
     // not automatically legible on both.
-    const stripTags = page.locator(".day-map-chip-row .day-map-priority");
+    const stripTags = page.locator(".dm-unscheduled .dm-p");
     const stripCount = await stripTags.count();
     expect(stripCount, "the strip should have tags before auto-fill").toBeGreaterThan(0);
     for (let i = 0; i < stripCount; i++) {
@@ -140,14 +140,14 @@ for (const theme of THEMES) {
     // Then every priority tag on a route card — all four, because a P4-only
     // override is exactly what survived the last collapse into one rule.
     await page.getByRole("button", { name: /auto-fill/i }).click();
-    await expect(page.locator(".dm-card .day-map-priority").first()).toBeVisible();
-    const cardTags = page.locator(".dm-card .day-map-priority");
+    await expect(page.locator(".dm-stop .dm-p:visible").first()).toBeVisible();
+    const cardTags = page.locator(".dm-stop .dm-p:visible");
     const cardCount = await cardTags.count();
     expect(cardCount).toBeGreaterThan(0);
     for (let i = 0; i < cardCount; i++) {
       await assertLegible(cardTags.nth(i), "route card tag", theme);
     }
-    await page.locator(".day-map-back").click();
+    await page.locator(".dm-back").click();
 
     // Plan's view switcher.
     await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();

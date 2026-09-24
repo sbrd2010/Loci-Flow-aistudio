@@ -37,6 +37,7 @@ import { submitOnEnter } from "./utils/formEvents";
 import { migrateStoredTheme, resolveTheme, watchColorScheme } from "./utils/theme";
 import { buildDayClock } from "./utils/dayClock";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch, activityEventPath } from "./utils/activityLog";
+import { isOnToday } from "./utils/deferral";
 
 const EXTEND_DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
 
@@ -829,7 +830,7 @@ export default function App() {
   // out of Day Close, but whose completion would still have marked the
   // deadline move done.
   const commitmentPinnedUuid = (payload?.tasks || []).find(t =>
-    t?.isNowFocus && t.horizonLevel === "today" && !t.isDeleted && !t.isParked && !t.isCompleted
+    t?.isNowFocus && isOnToday(t) && !t.isDeleted && !t.isParked && !t.isCompleted
   )?.uuid || null;
   // Driven by a clock, not by rendering. Read once per render, this value
   // would only change when something else re-rendered App — so an app left
@@ -1281,6 +1282,8 @@ export default function App() {
             onClose={closeDayMap}
             onStartFocus={(pinPromise) => { pendingFocusPinPromiseRef.current = pinPromise; setPendingFocusOpen(true); goToday(); }}
             onAddTask={() => openAddTask("today")}
+            onHelpChoose={() => { setRoadmapView("scattered"); setActiveTab("roadmap"); }}
+            dayClock={dayClock}
             flushNow={flushNow}
           />
         )}

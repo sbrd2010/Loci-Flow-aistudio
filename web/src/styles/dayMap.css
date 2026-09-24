@@ -1,1237 +1,578 @@
-/* ================================================================
-   Day Map — single-column vertical timeline
-   No color-mix(). All colors use rgba() or hex literals.
-   ================================================================ */
-
-/* ── Today-tab launcher banner ──────────────────────────────────────────────── */
-
-/* Dark canvas — overrides screen-content padding/bg when Day Map is active.
-
-   This shell is the PARENT of .day-map-page, so it cannot read --ground from
-   the token block below: custom properties inherit downwards only. Declaring
-   the token here instead puts it at the top of the Day Map subtree, where both
-   this background and every descendant can read it — writing
-   var(--ground) here without this declaration would silently fall back and
-   leave the canvas on the old cool palette. */
-.screen-content-day-map {
-  --ground: #171512;
-  padding: 0;
-  background: var(--ground);
-  gap: 0;
-}
-
-.day-map-launcher {
-  width: 100%;
-  min-height: 58px;
-  margin: 0 0 16px;
-  padding: 12px 14px;
-  border: 1px solid rgba(99, 102, 241, 0.35);
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(99, 102, 241, 0.14), transparent 46%),
-    var(--bg-card);
-  color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-  font-family: var(--font-sans);
-  text-align: left;
-}
-
-.day-map-launcher:hover {
-  border-color: var(--accent);
-  transform: translateY(-1px);
-}
-
-.day-map-launcher-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.day-map-launcher-main strong {
-  font-family: var(--font-display);
-  font-size: 16px;
-  font-weight: 800;
-  color: var(--text-primary);
-}
-
-.day-map-launcher-main span {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.day-map-launcher-cta {
-  min-height: 36px;
-  border-radius: 8px;
-  padding: 8px 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent);
-  color: var(--button-text, #fff);
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-/* ── Page shell ──────────────────────────────────────────────────────────────── */
+/* Day map (Addendum Y5; 33a laptop, 33d tablet, 34c phone, 37d after a move).
+   Light ground, one rail. Green is the NOW row and its one filled button; gold
+   only as GOAL tags; red only for the day's end and what runs past it. It
+   follows the theme like every other screen. */
 
 .day-map-page {
-  /* ── The page's own palette, retuned to the handoff ──
-     This block redefines the vocabulary for everything beneath it, which is
-     why Day Map kept its old look while the rest of the app moved: the 160-odd
-     var(--…) references below were reading THESE values, not the theme's. The
-     indigo accent and the cool blue-white ink are replaced with the same
-     Evening values screen 3 uses — Day Map is an execution surface, so it
-     stays dark on both themes, and pinning the values is what keeps it dark
-     on Paper.
-     Retheme only: no layout, no logic, no blocks changed. */
-  --ground:         #171512;
-  /* Day Map is dark under EVERY theme, so the quiet ink has to be pinned here
-     as well. Paper defines --text-quiet at the root as dark ink for a light
-     page; var(--text-quiet, var(--text-muted)) then never reaches its fallback,
-     because the variable IS defined — just wrong for this canvas — and the
-     priority tags rendered #5c5a55 on #1e1b17 at 2.49:1. A var() fallback
-     guards against undefined, not against wrong-for-the-context. */
-  --text-quiet:     #8f887d;
-  --surface:        #1e1b17;
-  --divider:        #2e2a24;
-  --control-edge:   #6b655c;
-  --gold-lift:      #d8ad63;
-  --bg-card:        #1e1b17;
-  --bg-card-hover:  #26221c;
-  --bg-secondary:   #1e1b17;
-  --border:         #2e2a24;
-  --text-primary:   #f2efe9;
-  --text-secondary: #b0a99e;
-  --text-muted:     #8f887d;
-  --accent:         #d8ad63;
-  --accent-ring:    rgba(216, 173, 99, 0.20);
-  --button-text:    #171512;
-
-  /* ── Layout ── */
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: 520px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 680px;
   margin: 0 auto;
-  width: 100%;
-  padding: 0 16px;
-  padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
-  color: var(--text-primary);
-}
-
-/* ── Topbar ──────────────────────────────────────────────────────────────────── */
-
-.day-map-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 40;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 12px;
-  /* Bleed to full width by cancelling the parent 16px padding */
-  margin: 0 -16px;
-  padding: 10px 16px 12px;
-  /* #171512 at 88%, so the sticky bar reads as the canvas showing through
-     rather than as a second surface. Stated as rgba because the alpha has to
-     be baked in and --ground carries no alpha channel. */
-  background: rgba(23, 21, 18, 0.88);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-}
-
-.day-map-back {
-  flex-shrink: 0;
-  min-height: 38px;
-  padding: 7px 14px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.14);
-  color: var(--text-primary);
+  padding: 0 20px 120px;
   font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.12s;
+  color: var(--ink);
+  background: var(--bg);
 }
 
-.day-map-back:hover {
-  background: rgba(255, 255, 255, 0.22);
-}
-
-.day-map-title {
-  min-width: 0;
-}
-
-/* Shared h1 base */
-.day-map-title h1 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 24px;
-  letter-spacing: -0.01em;
-}
-
-/* ── Day Map title: gold "Day" + silver "Map" ──────────── */
-.day-map-title-option-b {
-  font-weight: 700;
-}
-
-.day-map-title-option-b .dm-word-day {
-  color: #E8A820;
-  text-decoration: underline;
-  text-decoration-color: rgba(232, 168, 32, 0.55);
-  text-underline-offset: 3px;
-  text-decoration-thickness: 2px;
-}
-
-.day-map-title-option-b .dm-word-map {
-  color: #A8B4C0;
-}
-
-.day-map-title-meta {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-family: var(--font-sans);
-  font-size: 10.5px;
-  font-weight: 700;
-  color: rgba(232, 238, 255, 0.50);
-  margin-top: 1px;
-  flex-wrap: wrap;
-}
-
-.day-map-stats {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.day-map-stats span {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 6px 10px;
-  background: var(--bg-card);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-/* ── Overview bar ────────────────────────────────────────────────────────────── */
-
-.day-map-overview {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-card);
-}
-
-.day-map-load-line {
-  display: grid;
-  grid-template-columns: auto minmax(80px, 1fr);
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.day-map-load-line strong {
-  display: block;
-  font-size: 16px;
-  font-weight: 900;
-  color: var(--text-primary);
-}
-
-.day-map-load-line span {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.day-map-load-track {
-  height: 8px;
-  border-radius: 999px;
-  background: var(--bg-secondary);
-  overflow: hidden;
-}
-
-.day-map-load-track span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--accent);
-}
-
-/* ── Action buttons ──────────────────────────────────────────────────────────── */
-
-.day-map-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.day-map-actions button,
-.day-map-primary {
-  min-height: 36px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  padding: 6px 11px;
-  white-space: nowrap;
-}
-
-/* Gold ground needs the dark ink token, not white: white on #d8ad63 is
-   2.08:1. It was legible on the old indigo accent, which is why it survived
-   the retheme unnoticed. */
-.day-map-actions button:first-child {
-  background: var(--accent);
-  color: var(--button-text, #171512);
-  border-color: var(--accent);
-}
-
-.day-map-actions button:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.day-map-primary {
-  background: var(--accent);
-  color: var(--button-text, #fff);
-  border-color: var(--accent);
-  padding: 9px 14px;
-}
-
-/* ── Available tasks strip (collapsible horizontal scroll) ───────────────────── */
-
-.day-map-available-strip {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
-  overflow: hidden;
-}
-
-.day-map-strip-header {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--text-secondary);
-  text-align: left;
-}
-
-.day-map-strip-header:hover {
-  background: var(--bg-secondary);
-}
-
-.day-map-strip-chevron {
-  font-size: 10px;
-  color: var(--text-muted);
-  margin-left: 4px;
-}
-
-.day-map-chip-row {
-  display: flex;
-  gap: 8px;
-  padding: 0 12px 12px;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
-}
-
-.day-map-all-set {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.45;
-  padding: 0 2px 2px;
-}
-
-/* ── Task chip (available strip) ─────────────────────────────────────────────── */
-
-.day-map-task-chip {
-  flex-shrink: 0;
-  min-width: min(220px, 68vw);
-  min-height: 44px;
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--text-primary);
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  font-family: var(--font-sans);
-  cursor: grab;
-  touch-action: none;
-  text-align: left;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.day-map-task-chip.selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.22);
-}
-
-.day-map-task-chip:active {
-  cursor: grabbing;
-}
-
-.day-map-chip-title {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.day-map-chip-duration {
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-/* ── Day timeline ────────────────────────────────────────────────────────────── */
-
-.day-map-timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* ── Period card ─────────────────────────────────────────────────────────────── */
-
-.day-map-period {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-card);
-  padding: 12px;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
-}
-
-.day-map-period.is-over {
-  border-color: rgba(99, 102, 241, 0.7);
-  box-shadow: inset 0 0 0 2px rgba(99, 102, 241, 0.1);
-}
-
-.day-map-period.has-selection {
-  border-color: rgba(99, 102, 241, 0.45);
-}
-
-.day-map-period-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.day-map-period-head h2 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 16px;
-  font-weight: 900;
-  color: var(--text-primary);
-  letter-spacing: 0;
-}
-
-.day-map-period-range {
-  display: block;
-  margin-top: 2px;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.day-map-load-pill {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 4px 9px;
-  background: var(--bg-card);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.day-map-load-pill.over {
-  color: var(--danger);
-  border-color: rgba(239, 68, 68, 0.5);
-}
-
-.day-map-period-meter {
-  height: 3px;
-  border-radius: 999px;
-  background: var(--bg-secondary);
-  overflow: hidden;
-  margin-bottom: 10px;
-}
-
-.day-map-period-meter span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--accent);
-}
-
-/* ── Task stack ──────────────────────────────────────────────────────────────── */
-
-.day-map-task-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-/* ── Compact task row (read-first) ───────────────────────────────────────────── */
-
-.day-map-compact-wrap {
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid rgba(99, 102, 241, 0.18);
-}
-
-.day-map-compact-wrap.expanded {
-  border-color: rgba(99, 102, 241, 0.45);
-}
-
-.day-map-compact-row {
-  display: flex;
-  align-items: stretch;
-  background: var(--bg-secondary);
-}
-
-.day-map-compact-main {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 10px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  color: inherit;
-  font-family: var(--font-sans);
-  transition: background 0.12s;
-}
-
-.day-map-compact-main:hover {
-  background: rgba(99, 102, 241, 0.05);
-}
-
-.day-map-compact-main:active {
-  background: rgba(99, 102, 241, 0.1);
-}
-
-.day-map-compact-title {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.day-map-compact-time {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-muted);
-  white-space: nowrap;
-  text-align: right;
-}
-
-.day-map-remove-btn {
-  flex-shrink: 0;
-  width: 38px;
-  border: none;
-  border-left: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 17px;
-  line-height: 1;
-  font-family: var(--font-sans);
-  transition: color 0.12s, background 0.12s;
-}
-
-.day-map-remove-btn:hover {
-  color: var(--danger);
-  background: rgba(239, 68, 68, 0.07);
-}
-
-/* ── Inline edit panel ───────────────────────────────────────────────────────── */
-
-.day-map-edit-panel {
-  background: var(--bg-card);
-  border-top: 1px solid rgba(99, 102, 241, 0.18);
-  padding: 10px 12px;
-}
-
-.day-map-edit-grid {
+/* ── Head: back, title, the day clock (the page has no app header) ── */
+.dm-head {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 16px;
-  align-items: flex-end;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 10px 0 14px;
 }
-
-.day-map-edit-grid label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 10px;
-  font-weight: 800;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-family: var(--font-sans);
-}
-
-.day-map-edit-grid select {
-  height: 32px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 0 6px;
-  cursor: pointer;
-}
-
-/* ── Place-here button ───────────────────────────────────────────────────────── */
-
-.day-map-place-btn {
-  display: block;
-  width: 100%;
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1.5px dashed rgba(99, 102, 241, 0.5);
-  background: rgba(99, 102, 241, 0.07);
-  color: var(--accent);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  text-align: left;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.day-map-place-btn:hover {
-  background: rgba(99, 102, 241, 0.13);
-  border-color: var(--accent);
-}
-
-.day-map-place-btn:active {
-  background: rgba(99, 102, 241, 0.2);
-}
-
-/* ── Empty slot placeholder ──────────────────────────────────────────────────── */
-
-.day-map-empty-slot {
-  min-height: 52px;
-  border: 1px dashed rgba(99, 102, 241, 0.35);
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 2px;
-  padding: 10px 12px;
-  background: rgba(99, 102, 241, 0.04);
-}
-
-.day-map-empty-slot span {
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.day-map-empty-slot small {
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-/* ── Empty state (no today tasks) ───────────────────────────────────────────── */
-
-.day-map-empty-state {
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.day-map-empty-state h2 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 16px;
-  font-weight: 900;
-  color: var(--text-primary);
-  letter-spacing: 0;
-}
-
-.day-map-empty-state p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.45;
-}
-
-/* ── Priority badges ─────────────────────────────────────────────────────────── */
-
-.day-map-priority {
+.dm-back {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-width: 24px;
-  height: 20px;
-  border-radius: 6px;
-  padding: 0 5px;
-  font-size: 10px;
-  font-weight: 900;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-/* The mono tag, for every priority and every place one is drawn. Day Map
-   renders these in two spots — on a route card and in the unscheduled strip —
-   and an earlier pass styled only the card, leaving the strip's tags red,
-   amber, teal and blue on a screen whose whole point was that those four
-   colours are gone. Stated once here, at the base, so there is no second
-   place for them to survive. */
-/* One foreground, two backdrops. A route card is solid --surface, but the
-   unscheduled chip stacks a 7% white layer on the strip's 4% over the ground,
-   compositing to rgb(47, 45, 43) — measured from rendered pixels, not derived.
-   --text-quiet cleared 4.5:1 on the card at 4.89 and missed it on the strip at
-   3.91. --text-secondary is the tier above and is pinned inside
-   .day-map-page, so unlike --text-soft (defined only on Evening and Paper,
-   and dark ink on Paper) it is the same on every theme: 7.36 on the card,
-   5.89 on the strip. */
-.day-map-priority.p1,
-.day-map-priority.p2,
-.day-map-priority.p3,
-.day-map-priority.p4 {
-  color: var(--text-secondary);
-  background: none;
-  border: 1px solid var(--divider, rgba(255, 255, 255, 0.14));
-}
-
-/* ================================================================
-   Responsive
-   ================================================================ */
-
-@media (max-width: 560px) {
-  .screen-content-day-map {
-    padding: 0;
-  }
-
-  .day-map-launcher {
-    min-height: 50px;
-    padding: 10px 11px;
-    gap: 8px;
-  }
-
-  .day-map-launcher-main strong { font-size: 15px; }
-
-  .day-map-launcher-main span {
-    font-size: 11px;
-    max-width: 180px;
-  }
-
-  .day-map-launcher-cta {
-    min-height: 34px;
-    padding: 7px 9px;
-  }
-
-  .day-map-topbar {
-    grid-template-columns: auto 1fr;
-    gap: 8px;
-  }
-
-  .day-map-title h1 { font-size: 21px; }
-
-  .day-map-stats {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
-
-  .day-map-stats span {
-    font-size: 11px;
-    padding: 5px 8px;
-  }
-
-  .day-map-overview { grid-template-columns: 1fr; gap: 10px; }
-
-  .day-map-load-line { grid-template-columns: 1fr; gap: 6px; }
-
-  .day-map-actions { justify-content: stretch; }
-  .day-map-actions button { flex: 1; }
-
-  .day-map-compact-main {
-    padding: 9px 8px;
-    gap: 6px;
-  }
-
-  .day-map-compact-time { font-size: 11px; }
-}
-
-@media (max-width: 380px) {
-  .day-map-launcher-main span { max-width: 140px; }
-  .day-map-period-range { display: none; }
-  .day-map-task-chip { min-width: min(190px, 78vw); }
-}
-
-@media (min-width: 640px) {
-  .day-map-page { gap: 14px; }
-  .day-map-compact-title { font-size: 14px; }
-  .day-map-compact-time { font-size: 13px; }
-  .day-map-task-chip { min-width: 240px; }
-}
-
-/* On tablet and desktop, expand to fill the app container like all other pages */
-@media (min-width: 768px) {
-  .day-map-page {
-    max-width: 100%;
-    padding: 0 24px;
-  }
-
-  .day-map-topbar {
-    margin: 0 -24px;
-    padding: 12px 24px 14px;
-  }
-
-  .day-map-anchor-bar {
-    flex-wrap: nowrap;
-  }
-}
-
-/* ================================================================
-   Day Map V1 — Execution Route
-   ================================================================ */
-
-/* Chips are now tap-to-add, not draggable */
-.day-map-task-chip {
-  cursor: pointer;
-  touch-action: auto;
-}
-
-/* ── Anchor bar ("Starting from 3:30 PM") ─────────────────────────────────── */
-
-.day-map-anchor-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  flex-wrap: wrap;
-}
-
-.day-map-anchor-label {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--text-primary);
-  white-space: nowrap;
-}
-
-.day-map-anchor-actions {
-  display: flex;
-  align-items: center;
   gap: 6px;
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
-.day-map-action-btn {
-  min-height: 34px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: var(--accent);
-  color: var(--button-text, #171512);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: opacity 0.15s;
-}
-
-.day-map-action-btn:hover:not(:disabled) { opacity: 0.88; }
-.day-map-action-btn:active:not(:disabled) { opacity: 0.75; }
-.day-map-action-btn:disabled { opacity: 0.38; cursor: not-allowed; }
-
-.day-map-action-btn-clear {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.16);
-  color: rgba(232, 238, 255, 0.70);
-}
-
-.day-map-anchor-select {
-  height: 34px;
-  flex: 1;
-  min-width: 130px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 800;
+  min-height: 44px;
+  margin-left: -8px;
   padding: 0 8px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.dm-heading {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 800;
+}
+.dm-clock {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+}
+.dm-clock-left {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* ── Layout: one column; from 1024px the route beside a 320px panel ── */
+.dm-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "controls" "status" "route" "unscheduled";
+  gap: 14px;
+}
+.dm-controls { grid-area: controls; }
+.dm-status { grid-area: status; }
+.dm-route-wrap { grid-area: route; min-width: 0; }
+.dm-unscheduled { grid-area: unscheduled; }
+
+/* ── From · Auto-fill · Clear route ── */
+.dm-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+.dm-from {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.dm-from-select {
+  min-height: 44px;
+  padding: 0 10px;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--control-edge);
+  border-radius: 6px;
+}
+.dm-btn-outline,
+.dm-btn-alert,
+.dm-btn-filled,
+.dm-start {
+  min-height: 44px;
+  padding: 0 16px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 800;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.dm-btn-outline {
+  margin-left: auto;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--control-edge);
+}
+.dm-btn-outline:disabled { opacity: 0.5; cursor: default; }
+.dm-link {
+  min-height: 44px;
+  padding: 0;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 4px;
+}
+.dm-link:disabled { opacity: 0.5; cursor: default; }
+.dm-link.is-alert {
+  color: var(--coral-ink);
+  text-decoration-color: var(--coral);
+}
+
+/* ── Status: "Route fits the day", or planned vs left and what to do ── */
+.dm-status {
+  padding: 14px 16px;
+  background: var(--accent-tint);
+  border-radius: var(--radius);
+}
+.dm-status-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 800;
+}
+.dm-status-figures {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.dm-status.is-over {
+  color: var(--coral-ink);
+  background: var(--coral-tint);
+}
+.dm-status-over {
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--coral);
+}
+.dm-status-note {
+  margin: 8px 0 0;
+  font-size: 0.875rem;
+}
+/* The sentence and "Nothing is deleted" are the laptop panel's (33a); the
+   phone strip (34c) keeps to the figures and the two actions. */
+.dm-status-detail {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+.dm-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin-top: 12px;
+}
+.dm-btn-alert:disabled { opacity: 0.5; cursor: default; }
+.dm-btn-alert {
+  flex: 1 1 auto;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--coral);
+}
+
+/* ── The rail ── */
+.dm-route {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dm-stop,
+.dm-dayend,
+.dm-end,
+.dm-period {
+  display: grid;
+  grid-template-columns: 52px 22px minmax(0, 1fr);
+  align-items: start;
+}
+.dm-time {
+  padding-top: 14px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: right;
+  padding-right: 8px;
+}
+.dm-rail {
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+}
+.dm-rail::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  border-left: 2px solid var(--accent-soft);
+  transform: translateX(-50%);
+}
+.dm-node {
+  position: relative;
+  box-sizing: border-box;
+  width: 11px;
+  height: 11px;
+  margin-top: 17px;
+  background: var(--bg);
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+}
+
+.dm-period > span {
+  grid-column: 3;
+  padding: 16px 0 4px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.dm-period::before {
+  content: "";
+  grid-column: 2;
+  grid-row: 1;
+  align-self: stretch;
+  justify-self: center;
+  border-left: 2px solid var(--accent-soft);
+}
+.dm-period.is-over::before { border-left: 2px dashed var(--control-edge); }
+
+.dm-body {
+  min-width: 0;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+.dm-row {
+  display: flex;
+  align-items: flex-start;
+}
+.dm-main {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.dm-title-col {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.dm-title {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.dm-step,
+.dm-steps-count {
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+.dm-meta {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  padding-top: 2px;
+}
+.dm-p,
+.dm-dur {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.dm-dur { min-width: 34px; text-align: right; }
+/* Phones show the duration only (34c); the NOW card carries "P1 · 25m". */
+.dm-stop:not(.is-now) .dm-p { display: none; }
+.dm-stop:not(.is-now) .dm-meta .task-tag { display: none; }
+.dm-options {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-right: -10px;
+  padding: 0;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
-.day-map-anchor-select:focus {
-  outline: 2px solid var(--accent-ring);
-  outline-offset: 1px;
-  border-color: var(--accent);
-}
-
-.day-map-anchor-select option {
-  background-color: #1a1c24;
-  color: var(--text-primary);
-}
-
-.day-map-now-btn {
-  min-height: 34px;
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: none;
+/* NOW: act tint, a filled node, the screen's one filled button. */
+.dm-stop.is-now .dm-time { color: var(--accent); }
+.dm-stop.is-now .dm-node {
+  width: 13px;
+  height: 13px;
+  margin-top: 20px;
   background: var(--accent);
-  color: var(--button-text, #fff);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 900;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: opacity 0.15s;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
 }
-
-.day-map-now-btn:hover { opacity: 0.88; }
-.day-map-now-btn:active { opacity: 0.76; }
-
-/* ── Route container ───────────────────────────────────────────────────────── */
-
-.day-map-route {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-card);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+.dm-stop.is-now .dm-rail::before { border-left-color: var(--accent); }
+.dm-stop.is-now .dm-body {
+  margin: 6px 0;
+  padding: 6px 4px 12px 14px;
+  background: var(--accent-tint);
+  border-bottom: 0;
+  border-radius: 6px;
 }
-
-.day-map-route > * {
-  border-bottom: 1px solid var(--border);
-}
-
-.day-map-route > *:last-child {
-  border-bottom: none;
-}
-
-/* ── Period divider ─────────────────────────────────────────────────────────── */
-
-.day-map-period-divider {
-  padding: 7px 12px 6px;
-  background: var(--bg-secondary);
-}
-
-.day-map-period-divider span {
-  font-family: var(--font-sans);
-  font-size: 10px;
-  font-weight: 900;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-/* ── Route row ──────────────────────────────────────────────────────────────── */
-
-.day-map-route-row {
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-card);
-  transition: background 0.12s;
-}
-
-.day-map-route-row.is-now {
-  border-left: 3px solid var(--accent);
-  background: var(--accent-ring, rgba(99, 102, 241, 0.05));
-}
-
-.day-map-route-row.is-dragging {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.13);
-}
-
-/* "NOW" label above the first row's content */
-.day-map-now-badge {
-  padding: 5px 14px 4px;
-  font-family: var(--font-sans);
-  font-size: 10px;
-  font-weight: 900;
-  color: var(--accent);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  border-bottom: 1px solid var(--accent-ring, rgba(99, 102, 241, 0.12));
-}
-
-/* Main row: drag handle + content + controls */
-.day-map-route-main {
-  display: flex;
-  align-items: stretch;
+.dm-start {
+  display: block;
+  margin: 4px 10px 0 auto;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 1px solid var(--accent-edge);
   min-height: 48px;
 }
 
-.day-map-route-content {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 8px 10px 10px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  color: inherit;
-  font-family: var(--font-sans);
-  transition: background 0.12s;
-}
+/* Past the day's end: dimmed, on a dashed rail. */
+.dm-stop.is-over .dm-rail::before { border-left: 2px dashed var(--control-edge); }
+.dm-stop.is-over .dm-time,
+.dm-stop.is-over .dm-title { color: var(--ink-2); }
+.dm-stop.is-over .dm-title { font-weight: 700; }
+.dm-stop.is-over .dm-node { border-color: var(--control-edge); }
 
-.day-map-route-content:hover {
-  background: var(--bg-secondary);
+.dm-dayend .dm-time { padding-top: 12px; color: var(--coral); }
+.dm-dayend .dm-rail::before { border-left: 2px dashed var(--control-edge); }
+.dm-dayend .dm-node {
+  width: 11px;
+  height: 11px;
+  margin-top: 14px;
+  background: var(--coral);
+  border-color: var(--coral);
 }
-
-.day-map-route-title {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.day-map-route-time {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-muted);
-  white-space: nowrap;
-  text-align: right;
-}
-
-/* ↑ ↓ × controls */
-.day-map-row-controls {
+.dm-dayend-label {
   display: flex;
-  flex-shrink: 0;
-  align-items: stretch;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--coral);
+  white-space: nowrap;
+}
+.dm-dayend-label::after {
+  content: "";
+  flex: 1;
+  border-top: 1.5px solid var(--coral);
 }
 
-.day-map-move-btn {
-  min-width: 36px;
-  border: none;
-  border-left: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
-  font-family: var(--font-sans);
-  transition: color 0.12s, background 0.12s;
-  padding: 0 2px;
+.dm-end {
+  grid-template-columns: 52px minmax(0, 1fr);
+}
+.dm-end .dm-time { padding-top: 12px; }
+.dm-end-label {
+  padding: 10px 0 0 22px;
+  font-size: 0.875rem;
+  color: var(--ink-2);
 }
 
-.day-map-move-btn:hover:not(:disabled) {
-  color: var(--text-primary);
-  background: var(--bg-secondary);
-}
-
-.day-map-move-btn:disabled {
-  opacity: 0.25;
-  cursor: not-allowed;
-}
-
-/* "Start Focus →" footer on NOW card */
-.day-map-now-footer {
-  padding: 0 12px 10px;
-}
-
-.day-map-start-focus-btn {
-  display: block;
-  width: 100%;
-  min-height: 40px;
-  border-radius: 8px;
-  border: none;
-  background: var(--accent);
-  color: var(--button-text, #fff);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 900;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.day-map-start-focus-btn:hover { opacity: 0.88; }
-.day-map-start-focus-btn:active { opacity: 0.75; }
-
-/* Inline duration edit */
-.day-map-edit-label {
+/* Row options: steps, duration, remove. */
+.dm-panel {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-family: var(--font-sans);
-  font-size: 10px;
-  font-weight: 800;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  gap: 10px;
+  padding: 4px 0 10px;
 }
-
-.day-map-edit-label select {
-  height: 32px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: 12px;
+.dm-substeps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dm-substep {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.8125rem;
+}
+.dm-substep-check {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  border: 1.5px solid var(--control-edge);
+  border-radius: 50%;
+}
+.dm-substep.is-done { color: var(--ink-2); text-decoration: line-through; }
+.dm-substep.is-done .dm-substep-check { background: var(--accent); border-color: var(--accent); }
+.dm-panel-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+.dm-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
   font-weight: 700;
-  padding: 0 6px;
+}
+.dm-field select {
+  min-height: 44px;
+  padding: 0 8px;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--control-edge);
+  border-radius: 6px;
+}
+.dm-remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
   cursor: pointer;
 }
 
-/* Empty route message */
-.day-map-route-empty {
+.dm-route-empty {
   margin: 0;
-  padding: 24px 16px;
-  text-align: center;
-  color: rgba(232, 238, 255, 0.42);
-  font-family: var(--font-sans);
-  font-size: 14px;
+  padding: 16px 0;
+  font-size: 0.875rem;
+  color: var(--ink-2);
+}
+
+/* ── Unscheduled ── */
+.dm-unscheduled-head {
+  margin: 0;
+  font-size: 0.875rem;
   font-weight: 700;
-  line-height: 1.5;
-  border: 1px dashed rgba(255, 255, 255, 0.14);
-  border-radius: 10px;
+  color: var(--ink);
+}
+.dm-unscheduled-head span {
+  font-weight: 400;
+  color: var(--ink-2);
+}
+.dm-unscheduled-list {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.dm-add {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 0;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.dm-add-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
-/* ── Responsive ─────────────────────────────────────────────────────────────── */
-
-@media (max-width: 560px) {
-  .day-map-anchor-bar { gap: 8px; padding: 9px 11px; }
-  .day-map-anchor-select { font-size: 12px; }
-  .day-map-route-title { font-size: 13px; }
-  .day-map-route-time { font-size: 11px; }
-  .day-map-move-btn { min-width: 32px; font-size: 13px; }
-  .day-map-start-focus-btn { font-size: 12px; min-height: 38px; }
+/* ── Empty ── */
+.dm-empty {
+  padding: 48px 0;
+  text-align: center;
+}
+.dm-empty h2 { margin: 0 0 6px; font-size: 1.125rem; }
+.dm-empty p { margin: 0 0 18px; color: var(--ink-2); }
+.dm-btn-filled {
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 1px solid var(--accent-edge);
 }
 
-@media (max-width: 380px) {
-  .day-map-route-content {
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 6px;
-  }
-  .day-map-route-time { display: none; }
-  .day-map-now-badge { padding: 5px 12px 4px; }
+.day-map-page button:focus-visible,
+.day-map-page select:focus-visible,
+.dm-main:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
-/* ================================================================
-   Mobile-only overrides (≤640 px) — must be last to win the cascade
-   ================================================================ */
-
-@media (max-width: 640px) {
-  /* Title: nudge away from extreme left; back button icon-only */
-  .day-map-topbar { grid-template-columns: 1fr auto; }
-  .day-map-title { padding-left: 20px; }
-
-  .day-map-back {
-    width: 44px;
-    height: 44px;
-    min-height: 44px;
-    padding: 0;
-    display: flex;
+@media (min-width: 600px) {
+  .dm-stop:not(.is-now) .dm-p,
+  .dm-stop:not(.is-now) .dm-meta .task-tag { display: inline; }
+  .dm-stop.is-now .dm-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    font-weight: 800;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    background: rgba(255, 255, 255, 0.09);
   }
-  .day-map-back-word { display: none; }
+  .dm-stop.is-now .dm-start { margin: 0 6px 0 4px; }
+  .dm-stop.is-now .dm-panel { grid-column: 1 / -1; }
+  .dm-title { font-size: 1rem; }
+}
 
-  /* Anchor bar: single flex row — label | select | auto-fill | clear */
-  .day-map-anchor-bar { gap: 6px; padding: 5px 10px; flex-wrap: nowrap; align-items: center; }
-
-  /* Label: fixed 56px, wraps "Starting / from" to 2 lines */
-  .day-map-anchor-label {
-    flex: 0 0 56px;
-    width: 56px;
-    max-width: none;
-    white-space: normal;
-    font-size: 10px;
-    font-weight: 400;
-    line-height: 1.35;
+@media (min-width: 1024px) {
+  .day-map-page { max-width: 1180px; padding: 0 40px 80px; }
+  .dm-layout {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "route controls"
+      "route status"
+      "route unscheduled";
+    column-gap: 36px;
+    align-items: start;
   }
-
-  /* Select: fills remaining row space, never forces minimum width */
-  .day-map-anchor-select { flex: 1; min-width: 0; height: 28px; font-size: 11px; font-weight: 400; }
-
-  /* Action buttons: compact, stay on same row */
-  .day-map-action-btn { min-height: 28px; padding: 3px 8px; font-size: 10px; font-weight: 600; white-space: nowrap; }
-
-  /* Now button removed from JSX; belt-and-suspenders hide */
-  .day-map-now-btn { display: none; }
-
-  /* Unscheduled task chips: regular weight */
-  .day-map-chip-title { font-weight: 400; font-size: 12px; }
-  .day-map-chip-duration { font-weight: 400; font-size: 10px; }
+  .dm-controls {
+    padding: 18px 20px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+  }
+  .dm-status { padding: 18px 20px; }
+  .dm-status-detail { display: flex; }
+  .dm-status-actions { flex-direction: column; align-items: stretch; }
+  .dm-status-actions .dm-link { align-self: flex-start; }
 }

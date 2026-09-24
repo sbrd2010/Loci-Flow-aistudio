@@ -32,6 +32,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import "../styles/coachUI.css";
+import { isOnToday } from "../utils/deferral";
 
 // Visible/stored chat history cap (was 20) — the raw window actually sent to
 // the LLM stays at historyLimitForMode's 3/10, unaffected by this; the
@@ -616,7 +617,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const hour = now.getHours();
     const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
     const nowLabel = now.toLocaleString([], { weekday: "short", year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
-    const todayActive = tasks.filter(t => t.horizonLevel === "today" && isActiveLociTask(t));
+    const todayActive = tasks.filter(t => isOnToday(t) && isActiveLociTask(t));
     const taskContext = buildLociTaskContext(tasks, new Date(), getFocusWindows(config));
     const todayStr = getLociDayStr(new Date(), getFocusWindows(config));
     const anchorContext = buildLociAnchorsContext(config.dailyAnchors || []);
@@ -1349,7 +1350,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       // This also unparks `task` if it was parked — record that transition too.
       const wasParked = !!task.isParked;
       savePayloadAsync({ ...payload, tasks: current.map(t => {
-        if (t.uuid === taskUuid) return { ...t, horizonLevel: 'today', isNowFocus: true, isParked: false, orderIndex: maxOrder + 1, lastUpdated: now };
+        if (t.uuid === taskUuid) return { ...t, horizonLevel: 'today', deferredUntil: null, isNowFocus: true, isParked: false, orderIndex: maxOrder + 1, lastUpdated: now };
         return t.isNowFocus ? { ...t, isNowFocus: false, lastUpdated: now } : t;
       })})
         .then(() => {
@@ -1379,7 +1380,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       const wasParked = !!task.isParked;
       savePayloadAsync({ ...payload, tasks: current.map(t =>
         t.uuid === taskUuid
-          ? { ...t, horizonLevel: 'today', isNowFocus: false, isParked: false, orderIndex: maxOrder + 1, lastUpdated: now }
+          ? { ...t, horizonLevel: 'today', deferredUntil: null, isNowFocus: false, isParked: false, orderIndex: maxOrder + 1, lastUpdated: now }
           : t
       )})
         .then(() => {
@@ -1455,7 +1456,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
     const energyNote = hour < 12 ? "peak cognitive energy — ideal for deep/complex work" : hour < 15 ? "post-lunch dip — prefer shorter, concrete tasks" : hour < 18 ? "second wind — good for creative or social tasks" : "low energy — protect recovery, do only simple tasks";
 
-    const todayTasks = backlog.filter(t => t.horizonLevel === "today");
+    const todayTasks = backlog.filter(t => isOnToday(t));
     const weekTasks = backlog.filter(t => t.horizonLevel === "week");
     const totalTodayMins = todayTasks.reduce((sum, t) => sum + (Number(t.timeEstimateMinutes) || 25), 0);
     const totalTodayHours = (totalTodayMins / 60).toFixed(1);
@@ -1473,7 +1474,7 @@ Priority distribution: ${p1Count} P1 of ${backlog.length} total (${Math.round(p1
 LOCI PHILOSOPHY: The app biases toward doing, not planning. Your briefing must close the activation gap — turn intentions into a specific first step. Never suggest "organize more" or "plan better." Suggest starting.
 
 FULL TASK LIST (key: [priority] [horizon] title | est minutes):
-${backlog.map(t => `[${t.priority}] [${t.horizonLevel}] ${t.title} | ${t.timeEstimateMinutes || 25}min | ${t.category || "–"}`).join("\n")}
+${backlog.map(t => `[${t.priority}] [${t.horizonLevel === "today" && !isOnToday(t) ? "tomorrow" : t.horizonLevel}] ${t.title} | ${t.timeEstimateMinutes || 25}min | ${t.category || "–"}`).join("\n")}
 ${briefingAnchorContext ? `\n${briefingAnchorContext}\n` : ""}
 PRODUCE A FOCUS BRIEFING with these sections:
 
@@ -1623,11 +1624,11 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                 const task = taskChipsFor(m.actions);
                 if (!task) return null;
                 const phaseB = [];
-                if (task.horizonLevel === 'today' && !task.isNowFocus)
+                if (isOnToday(task) && !task.isNowFocus)
                   phaseB.push({ action: 'focus',       label: 'Set as Focus' });
-                else if (task.horizonLevel !== 'today' && !task.isNowFocus)
+                else if (!isOnToday(task) && !task.isNowFocus)
                   phaseB.push({ action: 'focus+today', label: 'Move to Today & Focus' });
-                if (task.horizonLevel !== 'today')
+                if (!isOnToday(task))
                   phaseB.push({ action: 'today',       label: 'Move to Today' });
                 if (!task.isParked)
                   phaseB.push({ action: 'park',        label: 'Park' });
@@ -1711,7 +1712,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
           const pColors = { P1: "var(--danger)", P2: "var(--warning)", P3: "var(--accent)", P4: "var(--success)" };
           const pCounts = Object.fromEntries(priorities.map(p => [p, active.filter(t => t.priority === p).length]));
           const totalPriority = Math.max(Object.values(pCounts).reduce((a, b) => a + b, 0), 1);
-          const todayTasks = active.filter(t => t.horizonLevel === "today");
+          const todayTasks = active.filter(t => isOnToday(t));
           const todayMins = todayTasks.reduce((s, t) => s + (Number(t.timeEstimateMinutes) || 25), 0);
           const loadPct = Math.min(100, Math.round((todayMins / 60) / 8 * 100));
           return (

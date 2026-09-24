@@ -757,3 +757,18 @@ describe("buildLociAnchorsContext", () => {
     expect(buildLociAnchorsContext([])).toBe("");
   });
 });
+
+describe("buildLociTaskContext: tasks moved to tomorrow", () => {
+  it("lists them under TOMORROW, not TODAY, until their day comes", () => {
+    const tasks = [
+      { uuid: "a", title: "Write the intro", horizonLevel: "today", priority: "P1" },
+      { uuid: "b", title: "Call Prof. Hale", horizonLevel: "today", priority: "P2", deferredUntil: "2026-09-25" },
+    ];
+    const tonight = buildLociTaskContext(tasks, new Date("2026-09-24T21:00:00"));
+    expect(tonight).toMatch(/TODAY \(1\):\n {2}- \[P1\] Write the intro/);
+    expect(tonight).toMatch(/TOMORROW \(moved off today\) \(1\):\n {2}- \[P2\] Call Prof\. Hale/);
+    const nextDay = buildLociTaskContext(tasks, new Date("2026-09-25T09:00:00"));
+    expect(nextDay).toMatch(/TODAY \(2\):/);
+    expect(nextDay).not.toMatch(/TOMORROW/);
+  });
+});

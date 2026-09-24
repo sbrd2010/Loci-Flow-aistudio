@@ -1,11 +1,16 @@
 import { getValidCommittedTaskIds, REFLECTION_MOODS } from "./dailyCoachCheckins";
 import { buildDeadlineProgressMirror } from "./deadlineProgressMirror";
 import { formatMinutesToTime, getFocusWindows, getLociDayStr } from "./focusWindows";
+import { isDeferred } from "./deferral";
 
-const HORIZON_ORDER = ["today", "week", "month", "quarter", "halfyear", "office"];
+// "tomorrow" is not a horizon: it is Today's tasks moved to tomorrow
+// (deferral.js), listed apart so the Coach neither loses them nor offers
+// them for today.
+const HORIZON_ORDER = ["today", "tomorrow", "week", "month", "quarter", "halfyear", "office"];
 
 const HORIZON_LABELS = {
   today: "TODAY",
+  tomorrow: "TOMORROW (moved off today)",
   week: "THIS WEEK",
   month: "THIS MONTH",
   quarter: "QUARTER",
@@ -15,6 +20,7 @@ const HORIZON_LABELS = {
 
 const HORIZON_CAPS = {
   today: 10,
+  tomorrow: 5,
   week: 5,
   month: 3,
   quarter: 3,
@@ -33,11 +39,18 @@ export function isActiveLociTask(task) {
 // anything checking "is this actually visible to the model" (e.g.
 // buildLociCategoryFilterContext) must use this instead of the full active
 // list, or it can miss a mismatch the model genuinely can't see either.
-export function getVisibleLociTasks(allTasks = []) {
+function inGroup(task, group, date) {
+  const dateStr = getLocalDateString(date);
+  if (group === "today") return task.horizonLevel === "today" && !isDeferred(task, dateStr);
+  if (group === "tomorrow") return task.horizonLevel === "today" && isDeferred(task, dateStr);
+  return task.horizonLevel === group;
+}
+
+export function getVisibleLociTasks(allTasks = [], date = new Date()) {
   const active = (allTasks || []).filter(isActiveLociTask);
   const visible = [];
   for (const horizon of HORIZON_ORDER) {
-    const horizonTasks = active.filter(task => task.horizonLevel === horizon);
+    const horizonTasks = active.filter(task => inGroup(task, horizon, date));
     if (horizonTasks.length === 0) continue;
     const cap = HORIZON_CAPS[horizon] || 8;
     visible.push(...horizonTasks.slice(0, cap));
@@ -55,7 +68,7 @@ export function buildLociTaskContext(allTasks = [], date = new Date(), windows =
   let total = 0;
 
   for (const horizon of HORIZON_ORDER) {
-    const horizonTasks = active.filter(task => task.horizonLevel === horizon);
+    const horizonTasks = active.filter(task => inGroup(task, horizon, date));
     if (horizonTasks.length === 0) continue;
 
     total += horizonTasks.length;
@@ -115,7 +128,7 @@ export function buildLociCheckinContext(config = {}, tasks = [], todayStr) {
 
   let committedTasks = [];
   if (config.dailyCommitmentDate === todayStr) {
-    const validIds = getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds);
+    const validIds = getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds, todayStr);
     committedTasks = validIds.map(id => tasks.find(t => t.uuid === id)).filter(Boolean);
   }
 

@@ -13,6 +13,7 @@ import { getLociNowMinutes, getOverallSpan, getFocusProgress, getRemainingFocusM
 import { isMorningRitualSlot } from "./morningRitual";
 import { countTodayCompletedTasks } from "./deadlineProgressMirror";
 import { isDailyDone } from "./deadlineCountdown";
+import { isOnToday } from "./deferral";
 
 export const MAX_COMMITMENT_TASKS = 3;
 const SNOOZE_MS = 90 * 60 * 1000;
@@ -120,10 +121,12 @@ export function buildMorningCommitmentSnooze(config = {}, now = Date.now()) {
 // Filters committed task IDs down to ones that still exist, aren't deleted, and are
 // still on the Today horizon — tasks moved/deleted since the morning are silently
 // dropped. Completed tasks remain valid (and still count as "done") since completing
-// a task doesn't change its horizon.
-export function getValidCommittedTaskIds(tasks = [], taskIds) {
+// a task doesn't change its horizon. dayStr is the day being summarized: after
+// midnight in a late window it is still yesterday's, and a task moved off that
+// day must stay off it.
+export function getValidCommittedTaskIds(tasks = [], taskIds, dayStr) {
   if (!Array.isArray(taskIds)) return [];
-  const validIds = new Set((tasks || []).filter(t => !t.isDeleted && t.horizonLevel === "today").map(t => t.uuid));
+  const validIds = new Set((tasks || []).filter(t => !t.isDeleted && isOnToday(t, dayStr)).map(t => t.uuid));
   return taskIds.filter(id => validIds.has(id));
 }
 
@@ -151,7 +154,7 @@ function formatHoursMinutes(totalMinutes) {
 // Summarizes progress on the morning's committed tasks plus remaining focus time
 // today. Missing/deleted committed task IDs are ignored (test 13).
 export function buildMiddayProgressSummary(tasks = [], config = {}, now, windows) {
-  const validIds = getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds);
+  const validIds = getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds, getLociDayStr(now, windows));
   const committedTasks = validIds.map(id => tasks.find(t => t.uuid === id)).filter(Boolean);
   const total = committedTasks.length;
   const doneCount = committedTasks.filter(t => t.isCompleted && !t.isDeleted).length;
@@ -230,7 +233,7 @@ export const REFLECTION_MOODS = [
 // whether today's deadline move was done.
 export function buildEndOfDaySummary(tasks = [], config = {}, todayStr) {
   const committedIds = config.dailyCommitmentDate === todayStr ? config.dailyCommitmentTaskIds : [];
-  const validIds = getValidCommittedTaskIds(tasks, committedIds);
+  const validIds = getValidCommittedTaskIds(tasks, committedIds, todayStr);
   const committedTasks = validIds.map(id => tasks.find(t => t.uuid === id)).filter(Boolean);
   const committedTotal = committedTasks.length;
   const committedDone = committedTasks.filter(t => t.isCompleted && !t.isDeleted).length;

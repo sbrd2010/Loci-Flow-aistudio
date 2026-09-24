@@ -30,20 +30,20 @@ async function openDayMap(page) {
   const dayMapButton = page.getByRole("button", { name: "Day map →" });
   await expect(dayMapButton).toBeVisible({ timeout: 8_000 });
   await dayMapButton.click();
-  await expect(page.getByRole("heading", { name: "Day Map" })).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByRole("heading", { name: "Day map" })).toBeVisible({ timeout: 8_000 });
 }
 
 async function autoFillDayMap(page) {
   const autoFill = page.getByRole("button", { name: "Auto-fill" });
   await expect(autoFill).toBeEnabled({ timeout: 5_000 });
   await autoFill.click();
-  await expect(page.getByText("3 / 3")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText("Unscheduled · 0")).toBeVisible({ timeout: 5_000 });
 }
 
 async function expectVisibleRouteTimeLabels(page) {
-  const routeTimes = page.locator(".dm-stop-time");
+  const routeTimes = page.locator(".dm-stop .dm-time");
   await expect(routeTimes.first()).toBeVisible({ timeout: 5_000 });
-  await expect(routeTimes.filter({ hasText: "6:00 AM" })).toHaveCount(0);
+  await expect(routeTimes.filter({ hasText: "06:00" })).toHaveCount(0);
 }
 
 async function expectNoHorizontalOverflow(page) {
@@ -52,7 +52,7 @@ async function expectNoHorizontalOverflow(page) {
       document.documentElement.scrollWidth,
       document.body?.scrollWidth || 0,
     ];
-    document.querySelectorAll(".app-container, .screen-content, .day-map-page, .dm-timeline").forEach((el) => {
+    document.querySelectorAll(".app-container, .screen-content, .day-map-page, .dm-route").forEach((el) => {
       measured.push(el.scrollWidth);
     });
     return {
@@ -76,7 +76,7 @@ for (const viewport of MOBILE_VIEWPORTS) {
 
     await autoFillDayMap(page);
     await expectVisibleRouteTimeLabels(page);
-    await expect(page.getByText("End of route")).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(/^Day ends\./)).toBeVisible({ timeout: 5_000 });
     await expectNoHorizontalOverflow(page);
   });
 }
@@ -92,9 +92,9 @@ test("reliability: Day Map route persists after closing and reopening", async ({
   await expect(page.getByRole("button", { name: "Day map →" })).toBeVisible({ timeout: 5_000 });
 
   await openDayMap(page);
-  await expect(page.getByText("3 / 3")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText("Unscheduled · 0")).toBeVisible({ timeout: 5_000 });
   await expectVisibleRouteTimeLabels(page);
-  await expect(page.getByText("End of route")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText(/^Day ends\./)).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
 });
 
@@ -106,11 +106,11 @@ test("Day Map cards show sub-step progress and reveal the full sub-step list whe
 
   // demo-t1 ("Reply to the important message...") is P1 with 4 sub-steps (2 done)
   // and sorts first into the auto-filled route.
-  const firstCard = page.locator(".dm-card-main").first();
+  const firstCard = page.locator(".dm-main").first();
   await expect(firstCard.getByText("2/4 steps done")).toBeVisible({ timeout: 5_000 });
 
-  await page.locator(".dm-btn-menu").first().click();
-  const substepsList = page.locator(".dm-substeps-list").first();
+  await page.locator(".dm-options").first().click();
+  const substepsList = page.locator(".dm-substeps").first();
   await expect(substepsList).toBeVisible({ timeout: 3_000 });
   await expect(substepsList.getByText("Open email / LinkedIn / WhatsApp")).toBeVisible();
   await expect(substepsList.getByText("Write a short, honest reply (3 sentences is enough)")).toBeVisible();
@@ -122,13 +122,11 @@ test("Day Map cards show sub-step progress and reveal the full sub-step list whe
   const rows = substepsList.locator(".dm-substep");
   await expect(rows.nth(0)).not.toHaveClass(/is-done/);
   await expect(rows.nth(0).getByText("Write a short, honest reply (3 sentences is enough)")).toBeVisible();
-  await expect(rows.nth(0).locator(".dm-substep-check")).toHaveText("");
   await expect(rows.nth(0)).toHaveAttribute(
     "aria-label",
     "Not completed: Write a short, honest reply (3 sentences is enough)"
   );
   await expect(rows.nth(3)).toHaveClass(/is-done/);
-  await expect(rows.nth(3).locator(".dm-substep-check")).toHaveText("✓");
   await expect(rows.nth(3)).toHaveAttribute("aria-label", "Completed: Read the message properly");
 
   await expectNoHorizontalOverflow(page);
@@ -140,13 +138,13 @@ test("reliability: removing a Day Map task reflows the remaining route", async (
   await openDayMap(page);
   await autoFillDayMap(page);
 
-  // Open ⋯ menu on first card to reveal the remove button
-  await page.locator(".dm-btn-menu").first().click();
+  // Open the first row's options to reveal the remove button
+  await page.locator(".dm-options").first().click();
   const removeButton = page.getByRole("button", { name: "Remove from route" });
   await expect(removeButton).toBeVisible({ timeout: 3_000 });
   await removeButton.click();
 
-  await expect(page.getByText("2 / 3")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText("Unscheduled · 1")).toBeVisible({ timeout: 5_000 });
   await expectVisibleRouteTimeLabels(page);
   await expectNoHorizontalOverflow(page);
 });

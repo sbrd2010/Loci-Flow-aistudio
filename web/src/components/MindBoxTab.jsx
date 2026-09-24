@@ -10,6 +10,7 @@ import { submitOnEnter } from "../utils/formEvents";
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
 import { getFocusWindows } from "../utils/focusWindows";
 import { buildTaskMutationEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
+import { isOnToday } from "../utils/deferral";
 
 function IconTrendingUp() {
   return (
@@ -330,12 +331,12 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
       message: "Move today's unfinished tasks to this week?\n\nNothing is lost — you'll find them in Roadmap → This Week. Fresh start, no shame.",
       confirmLabel: "Fresh start", cancelLabel: "Keep today",
       onConfirm: () => {
-        const affected = tasks.filter(t => !t.isCompleted && !t.isDeleted && t.horizonLevel === "today");
+        const affected = tasks.filter(t => !t.isCompleted && !t.isDeleted && isOnToday(t));
         const events = affected.map((t) => buildTaskMutationEvent("task_moved", t, {
           fromState: { horizonLevel: "today" }, toState: { horizonLevel: "week" }, windows,
         }));
         savePayloadAsync({ ...payload, tasks: tasks.map(t =>
-          (!t.isCompleted && !t.isDeleted && t.horizonLevel === "today")
+          (!t.isCompleted && !t.isDeleted && isOnToday(t))
             ? { ...t, horizonLevel: "week", lastUpdated: Date.now() } : t
         )})
           .then(() => writeActivityEvents(eventsPatch(uid, events)))

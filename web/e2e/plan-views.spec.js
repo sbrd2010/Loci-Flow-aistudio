@@ -36,7 +36,7 @@ test("Back from Day Map returns to whichever view opened it", async ({ page }) =
   await expect(page.getByRole("button", { name: "HORIZONS" })).toBeVisible();
   await page.getByRole("button", { name: "DAY MAP" }).click();
   await expect(page.locator(".day-map-page")).toBeVisible();
-  await page.locator(".day-map-back").click();
+  await page.locator(".dm-back").click();
   await expect(page.getByRole("button", { name: "HORIZONS" })).toBeVisible();
   await expect(page.locator(".day-map-page")).toHaveCount(0);
 
@@ -44,7 +44,7 @@ test("Back from Day Map returns to whichever view opened it", async ({ page }) =
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
   await page.getByRole("button", { name: "Day map →" }).click();
   await expect(page.locator(".day-map-page")).toBeVisible();
-  await page.locator(".day-map-back").click();
+  await page.locator(".dm-back").click();
   await expect(page.getByRole("button", { name: "Day map →" })).toBeVisible();
 });
 
@@ -74,7 +74,7 @@ test("priority tags are mono wherever Day Map draws them", async ({ page }) => {
 
   // Day Map draws a priority tag in two places: in the unscheduled strip, and
   // on a route card. An earlier pass styled only the card — the selector was
-  // scoped to .dm-card — so the strip kept painting red, amber, teal and blue
+  // scoped to the route card — so the strip kept painting red, amber, teal and blue
   // on the one screen whose point is that those four colours are gone. Both
   // sites are asserted, because fixing the site you are looking at and missing
   // its twin is how every colour in this PR survived its own deletion.
@@ -87,11 +87,11 @@ test("priority tags are mono wherever Day Map draws them", async ({ page }) => {
     return style.color;
   };
 
-  const stripColor = await mono(page.locator(".day-map-chip-row .day-map-priority"), "unscheduled strip");
+  const stripColor = await mono(page.locator(".dm-unscheduled .dm-p"), "unscheduled strip");
 
   await page.getByRole("button", { name: /auto-fill/i }).click();
-  await expect(page.locator(".dm-card .day-map-priority").first()).toBeVisible();
-  const cardColor = await mono(page.locator(".dm-card .day-map-priority"), "route card");
+  await expect(page.locator(".dm-stop .dm-p:visible").first()).toBeVisible();
+  const cardColor = await mono(page.locator(".dm-stop .dm-p:visible"), "route card");
 
   // One declaration site means one colour; two means they can drift apart.
   expect(cardColor).toBe(stripColor);

@@ -4,6 +4,7 @@ import { buildProfileContext } from "./coachProfile";
 import { buildLociMemoryContext, isMemoryEnabled } from "./coachMemory";
 import { messageSeemsActionLike } from "./coachActions";
 import { buildLocalSafetyReply, CRISIS_RE, MEDICAL_RISK_RE } from "./crisisSafety";
+import { isOnToday } from "./deferral";
 
 const ENTRY_POINT_LABELS = {
   deep_focus: "Deep Focus session",
@@ -26,7 +27,7 @@ export function buildRescueTaskList(allTasks, { entryPoint = "today", focusTask 
     return `${task.title}${meta}${step}`;
   };
 
-  const todayTasks = active.filter(t => t.horizonLevel === "today");
+  const todayTasks = active.filter(t => isOnToday(t));
   const visibleFocusTask = entryPoint === "deep_focus"
     ? (focusTask || active.find(t => t.isNowFocus))
     : todayTasks.find(t => t.isNowFocus);

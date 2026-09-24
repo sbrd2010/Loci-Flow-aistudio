@@ -70,92 +70,9 @@
   }
 }
 
-/* Day Map: keep the timeline dominant after all tasks are placed. */
-@media (max-width: 640px) {
-  .screen-content-day-map {
-    padding-top: 8px;
-  }
-
-  .day-map-page {
-    gap: 9px;
-  }
-
-  .day-map-topbar {
-    padding: 6px 0 8px;
-  }
-
-  .day-map-back {
-    min-height: 36px;
-    padding: 7px 10px;
-  }
-
-  .day-map-title h1 {
-    font-size: 20px;
-  }
-
-  .day-map-stats span {
-    padding: 4px 8px;
-  }
-
-  .day-map-overview,
-  .day-map-period,
-  .day-map-available-strip {
-    border-radius: 8px;
-  }
-
-  .day-map-overview {
-    padding: 10px;
-  }
-
-  .day-map-strip-header {
-    padding: 8px 10px;
-  }
-
-  .day-map-chip-row:has(.day-map-all-set) {
-    display: none;
-  }
-
-  .day-map-period {
-    padding: 10px;
-  }
-
-  .day-map-period-head {
-    margin-bottom: 6px;
-  }
-
-  .day-map-compact-main {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-rows: auto auto;
-    padding: 8px;
-  }
-
-  .day-map-compact-title {
-    font-size: 12.8px;
-  }
-
-  .day-map-compact-time {
-    grid-column: 2;
-    justify-self: start;
-    text-align: left;
-    font-size: 10.5px;
-  }
-
-  .day-map-remove-btn {
-    width: 34px;
-  }
-
-  .day-map-edit-panel {
-    padding: 8px 10px;
-  }
-}
-
 /* Tablet: avoid excessive white space while preserving the calmer Roadmap feel. */
 @media (min-width: 641px) and (max-width: 900px) {
   .screen-content {
     gap: 14px;
-  }
-
-  .day-map-page {
-    gap: 12px;
   }
 }

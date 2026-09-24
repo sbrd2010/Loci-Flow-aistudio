@@ -23,16 +23,15 @@ async function enterDemo(page, viewport = { width: 375, height: 812 }) {
 
 async function openDayMap(page) {
   await page.getByRole("button", { name: /Day Map/i }).click();
-  await expect(page.getByRole("heading", { name: "Day Map" })).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByRole("heading", { name: "Day map" })).toBeVisible({ timeout: 8_000 });
 }
 
 function taskStops(page) {
-  return page.locator(".dm-stop").filter({ has: page.locator(".dm-card") });
+  return page.locator(".dm-stop");
 }
 
-async function expectStopTime(stop, hm, ampm) {
-  await expect(stop.locator(".dm-time-hm")).toHaveText(hm, { timeout: 5_000 });
-  await expect(stop.locator(".dm-time-ampm")).toHaveText(ampm, { timeout: 5_000 });
+async function expectStopTime(stop, hm) {
+  await expect(stop.locator(".dm-time")).toHaveText(hm, { timeout: 5_000 });
 }
 
 async function expectNoHorizontalOverflow(page) {
@@ -42,7 +41,7 @@ async function expectNoHorizontalOverflow(page) {
       document.body?.scrollWidth || 0,
     ];
     document.querySelectorAll(
-      ".app-container, .screen-content, .day-map-page, .dm-summary-card, .day-map-anchor-bar, .day-map-available-strip, .dm-timeline, .dm-stop, .dm-card"
+      ".app-container, .screen-content, .day-map-page, .dm-controls, .dm-status, .dm-unscheduled, .dm-route, .dm-stop, .dm-body"
     ).forEach((el) => {
       measured.push(el.scrollWidth);
     });
@@ -66,7 +65,7 @@ test("mobile reliability: Day Map auto-fill persists route anchor and reflows du
   await page.getByRole("button", { name: "Auto-fill" }).click();
   await expect(taskStops(page).first()).toBeVisible({ timeout: 5_000 });
   await expect.poll(() => taskStops(page).count()).toBeGreaterThanOrEqual(2);
-  await expectStopTime(taskStops(page).first(), "11:00", "AM");
+  await expectStopTime(taskStops(page).first(), "11:00");
   await expectNoHorizontalOverflow(page);
 
   await page.getByRole("button", { name: /Back/i }).click();
@@ -75,12 +74,12 @@ test("mobile reliability: Day Map auto-fill persists route anchor and reflows du
   await openDayMap(page);
   await expect(taskStops(page).first()).toBeVisible({ timeout: 5_000 });
   await expect.poll(() => taskStops(page).count()).toBeGreaterThanOrEqual(2);
-  await expectStopTime(taskStops(page).first(), "11:00", "AM");
+  await expectStopTime(taskStops(page).first(), "11:00");
 
   const firstStop = taskStops(page).first();
-  await firstStop.getByLabel("Card options").click();
+  await firstStop.locator(".dm-options").click();
   await firstStop.locator("select").selectOption("90");
-  await expect(firstStop.locator(".dm-card-dur")).toHaveText("1h 30m", { timeout: 5_000 });
-  await expectStopTime(taskStops(page).nth(1), "12:35", "PM");
+  await expect(firstStop.locator(".dm-dur")).toHaveText("1h30m", { timeout: 5_000 });
+  await expectStopTime(taskStops(page).nth(1), "12:35");
   await expectNoHorizontalOverflow(page);
 });

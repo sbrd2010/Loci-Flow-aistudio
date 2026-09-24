@@ -265,7 +265,7 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
     savePayloadAsync({
       ...payload,
       tasks: tasks.map((t) =>
-        t.uuid === task.uuid ? { ...t, horizonLevel: "today", orderIndex: todayTasksCount, lastUpdated: Date.now() } : t
+        t.uuid === task.uuid ? { ...t, horizonLevel: "today", deferredUntil: null, orderIndex: todayTasksCount, lastUpdated: Date.now() } : t
       )
     })
       .then(() => writeActivityEvents(eventPatch(uid, event)))
