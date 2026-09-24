@@ -152,3 +152,41 @@ test("a task added without choosing a time is saved with no estimate", async ({ 
   expect(body).toContain("Sort the museum receipts {");
   expect(body).not.toContain("Sort the museum receipts (25min)");
 });
+
+// Codex review of #396, second round.
+test("⌘↵ pressed again while the sheet says Saved adds the task once", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.keyboard.press("n");
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByTestId("add-task-title").fill("Order the spare lens cap");
+  await page.keyboard.press("Control+Enter");
+  await page.keyboard.press("Control+Enter");
+  await page.keyboard.press("Control+Enter");
+  await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
+  await expect(page.getByTestId("today-tasks-list").getByText("Order the spare lens cap")).toHaveCount(1);
+});
+
+test("opening Other shows 25m chosen, and 25m is what is saved", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); } catch { /* private mode */ }
+  });
+  const bodies = [];
+  await page.route("https://api.groq.com/**", (route) => {
+    bodies.push(route.request().postData() || "");
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "One small step." } }] }) });
+  });
+  await enterDemo(page);
+  await openFromToday(page);
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByTestId("add-task-title").fill("Label the seed trays");
+  await dialog.getByRole("button", { name: "Other", exact: true }).click();
+  await expect(dialog.getByLabel("Minutes")).toHaveValue("25");
+  await dialog.getByTestId("add-task-submit").click();
+  await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
+
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  await page.getByPlaceholder(/Shift\+Enter for a new line/).fill("what are my tasks");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect.poll(() => bodies.some(b => b.includes("Label the seed trays")), { timeout: 8_000 }).toBe(true);
+  expect(bodies.find(b => b.includes("Label the seed trays"))).toContain("Label the seed trays (25min)");
+});
