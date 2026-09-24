@@ -630,3 +630,90 @@ test("mobile reliability: with Reduce Motion the sheet fades instead of sliding"
   await page.locator(".wall-peek").click();
   await expect(page.locator(".tasks-section")).toHaveCSS("animation-name", "today-sheet-fade");
 });
+
+// ── 2b-2b: swipe (37c) — touch only; every action also in the row menu ────
+
+async function swipe(page, row, dx, dy = 0) {
+  const box = await row.boundingBox();
+  const x = box.x + box.width / 2, y = box.y + Math.min(24, box.height / 2);
+  const opts = (cx, cy) => ({ pointerType: "touch", pointerId: 7, isPrimary: true, bubbles: true, clientX: cx, clientY: cy });
+  await row.dispatchEvent("pointerdown", opts(x, y));
+  for (let i = 1; i <= 6; i++) await row.dispatchEvent("pointermove", opts(x + (dx * i) / 6, y + (dy * i) / 6));
+  await row.dispatchEvent("pointerup", opts(x + dx, y + dy));
+}
+
+function listRow(page, text) {
+  return page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: text }).first();
+}
+
+test("mobile reliability: swipe right marks a row done, with Undo", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-list-hide").click();
+  await page.locator(".wall-peek").click();
+  await page.locator(".today-sheet-grabber").click(); // full height: room to work
+  const row = listRow(page, "10-minute walk");
+  await swipe(page, row, 140);
+  await expect(page.getByRole("status").filter({ hasText: "Marked done: 10-minute walk" })).toBeVisible();
+  await expect(listRow(page, "10-minute walk")).toHaveClass(/completed/);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(listRow(page, "10-minute walk")).not.toHaveClass(/completed/);
+});
+
+test("mobile reliability: swipe left opens This week and Front; This week moves it, with Undo", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  await swipe(page, row, -200);
+  const week = page.getByRole("button", { name: "This week" });
+  await expect(week).toBeVisible();
+  await expect(page.getByRole("button", { name: "Front", exact: true })).toBeVisible();
+  await week.click();
+  await expect(page.getByRole("status").filter({ hasText: "Moved to This week: 10-minute walk" })).toBeVisible();
+  await expect(listRow(page, "10-minute walk")).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(listRow(page, "10-minute walk")).toBeVisible();
+});
+
+test("mobile reliability: Front puts a row on a front, with Undo; the menu offers it too", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  await expect(row.locator(".task-tag.is-goal")).toHaveCount(0);
+
+  await swipe(page, row, -200);
+  await page.getByRole("button", { name: "Front", exact: true }).click();
+  const picker = page.getByRole("dialog", { name: /on a front/ });
+  await expect(picker).toBeVisible();
+  // The demo's goal (its Key Deadline) is a front; a task on it is GOAL.
+  await picker.getByRole("button", { name: "Project launch" }).click();
+  await expect(picker).toHaveCount(0);
+  await expect(listRow(page, "10-minute walk").locator(".task-tag.is-goal")).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Put on Project launch: 10-minute walk" })).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(listRow(page, "10-minute walk").locator(".task-tag.is-goal")).toHaveCount(0);
+
+  // Parity: the same action from the row menu, for screen readers and mice.
+  await listRow(page, "10-minute walk").locator(".task-row-top").click();
+  await page.getByTestId("task-menu-front").click();
+  await expect(page.getByRole("dialog", { name: /on a front/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: /on a front/ })).toHaveCount(0);
+});
+
+test("mobile reliability: a vertical drag on a row is a scroll, not a swipe", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await page.locator(".today-sheet-grabber").click();
+  const row = listRow(page, "10-minute walk");
+  const box = await row.boundingBox();
+  const x = box.x + box.width / 2, y = box.y + 20;
+  const at = (cx, cy) => ({ pointerType: "touch", pointerId: 9, isPrimary: true, bubbles: true, clientX: cx, clientY: cy });
+  // Diagonal but mostly vertical: it crosses 10px sideways before it is
+  // clearly a scroll, so the direction test is what decides. Checked while
+  // the finger is still down — a slid row would snap back on release.
+  await row.dispatchEvent("pointerdown", at(x, y));
+  for (let i = 1; i <= 6; i++) await row.dispatchEvent("pointermove", at(x + (40 * i) / 6, y + (50 * i) / 6));
+  await expect(row).not.toHaveAttribute("style", /translateX/);
+  await row.dispatchEvent("pointerup", at(x + 40, y + 50));
+  await expect(page.getByRole("button", { name: "This week" })).toBeHidden();
+  await expect(page.locator(".undo-toast")).toHaveCount(0);
+});
