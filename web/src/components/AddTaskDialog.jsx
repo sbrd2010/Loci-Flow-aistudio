@@ -223,7 +223,9 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    // Saved: the form stays up for a moment to say so. A second ⌘↵ (or a held
+    // one) must not add the task again.
+    if (saved || !title.trim()) return;
 
     // Flush an in-progress sub-step edit that never hit its row-level ✓/Enter
     // (e.g. the user clicked this dialog's Save/Add Task button instead) so
@@ -483,7 +485,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
                   {c.label}
                 </button>
               ))}
-              <button type="button" className={chip(otherOpen)} aria-pressed={otherOpen} onClick={() => setOtherOpen(true)}>Other</button>
+              <button type="button" className={chip(otherOpen)} aria-pressed={otherOpen} onClick={() => { setOtherOpen(true); setEstimatePicked(true); }}>Other</button>
             </div>
             {otherOpen && (
               <label className="add-other">

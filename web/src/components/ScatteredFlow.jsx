@@ -12,13 +12,21 @@ import "../styles/scattered.css";
 // Starting follows Day map's pattern: pin the task, hand the confirmed-write
 // promise up, and let the owner of the session lifecycle open it.
 
+// The first pick always gets a smallest start: its own first step, else its
+// first open sub-step, else the five minutes this screen offers.
+export function smallestStart(task) {
+  const step = typeof task?.concreteStep === "string" ? task.concreteStep.trim() : "";
+  if (step && step !== "Do first tiny step") return step;
+  const sub = (Array.isArray(task?.subSteps) ? task.subSteps : []).find(s => s && !s.done && String(s.text || "").trim());
+  return sub ? String(sub.text).trim() : "five minutes on it";
+}
+
 function metaFor(task, isGoal, showStart) {
   const bits = [String(task.priority || "P3").toUpperCase()];
   const est = Number(task.timeEstimateMinutes);
   if (est > 0) bits.push(est >= 60 && est % 60 === 0 ? `${est / 60}H` : est >= 60 ? `${Math.floor(est / 60)}H ${est % 60} MIN` : `${est} MIN`);
   if (isGoal) bits.push("GOAL");
-  const step = task.concreteStep && task.concreteStep !== "Do first tiny step" ? task.concreteStep : null;
-  if (showStart && step) bits.push(`SMALLEST START: ${step}`);
+  if (showStart) bits.push(`SMALLEST START: ${smallestStart(task)}`);
   return bits.join(" · ");
 }
 

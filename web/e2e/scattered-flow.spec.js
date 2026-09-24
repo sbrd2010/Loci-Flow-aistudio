@@ -61,10 +61,15 @@ test("at most three picks; the first is ringed and shows its smallest start; tap
   await expect(page.locator(".scattered-pick[aria-pressed='true']")).toHaveCount(1);
   expect(n).toBeGreaterThan(1);
 
+  // Only the first shows a smallest start, and it always has one.
+  await expect(picks.first().locator(".scattered-pick-meta")).toContainText("SMALLEST START: ");
+  await expect(picks.nth(1).locator(".scattered-pick-meta")).not.toContainText("SMALLEST START");
+
   const second = (await picks.nth(1).locator(".scattered-pick-title").innerText()).trim();
   await picks.nth(1).click();
   await expect(picks.first().locator(".scattered-pick-title")).toHaveText(second);
   await expect(picks.first()).toHaveAttribute("aria-pressed", "true");
+  await expect(picks.first().locator(".scattered-pick-meta")).toContainText("SMALLEST START: ");
 
   // And five minutes starts on that one.
   await page.getByRole("button", { name: "Start 5 minutes on the first" }).click();
