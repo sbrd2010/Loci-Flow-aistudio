@@ -163,3 +163,50 @@ test("mobile reliability: Stop here ends the session without handing over to a m
   await expect(page.locator(".confirm-dialog, .modal-backdrop")).toHaveCount(0);
   await expect(page.getByText(/Focus block complete/i)).toHaveCount(0);
 });
+
+// Codex review of #397. The length picker is for a stopped timer: every
+// session opens running, so "before the first start" never came.
+test("paused, the block's length can be changed", async ({ page }) => {
+  const overlay = await openSession(page);
+  await page.clock.runFor(2_000);
+  await expect(overlay.getByRole("group", { name: "Focus duration" })).toHaveCount(0);
+  await overlay.getByRole("button", { name: "Pause timer" }).click();
+  const picker = overlay.getByRole("group", { name: "Focus duration" });
+  await picker.getByRole("button", { name: "45m" }).click();
+  await expect(overlay.locator(".focus-mode-figures")).toContainText("OF 45:00");
+});
+
+test("a held Space toggles the timer once, not on every repeat", async ({ page }) => {
+  const overlay = await openSession(page);
+  await page.clock.runFor(2_000);
+  await page.evaluate(() => document.activeElement?.blur());
+  // One press and one auto-repeat: toggled twice, it would be running again.
+  await page.keyboard.down("Space");
+  await page.keyboard.down("Space");
+  await page.keyboard.up("Space");
+  await expect(overlay.getByRole("button", { name: "Resume timer" })).toBeVisible();
+});
+
+test("Escape closes the sounds drawer even from its volume slider", async ({ page }) => {
+  const overlay = await openSession(page);
+  await overlay.getByRole("button", { name: "Open sounds menu" }).click();
+  const drawer = page.locator(".focus-sounds-drawer");
+  await expect(drawer).toHaveClass(/open/);
+  await page.getByRole("slider", { name: "Adjust volume" }).focus();
+  await page.keyboard.press("Escape");
+  await expect(drawer).not.toHaveClass(/open/);
+  await expect(overlay).toBeVisible();
+});
+
+test("with Rescue open over the session, D and Esc are Rescue's, not the session's", async ({ page }) => {
+  const overlay = await openSession(page);
+  const title = await overlay.getByRole("heading", { level: 1 }).innerText();
+  await overlay.getByRole("button", { name: "I'm stuck" }).click();
+  await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press("d");
+  await page.keyboard.press("Escape");
+  await page.getByText("Exit rescue mode").click();
+  // Still in the same session, and the task is not done.
+  await expect(overlay.getByRole("heading", { level: 1 })).toHaveText(title);
+});

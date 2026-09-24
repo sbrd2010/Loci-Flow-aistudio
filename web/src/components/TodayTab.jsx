@@ -1384,7 +1384,7 @@ export default function TodayTab({
       {/* ── Day Close (end-of-day reflection) ─────────────────────── */}
       {showDailyCheckin && dailyCheckinSlot === "reflection" && (() => {
         const summary = buildEndOfDaySummary(tasks, config, anchorTodayStr);
-        const committedIds = config.dailyCommitmentDate === anchorTodayStr ? getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds) : [];
+        const committedIds = config.dailyCommitmentDate === anchorTodayStr ? getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds, anchorTodayStr) : [];
         const breakdownTask = committedIds.map(id => todayTasksAll.find(t => t.uuid === id)).find(t => t && !t.isCompleted)
           || todayTasksAll.find(t => !t.isCompleted) || null;
         return (
@@ -1662,6 +1662,7 @@ export default function TodayTab({
           onDone={() => { handleToggleComplete(activeTask); setIsFocusMode(false); }}
           onExit={() => setIsFocusMode(false)}
           onChangeDuration={handleChangeFocusDuration}
+          keysOff={rescueActive}
           onKeepGoing={extendTimer}
           onAddTime={addTimeToSession}
           onStopHere={handleStopHere}
