@@ -142,3 +142,30 @@ test("mobile reliability: Coach still reaches the provider for an ordinary messa
 
   await expect.poll(() => hits.length, { timeout: 10_000 }).toBeGreaterThan(0);
 });
+
+// Brief, Phase 6: the coach said it couldn't find a task just finished. A
+// casual message ("light" mode) carried no tasks at all. Every request now
+// carries today's tasks with their status and the focus session.
+test("a casual message to the coach still carries the task just marked done", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key");
+  });
+  const bodies = [];
+  await page.route("https://api.groq.com/**", async (route) => {
+    bodies.push(route.request().postData() || "");
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "Nice one." } }] }) });
+  });
+  await enterDemo(page);
+
+  const title = (await page.locator(".wall-title").innerText()).trim();
+  await page.locator(".today-wall .wall-action", { hasText: "Mark done" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  // Not a task question — the kind of message that got no task list at all.
+  await page.getByPlaceholder(/Shift\+Enter for a new line/).fill("I feel a bit scattered right now");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect.poll(() => bodies.some(b => b.includes("TODAY SNAPSHOT")), { timeout: 8_000 }).toBe(true);
+  const body = JSON.parse(bodies.filter(b => b.includes("TODAY SNAPSHOT")).pop());
+  const system = body.messages[0].content;
+  expect(system).toMatch(new RegExp(`\\[done \\d\\d:\\d\\d\\] ${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  expect(system).toContain("FOCUS SESSION:");
+});
