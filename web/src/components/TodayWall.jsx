@@ -79,7 +79,9 @@ export default function TodayWall({
   onTogglePeek,
   onAdd,
   remainingCount = 0,
+  doneCount = 0,
   lowEnergy = false,
+  onToggleLowEnergy,
   onStartFocus,
   onMarkDone,
   onSplit,
@@ -259,26 +261,51 @@ export default function TodayWall({
           )}
         </div>
 
-        {links}
       </div>
 
-      {/* 49a: "+" at the right of the peek, within a thumb's reach. */}
-      <div className="wall-peek-row">
-        <button
-          type="button"
-          className="wall-peek"
-          onClick={onTogglePeek}
-          aria-expanded={peekOpen}
-        >
-          <span className="wall-peek-grabber" aria-hidden="true" />
-          <span className="wall-peek-label">
-            {peekOpen ? "Hide list" : `After that · ${remainingCount}`}
-          </span>
-        </button>
-        {onAdd && (
-          <button type="button" className="wall-peek-add" onClick={onAdd} aria-label="Add a task to Today">
-            <IconPlus size={20} />
+      {/* The foot: on phones and tablets the links, then the peek; on a laptop
+          with the list hidden (35e) one row — links, "Show today's list",
+          Low energy. */}
+      <div className="wall-foot">
+        {links}
+
+        {/* 49a: "+" at the right of the peek, within a thumb's reach. */}
+        <div className="wall-peek-row">
+          <button
+            type="button"
+            className="wall-peek"
+            onClick={onTogglePeek}
+            aria-expanded={peekOpen}
+          >
+            <span className="wall-peek-grabber" aria-hidden="true" />
+            <span className="wall-peek-label">
+              {peekOpen ? "Hide list" : `After that · ${remainingCount}`}
+            </span>
+            {!peekOpen && (
+              <span className="wall-peek-wide">
+                Show today&apos;s list <span className="wall-peek-figures">{remainingCount} · {doneCount} done</span>
+              </span>
+            )}
           </button>
+          {onAdd && (
+            <button type="button" className="wall-peek-add" onClick={onAdd} aria-label="Add a task to Today">
+              <IconPlus size={20} />
+            </button>
+          )}
+        </div>
+
+        {onToggleLowEnergy && (
+          <label className="wall-energy">
+            <span>Low energy</span>
+            <button
+              type="button"
+              role="switch"
+              className="today-energy-switch"
+              aria-checked={lowEnergy}
+              aria-label="Low energy"
+              onClick={onToggleLowEnergy}
+            />
+          </label>
         )}
       </div>
     </section>

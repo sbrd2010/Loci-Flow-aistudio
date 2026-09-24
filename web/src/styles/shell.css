@@ -151,7 +151,7 @@
 
 /* Laptop, 1024px and up (41a, 41f): tabs in the header, no bottom bar. */
 @media (min-width: 1024px) {
-  .shell-header { padding: 0 40px 0 48px; }
+  .shell-header { padding: 0 max(48px, calc((100% - 1200px) / 2)); }
   .shell-wordmark { font-size: 19px; }
   .shell-end { gap: 6px; }
 
