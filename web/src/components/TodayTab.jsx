@@ -1017,7 +1017,7 @@ export default function TodayTab({
     : 0;
 
   // A task moved to tomorrow (deferral.js) is not today's until then.
-  const todayTasksAll = tasks.filter((t) => isOnToday(t) && !t.isDeleted && !t.isParked);
+  const todayTasksAll = tasks.filter((t) => isOnToday(t, todayStr) && !t.isDeleted && !t.isParked);
   const pinnedFocusTask = todayTasksAll.find(t => t.isNowFocus && !t.isCompleted && !t.isDeleted) || null;
 
   // Half height leaves the task and its Start focus in view above the sheet
