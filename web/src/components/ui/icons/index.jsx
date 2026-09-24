@@ -84,3 +84,25 @@ export const IconUndo = (props) => (
     <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
   </Icon>
 );
+
+export const IconArrowLeft = (props) => (
+  <Icon {...props}>
+    <path d="m12 19-7-7 7-7" />
+    <path d="M19 12H5" />
+  </Icon>
+);
+
+export const IconEllipsisVertical = (props) => (
+  <Icon {...props}>
+    <circle cx="12" cy="12" r="1" />
+    <circle cx="12" cy="5" r="1" />
+    <circle cx="12" cy="19" r="1" />
+  </Icon>
+);
+
+export const IconX = (props) => (
+  <Icon {...props}>
+    <path d="M18 6 6 18" />
+    <path d="m6 6 12 12" />
+  </Icon>
+);

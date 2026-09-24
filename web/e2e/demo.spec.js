@@ -265,7 +265,7 @@ test("11. Day Map route timeline — always visible, no view toggle", async ({ p
   await openDayMapWithTasks(page);
 
   // Route timeline is the only view — no toggle present
-  await expect(page.locator(".dm-timeline")).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".dm-route")).toBeVisible({ timeout: 5_000 });
   await expect(page.locator(".dm-view-toggle")).not.toBeVisible();
   await expect(page.locator(".dmb-grid")).not.toBeVisible();
 });

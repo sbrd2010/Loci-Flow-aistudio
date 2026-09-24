@@ -1284,6 +1284,8 @@ export default function App() {
             onClose={closeDayMap}
             onStartFocus={(pinPromise) => { pendingFocusPinPromiseRef.current = pinPromise; setPendingFocusOpen(true); goToday(); }}
             onAddTask={() => openAddTask("today")}
+            onHelpChoose={() => { setRoadmapView("scattered"); setActiveTab("roadmap"); }}
+            dayClock={dayClock}
             flushNow={flushNow}
           />
         )}
