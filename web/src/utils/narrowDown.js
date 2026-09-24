@@ -19,6 +19,7 @@
 
 import { getFocusWindows, getRemainingFocusMinutes } from "./focusWindows";
 import { frontsFromConfig, parseDueDate } from "./fronts";
+import { isDeferred } from "./deferral";
 
 const STALE_DAYS = 7;
 // Horizons further out than this week are not "due this horizon".
@@ -36,7 +37,8 @@ export function numberWord(n) {
 
 export function openTasks(tasks) {
   if (!Array.isArray(tasks)) return [];
-  return tasks.filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked);
+  // A task moved to tomorrow is not on offer today (deferral.js).
+  return tasks.filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked && !isDeferred(t));
 }
 
 // Focus minutes left today, measured the way the rest of the app measures them.
@@ -104,15 +106,19 @@ function effectiveDeadline(task, fronts) {
 
 // Of what survives, the one to actually do: nearest real deadline first, then
 // priority, then the order the user already put them in.
-function pickOne(pool, fronts) {
-  return [...pool].sort((a, b) => {
+function byUrgency(fronts) {
+  return (a, b) => {
     const da = effectiveDeadline(a, fronts)?.at ?? Infinity;
     const db = effectiveDeadline(b, fronts)?.at ?? Infinity;
     if (da !== db) return da - db;
     const pa = priorityRank(a), pb = priorityRank(b);
     if (pa !== pb) return pa - pb;
     return (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
-  })[0] || null;
+  };
+}
+
+function pickOne(pool, fronts) {
+  return [...pool].sort(byUrgency(fronts))[0] || null;
 }
 
 // Why this one — stated only from what is demonstrably true of the pool it was
@@ -209,4 +215,14 @@ export function narrowDown(tasks, config = {}, now = new Date()) {
     parked: open.filter(t => t !== chosen),
     minutesLeft,
   };
+}
+
+// Feeling scattered (45c): at most three to pick from. The first is
+// narrowDown's own choice; the next two are the most urgent of the rest
+// (nearest date, then priority, then list order).
+export function pickThree(tasks, config = {}, now = new Date()) {
+  const { chosen, parked } = narrowDown(tasks, config, now);
+  if (!chosen) return [];
+  const fronts = datedFronts(config);
+  return [chosen, ...[...parked].sort(byUrgency(fronts))].slice(0, 3);
 }

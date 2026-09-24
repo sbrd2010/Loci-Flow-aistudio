@@ -68,6 +68,10 @@ export default function App() {
     return migrateStoredTheme(stored);
   });
   const [roadmapView, setRoadmapView] = useState("plan");
+  // Feeling scattered has three doors (Today, Day map, Plan); its back link
+  // returns through the one it came in by.
+  const [scatteredFrom, setScatteredFrom] = useState("plan");
+  const openScattered = (from) => { setScatteredFrom(from); setRoadmapView("scattered"); setActiveTab("roadmap"); };
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState("");
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -1273,7 +1277,7 @@ export default function App() {
             onOpenDayMap={openDayMap}
             onOpenMindBox={openMindBox}
             onOpenCoach={() => setActiveTab("coach")}
-            onScattered={() => { setRoadmapView("scattered"); setActiveTab("roadmap"); }}
+            onScattered={() => openScattered("today")}
             isAddTaskDialogOpen={showAddTask}
             pendingCheckinSlot={pendingCheckinSlot}
             setPendingCheckinSlot={setPendingCheckinSlot}
@@ -1291,7 +1295,7 @@ export default function App() {
             onClose={closeDayMap}
             onStartFocus={(pinPromise) => { pendingFocusPinPromiseRef.current = pinPromise; setPendingFocusOpen(true); goToday(); }}
             onAddTask={() => openAddTask("today", "Day map")}
-            onHelpChoose={() => { setRoadmapView("scattered"); setActiveTab("roadmap"); }}
+            onHelpChoose={() => openScattered("daymap")}
             dayClock={dayClock}
             flushNow={flushNow}
           />
@@ -1303,7 +1307,7 @@ export default function App() {
             saveConfigPatch={saveConfigPatch}
             onOpenHorizons={() => setRoadmapView("horizons")}
             onOpenDayMap={openDayMap}
-            onScattered={() => setRoadmapView("scattered")}
+            onScattered={() => openScattered("plan")}
           />
         )}
         {activeTab === "roadmap" && roadmapView === "scattered" && (
@@ -1312,7 +1316,13 @@ export default function App() {
             savePayload={savePayload}
             savePayloadAsync={savePayloadAsync}
             flushNow={flushNow}
-            onBack={() => setRoadmapView("plan")}
+            onBack={() => {
+              setRoadmapView("plan");
+              if (scatteredFrom === "today") setActiveTab("today");
+              else if (scatteredFrom === "daymap") setActiveTab("daymap");
+            }}
+            backLabel={{ today: "Today", daymap: "Day map", plan: "Plan" }[scatteredFrom]}
+            onOpenMindBox={() => { setRoadmapView("plan"); openMindBox(); }}
             // Same handoff Day Map uses: pin the task, hand up the confirmed
             // write, and let Today open the session. Driving the timer from
             // here would risk orphaned sessions and missing ledger events.
@@ -1358,8 +1368,9 @@ export default function App() {
 
       {/* FAB — single + expands to two options. Plan only: Today adds from
           its own "+" on the peek and "+ Add" in the list (49a–d). Plan keeps
-          this until its own "+ Add" lands (Phase 3). */}
-      {activeTab === "roadmap" && (
+          this until its own "+ Add" lands (Phase 4). Not over Feeling
+          scattered, whose own buttons sit where it floats. */}
+      {activeTab === "roadmap" && roadmapView !== "scattered" && (
         <>
           {fabExpanded && (
             <div
