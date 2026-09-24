@@ -11,12 +11,17 @@ import "../../styles/undoToast.css";
 const UNDO_MS = 5000;
 
 export default function UndoToast({ message, onUndo, onClose }) {
-  const [held, setHeld] = useState(false);
+  // Held while the pointer is over it OR focus is inside it — tracked apart,
+  // so leaving with the mouse can't restart the clock under a focused Undo.
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const held = hovered || focused;
   const leftRef = useRef(UNDO_MS);
   const [barKey, setBarKey] = useState(0);
 
   useEffect(() => {
     if (held) return undefined;
+    setBarKey(k => k + 1);
     const startedAt = Date.now();
     const timer = setTimeout(onClose, leftRef.current);
     return () => {
@@ -25,16 +30,13 @@ export default function UndoToast({ message, onUndo, onClose }) {
     };
   }, [held]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const hold = () => setHeld(true);
-  const release = () => { setHeld(false); setBarKey(k => k + 1); };
-
   return (
     <div
       className="undo-toast"
-      onMouseEnter={hold}
-      onMouseLeave={release}
-      onFocus={hold}
-      onBlur={release}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}
     >
       <span className="undo-toast-text">{message}</span>
       <button type="button" className="undo-toast-btn" onClick={onUndo}>

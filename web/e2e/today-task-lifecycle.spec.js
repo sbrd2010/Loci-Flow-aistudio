@@ -308,3 +308,19 @@ test("mobile reliability: Undo is announced through a live region that was alrea
   // The same element, now carrying the words.
   await expect.poll(() => handle.evaluate(el => el.textContent)).toBe(`Marked done: ${title}. Undo available.`);
 });
+
+// "Holds while hovered or focused": the two are separate, so moving the
+// mouse off a toast whose Undo has keyboard focus must not restart the clock.
+test("mobile reliability: a focused Undo stays after the mouse passes over and leaves", async ({ page }) => {
+  await enterDemo(page);
+  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").last();
+  await row.getByTestId("task-checkbox").click();
+  const toast = page.locator(".undo-toast");
+  await expect(toast).toBeVisible();
+  await toast.getByRole("button", { name: "Undo" }).focus();
+  await toast.hover();
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(5_800);
+  await expect(toast).toBeVisible();
+  await expect(toast.getByRole("button", { name: "Undo" })).toBeFocused();
+});
