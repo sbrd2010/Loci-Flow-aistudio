@@ -725,7 +725,7 @@ describe("applyCoachActions", () => {
     expect(results).toEqual([{ type: "SET_NOW_FOCUS", title: "Email client", matched: true, task: next.tasks.find(t => t.uuid === "2") }]);
   });
 
-  it("COMPLETE_TASK marks the task done, awards XP, and increments today's contribution", () => {
+  it("COMPLETE_TASK marks the task done, leaves config alone, and increments today's contribution", () => {
     const payload = {
       userId: "user-1",
       tasks: [
@@ -738,7 +738,7 @@ describe("applyCoachActions", () => {
     expect(next.tasks[0].isCompleted).toBe(true);
     expect(next.tasks[0].isNowFocus).toBe(false);
     expect(next.tasks[0].dateCompletedString).toBe("2026-06-13");
-    expect(next.config.totalXp).toBe(200);
+    expect(next.config).toEqual({ totalXp: 100 });
     expect(next.contributions).toEqual([
       expect.objectContaining({ dateString: "2026-06-13", count: 1, userId: "user-1" }),
     ]);
@@ -1107,7 +1107,7 @@ describe("buildActionReplyText", () => {
       { type: "PARK_TASK", title: "Walk the dog", matched: false },
     ];
     expect(buildActionReplyText("Some narration the model wrote.", results, "I finished the report, and park walk the dog")).toBe(
-      `Marked "Write report" complete — +100 XP! I couldn't find "Walk the dog" in your task list — could you double-check the name?`
+      `Marked "Write report" complete. I couldn't find "Walk the dog" in your task list — could you double-check the name?`
     );
   });
 

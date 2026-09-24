@@ -23,9 +23,15 @@ describe("dayLeftFrom", () => {
   it("is the focus time from the route's start to the end of the last window", () => {
     expect(dayLeftFrom(630, new Date("2026-09-23T10:00:00"), windows)).toBe(340); // 10:30 → 16:10 = 5h40m
   });
-  it("skips the gaps between windows", () => {
-    const split = [{ startMin: 540, endMin: 720, overnight: false }, { startMin: 780, endMin: 1020, overnight: false }];
-    expect(dayLeftFrom(600, new Date("2026-09-23T10:00:00"), split)).toBe(120 + 240);
+  it("runs on the clock through the gaps, to the end of the last window", () => {
+    // 09:00–12:00 and 14:00–17:00, from 10:00: the day ends at 17:00.
+    const split = [{ startMin: 540, endMin: 720, overnight: false }, { startMin: 840, endMin: 1020, overnight: false }];
+    expect(dayLeftFrom(600, new Date("2026-09-23T10:00:00"), split)).toBe(420);
+  });
+  it("follows a window that runs past midnight", () => {
+    const late = [{ startMin: 420, endMin: 120, overnight: true }]; // 07:00–02:00
+    expect(dayLeftFrom(1260, new Date("2026-09-23T21:00:00"), late)).toBe(300);
+    expect(dayLeftFrom(30, new Date("2026-09-24T00:30:00"), late)).toBe(90);
   });
   it("is zero once the windows are over", () => {
     expect(dayLeftFrom(1000, new Date("2026-09-23T16:40:00"), windows)).toBe(0);
@@ -94,6 +100,16 @@ describe("moveToTomorrow / restoreSchedule", () => {
     const { tasks: next } = moveToTomorrow(withPin, ["b", "c"], "2026-09-24", 1);
     expect(next[1]).toMatchObject({ deferredUntil: "2026-09-24", orderIndex: -2, isNowFocus: false });
     expect(next[2]).toMatchObject({ deferredUntil: "2026-09-24", orderIndex: -1 });
+  });
+
+  it("a second move the same day queues after the first batch, still ahead of the list", () => {
+    const { tasks: once } = moveToTomorrow(tasks, ["b", "c"], "2026-09-24", 1);
+    const { tasks: twice } = moveToTomorrow(once, ["a"], "2026-09-24", 2);
+    const order = Object.fromEntries(twice.map(t => [t.uuid, t.orderIndex]));
+    expect(order.b).toBeLessThan(order.c);
+    expect(order.c).toBeLessThan(order.a);
+    expect(order.a).toBeLessThan(0);
+    expect(twice.find(t => t.uuid === "a").dayMapOrder).toBe(order.a);
   });
 
   it("Undo gives the pin back, unless another task was pinned since", () => {

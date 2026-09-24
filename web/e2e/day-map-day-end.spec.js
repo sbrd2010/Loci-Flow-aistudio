@@ -104,3 +104,46 @@ test("the next day, moved tasks open tomorrow's route at the top, timed from its
   // Yesterday's other stops are not carried over; they wait in Unscheduled.
   await expect(page.getByText("Unscheduled · 2")).toBeVisible();
 });
+
+// A 09:00–17:00 window, opened at 18:00: the day is over, so every stop is
+// past the line.
+async function dayOverAt18(page, { unpin }) {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
+  });
+  await page.setViewportSize({ width: 412, height: 892 });
+  await page.goto("/");
+  await page.clock.setFixedTime(new Date("2024-06-15T18:00:00"));
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  if (!(await page.locator("#settings-name").isVisible())) {
+    await page.getByRole("button", { name: /Your Profile/i }).click();
+  }
+  await page.getByRole("button", { name: "+ Add focus window" }).click();
+  await page.getByRole("button", { name: /Save Profile/ }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
+  if (unpin) {
+    const now = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { has: page.locator(".task-tag.is-now") });
+    await now.locator(".task-row-top").click();
+    await page.getByText("Unpin from Focus").click();
+  }
+  await page.getByRole("button", { name: "Day map →" }).click();
+  await page.getByRole("button", { name: "Auto-fill" }).click();
+  await expect(page.locator(".dm-stop.is-over")).toHaveCount(3);
+}
+
+test("the pinned task is never moved to tomorrow from here: it may have a session open", async ({ page }) => {
+  await dayOverAt18(page, { unpin: false });
+  await expect(page.locator(".dm-dayend")).toContainText(/3 won't fit/i);
+  await page.getByRole("button", { name: "Move 2 to tomorrow" }).click();
+  await expect(page.locator(".dm-stop")).toHaveCount(1);
+});
+
+test("with everything moved to tomorrow, the page says so instead of 'all tasks are on the route'", async ({ page }) => {
+  await dayOverAt18(page, { unpin: true });
+  await page.getByRole("button", { name: "Move 3 to tomorrow" }).click();
+  await expect(page.getByRole("heading", { name: "Nothing left for today" })).toBeVisible();
+  await expect(page.getByText("3 tasks start tomorrow.")).toBeVisible();
+  await expect(page.getByText(/all tasks are on the route/)).toHaveCount(0);
+});
