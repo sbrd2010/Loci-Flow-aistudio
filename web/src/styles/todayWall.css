@@ -489,3 +489,90 @@
     gap: 36px;
   }
 }
+
+/* — the foot: links, then the peek (phones, tablets, laptop with the list
+   open). "Show today's list" and Low energy are the laptop's (35e). — */
+.wall-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.wall-peek-wide,
+.wall-energy { display: none; }
+
+/* Laptop, list hidden (35e): the one task centred with its three actions in
+   a row; along the bottom, the links, "Show today's list" and Low energy. */
+@media (min-width: 1024px) {
+  .today-wall:not(.is-open):not(.is-done):not(.is-empty) {
+    min-height: calc(100dvh - 190px);
+  }
+  .today-wall:not(.is-open):not(.is-done):not(.is-empty) .wall-hero {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    max-width: 880px;
+    margin: auto;
+    padding: 24px 0;
+    text-align: center;
+  }
+  .today-wall:not(.is-open) .wall-hero > .wall-kicker,
+  .today-wall:not(.is-open) .wall-hero > .wall-title,
+  .today-wall:not(.is-open) .wall-hero > .wall-first-step { flex-basis: 100%; }
+  .today-wall:not(.is-open) .wall-hero > .wall-title { margin-top: 4px; }
+  .today-wall:not(.is-open) .wall-hero > .wall-primary {
+    min-width: 264px;
+    margin-top: 14px;
+  }
+  .today-wall:not(.is-open) .wall-hero > .wall-actions { margin-top: 14px; }
+  .today-wall:not(.is-open) .wall-hero .wall-action {
+    flex: none;
+    min-width: 166px;
+    min-height: 56px;
+  }
+
+  .today-wall:not(.is-open) .wall-foot {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 16px;
+  }
+  .today-wall:not(.is-open) .wall-foot > .wall-links { justify-self: start; }
+  .today-wall:not(.is-open) .wall-peek-row { grid-column: 2; }
+  .today-wall:not(.is-open) .wall-peek {
+    flex-direction: row;
+    min-height: 48px;
+    padding: 0 22px;
+    border: 1.5px solid var(--control-edge);
+    border-radius: 24px;
+  }
+  .today-wall:not(.is-open) .wall-peek-grabber,
+  .today-wall:not(.is-open) .wall-peek-label { display: none; }
+  /* The + stays on screen at every width (49a); here it sits beside the pill. */
+  .today-wall:not(.is-open) .wall-peek-row { gap: 10px; }
+  .today-wall:not(.is-open) .wall-peek-add { position: static; }
+  .today-wall:not(.is-open) .wall-peek-wide {
+    display: inline;
+    font-size: 0.90625rem;
+    font-weight: 800;
+  }
+  .wall-peek-figures {
+    margin-left: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--ink-2);
+  }
+  .today-wall:not(.is-open) .wall-energy {
+    display: flex;
+    grid-column: 3;
+    justify-self: end;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--ink-2);
+    cursor: pointer;
+  }
+}

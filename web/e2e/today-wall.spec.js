@@ -1143,3 +1143,46 @@ test("Split a task: rows are locked while the AI works, and an answer outside tw
   await expect(dialog.getByLabel("Step 1", { exact: true })).toBeEnabled();
   await expect(dialog.getByLabel("Step 1", { exact: true })).toHaveValue("");
 });
+
+// Laptop, 1024px and up (Addendum X3; 35e/36c): edge to edge, content capped
+// at 1200px and centred; with the list hidden, the one task sits centred and
+// the foot carries the links, "Show today's list" and Low energy.
+test("laptop: no phone-card frame; content capped at 1200px, centred", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto("/");
+  await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
+  await page.getByTestId("demo-btn").click();
+  const frame = await page.locator(".app-container").boundingBox();
+  expect(Math.round(frame.width)).toBe(1920);
+  const band = await page.locator(".wall-goal").boundingBox();
+  expect(Math.round(band.width)).toBe(1200);
+  expect(Math.round(band.x)).toBe(360);
+});
+
+test("laptop: with the list hidden, the task is centred and the foot shows today's list and Low energy", async ({ page }) => {
+  await enterLaptop(page);
+  const hero = await page.locator(".wall-title").boundingBox();
+  const vw = page.viewportSize().width;
+  expect(Math.abs(hero.x + hero.width / 2 - vw / 2)).toBeLessThan(4);
+  // Start focus, Mark done and Split it in one row.
+  const [start, done, split] = await Promise.all([
+    page.locator(".wall-primary").boundingBox(),
+    page.getByRole("button", { name: /^Mark done/ }).boundingBox(),
+    page.getByRole("button", { name: /^Split it/ }).boundingBox(),
+  ]);
+  expect(Math.round(done.y)).toBe(Math.round(start.y));
+  expect(Math.round(split.y)).toBe(Math.round(start.y));
+
+  const show = page.getByRole("button", { name: /Show today's list/ });
+  await expect(show).toBeVisible();
+  await expect(show).toContainText(/\d+ · \d+ done/);
+  // Low energy here and in the list are one setting.
+  const energy = page.locator(".wall-foot").getByRole("switch", { name: "Low energy" });
+  await expect(energy).toHaveAttribute("aria-checked", "false");
+  await energy.click();
+  await expect(energy).toHaveAttribute("aria-checked", "true");
+  await show.click();
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  await expect(page.locator(".today-energy").getByRole("switch", { name: "Low energy" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator(".wall-foot").getByRole("switch", { name: "Low energy" })).toBeHidden();
+});

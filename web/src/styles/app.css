@@ -102,9 +102,14 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+/* Laptop (Addendum X3/S): edge to edge as drawn, no phone-card frame; the
+   header and the content are capped at 1200px, centred, 48px gutters at least. */
 @media (min-width: 1024px) {
   .app-container {
-    max-width: 1100px;
+    max-width: none;
+    border-left: 0;
+    border-right: 0;
+    box-shadow: none;
   }
 }
 
@@ -188,7 +193,10 @@ h1, h2, h3, h4, h5, h6 {
 /* From 1024px the tabs sit in the header (shell.css), so there is no bottom
    bar to clear. */
 @media (min-width: 1024px) {
-  .screen-content { padding-bottom: 48px; }
+  .screen-content {
+    padding-bottom: 48px;
+    padding-inline: max(48px, calc((100% - 1200px) / 2));
+  }
 }
 
 @media (max-width: 640px) {
@@ -933,7 +941,7 @@ textarea.text-input {
   }
 }
 @media (min-width: 1024px) {
-  .fab { right: calc(50% - 530px); }
+  .fab { right: max(48px, calc(50% - 600px)); }
 }
 
 .fab:hover {
@@ -973,7 +981,7 @@ textarea.text-input {
   .fab-secondary { right: calc(50% - 340px); }
 }
 @media (min-width: 1024px) {
-  .fab-secondary { right: calc(50% - 530px); }
+  .fab-secondary { right: max(48px, calc(50% - 600px)); }
 }
 
 /* FAB speed-dial option pills */
@@ -999,7 +1007,7 @@ textarea.text-input {
 }
 @media (max-width: 480px) { .fab-option { right: 20px; } }
 @media (min-width: 720px) { .fab-option { right: calc(50% - 340px); } }
-@media (min-width: 1024px) { .fab-option { right: calc(50% - 530px); } }
+@media (min-width: 1024px) { .fab-option { right: max(48px, calc(50% - 600px)); } }
 
 /* Shared by the Undo Delete toast (Today/Roadmap) and the App-level sync-warning
    pill. Centered by default, but on phone-width screens (same breakpoint as
@@ -1034,7 +1042,7 @@ textarea.text-input {
   .bottom-toast { max-width: 552px; } /* .fab: right: calc(50% - 340px) */
 }
 @media (min-width: 1024px) {
-  .bottom-toast { max-width: 932px; } /* .fab: right: calc(50% - 530px) */
+  .bottom-toast { max-width: 932px; } /* .fab: right: max(48px, calc(50% - 600px)) */
 }
 
 /* Add Task Dialog Modal */

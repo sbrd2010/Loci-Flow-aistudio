@@ -1364,7 +1364,9 @@ export default function TodayTab({
         onTogglePeek={() => setPeekOpen(v => !v)}
         onAdd={onOpenAddTask}
         remainingCount={wallRemainingCount}
+        doneCount={listDoneCount}
         lowEnergy={!!config.isLowEnergyMode}
+        onToggleLowEnergy={() => saveConfigPatch({ isLowEnergyMode: !config.isLowEnergyMode })}
         timerLabel={wallLiveTimerLabel}
         onStartFocus={() => pinnedFocusTask && startFocusAndLog(pinnedFocusTask)}
         onMarkDone={() => pinnedFocusTask && handleToggleComplete(pinnedFocusTask)}
