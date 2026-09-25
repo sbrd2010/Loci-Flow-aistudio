@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { focusWindowRows, focusWindowsLine, focusWindowsSummary } from "./settingsSummary";
+import { focusWindowRows, focusWindowsLine, focusWindowsSummary, reconcileFocusWindowRows } from "./settingsSummary";
 
 describe("focusWindowsSummary", () => {
   it("counts windows, covered time and the end of the last one (44d)", () => {
@@ -28,5 +28,26 @@ describe("an older account's dayStartHour/dayEndHour", () => {
   });
   it("focusWindows, when set, win over the old hours", () => {
     expect(focusWindowRows({ dayStartHour: 7, dayEndHour: 26, focusWindows: [{ start: "09:00", end: "17:00" }] })).toEqual([{ start: "09:00", end: "17:00" }]);
+  });
+});
+
+describe("incoming focus-window configuration", () => {
+  it("replaces complete local rows while retaining a time input still being edited", () => {
+    const local = [{ start: "09:00", end: "17:00" }, { start: "18:00", end: "" }];
+    const remote = [{ start: "10:00", end: "16:00" }, { start: "20:00", end: "21:00" }];
+    expect(reconcileFocusWindowRows(local, remote)).toEqual([...remote, { start: "18:00", end: "" }]);
+  });
+  it("does not keep a stale complete row when another device changes it", () => {
+    expect(reconcileFocusWindowRows([{ start: "09:00", end: "17:00" }], [{ start: "10:00", end: "18:00" }]))
+      .toEqual([{ start: "10:00", end: "18:00" }]);
+  });
+});
+
+describe("overnight coverage", () => {
+  it("counts an early-morning overlap only once", () => {
+    const summary = focusWindowsSummary({ focusWindows: [
+      { start: "22:00", end: "02:00" }, { start: "01:00", end: "03:00" },
+    ] });
+    expect(summary.totalMinutes).toBe(5 * 60);
   });
 });

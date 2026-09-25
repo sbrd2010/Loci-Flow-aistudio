@@ -489,6 +489,23 @@ describe("editMemoryEntry (Settings › Coach memory)", () => {
     const { coachMemory } = editMemoryEntry(mem, "note", 0, "Rested today");
     expect(coachMemory.recentObservations[0]).toMatchObject({ text: "Rested today", lociDayStr: "2026-09-20" });
   });
+  it("resolves the original entry when another device shifts the list", () => {
+    const shifted = { ...mem, pinnedFacts: [
+      { text: "New earlier fact", createdAt: 9 },
+      ...mem.pinnedFacts,
+    ] };
+    const result = editMemoryEntry(shifted, "fact", 0, "Updated original", { createdAt: 1, text: "Lead researcher; deadline 30 Sep" });
+    expect(result.ok).toBe(true);
+    expect(result.coachMemory.pinnedFacts[0].text).toBe("New earlier fact");
+    expect(result.coachMemory.pinnedFacts[1].text).toBe("Updated original");
+  });
+  it("refuses an edit if the original memory was removed or changed", () => {
+    const expected = { createdAt: 1, text: "Lead researcher; deadline 30 Sep" };
+    const replaced = { ...mem, pinnedFacts: [{ text: "Different fact", createdAt: 3 }] };
+    const result = editMemoryEntry(replaced, "fact", 0, "Wrong replacement", expected);
+    expect(result).toMatchObject({ ok: false, reason: "stale" });
+    expect(result.coachMemory).toBe(replaced);
+  });
   it("refuses what the coach may not store, and an empty edit", () => {
     for (const bad of ["", "   ", "my password is hunter2", "[[REMEMBER: x]]"]) {
       const res = editMemoryEntry(mem, "fact", 0, bad);

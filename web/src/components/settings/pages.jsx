@@ -4,7 +4,7 @@ import { COACH_PROFILE_NOTE_MAX_LENGTH } from "../../utils/coachProfile";
 import { clearAllMemory, editMemoryEntry, isMemoryEnabled, removePinnedFact, removeRecentObservation } from "../../utils/coachMemory";
 import { analyzeFocusWindowRows, formatTime12 } from "../../utils/focusWindowHints";
 import { formatSpan } from "../../utils/dayMapPlan";
-import { focusWindowRows, focusWindowsSummary } from "../../utils/settingsSummary";
+import { focusWindowRows, focusWindowsSummary, reconcileFocusWindowRows } from "../../utils/settingsSummary";
 import { exportPayloadAsJson, exportTasksAsCsv } from "../../utils/exportTasks";
 import { isNativeApp } from "../../utils/nativeNotifs";
 import { IconPencil, IconPlus, IconX } from "../ui/icons";
@@ -33,7 +33,7 @@ export function coachName(config) {
 export function ProfilePage({ config, email, saveConfigPatch, onBack }) {
   const [name, setName, flushName] = useAutosave(config.userName || "", (v) => {
     const t = v.trim();
-    if (t) saveConfigPatch({ userName: t });
+    saveConfigPatch({ userName: t });
   });
   return (
     <SubPage title="Profile" onBack={onBack}>
@@ -70,6 +70,15 @@ function rowMinutes(start, end) {
 
 export function FocusWindowsPage({ config, saveConfigPatch, onBack, backLabel }) {
   const [rows, setRows] = useState(() => focusWindowRows(config));
+  const savedRows = focusWindowRows(config);
+  const savedRowsKey = JSON.stringify(savedRows);
+  const previousSavedRows = useRef(savedRows);
+  useEffect(() => {
+    const previousKey = JSON.stringify(previousSavedRows.current);
+    if (savedRowsKey === previousKey) return;
+    setRows(current => reconcileFocusWindowRows(current, savedRows));
+    previousSavedRows.current = savedRows;
+  }, [savedRowsKey]);
   const hints = useMemo(() => analyzeFocusWindowRows(rows), [rows]);
   // From the rows alone: an older account's hours are already a row here.
   const summary = focusWindowsSummary({ focusWindows: rows });
@@ -230,7 +239,7 @@ export function KeyDeadlinePage({ config, saveConfigPatch, onBack }) {
 
 // ── The coach (44c, 44j) ───────────────────────────────────────────────────
 export function CoachPage({ config, saveConfigPatch, onBack, children }) {
-  const [name, setName, flushName] = useAutosave(config.mentorName || "", v => { if (v.trim()) saveConfigPatch({ mentorName: v.trim() }); });
+  const [name, setName, flushName] = useAutosave(config.mentorName || "", v => saveConfigPatch({ mentorName: v.trim() }));
   const [style, setStyle, flushStyle] = useAutosave(config.coachPersonaNote || "", v => saveConfigPatch({ coachPersonaNote: v.trim().slice(0, 300) }));
   const [about, setAbout, flushAbout] = useAutosave(config.coachProfileNote || "", v => saveConfigPatch({ coachProfileNote: v.trim().slice(0, COACH_PROFILE_NOTE_MAX_LENGTH) }));
   const persona = normalizeCoachPersona(config.coachPersona);
@@ -281,25 +290,34 @@ export function CoachMemoryPage({ config, saveConfigPatch, onBack, backLabel, on
     ...facts.map((e, index) => ({ ...e, kind: "fact", index })),
     ...notes.map((e, index) => ({ ...e, kind: "note", index })),
   ];
-  const [editing, setEditing] = useState(null); // { kind, index, text }
-  const [refused, setRefused] = useState(false);
+  const [editing, setEditing] = useState(null); // { kind, createdAt, originalText, text }
+  const [refused, setRefused] = useState("");
   const who = coachName(config);
 
   const saveEdit = () => {
-    const { kind, index, text } = editing;
-    // Judged on what's shown; applied to the latest config (demo mode runs the
-    // patch later, inside a state update, so its result can't be read here).
-    if (!editMemoryEntry(config.coachMemory, kind, index, text).ok) { setRefused(true); return; }
+    const { kind, index, text, createdAt, originalText } = editing;
+    const expected = { createdAt, text: originalText };
+    // Validate the visible draft, then resolve the same entry again against
+    // the latest config when the patch runs. A shifted index must never edit
+    // another memory.
+    const checked = editMemoryEntry(config.coachMemory, kind, index, text, expected);
+    if (!checked.ok) {
+      setRefused(checked.reason === "stale" ? "This memory changed elsewhere. Reopen it to edit." : "That can’t be stored (it looks like a secret, an amount or a medical label).");
+      return;
+    }
     saveConfigPatch((latest) => {
-      const res = editMemoryEntry(latest.coachMemory, kind, index, text);
+      const res = editMemoryEntry(latest.coachMemory, kind, index, text, expected);
       return res.ok ? { coachMemory: res.coachMemory } : {};
     });
-    setRefused(false);
+    setRefused("");
     setEditing(null);
   };
-  const forget = (kind, index) => saveConfigPatch((latest) => ({
-    coachMemory: kind === "fact" ? removePinnedFact(latest.coachMemory, index) : removeRecentObservation(latest.coachMemory, index),
-  }));
+  const forget = (entry) => saveConfigPatch((latest) => {
+    const list = entry.kind === "fact" ? latest.coachMemory?.pinnedFacts : latest.coachMemory?.recentObservations;
+    const index = (list || []).findIndex(item => item.createdAt === entry.createdAt && item.text === entry.text);
+    if (index < 0) return {};
+    return { coachMemory: entry.kind === "fact" ? removePinnedFact(latest.coachMemory, index) : removeRecentObservation(latest.coachMemory, index) };
+  });
 
   return (
     <SubPage title="Coach memory" onBack={onBack} backLabel={backLabel}>
@@ -317,7 +335,7 @@ export function CoachMemoryPage({ config, saveConfigPatch, onBack, backLabel, on
           <p className="set-row-empty">Nothing yet. As you chat, facts worth keeping show up here.</p>
         )}
         {entries.map((e) => {
-          const isEditing = editing && editing.kind === e.kind && editing.index === e.index;
+          const isEditing = editing && editing.kind === e.kind && editing.createdAt === e.createdAt && editing.originalText === e.text;
           return (
             <div key={`${e.kind}-${e.index}`} className="set-memory">
               {isEditing ? (
@@ -329,10 +347,10 @@ export function CoachMemoryPage({ config, saveConfigPatch, onBack, backLabel, on
                     aria-label="Edit what the coach remembers"
                     onChange={ev => setEditing({ ...editing, text: ev.target.value })}
                   />
-                  {refused && <p className="set-window-hint">That can’t be stored (it looks like a secret, an amount or a medical label).</p>}
+                  {refused && <p className="set-window-hint" role="alert">{refused}</p>}
                   <div className="set-memory-actions">
                     <button type="button" className="set-btn is-filled" onClick={saveEdit}>Save</button>
-                    <button type="button" className="set-btn" onClick={() => { setEditing(null); setRefused(false); }}>Cancel</button>
+                    <button type="button" className="set-btn" onClick={() => { setEditing(null); setRefused(""); }}>Cancel</button>
                   </div>
                 </div>
               ) : (
@@ -341,10 +359,10 @@ export function CoachMemoryPage({ config, saveConfigPatch, onBack, backLabel, on
                     <span>{e.text}</span>
                     {shortDate(e.createdAt, e.lociDayStr) && <span className="set-memory-date">{shortDate(e.createdAt, e.lociDayStr)}</span>}
                   </div>
-                  <button type="button" className="set-icon-btn" aria-label={`Edit: ${e.text}`} onClick={() => { setEditing({ kind: e.kind, index: e.index, text: e.text }); setRefused(false); }}>
+                  <button type="button" className="set-icon-btn" aria-label={`Edit: ${e.text}`} onClick={() => { setEditing({ kind: e.kind, index: e.index, createdAt: e.createdAt, originalText: e.text, text: e.text }); setRefused(""); }}>
                     <IconPencil size={18} />
                   </button>
-                  <button type="button" className="set-icon-btn" aria-label={`Forget: ${e.text}`} onClick={() => forget(e.kind, e.index)}>
+                  <button type="button" className="set-icon-btn" aria-label={`Forget: ${e.text}`} onClick={() => forget(e)}>
                     <IconX size={18} />
                   </button>
                 </>
@@ -521,7 +539,6 @@ export function NotificationsPage({ permission, onRequest, onBack }) {
 
 // ── Data (44h) ─────────────────────────────────────────────────────────────
 export function DataPage({ payload, email, lastSyncLabel, onSyncNow, onResetTracking, onBack }) {
-  const [synced, setSynced] = useState(false);
   const [exportError, setExportError] = useState("");
   const active = (payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).length;
   const run = (fn) => { setExportError(""); try { fn(); } catch { setExportError("Export failed. Your tasks were not changed."); } };
@@ -529,9 +546,9 @@ export function DataPage({ payload, email, lastSyncLabel, onSyncNow, onResetTrac
     <SubPage title="Data" onBack={onBack}>
       <Group label="Sync">
         <div className="set-row is-static"><span className="set-row-title">Account</span><span className="set-row-value is-truncate">{email || "This device"}</span></div>
-        <div className="set-row is-static"><span className="set-row-title">Last sync</span><span className="set-row-value">{synced ? "just now" : lastSyncLabel}</span></div>
+        <div className="set-row is-static"><span className="set-row-title">Last sync</span><span className="set-row-value">{lastSyncLabel}</span></div>
         <div className="set-row is-static"><span className="set-row-title">Tasks</span><span className="set-row-value">{active} active</span></div>
-        <Row title="Sync now" onClick={() => { onSyncNow?.(); setSynced(true); }} />
+        <Row title="Sync now" onClick={() => onSyncNow?.()} />
       </Group>
       <Group label="Backup" note="A backup only saves a file. It never changes your tasks.">
         <Row title="Download JSON" sub="Every field, for restoring" onClick={() => run(() => exportPayloadAsJson(payload))} />
