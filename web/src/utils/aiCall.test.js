@@ -823,6 +823,36 @@ describe("Z.ai emergency fallback", () => {
     expect(sentSystemPrompt).not.toContain("WORK (");
   });
 
+  it("fits an oversized Today snapshot into Z.ai without hiding a task named by the user", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("Z.ai reply."));
+    const openTitle = "Open task 29 " + "o".repeat(320);
+    const doneTitle = "Done task 9 " + "d".repeat(320);
+    const open = Array.from({ length: 30 }, (_, i) =>
+      `- #open${i} [open] [P3] ${i === 29 ? openTitle : `Open task ${i} ${"o".repeat(320)}`}`);
+    const done = Array.from({ length: 10 }, (_, i) =>
+      `- #done${i} [done 09:36] ${i === 9 ? doneTitle : `Done task ${i} ${"d".repeat(320)}`}`);
+    const systemPrompt = `You are Loci Coach.
+TODAY SNAPSHOT: The TODAY SNAPSHOT below is live — every task on Today with its id and status, and whether a focus session is running. Answer anything about today from it: a task marked done there IS done, so never say you can't find it.
+TODAY SNAPSHOT (live — every task on Today, with its id and status):
+${[...open, ...done].join("\n")}
+FOCUS SESSION: none running.`;
+    const messages = [{ role: "user", content: `Did I finish ${doneTitle}? Also, what about ${openTitle}?` }];
+    expect(systemPrompt.length).toBeGreaterThan(12000);
+
+    const reply = await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", systemPrompt, messages }));
+    expect(reply).toBe("Z.ai reply.");
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    const sent = body.messages[0].content;
+    expect(sent.length + messages[0].content.length).toBeLessThanOrEqual(12000);
+    expect(sent).toContain(`[done 09:36] ${doneTitle}`);
+    expect(sent).toContain(`[open] [P3] ${openTitle}`);
+    expect(sent).toContain("TODAY SNAPSHOT (Z.ai partial view");
+    expect(sent).toContain("Do not infer that an unlisted task is absent");
+    expect(sent).not.toContain("The TODAY SNAPSHOT below is live");
+    expect(sent).toContain("FOCUS SESSION: none running.");
+  });
+
   it("trims chat history to the latest exchange for Z.ai when compressing an oversized prompt", async () => {
     storage.setItem("loci_provider_pref", "zai");
     fetch.mockResolvedValue(zaiOk("Compressed Z.ai reply."));

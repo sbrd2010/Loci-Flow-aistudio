@@ -477,6 +477,57 @@ function detectRequestedHorizons(userText) {
 // lists, trim chat history to the latest exchange, then drop This Week too)
 // instead of skipping Z.ai outright. Requests that genuinely need a long or
 // structured reply are already excluded above by the output-token check.
+// The complete Today snapshot is valuable to providers without a small
+// request cap. For Z.ai only, keep a bounded, explicitly partial view when
+// the normal horizon/history compression still exceeds its limit. Prefer a
+// task named by the latest user message, then recent completions; never make
+// an omitted task look absent from Loci.
+function compactZaiTodaySnapshot(systemPrompt, messages, latestMessageContent) {
+  const lines = String(systemPrompt || "").split("\n");
+  const start = lines.findIndex(line => line.startsWith("TODAY SNAPSHOT (live"));
+  if (start < 0) return systemPrompt;
+  const end = lines.findIndex((line, index) => index > start && line.startsWith("FOCUS SESSION:"));
+  if (end < 0) return systemPrompt;
+
+  const taskIndices = [];
+  for (let index = start + 1; index < end; index++) {
+    if (/^- #\S+ \[(?:open|done)/.test(lines[index])) taskIndices.push(index);
+  }
+  if (taskIndices.length === 0) return systemPrompt;
+
+  const adjusted = systemPrompt
+    .replace("The TODAY SNAPSHOT below is live — every task on Today with its id and status, and whether a focus session is running.",
+      "The TODAY SNAPSHOT below may be partial on Z.ai. Trust the listed statuses only.")
+    .replace("Answer anything about today from it: a task marked done there IS done, so never say you can't find it.",
+      "A listed task marked done is done. If a task is not listed, say the snapshot is incomplete for this request.")
+    .replace("the TODAY SNAPSHOT (every task on Today with its id and status — a task marked done there IS done)",
+      "a possibly partial TODAY SNAPSHOT with reliable statuses for listed tasks");
+  const adjustedLines = adjusted.split("\n");
+  adjustedLines[start] = "TODAY SNAPSHOT (Z.ai partial view; omitted tasks may exist):";
+  adjustedLines.splice(start + 1, 0,
+    "- Provider limit: this list may omit tasks. Do not infer that an unlisted task is absent or unchanged; ask for a fresh scan if its status matters.");
+  const shiftedIndices = taskIndices.map(index => index + 1);
+  const latest = String(latestMessageContent || "").toLowerCase();
+  const score = index => {
+    const line = adjustedLines[index];
+    const title = line.replace(/^- #\S+ \[[^\]]+\]\s*(?:\[[^\]]+\]\s*)?/, "").toLowerCase();
+    if (title.length >= 3 && latest.includes(title)) return 1000;
+    if (line.includes("NOW FOCUS")) return 500;
+    if (line.includes("[done")) return 100;
+    return 0;
+  };
+  const removalOrder = [...shiftedIndices].sort((a, b) => score(a) - score(b) || b - a);
+  const omitted = new Set();
+  const render = () => adjustedLines.filter((_, index) => !omitted.has(index)).join("\n");
+  let result = render();
+  for (const index of removalOrder) {
+    if (computeZaiPayloadChars(result, messages) <= ZAI_MAX_PAYLOAD_CHARS) break;
+    omitted.add(index);
+    result = render();
+  }
+  return result;
+}
+
 function compressZaiContext(systemPrompt, messages) {
   const userMessages = (messages || []).filter(m => m.role === "user");
   const latestMessageContent = userMessages.length > 0 ? userMessages[userMessages.length - 1].content : "";
@@ -497,6 +548,9 @@ function compressZaiContext(systemPrompt, messages) {
   // 3. Try Tier 2 drops (This Week) with trimmed messages (last 3)
   const trimmedMessages = (messages || []).length > 3 ? messages.slice(-3) : messages;
   trimmedSystemPrompt = dropZaiHorizonSections(systemPrompt, ZAI_DROP_HEADERS_TIER2, preserveHeaders);
+  if (computeZaiPayloadChars(trimmedSystemPrompt, trimmedMessages) > ZAI_MAX_PAYLOAD_CHARS) {
+    trimmedSystemPrompt = compactZaiTodaySnapshot(trimmedSystemPrompt, trimmedMessages, latestMessageContent);
+  }
   return { systemPrompt: trimmedSystemPrompt, messages: trimmedMessages };
 }
 
