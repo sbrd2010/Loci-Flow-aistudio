@@ -326,3 +326,17 @@ test("the API-key dialog keeps keyboard focus inside and returns it to its row",
   await expect(dialog).toHaveCount(0);
   await expect(opener).toBeFocused();
 });
+
+test("a daily minimum on its own remains visible and can be cleared", async ({ page }) => {
+  await enterDemo(page);
+  await openTab(page, "Settings");
+  await page.getByRole("button", { name: /^Key deadline/ }).click();
+  await page.getByRole("button", { name: "Clear goal" }).click();
+  await page.getByLabel("Daily minimum").fill("Write one paragraph");
+  await page.getByRole("button", { name: "Settings", exact: true }).last().click();
+  await expect(page.getByRole("button", { name: /^Key deadline/ })).toContainText("Daily minimum · Write one paragraph");
+  await page.getByRole("button", { name: /^Key deadline/ }).click();
+  await page.getByRole("button", { name: "Clear goal" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).last().click();
+  await expect(page.getByRole("button", { name: /^Key deadline/ })).toContainText("Not set");
+});

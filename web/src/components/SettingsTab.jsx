@@ -226,7 +226,10 @@ export default function SettingsTab({ payload, saveSubPath, saveConfigPatch, las
       <Group label="Your goal">
         <Row
           title="Key deadline"
-          sub={config.deadlineLabel || config.deadlineDate ? [config.deadlineLabel, shortDeadline(config.deadlineDate)].filter(Boolean).join(" · ") : "Not set"}
+          sub={config.deadlineLabel || config.deadlineDate
+            ? [config.deadlineLabel, shortDeadline(config.deadlineDate)].filter(Boolean).join(" · ")
+            : config.deadlineAction ? `Daily minimum · ${config.deadlineAction}`
+              : config.deadlineStartDate ? `Started · ${shortDeadline(config.deadlineStartDate)}` : "Not set"}
           onClick={() => open("goal")}
         />
       </Group>

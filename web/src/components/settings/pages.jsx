@@ -197,7 +197,7 @@ export function KeyDeadlinePage({ config, saveConfigPatch, onBack }) {
   const [goal, setGoal, flushGoal] = useAutosave(config.deadlineLabel || "", v => saveConfigPatch({ deadlineLabel: v.trim() }));
   const [daily, setDaily, flushDaily] = useAutosave(config.deadlineAction || "", v => saveConfigPatch({ deadlineAction: v.trim() }));
   const left = daysLeft(config.deadlineDate);
-  const hasGoal = !!(config.deadlineLabel || config.deadlineDate);
+  const hasGoal = !!(config.deadlineLabel || config.deadlineDate || config.deadlineAction || config.deadlineStartDate);
   return (
     <SubPage title="Key deadline" onBack={onBack} lede="One goal with a date. It shows as the gold band on Today and the week in Mind Box.">
       <label className="set-field">
