@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { COACH_PERSONAS, normalizeCoachPersona } from "../../utils/coachPersona";
 import { COACH_PROFILE_NOTE_MAX_LENGTH } from "../../utils/coachProfile";
-import { clearAllMemory, editMemoryEntry, isMemoryEnabled, removePinnedFact, removeRecentObservation } from "../../utils/coachMemory";
+import { MEMORY_ENTRY_MAX_LENGTH, clearAllMemory, editMemoryEntry, isMemoryEnabled, removePinnedFact, removeRecentObservation } from "../../utils/coachMemory";
 import { analyzeFocusWindowRows, formatTime12 } from "../../utils/focusWindowHints";
 import { formatSpan } from "../../utils/dayMapPlan";
 import { focusWindowRows, focusWindowsSummary, reconcileFocusWindowRows } from "../../utils/settingsSummary";
@@ -302,7 +302,7 @@ export function CoachMemoryPage({ config, saveConfigPatch, onBack, backLabel, on
     // another memory.
     const checked = editMemoryEntry(config.coachMemory, kind, index, text, expected);
     if (!checked.ok) {
-      setRefused(checked.reason === "stale" ? "This memory changed elsewhere. Reopen it to edit." : "That can’t be stored (it looks like a secret, an amount or a medical label).");
+      setRefused(checked.reason === "stale" ? "This memory changed elsewhere. Reopen it to edit." : checked.reason === "too-long" ? "Keep this memory to 200 characters." : "That can’t be stored (it looks like a secret, an amount or a medical label).");
       return;
     }
     saveConfigPatch((latest) => {
@@ -343,10 +343,12 @@ export function CoachMemoryPage({ config, saveConfigPatch, onBack, backLabel, on
                   <textarea
                     className="set-input set-textarea"
                     rows={2}
+                    maxLength={MEMORY_ENTRY_MAX_LENGTH}
                     value={editing.text}
                     aria-label="Edit what the coach remembers"
                     onChange={ev => setEditing({ ...editing, text: ev.target.value })}
                   />
+                  <span className="set-hint">Up to {MEMORY_ENTRY_MAX_LENGTH} characters.</span>
                   {refused && <p className="set-window-hint" role="alert">{refused}</p>}
                   <div className="set-memory-actions">
                     <button type="button" className="set-btn is-filled" onClick={saveEdit}>Save</button>

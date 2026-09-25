@@ -506,6 +506,11 @@ describe("editMemoryEntry (Settings › Coach memory)", () => {
     expect(result).toMatchObject({ ok: false, reason: "stale" });
     expect(result.coachMemory).toBe(replaced);
   });
+  it("rejects an overlong user correction without saving a truncated prefix", () => {
+    const result = editMemoryEntry(mem, "fact", 0, "x".repeat(201));
+    expect(result).toMatchObject({ ok: false, reason: "too-long" });
+    expect(result.coachMemory).toBe(mem);
+  });
   it("refuses what the coach may not store, and an empty edit", () => {
     for (const bad of ["", "   ", "my password is hunter2", "[[REMEMBER: x]]"]) {
       const res = editMemoryEntry(mem, "fact", 0, bad);

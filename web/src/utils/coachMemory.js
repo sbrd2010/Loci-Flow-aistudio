@@ -22,7 +22,7 @@
 export const MAX_PINNED_FACTS = 15;
 export const MAX_RECENT_OBSERVATIONS = 30;
 const RECENT_OBSERVATIONS_IN_PROMPT = 10;
-const MEMORY_ENTRY_MAX_LENGTH = 200;
+export const MEMORY_ENTRY_MAX_LENGTH = 200;
 // A [[FORGET: ...]] shorter than this is too vague to safely substring-match —
 // e.g. "User" or "job" would otherwise match (and delete) most stored entries.
 const MIN_FORGET_TEXT_LENGTH = 8;
@@ -117,7 +117,9 @@ export function removeRecentObservation(coachMemory = {}, index) {
 export function editMemoryEntry(coachMemory = {}, kind, index, text, expected = null) {
   const key = kind === "fact" ? "pinnedFacts" : "recentObservations";
   const list = coachMemory[key] || [];
-  const cleaned = cleanMemoryText(text);
+  const normalized = String(text || "").replace(/[\s\x00-\x1f\x7f]+/g, " ").trim();
+  if (normalized.length > MEMORY_ENTRY_MAX_LENGTH) return { coachMemory, ok: false, reason: "too-long" };
+  const cleaned = cleanMemoryText(normalized);
   if (!cleaned) return { coachMemory, ok: false, reason: "invalid" };
   // Settings captures the entry a person opened. The latest list may have
   // shifted while they typed, so never trust its old array index alone.
