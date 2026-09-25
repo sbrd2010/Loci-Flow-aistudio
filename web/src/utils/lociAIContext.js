@@ -412,6 +412,56 @@ const RECENT_COMPLETE_WINDOW_MS = 24 * 60 * 60 * 1000;
 // duplicate is done too, or (against instructions) resolving a COMPLETE_TASK
 // tag against the wrong one. Flag the collision inline so the model treats
 // them as distinct instead of silently assuming a match.
+// Every Coach request carries this (brief, Phase 6: the coach "can't find" a
+// task you just finished). Today's tasks with a short id and their status,
+// open or done today, and the focus session if one is running, so no mode
+// is blind to what just happened.
+
+function shortId(task) {
+  const raw = String(task.uuid || task.id || "");
+  const source = raw.startsWith("repaired-") ? raw.slice("repaired-".length) : raw;
+  const clean = source.replace(/[^a-z0-9]/gi, "");
+  return (raw.startsWith("repaired-") ? `r${clean.slice(-8)}` : clean.slice(0, 6)) || "?";
+}
+
+function clock(ts) {
+  if (!Number.isFinite(Number(ts))) return "";
+  const d = new Date(Number(ts));
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+export function buildLociTodaySnapshotContext(allTasks = [], { dayStr, focusTimer = {} } = {}) {
+  const onToday = (allTasks || []).filter(t => t && !t.isDeleted && !t.isParked && t.horizonLevel === "today");
+  const open = onToday.filter(t => !t.isCompleted && !isDeferred(t, dayStr))
+    .sort((a, b) => (b.isNowFocus ? 1 : 0) - (a.isNowFocus ? 1 : 0) || (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+  const done = (allTasks || []).filter(t => t && !t.isDeleted && t.isCompleted && t.dateCompletedString === dayStr)
+    .sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
+  const tomorrow = onToday.filter(t => !t.isCompleted && isDeferred(t, dayStr)).length;
+
+  const lines = [`TODAY SNAPSHOT (live — every task on Today, with its id and status):`];
+  if (open.length === 0 && done.length === 0) lines.push("- Nothing on Today yet.");
+  for (const t of open) {
+    lines.push(`- #${shortId(t)} [open${t.isNowFocus ? " · NOW FOCUS" : ""}] [${t.priority || "P3"}] ${t.title}`);
+  }
+  for (const t of done) {
+    const at = clock(t.lastUpdated);
+    lines.push(`- #${shortId(t)} [done${at ? ` ${at}` : ""}] ${t.title}`);
+  }
+  if (tomorrow > 0) lines.push(`- ${tomorrow} moved to tomorrow (not today's).`);
+
+  const { activeTask, focusSessionActive, isTimerRunning, focusElapsedSeconds, timerSecondsLeft, timerMaxSeconds } = focusTimer || {};
+  if (focusSessionActive && activeTask) {
+    const elapsedSeconds = Number.isFinite(focusElapsedSeconds)
+      ? focusElapsedSeconds
+      : (timerMaxSeconds || 0) - (timerSecondsLeft || 0);
+    const elapsed = Math.round(Math.max(0, elapsedSeconds) / 60);
+    lines.push(`FOCUS SESSION: ${isTimerRunning ? "running" : "paused"} on #${shortId(activeTask)} "${activeTask.title}" — ${elapsed} min in.`);
+  } else {
+    lines.push("FOCUS SESSION: none running.");
+  }
+  return lines.join("\n");
+}
+
 export function buildLociRecentlyCompletedContext(tasks = [], date = new Date()) {
   const cutoff = date.getTime() - RECENT_COMPLETE_WINDOW_MS;
   const recentlyCompleted = (tasks || []).filter(t =>

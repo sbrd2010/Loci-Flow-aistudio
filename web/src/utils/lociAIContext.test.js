@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLociCoreInstruction, buildLociAnchorsContext, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
+import { buildLociCoreInstruction, buildLociAnchorsContext, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociTodaySnapshotContext, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
 import { getFocusWindows } from "./focusWindows";
 
 describe("lociAIContext", () => {
@@ -776,5 +776,61 @@ describe("buildLociTaskContext: tasks moved to tomorrow", () => {
     const late = getFocusWindows({ dayEndHour: 26 });
     expect(buildLociTaskContext(tasks, new Date("2026-09-25T00:30:00"), late)).toMatch(/TOMORROW \(moved off today\) \(1\)/);
     expect(buildLociTaskContext(tasks, new Date("2026-09-25T02:30:00"), late)).toMatch(/TODAY \(1\):/);
+  });
+});
+
+describe("buildLociTodaySnapshotContext (every Coach request)", () => {
+  const day = "2026-09-24";
+  const tasks = [
+    { uuid: "aaa111-x", title: "Write the intro", horizonLevel: "today", priority: "P1", isNowFocus: true, orderIndex: 2 },
+    { uuid: "bbb222-x", title: "Email Maya", horizonLevel: "today", priority: "P2", orderIndex: 1 },
+    { uuid: "ccc333-x", title: "Pay the water bill", horizonLevel: "today", isCompleted: true, dateCompletedString: day, lastUpdated: new Date(2026, 8, 24, 9, 36).getTime() },
+    { uuid: "ddd444-x", title: "Old done", horizonLevel: "today", isCompleted: true, dateCompletedString: "2026-09-23" },
+    { uuid: "eee555-x", title: "Call Prof. Hale", horizonLevel: "today", deferredUntil: "2026-09-25" },
+    { uuid: "fff666-x", title: "Week thing", horizonLevel: "week" },
+  ];
+  it("lists today's open tasks (now focus first) and today's done, with ids and statuses", () => {
+    const out = buildLociTodaySnapshotContext(tasks, { dayStr: day });
+    expect(out).toContain("- #aaa111 [open · NOW FOCUS] [P1] Write the intro");
+    expect(out).toContain("- #bbb222 [open] [P2] Email Maya");
+    expect(out).toContain("- #ccc333 [done 09:36] Pay the water bill");
+    expect(out).not.toContain("Old done");
+    expect(out).not.toContain("Call Prof. Hale");
+    expect(out).toContain("1 moved to tomorrow");
+    expect(out).not.toContain("Week thing");
+    expect(out.indexOf("Write the intro")).toBeLessThan(out.indexOf("Email Maya"));
+    expect(out).toContain("FOCUS SESSION: none running.");
+  });
+  it("names a running focus session", () => {
+    const out = buildLociTodaySnapshotContext(tasks, { dayStr: day, focusTimer: { focusSessionActive: true, isTimerRunning: true, activeTask: tasks[0], timerMaxSeconds: 1500, timerSecondsLeft: 900 } });
+    expect(out).toContain('FOCUS SESSION: running on #aaa111 "Write the intro" — 10 min in.');
+  });
+  it("keeps whole-session elapsed time after a focus block extension", () => {
+    const out = buildLociTodaySnapshotContext(tasks, { dayStr: day, focusTimer: {
+      focusSessionActive: true, isTimerRunning: true, activeTask: tasks[0],
+      focusElapsedSeconds: 25 * 60, timerMaxSeconds: 5 * 60, timerSecondsLeft: 5 * 60,
+    } });
+    expect(out).toContain('FOCUS SESSION: running on #aaa111 "Write the intro" — 25 min in.');
+  });
+  it("lists every open and completed task past the old snapshot caps", () => {
+    const open = Array.from({ length: 14 }, (_, i) => ({ uuid: `open-${i}`, title: `Open task ${i}`, horizonLevel: "today" }));
+    const done = Array.from({ length: 10 }, (_, i) => ({ uuid: `done-${i}`, title: `Done task ${i}`, horizonLevel: "today", isCompleted: true, dateCompletedString: day }));
+    const out = buildLociTodaySnapshotContext([...open, ...done], { dayStr: day });
+    for (const task of [...open, ...done]) expect(out).toContain(task.title);
+    expect(out).not.toContain("more open");
+    expect(out).not.toContain("more done");
+  });
+  it("distinguishes repaired task IDs and uses the same ID for the focus session", () => {
+    const repaired = [
+      { uuid: "repaired-1700000000000-1", title: "Same title", horizonLevel: "today" },
+      { uuid: "repaired-1700000000000-2", title: "Same title", horizonLevel: "today" },
+    ];
+    const out = buildLociTodaySnapshotContext(repaired, { dayStr: day, focusTimer: {
+      focusSessionActive: true, activeTask: repaired[1], focusElapsedSeconds: 0,
+    } });
+    const ids = [...out.matchAll(/- #(\w+) \[open/g)].map(match => match[1]);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+    expect(out).toContain(`FOCUS SESSION: paused on #${ids[1]}`);
   });
 });

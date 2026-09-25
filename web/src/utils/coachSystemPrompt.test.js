@@ -159,6 +159,25 @@ describe("buildCoachSystemPrompt", () => {
     expect(out).toContain("I'm missing the task snapshot for this request — that looks like a Loci context issue.");
   });
 
+  it("every mode carries the TODAY SNAPSHOT, so no reply is blind to a task just finished (brief, Phase 6)", () => {
+    const snap = "TODAY SNAPSHOT (live — every task on Today, with its id and status):\n- #ccc333 [done 09:36] Pay the water bill\nFOCUS SESSION: none running.";
+    const ctx = { ...baseCtx(), todaySnapshotContext: snap };
+    for (const mode of ["full_task", "compact_task", "emotional", "light", "profile_reflection"]) {
+      expect(buildCoachSystemPrompt(mode, ctx), mode).toContain("#ccc333 [done 09:36] Pay the water bill");
+    }
+    // The light prompt no longer claims it has no tasks at all.
+    expect(buildCoachSystemPrompt("light", ctx)).not.toContain("NO TASK SNAPSHOT IN THIS PROMPT");
+  });
+
+  it("does not claim an absent snapshot is live while cloud sync is unconfirmed", () => {
+    for (const mode of ["light", "compact_task"]) {
+      const out = buildCoachSystemPrompt(mode, { ...baseCtx(), todaySnapshotContext: "" });
+      expect(out).toContain("Cloud sync is unconfirmed");
+      expect(out).not.toContain("The TODAY SNAPSHOT below is live");
+      expect(out).not.toContain("the TODAY SNAPSHOT (every task on Today");
+    }
+  });
+
   it("full_task, compact_task, emotional, and light modes all carry RECENTLY COMPLETED context when present", () => {
     // classifyContextMode routes completion-celebration phrasing like "I did
     // it" / "small win" to emotional, and bare "done"-style confirmations to
