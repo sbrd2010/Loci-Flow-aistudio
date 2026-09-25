@@ -805,4 +805,32 @@ describe("buildLociTodaySnapshotContext (every Coach request)", () => {
     const out = buildLociTodaySnapshotContext(tasks, { dayStr: day, focusTimer: { focusSessionActive: true, isTimerRunning: true, activeTask: tasks[0], timerMaxSeconds: 1500, timerSecondsLeft: 900 } });
     expect(out).toContain('FOCUS SESSION: running on #aaa111 "Write the intro" — 10 min in.');
   });
+  it("keeps whole-session elapsed time after a focus block extension", () => {
+    const out = buildLociTodaySnapshotContext(tasks, { dayStr: day, focusTimer: {
+      focusSessionActive: true, isTimerRunning: true, activeTask: tasks[0],
+      focusElapsedSeconds: 25 * 60, timerMaxSeconds: 5 * 60, timerSecondsLeft: 5 * 60,
+    } });
+    expect(out).toContain('FOCUS SESSION: running on #aaa111 "Write the intro" — 25 min in.');
+  });
+  it("lists every open and completed task past the old snapshot caps", () => {
+    const open = Array.from({ length: 14 }, (_, i) => ({ uuid: `open-${i}`, title: `Open task ${i}`, horizonLevel: "today" }));
+    const done = Array.from({ length: 10 }, (_, i) => ({ uuid: `done-${i}`, title: `Done task ${i}`, horizonLevel: "today", isCompleted: true, dateCompletedString: day }));
+    const out = buildLociTodaySnapshotContext([...open, ...done], { dayStr: day });
+    for (const task of [...open, ...done]) expect(out).toContain(task.title);
+    expect(out).not.toContain("more open");
+    expect(out).not.toContain("more done");
+  });
+  it("distinguishes repaired task IDs and uses the same ID for the focus session", () => {
+    const repaired = [
+      { uuid: "repaired-1700000000000-1", title: "Same title", horizonLevel: "today" },
+      { uuid: "repaired-1700000000000-2", title: "Same title", horizonLevel: "today" },
+    ];
+    const out = buildLociTodaySnapshotContext(repaired, { dayStr: day, focusTimer: {
+      focusSessionActive: true, activeTask: repaired[1], focusElapsedSeconds: 0,
+    } });
+    const ids = [...out.matchAll(/- #(\w+) \[open/g)].map(match => match[1]);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+    expect(out).toContain(`FOCUS SESSION: paused on #${ids[1]}`);
+  });
 });

@@ -81,6 +81,15 @@ export default function App() {
   const sessionStartRef = useRef(Date.now());
   const tabStartRef = useRef(Date.now());
 
+  // Retired NVIDIA BYOK credentials have no Settings control anymore. Clear
+  // the old local secret on startup, before any provider can be selected.
+  useEffect(() => {
+    try {
+      localStorage.removeItem("loci_nvidia_key");
+      if (localStorage.getItem("loci_provider_pref") === "nvidia") localStorage.removeItem("loci_provider_pref");
+    } catch { /* storage blocked */ }
+  }, []);
+
   // ── Demo mode ──────────────────────────────────────────────────────────────
   const [demoMode, setDemoMode] = useState(false);
   const [demoPayload, setDemoPayload] = useState(null);

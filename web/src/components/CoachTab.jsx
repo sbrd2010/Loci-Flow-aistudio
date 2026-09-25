@@ -635,7 +635,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const pendingCheckinContext = buildCoachCheckinContext(config.coachCheckin, now.getTime());
     const lowEnergyContext = buildLociLowEnergyContext(config);
     const recentlyParkedContext = buildLociRecentlyParkedContext(tasks, now);
-    const recentlyCompletedContext = buildLociRecentlyCompletedContext(tasks, now);
+    const recentlyCompletedContext = cloudSyncUnconfirmed ? "" : buildLociRecentlyCompletedContext(tasks, now);
     const requestedCategories = detectRequestedCategories(userText);
     const categoryFilterContext = buildLociCategoryFilterContext(tasks, requestedCategories, windows);
     const lociCoreInstruction = buildLociCoreInstruction({ firstName });
@@ -675,7 +675,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const isEarlyConversation = userMessageCount <= 1;
 
     const profileBlock = profileToCoachContext(userProfile);
-    const currentFocusTitle = tasks.find(t => isActiveLociTask(t) && t.isNowFocus)?.title || null;
+    const currentFocusTitle = cloudSyncUnconfirmed ? null : (tasks.find(t => isActiveLociTask(t) && t.isNowFocus)?.title || null);
     const systemInstruction = buildCoachSystemPrompt(contextMode, {
       lociCoreInstruction,
       mentorName: config.mentorName || "Loci AI Coach",
@@ -687,9 +687,9 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       memorySectionEnabled,
       personaInstruction,
       taskContext,
-      todaySnapshotContext: buildLociTodaySnapshotContext(tasks, { dayStr: todayStr, focusTimer }),
+      todaySnapshotContext: cloudSyncUnconfirmed ? "" : buildLociTodaySnapshotContext(tasks, { dayStr: todayStr, focusTimer }),
       focusSessionContext,
-      nowFocusContext,
+      nowFocusContext: cloudSyncUnconfirmed ? "" : nowFocusContext,
       dayMapContext,
       remindersContext,
       anchorContext,

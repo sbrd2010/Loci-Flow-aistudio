@@ -214,3 +214,129 @@ test("laptop: sections on the left, the chosen one on the right; The day's pages
   await nav.getByRole("button", { name: "Coach", exact: true }).click();
   await expect(page.getByRole("switch", { name: "Proactive nudges" })).toBeVisible();
 });
+
+test("settings names can be cleared and stay cleared after leaving their pages", async ({ page }) => {
+  await enterDemo(page);
+  await openTab(page, "Settings");
+  await page.locator(".set-profile").click();
+  await page.locator("#settings-name").fill("");
+  await page.getByRole("button", { name: "Settings", exact: true }).last().click();
+  await expect(page.locator(".set-profile-name")).toHaveText("Your profile");
+  await page.locator(".set-profile").click();
+  await expect(page.locator("#settings-name")).toHaveValue("");
+  await page.getByRole("button", { name: "Settings", exact: true }).last().click();
+
+  await page.getByRole("button", { name: /Tone and profile/ }).click();
+  await page.locator("#settings-mentor").fill("");
+  await page.getByRole("button", { name: "Settings", exact: true }).last().click();
+  await expect(page.getByRole("button", { name: /Tone and profile/ })).toContainText("Your coach");
+  await page.getByRole("button", { name: /Tone and profile/ }).click();
+  await expect(page.locator("#settings-mentor")).toHaveValue("");
+});
+
+test("Sync now does not claim a successful sync when demo has no server", async ({ page }) => {
+  await enterDemo(page);
+  await page.clock.setFixedTime(new Date("2024-06-16T10:00:00"));
+  await openTab(page, "Settings");
+  await page.getByRole("button", { name: /^Sync/ }).click();
+  const lastSync = page.locator(".set-row", { hasText: "Last sync" }).locator(".set-row-value");
+  await expect(lastSync).not.toHaveText("just now");
+  const before = await lastSync.innerText();
+  await page.getByRole("button", { name: "Sync now" }).click();
+  await expect(lastSync).toHaveText(before);
+});
+
+test("wide-only Settings sections return to the phone root on resize", async ({ page }) => {
+  await enterDemo(page, { width: 900, height: 900 });
+  await openTab(page, "Settings");
+  for (const section of ["The day", "Appearance", "Support"]) {
+    await page.setViewportSize({ width: 900, height: 900 });
+    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: section }).click();
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
+    await expect(page.locator(".set-profile")).toBeVisible();
+  }
+});
+
+test("retired NVIDIA storage is cleared and theme choices have 44px targets", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("loci_nvidia_key", "retired-secret");
+    localStorage.setItem("loci_provider_pref", "nvidia");
+  });
+  await enterDemo(page);
+  expect(await page.evaluate(() => localStorage.getItem("loci_nvidia_key"))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem("loci_provider_pref"))).toBeNull();
+  await openTab(page, "Settings");
+  const choices = page.getByRole("radiogroup", { name: "Theme" }).getByRole("radio");
+  for (let i = 0; i < 3; i++) {
+    expect((await choices.nth(i).boundingBox()).height).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test("bug report takes keyboard focus, traps Tab and restores the trigger", async ({ page }) => {
+  await enterDemo(page);
+  await openTab(page, "Settings");
+  const trigger = page.getByRole("button", { name: "Report a bug" });
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Report a bug" });
+  await expect(page.locator("#bug-what")).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(dialog.getByRole("button", { name: "Close" })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.locator("#bug-device")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
+test("a partial first focus window stays in place while the following row is saved", async ({ page }) => {
+  await enterDemo(page);
+  await openTab(page, "Settings");
+  await page.getByRole("button", { name: /^Focus windows/ }).click();
+  await page.getByRole("button", { name: "Add a window" }).click();
+  const firstEnd = page.getByLabel("Focus window 1 end time");
+  const secondEnd = page.getByLabel("Focus window 2 end time");
+  await expect(secondEnd).toHaveValue("17:00");
+  await firstEnd.fill("");
+  await expect(firstEnd).toBeFocused();
+  await expect(firstEnd).toHaveValue("");
+  await expect(secondEnd).toHaveValue("17:00");
+  await firstEnd.fill("12:00");
+  await expect(firstEnd).toHaveValue("12:00");
+  await expect(secondEnd).toHaveValue("17:00");
+});
+
+test("the API-key dialog keeps keyboard focus inside and returns it to its row", async ({ page }) => {
+  await enterDemo(page);
+  await openTab(page, "Settings");
+  await page.getByRole("button", { name: /^AI provider/ }).click();
+  const opener = page.getByRole("button", { name: /^Groq/ });
+  await opener.focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Groq key" });
+  await expect(dialog.getByLabel("Key")).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(dialog.getByRole("button", { name: "Close" })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(dialog.getByRole("link", { name: /Get a key/ })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("button", { name: "Close" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
+test("a daily minimum on its own remains visible and can be cleared", async ({ page }) => {
+  await enterDemo(page);
+  await openTab(page, "Settings");
+  await page.getByRole("button", { name: /^Key deadline/ }).click();
+  await page.getByRole("button", { name: "Clear goal" }).click();
+  await page.getByLabel("Daily minimum").fill("Write one paragraph");
+  await page.getByRole("button", { name: "Settings", exact: true }).last().click();
+  await expect(page.getByRole("button", { name: /^Key deadline/ })).toContainText("Daily minimum · Write one paragraph");
+  await page.getByRole("button", { name: /^Key deadline/ }).click();
+  await page.getByRole("button", { name: "Clear goal" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).last().click();
+  await expect(page.getByRole("button", { name: /^Key deadline/ })).toContainText("Not set");
+});

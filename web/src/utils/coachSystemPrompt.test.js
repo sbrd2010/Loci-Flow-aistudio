@@ -169,6 +169,15 @@ describe("buildCoachSystemPrompt", () => {
     expect(buildCoachSystemPrompt("light", ctx)).not.toContain("NO TASK SNAPSHOT IN THIS PROMPT");
   });
 
+  it("does not claim an absent snapshot is live while cloud sync is unconfirmed", () => {
+    for (const mode of ["light", "compact_task"]) {
+      const out = buildCoachSystemPrompt(mode, { ...baseCtx(), todaySnapshotContext: "" });
+      expect(out).toContain("Cloud sync is unconfirmed");
+      expect(out).not.toContain("The TODAY SNAPSHOT below is live");
+      expect(out).not.toContain("the TODAY SNAPSHOT (every task on Today");
+    }
+  });
+
   it("full_task, compact_task, emotional, and light modes all carry RECENTLY COMPLETED context when present", () => {
     // classifyContextMode routes completion-celebration phrasing like "I did
     // it" / "small win" to emotional, and bare "done"-style confirmations to

@@ -22,7 +22,7 @@
 export const MAX_PINNED_FACTS = 15;
 export const MAX_RECENT_OBSERVATIONS = 30;
 const RECENT_OBSERVATIONS_IN_PROMPT = 10;
-const MEMORY_ENTRY_MAX_LENGTH = 200;
+export const MEMORY_ENTRY_MAX_LENGTH = 200;
 // A [[FORGET: ...]] shorter than this is too vague to safely substring-match —
 // e.g. "User" or "job" would otherwise match (and delete) most stored entries.
 const MIN_FORGET_TEXT_LENGTH = 8;
@@ -114,12 +114,20 @@ export function removeRecentObservation(coachMemory = {}, index) {
 // Settings › Coach memory: the user corrects an entry in place. The same
 // rules as the coach's own writes apply; text they reject leaves the entry as
 // it was, and the caller learns so from `ok`.
-export function editMemoryEntry(coachMemory = {}, kind, index, text) {
+export function editMemoryEntry(coachMemory = {}, kind, index, text, expected = null) {
   const key = kind === "fact" ? "pinnedFacts" : "recentObservations";
   const list = coachMemory[key] || [];
-  const cleaned = cleanMemoryText(text);
-  if (!cleaned || !list[index]) return { coachMemory, ok: false };
-  const next = list.map((entry, i) => i === index ? { ...entry, text: cleaned, updatedAt: Date.now(), source: "user" } : entry);
+  const normalized = String(text || "").replace(/[\s\x00-\x1f\x7f]+/g, " ").trim();
+  if (normalized.length > MEMORY_ENTRY_MAX_LENGTH) return { coachMemory, ok: false, reason: "too-long" };
+  const cleaned = cleanMemoryText(normalized);
+  if (!cleaned) return { coachMemory, ok: false, reason: "invalid" };
+  // Settings captures the entry a person opened. The latest list may have
+  // shifted while they typed, so never trust its old array index alone.
+  const target = expected
+    ? list.findIndex(entry => entry.createdAt === expected.createdAt && entry.text === expected.text)
+    : index;
+  if (!list[target]) return { coachMemory, ok: false, reason: "stale" };
+  const next = list.map((entry, i) => i === target ? { ...entry, text: cleaned, updatedAt: Date.now(), source: "user" } : entry);
   return { coachMemory: { ...coachMemory, [key]: next }, ok: true };
 }
 

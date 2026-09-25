@@ -19,12 +19,35 @@ export function focusWindowRows(config = {}) {
   return [];
 }
 
+// A time input can briefly be incomplete while a person edits it. Keep that
+// draft when a synchronized config arrives, but replace all complete rows
+// with the latest saved set so the next edit cannot write an old snapshot.
+export function reconcileFocusWindowRows(currentRows, savedRows) {
+  let savedIndex = 0;
+  const rows = currentRows.flatMap(row => {
+    // Keep an unfinished time input at its current index: the page renders
+    // rows with index keys, so moving it also moves keyboard focus to another
+    // window's input.
+    if (!row.start || !row.end || row.start === row.end) return [{ ...row }];
+    if (savedIndex >= savedRows.length) return [];
+    return [{ ...savedRows[savedIndex++] }];
+  });
+  return [...rows, ...savedRows.slice(savedIndex).map(w => ({ ...w }))];
+}
+
 export function focusWindowsSummary(config = {}) {
   const set = focusWindowRows(config).filter(w => w.start && w.end && w.start !== w.end);
   const windows = getFocusWindows({ ...config, focusWindows: set });
-  const spans = mergeWindowSpans(windows);
-  const totalMinutes = spans.reduce((sum, [s, e]) => sum + (e - s), 0);
-  const lastEnd = Math.max(...spans.map(([, e]) => e)) % 1440;
+  // Count coverage on a single 00:00–24:00 clock. Split overnight windows
+  // before merging, or 22:00–02:00 and 01:00–03:00 count 01:00–02:00 twice.
+  const clockWindows = windows.flatMap(w => w.overnight
+    ? [{ startMin: w.startMin, endMin: 1440, overnight: false }, { startMin: 0, endMin: w.endMin, overnight: false }]
+    : [w]);
+  const clockSpans = mergeWindowSpans(clockWindows);
+  const totalMinutes = clockSpans.reduce((sum, [s, e]) => sum + (e - s), 0);
+  // Day end remains the end of the latest configured span, including its
+  // after-midnight tail.
+  const lastEnd = Math.max(...mergeWindowSpans(windows).map(([, e]) => e)) % 1440;
   const dayEnds = `${String(Math.floor(lastEnd / 60)).padStart(2, "0")}:${String(lastEnd % 60).padStart(2, "0")}`;
   return { count: set.length, totalMinutes, dayEnds, isFallback: set.length === 0 };
 }

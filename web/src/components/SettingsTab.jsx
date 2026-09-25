@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 import PrivacyPolicy from "./PrivacyPolicy";
 import { db, auth } from "../firebase";
@@ -26,6 +26,7 @@ const SECTIONS = [
 ];
 // Pages that live inside "The day" on a wide screen.
 const DAY_PAGES = ["focusWindows", "timer", "reminder", "anchors"];
+const WIDE_ONLY_PAGES = ["day", "appearance", "support"];
 
 const THEMES = [["light", "Light"], ["dark", "Dark"], ["auto", "Auto"]];
 
@@ -67,6 +68,9 @@ export default function SettingsTab({ payload, saveSubPath, saveConfigPatch, las
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showBug, setShowBug] = useState(false);
   const [permission, setPermission] = useState(() => notifPermissionState());
+  useEffect(() => {
+    if (!wide && WIDE_ONLY_PAGES.includes(page)) setPage(null);
+  }, [wide, page]);
 
   useEffect(() => {
     if (!isNativeApp()) return;
@@ -77,7 +81,7 @@ export default function SettingsTab({ payload, saveSubPath, saveConfigPatch, las
     document.querySelector(".screen-content")?.scrollTo?.({ top: 0 });
   }, [page]);
 
-  const syncLabel = relativeTime(lastSyncedAt || payload.timestamp);
+  const syncLabel = relativeTime(lastSyncedAt);
   const activeCount = (payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).length;
   const memoryCount = (config.coachMemory?.pinnedFacts || []).length + (config.coachMemory?.recentObservations || []).length;
   const who = coachName(config);
@@ -201,8 +205,9 @@ export default function SettingsTab({ payload, saveSubPath, saveConfigPatch, las
     );
   }
 
-  if (page && pages[page]) {
-    return <div className="set-phone" key={page}>{pages[page]()}{modals}</div>;
+  const phonePage = WIDE_ONLY_PAGES.includes(page) ? null : page;
+  if (phonePage && pages[phonePage]) {
+    return <div className="set-phone" key={phonePage}>{pages[phonePage]()}{modals}</div>;
   }
 
   const name = (config.userName || "").trim();
@@ -221,7 +226,10 @@ export default function SettingsTab({ payload, saveSubPath, saveConfigPatch, las
       <Group label="Your goal">
         <Row
           title="Key deadline"
-          sub={config.deadlineLabel || config.deadlineDate ? [config.deadlineLabel, shortDeadline(config.deadlineDate)].filter(Boolean).join(" · ") : "Not set"}
+          sub={config.deadlineLabel || config.deadlineDate
+            ? [config.deadlineLabel, shortDeadline(config.deadlineDate)].filter(Boolean).join(" · ")
+            : config.deadlineAction ? `Daily minimum · ${config.deadlineAction}`
+              : config.deadlineStartDate ? `Started · ${shortDeadline(config.deadlineStartDate)}` : "Not set"}
           onClick={() => open("goal")}
         />
       </Group>
@@ -250,6 +258,29 @@ function BugReport({ onClose }) {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  const dialogRef = useRef(null);
+  useEffect(() => {
+    const trigger = document.activeElement;
+    dialogRef.current?.querySelector("#bug-what")?.focus();
+    return () => { if (trigger?.isConnected) trigger.focus(); };
+  }, []);
+  useEffect(() => {
+    if (done) dialogRef.current?.querySelector(".add-close")?.focus();
+  }, [done]);
+  const onDialogKeyDown = (e) => {
+    if (e.key === "Escape" && !busy) {
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const focusable = [...dialogRef.current.querySelectorAll("button:not([disabled]), input:not([disabled]), textarea:not([disabled]), a[href]")];
+    if (!focusable.length) return;
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -274,7 +305,7 @@ function BugReport({ onClose }) {
 
   return (
     <div className="add-overlay" onClick={() => !busy && onClose()}>
-      <div className="add-card set-key-card" role="dialog" aria-modal="true" aria-labelledby="bug-title" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === "Escape" && !busy) onClose(); }}>
+      <div ref={dialogRef} className="add-card set-key-card" role="dialog" aria-modal="true" aria-labelledby="bug-title" onClick={e => e.stopPropagation()} onKeyDown={onDialogKeyDown}>
         <div className="add-head">
           <h2 id="bug-title" className="add-heading">Report a bug</h2>
           {!busy && <button type="button" className="add-close" onClick={onClose} aria-label="Close"><IconX size={20} /></button>}
