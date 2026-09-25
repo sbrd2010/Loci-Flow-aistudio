@@ -35,7 +35,12 @@ describe("incoming focus-window configuration", () => {
   it("replaces complete local rows while retaining a time input still being edited", () => {
     const local = [{ start: "09:00", end: "17:00" }, { start: "18:00", end: "" }];
     const remote = [{ start: "10:00", end: "16:00" }, { start: "20:00", end: "21:00" }];
-    expect(reconcileFocusWindowRows(local, remote)).toEqual([...remote, { start: "18:00", end: "" }]);
+    expect(reconcileFocusWindowRows(local, remote)).toEqual([remote[0], { start: "18:00", end: "" }, remote[1]]);
+  });
+  it("keeps a first-row draft at the first row while another complete row remains", () => {
+    const local = [{ start: "07:00", end: "" }, { start: "09:00", end: "17:00" }];
+    expect(reconcileFocusWindowRows(local, [{ start: "09:00", end: "17:00" }]))
+      .toEqual(local);
   });
   it("does not keep a stale complete row when another device changes it", () => {
     expect(reconcileFocusWindowRows([{ start: "09:00", end: "17:00" }], [{ start: "10:00", end: "18:00" }]))

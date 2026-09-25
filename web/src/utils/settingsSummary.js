@@ -23,11 +23,16 @@ export function focusWindowRows(config = {}) {
 // draft when a synchronized config arrives, but replace all complete rows
 // with the latest saved set so the next edit cannot write an old snapshot.
 export function reconcileFocusWindowRows(currentRows, savedRows) {
-  const drafts = currentRows.filter(w => !w.start || !w.end || w.start === w.end);
-  return [
-    ...savedRows.map(w => ({ ...w })),
-    ...drafts.filter(d => !savedRows.some(w => w.start === d.start && w.end === d.end)),
-  ];
+  let savedIndex = 0;
+  const rows = currentRows.flatMap(row => {
+    // Keep an unfinished time input at its current index: the page renders
+    // rows with index keys, so moving it also moves keyboard focus to another
+    // window's input.
+    if (!row.start || !row.end || row.start === row.end) return [{ ...row }];
+    if (savedIndex >= savedRows.length) return [];
+    return [{ ...savedRows[savedIndex++] }];
+  });
+  return [...rows, ...savedRows.slice(savedIndex).map(w => ({ ...w }))];
 }
 
 export function focusWindowsSummary(config = {}) {

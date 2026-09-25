@@ -289,3 +289,40 @@ test("bug report takes keyboard focus, traps Tab and restores the trigger", asyn
   await expect(dialog).toHaveCount(0);
   await expect(trigger).toBeFocused();
 });
+
+test("a partial first focus window stays in place while the following row is saved", async ({ page }) => {
+  await enterDemo(page);
+  await openTab(page, "Settings");
+  await page.getByRole("button", { name: /^Focus windows/ }).click();
+  await page.getByRole("button", { name: "Add a window" }).click();
+  const firstEnd = page.getByLabel("Focus window 1 end time");
+  const secondEnd = page.getByLabel("Focus window 2 end time");
+  await expect(secondEnd).toHaveValue("17:00");
+  await firstEnd.fill("");
+  await expect(firstEnd).toBeFocused();
+  await expect(firstEnd).toHaveValue("");
+  await expect(secondEnd).toHaveValue("17:00");
+  await firstEnd.fill("12:00");
+  await expect(firstEnd).toHaveValue("12:00");
+  await expect(secondEnd).toHaveValue("17:00");
+});
+
+test("the API-key dialog keeps keyboard focus inside and returns it to its row", async ({ page }) => {
+  await enterDemo(page);
+  await openTab(page, "Settings");
+  await page.getByRole("button", { name: /^AI provider/ }).click();
+  const opener = page.getByRole("button", { name: /^Groq/ });
+  await opener.focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Groq key" });
+  await expect(dialog.getByLabel("Key")).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(dialog.getByRole("button", { name: "Close" })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(dialog.getByRole("link", { name: /Get a key/ })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("button", { name: "Close" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});

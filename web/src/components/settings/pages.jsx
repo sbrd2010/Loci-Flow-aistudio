@@ -474,7 +474,25 @@ function KeySheet({ provider, onClose }) {
   const [value, setValue] = useState(() => readStore(provider.storage));
   const had = !!readStore(provider.storage);
   const cardRef = useRef(null);
-  useEffect(() => { cardRef.current?.querySelector("input")?.focus(); }, []);
+  useEffect(() => {
+    const opener = document.activeElement;
+    cardRef.current?.querySelector("input")?.focus();
+    return () => { if (opener?.isConnected) opener.focus(); };
+  }, []);
+  const onDialogKeyDown = (e) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const focusable = [...cardRef.current.querySelectorAll("button:not([disabled]), input:not([disabled]), a[href]")];
+    if (!focusable.length) return;
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
   const write = (v) => {
     try { v ? localStorage.setItem(provider.storage, v) : localStorage.removeItem(provider.storage); } catch { /* storage blocked */ }
     onClose();
@@ -488,7 +506,7 @@ function KeySheet({ provider, onClose }) {
         aria-modal="true"
         aria-labelledby="set-key-title"
         onClick={e => e.stopPropagation()}
-        onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }}
+        onKeyDown={onDialogKeyDown}
       >
         <div className="add-head">
           <h2 id="set-key-title" className="add-heading">{provider.name} key</h2>
