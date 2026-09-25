@@ -22,7 +22,7 @@
 export const MAX_PINNED_FACTS = 15;
 export const MAX_RECENT_OBSERVATIONS = 30;
 const RECENT_OBSERVATIONS_IN_PROMPT = 10;
-const MEMORY_ENTRY_MAX_LENGTH = 200;
+export const MEMORY_ENTRY_MAX_LENGTH = 200;
 // A [[FORGET: ...]] shorter than this is too vague to safely substring-match —
 // e.g. "User" or "job" would otherwise match (and delete) most stored entries.
 const MIN_FORGET_TEXT_LENGTH = 8;
@@ -59,7 +59,8 @@ const FINANCIAL_SHORTHAND_PATTERN = /\bowe[sd]?\b\s*(?:\w+\s+){0,3}?\d[\d,.]*\s?
 // social, generalized, major, etc.) between the verb phrase and the label.
 const MEDICAL_LABEL_PATTERN = /\b(adhd|autis(?:m|tic)|asperger'?s?|bipolar|ocd|ptsd|schizophreni[ac])\b|\b(?:has|have|suffers?\s+from|diagnosed\s+with)\s+(?:\w+\s+){0,2}(?:depression|anxiety)\b/i;
 
-function appendCapped(list = [], text, max, extra = {}) {
+// The text a memory entry may hold, or null when it must not be stored.
+function cleanMemoryText(text) {
   // Collapse newlines/control chars so a memory entry can't break out of its
   // bullet line and inject extra "lines" into the system prompt.
   const trimmed = String(text || "").replace(/[\s\x00-\x1f\x7f]+/g, " ").trim().slice(0, MEMORY_ENTRY_MAX_LENGTH);
@@ -69,7 +70,13 @@ function appendCapped(list = [], text, max, extra = {}) {
   // MEMORY_TAG_RE's non-greedy match stops at the first "]]" (see
   // parseMemoryTags below) — don't let that fragment get persisted and
   // re-injected into every future prompt.
-  if (!trimmed || trimmed.includes("[[") || SECRET_PATTERN.test(trimmed) || FINANCIAL_AMOUNT_PATTERN.test(trimmed) || FINANCIAL_SHORTHAND_PATTERN.test(trimmed) || MEDICAL_LABEL_PATTERN.test(trimmed)) return list;
+  if (!trimmed || trimmed.includes("[[") || SECRET_PATTERN.test(trimmed) || FINANCIAL_AMOUNT_PATTERN.test(trimmed) || FINANCIAL_SHORTHAND_PATTERN.test(trimmed) || MEDICAL_LABEL_PATTERN.test(trimmed)) return null;
+  return trimmed;
+}
+
+function appendCapped(list = [], text, max, extra = {}) {
+  const trimmed = cleanMemoryText(text);
+  if (!trimmed) return list;
 
   // Dedupe by normalized exact text — re-stating the same fact refreshes its
   // position (and updatedAt) instead of piling up near-identical entries.
@@ -102,6 +109,26 @@ export function addRecentObservation(coachMemory = {}, text, lociDayStr) {
 
 export function removeRecentObservation(coachMemory = {}, index) {
   return { ...coachMemory, recentObservations: (coachMemory.recentObservations || []).filter((_, i) => i !== index) };
+}
+
+// Settings › Coach memory: the user corrects an entry in place. The same
+// rules as the coach's own writes apply; text they reject leaves the entry as
+// it was, and the caller learns so from `ok`.
+export function editMemoryEntry(coachMemory = {}, kind, index, text, expected = null) {
+  const key = kind === "fact" ? "pinnedFacts" : "recentObservations";
+  const list = coachMemory[key] || [];
+  const normalized = String(text || "").replace(/[\s\x00-\x1f\x7f]+/g, " ").trim();
+  if (normalized.length > MEMORY_ENTRY_MAX_LENGTH) return { coachMemory, ok: false, reason: "too-long" };
+  const cleaned = cleanMemoryText(normalized);
+  if (!cleaned) return { coachMemory, ok: false, reason: "invalid" };
+  // Settings captures the entry a person opened. The latest list may have
+  // shifted while they typed, so never trust its old array index alone.
+  const target = expected
+    ? list.findIndex(entry => entry.createdAt === expected.createdAt && entry.text === expected.text)
+    : index;
+  if (!list[target]) return { coachMemory, ok: false, reason: "stale" };
+  const next = list.map((entry, i) => i === target ? { ...entry, text: cleaned, updatedAt: Date.now(), source: "user" } : entry);
+  return { coachMemory: { ...coachMemory, [key]: next }, ok: true };
 }
 
 export function clearAllMemory(coachMemory = {}) {

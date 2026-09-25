@@ -155,12 +155,13 @@ async function dayOverAt18(page, { unpin }) {
   await page.clock.setFixedTime(new Date("2024-06-15T18:00:00"));
   await page.getByTestId("demo-btn").click();
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  // Settings › Focus windows. The demo's day is its old 07:00–02:00 hours;
+  // this replaces them with one 09:00–17:00 window, saved as it changes.
   await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
-  if (!(await page.locator("#settings-name").isVisible())) {
-    await page.getByRole("button", { name: /Your Profile/i }).click();
-  }
-  await page.getByRole("button", { name: "+ Add focus window" }).click();
-  await page.getByRole("button", { name: /Save Profile/ }).click();
+  await page.getByRole("button", { name: /^Focus windows/ }).click();
+  await page.getByRole("button", { name: "Remove focus window 1" }).click();
+  await page.getByRole("button", { name: "Add a window" }).click();
+  await expect(page.getByLabel("Focus window 1 start time")).toHaveValue("09:00");
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
   if (unpin) {
     const now = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { has: page.locator(".task-tag.is-now") });

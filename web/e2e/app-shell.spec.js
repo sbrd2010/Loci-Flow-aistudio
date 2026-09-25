@@ -38,7 +38,7 @@ for (const [label, width, height, place] of [
     }
 
     await gear(page).click();
-    await expect(page.getByRole("heading", { name: "Your Profile" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
     await expect(mainNav(page).locator("[aria-current]")).toHaveCount(0);
     if (label === "laptop") {
       await expect(gear(page)).toHaveAttribute("aria-current", "page");

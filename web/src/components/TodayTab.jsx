@@ -852,10 +852,10 @@ export default function TodayTab({
       return;
     }
     setBreakdownLoadingUuid(task.uuid);
-    const { groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
+    const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
     try {
       const raw = await callAI({
-        groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey,
+        groqKey, geminiKey, cerebrasKey, zaiKey,
         systemPrompt: "You are a productivity coach. Respond ONLY with a valid JSON array of strings, no markdown, no explanation.",
         messages: [{
           role: "user",
@@ -1358,7 +1358,7 @@ export default function TodayTab({
       <TodayWall
         task={pinnedFocusTask}
         goal={wallGoal}
-        anchors={anchors.filter(a => a && typeof a.text === "string" && a.text.trim())}
+        anchors={config.anchorsOnToday === "off" ? [] : anchors.filter(a => a && typeof a.text === "string" && a.text.trim())}
         focusMinutes={Number(pinnedFocusTask?.timeEstimateMinutes) > 0 ? Number(pinnedFocusTask.timeEstimateMinutes) : 25}
         peekOpen={peekOpen}
         onTogglePeek={() => setPeekOpen(v => !v)}

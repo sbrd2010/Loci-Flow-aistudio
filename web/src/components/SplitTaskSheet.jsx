@@ -66,9 +66,9 @@ export default function SplitTaskSheet({ task, onClose, onSplit }) {
   useEffect(() => {
     if (source !== "ai") return undefined;
     let live = true;
-    const { groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
+    const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
     callAI({
-      groqKey, nvidiaKey, geminiKey, cerebrasKey, zaiKey,
+      groqKey, geminiKey, cerebrasKey, zaiKey,
       systemPrompt: "You split tasks into concrete steps. Respond ONLY with a valid JSON array, no markdown.",
       messages: [{
         role: "user",

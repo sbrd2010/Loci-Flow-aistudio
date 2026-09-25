@@ -760,11 +760,8 @@ async function slide(page, row, { rest = 0, dx = 150, id = 12, primary = true } 
 
 async function turnOnDragAnywhere(page) {
   await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
-  if (!(await page.locator("#settings-name").isVisible())) {
-    await page.getByRole("button", { name: /Your Profile/i }).click();
-  }
-  await page.getByText("Drag-anywhere task rows").click();
-  await page.getByRole("button", { name: /Save Profile/ }).click();
+  await page.getByRole("switch", { name: "Drag anywhere" }).click();
+  await expect(page.getByRole("switch", { name: "Drag anywhere" })).toHaveAttribute("aria-checked", "true");
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
 }
 
