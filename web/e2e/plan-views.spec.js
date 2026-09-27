@@ -1,20 +1,8 @@
 import { test, expect } from "@playwright/test";
 
-// Plan's three-view switcher (FRONTS / DAY MAP / HORIZONS) and the Horizons
-// retheme it leads to.
-//
-// Both tests here exist because of a specific way this PR shipped broken:
-//
-//   - "Back" from Day Map was hard-wired to Today. That was correct while
-//     Today was the only door into Day Map; adding a second door from Plan
-//     made it wrong, and nothing caught it because no test ever pressed Back.
-//   - The Horizons retheme was declared a second time inside a desktop media
-//     query, so the original pills kept winning at every width. The build was
-//     clean and 123 e2e passed: a stylesheet can be entirely dead without a
-//     single test noticing, because tests read the DOM and not the pixels.
-//
-// So the first test presses the button, and the second asserts on computed
-// style rather than on markup.
+// Plan (45h–j): Horizons | Fronts, the horizons as sections — one column on
+// a phone, two on a tablet, four on a laptop — and the Day map reached from
+// Today only (turn 50: "Plan is Horizons | Fronts, and that is final").
 
 async function enterDemo(page) {
   await page.addInitScript(() => {
@@ -28,19 +16,26 @@ async function enterDemo(page) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
 }
 
-test("Back from Day Map returns to whichever view opened it", async ({ page }) => {
+test("Plan opens on Horizons, switches to Fronts, and has no Day map door", async ({ page }) => {
   await enterDemo(page);
-
-  // Door 1: Plan. Back must return to Plan, not to Today.
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  await expect(page.getByRole("button", { name: "HORIZONS" })).toBeVisible();
-  await page.getByRole("button", { name: "DAY MAP" }).click();
-  await expect(page.locator(".day-map-page")).toBeVisible();
-  await page.locator(".dm-back").click();
-  await expect(page.getByRole("button", { name: "HORIZONS" })).toBeVisible();
-  await expect(page.locator(".day-map-page")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Plan", level: 1 })).toBeVisible();
+  const horizons = page.getByRole("tab", { name: "Horizons" });
+  const fronts = page.getByRole("tab", { name: "Fronts" });
+  await expect(horizons).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("heading", { name: /^This week/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /day map/i })).toHaveCount(0);
 
-  // Door 2: Today. Back must still return to Today.
+  await fronts.click();
+  await expect(fronts).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: "New front" })).toBeVisible();
+  // Arrow keys move between the two, as in any tab list.
+  await fronts.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(horizons).toHaveAttribute("aria-selected", "true");
+  await expect(horizons).toBeFocused();
+
+  // Today is the one door into the Day map, and Back returns there.
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
   await page.getByRole("button", { name: "Day map →" }).click();
   await expect(page.locator(".day-map-page")).toBeVisible();
@@ -48,23 +43,16 @@ test("Back from Day Map returns to whichever view opened it", async ({ page }) =
   await expect(page.getByRole("button", { name: "Day map →" })).toBeVisible();
 });
 
-test("Horizon kickers render as kickers, not as the legacy pills", async ({ page }) => {
+test("Horizons: one column on a phone, two on a tablet, four on a laptop (45h–j)", async ({ page }) => {
   await enterDemo(page);
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  await page.getByRole("button", { name: "HORIZONS" }).click();
-  await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible({ timeout: 8_000 });
-
-  // The legacy pills were a 20px-radius filled capsule; the kicker has no fill
-  // and no radius. Asserted on computed style, because the markup is identical
-  // either way — that is exactly what made the dead stylesheet invisible.
-  const pill = page.locator(".horizon-pill").first();
-  const style = await pill.evaluate((el) => {
-    const c = getComputedStyle(el);
-    return { radius: c.borderRadius, bg: c.backgroundColor, family: c.fontFamily };
-  });
-  expect(style.radius).toBe("0px");
-  expect(style.bg).toBe("rgba(0, 0, 0, 0)");
-  expect(style.family.toLowerCase()).toMatch(/mono/);
+  const columns = async () => page.locator(".plan-horizon").evaluateAll(els =>
+    new Set(els.slice(0, 4).map(el => Math.round(el.getBoundingClientRect().left))).size);
+  await expect.poll(columns).toBe(1);
+  await page.setViewportSize({ width: 900, height: 1200 });
+  await expect.poll(columns).toBe(2);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect.poll(columns).toBe(4);
 });
 
 test("priority tags are mono wherever Day Map draws them", async ({ page }) => {
@@ -97,48 +85,61 @@ test("priority tags are mono wherever Day Map draws them", async ({ page }) => {
   expect(cardColor).toBe(stripColor);
 });
 
-test("the 44px hit overlays do not scroll or steal clicks", async ({ page }) => {
+test("Horizons: each horizon's + and each row's circle are 44px targets", async ({ page }) => {
   await enterDemo(page);
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-
-  // An absolutely positioned child still counts toward a scroll container's
-  // scrollable overflow. .horizon-pills is overflow-x: auto, which makes the
-  // y axis compute to auto as well, so a 44px overlay in a 24px row gave the
-  // kickers 8px of vertical scroll — the row could be dragged up and down on
-  // touch. The row is sized to fit the overlay instead of clipping it.
-  await page.getByRole("button", { name: "HORIZONS" }).click();
-  await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible();
-  const row = await page.locator(".horizon-pills").evaluate((el) => ({
-    scrollH: el.scrollHeight, clientH: el.clientHeight,
-    scrollW: el.scrollWidth, clientW: el.clientWidth,
-  }));
-  expect(row.scrollH, "the kicker row must not scroll vertically").toBeLessThanOrEqual(row.clientH);
-  // ...while still scrolling sideways, which is what the container is for.
-  expect(row.scrollW).toBeGreaterThan(row.clientW);
-
-  // left/right: 0 would only make the target taller. Horizon labels are
-  // user-facing and variable, and a short one ("Work") measured 28.8px across,
-  // so the overlay carries a min-width too. Both axes are asserted, and so is
-  // the absence of overlap: a widened overlay grows sideways into the gap, and
-  // one that reached its neighbour would hand taps to the wrong column.
-  const targets = await page.locator(".horizon-pill").evaluateAll((els) => els.map((el) => {
-    const r = el.getBoundingClientRect();
-    const after = getComputedStyle(el, "::after");
-    const width = Math.max(r.width, parseFloat(after.minWidth) || 0);
-    const centre = r.x + r.width / 2;
-    return { label: el.textContent.trim(), width, left: centre - width / 2, right: centre + width / 2 };
-  }));
-  for (const t of targets) {
-    expect(t.width, `"${t.label}" target width`).toBeGreaterThanOrEqual(44);
+  for (const name of ["This week", "This month", "This quarter", "6 months"]) {
+    const box = await page.getByRole("button", { name: `Add a task to ${name}` }).boundingBox();
+    expect(Math.round(box.width), name).toBeGreaterThanOrEqual(44);
+    expect(Math.round(box.height), name).toBeGreaterThanOrEqual(44);
   }
-  for (let i = 1; i < targets.length; i++) {
-    expect(targets[i].left, `"${targets[i].label}" must not overlap "${targets[i - 1].label}"`)
-      .toBeGreaterThanOrEqual(targets[i - 1].right);
-  }
+  const circle = await page.locator(".plan-row-circle").first().boundingBox();
+  expect(Math.round(circle.width)).toBeGreaterThanOrEqual(44);
+  expect(Math.round(circle.height)).toBeGreaterThanOrEqual(44);
 
-  // The overlays sit above their own buttons, so a neighbour must still get
-  // its own clicks: the point is a bigger target, not a bigger button.
+  // + opens Add task on that horizon (45a).
+  await page.getByRole("button", { name: "Add a task to This quarter" }).click();
+  await expect(page.getByTestId("add-task-submit")).toHaveText("Add to This quarter");
+});
+
+test("Horizons: the circle marks a task done; Work shows only when it holds tasks", async ({ page }) => {
+  await enterDemo(page);
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  await page.getByRole("button", { name: "New front" }).click();
-  await expect(page.locator(".plan-new-form")).toBeVisible();
+  const week = page.locator(".plan-horizon", { has: page.getByRole("heading", { name: /^This week/ }) });
+  const rows = week.locator(".plan-row");
+  const before = await rows.count();
+  const title = (await rows.first().locator(".plan-row-title").innerText()).trim();
+  await rows.first().getByRole("button", { name: `Mark done: ${title}` }).click();
+  await expect(rows).toHaveCount(before - 1);
+  await expect(week.getByRole("heading", { name: /^This week/ })).toContainText(String(before - 1));
+  // The demo has no Work tasks, so there is no Work section to scroll past.
+  await expect(page.getByRole("heading", { name: /^Work/ })).toHaveCount(0);
+});
+
+test("Mind Box's notes link lands on Plan's Inbox", async ({ page }) => {
+  await enterDemo(page);
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Mind Box", exact: true }).click();
+  await page.getByTestId("brain-dump-inbox-btn").click();
+  await expect(page.getByRole("tab", { name: "Horizons" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("heading", { name: /^Inbox/ })).toBeInViewport();
+});
+
+// Codex review of #410: in Drag anywhere mode the row is the drag handle, so
+// Space or Enter on its circle must mark the task done, not pick the row up.
+test("Horizons in Drag anywhere mode: Space and Enter on the circle mark the task done", async ({ page }) => {
+  await enterDemo(page);
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("switch", { name: "Drag anywhere" }).click();
+  await expect(page.getByRole("switch", { name: "Drag anywhere" })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  const week = page.locator(".plan-horizon", { has: page.getByRole("heading", { name: /^This week/ }) });
+  const rows = week.locator(".plan-row");
+  const before = await rows.count();
+  for (const key of ["Space", "Enter"]) {
+    const title = (await rows.first().locator(".plan-row-title").innerText()).trim();
+    await rows.first().getByRole("button", { name: `Mark done: ${title}` }).focus();
+    await page.keyboard.press(key);
+    await expect(week.getByText(title, { exact: true })).toHaveCount(0);
+  }
+  await expect(rows).toHaveCount(before - 2);
 });

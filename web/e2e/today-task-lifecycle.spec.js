@@ -276,7 +276,7 @@ test("mobile reliability: editing the wall's task off Today clears its focus/pin
   // on the wall; a cleared one lands in the list like any other task.
   const nav = page.getByRole("navigation", { name: "Main navigation" });
   await nav.getByRole("button", { name: "Plan", exact: true }).click();
-  await page.getByRole("button", { name: "HORIZONS" }).click();
+  await page.getByRole("tab", { name: "Horizons" }).click();
   await page.locator(".roadmap-task-card", { hasText: title }).first().click();
   await page.getByRole("button", { name: /Move to Today/i }).click();
   await nav.getByRole("button", { name: "Today", exact: true }).click();

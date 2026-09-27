@@ -68,7 +68,7 @@ async function assertLegible(locator, what, theme) {
 const visibleHitHeight = (locator) => locator.evaluate((el) => {
   const box = el.getBoundingClientRect();
   const declared = Math.max(box.height, parseFloat(getComputedStyle(el, "::after").height) || 0);
-  const scroller = el.closest(".horizon-pills, .plan-views") || el.parentElement;
+  const scroller = el.parentElement;
   const cs = getComputedStyle(scroller);
   if (cs.overflowX === "visible" && cs.overflowY === "visible") return declared;
   const sr = scroller.getBoundingClientRect();
@@ -148,19 +148,15 @@ for (const theme of THEMES) {
     }
     await page.locator(".dm-back").click();
 
-    // Plan's view switcher.
+    // Plan (45h): the unselected view in its switch, and a row's figures —
+    // its smallest text — both legible; the horizon's + a full target.
     await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-    await expect(page.getByRole("button", { name: "HORIZONS" })).toBeVisible();
-    await assertLegible(page.locator("button.plan-view").first(), "plan kicker", theme);
-    expect(await visibleHitHeight(page.getByRole("button", { name: "DAY MAP" })),
-      `plan kicker hit area on ${theme}`).toBeGreaterThanOrEqual(MIN_TOUCH_PX);
-
-    // The horizon switcher.
-    await page.getByRole("button", { name: "HORIZONS" }).click();
-    await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible();
-    await assertLegible(page.locator(".horizon-pill").first(), "horizon kicker", theme);
-    expect(await visibleHitHeight(page.locator(".horizon-pill").first()),
-      `horizon kicker hit area on ${theme}`).toBeGreaterThanOrEqual(MIN_TOUCH_PX);
+    await expect(page.getByRole("tab", { name: "Horizons" })).toHaveAttribute("aria-selected", "true");
+    await assertLegible(page.getByRole("tab", { name: "Fronts" }), "unselected Plan view", theme);
+    await assertLegible(page.locator(".plan-row-figures").first(), "horizon row figures", theme);
+    await assertLegible(page.locator(".plan-horizon-count").first(), "horizon count", theme);
+    expect(await visibleHitHeight(page.getByRole("button", { name: "Add a task to This week" })),
+      `horizon + hit area on ${theme}`).toBeGreaterThanOrEqual(MIN_TOUCH_PX);
   });
 }
 
