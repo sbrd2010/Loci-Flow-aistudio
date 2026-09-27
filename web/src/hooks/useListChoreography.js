@@ -57,20 +57,26 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
   const leaving = useRef(null);
   const busyUntil = useRef(0);
 
-  const settle = useCallback(() => {
+  // The list faded out: back to the display React gave it.
+  const releaseLeaving = useCallback(() => {
+    if (!leaving.current) return;
+    const el = leaving.current;
+    ["position", "left", "top", "width", "height", "margin", "pointerEvents", "zIndex"].forEach(p => { el.style[p] = ""; });
+    el.style.display = el.dataset.restoreDisplay || "";
+    delete el.dataset.restoreDisplay;
+    leaving.current = null;
+  }, []);
+
+  // Ends the previous toggle's motion. The ghosts to remove are passed in, so
+  // a toggle can take its own exit ghosts first and keep them.
+  const settle = useCallback((staleGhosts = ghosts.current) => {
     anims.current.forEach(a => a.cancel());
     anims.current = [];
-    ghosts.current.forEach(g => g.remove());
-    ghosts.current = [];
-    if (leaving.current) {
-      const el = leaving.current;
-      ["position", "left", "top", "width", "height", "margin", "pointerEvents", "zIndex"].forEach(p => { el.style[p] = ""; });
-      el.style.display = el.dataset.restoreDisplay || "";
-      delete el.dataset.restoreDisplay;
-      leaving.current = null;
-    }
-  }, []);
-  useEffect(() => settle, [settle]);
+    staleGhosts.forEach(g => g.remove());
+    ghosts.current = ghosts.current.filter(g => !staleGhosts.includes(g));
+    releaseLeaving();
+  }, [releaseLeaving]);
+  useEffect(() => () => settle(), [settle]);
 
   const play = (el, keyframes, opts) => {
     if (!el?.animate) return null;
@@ -102,7 +108,14 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
       { duration: 120, easing: EXIT, fill: "forwards" },
     );
     anims.current.push(a);
-    a.onfinish = () => { if (leaving.current === el) settle(); };
+    // Only the list is done at 120ms: the task's glide and the controls'
+    // fade-in run on to 320ms and 380ms.
+    a.onfinish = () => {
+      if (leaving.current !== el) return;
+      releaseLeaving();
+      a.cancel();
+      anims.current = anims.current.filter(x => x !== a);
+    };
   };
 
   const toggle = useCallback((next) => {
@@ -133,12 +146,15 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
     const controlsBefore = [...root.querySelectorAll("[data-flip-controls]")].filter(visible);
     const entersBefore = [...root.querySelectorAll("[data-flip-enter]")].filter(visible);
     const heroBefore = root.querySelector(".wall-hero");
-    // Ghosts are taken before the layout changes, while they still look right.
+    // The previous toggle's ghosts go; this toggle's are taken before the
+    // layout changes, while they still look right, and fade out after it.
+    const staleGhosts = ghosts.current;
+    ghosts.current = [];
     if (next) controlsBefore.forEach(el => fadeOutGhost(el, 80, "linear"));
     else entersBefore.forEach(el => fadeOutGhost(el, 80, "linear"));
     if (mode === "rise") fadeOutGhost(heroBefore, 120, EXIT);
 
-    settle();
+    settle(staleGhosts);
     flushSync(() => setOpen(next));
     const d = ms => (interrupted ? 0 : ms);
 

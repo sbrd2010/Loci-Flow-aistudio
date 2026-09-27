@@ -184,6 +184,7 @@
 
 @media (min-width: 1024px) {
   .today-list-top {
+    container-type: inline-size;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -192,16 +193,23 @@
     border-bottom: 1px solid var(--line);
   }
   .today-list-head { display: contents; }
+  /* Too narrow for one row (a 1024–1279 laptop): two rows on purpose —
+     title, count and Hide list, then the filter and Low energy — rather
+     than letting Hide list wrap onto a line of its own. */
   .today-list-title { order: 0; }
   .today-list-count { order: 1; }
+  .today-list-head-end { order: 2; margin-left: auto; }
   .today-list-tools {
-    order: 2;
+    order: 3;
+    flex: 1 0 100%;
     flex-wrap: nowrap;
-    margin-left: auto;
     padding: 0;
     border: 0;
   }
-  .today-list-head-end { order: 3; margin-left: 0; }
+  @container (min-width: 680px) {
+    .today-list-tools { order: 2; flex: 0 1 auto; margin-left: auto; }
+    .today-list-head-end { order: 3; margin-left: 0; }
+  }
   .today-list-link,
   .today-list-add,
   .today-energy-caption { display: none; }
