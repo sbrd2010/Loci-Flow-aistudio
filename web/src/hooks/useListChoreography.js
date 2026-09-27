@@ -123,6 +123,11 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
     const mode = listMotionMode();
     if (!root || mode === "none") { setOpen(next); return; }
     const now = performance.now();
+    // The toggle keeps focus: Show list → Hide list, and back.
+    const toggleHadFocus = document.activeElement?.matches?.(".wall-peek, .today-list-hide");
+    const handFocus = () => {
+      if (toggleHadFocus) root.querySelector(next ? ".today-list-hide" : ".wall-peek")?.focus({ preventScroll: true });
+    };
     if (mode === "reduce") {
       if (now < busyUntil.current) return;
       busyUntil.current = now + 130;
@@ -132,12 +137,12 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
         flushSync(() => setOpen(next));
         out.cancel();
         root.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 60, easing: "linear" });
+        handFocus();
       };
       return;
     }
 
     const interrupted = anims.current.some(a => a.playState === "running");
-    const toggleHadFocus = document.activeElement?.matches?.(".wall-peek, .today-list-hide");
     const list = listRef.current;
     const listWasShown = visible(list);
     const listRect = listWasShown ? list.getBoundingClientRect() : null;
@@ -193,8 +198,7 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
       }
     }
 
-    // The toggle keeps focus: Show list → Hide list, and back.
-    if (toggleHadFocus) root.querySelector(next ? ".today-list-hide" : ".wall-peek")?.focus({ preventScroll: true });
+    handFocus();
   }, [rootRef, listRef, setOpen, settle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return toggle;
