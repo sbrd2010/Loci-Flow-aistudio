@@ -1236,6 +1236,57 @@ test("laptop: show/hide glides with transform and opacity, reverses mid-move and
   await expect(page.getByRole("button", { name: /^Show list/ })).toBeVisible();
 });
 
+// Codex review of #405. What leaves fades out as a copy (the hidden-state
+// controls on Show, 80ms): the copy must outlive the layout switch. And the
+// list's own 120ms fade on Hide must not end the task's glide, which runs to
+// 320ms. Both are read in the same task as the click, so timing can't flake.
+test("laptop: the leaving controls fade out, and hiding lets the task finish its glide (51f)", async ({ page }) => {
+  await enterLaptop(page);
+  const ghostsAfterShow = await page.evaluate(() => {
+    document.querySelector(".wall-peek-wide").click();
+    return [...document.body.children]
+      .filter(c => c.style.position === "fixed" && c.getAttribute("aria-hidden") === "true")
+      .filter(c => c.getAnimations().some(a => a.playState === "running")).length;
+  });
+  expect(ghostsAfterShow).toBeGreaterThan(0);
+  await page.waitForFunction(() => document.getAnimations().length === 0);
+
+  const hide = await page.evaluate(async () => {
+    document.querySelector(".today-list-hide").click();
+    const list = document.querySelector(".tasks-section");
+    const fade = list.getAnimations()[0];
+    // After the app's own onfinish has run (listeners fire in order).
+    await new Promise(r => fade.addEventListener("finish", r, { once: true }));
+    const glide = document.querySelector("[data-flip='title']").getAnimations()[0];
+    return { listFade: fade.effect.getTiming().duration, glideState: glide?.playState };
+  });
+  expect(hide.listFade).toBe(120);
+  expect(hide.glideState).toBe("running");
+});
+
+// Codex review of #405. The header's five items need about 650px; a laptop
+// list under that (1024–1279) takes two tidy rows — title, count and Hide
+// list, then the filter and Low energy — never Hide list alone on a third.
+test("laptop: the list header is one row when it fits, two tidy rows when it doesn't", async ({ page }) => {
+  const tops = () => page.evaluate(() => Object.fromEntries(
+    [".today-list-title", ".today-list-count", ".today-list-tools", ".today-list-head-end"].map(sel => {
+      const r = document.querySelector(sel).getBoundingClientRect();
+      return [sel.slice(12), { top: r.top, bottom: r.bottom }];
+    })));
+  const sameRow = (a, b) => a.top < b.bottom && b.top < a.bottom;
+  await enterLaptop(page);
+  await page.keyboard.press("l");
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  let t = await tops();
+  for (const k of ["count", "tools", "head-end"]) expect(sameRow(t.title, t[k]), k).toBe(true);
+
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await expect.poll(async () => { t = await tops(); return sameRow(t.title, t.tools); }).toBe(false);
+  expect(sameRow(t.title, t.count)).toBe(true);
+  expect(sameRow(t.title, t["head-end"])).toBe(true);
+  expect(t.tools.top).toBeGreaterThanOrEqual(t["head-end"].bottom - 1);
+});
+
 test("laptop: with Reduce Motion the list fades through paper and nothing moves", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await enterLaptop(page);
