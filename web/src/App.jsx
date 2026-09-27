@@ -1314,7 +1314,6 @@ export default function App() {
             onHelpChoose={() => openScattered("daymap")}
             dayClock={dayClock}
             flushNow={flushNow}
-            backLabel={dayMapReturnTab === "roadmap" ? "Plan" : "Today"}
           />
         )}
         {activeTab === "roadmap" && (roadmapView === "plan" || roadmapView === "horizons") && (
