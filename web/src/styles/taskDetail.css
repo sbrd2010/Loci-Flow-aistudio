@@ -368,3 +368,16 @@
 }
 .detail-suggest:disabled { color: var(--ink-2); cursor: default; }
 .detail-suggest:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* A narrow laptop (1024–1279): on the right the drawer would cover nearly
+   all of the list, which must stay usable (50b). It opens on the left
+   instead, over the task column (x 48–468); the list starts at 504. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .task-detail.is-drawer {
+    left: 0;
+    right: auto;
+    border-left: 0;
+    border-right: 1px solid var(--line);
+    box-shadow: 12px 0 30px rgba(15, 31, 22, 0.08);
+  }
+}
