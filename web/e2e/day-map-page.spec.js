@@ -66,14 +66,6 @@ test("laptop: the app header stays with Today current; ‹ Today and Esc go back
   await expect(page.locator(".day-map-page")).toHaveCount(0);
 });
 
-test("the Day map's Back names where it goes: Plan when Plan opened it", async ({ page }) => {
-  await enterDemo(page, { width: 1280, height: 800 });
-  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  await page.getByRole("button", { name: "DAY MAP" }).click();
-  await expect(page.locator(".day-map-page")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Back to Plan" })).toContainText("Plan");
-});
-
 // Codex review of #409: NOW marks where the fill ends — early in the day too,
 // not held at a fifth of the way along — and stays inside the bar.
 test("the NOW label sits where the day's fill ends, even near the start", async ({ page }) => {

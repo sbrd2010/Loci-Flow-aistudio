@@ -65,7 +65,7 @@ test("reliability: today task can be moved to the roadmap", async ({ page }) => 
 
   await expect(tasksList.getByText(title)).not.toBeVisible({ timeout: 5_000 });
   await openTab(page, "Plan");
-  await page.getByRole("button", { name: "HORIZONS" }).click();
+  await page.getByRole("tab", { name: "Horizons" }).click();
   await expect(page.getByText(title)).toBeVisible({ timeout: 5_000 });
 });
 
@@ -85,7 +85,7 @@ test("reliability: parked roadmap tasks are hidden after Bad Day Reset", async (
 
   await expect(tasksList.getByText(title)).not.toBeVisible({ timeout: 5_000 });
   await openTab(page, "Plan");
-  await page.getByRole("button", { name: "HORIZONS" }).click();
+  await page.getByRole("tab", { name: "Horizons" }).click();
   await expect(page.getByText(title)).toBeVisible({ timeout: 5_000 });
 
   await openTab(page, "Mind Box");
@@ -93,7 +93,7 @@ test("reliability: parked roadmap tasks are hidden after Bad Day Reset", async (
   await page.getByRole("button", { name: "Yes, restart" }).click();
 
   await openTab(page, "Plan");
-  await page.getByRole("button", { name: "HORIZONS" }).click();
+  await page.getByRole("tab", { name: "Horizons" }).click();
   await expect(page.getByText(title)).not.toBeVisible({ timeout: 5_000 });
 });
 
@@ -127,15 +127,15 @@ test("reliability: brain dump item survives tab switch and is browsable via Road
   // Mind Box's inbox button deep-links straight to Roadmap's Inbox — no
   // browsable list of its own anymore.
   await page.getByTestId("brain-dump-inbox-btn").click();
-  await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByRole("heading", { name: "Plan", level: 1 })).toBeVisible({ timeout: 8_000 });
   const dumpItem = page.locator('[data-testid="dump-item"]').filter({ hasText: thought });
   await expect(dumpItem).toBeVisible({ timeout: 5_000 });
 
   // Switch away and back — item must survive the tab switch
   await openTab(page, "Mind Box");
   await openTab(page, "Plan");
-  await page.getByRole("button", { name: "HORIZONS" }).click();
-  await page.getByRole("tab", { name: /Inbox/ }).click();
+  await page.getByRole("tab", { name: "Horizons" }).click();
+  await expect(page.getByRole("heading", { name: /^Inbox/ })).toBeVisible();
   await expect(dumpItem).toBeVisible({ timeout: 5_000 });
 });
 

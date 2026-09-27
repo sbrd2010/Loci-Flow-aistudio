@@ -61,17 +61,17 @@ for (const viewport of MOBILE_VIEWPORTS) {
     await expect(page.getByTestId("today-tasks-list")).toBeVisible({ timeout: 8_000 });
     await expectNoHorizontalOverflow(page);
 
-    // The Roadmap tab opens on Plan (the redesign's screen 4); the horizon
-    // board is one tap behind it. Both need the overflow guard — Plan's header
-    // puts a title and a "New front" button on one row, which is exactly the
-    // kind of thing that overflows at 320px.
+    // Plan opens on Horizons (45h); Fronts is the other view. Both need the
+    // overflow guard — the fronts header puts a title and a "New front" button
+    // on one row, which is exactly the kind of thing that overflows at 320px.
     await openTab(page, "Plan");
-    await expect(page.locator(".plan-tab")).toBeVisible({ timeout: 8_000 });
-    await expect(page.getByText("ONE NEXT MOVE EACH")).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByRole("heading", { name: "Plan", level: 1 })).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator(".plan-horizons")).toBeVisible({ timeout: 8_000 });
     await expectNoHorizontalOverflow(page);
 
-    await page.getByRole("button", { name: "HORIZONS" }).click();
-    await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible({ timeout: 8_000 });
+    await page.getByRole("tab", { name: "Fronts" }).click();
+    await expect(page.locator(".plan-tab")).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText("ONE NEXT MOVE EACH")).toBeVisible({ timeout: 8_000 });
     await expectNoHorizontalOverflow(page);
 
     await openTab(page, "Mind Box");

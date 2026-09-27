@@ -196,8 +196,8 @@ test("13. Brain dump long-note gate — move as-is lands in horizon", async ({ p
 
   // Navigate to Roadmap and open Brain Dump Inbox
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  await page.getByRole("button", { name: "HORIZONS" }).click();
-  await page.getByRole("tab", { name: /Inbox/ }).click();
+  await page.getByRole("tab", { name: "Horizons" }).click();
+  await expect(page.getByRole("heading", { name: /^Inbox/ })).toBeVisible();
 
   // Demo item bd4 is > 20 words — it should be in the inbox
   const longItemText = "I need to decide whether to keep the current plan";
@@ -215,17 +215,17 @@ test("13. Brain dump long-note gate — move as-is lands in horizon", async ({ p
   await dumpItem.getByRole("button", { name: "Move as-is" }).click();
   await expect(dumpItem).not.toBeVisible({ timeout: 5_000 });
 
-  // Switch to Week horizon and verify the task is there
-  await page.getByRole("tab", { name: /^Week/ }).click();
-  await expect(page.getByText(longItemText)).toBeVisible({ timeout: 5_000 });
+  // It lands in This week, shown with the other horizons.
+  const week = page.locator(".plan-horizon", { has: page.getByRole("heading", { name: /^This week/ }) });
+  await expect(week.getByText(longItemText)).toBeVisible({ timeout: 5_000 });
 });
 
 test("14. Brain dump inbox delete (Roadmap) requires confirmation before removing an item", async ({ page }) => {
   await enterDemo(page);
 
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  await page.getByRole("button", { name: "HORIZONS" }).click();
-  await page.getByRole("tab", { name: /Inbox/ }).click();
+  await page.getByRole("tab", { name: "Horizons" }).click();
+  await expect(page.getByRole("heading", { name: /^Inbox/ })).toBeVisible();
 
   const firstDumpItem = page.locator('[data-testid="dump-item"]').first();
   await expect(firstDumpItem).toBeVisible({ timeout: 5_000 });
