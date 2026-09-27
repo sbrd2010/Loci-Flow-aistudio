@@ -253,74 +253,6 @@
   line-height: 1.6;
   color: var(--text-quiet, var(--text-muted));
 }
-/* Plan's three views. A row of mono kickers under a hairline, not pills:
-   the same restraint the rest of the sheet uses, so switching view reads as
-   moving along one surface rather than leaving for another screen. */
-.plan-views {
-  display: flex;
-  gap: 18px;
-  align-items: center;
-  padding: 0 0 10px;
-  margin: 0 0 14px;
-  border-bottom: 1px solid var(--divider, var(--border));
-}
-
-.plan-view {
-  appearance: none;
-  background: none;
-  border: 0;
-  padding: 2px 0;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  /* Evening and Paper define --text-quiet; the thirteen legacy themes do not,
-     and their --text-muted is a deliberately faint tier that puts a 10px
-     kicker at 2.58:1 on Teal and 2.64:1 on Coral. --text-secondary is the
-     legible tier those themes actually intend for small labels. */
-  color: var(--text-quiet, var(--text-secondary));
-}
-
-/* Only the two that go somewhere are buttons; the current view is a span, and
-   should not offer a pointer or a hover it cannot honour.
-
-   A 10px kicker is a 15px-tall tap target, and these two buttons are now the
-   only way into Day Map and Horizons from here. The row is meant to stay tight,
-   so the hit area is extended past the glyphs with a pseudo-element rather than
-   by growing the button: 44px tall, centred, which is the same minimum
-   .plan-new-front and .plan-front-close already use. */
-button.plan-view {
-  position: relative;
-  cursor: pointer;
-}
-
-button.plan-view::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 44px;
-  transform: translateY(-50%);
-}
-
-button.plan-view:hover { color: var(--ink, var(--text-primary)); }
-
-button.plan-view:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
-/* The view you are on: named in ink, underlined in gold. One accent. */
-.plan-view.is-active {
-  color: var(--ink, var(--text-primary));
-  box-shadow: inset 0 -2px 0 var(--accent);
-}
-
-.plan-view:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
 @media (max-width: 430px) {
   .plan-tab { padding-left: 20px; padding-right: 20px; }
 }
@@ -406,3 +338,216 @@ button.plan-view:focus-visible {
   transition: background 0.15s ease;
 }
 .plan-scattered:hover { background: var(--accent-tint); }
+
+/* ── Plan's head (45h–j): the title and Horizons | Fronts ──
+   Phone: the switch takes the width under the title. From 840px it sits
+   beside it. */
+.plan-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 18px 20px 14px;
+  font-family: var(--font-sans);
+  color: var(--ink, var(--text-primary));
+  border-bottom: 1px solid var(--line, var(--border));
+}
+.plan-head-title {
+  margin: 0;
+  font-size: 1.625rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.plan-seg {
+  display: flex;
+  flex: 1 0 100%;
+  padding: 3px;
+  background: var(--panel, var(--bg-secondary));
+  border-radius: 10px;
+}
+.plan-seg-opt {
+  flex: 1;
+  min-height: 40px;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--ink-2, var(--text-secondary));
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.plan-seg-opt[aria-selected="true"] {
+  color: var(--ink, var(--text-primary));
+  background: var(--surface, var(--bg-card));
+  box-shadow: var(--shadow-sm);
+}
+.plan-seg-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── Horizons (45h): a section per horizon — a count and a +, then rows ── */
+.plan-horizons-view {
+  gap: 0;
+  padding: 4px 20px 96px;
+  font-family: var(--font-sans);
+  color: var(--ink, var(--text-primary));
+}
+.plan-horizons { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 36px; }
+.plan-horizon { min-width: 0; }
+.plan-horizon-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  border-bottom: 1px solid var(--line, var(--border));
+}
+.plan-horizon-name {
+  margin: 0;
+  font-size: 1.1875rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.plan-horizon-count {
+  margin-left: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink-2, var(--text-secondary));
+}
+.plan-horizon-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 -10px 0 auto;
+  padding: 0;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.plan-horizon-add:hover { background: var(--accent-tint, var(--bg-card-hover)); }
+.plan-horizon-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.plan-empty.roadmap-empty-state {
+  padding: 14px 0;
+  text-align: left;
+  color: var(--ink-2, var(--text-secondary));
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line, var(--border));
+  border-radius: 0;
+}
+
+/* A row: the 44px circle, the title, and under it GOAL · P · estimate. */
+.roadmap-task-card.plan-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 60px;
+  padding: 10px 0;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line, var(--border));
+  border-radius: 0;
+  box-shadow: none;
+  transform: none;
+  transition: background 0.12s;
+}
+.roadmap-task-card.plan-row:hover { background: none; transform: none; }
+.roadmap-task-card.plan-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.plan-row-grip {
+  flex-shrink: 0;
+  align-self: center;
+  width: 20px;
+  margin-left: -22px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--ink-2, var(--text-muted));
+  background: none;
+  border: 0;
+  opacity: 0.45;
+  cursor: grab;
+  touch-action: none;
+}
+.plan-row-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  margin: -6px -8px -6px -12px;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.plan-row-circle > span {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--edge, var(--border));
+  border-radius: 50%;
+}
+.plan-row-circle:hover > span { border-color: var(--accent); }
+.plan-row-circle:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 50%; }
+.plan-row-body { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }
+.roadmap-task-title.plan-row-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--ink, var(--text-primary));
+}
+.plan-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.plan-row-figures {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-2, var(--text-secondary));
+}
+
+/* ── Inbox: Mind Box's notes, until they are sent to a horizon ── */
+.plan-inbox { margin-bottom: 8px; }
+.plan-inbox-clear {
+  min-height: 44px;
+  margin-left: auto;
+  padding: 0 4px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--coral-ink, var(--danger));
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.plan-inbox-note { margin: 10px 0; font-size: 0.8125rem; color: var(--ink-2, var(--text-secondary)); }
+.plan-inbox-note.is-full { font-weight: 700; color: var(--coral-ink, var(--danger)); }
+
+/* Tablet (45j): two columns of horizons, the switch beside the title. */
+@media (min-width: 840px) {
+  .plan-head { padding: 22px 36px 18px; }
+  .plan-seg { flex: 0 0 280px; margin-left: auto; }
+  .plan-horizons-view { padding: 8px 36px 80px; }
+  .plan-horizons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Laptop (45j, 50m): four columns; a row keeps its title and figures on one
+   line where they fit. */
+@media (min-width: 1024px) {
+  .plan-head,
+  .plan-horizons-view {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding-left: 48px;
+    padding-right: 48px;
+  }
+  .plan-head { border-bottom: 0; padding-top: 28px; }
+  .plan-head-title { font-size: 2.25rem; }
+  .plan-horizons { grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: 28px; }
+  .plan-horizon-name { font-size: 1rem; }
+  .roadmap-task-card.plan-row { min-height: 48px; }
+  .roadmap-task-title.plan-row-title { font-size: 0.875rem; font-weight: 600; }
+}
+

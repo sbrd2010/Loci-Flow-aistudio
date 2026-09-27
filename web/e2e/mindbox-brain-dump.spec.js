@@ -56,12 +56,12 @@ test("mobile reliability: Brain Dump item is addable from Mind Box, browsable on
   await expect(input).toHaveValue("");
 
   // Mind Box no longer has its own browsable list — its "N notes" button
-  // jumps straight to Roadmap's Horizon Planning Inbox instead.
+  // opens Plan's Horizons, whose Inbox holds them.
   await expect(page.getByTestId("brain-dump-inbox-btn")).toContainText("Roadmap Inbox");
   await expectNoHorizontalOverflow(page);
   await page.getByTestId("brain-dump-inbox-btn").click();
 
-  await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByRole("heading", { name: "Plan", level: 1 })).toBeVisible({ timeout: 8_000 });
   const dumpItem = page.locator('[data-testid="dump-item"]').filter({ hasText: thought });
   await expect(dumpItem).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
@@ -73,8 +73,8 @@ test("mobile reliability: Brain Dump item is addable from Mind Box, browsable on
   // The nav tab lands on Plan by design; the Inbox is a column on the horizon
   // board behind it. (The "N notes waiting" deep link above goes straight
   // there, which is why it needs no hop.)
-  await page.getByRole("button", { name: "HORIZONS" }).click();
-  await page.getByRole("tab", { name: /Inbox/ }).click();
+  await page.getByRole("tab", { name: "Horizons" }).click();
+  await expect(page.getByRole("heading", { name: /^Inbox/ })).toBeVisible();
   await expect(dumpItem).toBeVisible({ timeout: 5_000 });
 
   await dumpItem.getByText("🗑").click();

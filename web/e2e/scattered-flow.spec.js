@@ -26,6 +26,8 @@ async function enterDemo(page) {
 
 async function openScattered(page) {
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  // Plan opens on Horizons (45h); the door is on its Fronts view.
+  await page.getByRole("tab", { name: "Fronts" }).click();
   const entry = page.getByRole("button", { name: /I'm scattered/i });
   await entry.scrollIntoViewIfNeeded();
   await entry.click();

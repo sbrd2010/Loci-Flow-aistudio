@@ -24,8 +24,10 @@ async function enterDemo(page) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
 }
 
+// Plan opens on Horizons (45h); fronts are its other view.
 async function openPlan(page) {
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  await page.getByRole("tab", { name: "Fronts" }).click();
   await expect(page.locator(".plan-tab")).toBeVisible({ timeout: 10_000 });
 }
 

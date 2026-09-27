@@ -43,8 +43,8 @@ test("opened from Today: it says so, rings the horizon block, and the button nam
 test("opened from Plan: the note names the column it came from", async ({ page }) => {
   await enterDemo(page);
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  await page.getByRole("button", { name: "HORIZONS" }).click();
-  await page.locator(".horizon-panel .column-add-btn").first().click();
+  await page.getByRole("tab", { name: "Horizons" }).click();
+  await page.getByRole("button", { name: "Add a task to This week" }).click();
   const dialog = page.getByRole("dialog", { name: "New task" });
   await expect(dialog.locator(".add-note")).toContainText(/because you opened it from Plan · /);
   const pressed = (await dialog.locator(".add-block [aria-pressed='true']").first().innerText()).trim();

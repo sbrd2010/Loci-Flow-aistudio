@@ -22,8 +22,8 @@ async function enterDemo(page) {
 
 async function openRoadmap(page) {
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  await page.getByRole("button", { name: "HORIZONS" }).click();
-  await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible({ timeout: 8_000 });
+  await page.getByRole("tab", { name: "Horizons" }).click();
+  await expect(page.getByRole("heading", { name: "Plan", level: 1 })).toBeVisible({ timeout: 8_000 });
 }
 
 function roadmapCard(page, title) {
@@ -36,7 +36,7 @@ async function expectNoHorizontalOverflow(page) {
       document.documentElement.scrollWidth,
       document.body?.scrollWidth || 0,
     ];
-    document.querySelectorAll(".app-container, .screen-content, .roadmap-container, .roadmap-compact-layout, .horizon-panel").forEach((el) => {
+    document.querySelectorAll(".app-container, .screen-content, .roadmap-container, .plan-horizons").forEach((el) => {
       measured.push(el.scrollWidth);
     });
     return {
@@ -55,7 +55,7 @@ test("reliability: roadmap task can be added, edited, and moved to Today", async
   const originalTitle = "Roadmap lifecycle seed task";
   const editedTitle = "Ready for Today smoke task";
 
-  await page.locator(".horizon-panel .column-add-btn").click();
+  await page.getByRole("button", { name: "Add a task to This week" }).click();
   await expect(page.locator(".add-card")).toBeVisible({ timeout: 5_000 });
   await page.getByTestId("add-task-title").fill(originalTitle);
   await page.getByTestId("add-task-submit").click();
@@ -89,7 +89,7 @@ test("reliability: manual sub-steps added on a roadmap task are visible on the c
   await openRoadmap(page);
 
   const title = "Roadmap checklist visibility seed task";
-  await page.locator(".horizon-panel .column-add-btn").click();
+  await page.getByRole("button", { name: "Add a task to This week" }).click();
   await expect(page.locator(".add-card")).toBeVisible({ timeout: 5_000 });
   await page.getByTestId("add-task-title").fill(title);
   await page.getByRole("button", { name: /More details/i }).click();
@@ -123,6 +123,6 @@ test("reliability: roadmap task can be deleted through confirmation", async ({ p
   await page.getByRole("button", { name: "Delete", exact: true }).click();
 
   await expect(roadmapCard(page, title)).not.toBeVisible({ timeout: 5_000 });
-  await expect(page.getByRole("heading", { name: "Horizon Planning" })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("heading", { name: "Plan", level: 1 })).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
 });

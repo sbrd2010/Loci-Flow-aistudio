@@ -17,10 +17,20 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import LinkifyText from "./LinkifyText";
+import { formatEstimate } from "./TaskDetail";
+import { IconPlus } from "./ui/icons";
+import { commitmentKickerFront, frontForCommitment, frontsFromConfig } from "../utils/fronts";
 
-function SortableRoadmapCard({ id, task, onTaskClick, interactionStyle = "classic" }) {
+// A horizon row (45h): the circle marks it done; the title; then GOAL, the
+// priority, and the estimate — or, without one, the front it is on. The whole
+// row opens the task. Drag keeps working: by the grip, or by the whole row in
+// Drag anywhere mode.
+function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, frontName = null, interactionStyle = "classic" }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   const isDragAnywhere = interactionStyle === "dragAnywhere";
+  const estimate = Number(task.timeEstimateMinutes) > 0 ? formatEstimate(task.timeEstimateMinutes) : null;
+  const meta = [task.priority || "P3", estimate || frontName].filter(Boolean);
+  const steps = Array.isArray(task.subSteps) ? task.subSteps : [];
   return (
     <div
       ref={setNodeRef}
@@ -33,7 +43,7 @@ function SortableRoadmapCard({ id, task, onTaskClick, interactionStyle = "classi
     >
       <div
         ref={isDragAnywhere ? setActivatorNodeRef : undefined}
-        className="roadmap-task-card"
+        className={`roadmap-task-card plan-row${isDragAnywhere ? " is-drag-anywhere" : ""}`}
         onClick={() => onTaskClick(task)}
         {...(isDragAnywhere ? {
           ...listeners,
@@ -41,49 +51,46 @@ function SortableRoadmapCard({ id, task, onTaskClick, interactionStyle = "classi
           "aria-disabled": attributes?.["aria-disabled"],
           "aria-describedby": attributes?.["aria-describedby"],
         } : {})}
-        style={{
-          display: "flex", alignItems: "center", gap: "6px",
-          ...(isDragAnywhere ? { cursor: "grab" } : {}),
-        }}
       >
         {!isDragAnywhere && (
           <button
+            type="button"
             {...listeners}
             {...attributes}
-            style={{
-              background: "none", border: "none", cursor: "grab",
-              color: "var(--text-muted)", opacity: 0.3, padding: "2px 3px",
-              flexShrink: 0, lineHeight: 1, fontSize: "13px",
-              touchAction: "none",
-            }}
+            className="plan-row-grip"
             onClick={e => e.stopPropagation()}
             aria-label="Drag to reorder"
           >
             ⠿
           </button>
         )}
-        <span className={`priority-badge ${task.priority?.toLowerCase() || "p3"}`} style={{ flexShrink: 0 }}>
-          {task.priority || "P3"}
-        </span>
-        {task.isHorizonPinned && (
-          <span title="Pinned to top" aria-label="Pinned to top" style={{ flexShrink: 0, fontSize: "12px" }}>📌</span>
-        )}
-        {CATEGORY_ICONS[task.category] && (
-          <span className="task-category-icon" title={task.category} aria-label={task.category}>
-            {CATEGORY_ICONS[task.category]}
-          </span>
-        )}
-        <span className="roadmap-task-title" style={{ flex: 1, minWidth: 0 }}><LinkifyText text={task.title} /></span>
-        {task.subSteps && task.subSteps.length > 0 && (
-          <span
-            title={`${task.subSteps.filter(s => s.done).length}/${task.subSteps.length} steps done`}
-            style={{ flexShrink: 0, fontSize: "11px", color: "var(--text-muted)" }}
+        {onDone && (
+          <button
+            type="button"
+            className="plan-row-circle"
+            aria-label={`Mark done: ${task.title}`}
+            onClick={e => { e.stopPropagation(); onDone(task); }}
+            onMouseDown={e => e.stopPropagation()}
+            onTouchStart={e => e.stopPropagation()}
+            onPointerDown={e => e.stopPropagation()}
           >
-            ☑ {task.subSteps.filter(s => s.done).length}/{task.subSteps.length}
-          </span>
+            <span aria-hidden="true" />
+          </button>
         )}
+        <span className="plan-row-body">
+          <span className="roadmap-task-title plan-row-title">
+            {task.isHorizonPinned && <span className="plan-row-pinned" title="Pinned to top" aria-label="Pinned to top">📌 </span>}
+            <LinkifyText text={task.title} />
+          </span>
+          <span className="plan-row-meta">
+            {isGoal && <span className="task-tag is-goal">GOAL</span>}
+            <span className="plan-row-figures">{meta.join(" · ")}</span>
+            {steps.length > 0 && <span className="plan-row-figures">{steps.filter(s => s.done).length}/{steps.length} steps</span>}
+          </span>
+        </span>
         {isDragAnywhere && (
           <button
+            type="button"
             className="task-row-kebab-btn"
             onClick={e => { e.stopPropagation(); onTaskClick(task); }}
             onMouseDown={e => e.stopPropagation()}
@@ -97,7 +104,7 @@ function SortableRoadmapCard({ id, task, onTaskClick, interactionStyle = "classi
   );
 }
 
-function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, onTaskClick }) {
+function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, onTaskClick, onDone, isGoal = () => false, frontNameOf = () => null }) {
   const interactionStyle = payload?.config?.taskRowInteractionStyle === "dragAnywhere" ? "dragAnywhere" : "classic";
   const [activeId, setActiveId] = useState(null);
   const getKey = (t) => t.uuid || String(t.id);
@@ -133,7 +140,7 @@ function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, on
   };
 
   if (colTasks.length === 0) {
-    return <div className="roadmap-empty-state">No tasks here. Tap + to add one.</div>;
+    return <div className="roadmap-empty-state plan-empty">Nothing here yet.</div>;
   }
 
   const activeTask = activeId ? colTasks.find(t => getKey(t) === activeId) : null;
@@ -153,6 +160,9 @@ function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, on
             id={getKey(task)}
             task={task}
             onTaskClick={onTaskClick}
+            onDone={onDone}
+            isGoal={isGoal(task)}
+            frontName={frontNameOf(task)}
             interactionStyle={interactionStyle}
           />
         ))}
@@ -179,22 +189,21 @@ function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, on
   );
 }
 
-export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, onEditTask, initialExpandedCol, uid, writeActivityEvents, focusTimer = {} }) {
+export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, onEditTask, focusInbox = false, uid, writeActivityEvents, focusTimer = {} }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
   const windows = getFocusWindows(config);
 
+  // 45h: the four horizons, always shown. Work (the older horizon) is shown
+  // only while it holds tasks, so none of them is lost from view.
   const columns = [
-    { key: "week",     label: "This Week",  shortLabel: "Week"  },
-    { key: "month",    label: "Month",      shortLabel: "Month" },
-    { key: "quarter",  label: "Quarter",    shortLabel: "Quarter"  },
-    { key: "halfyear", label: "6 Months",   shortLabel: "6 Months" },
-    { key: "office",   label: "Work",       shortLabel: "Work"  }
+    { key: "week",     label: "This week" },
+    { key: "month",    label: "This month" },
+    { key: "quarter",  label: "This quarter" },
+    { key: "halfyear", label: "6 months" },
+    { key: "office",   label: "Work", onlyWithTasks: true },
   ];
 
   const [selectedTask, setSelectedTask] = useState(null);
-  // "week" by default; "inbox" when brain dump pill is selected on mobile,
-  // or when navigated here via initialExpandedCol (e.g. Mind Box's inbox link)
-  const [expandedCol, setExpandedCol] = useState(initialExpandedCol || "week");
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [undoTask, setUndoTask] = useState(null);
   const undoTimeoutRef = useRef(null);
@@ -217,6 +226,12 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
     };
   }, []);
+
+  // Mind Box's "N notes waiting" lands here: bring the Inbox into view.
+  const inboxRef = useRef(null);
+  useEffect(() => {
+    if (focusInbox) inboxRef.current?.scrollIntoView({ block: "start" });
+  }, [focusInbox]);
 
   const openTask = (task) => {
     setCopied(false);
@@ -610,152 +625,61 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
     );
   };
 
-  // Shared task list renderer used by both mobile panel and desktop column
-  const renderTaskList = (colKey) => {
-    const colTasks = tasks
-      .filter(t => t.horizonLevel === colKey && isVisibleRoadmapTask(t))
-      .sort(byPriorityThenOrder);
-    return (
-      <SortableRoadmapList
-        colKey={colKey}
-        colTasks={colTasks}
-        tasks={tasks}
-        payload={payload}
-        savePayload={savePayload}
-        onTaskClick={openTask}
-      />
-    );
-  };
-
   const brainDump = payload.brainDump || [];
-  const currentCol = columns.find(c => c.key === expandedCol);
-  const useCompact = (config.roadmapStyle || "compact") !== "grid";
+  // GOAL: the same rule as Today's rows — the front the wall's kicker names.
+  const fronts = frontsFromConfig(config);
+  const goalFront = commitmentKickerFront(frontForCommitment(tasks.find(t => t.isNowFocus && !t.isDeleted && !t.isCompleted), fronts), config);
+  const isGoal = (task) => !!goalFront && task.frontId === goalFront.id;
+  const frontNameOf = (task) => fronts.find(f => f.id === task.frontId)?.name || null;
 
-  // ── Shared: pill + panel layout (compact mode, works at all screen sizes) ──
-  const renderCompactLayout = () => (
-    <div className="roadmap-compact-layout">
-      <div className="horizon-pills" role="tablist">
-        {brainDump.length > 0 && (
-          <button role="tab" className={`horizon-pill${expandedCol === "inbox" ? " active" : ""}`} onClick={() => setExpandedCol("inbox")}>
-            📥 Inbox <span className="pill-badge">{brainDump.length}</span>
-          </button>
-        )}
-        {columns.map(col => {
-          const count = tasks.filter(t => t.horizonLevel === col.key && isVisibleRoadmapTask(t)).length;
-          return (
-            <button key={col.key} role="tab"
-              className={`horizon-pill${expandedCol === col.key ? " active" : ""}`}
-              onClick={() => setExpandedCol(col.key)}
-            >
-              {col.shortLabel}
-              {count > 0 && <span className="pill-badge">{count}</span>}
-            </button>
-          );
-        })}
+  const inbox = brainDump.length > 0 && (
+    <section className="plan-inbox" aria-labelledby="plan-inbox-title" ref={inboxRef}>
+      <div className="plan-horizon-head">
+        <h3 className="plan-horizon-name" id="plan-inbox-title">Inbox <span className="plan-horizon-count">{brainDump.length}</span></h3>
+        <button type="button" className="plan-inbox-clear" onClick={handleClearAllBrainDump}>Clear all</button>
       </div>
-
-      <div className="horizon-panel" style={{ paddingBottom: "80px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)" }}>
-            {expandedCol === "inbox" ? "📥 Brain Dump Inbox" : currentCol?.label || ""}
-            {expandedCol !== "inbox" && <span className="roadmap-sort-hint">Sorted by priority</span>}
-          </span>
-          {expandedCol !== "inbox" && (
-            <button className="column-add-btn" onClick={() => onOpenAddTask(expandedCol)}
-              style={{ width: "28px", height: "28px", fontSize: "18px", borderRadius: "50%", flexShrink: 0 }}
-              title={`Add task to ${currentCol?.label}`}>+</button>
-          )}
-          {expandedCol === "inbox" && brainDump.length > 0 && (
-            <button onClick={handleClearAllBrainDump}
-              style={{ fontSize: "11px", padding: "4px 10px", background: "none", border: "1px solid var(--danger)", borderRadius: "var(--radius-sm)", color: "var(--danger)", cursor: "pointer", fontWeight: "700" }}>
-              Clear all
-            </button>
-          )}
-        </div>
-
-        {expandedCol === "inbox" ? (
-          brainDump.length === 0 ? (
-            <div className="roadmap-empty-state">Brain dump is empty. Use the 📝 button on the Home tab to capture thoughts.</div>
-          ) : (
-            <>
-              <p style={{ fontSize: "11.5px", color: brainDump.length >= 50 ? "var(--danger)" : "var(--text-secondary)", fontWeight: brainDump.length >= 50 ? "700" : "400" }}>
-                {brainDump.length}/50 {brainDump.length >= 50 ? "— inbox full! Triage before adding more." : `item${brainDump.length !== 1 ? "s" : ""}. Send each to the right horizon.`}
-              </p>
-              {brainDump.map(item => renderDumpItem(item))}
-            </>
-          )
-        ) : (
-          renderTaskList(expandedCol)
-        )}
-      </div>
-    </div>
-  );
-
-  // ── Shared: accordion grid layout (grid mode, works at all screen sizes) ──
-  const renderGridLayout = () => (
-    <>
-      {brainDump.length > 0 && (
-        <section className="card" style={{ marginBottom: "4px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-            <h2 style={{ fontSize: "15px", fontWeight: "800", fontFamily: "var(--font-display)", color: "var(--text-primary)", margin: 0 }}>
-              📥 Brain Dump Inbox
-            </h2>
-            <button onClick={handleClearAllBrainDump}
-              style={{ fontSize: "11px", padding: "4px 10px", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--danger)", cursor: "pointer", fontWeight: "700" }}>
-              Clear all
-            </button>
-          </div>
-          <p style={{ fontSize: "11.5px", color: brainDump.length >= 50 ? "var(--danger)" : "var(--text-secondary)", marginBottom: "12px", fontWeight: brainDump.length >= 50 ? "700" : "400" }}>
-            {brainDump.length}/50 {brainDump.length >= 50 ? "— inbox full! Triage before adding more." : `unprocessed idea${brainDump.length !== 1 ? "s" : ""}. Send each to the right horizon.`}
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {brainDump.map(item => renderDumpItem(item))}
-          </div>
-        </section>
-      )}
-      <div className="roadmap-scroll-container">
-        {columns.map((col) => {
-          const colTasks = tasks
-            .filter((t) => t.horizonLevel === col.key && isVisibleRoadmapTask(t))
-            .sort(byPriorityThenOrder);
-          const isExpanded = expandedCol === col.key;
-          return (
-            <div key={col.key} className={`roadmap-column${isExpanded ? " expanded" : ""}`}>
-              <div className="column-header" onClick={() => setExpandedCol(isExpanded ? "" : col.key)} style={{ cursor: "pointer", userSelect: "none" }}>
-                <span className="column-title">{col.label}<span className="roadmap-sort-hint">Sorted by priority</span></span>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <span className="column-count">{colTasks.length}</span>
-                  <button className="column-add-btn" onClick={(e) => { e.stopPropagation(); onOpenAddTask(col.key); }} title={`Add task directly to ${col.label}`}>+</button>
-                  <span style={{ fontSize: "18px", color: "var(--text-primary)", fontWeight: "700", transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
-                </div>
-              </div>
-              <div className={`column-tasks-list${isExpanded ? " col-expanded" : " col-collapsed"}`}>
-                <SortableRoadmapList
-                  colKey={col.key}
-                  colTasks={colTasks}
-                  tasks={tasks}
-                  payload={payload}
-                  savePayload={savePayload}
-                  onTaskClick={openTask}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </>
+      <p className={`plan-inbox-note${brainDump.length >= 50 ? " is-full" : ""}`}>
+        {brainDump.length}/50 {brainDump.length >= 50 ? "— the inbox is full. Send some on before adding more." : `${brainDump.length === 1 ? "note" : "notes"} from Mind Box. Send each to a horizon.`}
+      </p>
+      <div className="plan-inbox-items">{brainDump.map(item => renderDumpItem(item))}</div>
+    </section>
   );
 
   return (
-    <div className="roadmap-container">
-      <div>
-        <h2 className="roadmap-board-title">Horizon Planning</h2>
-        <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-          Map your goals strategically across time horizons. Tap a card to manage.
-        </p>
+    <div className="roadmap-container plan-horizons-view">
+      <div className="plan-horizons">
+        {columns.map(col => {
+          const colTasks = tasks
+            .filter(t => t.horizonLevel === col.key && isVisibleRoadmapTask(t))
+            .sort(byPriorityThenOrder);
+          if (col.onlyWithTasks && colTasks.length === 0) return null;
+          return (
+            <section key={col.key} className="plan-horizon" aria-labelledby={`plan-h-${col.key}`}>
+              <div className="plan-horizon-head">
+                <h3 className="plan-horizon-name" id={`plan-h-${col.key}`}>
+                  {col.label} <span className="plan-horizon-count">{colTasks.length}</span>
+                </h3>
+                <button type="button" className="plan-horizon-add" onClick={() => onOpenAddTask(col.key)} aria-label={`Add a task to ${col.label}`}>
+                  <IconPlus size={20} />
+                </button>
+              </div>
+              <SortableRoadmapList
+                colKey={col.key}
+                colTasks={colTasks}
+                tasks={tasks}
+                payload={payload}
+                savePayload={savePayload}
+                onTaskClick={openTask}
+                onDone={handleMarkDone}
+                isGoal={isGoal}
+                frontNameOf={frontNameOf}
+              />
+            </section>
+          );
+        })}
       </div>
-
-      {useCompact ? renderCompactLayout() : renderGridLayout()}
+      {/* Mind Box's notes wait below the horizons (45h has none on top). */}
+      {inbox}
 
       {/* Task management overlay */}
       {selectedTask && (

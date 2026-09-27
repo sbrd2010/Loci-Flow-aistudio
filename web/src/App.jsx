@@ -18,6 +18,7 @@ import BottomNav from "./components/BottomNav";
 import TodayTab from "./components/TodayTab";
 import RoadmapTab from "./components/RoadmapTab";
 import PlanTab from "./components/PlanTab";
+import PlanHeader from "./components/PlanHeader";
 import ScatteredFlow from "./components/ScatteredFlow";
 import MindBoxTab from "./components/MindBoxTab";
 import CoachTab from "./components/CoachTab";
@@ -54,7 +55,6 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("today");
   const [pendingCheckinSlot, setPendingCheckinSlot] = useState(null);
   const [mindBoxInitialPanel, setMindBoxInitialPanel] = useState(null);
-  const [roadmapInitialCol, setRoadmapInitialCol] = useState(null);
   const [showAddTask, setShowAddTask] = useState(false);
   const [preselectedHorizon, setPreselectedHorizon] = useState("today");
   // Where + was tapped ("Today", "Plan · Quarter"), for Add task's note (45a).
@@ -67,7 +67,9 @@ export default function App() {
     try { stored = localStorage.getItem("loci_theme"); } catch { /* storage blocked */ }
     return migrateStoredTheme(stored);
   });
-  const [roadmapView, setRoadmapView] = useState("plan");
+  // Plan opens on Horizons (45h); "plan" is its Fronts view.
+  const [roadmapView, setRoadmapView] = useState("horizons");
+  const [planFocusInbox, setPlanFocusInbox] = useState(false);
   // Feeling scattered has three doors (Today, Day map, Plan); its back link
   // returns through the one it came in by.
   const [scatteredFrom, setScatteredFrom] = useState("plan");
@@ -977,7 +979,7 @@ export default function App() {
     tabStartRef.current = Date.now();
     setFabExpanded(false);
     if (tab === "mindbox") setMindBoxInitialPanel(null);
-    if (tab === "roadmap") { setRoadmapInitialCol(null); setRoadmapView("plan"); }
+    if (tab === "roadmap") { setRoadmapView("horizons"); setPlanFocusInbox(false); }
     setActiveTab(tab);
   };
 
@@ -988,13 +990,12 @@ export default function App() {
     if (panel) setMindBoxInitialPanel(panel);
   };
 
-  // Switch to Roadmap's Horizon Planning, deep-linking straight to the Brain
-  // Dump Inbox column — used by Mind Box's "N notes waiting" button so that's
-  // the one and only place brain dump items are browsable.
+  // Mind Box's "N notes waiting" opens Plan's Horizons, where the Inbox of
+  // notes heads the page — the one place they are browsable.
   const openRoadmapInbox = () => {
     handleTabSelect("roadmap");
     setRoadmapView("horizons");
-    setRoadmapInitialCol("inbox");
+    setPlanFocusInbox(true);
   };
 
   const goToday = () => { setFabExpanded(false); setActiveTab("today"); };
@@ -1306,15 +1307,18 @@ export default function App() {
             flushNow={flushNow}
           />
         )}
+        {activeTab === "roadmap" && (roadmapView === "plan" || roadmapView === "horizons") && (
+          <PlanHeader view={roadmapView} onChange={setRoadmapView} />
+        )}
         {activeTab === "roadmap" && roadmapView === "plan" && (
-          <PlanTab
-            payload={payload}
-            savePayload={savePayload}
-            saveConfigPatch={saveConfigPatch}
-            onOpenHorizons={() => setRoadmapView("horizons")}
-            onOpenDayMap={openDayMap}
-            onScattered={() => openScattered("plan")}
-          />
+          <div role="tabpanel" aria-labelledby="plan-tab-plan">
+            <PlanTab
+              payload={payload}
+              savePayload={savePayload}
+              saveConfigPatch={saveConfigPatch}
+              onScattered={() => openScattered("plan")}
+            />
+          </div>
         )}
         {activeTab === "roadmap" && roadmapView === "scattered" && (
           <ScatteredFlow
@@ -1344,17 +1348,19 @@ export default function App() {
           />
         )}
         {activeTab === "roadmap" && roadmapView === "horizons" && (
+          <div role="tabpanel" aria-labelledby="plan-tab-horizons">
           <RoadmapTab
             payload={payload}
             savePayload={savePayload}
             savePayloadAsync={savePayloadAsync}
             onOpenAddTask={(h) => openAddTask(h, `Plan · ${PLAN_COLUMN_NAMES[h] || h}`)}
             onEditTask={(task) => { setEditingTask(task); setShowAddTask(true); }}
-            initialExpandedCol={roadmapInitialCol}
+            focusInbox={planFocusInbox}
             uid={activityUid}
             writeActivityEvents={writeActivityEvents}
             focusTimer={focusTimer}
           />
+          </div>
         )}
         {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onOpenRoadmapInbox={openRoadmapInbox} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} uid={activityUid} writeActivityEvents={writeActivityEvents} focusTimer={focusTimer} />}
         {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} />}
