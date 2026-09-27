@@ -381,3 +381,16 @@
     box-shadow: 12px 0 30px rgba(15, 31, 22, 0.08);
   }
 }
+
+/* Wide (50b, 50k): from 1600px the drawer opens over the Day map column, so
+   the whole list stays visible. Its left edge is half a gap past the list's
+   (margin + 420 + 36 + 720 + 18); where 480px won't fit beside the list
+   (1600–1723) it takes what is left. */
+@media (min-width: 1600px) {
+  .task-detail.is-drawer {
+    --wide-margin: max(48px, calc((100vw - 1760px) / 2));
+    left: calc(var(--wide-margin) + 1194px);
+    right: auto;
+    width: min(480px, calc(100vw - var(--wide-margin) - 1194px));
+  }
+}

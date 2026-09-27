@@ -223,3 +223,8 @@
   .offline-banner-phone { display: none; }
   .offline-banner-device { display: inline; }
 }
+
+/* From 1600px the cap is 1760px (50k–n). */
+@media (min-width: 1600px) {
+  .shell-header { padding: 0 max(48px, calc((100% - 1760px) / 2)); }
+}
