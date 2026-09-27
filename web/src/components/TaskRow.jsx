@@ -56,7 +56,7 @@ export const ROADMAP_HORIZONS = [
 // MUST / GOAL tags. Tapping the row opens the task (50a–b); the list moves
 // keyboard focus between rows (one tab stop, ↑/↓). On a laptop a pin shows at
 // the row's right on hover or focus: "Make the one thing · P" (50d).
-export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, onSwipeDone, onSwipeWeek, onPutOnFront }) {
+export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, onSwipeDone, onSwipeTomorrow, onPutOnFront }) {
   const { title, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
 
   const hasActions = !isCompleted && !!onOpen;
@@ -65,11 +65,11 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
   const hasSubSteps = subSteps && subSteps.length > 0;
   const isDragAnywhere = interactionStyle === "dragAnywhere" && !!dragHandleListeners;
   // Swipe (touch only; 37c): right past a threshold marks done; left opens
-  // "This week" and "Front" behind the row. The same actions are in the task
+  // "Tomorrow" and "Front" behind the row (50). The same actions are in the task
   // sheet, for screen readers and pointers. Only a clearly horizontal drag is
   // a swipe — anything else is left to scrolling and to drag-to-reorder
   // (whose long-press is cancelled by the movement).
-  const canSwipe = !isCompleted && !!(onSwipeDone || onSwipeWeek || onPutOnFront);
+  const canSwipe = !isCompleted && !!(onSwipeDone || onSwipeTomorrow || onPutOnFront);
   const [swipeX, setSwipeX] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const swipeRef = useRef(null);
@@ -125,7 +125,7 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
       setRevealed(false);
       navigator.vibrate?.(10);
       onSwipeDone(task);
-    } else if (end <= -SWIPE_REVEAL / 2 && (onSwipeWeek || onPutOnFront)) {
+    } else if (end <= -SWIPE_REVEAL / 2 && (onSwipeTomorrow || onPutOnFront)) {
       setSwipeX(-SWIPE_REVEAL);
       setRevealed(true);
     } else {
@@ -317,12 +317,12 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
   const shown = swipeX !== 0;
   return (
     <div className="task-swipe">
-      {/* Behind the row: Done on the left (right swipe), This week and Front
+      {/* Behind the row: Done on the left (right swipe), Tomorrow and Front
           on the right (left swipe). Hidden from everyone until uncovered. */}
       <span className="task-swipe-done" aria-hidden="true" style={{ visibility: swipeX > 0 ? "visible" : "hidden" }}>Done</span>
       <span className="task-swipe-actions" style={{ visibility: shown && swipeX < 0 ? "visible" : "hidden" }}>
-        {onSwipeWeek && (
-          <button type="button" className="task-swipe-week" onClick={() => { closeSwipe(); onSwipeWeek(task); }}>This week</button>
+        {onSwipeTomorrow && (
+          <button type="button" className="task-swipe-tomorrow" onClick={() => { closeSwipe(); onSwipeTomorrow(task); }}>Tomorrow</button>
         )}
         {onPutOnFront && (
           <button type="button" className="task-swipe-front" onClick={() => { closeSwipe(); onPutOnFront(task); }}>Front</button>

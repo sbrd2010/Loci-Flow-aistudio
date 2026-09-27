@@ -67,7 +67,7 @@ export function nextDateStr(dateStr) {
 }
 
 // What a move to tomorrow touches, and so what its Undo puts back.
-const MOVE_FIELDS = ["dayMapDate", "dayMapPeriod", "dayMapStartMinutes", "dayMapDurationMinutes", "dayMapOrder", "deferredUntil", "orderIndex"];
+const MOVE_FIELDS = ["dayMapDate", "dayMapPeriod", "dayMapStartMinutes", "dayMapDurationMinutes", "dayMapOrder", "deferredUntil", "orderIndex", "deferredFromOrder"];
 
 // Moves these tasks to tomorrow, in their current order. They keep the Today
 // horizon but leave today (deferredUntil, see deferral.js); tomorrow they head
@@ -96,11 +96,30 @@ export function moveToTomorrow(allTasks, ids, tomorrowStr, now = Date.now()) {
       dayMapOrder: order.get(id),
       deferredUntil: tomorrowStr,
       orderIndex: order.get(id),
+      // Where it sat in today's list, for "Bring back" (50h).
+      ...(Number.isFinite(t.orderIndex) ? { deferredFromOrder: t.orderIndex } : {}),
       isNowFocus: false,
       lastUpdated: now,
     };
   });
   return { tasks, before };
+}
+
+// "Bring back" (50h): a task moved to tomorrow returns to today, to the spot
+// it left in the list, and off tomorrow's route. Undo is restoreSchedule.
+export function bringBack(allTasks, id, now = Date.now()) {
+  const before = [];
+  const tasks = allTasks.map(t => {
+    if (String(t.uuid || t.id) !== id || !t.deferredUntil) return t;
+    before.push(t);
+    const { deferredUntil, deferredFromOrder, dayMapDate, dayMapOrder, ...rest } = t; // eslint-disable-line no-unused-vars
+    return {
+      ...rest,
+      ...(Number.isFinite(deferredFromOrder) ? { orderIndex: deferredFromOrder } : {}),
+      lastUpdated: now,
+    };
+  });
+  return { tasks: before.length ? tasks : allTasks, before };
 }
 
 // Undo for moveToTomorrow: restores only what the move changed, so an edit

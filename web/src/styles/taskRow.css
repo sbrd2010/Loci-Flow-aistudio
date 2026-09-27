@@ -289,7 +289,7 @@
   border: 0;
   cursor: pointer;
 }
-.task-swipe-week {
+.task-swipe-tomorrow {
   color: var(--ink);
   background: var(--panel);
 }
