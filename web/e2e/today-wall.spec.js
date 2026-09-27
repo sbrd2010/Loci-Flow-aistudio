@@ -1696,3 +1696,38 @@ test("the task sheet keeps a task's own estimate on offer", async ({ page }) => 
   await detail.getByRole("button", { name: /^Estimate/ }).click();
   await expect(group.getByRole("radio", { name: "25m" })).toHaveAttribute("aria-checked", "true");
 });
+
+// Codex review of #407: a drag across the "Today" heading is not taken — the
+// groups are ordered apart, so a saved cross-group order would only surface
+// the day after, when the heading is gone.
+test("a moved-from-yesterday task can't be dragged across the Today heading (50i)", async ({ page }) => {
+  await laptopListOpen(page);
+  const list = page.getByTestId("today-tasks-list");
+  const rows = list.locator("[data-testid='task-row']:not(.completed)");
+  const last = (await rows.last().locator(".task-title-text").innerText()).trim();
+  await rows.last().focus();
+  await page.keyboard.press("t");
+  const rerender = async () => {
+    await page.getByRole("button", { name: /^Must-do · \d+$/ }).click();
+    await page.getByRole("button", { name: /^All · \d+$/ }).click();
+  };
+  await page.clock.setFixedTime(new Date("2024-06-16T10:00:00"));
+  await rerender();
+  await expect(rows.first().locator(".task-title-text")).toHaveText(last);
+
+  const announced = (re) => page.waitForFunction((src) =>
+    [...document.querySelectorAll("[id^='DndLiveRegion']")].some(el => new RegExp(src).test(el.textContent)), re.source);
+  await rows.first().focus();
+  await page.keyboard.press("Space");
+  await announced(/Picked up|was moved over/);
+  await page.keyboard.press("ArrowDown");
+  await announced(/Draggable item (\S+) was moved over droppable area (?!\1\b)\S+/);
+  await page.keyboard.press("Space");
+  await expect(rows.first().locator(".task-title-text")).toHaveText(last);
+
+  // The day after, with no headings, the order is still as it was shown.
+  await page.clock.setFixedTime(new Date("2024-06-17T10:00:00"));
+  await rerender();
+  await expect(list.locator(".today-list-group")).toHaveCount(0);
+  await expect(rows.first().locator(".task-title-text")).toHaveText(last);
+});

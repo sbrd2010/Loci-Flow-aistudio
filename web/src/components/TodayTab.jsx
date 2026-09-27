@@ -1102,6 +1102,9 @@ export default function TodayTab({
     const oldIndex = remainingTasks.findIndex(t => getTaskKey(t) === active.id);
     const newIndex = remainingTasks.findIndex(t => getTaskKey(t) === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
+    // "Moved from yesterday" and "Today" are ordered apart (50i): a drop
+    // across the heading would be undone by the sort on screen, yet saved.
+    if (isFromYesterday(remainingTasks[oldIndex]) !== isFromYesterday(remainingTasks[newIndex])) return;
     const reordered = arrayMove([...remainingTasks], oldIndex, newIndex);
     const orderMap = new Map(reordered.map((t, i) => [getTaskKey(t), i]));
     savePayload({ ...payload, tasks: tasks.map(t =>
