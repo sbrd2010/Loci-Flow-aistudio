@@ -1298,6 +1298,28 @@ test("laptop: the list header is one row when it fits, two tidy rows when it doe
   expect(t.tools.top).toBeGreaterThanOrEqual(t["head-end"].bottom - 1);
 });
 
+// Codex review of #405: if the list must show again during its 120ms fade
+// (the one thing was finished, so there is nothing on the wall), the end of
+// the fade must not put back the display: none it started from.
+test("laptop: a list the app shows again mid-fade stays shown after the fade", async ({ page }) => {
+  await enterLaptop(page);
+  await page.keyboard.press("l");
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  await page.waitForFunction(() => document.getAnimations().length === 0);
+  const display = await page.evaluate(async () => {
+    document.querySelector(".today-list-hide").click();
+    const list = document.querySelector(".tasks-section");
+    const fade = list.getAnimations()[0];
+    // Mark the one thing done while the list is still fading out.
+    [...document.querySelectorAll("button")].find(b => /^Mark done/.test(b.textContent.trim()))?.click();
+    await new Promise(r => fade.addEventListener("finish", r, { once: true }));
+    await new Promise(r => setTimeout(r, 50));
+    return getComputedStyle(list).display;
+  });
+  expect(display).not.toBe("none");
+  await expect(page.locator(".tasks-section")).toBeVisible();
+});
+
 test("laptop: with Reduce Motion the list fades through paper and nothing moves", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await enterLaptop(page);
