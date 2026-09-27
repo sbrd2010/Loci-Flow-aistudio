@@ -976,6 +976,8 @@ export default function App() {
     track("tab_switch", { tab, from: activeTab, dwell_sec: dwellSec });
     tabStartRef.current = Date.now();
     setFabExpanded(false);
+    // Leaving the Day map by a tab saves its pending edits, as its Back does.
+    if (activeTab === "daymap") flushNow();
     if (tab === "mindbox") setMindBoxInitialPanel(null);
     if (tab === "roadmap") { setRoadmapInitialCol(null); setRoadmapView("plan"); }
     setActiveTab(tab);
@@ -1249,15 +1251,16 @@ export default function App() {
         </div>
       )}
 
-      {/* Header top bar — hidden on Day Map (full-screen page) */}
-      {activeTab !== "daymap" && (
-        <Header
-          activeTab={activeTab}
-          onTabSelect={handleTabSelect}
-          onGoHome={goToday}
-          dayClock={dayClock}
-        />
-      )}
+      {/* Header top bar. The Day map is Today's page (50e–f): Today stays
+          current in the nav, and on a phone its own header takes this one's
+          place. */}
+      <Header
+        activeTab={activeTab === "daymap" ? "today" : activeTab}
+        onDayMap={activeTab === "daymap"}
+        onTabSelect={handleTabSelect}
+        onGoHome={goToday}
+        dayClock={dayClock}
+      />
 
       {/* Main Tab Screen Router */}
       <main className={`screen-content${activeTab === "daymap" ? " screen-content-day-map" : ""}`}>
@@ -1304,6 +1307,7 @@ export default function App() {
             onHelpChoose={() => openScattered("daymap")}
             dayClock={dayClock}
             flushNow={flushNow}
+            backLabel={dayMapReturnTab === "roadmap" ? "Plan" : "Today"}
           />
         )}
         {activeTab === "roadmap" && roadmapView === "plan" && (
@@ -1558,7 +1562,7 @@ export default function App() {
       )}
 
       {/* Bottom Nav — hidden on Day Map (full-screen page) */}
-      {activeTab !== "daymap" && <BottomNav activeTab={activeTab} onTabSelect={handleTabSelect} />}
+      <BottomNav activeTab={activeTab === "daymap" ? "today" : activeTab} onTabSelect={handleTabSelect} />
 
       {/* Add / Edit Task Dialog */}
       {showAddTask && (

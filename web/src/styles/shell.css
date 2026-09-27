@@ -69,6 +69,9 @@
 .shell-header.is-settings .shell-clock { padding-right: 12px; }
 
 .shell-tabs { display: none; }
+/* The Day map is Today's page (50e): on phones and tablets its own header
+   takes this one's place. */
+.shell-header.is-day-map { display: none; }
 
 /* — Tab bar — */
 .tab-bar {
@@ -189,6 +192,7 @@
   .shell-header.is-settings .shell-clock { padding-right: 0; }
 
   .tab-bar { display: none; }
+  .shell-header.is-day-map { display: flex; }
 }
 
 /* — Offline (37g, 41h): neutral, not red — nothing is wrong with you. — */

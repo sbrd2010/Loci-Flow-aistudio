@@ -15,14 +15,14 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { shouldReflowPastRoute } from "../utils/dayMapRoute";
-import { dayLeftFrom, formatClock24, formatSpan, moveToTomorrow, nextDateStr, planDay, restoreSchedule } from "../utils/dayMapPlan";
+import { dayLeftFrom, dayProgress, formatClock24, formatSpan, moveToTomorrow, nextDateStr, planDay, restoreSchedule } from "../utils/dayMapPlan";
 import { getFocusWindows, getLociNowMinutes, mergeWindowSpans } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
 import { commitmentKickerFront, frontForCommitment, frontsFromConfig } from "../utils/fronts";
 import { useLociDayStr } from "../hooks/useTodayStr";
 import LinkifyText from "./LinkifyText";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
-import { IconArrowLeft, IconEllipsisVertical, IconX } from "./ui/icons";
+import { IconChevronLeft, IconEllipsisVertical, IconX } from "./ui/icons";
 import "../styles/dayMap.css";
 
 // Day map (Addendum Y5; 33a laptop, 33d tablet, 34c phone, 37d after a move).
@@ -244,7 +244,7 @@ function StartControl({ anchorMinutes, onChangeAnchor, windows }) {
   );
 }
 
-export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onAddTask, onHelpChoose, dayClock, flushNow = () => {} }) {
+export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onAddTask, onHelpChoose, dayClock, flushNow = () => {}, backLabel = "Today" }) {
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [undo, setUndo] = useState(null);
 
@@ -445,19 +445,68 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     routeItems.push({ type: "task", id: getTaskId(task), task, index });
   });
 
+  // The day clock (50e–f): how much of the day has passed, and where it ends.
+  const progress = dayProgress(new Date(), windows);
+  const nowPct = progress ? Math.round(progress.passed * 1000) / 10 : 0;
+  const close = () => { flushNow(); onClose(); };
+  // Esc goes back (50e–f), unless a dialog or a field is taking it.
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      const el = e.target;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (document.querySelector("[role='dialog'][aria-modal='true']")) return;
+      closeRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const undoText = undo ? `${undo.count} ${undo.count === 1 ? "task" : "tasks"} moved to tomorrow` : "";
 
   return (
     <div className="day-map-page">
+      {/* 50e–f: Back (Esc), the title, and a day clock — time left, when the
+          day ends, how much of it has passed. */}
       <div className="dm-head">
-        <button type="button" className="dm-back" onClick={() => { flushNow(); onClose(); }}>
-          <IconArrowLeft size={18} /> Back
+        <button type="button" className="dm-back" onClick={close} aria-label={`Back to ${backLabel}`}>
+          <IconChevronLeft size={22} />
+          <span className="dm-back-label">{backLabel}</span>
+          <kbd className="wall-key dm-back-key" aria-hidden="true">Esc</kbd>
         </button>
         <h1 className="dm-heading">Day map</h1>
-        {dayClock && (
-          <span className="dm-clock">
-            {dayClock.date}{dayClock.left && <> · <span className="dm-clock-left">{dayClock.left}</span> LEFT</>}
-          </span>
+        {dayClock && <span className="dm-date">{dayClock.date}</span>}
+        {progress && (
+          <div className="dm-dayclock">
+            <div className="dm-dayclock-top">
+              <span className="dm-dayclock-left">{dayClock?.left ? `${dayClock.left} left` : "The day is over"}</span>
+              <span className="dm-dayclock-ends"> · ends {formatClock24(progress.end)}</span>
+              {scheduledTasks.length > 0 && (
+                <span className={`dm-dayclock-plan${plan.overBy > 0 ? " is-over" : ""}`}>
+                  {formatSpan(plan.planned)} planned{plan.overBy > 0 ? ` · ${formatSpan(plan.overBy)} over` : ""}
+                </span>
+              )}
+              {dayClock && <span className="dm-dayclock-date" aria-hidden="true">{dayClock.date}</span>}
+            </div>
+            <div
+              className="dm-dayclock-bar"
+              role="progressbar"
+              aria-label="The day so far"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(nowPct)}
+              aria-valuetext={`${Math.round(nowPct)}% of the day has passed; it ends at ${formatClock24(progress.end)}`}
+            >
+              <span className="dm-dayclock-fill" style={{ width: `${nowPct}%` }} />
+            </div>
+            <div className="dm-dayclock-labels" aria-hidden="true">
+              <span>{formatClock24(progress.start)}</span>
+              <span className="dm-dayclock-now" style={{ left: `${Math.min(80, Math.max(20, nowPct))}%` }}>{formatClock24(progress.now)} NOW</span>
+              <span>{formatClock24(progress.end)}</span>
+            </div>
+          </div>
         )}
       </div>
 

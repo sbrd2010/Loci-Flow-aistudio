@@ -14,45 +14,130 @@
   background: var(--bg);
 }
 
-/* ── Head: back, title, the day clock (the page has no app header) ── */
+/* ── Head (50e–f): back, title, and the day clock ──
+   Phone: chevron, title and date on one line, then time left with what is
+   planned, the bar and its labels. Laptop: "‹ Today Esc" over a large title,
+   and the clock on the right — time left · ends, the date, the bar. */
 .dm-head {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    "back title date"
+    "clock clock clock";
   align-items: center;
-  gap: 4px 12px;
-  padding: 10px 0 14px;
+  column-gap: 4px;
+  padding: 8px 0 14px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
 }
 .dm-back {
+  grid-area: back;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 44px;
   min-height: 44px;
-  margin-left: -8px;
-  padding: 0 8px;
+  margin-left: -10px;
+  padding: 0 6px;
   font: inherit;
-  font-size: 0.875rem;
-  font-weight: 700;
+  font-size: 0.9375rem;
+  font-weight: 800;
   color: var(--ink);
   background: none;
   border: 0;
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
+.dm-back-label,
+.dm-back-key { display: none; }
 .dm-heading {
+  grid-area: title;
   margin: 0;
-  font-size: 1.125rem;
+  font-size: 1.5rem;
   font-weight: 800;
+  letter-spacing: -0.02em;
 }
-.dm-clock {
-  margin-left: auto;
+.dm-date,
+.dm-dayclock-date {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--ink-2);
 }
-.dm-clock-left {
+.dm-date { grid-area: date; }
+.dm-dayclock-date { display: none; }
+
+.dm-dayclock { grid-area: clock; margin-top: 12px; }
+.dm-dayclock-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.dm-dayclock-left { font-size: 1.125rem; font-weight: 800; }
+.dm-dayclock-ends { display: none; font-size: 0.875rem; color: var(--ink-2); }
+.dm-dayclock-plan {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
   font-weight: 700;
+  color: var(--ink-2);
+}
+.dm-dayclock-plan.is-over { color: var(--coral-ink); }
+.dm-dayclock-bar {
+  position: relative;
+  height: 6px;
+  margin-top: 8px;
+  overflow: hidden;
+  background: var(--accent-tint);
+  border-radius: 3px;
+}
+.dm-dayclock-fill {
+  display: block;
+  height: 100%;
+  background: var(--ink-2);
+  border-right: 2px solid var(--ink);
+}
+.dm-dayclock-labels {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.dm-dayclock-now {
+  position: absolute;
+  top: 0;
   color: var(--ink);
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+@media (min-width: 1024px) {
+  .dm-head {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+    grid-template-areas:
+      "back clock"
+      "title clock";
+    column-gap: 40px;
+    padding: 24px 0 20px;
+    margin-bottom: 16px;
+  }
+  .dm-back { justify-self: start; margin-left: -6px; font-size: 0.9375rem; }
+  .dm-back-label { display: inline; }
+  .dm-back-key { display: inline-flex; }
+  .dm-heading { font-size: 2.25rem; }
+  .dm-date { display: none; }
+  .dm-dayclock { align-self: center; margin-top: 0; }
+  .dm-dayclock-ends { display: inline; }
+  /* The side panel says what is planned and over (33a). */
+  .dm-dayclock-plan { display: none; }
+  .dm-dayclock-date { display: inline; margin-left: auto; }
 }
 
 /* ── Layout: one column; from 1024px the route beside a 320px panel ── */

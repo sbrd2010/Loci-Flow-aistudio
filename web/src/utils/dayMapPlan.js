@@ -35,6 +35,19 @@ export function dayLeftFrom(startMinutes, now, windows) {
   return Math.max(0, Math.round(lastEnd - lociStart));
 }
 
+// The day clock's bar (50e–f): where the Loci day starts and ends, where now
+// sits, and the share of it that has passed (0–1). Loci minutes, so a window
+// past midnight runs on past 1440. Null with no windows.
+export function dayProgress(now, windows) {
+  const spans = mergeWindowSpans(windows);
+  if (!spans.length) return null;
+  const start = spans[0][0];
+  const end = Math.max(...spans.map(([, e]) => e));
+  const at = getLociNowMinutes(now, windows);
+  const passed = end > start ? Math.min(1, Math.max(0, (at - start) / (end - start))) : 1;
+  return { start, end, now: at, passed };
+}
+
 // Where the day ends along the route, and what that means for each stop.
 // `route` is the reflowed route ({ dayMapStartMinutes, dayMapDurationMinutes }).
 export function planDay(route, startMinutes, dayLeft) {
