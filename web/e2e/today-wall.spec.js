@@ -1718,6 +1718,7 @@ test("narrow laptop: the drawer opens over the task column and leaves the list u
   await page.setViewportSize({ width: 1280, height: 800 });
   const wide = await detail.boundingBox();
   expect(Math.round(wide.x + wide.width)).toBe(1280);
+});
 
 // Codex review of #407: a drag across the "Today" heading is not taken — the
 // groups are ordered apart, so a saved cross-group order would only surface
