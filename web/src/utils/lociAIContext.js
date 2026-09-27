@@ -430,7 +430,53 @@ function clock(ts) {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-export function buildLociTodaySnapshotContext(allTasks = [], { dayStr, focusTimer = {} } = {}) {
+// Caps keep the always-on block small: every Coach request carries it, and
+// Groq's free tier allows 8,000 tokens a minute. 15 open + 10 done titles of
+// at most 80 characters is roughly 800 tokens at worst. A task named in the
+// message is always listed, so "did I finish X?" never falls off the cap.
+export const SNAPSHOT_MAX_OPEN = 15;
+export const SNAPSHOT_MAX_DONE = 10;
+const SNAPSHOT_MAX_TITLE = 80;
+
+// At most this many named tasks are rescued past a cap, so a message naming
+// a title shared by many duplicates cannot unbound the block.
+const SNAPSHOT_MAX_NAMED_EXTRA = 3;
+
+const oneLine = text => String(text || "").replace(/\s+/g, " ").trim();
+
+// A long title keeps its start and its end: two tasks that differ only late
+// in the title ("… Avery Denison" / "… Paques") must not look the same.
+const SNAPSHOT_TITLE_TAIL = 20;
+function snapshotTitle(title) {
+  // The snapshot's own "…" marks the gap; a literal one in the title is
+  // written as "..." so the gap stays the only one.
+  const t = oneLine(title).replace(/…/g, "...");
+  if (t.length <= SNAPSHOT_MAX_TITLE) return t;
+  const head = SNAPSHOT_MAX_TITLE - SNAPSHOT_TITLE_TAIL - 1;
+  return `${t.slice(0, head).trimEnd()}…${t.slice(-SNAPSHOT_TITLE_TAIL).trimStart()}`;
+}
+
+// A title counts as named only as a whole phrase, so "art" is not named by
+// "Start report" and cannot take a rescue slot from the task that is.
+function mentionsTitle(mention, title) {
+  if (!title) return false;
+  const esc = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${esc}($|[^\\p{L}\\p{N}])`, "u").test(mention);
+}
+
+function capKeepingMentioned(list, max, mention) {
+  if (list.length <= max) return { shown: list, omitted: 0 };
+  const named = t => mentionsTitle(mention, oneLine(t.title).toLowerCase());
+  const shown = list.slice(0, max);
+  let extra = 0;
+  for (const t of list.slice(max)) {
+    if (extra >= SNAPSHOT_MAX_NAMED_EXTRA) break;
+    if (named(t)) { shown.push(t); extra++; }
+  }
+  return { shown, omitted: list.length - shown.length };
+}
+
+export function buildLociTodaySnapshotContext(allTasks = [], { dayStr, focusTimer = {}, unconfirmed = false, mentionText = "" } = {}) {
   const onToday = (allTasks || []).filter(t => t && !t.isDeleted && !t.isParked && t.horizonLevel === "today");
   const open = onToday.filter(t => !t.isCompleted && !isDeferred(t, dayStr))
     .sort((a, b) => (b.isNowFocus ? 1 : 0) - (a.isNowFocus ? 1 : 0) || (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
@@ -438,15 +484,26 @@ export function buildLociTodaySnapshotContext(allTasks = [], { dayStr, focusTime
     .sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
   const tomorrow = onToday.filter(t => !t.isCompleted && isDeferred(t, dayStr)).length;
 
-  const lines = [`TODAY SNAPSHOT (live — every task on Today, with its id and status):`];
+  const mention = oneLine(mentionText).toLowerCase();
+  const openCap = capKeepingMentioned(open, SNAPSHOT_MAX_OPEN, mention);
+  const doneCap = capKeepingMentioned(done, SNAPSHOT_MAX_DONE, mention);
+
+  // Offline or before the first cloud read, the tasks are this device's copy.
+  // Send them anyway, marked as such: a blind Coach is the bug this block
+  // exists to fix, and a labelled copy lets it hedge instead.
+  const lines = [unconfirmed
+    ? `TODAY SNAPSHOT (this device's copy — cloud sync not confirmed yet, so another device may have changed a status; say so if it matters):`
+    : `TODAY SNAPSHOT (live — Today's tasks, with their id and status):`];
   if (open.length === 0 && done.length === 0) lines.push("- Nothing on Today yet.");
-  for (const t of open) {
-    lines.push(`- #${shortId(t)} [open${t.isNowFocus ? " · NOW FOCUS" : ""}] [${t.priority || "P3"}] ${t.title}`);
+  for (const t of openCap.shown) {
+    lines.push(`- #${shortId(t)} [open${t.isNowFocus ? " · NOW FOCUS" : ""}] [${t.priority || "P3"}] ${snapshotTitle(t.title)}`);
   }
-  for (const t of done) {
+  if (openCap.omitted > 0) lines.push(`- +${openCap.omitted} more open on Today, not listed (capped).`);
+  for (const t of doneCap.shown) {
     const at = clock(t.lastUpdated);
-    lines.push(`- #${shortId(t)} [done${at ? ` ${at}` : ""}] ${t.title}`);
+    lines.push(`- #${shortId(t)} [done${at ? ` ${at}` : ""}] ${snapshotTitle(t.title)}`);
   }
+  if (doneCap.omitted > 0) lines.push(`- +${doneCap.omitted} more done today, not listed (capped).`);
   if (tomorrow > 0) lines.push(`- ${tomorrow} moved to tomorrow (not today's).`);
 
   const { activeTask, focusSessionActive, isTimerRunning, focusElapsedSeconds, timerSecondsLeft, timerMaxSeconds } = focusTimer || {};

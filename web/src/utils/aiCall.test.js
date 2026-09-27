@@ -833,8 +833,8 @@ describe("Z.ai emergency fallback", () => {
     const done = Array.from({ length: 10 }, (_, i) =>
       `- #done${i} [done 09:36] ${i === 9 ? doneTitle : `Done task ${i} ${"d".repeat(320)}`}`);
     const systemPrompt = `You are Loci Coach.
-TODAY SNAPSHOT: The TODAY SNAPSHOT below is live — every task on Today with its id and status, and whether a focus session is running. Answer anything about today from it: a task marked done there IS done, so never say you can't find it.
-TODAY SNAPSHOT (live — every task on Today, with its id and status):
+TODAY SNAPSHOT: The TODAY SNAPSHOT below lists Today's tasks with their id and status, and whether a focus session is running; its first line says if it is this device's unconfirmed copy. Answer anything about today from it: a task marked done there IS done. If it says more tasks were not listed (capped), an unlisted task still exists — say it isn't in this snapshot, never that you can't find it.
+TODAY SNAPSHOT (live — Today's tasks, with their id and status):
 ${[...open, ...done].join("\n")}
 FOCUS SESSION: none running.`;
     const messages = [{ role: "user", content: `Did I finish ${doneTitle}? Also, what about ${openTitle}?` }];
@@ -849,8 +849,26 @@ FOCUS SESSION: none running.`;
     expect(sent).toContain(`[open] [P3] ${openTitle}`);
     expect(sent).toContain("TODAY SNAPSHOT (Z.ai partial view");
     expect(sent).toContain("Do not infer that an unlisted task is absent");
-    expect(sent).not.toContain("The TODAY SNAPSHOT below is live");
+    expect(sent).not.toContain("The TODAY SNAPSHOT below lists");
     expect(sent).toContain("FOCUS SESSION: none running.");
+  });
+
+  it("keeps a named task whose title the snapshot cut short when Z.ai compacts it", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("Z.ai reply."));
+    const fullTitle = "Prepare the referral request for the polymer engineer role at the membrane company";
+    const shown = `${fullTitle.slice(0, 59).trimEnd()}…${fullTitle.slice(-20).trimStart()}`;
+    const filler = Array.from({ length: 40 }, (_, i) => `- #open${i} [open] [P3] Open task ${i} ${"o".repeat(300)}`);
+    const systemPrompt = `You are Loci Coach.
+TODAY SNAPSHOT (live — Today's tasks, with their id and status):
+${filler.join("\n")}
+- #named1 [open] [P1] ${shown}
+FOCUS SESSION: none running.`;
+    const messages = [{ role: "user", content: `Where am I with ${fullTitle}?` }];
+    expect(systemPrompt.length).toBeGreaterThan(12000);
+    await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", systemPrompt, messages }));
+    const sent = JSON.parse(fetch.mock.calls[0][1].body).messages[0].content;
+    expect(sent).toContain(`#named1 [open] [P1] ${shown}`);
   });
 
   it("trims chat history to the latest exchange for Z.ai when compressing an oversized prompt", async () => {

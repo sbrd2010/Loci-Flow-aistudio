@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLociCoreInstruction, buildLociAnchorsContext, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociTodaySnapshotContext, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
+import { buildLociCoreInstruction, buildLociAnchorsContext, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociTodaySnapshotContext, SNAPSHOT_MAX_OPEN, SNAPSHOT_MAX_DONE, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
 import { getFocusWindows } from "./focusWindows";
 
 describe("lociAIContext", () => {
@@ -819,6 +819,65 @@ describe("buildLociTodaySnapshotContext (every Coach request)", () => {
     for (const task of [...open, ...done]) expect(out).toContain(task.title);
     expect(out).not.toContain("more open");
     expect(out).not.toContain("more done");
+  });
+  it("caps a long Today for token budgets, says how many were left out, and keeps a task the message names", () => {
+    const open = Array.from({ length: 22 }, (_, i) => ({ uuid: `open-${i}`, title: `Open task ${i}`, horizonLevel: "today", orderIndex: i }));
+    const done = Array.from({ length: 13 }, (_, i) => ({ uuid: `done-${i}`, title: `Done task ${i}`, horizonLevel: "today", isCompleted: true, dateCompletedString: day, lastUpdated: 1000 - i }));
+    const out = buildLociTodaySnapshotContext([...open, ...done], { dayStr: day, mentionText: "did I finish done task 12? and open task 20" });
+    expect(out.match(/\[open\]/g)).toHaveLength(SNAPSHOT_MAX_OPEN + 1);
+    expect(out.match(/\[done/g)).toHaveLength(SNAPSHOT_MAX_DONE + 1);
+    expect(out).toContain("Open task 20");
+    expect(out).toContain("Done task 12");
+    expect(out).not.toContain("Open task 21");
+    expect(out).toContain(`- +${22 - SNAPSHOT_MAX_OPEN - 1} more open on Today, not listed (capped).`);
+    expect(out).toContain(`- +${13 - SNAPSHOT_MAX_DONE - 1} more done today, not listed (capped).`);
+  });
+  it("matches a named task past the cap despite newlines or doubled spaces in its title", () => {
+    const open = Array.from({ length: 16 }, (_, i) => ({ uuid: `o-${i}`, title: `Open task ${i}`, horizonLevel: "today", orderIndex: i }));
+    open.push({ uuid: "call-1", title: "Call\nMom  today", horizonLevel: "today", orderIndex: 99 });
+    const out = buildLociTodaySnapshotContext(open, { dayStr: day, mentionText: "did I  call mom today?" });
+    expect(out).toContain("Call Mom today");
+  });
+  it("rescues at most three named duplicates past the cap and counts the rest as left out", () => {
+    const open = Array.from({ length: 15 }, (_, i) => ({ uuid: `o-${i}`, title: `Open task ${i}`, horizonLevel: "today", orderIndex: i }));
+    const dupes = Array.from({ length: 10 }, (_, i) => ({ uuid: `rent-${i}`, title: "Pay rent", horizonLevel: "today", orderIndex: 100 + i }));
+    const out = buildLociTodaySnapshotContext([...open, ...dupes], { dayStr: day, mentionText: "focus on Pay rent" });
+    expect(out.match(/Pay rent/g)).toHaveLength(3);
+    expect(out).toContain("- +7 more open on Today, not listed (capped).");
+  });
+  it("shortens very long titles so one entry cannot blow the budget", () => {
+    const out = buildLociTodaySnapshotContext([{ uuid: "long-1", title: "x".repeat(300), horizonLevel: "today" }], { dayStr: day });
+    const line = out.split("\n").find(l => l.startsWith("- #long1"));
+    expect(line.length).toBeLessThan(110);
+    expect(line).toContain("…");
+  });
+  it("keeps the end of a long title, so two titles that differ late stay distinct", () => {
+    const base = "Prepare CV and cover letter for the polymer engineer role, tailored for the interview at ";
+    const t = [{ uuid: "a1", title: `${base}Avery Denison`, horizonLevel: "today" }, { uuid: "b2", title: `${base}Paques Biomaterials`, horizonLevel: "today" }];
+    const out = buildLociTodaySnapshotContext(t, { dayStr: day });
+    expect(out).toContain("…iew at Avery Denison");
+    expect(out).toContain("…Paques Biomaterials");
+    expect(out).toContain("Paques Biomaterials");
+  });
+  it("does not let a title found inside another word take a rescue slot", () => {
+    const open = Array.from({ length: 15 }, (_, i) => ({ uuid: `o-${i}`, title: `Open task ${i}`, horizonLevel: "today", orderIndex: i }));
+    const arts = Array.from({ length: 3 }, (_, i) => ({ uuid: `art-${i}`, title: "art", horizonLevel: "today", orderIndex: 50 + i }));
+    const named = { uuid: "sr-1", title: "Start report", horizonLevel: "today", orderIndex: 99 };
+    const out = buildLociTodaySnapshotContext([...open, ...arts, named], { dayStr: day, mentionText: "focus on Start report" });
+    expect(out).toContain("] Start report");
+    expect(out).not.toContain("] art");
+  });
+  it("keeps a named short title past the cap as a whole word only", () => {
+    const open = Array.from({ length: 15 }, (_, i) => ({ uuid: `o-${i}`, title: `Open task ${i}`, horizonLevel: "today", orderIndex: i }));
+    const pr = { uuid: "pr-1", title: "PR", horizonLevel: "today", orderIndex: 99 };
+    expect(buildLociTodaySnapshotContext([...open, pr], { dayStr: day, mentionText: "did I send the PR?" })).toContain("] PR");
+    expect(buildLociTodaySnapshotContext([...open, pr], { dayStr: day, mentionText: "april plans" })).not.toContain("] PR");
+  });
+  it("still sends the tasks while cloud sync is unconfirmed, labelled as this device's copy", () => {
+    const out = buildLociTodaySnapshotContext(tasks, { dayStr: day, unconfirmed: true });
+    expect(out.split("\n")[0]).toContain("this device's copy — cloud sync not confirmed");
+    expect(out).toContain("- #ccc333 [done 09:36] Pay the water bill");
+    expect(out).not.toContain("(live");
   });
   it("distinguishes repaired task IDs and uses the same ID for the focus session", () => {
     const repaired = [

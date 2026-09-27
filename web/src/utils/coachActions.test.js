@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { buildLociTodaySnapshotContext } from "./lociAIContext";
 import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, buildParkTaskTasks, applyCoachActions, matchesUserIntent, buildActionReplyText, inferTaskMetadata } from "./coachActions";
 import { parseCheckinTag } from "./coachCheckin";
 import { getFocusWindows, getLociDayStr } from "./focusWindows";
@@ -163,6 +164,26 @@ describe("findTaskByTitle", () => {
   it("matches exactly, case- and punctuation-insensitive", () => {
     expect(findTaskByTitle(tasks, "write report")).toBe(tasks[0]);
     expect(findTaskByTitle(tasks, "Write Report!")).toBe(tasks[0]);
+  });
+
+  it("resolves a title the Today snapshot shortened to start…end, and only when that picks one task", () => {
+    const base = "Prepare CV and cover letter for the polymer engineer role, tailored for the interview at ";
+    const long = [
+      { uuid: "a", title: `${base}Avery Denison`, isCompleted: false, isDeleted: false, isParked: false },
+      { uuid: "b", title: `${base}Paques Biomaterials`, isCompleted: false, isDeleted: false, isParked: false },
+    ];
+    expect(findTaskByTitle(long, "Prepare CV and cover letter for the polymer engineer role,…iew at Avery Denison")).toBe(long[0]);
+    expect(findTaskByTitle(long, "Prepare CV and cover letter for the polymer engineer role,…Paques Biomaterials")).toBe(long[1]);
+    expect(findTaskByTitle([...long, { ...long[0], uuid: "c" }], "Prepare CV and cover letter for the polymer engineer role,…iew at Avery Denison")).toBe(null);
+    expect(matchesUserIntent("COMPLETE_TASK", "I just finished the CV for Avery Denison", "Prepare CV and cover letter for the polymer engineer role,…iew at Avery Denison")).toBe(true);
+  });
+
+  it("resolves a shortened title whose start already had a literal ellipsis", () => {
+    const task = { uuid: "e", title: "Draft… then send the long referral email to the hiring manager at the membrane company", isCompleted: false, isDeleted: false, isParked: false };
+    const shown = buildLociTodaySnapshotContext([{ ...task, horizonLevel: "today" }], { dayStr: "2026-09-27" })
+      .split("\n").find(l => l.startsWith("- #")).replace(/^- #\S+ \[open\] \[P3\] /, "");
+    expect(shown.split("…")).toHaveLength(2);
+    expect(findTaskByTitle([task], shown)).toBe(task);
   });
 
   it("matches when the tag title is a substring of the task title", () => {
