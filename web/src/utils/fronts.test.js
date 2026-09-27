@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  frontsOnOffer,
   FRONT_NAME_MAX,
   FRONT_NEXT_MOVE_MAX,
   FRONT_LIMIT,
@@ -406,3 +407,13 @@ describe("planFooterSentence", () => {
     expect(s).toContain("1 is parked, and stays that way until you say otherwise.");
   });
 });
+
+describe("frontsOnOffer", () => {
+  const fronts = [{ id: "a", name: "A" }, { id: "p", name: "P", parked: true }];
+  it("offers the open fronts, plus a task's own front when it is parked", () => {
+    expect(frontsOnOffer(fronts, null).map(f => f.id)).toEqual(["a"]);
+    expect(frontsOnOffer(fronts, "p").map(f => f.id)).toEqual(["a", "p"]);
+    expect(frontsOnOffer(fronts, "a").map(f => f.id)).toEqual(["a"]);
+  });
+});
+
