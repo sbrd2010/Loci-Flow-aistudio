@@ -615,7 +615,6 @@ export default function TodayTab({
     setUndo({ kind: "delete", task, at: Date.now() });
   };
 
-  // Unpin from the list's NOW row: acts at once, with Undo like the rest.
   // Split (45d): the original is replaced by the steps, in its place; the pin
   // moves to the first. Undo (5s) brings the original back and removes them.
   const handleSplit = (steps) => {
@@ -714,10 +713,26 @@ export default function TodayTab({
   };
 
   // Tomorrow (50b, T): leaves today for the next Loci day, first in line there.
+  // moveToTomorrow unpins it, so a session running on it ends here, recorded,
+  // as Delete, Park and Done end theirs.
   const handleTomorrow = (task) => {
+    const actionAt = Date.now();
+    let endedFocusSession = null;
+    if (task.isNowFocus) {
+      endedFocusSession = endFocusSession("user_abandoned");
+      setIsTimerRunning(false);
+      setIsFocusMode(false);
+      setFocusSessionActive(false);
+    }
     const { tasks: next, before } = moveToTomorrow(tasks, [String(task.uuid || task.id)], nextDateStr(todayStr));
-    savePayload({ ...payload, tasks: next });
-    setUndo({ kind: "tomorrow", task, before, at: Date.now() });
+    savePayloadAsync({ ...payload, tasks: next })
+      .then(() => {
+        if (endedFocusSession) {
+          writeActivityEvents(eventPatch(uid, buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt })));
+        }
+      })
+      .catch(() => {});
+    setUndo({ kind: "tomorrow", task, before, at: actionAt });
   };
   const handleParkWithUndo = (task) => {
     setUndo({ kind: "park", task, wasPinned: !!task.isNowFocus, at: Date.now() });

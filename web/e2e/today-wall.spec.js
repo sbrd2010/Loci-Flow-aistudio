@@ -1417,3 +1417,41 @@ test("phone: the task opens as a full-height sheet over the list; × closes it (
   await detail.getByRole("button", { name: "Close" }).click();
   await expect(detail).toHaveCount(0);
 });
+
+// Codex review of #406: Tomorrow unpins the task, so a session running on it
+// ends there — recorded, not left open to be resumed after Undo.
+test("Tomorrow on the one thing ends its running session (50b)", async ({ page }) => {
+  await enterLaptop(page);
+  const title = (await page.locator(".wall-title").innerText()).trim();
+  await page.locator(".wall-primary").click();
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 8_000 });
+  await overlay.locator(".focus-mode-exit-btn").click();
+  await expect(page.locator(".wall-primary")).toContainText("Resume focus");
+
+  await page.locator(".wall-title").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Tomorrow/ }).click();
+  await expect(page.locator(".floating-focus-timer")).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(".wall-title")).toHaveText(title, { timeout: 8_000 });
+  await expect(page.locator(".wall-primary")).toContainText("Start focus");
+});
+
+// Codex review of #406: the phone sheet is modal, so Tab and Shift+Tab stay
+// inside it and never reach the list or navigation behind the scrim.
+test("mobile reliability: Tab stays inside the open task sheet", async ({ page }) => {
+  await enterDemo(page);
+  await openSheet(page);
+  await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first().locator(".task-row-top").click();
+  const detail = page.getByTestId("task-detail");
+  await expect(detail).toHaveAttribute("aria-modal", "true");
+  const inside = () => page.evaluate(() => !!document.activeElement?.closest("[data-testid='task-detail']"));
+  for (let i = 0; i < 40; i++) {
+    await page.keyboard.press("Tab");
+    expect(await inside(), `Tab ${i + 1}`).toBe(true);
+  }
+  for (let i = 0; i < 40; i++) {
+    await page.keyboard.press("Shift+Tab");
+    expect(await inside(), `Shift+Tab ${i + 1}`).toBe(true);
+  }
+});

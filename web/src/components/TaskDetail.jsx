@@ -83,9 +83,24 @@ export default function TaskDetail({
 
   const kbd = k => isDrawer && <kbd className="wall-key detail-key" aria-hidden="true">{k}</kbd>;
 
+  // The phone sheet is modal: Tab stays inside it, as in the other sheets.
+  // The laptop drawer is not, so Tab moves on to the page.
+  const rootRef = useRef(null);
+  const trapTab = (e) => {
+    if (isDrawer || e.key !== "Tab") return;
+    const items = [...(rootRef.current?.querySelectorAll("button:enabled, input:enabled, textarea:enabled, select:enabled, [tabindex='0']") || [])];
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    const inside = rootRef.current.contains(document.activeElement);
+    if (e.shiftKey && (document.activeElement === first || !inside)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (document.activeElement === last || !inside)) { e.preventDefault(); first.focus(); }
+  };
+
   return (
     <div
+      ref={rootRef}
       className={`task-detail is-${variant}`}
+      onKeyDown={trapTab}
       role="dialog"
       aria-modal={isDrawer ? "false" : "true"}
       aria-label={`Task: ${task.title}`}
