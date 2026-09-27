@@ -5,7 +5,7 @@ import SplitTaskSheet from "./SplitTaskSheet";
 import { buildSplit, undoSplit } from "../utils/splitTask";
 import TodayWall from "./TodayWall";
 import Momentum from "./Momentum";
-import { frontsFromConfig, commitmentDaysLeft, commitmentKickerFront, frontForCommitment, frontProgress } from "../utils/fronts";
+import { frontsFromConfig, frontsOnOffer, commitmentDaysLeft, commitmentKickerFront, frontForCommitment, frontProgress } from "../utils/fronts";
 import { useFocusLedger } from "../hooks/useFocusLedger";
 import { minutesForTaskOn, sessionsOnDay } from "../utils/focusLedger";
 import { buildMomentum } from "../utils/momentum";
@@ -41,11 +41,11 @@ import {
   useSortable, arrayMove
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { isOnToday } from "../utils/deferral";
+import { isDeferred, isOnToday } from "../utils/deferral";
 import { IconPlus } from "./ui/icons";
 import TaskDetail from "./TaskDetail";
 import { makeOneThing, undoOneThing } from "../utils/oneThing";
-import { moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
+import { bringBack, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
 
 // Addendum A: on a Low Energy day the wall offers a smaller start instead of
@@ -348,7 +348,7 @@ export default function TodayTab({
   const [splitTask, setSplitTask] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
   // The one Undo toast: { kind: "done" | "delete" | "move" | "front" | "split"
-  // | "swap" | "tomorrow" | "park", task (as it was), to, wasPinned, previous,
+  // | "swap" | "tomorrow" | "bringback" | "park", task (as it was), to, wasPinned, previous,
   // before, at }.
   // Only the task is held — what undoing writes is built from the tasks as
   // they are when Undo is tapped, not as they were 5 seconds earlier.
@@ -647,7 +647,7 @@ export default function TodayTab({
   };
 
 
-  // Moves from a row (the swipe's "This week", and the menu's horizons) act at
+  // Moves to another horizon (the task sheet's Horizon picker) act at
   // once with Undo. Undo puts back the horizon and place it had, and the pin
   // if it was the one thing and nothing else has been pinned since.
   const handleMoveWithUndo = (task, horizon) => {
@@ -735,6 +735,15 @@ export default function TodayTab({
       .catch(() => {});
     setUndo({ kind: "tomorrow", task, before, at: actionAt });
   };
+  // Bring back (50h): to its old spot in today's list, tinted, with Undo.
+  const handleBringBack = (task) => {
+    const { tasks: next, before } = bringBack(tasks, String(task.uuid || task.id));
+    if (!before.length) return;
+    savePayload({ ...payload, tasks: next });
+    setTintUuid(task.uuid);
+    setUndo({ kind: "bringback", task, before, at: Date.now() });
+  };
+  const [movedOpen, setMovedOpen] = useState(false);
   const handleParkWithUndo = (task) => {
     setUndo({ kind: "park", task, wasPinned: !!task.isNowFocus, at: Date.now() });
     handleParkTask(task);
@@ -779,7 +788,7 @@ export default function TodayTab({
       return front ? `Put on ${front.name}: ${title}` : `Off its front: ${title}`;
     }
     if (u.kind === "swap") return u.previous ? `${u.previous.title} is back at the top of the list.` : `Made the one thing: ${title}`;
-    return `${{ done: "Marked done", delete: "Deleted", tomorrow: "Moved to tomorrow", park: "Parked", unpin: "Unpinned" }[u.kind]}: ${title}`;
+    return `${{ done: "Marked done", delete: "Deleted", tomorrow: "Moved to tomorrow", bringback: "Brought back", park: "Parked", unpin: "Unpinned" }[u.kind]}: ${title}`;
   };
   const undoText = undo ? undoMessage(undo) : "";
 
@@ -845,7 +854,7 @@ export default function TodayTab({
       savePayload({ ...payload, tasks: undoOneThing(tasks, task.uuid, undo.previous) });
       return;
     }
-    if (kind === "tomorrow") {
+    if (kind === "tomorrow" || kind === "bringback") {
       savePayload({ ...payload, tasks: restoreSchedule(tasks, undo.before) });
       return;
     }
@@ -1093,6 +1102,9 @@ export default function TodayTab({
     const oldIndex = remainingTasks.findIndex(t => getTaskKey(t) === active.id);
     const newIndex = remainingTasks.findIndex(t => getTaskKey(t) === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
+    // "Moved from yesterday" and "Today" are ordered apart (50i): a drop
+    // across the heading would be undone by the sort on screen, yet saved.
+    if (isFromYesterday(remainingTasks[oldIndex]) !== isFromYesterday(remainingTasks[newIndex])) return;
     const reordered = arrayMove([...remainingTasks], oldIndex, newIndex);
     const orderMap = new Map(reordered.map((t, i) => [getTaskKey(t), i]));
     savePayload({ ...payload, tasks: tasks.map(t =>
@@ -1262,7 +1274,17 @@ export default function TodayTab({
     ? `${String(Math.floor(Math.max(0, timerSecondsLeft) / 60)).padStart(2, "0")}:${String(Math.max(0, timerSecondsLeft) % 60).padStart(2, "0")}`
     : null;
 
-  const remainingTasks = todayTasksFiltered.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+  // 50i–j: tasks moved here from yesterday head the list under their own
+  // heading, for this one Loci day; after it they sort like any other.
+  const isFromYesterday = (t) => t.deferredUntil === todayStr;
+  const remainingTasks = todayTasksFiltered
+    .filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid)
+    .sort((a, b) => (isFromYesterday(b) - isFromYesterday(a)) || ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)));
+  const fromYesterdayCount = remainingTasks.filter(isFromYesterday).length;
+  // 50g–h: what was moved to tomorrow, listed under a quiet line at the end.
+  const movedToTomorrow = tasks
+    .filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted && !t.isParked && isDeferred(t, todayStr))
+    .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
 
   // — A task, opened (50a–b), and the list's keyboard (50b): one tab stop,
   // ↑/↓ or J/K to move, Enter to open, D / T / P / E / ⌫ to act. —
@@ -1768,7 +1790,14 @@ export default function TodayTab({
                   strategy={verticalListSortingStrategy}
                 >
                   {remainingTasks.map((task, idx) => (
-                      <SortableTaskItem key={getTaskKey(task)} id={getTaskKey(task)}>
+                    <React.Fragment key={getTaskKey(task)}>
+                      {fromYesterdayCount > 0 && idx === 0 && (
+                        <h3 className="today-list-group">Moved from yesterday · {fromYesterdayCount}</h3>
+                      )}
+                      {fromYesterdayCount > 0 && idx === fromYesterdayCount && (
+                        <h3 className="today-list-group">Today</h3>
+                      )}
+                      <SortableTaskItem id={getTaskKey(task)}>
                         {({ dragHandleListeners, dragHandleAttributes, dragActivatorRef }) => (
                           <TaskRow
                             task={task}
@@ -1779,7 +1808,7 @@ export default function TodayTab({
                             tabStop={task.uuid === rovingUuid}
                             isTinted={task.uuid === tintUuid}
                             onSwipeDone={handleToggleComplete}
-                            onSwipeWeek={t => handleMoveWithUndo(t, "week")}
+                            onSwipeTomorrow={handleTomorrow}
                             onPutOnFront={openFrontPicker}
                             onBreakdown={handleBreakdown}
                             onSubStepToggle={handleSubStepToggle}
@@ -1795,6 +1824,7 @@ export default function TodayTab({
                           />
                         )}
                       </SortableTaskItem>
+                    </React.Fragment>
                   ))}
                 </SortableContext>
                 <DragOverlay dropAnimation={null}>
@@ -1833,6 +1863,27 @@ export default function TodayTab({
                 </>
               )}
             </>
+          )}
+          {/* 50g–h: the list closes with a quiet line for what was moved to
+              tomorrow; it opens in place, each with Bring back. */}
+          {movedToTomorrow.length > 0 && (
+            <div className="today-moved">
+              <button type="button" className="today-moved-line" aria-expanded={movedOpen} onClick={() => setMovedOpen(o => !o)}>
+                <span>{movedToTomorrow.length} moved to tomorrow</span>
+                <span className="today-moved-toggle">{movedOpen ? "Hide" : "Show"}</span>
+              </button>
+              {movedOpen && (
+                <ul className="today-moved-list">
+                  {movedToTomorrow.map(task => (
+                    <li key={task.uuid} className="today-moved-row">
+                      {task.priority && <span className="task-row-priority" aria-label={`Priority ${task.priority.replace(/\D/g, "")}`}>{task.priority}</span>}
+                      <span className="today-moved-title">{task.title}</span>
+                      <button type="button" className="today-moved-back" aria-label={`Bring back: ${task.title}`} onClick={() => handleBringBack(task)}>Bring back</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
         </div>
         {/* Laptop (51a): the list's last line adds to Today. It pins to the
@@ -1958,7 +2009,7 @@ export default function TodayTab({
             total={remainingTasks.length}
             variant={drawerViewport ? "drawer" : "sheet"}
             isGoal={!!wallKickerFront && detailTask.frontId === wallKickerFront.id}
-            fronts={frontsFromConfig(config).filter(f => !f.parked)}
+            fronts={frontsOnOffer(frontsFromConfig(config), detailTask.frontId)}
             editTitleSignal={editTitle?.uuid === detailTask.uuid ? editTitle.n : 0}
             onClose={closeDetail}
             onPatch={patch => handlePatchTask(detailTask.uuid, patch)}

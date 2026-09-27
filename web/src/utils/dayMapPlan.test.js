@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayLeftFrom, formatClock24, formatSpan, moveToTomorrow, nextDateStr, planDay, restoreSchedule } from "./dayMapPlan";
+import { bringBack, dayLeftFrom, formatClock24, formatSpan, moveToTomorrow, nextDateStr, planDay, restoreSchedule } from "./dayMapPlan";
 
 const stop = (id, start, dur) => ({ uuid: id, dayMapStartMinutes: start, dayMapDurationMinutes: dur });
 
@@ -128,5 +128,35 @@ describe("moveToTomorrow / restoreSchedule", () => {
     const back = restoreSchedule(edited, before, 2);
     expect(back[1]).toMatchObject({ title: "B, renamed", dayMapDate: "2026-09-23", dayMapOrder: 1, dayMapStartMinutes: 1060, dayMapPeriod: "evening" });
     expect(back[2]).toMatchObject({ dayMapDate: "2026-09-23", dayMapOrder: 2, dayMapStartMinutes: 1155 });
+  });
+});
+
+describe("bringBack (50h)", () => {
+  const tasks = [
+    { uuid: "a", title: "A", orderIndex: 0 },
+    { uuid: "b", title: "B", orderIndex: 1, dayMapDate: "2026-09-23", dayMapOrder: 1, dayMapStartMinutes: 1060 },
+    { uuid: "c", title: "C", orderIndex: 2 },
+  ];
+
+  it("returns a moved task to its old spot, on today and off tomorrow's route", () => {
+    const { tasks: moved } = moveToTomorrow(tasks, ["b"], "2026-09-24", 1);
+    expect(moved[1]).toMatchObject({ deferredFromOrder: 1, orderIndex: -1 });
+    const { tasks: back, before } = bringBack(moved, "b", 2);
+    expect(back[1].orderIndex).toBe(1);
+    for (const f of ["deferredUntil", "deferredFromOrder", "dayMapDate", "dayMapOrder"]) expect(back[1]).not.toHaveProperty(f);
+    expect(before.map(t => t.uuid)).toEqual(["b"]);
+  });
+
+  it("Undo sends it back to tomorrow as it was", () => {
+    const { tasks: moved } = moveToTomorrow(tasks, ["b"], "2026-09-24", 1);
+    const { tasks: back, before } = bringBack(moved, "b", 2);
+    expect(restoreSchedule(back, before, 3)[1]).toMatchObject({ deferredUntil: "2026-09-24", orderIndex: -1, deferredFromOrder: 1, dayMapDate: "2026-09-24" });
+  });
+
+  it("a task with no old spot keeps its place at the top; one not moved is left alone", () => {
+    const { tasks: moved } = moveToTomorrow([{ uuid: "n", title: "N" }], ["n"], "2026-09-24", 1);
+    expect(moved[0]).not.toHaveProperty("deferredFromOrder");
+    expect(bringBack(moved, "n", 2).tasks[0]).toMatchObject({ orderIndex: -1 });
+    expect(bringBack(tasks, "a", 2).tasks).toBe(tasks);
   });
 });

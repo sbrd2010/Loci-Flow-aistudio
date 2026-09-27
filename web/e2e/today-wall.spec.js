@@ -673,16 +673,17 @@ test("mobile reliability: swipe right marks a row done, with Undo", async ({ pag
   await expect(listRow(page, "10-minute walk")).not.toHaveClass(/completed/);
 });
 
-test("mobile reliability: swipe left opens This week and Front; This week moves it, with Undo", async ({ page }) => {
+// Turn 50: swipes stay "right = Done, left = Tomorrow / Front".
+test("mobile reliability: swipe left opens Tomorrow and Front; Tomorrow moves it, with Undo", async ({ page }) => {
   await enterDemoWithPeek(page);
   await page.locator(".today-sheet-grabber").click();
   const row = listRow(page, "10-minute walk");
   await swipe(page, row, -200);
-  const week = page.getByRole("button", { name: "This week" });
-  await expect(week).toBeVisible();
+  const tomorrow = page.getByRole("button", { name: "Tomorrow", exact: true });
+  await expect(tomorrow).toBeVisible();
   await expect(page.getByRole("button", { name: "Front", exact: true })).toBeVisible();
-  await week.click();
-  await expect(page.getByRole("status").filter({ hasText: "Moved to This week: 10-minute walk" })).toBeVisible();
+  await tomorrow.click();
+  await expect(page.getByRole("status").filter({ hasText: "Moved to tomorrow: 10-minute walk" })).toBeVisible();
   await expect(listRow(page, "10-minute walk")).toHaveCount(0);
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(listRow(page, "10-minute walk")).toBeVisible();
@@ -730,7 +731,7 @@ test("mobile reliability: a vertical drag on a row is a scroll, not a swipe", as
   for (let i = 1; i <= 6; i++) await row.dispatchEvent("pointermove", at(x + (40 * i) / 6, y + (50 * i) / 6));
   await expect(row).not.toHaveAttribute("style", /translateX/);
   await row.dispatchEvent("pointerup", at(x + 40, y + 50));
-  await expect(page.getByRole("button", { name: "This week" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Tomorrow", exact: true })).toBeHidden();
   await expect(page.locator(".undo-toast")).toHaveCount(0);
 });
 
@@ -1525,6 +1526,67 @@ test("an open task becomes the full-height sheet when the window narrows", async
   expect(Math.round((await detail.boundingBox()).y)).toBe(12);
 });
 
+// ── 50g–j: moved to tomorrow ──────────────────────────────────────────────
+
+// 50g–h: the list closes with "N moved to tomorrow", a disclosure; opened,
+// each has Bring back, which returns it to its old spot, tinted, with Undo.
+test("laptop: moved tasks close the list in a quiet line; Bring back returns one to its spot, with Undo (50g–h)", async ({ page }) => {
+  await laptopListOpen(page);
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
+  const titles = await rows.locator(".task-title-text").allInnerTexts();
+  expect(titles.length).toBeGreaterThanOrEqual(2);
+  // The last row: a Bring back that only put it on top would show.
+  const lastTitle = titles[titles.length - 1].trim();
+  await rows.last().focus();
+  await page.keyboard.press("t");
+  await expect(rows).toHaveCount(titles.length - 1);
+
+  const line = page.getByRole("button", { name: /^1 moved to tomorrow/ });
+  await expect(line).toHaveAttribute("aria-expanded", "false");
+  await line.click();
+  await expect(line).toHaveAttribute("aria-expanded", "true");
+  await expect(line).toContainText("Hide");
+  const back = page.getByRole("button", { name: `Bring back: ${lastTitle}` });
+  await back.click();
+  // Back where it was, last, tinted; the line goes with nothing left in it.
+  await expect(rows.last().locator(".task-title-text")).toHaveText(lastTitle);
+  await expect(page.locator(".task-row.is-tinted")).toHaveCount(1);
+  await expect(line).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: `Brought back: ${lastTitle}` })).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(rows).toHaveCount(titles.length - 1);
+  await expect(page.getByRole("button", { name: /^1 moved to tomorrow/ })).toBeVisible();
+});
+
+// 50i–j: the next morning they head the list under "Moved from yesterday",
+// the rest under "Today"; the day after, the headings are gone.
+test("the next morning, moved tasks head the list under their own heading, for that day only (50i–j)", async ({ page }) => {
+  await laptopListOpen(page);
+  const list = page.getByTestId("today-tasks-list");
+  const rows = list.locator("[data-testid='task-row']:not(.completed)");
+  const last = (await rows.last().locator(".task-title-text").innerText()).trim();
+  await rows.last().focus();
+  await page.keyboard.press("t");
+  await expect(list.locator(".today-list-group")).toHaveCount(0);
+
+  const rerender = async () => {
+    await page.getByRole("button", { name: /^Must-do · \d+$/ }).click();
+    await page.getByRole("button", { name: /^All · \d+$/ }).click();
+  };
+  await page.clock.setFixedTime(new Date("2024-06-16T10:00:00"));
+  await rerender();
+  const groups = list.locator(".today-list-group");
+  await expect(groups).toHaveText(["Moved from yesterday · 1", "Today"]);
+  await expect(rows.first().locator(".task-title-text")).toHaveText(last);
+  // Not pinned automatically.
+  await expect(page.locator(".wall-title")).not.toHaveText(last);
+
+  await page.clock.setFixedTime(new Date("2024-06-17T10:00:00"));
+  await rerender();
+  await expect(groups).toHaveCount(0);
+  await expect(list.getByText(last)).toBeVisible();
+});
+
 // Codex review of #406: the list is one tab stop (50b) — the grip, circle
 // and step controls inside rows are not in the tab order — and the row
 // itself is what Space picks up to reorder, in both drag modes.
@@ -1656,4 +1718,38 @@ test("narrow laptop: the drawer opens over the task column and leaves the list u
   await page.setViewportSize({ width: 1280, height: 800 });
   const wide = await detail.boundingBox();
   expect(Math.round(wide.x + wide.width)).toBe(1280);
+
+// Codex review of #407: a drag across the "Today" heading is not taken — the
+// groups are ordered apart, so a saved cross-group order would only surface
+// the day after, when the heading is gone.
+test("a moved-from-yesterday task can't be dragged across the Today heading (50i)", async ({ page }) => {
+  await laptopListOpen(page);
+  const list = page.getByTestId("today-tasks-list");
+  const rows = list.locator("[data-testid='task-row']:not(.completed)");
+  const last = (await rows.last().locator(".task-title-text").innerText()).trim();
+  await rows.last().focus();
+  await page.keyboard.press("t");
+  const rerender = async () => {
+    await page.getByRole("button", { name: /^Must-do · \d+$/ }).click();
+    await page.getByRole("button", { name: /^All · \d+$/ }).click();
+  };
+  await page.clock.setFixedTime(new Date("2024-06-16T10:00:00"));
+  await rerender();
+  await expect(rows.first().locator(".task-title-text")).toHaveText(last);
+
+  const announced = (re) => page.waitForFunction((src) =>
+    [...document.querySelectorAll("[id^='DndLiveRegion']")].some(el => new RegExp(src).test(el.textContent)), re.source);
+  await rows.first().focus();
+  await page.keyboard.press("Space");
+  await announced(/Picked up|was moved over/);
+  await page.keyboard.press("ArrowDown");
+  await announced(/Draggable item (\S+) was moved over droppable area (?!\1\b)\S+/);
+  await page.keyboard.press("Space");
+  await expect(rows.first().locator(".task-title-text")).toHaveText(last);
+
+  // The day after, with no headings, the order is still as it was shown.
+  await page.clock.setFixedTime(new Date("2024-06-17T10:00:00"));
+  await rerender();
+  await expect(list.locator(".today-list-group")).toHaveCount(0);
+  await expect(rows.first().locator(".task-title-text")).toHaveText(last);
 });

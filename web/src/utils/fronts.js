@@ -266,3 +266,9 @@ export function planFooterSentence(fronts, tasks, now = new Date()) {
 
   return parts.join(" ");
 }
+
+// The fronts a task can be put on: the open ones, plus its own even when
+// that front is parked, so its assignment shows and can be chosen back.
+export function frontsOnOffer(fronts, currentFrontId) {
+  return fronts.filter(f => !f.parked || (currentFrontId != null && f.id === currentFrontId));
+}
