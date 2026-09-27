@@ -123,3 +123,23 @@ test("Mind Box's notes link lands on Plan's Inbox", async ({ page }) => {
   await expect(page.getByRole("tab", { name: "Horizons" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("heading", { name: /^Inbox/ })).toBeInViewport();
 });
+
+// Codex review of #410: in Drag anywhere mode the row is the drag handle, so
+// Space or Enter on its circle must mark the task done, not pick the row up.
+test("Horizons in Drag anywhere mode: Space and Enter on the circle mark the task done", async ({ page }) => {
+  await enterDemo(page);
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("switch", { name: "Drag anywhere" }).click();
+  await expect(page.getByRole("switch", { name: "Drag anywhere" })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  const week = page.locator(".plan-horizon", { has: page.getByRole("heading", { name: /^This week/ }) });
+  const rows = week.locator(".plan-row");
+  const before = await rows.count();
+  for (const key of ["Space", "Enter"]) {
+    const title = (await rows.first().locator(".plan-row-title").innerText()).trim();
+    await rows.first().getByRole("button", { name: `Mark done: ${title}` }).focus();
+    await page.keyboard.press(key);
+    await expect(week.getByText(title, { exact: true })).toHaveCount(0);
+  }
+  await expect(rows).toHaveCount(before - 2);
+});
