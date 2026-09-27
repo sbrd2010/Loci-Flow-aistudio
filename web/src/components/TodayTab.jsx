@@ -42,6 +42,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { isOnToday } from "../utils/deferral";
+import { IconPlus } from "./ui/icons";
+import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
 
 // Addendum A: on a Low Energy day the wall offers a smaller start instead of
 // "split it". Five minutes, the same length ScatteredFlow's "Just 5 minutes"
@@ -189,6 +191,12 @@ export default function TodayTab({
   }, []);
   const sheetRef = useRef(null);
   const sheetDragRef = useRef(null);
+  const layoutRef = useRef(null);
+  const peekOpenRef = useRef(peekOpen);
+  peekOpenRef.current = peekOpen;
+  // From 840px the list shows and hides with the 51 choreography; phones
+  // keep the sheet.
+  const toggleList = useListChoreography({ rootRef: layoutRef, listRef: sheetRef, setOpen: setPeekOpen });
   const closeSheet = () => {
     const hadFocus = sheetRef.current?.contains(document.activeElement);
     setPeekOpen(false);
@@ -1019,6 +1027,7 @@ export default function TodayTab({
   // A task moved to tomorrow (deferral.js) is not today's until then.
   const todayTasksAll = tasks.filter((t) => isOnToday(t, todayStr) && !t.isDeleted && !t.isParked);
   const pinnedFocusTask = todayTasksAll.find(t => t.isNowFocus && !t.isCompleted && !t.isDeleted) || null;
+  const listMotionActive = () => !!pinnedFocusTask && listMotionMode() !== "none";
 
   // Half height leaves the task and its Start focus in view above the sheet
   // (37b): its top edge sits just under Start focus, kept between 30% and 70%
@@ -1332,9 +1341,15 @@ export default function TodayTab({
         onOpenAddTask();
         return;
       }
+      if (key === "m" && onOpenDayMap) {
+        e.preventDefault();
+        onOpenDayMap();
+        return;
+      }
       if (!pinnedFocusTask) return;
       if (key === "l") {
-        setPeekOpen(v => !v);
+        if (listMotionActive()) toggleList(!peekOpenRef.current);
+        else setPeekOpen(v => !v);
       } else if (key === " ") {
         e.preventDefault();
         startFocusAndLog(pinnedFocusTask);
@@ -1353,7 +1368,7 @@ export default function TodayTab({
       {/* ── Today (turns 37, 41). On a laptop the wall is a 420px column with
            the list beside it once the list is open (41a); on phones and
            tablets the two stack. ── */}
-      <div className={`today-layout${peekOpen || !pinnedFocusTask ? " is-list-open" : ""}`}>
+      <div ref={layoutRef} className={`today-layout${peekOpen || !pinnedFocusTask ? " is-list-open" : ""}`}>
       <div className="today-layout-main" inert={wallCovered ? "" : undefined} aria-hidden={wallCovered ? "true" : undefined}>
       <TodayWall
         task={pinnedFocusTask}
@@ -1361,10 +1376,10 @@ export default function TodayTab({
         anchors={config.anchorsOnToday === "off" ? [] : anchors.filter(a => a && typeof a.text === "string" && a.text.trim())}
         focusMinutes={Number(pinnedFocusTask?.timeEstimateMinutes) > 0 ? Number(pinnedFocusTask.timeEstimateMinutes) : 25}
         peekOpen={peekOpen}
-        onTogglePeek={() => setPeekOpen(v => !v)}
+        onTogglePeek={() => (listMotionActive() ? toggleList(!peekOpen) : setPeekOpen(v => !v))}
         onAdd={onOpenAddTask}
+        onOpenDayMap={onOpenDayMap}
         remainingCount={wallRemainingCount}
-        doneCount={listDoneCount}
         lowEnergy={!!config.isLowEnergyMode}
         onToggleLowEnergy={() => saveConfigPatch({ isLowEnergyMode: !config.isLowEnergyMode })}
         timerLabel={wallLiveTimerLabel}
@@ -1483,6 +1498,10 @@ export default function TodayTab({
             </div>
           </>
         )}
+        {/* One header row on a laptop (51a): title, count, the filter, Low
+            energy, Hide list. Phones and tablets keep the tools on a second
+            line under it (37b). */}
+        <div className="today-list-top">
         <div className="today-list-head">
           <h2 className="today-list-title">After that</h2>
           <span className="today-list-count">{listAllCount} · {listDoneCount} done</span>
@@ -1496,7 +1515,7 @@ export default function TodayTab({
               </button>
             )}
             {pinnedFocusTask && (
-              <button type="button" className="today-list-hide" onClick={closeSheet}>
+              <button type="button" className="today-list-hide" onClick={() => (listMotionActive() ? toggleList(false) : closeSheet())}>
                 Hide list <kbd className="wall-key" aria-hidden="true">L</kbd>
               </button>
             )}
@@ -1527,6 +1546,7 @@ export default function TodayTab({
               onClick={() => saveConfigPatch({ isLowEnergyMode: !config.isLowEnergyMode })}
             />
           </label>
+        </div>
         </div>
 
         <div className="tasks-list" data-testid="today-tasks-list">
@@ -1645,6 +1665,18 @@ export default function TodayTab({
             </>
           )}
         </div>
+        {/* Laptop (51a): the list's last line adds to Today. It pins to the
+            bottom of the card when the list is longer than the screen. */}
+        {onOpenAddTask && (
+          <div className="today-list-addbar">
+            <button type="button" className="today-list-addrow" onClick={() => onOpenAddTask()} aria-label="Add a task to Today">
+              <IconPlus size={18} />
+              <span className="today-list-addrow-label">Add a task</span>
+              <span className="today-list-addrow-where" aria-hidden="true">to Today</span>
+              <kbd className="wall-key" aria-hidden="true">N</kbd>
+            </button>
+          </div>
+        )}
       </section>
       </div>
 

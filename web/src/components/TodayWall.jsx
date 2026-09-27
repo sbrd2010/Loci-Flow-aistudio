@@ -27,7 +27,7 @@ function GoalBand({ goal }) {
   const figures = goalFigures(goal, false);
   const compactFigures = goalFigures(goal, true);
   return (
-    <div className="wall-goal" role="group" aria-label={`Your goal: ${goal.name}${figures ? `, ${figures}` : ""}`}>
+    <div className="wall-goal" data-flip="goal" role="group" aria-label={`Your goal: ${goal.name}${figures ? `, ${figures}` : ""}`}>
       <div className="wall-goal-head">
         <span className="wall-goal-kicker">YOUR GOAL</span>
         {figures && <span className="wall-goal-figures">{figures}</span>}
@@ -59,6 +59,7 @@ function AnchorLine({ anchors }) {
     <button
       type="button"
       className="wall-anchor"
+      data-flip="anchor"
       onClick={() => setOffset(o => o + 1)}
       aria-label={`Anchor ${index + 1} of ${anchors.length}: ${anchors[index].text}. Show the next one.`}
     >
@@ -78,8 +79,8 @@ export default function TodayWall({
   peekOpen,
   onTogglePeek,
   onAdd,
+  onOpenDayMap,
   remainingCount = 0,
-  doneCount = 0,
   lowEnergy = false,
   onToggleLowEnergy,
   onStartFocus,
@@ -115,7 +116,7 @@ export default function TodayWall({
 
   // Rescue sits beside "Feeling scattered?" on every Today state (Y4).
   const links = (onScattered || onRescue) && (
-    <div className="wall-links">
+    <div className="wall-links" data-flip="links">
       {onScattered && (
         <button type="button" className="wall-link" onClick={onScattered}>Feeling scattered?</button>
       )}
@@ -228,21 +229,21 @@ export default function TodayWall({
       {top}
 
       <div className="wall-hero">
-        <div className="wall-kicker">TODAY, ONE THING</div>
-        <h2 className="wall-title"><LinkifyText text={task.title} /></h2>
+        <div className="wall-kicker" data-flip="kicker">TODAY, ONE THING</div>
+        <h2 className="wall-title" data-flip="title"><LinkifyText text={task.title} /></h2>
         {firstStep && (
-          <p className="wall-first-step">
+          <p className="wall-first-step" data-flip="step">
             <span className="wall-first-step-label">First step</span> — <LinkifyText text={firstStep} />
           </p>
         )}
 
-        <button type="button" className="wall-primary" onClick={onStartFocus}>
+        <button type="button" className="wall-primary" data-flip="primary" onClick={onStartFocus}>
           <span>{resuming ? "Resume focus" : "Start focus"}</span>
           <span className="wall-primary-figure">{timer}</span>
           <kbd className="wall-key is-on-fill" aria-hidden="true">Space</kbd>
         </button>
 
-        <div className="wall-actions">
+        <div className="wall-actions" data-flip="actions">
           <button type="button" className="wall-action" onClick={onMarkDone}>
             Mark done <kbd className="wall-key" aria-hidden="true">D</kbd>
           </button>
@@ -261,16 +262,22 @@ export default function TodayWall({
           )}
         </div>
 
+        {/* Laptop, list shown (51a): the Day map link sits under the task. */}
+        {onOpenDayMap && (
+          <button type="button" className="wall-daymap" data-flip-enter="" onClick={onOpenDayMap}>
+            Day map → <kbd className="wall-key" aria-hidden="true">M</kbd>
+          </button>
+        )}
       </div>
 
-      {/* The foot: on phones and tablets the links, then the peek; on a laptop
-          with the list hidden (35e) one row — links, "Show today's list",
-          Low energy. */}
+      {/* The foot: on phones and tablets the links, then the peek. On a
+          laptop with the list hidden (51b) one centred row: "Show list · N ·
+          L", a 44px "+", then Low energy. */}
       <div className="wall-foot">
         {links}
 
         {/* 49a: "+" at the right of the peek, within a thumb's reach. */}
-        <div className="wall-peek-row">
+        <div className="wall-peek-row" data-flip-controls="">
           <button
             type="button"
             className="wall-peek"
@@ -283,19 +290,20 @@ export default function TodayWall({
             </span>
             {!peekOpen && (
               <span className="wall-peek-wide">
-                Show today&apos;s list <span className="wall-peek-figures">{remainingCount} · {doneCount} done</span>
+                Show list · {remainingCount} <kbd className="wall-key" aria-hidden="true">L</kbd>
               </span>
             )}
           </button>
           {onAdd && (
             <button type="button" className="wall-peek-add" onClick={onAdd} aria-label="Add a task to Today">
               <IconPlus size={20} />
+              <span className="wall-tip" role="presentation" aria-hidden="true">Add a task <kbd className="wall-key">N</kbd></span>
             </button>
           )}
         </div>
 
         {onToggleLowEnergy && (
-          <label className="wall-energy">
+          <label className="wall-energy" data-flip-controls="">
             <span>Low energy</span>
             <button
               type="button"
