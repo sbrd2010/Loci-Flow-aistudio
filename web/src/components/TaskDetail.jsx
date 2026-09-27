@@ -81,6 +81,11 @@ export default function TaskDetail({
     setNewStep("");
   };
 
+  // Three priorities (45a); a task that has the older P4 keeps it on offer
+  // while it is open, as the full editor does, so it can be chosen back.
+  const [hadP4] = useState(task.priority === "P4");
+  const priorities = ["P1", "P2", "P3", ...(hadP4 ? ["P4"] : [])];
+
   const kbd = k => isDrawer && <kbd className="wall-key detail-key" aria-hidden="true">{k}</kbd>;
 
   // The phone sheet is modal: Tab stays inside it, as in the other sheets.
@@ -141,8 +146,11 @@ export default function TaskDetail({
                 onChange={e => setTitle(e.target.value)}
                 onBlur={finishTitle}
                 onKeyDown={e => {
-                  if (e.key === "Enter") { e.preventDefault(); finishTitle(); }
-                  if (e.key === "Escape") { e.stopPropagation(); setTitle(task.title); setEditingTitle(false); }
+                  // Enter and Escape hand focus back to the title, so the
+                  // sheet's keys (Esc to close) still reach it.
+                  const refocus = () => requestAnimationFrame(() => headingRef.current?.focus({ preventScroll: true }));
+                  if (e.key === "Enter") { e.preventDefault(); finishTitle(); refocus(); }
+                  if (e.key === "Escape") { e.stopPropagation(); setTitle(task.title); setEditingTitle(false); refocus(); }
                 }}
               />
             ) : (
@@ -166,7 +174,7 @@ export default function TaskDetail({
           <div className="detail-row">
             <span className="detail-label" id="detail-priority">Priority</span>
             <div className="detail-seg" role="radiogroup" aria-labelledby="detail-priority">
-              {["P1", "P2", "P3"].map(p => (
+              {priorities.map(p => (
                 <button
                   key={p}
                   type="button"

@@ -59,7 +59,7 @@ const PencilIcon = () => (
   </svg>
 );
 
-function SortableTaskItem({ id, interactionStyle, children }) {
+function SortableTaskItem({ id, children }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   return (
     <div
@@ -75,7 +75,8 @@ function SortableTaskItem({ id, interactionStyle, children }) {
       {children({
         dragHandleListeners: listeners,
         dragHandleAttributes: attributes,
-        dragActivatorRef: interactionStyle === "dragAnywhere" ? setActivatorNodeRef : undefined,
+        // The row is the keyboard's handle in both modes (50b: one tab stop).
+        dragActivatorRef: setActivatorNodeRef,
       })}
     </div>
   );
@@ -190,7 +191,9 @@ export default function TodayTab({
   const [drawerViewport, setDrawerViewport] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1024);
   const [detailUuid, setDetailUuid] = useState(null);
   const [rowFocusUuid, setRowFocusUuid] = useState(null);
-  const [editTitleSignal, setEditTitleSignal] = useState(0);
+  // E asks the open task to edit its title: tied to that task, so a task
+  // opened later with Enter or a tap opens normally.
+  const [editTitle, setEditTitle] = useState(null); // { uuid, n }
   useEffect(() => { if (!peekOpen) setSheetFull(false); }, [peekOpen]);
   useEffect(() => {
     const update = () => { setSheetViewport(window.innerWidth < 840); setDrawerViewport(window.innerWidth >= 1024); };
@@ -1291,6 +1294,9 @@ export default function TodayTab({
     // Done, moved, parked or deleted: the task left the list, so it closes.
     if (detailUuid && !detailTask) setDetailUuid(null);
   }, [detailUuid, detailTask]);
+  useEffect(() => {
+    if (editTitle && editTitle.uuid !== detailUuid) setEditTitle(null);
+  }, [detailUuid, editTitle]);
   const rovingUuid = remainingTasks.some(t => t.uuid === rowFocusUuid) ? rowFocusUuid : remainingTasks[0]?.uuid;
   const focusRow = (uuid) => {
     if (!uuid) return;
@@ -1327,7 +1333,7 @@ export default function TodayTab({
     if (key === "d") { const next = neighbourOf(task); handleToggleComplete(task); focusRow(next); return true; }
     if (key === "t") { const next = neighbourOf(task); handleTomorrow(task); focusRow(next); return true; }
     if (key === "p") { makeOneThingAndFollow(task); return true; }
-    if (key === "e") { openDetail(task); setEditTitleSignal(n => n + 1); return true; }
+    if (key === "e") { openDetail(task); setEditTitle(prev => ({ uuid: task.uuid, n: (prev?.n || 0) + 1 })); return true; }
     if (key === "backspace" || key === "delete") { const next = neighbourOf(task); handleDeleteTask(task); focusRow(next); return true; }
     return false;
   };
@@ -1788,7 +1794,7 @@ export default function TodayTab({
                       {fromYesterdayCount > 0 && idx === fromYesterdayCount && (
                         <h3 className="today-list-group">Today</h3>
                       )}
-                      <SortableTaskItem id={getTaskKey(task)} interactionStyle={taskRowInteractionStyle}>
+                      <SortableTaskItem id={getTaskKey(task)}>
                         {({ dragHandleListeners, dragHandleAttributes, dragActivatorRef }) => (
                           <TaskRow
                             task={task}
@@ -2001,7 +2007,7 @@ export default function TodayTab({
             variant={drawerViewport ? "drawer" : "sheet"}
             isGoal={!!wallKickerFront && detailTask.frontId === wallKickerFront.id}
             fronts={frontsFromConfig(config).filter(f => !f.parked)}
-            editTitleSignal={editTitleSignal}
+            editTitleSignal={editTitle?.uuid === detailTask.uuid ? editTitle.n : 0}
             onClose={closeDetail}
             onPatch={patch => handlePatchTask(detailTask.uuid, patch)}
             onToggleMVD={() => handleToggleMVD(detailTask)}

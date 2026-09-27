@@ -1288,6 +1288,28 @@ test("laptop: the list header is one row when it fits, two tidy rows when it doe
   expect(t.tools.top).toBeGreaterThanOrEqual(t["head-end"].bottom - 1);
 });
 
+// Codex review of #405: if the list must show again during its 120ms fade
+// (the one thing was finished, so there is nothing on the wall), the end of
+// the fade must not put back the display: none it started from.
+test("laptop: a list the app shows again mid-fade stays shown after the fade", async ({ page }) => {
+  await enterLaptop(page);
+  await page.keyboard.press("l");
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  await page.waitForFunction(() => document.getAnimations().length === 0);
+  const display = await page.evaluate(async () => {
+    document.querySelector(".today-list-hide").click();
+    const list = document.querySelector(".tasks-section");
+    const fade = list.getAnimations()[0];
+    // Mark the one thing done while the list is still fading out.
+    [...document.querySelectorAll("button")].find(b => /^Mark done/.test(b.textContent.trim()))?.click();
+    await new Promise(r => fade.addEventListener("finish", r, { once: true }));
+    await new Promise(r => setTimeout(r, 50));
+    return getComputedStyle(list).display;
+  });
+  expect(display).not.toBe("none");
+  await expect(page.locator(".tasks-section")).toBeVisible();
+});
+
 test("laptop: with Reduce Motion the list fades through paper and nothing moves", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await enterLaptop(page);
@@ -1565,3 +1587,63 @@ test("the next morning, moved tasks head the list under their own heading, for t
   await expect(list.getByText(last)).toBeVisible();
 });
 
+// Codex review of #406: the list is one tab stop (50b) — the grip, circle
+// and step controls inside rows are not in the tab order — and the row
+// itself is what Space picks up to reorder, in both drag modes.
+test("laptop: the list is one tab stop, and Space on a row reorders it", async ({ page }) => {
+  await laptopListOpen(page);
+  const list = page.getByTestId("today-tasks-list");
+  const rows = list.locator("[data-testid='task-row']:not(.completed)");
+  const titles = (await rows.locator(".task-title-text").allInnerTexts()).map(t => t.trim());
+  await rows.first().focus();
+  await page.keyboard.press("Tab");
+  expect(await page.evaluate(() => !!document.activeElement?.closest("[data-testid='today-tasks-list']"))).toBe(false);
+
+  // Each step waits for dnd-kit's own announcement, as a screen reader hears it.
+  const announced = (re) => page.waitForFunction((src) =>
+    [...document.querySelectorAll("[id^='DndLiveRegion']")].some(el => new RegExp(src).test(el.textContent)), re.source);
+  await rows.first().focus();
+  await page.keyboard.press("Space");
+  await announced(/Picked up|was moved over/);
+  await page.keyboard.press("ArrowDown");
+  // Over another row, not over itself.
+  await announced(/Draggable item (\S+) was moved over droppable area (?!\1\b)\S+/);
+  await page.keyboard.press("Space");
+  await expect(rows.nth(1).locator(".task-title-text")).toHaveText(titles[0]);
+  await expect(rows.nth(0).locator(".task-title-text")).toHaveText(titles[1]);
+});
+
+// Codex review of #406: E opens a task to edit its title; a task opened
+// after that, with Enter, opens as usual.
+test("laptop: E edits the title of that task only; the next one opens normally", async ({ page }) => {
+  await laptopListOpen(page);
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
+  const detail = page.getByTestId("task-detail");
+  await rows.first().focus();
+  await page.keyboard.press("e");
+  await expect(detail.locator(".detail-title-input")).toBeVisible();
+  await page.keyboard.press("Escape");
+  // Out of the field, focus is back on the title, where Esc closes the sheet.
+  await expect(detail.locator(".detail-title")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(detail).toHaveCount(0);
+  await rows.nth(1).focus();
+  await page.keyboard.press("Enter");
+  await expect(detail).toBeVisible();
+  await expect(detail.locator(".detail-title-input")).toHaveCount(0);
+});
+
+// Codex review of #406: a task with the older P4 shows it, and can go back
+// to it after choosing another.
+test("the task sheet keeps a P4 task's priority on offer", async ({ page }) => {
+  await laptopListOpen(page);
+  const row = listRow(page, "10-minute walk");
+  await expect(row.locator(".task-row-priority")).toHaveText("P4");
+  await row.locator(".task-title-text").click();
+  const group = page.getByTestId("task-detail").getByRole("radiogroup", { name: "Priority" });
+  await expect(group.getByRole("radio", { name: "Priority 4" })).toHaveAttribute("aria-checked", "true");
+  await group.getByRole("radio", { name: "Priority 1" }).click();
+  await expect(group.getByRole("radio", { name: "Priority 1" })).toHaveAttribute("aria-checked", "true");
+  await group.getByRole("radio", { name: "Priority 4" }).click();
+  await expect(group.getByRole("radio", { name: "Priority 4" })).toHaveAttribute("aria-checked", "true");
+});

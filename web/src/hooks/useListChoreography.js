@@ -50,6 +50,7 @@ function ghostOf(el) {
 }
 
 const visible = el => !!el && el.getClientRects().length > 0;
+const LEAVE_VARS = ["--leave-left", "--leave-top", "--leave-width", "--leave-height"];
 
 export function useListChoreography({ rootRef, listRef, setOpen }) {
   const anims = useRef([]);
@@ -57,13 +58,13 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
   const leaving = useRef(null);
   const busyUntil = useRef(0);
 
-  // The list faded out: back to the display React gave it.
+  // The list faded out: the hold comes off, and whatever display React
+  // gives it now (it may have changed during the fade) shows through.
   const releaseLeaving = useCallback(() => {
     if (!leaving.current) return;
     const el = leaving.current;
-    ["position", "left", "top", "width", "height", "margin", "pointerEvents", "zIndex"].forEach(p => { el.style[p] = ""; });
-    el.style.display = el.dataset.restoreDisplay || "";
-    delete el.dataset.restoreDisplay;
+    el.removeAttribute("data-leaving");
+    LEAVE_VARS.forEach(v => el.style.removeProperty(v));
     leaving.current = null;
   }, []);
 
@@ -95,13 +96,14 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
   };
 
   // Keeps the list on screen where it was while it fades out; React has
-  // already set it to display: none.
+  // already set it to display: none. The hold is an attribute and custom
+  // properties (todayList.css), never the inline styles React owns.
   const holdLeavingList = (el, rect, fromOpacity) => {
-    el.dataset.restoreDisplay = el.style.display;
-    Object.assign(el.style, {
-      display: "flex", position: "fixed", left: `${rect.left}px`, top: `${rect.top}px`,
-      width: `${rect.width}px`, height: `${rect.height}px`, margin: "0", pointerEvents: "none", zIndex: "4",
-    });
+    el.style.setProperty("--leave-left", `${rect.left}px`);
+    el.style.setProperty("--leave-top", `${rect.top}px`);
+    el.style.setProperty("--leave-width", `${rect.width}px`);
+    el.style.setProperty("--leave-height", `${rect.height}px`);
+    el.setAttribute("data-leaving", "");
     leaving.current = el;
     const a = el.animate(
       [{ opacity: fromOpacity, transform: "translateX(0)" }, { opacity: 0, transform: "translateX(12px)" }],
