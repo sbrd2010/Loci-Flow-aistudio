@@ -999,7 +999,13 @@ export default function App() {
     setRoadmapInitialCol("inbox");
   };
 
-  const goToday = () => { setFabExpanded(false); setActiveTab("today"); };
+  // Every way out of the Day map saves its pending edits first (the wordmark
+  // and Start focus come through here, as tabs do through handleTabSelect).
+  const goToday = () => {
+    if (activeTab === "daymap") flushNow();
+    setFabExpanded(false);
+    setActiveTab("today");
+  };
 
   // Day Map is a full-screen page with two doors into it — Today's "Day Map"
   // button and Plan's view switcher — so "close" has to mean "back where I came

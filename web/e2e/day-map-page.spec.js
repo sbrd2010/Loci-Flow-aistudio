@@ -98,3 +98,14 @@ test("the NOW label sits where the day's fill ends, even near the start", async 
   expect(geo.nowRight).toBeLessThanOrEqual(geo.barRight + 1);
   await expect(page.locator(".dm-dayclock-labels span").first()).toHaveClass(/is-covered/);
 });
+
+// Codex review of #409: the header is back on a laptop, so the Loci wordmark
+// is another way out of the Day map (it goes through goToday, which now saves
+// pending edits first, as Back and the tabs do).
+test("laptop: the Loci wordmark leaves the Day map for Today", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await openDayMapByKey(page);
+  await page.getByRole("banner").getByRole("button", { name: "Loci" }).click();
+  await expect(page.locator(".day-map-page")).toHaveCount(0);
+  await expect(page.locator(".wall-title")).toBeVisible();
+});
