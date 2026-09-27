@@ -978,6 +978,8 @@ export default function App() {
     track("tab_switch", { tab, from: activeTab, dwell_sec: dwellSec });
     tabStartRef.current = Date.now();
     setFabExpanded(false);
+    // Leaving the Day map by a tab saves its pending edits, as its Back does.
+    if (activeTab === "daymap") flushNow();
     if (tab === "mindbox") setMindBoxInitialPanel(null);
     if (tab === "roadmap") { setRoadmapView("horizons"); setPlanFocusInbox(false); }
     setActiveTab(tab);
@@ -998,7 +1000,13 @@ export default function App() {
     setPlanFocusInbox(true);
   };
 
-  const goToday = () => { setFabExpanded(false); setActiveTab("today"); };
+  // Every way out of the Day map saves its pending edits first (the wordmark
+  // and Start focus come through here, as tabs do through handleTabSelect).
+  const goToday = () => {
+    if (activeTab === "daymap") flushNow();
+    setFabExpanded(false);
+    setActiveTab("today");
+  };
 
   // Day Map is a full-screen page with two doors into it — Today's "Day Map"
   // button and Plan's view switcher — so "close" has to mean "back where I came
@@ -1250,15 +1258,16 @@ export default function App() {
         </div>
       )}
 
-      {/* Header top bar — hidden on Day Map (full-screen page) */}
-      {activeTab !== "daymap" && (
-        <Header
-          activeTab={activeTab}
-          onTabSelect={handleTabSelect}
-          onGoHome={goToday}
-          dayClock={dayClock}
-        />
-      )}
+      {/* Header top bar. The Day map is Today's page (50e–f): Today stays
+          current in the nav, and on a phone its own header takes this one's
+          place. */}
+      <Header
+        activeTab={activeTab === "daymap" ? "today" : activeTab}
+        onDayMap={activeTab === "daymap"}
+        onTabSelect={handleTabSelect}
+        onGoHome={goToday}
+        dayClock={dayClock}
+      />
 
       {/* Main Tab Screen Router */}
       <main className={`screen-content${activeTab === "daymap" ? " screen-content-day-map" : ""}`}>
@@ -1305,6 +1314,7 @@ export default function App() {
             onHelpChoose={() => openScattered("daymap")}
             dayClock={dayClock}
             flushNow={flushNow}
+            backLabel={dayMapReturnTab === "roadmap" ? "Plan" : "Today"}
           />
         )}
         {activeTab === "roadmap" && (roadmapView === "plan" || roadmapView === "horizons") && (
@@ -1564,7 +1574,7 @@ export default function App() {
       )}
 
       {/* Bottom Nav — hidden on Day Map (full-screen page) */}
-      {activeTab !== "daymap" && <BottomNav activeTab={activeTab} onTabSelect={handleTabSelect} />}
+      <BottomNav activeTab={activeTab === "daymap" ? "today" : activeTab} onTabSelect={handleTabSelect} />
 
       {/* Add / Edit Task Dialog */}
       {showAddTask && (

@@ -7,10 +7,10 @@ import "../styles/shell.css";
 // laptop, the day's date and time left, and the Settings gear. On phones and
 // tablets Settings has no tab, so the gear hides while you are in it and a tab
 // takes you back; on a laptop it stays, marked as the current page.
-export default function Header({ activeTab, onTabSelect, onGoHome, dayClock }) {
+export default function Header({ activeTab, onTabSelect, onGoHome, dayClock, onDayMap = false }) {
   const inSettings = activeTab === "settings";
   return (
-    <header className={`shell-header${inSettings ? " is-settings" : ""}`}>
+    <header className={`shell-header${inSettings ? " is-settings" : ""}${onDayMap ? " is-day-map" : ""}`}>
       <button type="button" className="shell-wordmark" onClick={onGoHome}>Loci</button>
 
       <nav className="shell-tabs" aria-label="Main navigation">

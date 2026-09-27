@@ -88,7 +88,7 @@ test("reliability: Day Map route persists after closing and reopening", async ({
   await autoFillDayMap(page);
   await expectVisibleRouteTimeLabels(page);
 
-  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { name: "Back to Today" }).click();
   await expect(page.getByRole("button", { name: "Day map →" })).toBeVisible({ timeout: 5_000 });
 
   await openDayMap(page);
