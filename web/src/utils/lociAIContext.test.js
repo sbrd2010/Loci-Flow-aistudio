@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLociCoreInstruction, buildLociAnchorsContext, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociTodaySnapshotContext, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
+import { buildLociCoreInstruction, buildLociAnchorsContext, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociTodaySnapshotContext, SNAPSHOT_MAX_OPEN, SNAPSHOT_MAX_DONE, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
 import { getFocusWindows } from "./focusWindows";
 
 describe("lociAIContext", () => {
@@ -819,6 +819,30 @@ describe("buildLociTodaySnapshotContext (every Coach request)", () => {
     for (const task of [...open, ...done]) expect(out).toContain(task.title);
     expect(out).not.toContain("more open");
     expect(out).not.toContain("more done");
+  });
+  it("caps a long Today for token budgets, says how many were left out, and keeps a task the message names", () => {
+    const open = Array.from({ length: 22 }, (_, i) => ({ uuid: `open-${i}`, title: `Open task ${i}`, horizonLevel: "today", orderIndex: i }));
+    const done = Array.from({ length: 13 }, (_, i) => ({ uuid: `done-${i}`, title: `Done task ${i}`, horizonLevel: "today", isCompleted: true, dateCompletedString: day, lastUpdated: 1000 - i }));
+    const out = buildLociTodaySnapshotContext([...open, ...done], { dayStr: day, mentionText: "did I finish done task 12? and open task 20" });
+    expect(out.match(/\[open\]/g)).toHaveLength(SNAPSHOT_MAX_OPEN + 1);
+    expect(out.match(/\[done/g)).toHaveLength(SNAPSHOT_MAX_DONE + 1);
+    expect(out).toContain("Open task 20");
+    expect(out).toContain("Done task 12");
+    expect(out).not.toContain("Open task 21");
+    expect(out).toContain(`- +${22 - SNAPSHOT_MAX_OPEN - 1} more open on Today, not listed (capped).`);
+    expect(out).toContain(`- +${13 - SNAPSHOT_MAX_DONE - 1} more done today, not listed (capped).`);
+  });
+  it("shortens very long titles so one entry cannot blow the budget", () => {
+    const out = buildLociTodaySnapshotContext([{ uuid: "long-1", title: "x".repeat(300), horizonLevel: "today" }], { dayStr: day });
+    const line = out.split("\n").find(l => l.startsWith("- #long1"));
+    expect(line.length).toBeLessThan(110);
+    expect(line.endsWith("…")).toBe(true);
+  });
+  it("still sends the tasks while cloud sync is unconfirmed, labelled as this device's copy", () => {
+    const out = buildLociTodaySnapshotContext(tasks, { dayStr: day, unconfirmed: true });
+    expect(out.split("\n")[0]).toContain("this device's copy — cloud sync not confirmed");
+    expect(out).toContain("- #ccc333 [done 09:36] Pay the water bill");
+    expect(out).not.toContain("(live");
   });
   it("distinguishes repaired task IDs and uses the same ID for the focus session", () => {
     const repaired = [

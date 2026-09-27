@@ -833,8 +833,8 @@ describe("Z.ai emergency fallback", () => {
     const done = Array.from({ length: 10 }, (_, i) =>
       `- #done${i} [done 09:36] ${i === 9 ? doneTitle : `Done task ${i} ${"d".repeat(320)}`}`);
     const systemPrompt = `You are Loci Coach.
-TODAY SNAPSHOT: The TODAY SNAPSHOT below is live — every task on Today with its id and status, and whether a focus session is running. Answer anything about today from it: a task marked done there IS done, so never say you can't find it.
-TODAY SNAPSHOT (live — every task on Today, with its id and status):
+TODAY SNAPSHOT: The TODAY SNAPSHOT below lists Today's tasks with their id and status, and whether a focus session is running; its first line says if it is this device's unconfirmed copy. Answer anything about today from it: a task marked done there IS done. If it says more tasks were not listed (capped), an unlisted task still exists — say it isn't in this snapshot, never that you can't find it.
+TODAY SNAPSHOT (live — Today's tasks, with their id and status):
 ${[...open, ...done].join("\n")}
 FOCUS SESSION: none running.`;
     const messages = [{ role: "user", content: `Did I finish ${doneTitle}? Also, what about ${openTitle}?` }];
@@ -849,7 +849,7 @@ FOCUS SESSION: none running.`;
     expect(sent).toContain(`[open] [P3] ${openTitle}`);
     expect(sent).toContain("TODAY SNAPSHOT (Z.ai partial view");
     expect(sent).toContain("Do not infer that an unlisted task is absent");
-    expect(sent).not.toContain("The TODAY SNAPSHOT below is live");
+    expect(sent).not.toContain("The TODAY SNAPSHOT below lists");
     expect(sent).toContain("FOCUS SESSION: none running.");
   });
 

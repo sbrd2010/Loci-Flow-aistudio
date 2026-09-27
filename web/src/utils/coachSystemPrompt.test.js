@@ -160,7 +160,7 @@ describe("buildCoachSystemPrompt", () => {
   });
 
   it("every mode carries the TODAY SNAPSHOT, so no reply is blind to a task just finished (brief, Phase 6)", () => {
-    const snap = "TODAY SNAPSHOT (live — every task on Today, with its id and status):\n- #ccc333 [done 09:36] Pay the water bill\nFOCUS SESSION: none running.";
+    const snap = "TODAY SNAPSHOT (live — Today's tasks, with their id and status):\n- #ccc333 [done 09:36] Pay the water bill\nFOCUS SESSION: none running.";
     const ctx = { ...baseCtx(), todaySnapshotContext: snap };
     for (const mode of ["full_task", "compact_task", "emotional", "light", "profile_reflection"]) {
       expect(buildCoachSystemPrompt(mode, ctx), mode).toContain("#ccc333 [done 09:36] Pay the water bill");
@@ -173,8 +173,8 @@ describe("buildCoachSystemPrompt", () => {
     for (const mode of ["light", "compact_task"]) {
       const out = buildCoachSystemPrompt(mode, { ...baseCtx(), todaySnapshotContext: "" });
       expect(out).toContain("Cloud sync is unconfirmed");
-      expect(out).not.toContain("The TODAY SNAPSHOT below is live");
-      expect(out).not.toContain("the TODAY SNAPSHOT (every task on Today");
+      expect(out).not.toContain("The TODAY SNAPSHOT below lists");
+      expect(out).not.toContain("the TODAY SNAPSHOT (Today's tasks");
     }
   });
 

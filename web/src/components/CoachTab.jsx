@@ -687,7 +687,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       memorySectionEnabled,
       personaInstruction,
       taskContext,
-      todaySnapshotContext: cloudSyncUnconfirmed ? "" : buildLociTodaySnapshotContext(tasks, { dayStr: todayStr, focusTimer }),
+      todaySnapshotContext: buildLociTodaySnapshotContext(tasks, { dayStr: todayStr, focusTimer, unconfirmed: cloudSyncUnconfirmed, mentionText: userText }),
       focusSessionContext,
       nowFocusContext: cloudSyncUnconfirmed ? "" : nowFocusContext,
       dayMapContext,

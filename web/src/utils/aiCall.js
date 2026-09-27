@@ -484,7 +484,7 @@ function detectRequestedHorizons(userText) {
 // an omitted task look absent from Loci.
 function compactZaiTodaySnapshot(systemPrompt, messages, latestMessageContent) {
   const lines = String(systemPrompt || "").split("\n");
-  const start = lines.findIndex(line => line.startsWith("TODAY SNAPSHOT (live"));
+  const start = lines.findIndex(line => line.startsWith("TODAY SNAPSHOT ("));
   if (start < 0) return systemPrompt;
   const end = lines.findIndex((line, index) => index > start && line.startsWith("FOCUS SESSION:"));
   if (end < 0) return systemPrompt;
@@ -496,14 +496,14 @@ function compactZaiTodaySnapshot(systemPrompt, messages, latestMessageContent) {
   if (taskIndices.length === 0) return systemPrompt;
 
   const adjusted = systemPrompt
-    .replace("The TODAY SNAPSHOT below is live — every task on Today with its id and status, and whether a focus session is running.",
+    .replace("The TODAY SNAPSHOT below lists Today's tasks with their id and status, and whether a focus session is running; its first line says if it is this device's unconfirmed copy.",
       "The TODAY SNAPSHOT below may be partial on Z.ai. Trust the listed statuses only.")
-    .replace("Answer anything about today from it: a task marked done there IS done, so never say you can't find it.",
+    .replace("Answer anything about today from it: a task marked done there IS done. If it says more tasks were not listed (capped), an unlisted task still exists — say it isn't in this snapshot, never that you can't find it.",
       "A listed task marked done is done. If a task is not listed, say the snapshot is incomplete for this request.")
-    .replace("the TODAY SNAPSHOT (every task on Today with its id and status — a task marked done there IS done)",
+    .replace("the TODAY SNAPSHOT (Today's tasks with their id and status, possibly capped — a task marked done there IS done)",
       "a possibly partial TODAY SNAPSHOT with reliable statuses for listed tasks");
   const adjustedLines = adjusted.split("\n");
-  adjustedLines[start] = "TODAY SNAPSHOT (Z.ai partial view; omitted tasks may exist):";
+  adjustedLines[start] = `TODAY SNAPSHOT (Z.ai partial view; omitted tasks may exist${lines[start].includes("not confirmed") ? "; this device's copy, cloud sync not confirmed" : ""}):`;
   adjustedLines.splice(start + 1, 0,
     "- Provider limit: this list may omit tasks. Do not infer that an unlisted task is absent or unchanged; ask for a fresh scan if its status matters.");
   const shiftedIndices = taskIndices.map(index => index + 1);
