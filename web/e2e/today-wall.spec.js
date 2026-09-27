@@ -185,20 +185,18 @@ test("mobile reliability: five minutes is honoured even with a session already o
 
 // Reaching the empty wall means having no commitment AND none finished today
 // — completing one gives the done state (J2b), which stands for the rest of
-// the day. So this unpins instead, from the NOW row that heads the open list.
+// the day. So this unpins instead: the wall's title opens the one thing (50a),
+// and its sheet lets it go.
 async function unpinFromList(page) {
-  const now = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { has: page.locator(".task-tag.is-now") });
-  await expect(now).toHaveCount(1, { timeout: 10_000 });
-  await now.locator(".task-row-top").click();
-  await page.getByText("Unpin from Focus").click();
+  await page.locator(".wall-title").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
 }
 
-// The task editor, for the wall's one thing: its NOW row's menu → Edit. (The
-// wall's "Split it" opens Split a task now, 45d.)
+// The task editor, for the wall's one thing: its title opens it → More details.
+// (The wall's "Split it" opens Split a task now, 45d.)
 async function editWallTask(page) {
-  const now = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { has: page.locator(".task-tag.is-now") });
-  await now.locator(".task-row-top").click();
-  await now.getByTestId("task-menu-edit").click();
+  await page.locator(".wall-title").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^More details/ }).click();
 }
 
 async function emptyTheWall(page) {
@@ -519,22 +517,23 @@ test("laptop: the wall's keys stay quiet on any focused control", async ({ page 
   await expect(page.locator(".wall-done-line")).toHaveCount(0);
 });
 
-// The wall has no unpin of its own: the one thing heads the open list, marked
-// NOW, and its row menu lets go of it — with Undo, like every other action.
-test("mobile reliability: the one thing can be unpinned from the list, and Undo pins it back", async ({ page }) => {
+// The wall has no unpin of its own on screen: its title opens the one thing
+// (50a) and the sheet lets go of it — with Undo, like every other action.
+test("mobile reliability: the one thing can be let go from its sheet, and Undo pins it back", async ({ page }) => {
   await enterDemoWithPeek(page);
   const title = (await page.locator(".wall-title").innerText()).trim();
 
-  const now = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']").first();
-  await expect(now.locator(".task-tag.is-now")).toHaveText("NOW");
-  await expect(now.locator(".task-title-text")).toHaveText(title);
-  // Not counted in "After that": the figure is the rest of the day.
+  // It has no row in the list: "After that" is the rest of the day.
+  const list = page.getByTestId("today-tasks-list");
+  await expect(list.locator("[data-testid='task-row']", { hasText: title })).toHaveCount(0);
   const count = await page.locator(".today-list-count").innerText();
-  const rows = await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").count();
-  expect(Number(count.split(" ")[0])).toBe(rows - 1);
+  const rows = await list.locator("[data-testid='task-row']:not(.completed)").count();
+  expect(Number(count.split(" ")[0])).toBe(rows);
 
-  await now.locator(".task-row-top").click();
-  await page.getByText("Unpin from Focus").click();
+  await page.locator(".wall-title").click();
+  const detail = page.getByTestId("task-detail");
+  await expect(detail.locator(".detail-kicker").first()).toHaveText("TODAY · THE ONE THING");
+  await detail.getByRole("button", { name: /^Not the one thing now/ }).click();
   await expect(page.locator(".wall-commit-field")).toBeVisible({ timeout: 8_000 });
   await expect(page.getByRole("status").filter({ hasText: `Unpinned: ${title}` })).toBeVisible();
 
@@ -707,12 +706,14 @@ test("mobile reliability: Front puts a row on a front, with Undo; the menu offer
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(listRow(page, "10-minute walk").locator(".task-tag.is-goal")).toHaveCount(0);
 
-  // Parity: the same action from the row menu, for screen readers and mice.
+  // Parity: the same action from the task sheet (50a), for screen readers
+  // and mice.
   await listRow(page, "10-minute walk").locator(".task-row-top").click();
-  await page.getByTestId("task-menu-front").click();
-  await expect(page.getByRole("dialog", { name: /on a front/ })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog", { name: /on a front/ })).toHaveCount(0);
+  const detail = page.getByTestId("task-detail");
+  await detail.getByRole("button", { name: /^Front/ }).click();
+  await detail.getByRole("radio", { name: "Project launch" }).click();
+  await expect(detail.locator(".task-tag.is-goal")).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Put on Project launch: 10-minute walk" })).toBeVisible();
 });
 
 test("mobile reliability: a vertical drag on a row is a scroll, not a swipe", async ({ page }) => {
@@ -809,11 +810,9 @@ test("the front picker keeps focus inside, and gives it back when it closes", as
   await enterDemoWithPeek(page);
   await page.locator(".today-sheet-grabber").click();
   const row = listRow(page, "10-minute walk");
-  const title = (await row.locator(".task-title-text").innerText()).trim();
-  const options = page.getByRole("button", { name: `Options: ${title}` });
-  await options.focus();
-  await page.keyboard.press("Enter");
-  await page.getByTestId("task-menu-front").focus();
+  await swipe(page, row, -200);
+  const front = page.getByRole("button", { name: "Front", exact: true });
+  await front.focus();
   await page.keyboard.press("Enter");
   const picker = page.getByRole("dialog", { name: /on a front/ });
   await expect(picker).toBeVisible();
@@ -826,23 +825,12 @@ test("the front picker keeps focus inside, and gives it back when it closes", as
   await expect(picker.locator(":focus")).toHaveCount(1);
   await page.keyboard.press("Escape");
   await expect(picker).toHaveCount(0);
-  await expect(options).toBeFocused();
+  // The swipe's Front is hidden once the row closes, so focus goes to the row.
+  await expect(row).toBeFocused();
 });
 
 
-test("mobile reliability: a slide that starts on the open row menu is not a swipe", async ({ page }) => {
-  await enterDemoWithPeek(page);
-  await page.locator(".today-sheet-grabber").click();
-  const row = listRow(page, "10-minute walk");
-  await row.locator(".task-row-top").click();
-  const item = page.getByTestId("task-menu-front");
-  await expect(item).toBeVisible();
-  await slide(page, item);
-  await expect(listRow(page, "10-minute walk")).not.toHaveClass(/completed/);
-  await expect(page.getByRole("status").filter({ hasText: "Marked done" })).toHaveCount(0);
-});
-
-test("the front picker opened from the swipe gives focus to Options, not the hidden Front", async ({ page }) => {
+test("the front picker opened from the swipe gives focus to the row, not the hidden Front", async ({ page }) => {
   await enterDemoWithPeek(page);
   await page.locator(".today-sheet-grabber").click();
   const row = listRow(page, "10-minute walk");
@@ -855,7 +843,8 @@ test("the front picker opened from the swipe gives focus to Options, not the hid
   await expect(picker).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(picker).toHaveCount(0);
-  await expect(page.getByRole("button", { name: `Options: ${title}` })).toBeFocused();
+  await expect(row).toBeFocused();
+  expect(title.length).toBeGreaterThan(0);
 });
 
 test("mobile reliability: a gesture on the drag grip is never a swipe", async ({ page }) => {
@@ -873,7 +862,7 @@ test("mobile reliability: a gesture on the drag grip is never a swipe", async ({
   await expect(page.locator(".undo-toast")).toHaveCount(0);
 });
 
-test("mobile reliability: the sheet's name counts the open rows it holds, NOW row included", async ({ page }) => {
+test("mobile reliability: the sheet's name counts the open rows it holds", async ({ page }) => {
   await enterDemo(page);
   await openSheet(page);
   const rows = await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").count();
@@ -904,7 +893,8 @@ test("mobile reliability: pinning a longer task with the sheet open re-measures 
   await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: "A very long task title" });
   await row.locator(".task-row-top").click();
-  await page.getByText("Pin to Focus", { exact: true }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await expect(page.getByTestId("task-detail")).toHaveCount(0);
   await expect(page.locator(".wall-title")).toHaveText(long);
   await expect(sheet).toBeVisible();
   // The wall grew, so the sheet's half height shrinks to keep Start in view.
@@ -963,8 +953,8 @@ test("mobile reliability: with a session left running, the sheet says Resume and
 test("mobile reliability: Escape in the front picker closes the picker, not the sheet", async ({ page }) => {
   await enterDemoWithPeek(page);
   await page.locator(".today-sheet-grabber").click();
-  await listRow(page, "10-minute walk").locator(".task-row-top").click();
-  await page.getByTestId("task-menu-front").click();
+  await swipe(page, listRow(page, "10-minute walk"), -200);
+  await page.getByRole("button", { name: "Front", exact: true }).click();
   const picker = page.getByRole("dialog", { name: /on a front/ });
   await expect(picker).toBeVisible();
   await page.keyboard.press("Escape");
@@ -980,18 +970,17 @@ test("mobile reliability: Must-do filter updates the sheet's announced row count
   await expect(page.locator(".tasks-section")).toHaveAttribute("aria-label", `Today's list, ${rows} ${rows === 1 ? "task" : "tasks"}`);
 });
 
-test("mobile reliability: Escape closes a row menu before the sheet", async ({ page }) => {
+test("mobile reliability: Escape closes the open task before the sheet", async ({ page }) => {
   await enterDemo(page);
   await openSheet(page);
   const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first();
-  const options = row.getByRole("button", { name: /^Options:/ });
-  await options.focus();
+  await row.focus();
   await page.keyboard.press("Enter");
-  const menu = row.getByTestId("task-options-menu");
-  await expect(menu).toBeVisible();
+  const detail = page.getByTestId("task-detail");
+  await expect(detail).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(menu).toHaveCount(0);
-  await expect(options).toBeFocused();
+  await expect(detail).toHaveCount(0);
+  await expect(row).toBeFocused();
   await expect(page.locator(".tasks-section")).toBeVisible();
 });
 
@@ -1339,4 +1328,309 @@ test("laptop: with Reduce Motion the list fades through paper and nothing moves"
   await page.keyboard.press("Enter");
   await expect(page.locator(".tasks-section")).toBeVisible();
   await expect(page.locator(".today-list-hide")).toBeFocused();
+});
+
+// — Turn 50: a task, opened (50a–b), and making one the one thing (50c–d) —
+
+async function laptopListOpen(page) {
+  await enterLaptop(page);
+  await page.keyboard.press("l");
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  await page.waitForTimeout(400);
+}
+
+test("laptop: tapping a row opens a 480px drawer that is not modal; ↑/↓ change the task; Esc returns to the row (50b)", async ({ page }) => {
+  await laptopListOpen(page);
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
+  const first = (await rows.nth(0).locator(".task-title-text").innerText()).trim();
+  const second = (await rows.nth(1).locator(".task-title-text").innerText()).trim();
+  await rows.nth(0).locator(".task-title-text").click();
+  const detail = page.getByTestId("task-detail");
+  await expect(detail).toBeVisible();
+  expect(Math.round((await detail.boundingBox()).width)).toBe(480);
+  await expect(detail).toHaveAttribute("aria-modal", "false");
+  await expect(detail.getByRole("heading", { name: first })).toBeVisible();
+  // No row menu any more.
+  await expect(page.locator(".task-row-menu, [data-testid='task-options-menu']")).toHaveCount(0);
+  await page.keyboard.press("ArrowDown");
+  await expect(detail.getByRole("heading", { name: second })).toBeVisible();
+  await expect(detail.locator(".detail-kicker").first()).toHaveText(/TODAY · 2 OF \d+/);
+  await page.keyboard.press("Escape");
+  await expect(detail).toHaveCount(0);
+  await expect(rows.nth(1)).toBeFocused();
+});
+
+test("the task sheet saves as you type: priority, note and title (50a)", async ({ page }) => {
+  await laptopListOpen(page);
+  const row = listRow(page, "10-minute walk");
+  await row.locator(".task-title-text").click();
+  const detail = page.getByTestId("task-detail");
+  await detail.getByRole("radio", { name: "Priority 1" }).click();
+  await expect(row.locator(".task-row-priority")).toHaveText("P1");
+  await detail.getByPlaceholder("Add a note…").fill("Around the block, no phone.");
+  await page.waitForTimeout(900);
+  await page.keyboard.press("Escape");
+  await expect(detail).toHaveCount(0);
+  await listRow(page, "10-minute walk").locator(".task-title-text").click();
+  await expect(page.getByTestId("task-detail").getByPlaceholder("Add a note…")).toHaveValue("Around the block, no phone.");
+  // E edits the title; Enter saves it.
+  await page.getByTestId("task-detail").getByRole("heading").click();
+  const input = page.getByTestId("task-detail").getByRole("textbox", { name: "Title" });
+  await input.fill("10-minute walk outside");
+  await input.press("Enter");
+  await expect(listRow(page, "10-minute walk outside")).toBeVisible();
+});
+
+test("Make this the one thing: the old one goes back to the top of the list, tinted, with Undo (50c–d)", async ({ page }) => {
+  await laptopListOpen(page);
+  const oldTitle = (await page.locator(".wall-title").innerText()).trim();
+  await listRow(page, "10-minute walk").locator(".task-title-text").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await expect(page.locator(".wall-title")).toHaveText(/10-minute walk/);
+  const firstRow = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']").first();
+  await expect(firstRow.locator(".task-title-text")).toHaveText(oldTitle);
+  await expect(firstRow).toHaveClass(/is-tinted/);
+  await expect(page.getByRole("status").filter({ hasText: `${oldTitle} is back at the top of the list.` })).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(".wall-title")).toHaveText(oldTitle);
+});
+
+test("keyboard on a row: P makes it the one thing, T moves it to tomorrow, ⌫ deletes — each with Undo (50b)", async ({ page }) => {
+  await laptopListOpen(page);
+  const list = page.getByTestId("today-tasks-list");
+  const walk = listRow(page, "10-minute walk");
+  await walk.focus();
+  await page.keyboard.press("t");
+  await expect(list.getByText("10-minute walk")).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "Moved to tomorrow: 10-minute walk" })).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(listRow(page, "10-minute walk")).toBeVisible();
+
+  await listRow(page, "10-minute walk").focus();
+  await page.keyboard.press("Backspace");
+  await expect(list.getByText("10-minute walk")).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(listRow(page, "10-minute walk")).toBeVisible();
+
+  await listRow(page, "10-minute walk").focus();
+  await page.keyboard.press("p");
+  await expect(page.locator(".wall-title")).toHaveText(/10-minute walk/);
+});
+
+test("laptop: hovering a row shows the pin, which makes it the one thing (50d)", async ({ page }) => {
+  await laptopListOpen(page);
+  const row = listRow(page, "10-minute walk");
+  const pin = row.getByRole("button", { name: /^Make the one thing/ });
+  await expect(pin).toBeHidden();
+  await row.hover();
+  await expect(pin).toBeVisible();
+  await pin.click();
+  await expect(page.locator(".wall-title")).toHaveText(/10-minute walk/);
+  await expect(page.getByTestId("task-detail")).toHaveCount(0);
+});
+
+test("phone: the task opens as a full-height sheet over the list; × closes it (50a)", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await listRow(page, "10-minute walk").locator(".task-title-text").click();
+  const detail = page.getByTestId("task-detail");
+  await expect(detail).toBeVisible();
+  await expect(detail).toHaveClass(/is-sheet/);
+  await expect(detail.getByRole("button", { name: "Tomorrow" })).toBeVisible();
+  await detail.getByRole("button", { name: "Close" }).click();
+  await expect(detail).toHaveCount(0);
+});
+
+// Codex review of #406: Tomorrow unpins the task, so a session running on it
+// ends there — recorded, not left open to be resumed after Undo.
+test("Tomorrow on the one thing ends its running session (50b)", async ({ page }) => {
+  await enterLaptop(page);
+  const title = (await page.locator(".wall-title").innerText()).trim();
+  await page.locator(".wall-primary").click();
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 8_000 });
+  await overlay.locator(".focus-mode-exit-btn").click();
+  await expect(page.locator(".wall-primary")).toContainText("Resume focus");
+
+  await page.locator(".wall-title").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Tomorrow/ }).click();
+  await expect(page.locator(".floating-focus-timer")).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(".wall-title")).toHaveText(title, { timeout: 8_000 });
+  await expect(page.locator(".wall-primary")).toContainText("Start focus");
+});
+
+// Codex review of #406: the phone sheet is modal, so Tab and Shift+Tab stay
+// inside it and never reach the list or navigation behind the scrim.
+test("mobile reliability: Tab stays inside the open task sheet", async ({ page }) => {
+  await enterDemo(page);
+  await openSheet(page);
+  await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first().locator(".task-row-top").click();
+  const detail = page.getByTestId("task-detail");
+  await expect(detail).toHaveAttribute("aria-modal", "true");
+  const inside = () => page.evaluate(() => !!document.activeElement?.closest("[data-testid='task-detail']"));
+  for (let i = 0; i < 40; i++) {
+    await page.keyboard.press("Tab");
+    expect(await inside(), `Tab ${i + 1}`).toBe(true);
+  }
+  for (let i = 0; i < 40; i++) {
+    await page.keyboard.press("Shift+Tab");
+    expect(await inside(), `Shift+Tab ${i + 1}`).toBe(true);
+  }
+});
+
+// Codex review of #406: making the first one thing (nothing pinned) has its
+// Undo too.
+test("mobile reliability: making the one thing on an empty wall offers Undo", async ({ page }) => {
+  await emptyTheWall(page);
+  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first();
+  const title = (await row.locator(".task-title-text").innerText()).trim();
+  await row.locator(".task-row-top").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await expect(page.locator(".wall-title")).toHaveText(title);
+  await expect(page.getByRole("status").filter({ hasText: `Made the one thing: ${title}` })).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(".wall-commit-field")).toBeVisible({ timeout: 8_000 });
+});
+
+// Codex review of #406: P on a row sends it to the wall, and focus follows
+// it there; with the drawer open, P closes it.
+test("laptop: P on a row makes it the one thing and focus follows to the wall", async ({ page }) => {
+  await laptopListOpen(page);
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
+  const title = (await rows.first().locator(".task-title-text").innerText()).trim();
+  await rows.first().focus();
+  await page.keyboard.press("p");
+  await expect(page.locator(".wall-title")).toHaveText(title);
+  await expect(page.locator(".wall-title")).toBeFocused();
+
+  const next = (await rows.first().locator(".task-title-text").innerText()).trim();
+  await rows.first().locator(".task-title-text").click();
+  await expect(page.getByTestId("task-detail")).toBeVisible();
+  await page.keyboard.press("p");
+  await expect(page.getByTestId("task-detail")).toHaveCount(0);
+  await expect(page.locator(".wall-title")).toHaveText(next);
+  await expect(page.locator(".wall-title")).toBeFocused();
+});
+
+// Codex review of #406: an open task follows the window from drawer to sheet
+// without keeping the drawer's measured top.
+test("an open task becomes the full-height sheet when the window narrows", async ({ page }) => {
+  await laptopListOpen(page);
+  await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first().locator(".task-title-text").click();
+  const detail = page.getByTestId("task-detail");
+  await expect(detail).toHaveClass(/is-drawer/);
+  await page.setViewportSize({ width: 800, height: 900 });
+  await expect(detail).toHaveClass(/is-sheet/);
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+  expect(Math.round((await detail.boundingBox()).y)).toBe(12);
+});
+
+// Codex review of #406: the list is one tab stop (50b) — the grip, circle
+// and step controls inside rows are not in the tab order — and the row
+// itself is what Space picks up to reorder, in both drag modes.
+test("laptop: the list is one tab stop, and Space on a row reorders it", async ({ page }) => {
+  await laptopListOpen(page);
+  const list = page.getByTestId("today-tasks-list");
+  const rows = list.locator("[data-testid='task-row']:not(.completed)");
+  const titles = (await rows.locator(".task-title-text").allInnerTexts()).map(t => t.trim());
+  await rows.first().focus();
+  await page.keyboard.press("Tab");
+  expect(await page.evaluate(() => !!document.activeElement?.closest("[data-testid='today-tasks-list']"))).toBe(false);
+
+  // Each step waits for dnd-kit's own announcement, as a screen reader hears it.
+  const announced = (re) => page.waitForFunction((src) =>
+    [...document.querySelectorAll("[id^='DndLiveRegion']")].some(el => new RegExp(src).test(el.textContent)), re.source);
+  await rows.first().focus();
+  await page.keyboard.press("Space");
+  await announced(/Picked up|was moved over/);
+  await page.keyboard.press("ArrowDown");
+  // Over another row, not over itself.
+  await announced(/Draggable item (\S+) was moved over droppable area (?!\1\b)\S+/);
+  await page.keyboard.press("Space");
+  await expect(rows.nth(1).locator(".task-title-text")).toHaveText(titles[0]);
+  await expect(rows.nth(0).locator(".task-title-text")).toHaveText(titles[1]);
+});
+
+// Codex review of #406: E opens a task to edit its title; a task opened
+// after that, with Enter, opens as usual.
+test("laptop: E edits the title of that task only; the next one opens normally", async ({ page }) => {
+  await laptopListOpen(page);
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
+  const detail = page.getByTestId("task-detail");
+  await rows.first().focus();
+  await page.keyboard.press("e");
+  await expect(detail.locator(".detail-title-input")).toBeVisible();
+  await page.keyboard.press("Escape");
+  // Out of the field, focus is back on the title, where Esc closes the sheet.
+  await expect(detail.locator(".detail-title")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(detail).toHaveCount(0);
+  await rows.nth(1).focus();
+  await page.keyboard.press("Enter");
+  await expect(detail).toBeVisible();
+  await expect(detail.locator(".detail-title-input")).toHaveCount(0);
+});
+
+// Codex review of #406: a task with the older P4 shows it, and can go back
+// to it after choosing another.
+test("the task sheet keeps a P4 task's priority on offer", async ({ page }) => {
+  await laptopListOpen(page);
+  const row = listRow(page, "10-minute walk");
+  await expect(row.locator(".task-row-priority")).toHaveText("P4");
+  await row.locator(".task-title-text").click();
+  const group = page.getByTestId("task-detail").getByRole("radiogroup", { name: "Priority" });
+  await expect(group.getByRole("radio", { name: "Priority 4" })).toHaveAttribute("aria-checked", "true");
+  await group.getByRole("radio", { name: "Priority 1" }).click();
+  await expect(group.getByRole("radio", { name: "Priority 1" })).toHaveAttribute("aria-checked", "true");
+  await group.getByRole("radio", { name: "Priority 4" }).click();
+  await expect(group.getByRole("radio", { name: "Priority 4" })).toHaveAttribute("aria-checked", "true");
+});
+
+// Codex review of #405: with nothing pinned the wall has no Day map link of
+// its own, so on a laptop the list header keeps it.
+test("laptop: with no one thing, the list header still opens the Day map", async ({ page }) => {
+  await enterLaptop(page);
+  await page.locator(".wall-title").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await expect(page.locator(".wall-commit-field")).toBeVisible();
+  const link = page.locator(".today-list-link");
+  await expect(link).toBeVisible();
+  await link.click();
+  await expect(page.getByRole("heading", { name: /Day map/i }).first()).toBeVisible();
+});
+
+// Codex review of #405: reversed mid-fade, what leaves fades out from where
+// it is, not from fully opaque.
+test("laptop: a toggle reversed mid-fade fades the leaving link from its current opacity", async ({ page }) => {
+  await enterLaptop(page);
+  const start = await page.evaluate(() => {
+    document.querySelector(".wall-peek").click();
+    const link = document.querySelector(".wall-daymap");
+    const enter = link.getAnimations()[0];
+    enter.currentTime = 60 + 110; // halfway through its 220ms fade-in, after the 60ms delay
+    const now = Number(getComputedStyle(link).opacity);
+    document.querySelector(".today-list-hide").click();
+    const ghost = [...document.body.children].find(c => c.style.position === "fixed" && c.getAttribute("aria-hidden") === "true" && c.classList.contains("wall-daymap"));
+    return { now, from: ghost?.getAnimations()[0]?.effect.getKeyframes()[0].opacity };
+  });
+  expect(start.now).toBeGreaterThan(0.05);
+  expect(start.now).toBeLessThan(0.95);
+  expect(Number(start.from)).toBeCloseTo(start.now, 2);
+});
+
+// Codex review of #406: an estimate the chips don't carry (25m, the default)
+// is shown, and can be chosen back.
+test("the task sheet keeps a task's own estimate on offer", async ({ page }) => {
+  await laptopListOpen(page);
+  // The demo's tasks carry the app's 25-minute default.
+  await listRow(page, "10-minute walk").locator(".task-title-text").click();
+  const detail = page.getByTestId("task-detail");
+  await detail.getByRole("button", { name: /^Estimate/ }).click();
+  const group = detail.getByRole("radiogroup", { name: "Estimate" });
+  await expect(group.getByRole("radio", { name: "25m" })).toHaveAttribute("aria-checked", "true");
+  await group.getByRole("radio", { name: "1h", exact: true }).click();
+  await detail.getByRole("button", { name: /^Estimate/ }).click();
+  await group.getByRole("radio", { name: "25m" }).click();
+  await detail.getByRole("button", { name: /^Estimate/ }).click();
+  await expect(group.getByRole("radio", { name: "25m" })).toHaveAttribute("aria-checked", "true");
 });

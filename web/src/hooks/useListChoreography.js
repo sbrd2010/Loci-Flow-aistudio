@@ -91,7 +91,10 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
     const g = ghostOf(el);
     if (!g) return;
     ghosts.current.push(g);
-    const a = g.animate([{ opacity: 1 }, { opacity: 0 }], { duration, easing, fill: "forwards" });
+    // From where it is: a toggle reversed mid-fade leaves it part-faded, and
+    // the copy carries that opacity (ghostOf copies computed styles).
+    const from = Number.parseFloat(g.style.opacity);
+    const a = g.animate([{ opacity: Number.isFinite(from) ? from : 1 }, { opacity: 0 }], { duration, easing, fill: "forwards" });
     a.onfinish = () => { g.remove(); ghosts.current = ghosts.current.filter(x => x !== g); };
   };
 

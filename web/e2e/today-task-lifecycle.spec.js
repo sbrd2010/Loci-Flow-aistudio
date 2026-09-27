@@ -77,7 +77,7 @@ test("mobile reliability: Today task can be added, edited, focused, completed, r
   await expectNoHorizontalOverflow(page);
 
   await openTaskMenu(page, originalTitle);
-  await page.getByTestId("task-menu-edit").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^More details/ }).click();
   await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
   await page.getByTestId("add-task-title").fill(editedTitle);
   await page.getByTestId("add-task-submit").click();
@@ -94,7 +94,7 @@ test("mobile reliability: Today task can be added, edited, focused, completed, r
   await expect(todayRow(page, editedTitle)).not.toHaveClass(/completed/, { timeout: 5_000 });
 
   await openTaskMenu(page, editedTitle);
-  await page.getByTestId("task-menu-delete").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Delete/ }).click();
   await expect(todayRow(page, editedTitle)).not.toBeVisible({ timeout: 5_000 });
   await expect(page.getByRole("status").filter({ hasText: `Deleted: ${editedTitle}` })).toBeVisible({ timeout: 5_000 });
   await page.getByRole("button", { name: "Undo" }).click();
@@ -102,7 +102,7 @@ test("mobile reliability: Today task can be added, edited, focused, completed, r
 
   // Pinning makes it the wall's one thing; the overlay does not auto-open.
   await openTaskMenu(page, editedTitle);
-  await page.getByText("Pin to Focus", { exact: true }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
   const wallTitle = page.locator(".wall-title");
   await expect(wallTitle).toHaveText(editedTitle, { timeout: 5_000 });
   // The list is a sheet over the wall on a phone; put it away before using
@@ -137,7 +137,7 @@ test("mobile reliability: Today task can be parked from its row menu and disappe
   await expect(todayRow(page, title)).toBeVisible({ timeout: 5_000 });
 
   await openTaskMenu(page, title);
-  await page.getByTestId("task-menu-park").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Park/ }).click();
   await expect(todayRow(page, title)).not.toBeVisible({ timeout: 5_000 });
 });
 
@@ -254,12 +254,14 @@ test("mobile reliability: editing the wall's task off Today clears its focus/pin
 
   // Pin it — isNowFocus: true, the same state a running session leaves.
   await openTaskMenu(page, title);
-  await page.getByText("Pin to Focus", { exact: true }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
   await expect(page.locator(".wall-title")).toHaveText(title, { timeout: 5_000 });
 
-  // The task editor can move the task off Today.
-  await openTaskMenu(page, title);
-  await page.getByTestId("task-menu-edit").click();
+  // The task editor can move the task off Today. The one thing has no row;
+  // its title on the wall opens it (50a).
+  await putListAway(page);
+  await page.locator(".wall-title").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^More details/ }).click();
   await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
   await page.getByRole("button", { name: "Week", exact: true }).click();
   await page.getByTestId("add-task-submit").click();
@@ -335,54 +337,42 @@ test("mobile reliability: a focused Undo stays after the mouse passes over and l
   await expect(toast.getByRole("button", { name: "Undo" })).toBeFocused();
 });
 
-// The row menu (Unpin, Put on a front, moves…) must be reachable without a
-// pointer: a focus-revealed "Options" button opens it, Tab walks into it,
-// and Escape closes it and returns focus.
-test("mobile reliability: a row's menu is reachable from the keyboard", async ({ page }) => {
+// 50b: the list is one tab stop. ↓ / ↑ move between rows, Enter opens the
+// task, Escape closes it and returns focus to the row.
+test("mobile reliability: rows are reachable from the keyboard and Enter opens the task", async ({ page }) => {
   await enterDemo(page);
-  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first();
-  const title = (await row.locator(".task-title-text").innerText()).trim();
-  const options = page.getByRole("button", { name: `Options: ${title}` });
-  await options.focus();
-  await expect(options).toBeVisible();
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
+  await expect(rows.first()).toBeVisible();
+  // One tab stop: exactly one row is in the tab order.
+  await expect(page.getByTestId("today-tasks-list").locator("[data-testid='task-row'][tabindex='0']")).toHaveCount(1);
+  await rows.first().focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(rows.nth(1)).toBeFocused();
+  const title = (await rows.nth(1).locator(".task-title-text").innerText()).trim();
   await page.keyboard.press("Enter");
-  const menu = row.getByTestId("task-options-menu");
-  await expect(menu).toBeVisible();
-  await page.keyboard.press("Tab");
-  await expect(menu.locator(":focus")).toHaveCount(1);
+  const detail = page.getByTestId("task-detail");
+  await expect(detail).toBeVisible();
+  await expect(detail.getByRole("heading", { name: title })).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(menu).toHaveCount(0);
-  await expect(options).toBeFocused();
-
-  // And it reaches what only the menu offers — here, Unpin on the NOW row.
-  await page.keyboard.press("Enter");
-  await menu.getByText("Unpin from Focus").focus();
-  await page.keyboard.press("Enter");
-  await expect(page.locator(".wall-commit-field")).toBeVisible({ timeout: 8_000 });
+  await expect(detail).toHaveCount(0);
+  await expect(rows.nth(1)).toBeFocused();
 });
 
-// In Drag anywhere mode the visible kebab is the menu trigger. Escape from a
-// focused menu action must return keyboard focus to that same button.
-test("mobile reliability: Escape returns focus to the drag-anywhere menu trigger", async ({ page }) => {
+// In Drag anywhere mode Space picks a row up; Enter still opens the task.
+test("mobile reliability: in Drag anywhere mode Enter opens the task and Escape returns to the row", async ({ page }) => {
   await enterDemo(page);
   await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
-  // Settings saves as it changes (44a): the switch is the whole of it.
   await page.getByRole("switch", { name: "Drag anywhere" }).click();
   await expect(page.getByRole("switch", { name: "Drag anywhere" })).toHaveAttribute("aria-checked", "true");
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
-
-  // The pinned NOW row is not draggable, so pick a row with the drag-mode kebab.
-  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:has(.task-row-kebab-btn)").first();
-  const trigger = row.getByRole("button", { name: "Task options" });
-  await trigger.focus();
+  await expect(page.getByTestId("today-tasks-list")).toBeVisible();
+  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first();
+  await row.focus();
   await page.keyboard.press("Enter");
-  const menu = row.getByTestId("task-options-menu");
-  await expect(menu).toBeVisible();
-  await page.keyboard.press("Shift+Tab");
-  await expect(menu.locator(":focus")).toHaveCount(1);
+  await expect(page.getByTestId("task-detail")).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(menu).toHaveCount(0);
-  await expect(trigger).toBeFocused();
+  await expect(page.getByTestId("task-detail")).toHaveCount(0);
+  await expect(row).toBeFocused();
 });
 
 // "N done" counts what was finished today, and the Completed section shows

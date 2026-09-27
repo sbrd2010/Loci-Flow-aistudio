@@ -210,7 +210,9 @@
     .today-list-tools { order: 2; flex: 0 1 auto; margin-left: auto; }
     .today-list-head-end { order: 3; margin-left: 0; }
   }
-  .today-list-link,
+  /* The Day map link moves under the task (51a) — only when there is one:
+     the empty and done walls have no link of their own. */
+  .today-list.is-sheet .today-list-link,
   .today-list-add,
   .today-energy-caption { display: none; }
   .today-list .tasks-list { padding: 0 22px 8px; }

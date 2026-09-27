@@ -80,6 +80,7 @@ export default function TodayWall({
   onTogglePeek,
   onAdd,
   onOpenDayMap,
+  onOpenTask,
   remainingCount = 0,
   lowEnergy = false,
   onToggleLowEnergy,
@@ -222,7 +223,11 @@ export default function TodayWall({
     );
   }
 
-  const firstStep = task.concreteStep || null;
+  // With steps, the wall names the next one left (50c); otherwise the first
+  // step the task was given.
+  const nextStep = Array.isArray(task.subSteps) ? task.subSteps.find(s => s && !s.done && s.text)?.text : null;
+  const firstStep = nextStep || task.concreteStep || null;
+  const stepLabel = nextStep ? "Next step" : "First step";
 
   return (
     <section className={`today-wall${peekOpen ? " is-open" : ""}`}>
@@ -230,10 +235,20 @@ export default function TodayWall({
 
       <div className="wall-hero">
         <div className="wall-kicker" data-flip="kicker">TODAY, ONE THING</div>
-        <h2 className="wall-title" data-flip="title"><LinkifyText text={task.title} /></h2>
+        {/* The title opens the task (its sheet: edit it, or let go of it).
+            A link inside the title keeps its own click. */}
+        <h2
+          className={`wall-title${onOpenTask ? " is-openable" : ""}`}
+          data-flip="title"
+          tabIndex={onOpenTask ? -1 : undefined}
+          title={onOpenTask ? "Open the task · E" : undefined}
+          onClick={onOpenTask ? (e) => { if (!e.target.closest("a")) onOpenTask(); } : undefined}
+        >
+          <LinkifyText text={task.title} />
+        </h2>
         {firstStep && (
           <p className="wall-first-step" data-flip="step">
-            <span className="wall-first-step-label">First step</span> — <LinkifyText text={firstStep} />
+            <span className="wall-first-step-label">{stepLabel}</span> — <LinkifyText text={firstStep} />
           </p>
         )}
 

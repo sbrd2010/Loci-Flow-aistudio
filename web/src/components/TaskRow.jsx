@@ -1,6 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { formatReminderLabel } from "../utils/reminders";
-import { safeCopyToClipboard } from "../utils/clipboard";
 import LinkifyText from "./LinkifyText";
 import "../styles/taskRow.css";
 
@@ -12,19 +11,6 @@ const GripIcon = () => (
     <circle cx="7" cy="2.5" r="1.5"/>
     <circle cx="7" cy="7.5" r="1.5"/>
     <circle cx="7" cy="12.5" r="1.5"/>
-  </svg>
-);
-
-const PencilIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
-  </svg>
-);
-
-const CopyIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="9" y="9" width="13" height="13" rx="2"/>
-    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
   </svg>
 );
 
@@ -41,83 +27,12 @@ const PinIcon = () => (
   </svg>
 );
 
-const UnpinIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="2" y1="2" x2="22" y2="22"/>
-    <line x1="12" y1="17" x2="12" y2="22"/>
-    <path d="M9.586 4H15v2.76a2 2 0 0 0 1.11 1.79l1.78.9A2 2 0 0 1 19 11.24V17"/>
-    <path d="M5 17h9"/>
-  </svg>
-);
-
-const StarIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-  </svg>
-);
-
-const StarOffIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" opacity="0.4"/>
-    <line x1="2" y1="2" x2="22" y2="22"/>
-  </svg>
-);
-
-const BoltIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-  </svg>
-);
-
 const TrashIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="3 6 5 6 21 6"/>
     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
   </svg>
 );
-
-const ArrowRightIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="5" y1="12" x2="19" y2="12"/>
-    <polyline points="13 6 19 12 13 18"/>
-  </svg>
-);
-
-const ParkIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 8H3v13h18V8z"/>
-    <path d="M1 3h22v5H1z"/>
-    <path d="M10 12h4"/>
-  </svg>
-);
-
-function MenuItem({ onClick, color, danger, testId, children }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <button
-      data-testid={testId}
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onTouchStart={() => setHovered(true)}
-      onTouchEnd={() => setHovered(false)}
-      style={{
-        display: "flex", alignItems: "center", gap: "10px", width: "100%",
-        background: hovered ? (danger ? "var(--coral-tint)" : "var(--panel)") : "transparent",
-        border: "none", padding: "9px 12px",
-        cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: "500",
-        color: color || "var(--ink)",
-        transition: "background 0.12s",
-        borderRadius: "9px",
-        fontFamily: "var(--font-sans)",
-        letterSpacing: "0.01em",
-        lineHeight: "1.2"
-      }}
-    >
-      {children}
-    </button>
-  );
-}
 
 // Swipe distances (px): past SWIPE_DONE to the right marks done; to the left
 // the row opens by SWIPE_REVEAL, the width of its two actions.
@@ -138,52 +53,20 @@ export const ROADMAP_HORIZONS = [
 
 // A Today row (41a; Addendum AA): a 20px circle in a 44px tap area (tap it to
 // mark done), a mono priority tag, a title that wraps and grows the row, and
-// MUST / GOAL tags. Tapping the row opens its menu.
-export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdit, onMoveUp, onMoveDown, onMoveToHorizon, onPark, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, onToggleMVD, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, onSwipeDone, onSwipeWeek, onPutOnFront }) {
-  const { title, concreteStep, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [showRoadmapOptions, setShowRoadmapOptions] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const menuRef = useRef(null);
-  const optionsBtnRef = useRef(null);
-  const copyTimeoutRef = useRef(null);
+// MUST / GOAL tags. Tapping the row opens the task (50a–b); the list moves
+// keyboard focus between rows (one tab stop, ↑/↓). On a laptop a pin shows at
+// the row's right on hover or focus: "Make the one thing · P" (50d).
+export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, onSwipeDone, onSwipeWeek, onPutOnFront }) {
+  const { title, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
 
-  useEffect(() => () => { if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current); }, []);
-
-  useEffect(() => {
-    if (!menuOpen) setShowRoadmapOptions(false);
-  }, [menuOpen]);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handler = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("touchstart", handler, { passive: true });
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("touchstart", handler);
-    };
-  }, [menuOpen]);
-
-  const hasActions = !isCompleted && (onEdit || onPin || onDelete || onBreakdown || onMoveToHorizon || onPark);
+  const hasActions = !isCompleted && !!onOpen;
   const activeSubSteps = subSteps?.filter(s => !s.done) ?? [];
   const doneSubSteps = subSteps?.filter(s => s.done) ?? [];
   const hasSubSteps = subSteps && subSteps.length > 0;
   const isDragAnywhere = interactionStyle === "dragAnywhere" && !!dragHandleListeners;
-  const onOptionsEscape = (e) => {
-    if (e.key !== "Escape" || !menuOpen) return;
-    e.preventDefault();
-    e.stopPropagation();
-    setMenuOpen(false);
-    optionsBtnRef.current?.focus();
-  };
-
-
   // Swipe (touch only; 37c): right past a threshold marks done; left opens
-  // "This week" and "Front" behind the row. The same actions are in the row
-  // menu, for screen readers and pointers. Only a clearly horizontal drag is
+  // "This week" and "Front" behind the row. The same actions are in the task
+  // sheet, for screen readers and pointers. Only a clearly horizontal drag is
   // a swipe — anything else is left to scrolling and to drag-to-reorder
   // (whose long-press is cancelled by the movement).
   const canSwipe = !isCompleted && !!(onSwipeDone || onSwipeWeek || onPutOnFront);
@@ -194,9 +77,9 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   const onSwipeDown = (e) => {
     // One finger only: the swipe follows the pointer that began it.
     if (!canSwipe || e.pointerType !== "touch" || !e.isPrimary) return;
-    // The grip is drag-to-reorder's, and the open menu's items are buttons;
-    // a gesture that starts on either is never a swipe.
-    if (e.target.closest?.(".task-row-grip, .task-row-menu")) return;
+    // The grip is drag-to-reorder's; a gesture that starts on it is never a
+    // swipe.
+    if (e.target.closest?.(".task-row-grip")) return;
     swipeRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, base: revealed ? -SWIPE_REVEAL : 0, active: false };
   };
   const onSwipeMove = (e) => {
@@ -233,7 +116,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
     // Where the finger lifted is the gesture's end (moves may be coalesced).
     sw.last = e.clientX - sw.x;
     // Only the click this pointerup may produce is swallowed; if it lands
-    // elsewhere (or never comes), the next real tap must still open the menu.
+    // elsewhere (or never comes), the next real tap must still open the task.
     suppressClickRef.current = true;
     setTimeout(() => { suppressClickRef.current = false; }, 0);
     const end = sw.base + (sw.last || 0);
@@ -262,14 +145,15 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
   };
   const closeSwipe = () => { setSwipeX(0); setRevealed(false); };
 
+  // The row is the keyboard's drag handle in both modes (Space picks it up):
+  // the list is one tab stop (50b), so the grip is only for pointers.
   const setRowRef = useCallback(node => {
-    menuRef.current = node;
-    if (isDragAnywhere && dragActivatorRef) dragActivatorRef(node);
-  }, [isDragAnywhere, dragActivatorRef]);
+    if (dragActivatorRef) dragActivatorRef(node);
+  }, [dragActivatorRef]);
 
   const row = (
     <div
-      className={`task-row ${isCompleted ? "completed" : ""}`}
+      className={`task-row ${isCompleted ? "completed" : ""}${isTinted ? " is-tinted" : ""}`}
       data-testid="task-row"
       data-task-uuid={task.uuid}
       ref={setRowRef}
@@ -278,18 +162,17 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         // closes it.
         if (suppressClickRef.current) { suppressClickRef.current = false; return; }
         if (revealed) { closeSwipe(); return; }
-        if (hasActions) setMenuOpen(o => !o);
+        if (hasActions) onOpen(task);
       } : undefined}
       {...(canSwipe ? { onPointerDown: onSwipeDown, onPointerMove: onSwipeMove, onPointerUp: onSwipeUp, onPointerCancel: onSwipeCancel } : {})}
-      {...(isDragAnywhere ? {
-        ...dragHandleListeners,
-        tabIndex: dragHandleAttributes?.tabIndex,
+      {...(dragHandleListeners ? {
+        ...(isDragAnywhere ? dragHandleListeners : { onKeyDown: dragHandleListeners.onKeyDown }),
         "aria-disabled": dragHandleAttributes?.["aria-disabled"],
         "aria-describedby": dragHandleAttributes?.["aria-describedby"],
       } : {})}
+      {...(hasActions ? { tabIndex: tabStop ? 0 : -1, "aria-label": `${title}${isMVD ? ", must-do" : ""}${isGoal ? ", goal task" : ""}. Enter to open.` } : {})}
       style={{
         ...(swipeX ? { transform: `translateX(${swipeX}px)`, transition: swipeRef.current ? "none" : undefined } : {}),
-        ...(menuOpen ? { zIndex: 400, position: "relative" } : {}),
         ...(hasActions ? { cursor: "pointer" } : {}),
         ...(isDragAnywhere ? { cursor: "grab" } : {}),
       }}
@@ -300,6 +183,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
           {...dragHandleListeners}
           {...(dragHandleAttributes || {})}
           className="task-row-grip"
+          tabIndex={-1}
           onClick={e => e.stopPropagation()}
           aria-label="Drag to reorder"
           title="Drag to reorder"
@@ -313,6 +197,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         type="button"
         className="checkbox-container"
         data-testid="task-checkbox"
+        tabIndex={hasActions ? -1 : undefined}
         aria-label={isCompleted ? `Mark not done: ${title}` : `Mark done: ${title}`}
         aria-pressed={!!isCompleted}
         onClick={e => { e.stopPropagation(); onToggleComplete(task); }}
@@ -365,6 +250,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
                 {onDeleteSubStep && (
                   <button
                     className="task-substep-remove"
+                    tabIndex={hasActions ? -1 : undefined}
                     onClick={e => { e.stopPropagation(); onDeleteSubStep(task, step.id); }}
                     onMouseDown={e => e.stopPropagation()}
                     onTouchStart={e => e.stopPropagation()}
@@ -391,6 +277,7 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
             Couldn't break this down.{" "}
             <button
               className="task-row-retry"
+              tabIndex={hasActions ? -1 : undefined}
               onClick={e => { e.stopPropagation(); onBreakdown(task); }}
               onMouseDown={e => e.stopPropagation()}
               onTouchStart={e => e.stopPropagation()}
@@ -399,124 +286,19 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
         )}
       </div>
 
-      {/* Keyboard and screen-reader way into the menu, in the default mode
-          (Drag anywhere has its visible ⋮). Hidden until focused, so the row
-          looks as drawn; placed before the menu so Tab walks into it. */}
-      {!isDragAnywhere && hasActions && (
+      {onMakeOneThing && !isCompleted && !isNowFocus && (
         <button
           type="button"
-          className="task-row-options"
-          ref={optionsBtnRef}
-          aria-label={`Options: ${title}`}
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
-          onKeyDown={onOptionsEscape}
-        >
-          Options
-        </button>
-      )}
-
-      {/* options dropdown — triggered by tapping the card body */}
-      {menuOpen && (
-        <div
-          data-testid="task-options-menu"
-          onKeyDown={e => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setMenuOpen(false); optionsBtnRef.current?.focus(); } }}
-          onClick={e => e.stopPropagation()}
+          className="task-row-pin"
+          tabIndex={-1}
+          aria-label={`Make the one thing: ${title}`}
+          title="Make the one thing · P"
+          onClick={e => { e.stopPropagation(); onMakeOneThing(task); }}
           onMouseDown={e => e.stopPropagation()}
           onTouchStart={e => e.stopPropagation()}
-          className="task-row-menu">
-          {onPin && (
-            <MenuItem onClick={() => { onPin(task); setMenuOpen(false); }} color={isNowFocus ? "var(--warning)" : "var(--text-primary)"}>
-              {isNowFocus ? <UnpinIcon /> : <PinIcon />}
-              {isNowFocus ? "Unpin from Focus" : "Pin to Focus"}
-            </MenuItem>
-          )}
-          {onToggleMVD && (
-            <MenuItem onClick={() => { onToggleMVD(task); setMenuOpen(false); }} color={isMVD ? "var(--text-muted)" : "var(--accent)"}>
-              {isMVD ? <StarOffIcon /> : <StarIcon />}
-              {isMVD ? "Remove must-do" : "Mark as must-do"}
-            </MenuItem>
-          )}
-          {onBreakdown && !isBreakingDown && (
-            <MenuItem onClick={() => { onBreakdown(task); setMenuOpen(false); }} color="var(--accent)">
-              <BoltIcon /> Break it down
-            </MenuItem>
-          )}
-          {onEdit && (
-            <MenuItem testId="task-menu-edit" onClick={() => { onEdit(task); setMenuOpen(false); }}>
-              <PencilIcon /> Edit task
-            </MenuItem>
-          )}
-          {onPutOnFront && (
-            <MenuItem testId="task-menu-front" onClick={() => { onPutOnFront(task); setMenuOpen(false); }}>
-              <ArrowRightIcon /> Put on a front
-            </MenuItem>
-          )}
-          <MenuItem
-            testId="task-menu-copy"
-            color={copied ? "var(--success)" : "var(--text-primary)"}
-            onClick={() => {
-              const text = concreteStep && concreteStep !== "Do first tiny step"
-                ? `${title}\n${concreteStep}`
-                : title;
-              safeCopyToClipboard(text).then(ok => {
-                if (ok) {
-                  if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-                  setCopied(true);
-                  copyTimeoutRef.current = setTimeout(() => {
-                    setCopied(false);
-                    setMenuOpen(false);
-                    copyTimeoutRef.current = null;
-                  }, 900);
-                } else {
-                  setMenuOpen(false);
-                }
-              });
-            }}
-          >
-            {copied ? <CheckIcon /> : <CopyIcon />}
-            {copied ? "Copied!" : "Copy"}
-          </MenuItem>
-          {onMoveToHorizon && (
-            <>
-              <div style={{ height: "1px", margin: "5px 8px", background: "var(--border)", opacity: 0.5 }} />
-              {!showRoadmapOptions ? (
-                <MenuItem onClick={() => setShowRoadmapOptions(true)} color="var(--text-secondary)">
-                  <ArrowRightIcon />
-                  <span style={{ flex: 1 }}>Move to roadmap</span>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4, flexShrink: 0 }}>
-                    <polyline points="9 18 15 12 9 6"/>
-                  </svg>
-                </MenuItem>
-              ) : (
-                <>
-                  <div style={{ fontSize: "9px", fontWeight: "800", color: "var(--text-muted)", padding: "4px 12px 2px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                    Move to roadmap
-                  </div>
-                  {ROADMAP_HORIZONS.map(({ key, label }) => (
-                    <MenuItem key={key} onClick={() => { onMoveToHorizon(task, key); setMenuOpen(false); }} color="var(--text-secondary)">
-                      <ArrowRightIcon /> {label}
-                    </MenuItem>
-                  ))}
-                </>
-              )}
-            </>
-          )}
-          {onPark && (
-            <MenuItem testId="task-menu-park" onClick={() => { onPark(task); setMenuOpen(false); }} color="var(--text-secondary)">
-              <ParkIcon /> Park for later
-            </MenuItem>
-          )}
-          {onDelete && (
-            <>
-              <div style={{ height: "1px", margin: "5px 8px", background: "var(--border)", opacity: 0.5 }} />
-              <MenuItem testId="task-menu-delete" danger onClick={() => { onDelete(task); setMenuOpen(false); }} color="var(--danger)">
-                <TrashIcon /> Delete
-              </MenuItem>
-            </>
-          )}
-        </div>
+        >
+          <PinIcon /> <kbd className="wall-key" aria-hidden="true">P</kbd>
+        </button>
       )}
       {isCompleted && onDelete && (
         <button
@@ -527,19 +309,6 @@ export default function TaskRow({ task, onToggleComplete, onPin, onDelete, onEdi
           aria-label={`Delete: ${title}`}
           title="Delete"
         ><TrashIcon /></button>
-      )}
-      {isDragAnywhere && hasActions && (
-        <button
-          className="task-row-kebab-btn"
-          ref={optionsBtnRef}
-          onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
-          onMouseDown={e => e.stopPropagation()}
-          onTouchStart={e => e.stopPropagation()}
-          aria-label="Task options"
-          aria-expanded={menuOpen}
-          onKeyDown={onOptionsEscape}
-          title="Task options"
-        >⋮</button>
       )}
     </div>
   );
