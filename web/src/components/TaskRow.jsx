@@ -145,9 +145,11 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
   };
   const closeSwipe = () => { setSwipeX(0); setRevealed(false); };
 
+  // The row is the keyboard's drag handle in both modes (Space picks it up):
+  // the list is one tab stop (50b), so the grip is only for pointers.
   const setRowRef = useCallback(node => {
-    if (isDragAnywhere && dragActivatorRef) dragActivatorRef(node);
-  }, [isDragAnywhere, dragActivatorRef]);
+    if (dragActivatorRef) dragActivatorRef(node);
+  }, [dragActivatorRef]);
 
   const row = (
     <div
@@ -163,8 +165,8 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
         if (hasActions) onOpen(task);
       } : undefined}
       {...(canSwipe ? { onPointerDown: onSwipeDown, onPointerMove: onSwipeMove, onPointerUp: onSwipeUp, onPointerCancel: onSwipeCancel } : {})}
-      {...(isDragAnywhere ? {
-        ...dragHandleListeners,
+      {...(dragHandleListeners ? {
+        ...(isDragAnywhere ? dragHandleListeners : { onKeyDown: dragHandleListeners.onKeyDown }),
         "aria-disabled": dragHandleAttributes?.["aria-disabled"],
         "aria-describedby": dragHandleAttributes?.["aria-describedby"],
       } : {})}
@@ -181,6 +183,7 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
           {...dragHandleListeners}
           {...(dragHandleAttributes || {})}
           className="task-row-grip"
+          tabIndex={-1}
           onClick={e => e.stopPropagation()}
           aria-label="Drag to reorder"
           title="Drag to reorder"
@@ -194,6 +197,7 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
         type="button"
         className="checkbox-container"
         data-testid="task-checkbox"
+        tabIndex={hasActions ? -1 : undefined}
         aria-label={isCompleted ? `Mark not done: ${title}` : `Mark done: ${title}`}
         aria-pressed={!!isCompleted}
         onClick={e => { e.stopPropagation(); onToggleComplete(task); }}
@@ -246,6 +250,7 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
                 {onDeleteSubStep && (
                   <button
                     className="task-substep-remove"
+                    tabIndex={hasActions ? -1 : undefined}
                     onClick={e => { e.stopPropagation(); onDeleteSubStep(task, step.id); }}
                     onMouseDown={e => e.stopPropagation()}
                     onTouchStart={e => e.stopPropagation()}
@@ -272,6 +277,7 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
             Couldn't break this down.{" "}
             <button
               className="task-row-retry"
+              tabIndex={hasActions ? -1 : undefined}
               onClick={e => { e.stopPropagation(); onBreakdown(task); }}
               onMouseDown={e => e.stopPropagation()}
               onTouchStart={e => e.stopPropagation()}

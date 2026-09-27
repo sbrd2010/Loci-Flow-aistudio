@@ -1524,3 +1524,58 @@ test("an open task becomes the full-height sheet when the window narrows", async
   await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
   expect(Math.round((await detail.boundingBox()).y)).toBe(12);
 });
+
+// Codex review of #406: the list is one tab stop (50b) — the grip, circle
+// and step controls inside rows are not in the tab order — and the row
+// itself is what Space picks up to reorder, in both drag modes.
+test("laptop: the list is one tab stop, and Space on a row reorders it", async ({ page }) => {
+  await laptopListOpen(page);
+  const list = page.getByTestId("today-tasks-list");
+  const rows = list.locator("[data-testid='task-row']:not(.completed)");
+  const titles = (await rows.locator(".task-title-text").allInnerTexts()).map(t => t.trim());
+  await rows.first().focus();
+  await page.keyboard.press("Tab");
+  expect(await page.evaluate(() => !!document.activeElement?.closest("[data-testid='today-tasks-list']"))).toBe(false);
+
+  await rows.first().focus();
+  await page.keyboard.press("Space");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Space");
+  await expect(rows.nth(1).locator(".task-title-text")).toHaveText(titles[0]);
+  await expect(rows.nth(0).locator(".task-title-text")).toHaveText(titles[1]);
+});
+
+// Codex review of #406: E opens a task to edit its title; a task opened
+// after that, with Enter, opens as usual.
+test("laptop: E edits the title of that task only; the next one opens normally", async ({ page }) => {
+  await laptopListOpen(page);
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
+  const detail = page.getByTestId("task-detail");
+  await rows.first().focus();
+  await page.keyboard.press("e");
+  await expect(detail.locator(".detail-title-input")).toBeVisible();
+  await page.keyboard.press("Escape");
+  // Out of the field, focus is back on the title, where Esc closes the sheet.
+  await expect(detail.locator(".detail-title")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(detail).toHaveCount(0);
+  await rows.nth(1).focus();
+  await page.keyboard.press("Enter");
+  await expect(detail).toBeVisible();
+  await expect(detail.locator(".detail-title-input")).toHaveCount(0);
+});
+
+// Codex review of #406: a task with the older P4 shows it, and can go back
+// to it after choosing another.
+test("the task sheet keeps a P4 task's priority on offer", async ({ page }) => {
+  await laptopListOpen(page);
+  const row = listRow(page, "10-minute walk");
+  await expect(row.locator(".task-row-priority")).toHaveText("P4");
+  await row.locator(".task-title-text").click();
+  const group = page.getByTestId("task-detail").getByRole("radiogroup", { name: "Priority" });
+  await expect(group.getByRole("radio", { name: "Priority 4" })).toHaveAttribute("aria-checked", "true");
+  await group.getByRole("radio", { name: "Priority 1" }).click();
+  await expect(group.getByRole("radio", { name: "Priority 1" })).toHaveAttribute("aria-checked", "true");
+  await group.getByRole("radio", { name: "Priority 4" }).click();
+  await expect(group.getByRole("radio", { name: "Priority 4" })).toHaveAttribute("aria-checked", "true");
+});
