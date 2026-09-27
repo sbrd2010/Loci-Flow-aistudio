@@ -502,9 +502,12 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
               <span className="dm-dayclock-fill" style={{ width: `${nowPct}%` }} />
             </div>
             <div className="dm-dayclock-labels" aria-hidden="true">
-              <span>{formatClock24(progress.start)}</span>
-              <span className="dm-dayclock-now" style={{ left: `${Math.min(80, Math.max(20, nowPct))}%` }}>{formatClock24(progress.now)} NOW</span>
-              <span>{formatClock24(progress.end)}</span>
+              {/* NOW sits exactly where the fill ends. Shifting it by the same
+                  share of its own width keeps it inside the bar at 0% and 100%;
+                  near an end, that end's time gives way to it. */}
+              <span className={nowPct < 15 ? "is-covered" : undefined}>{formatClock24(progress.start)}</span>
+              <span className="dm-dayclock-now" style={{ left: `${nowPct}%`, transform: `translateX(-${nowPct}%)` }}>{formatClock24(progress.now)} NOW</span>
+              <span className={nowPct > 85 ? "is-covered" : undefined}>{formatClock24(progress.end)}</span>
             </div>
           </div>
         )}

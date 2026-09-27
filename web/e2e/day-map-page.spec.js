@@ -73,3 +73,28 @@ test("the Day map's Back names where it goes: Plan when Plan opened it", async (
   await expect(page.locator(".day-map-page")).toBeVisible();
   await expect(page.getByRole("button", { name: "Back to Plan" })).toContainText("Plan");
 });
+
+// Codex review of #409: NOW marks where the fill ends — early in the day too,
+// not held at a fifth of the way along — and stays inside the bar.
+test("the NOW label sits where the day's fill ends, even near the start", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.clock.setFixedTime(new Date("2024-06-15T07:30:00"));
+  await page.getByTestId("demo-btn").click();
+  await page.locator("body").click({ position: { x: 5, y: 300 } });
+  await page.keyboard.press("m");
+  const geo = await page.evaluate(() => {
+    const bar = document.querySelector(".dm-dayclock-bar").getBoundingClientRect();
+    const fill = document.querySelector(".dm-dayclock-fill").getBoundingClientRect();
+    const now = document.querySelector(".dm-dayclock-now").getBoundingClientRect();
+    const frac = fill.width / bar.width;
+    return { frac, fillEnd: fill.right, anchor: now.left + frac * now.width, nowLeft: now.left, nowRight: now.right, barLeft: bar.left, barRight: bar.right };
+  });
+  expect(geo.frac).toBeGreaterThan(0);
+  expect(geo.frac).toBeLessThan(0.15);
+  // The point of the label that marks now is over the fill's end.
+  expect(Math.abs(geo.anchor - geo.fillEnd)).toBeLessThan(2);
+  expect(geo.nowLeft).toBeGreaterThanOrEqual(geo.barLeft - 1);
+  expect(geo.nowRight).toBeLessThanOrEqual(geo.barRight + 1);
+  await expect(page.locator(".dm-dayclock-labels span").first()).toHaveClass(/is-covered/);
+});
