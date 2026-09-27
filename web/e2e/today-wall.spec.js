@@ -1697,6 +1697,29 @@ test("the task sheet keeps a task's own estimate on offer", async ({ page }) => 
   await expect(group.getByRole("radio", { name: "25m" })).toHaveAttribute("aria-checked", "true");
 });
 
+// Owner's call on the Codex review of #406: on a narrow laptop the drawer
+// opens over the task column, so the list beside it stays fully usable; from
+// 1280px it sits on the right, over the list, as 50b draws it.
+test("narrow laptop: the drawer opens over the task column and leaves the list usable", async ({ page }) => {
+  await laptopListOpen(page);
+  await page.setViewportSize({ width: 1024, height: 800 });
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
+  const second = (await rows.nth(1).locator(".task-title-text").innerText()).trim();
+  await rows.first().locator(".task-title-text").click();
+  const detail = page.getByTestId("task-detail");
+  await expect(detail).toBeVisible();
+  const [box, list] = await Promise.all([detail.boundingBox(), page.locator(".tasks-section").boundingBox()]);
+  expect(Math.round(box.x)).toBe(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(list.x);
+  // A row beside it can be clicked, and opens in the same drawer.
+  await rows.nth(1).locator(".task-title-text").click();
+  await expect(detail.getByRole("heading", { name: second })).toBeVisible();
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const wide = await detail.boundingBox();
+  expect(Math.round(wide.x + wide.width)).toBe(1280);
+});
+
 // Codex review of #407: a drag across the "Today" heading is not taken — the
 // groups are ordered apart, so a saved cross-group order would only surface
 // the day after, when the heading is gone.
