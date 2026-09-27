@@ -857,7 +857,7 @@ FOCUS SESSION: none running.`;
     storage.setItem("loci_provider_pref", "zai");
     fetch.mockResolvedValue(zaiOk("Z.ai reply."));
     const fullTitle = "Prepare the referral request for the polymer engineer role at the membrane company";
-    const shown = `${fullTitle.slice(0, 79)}…`;
+    const shown = `${fullTitle.slice(0, 59).trimEnd()}…${fullTitle.slice(-20).trimStart()}`;
     const filler = Array.from({ length: 40 }, (_, i) => `- #open${i} [open] [P3] Open task ${i} ${"o".repeat(300)}`);
     const systemPrompt = `You are Loci Coach.
 TODAY SNAPSHOT (live — Today's tasks, with their id and status):

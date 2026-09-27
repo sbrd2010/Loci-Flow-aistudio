@@ -849,7 +849,21 @@ describe("buildLociTodaySnapshotContext (every Coach request)", () => {
     const out = buildLociTodaySnapshotContext([{ uuid: "long-1", title: "x".repeat(300), horizonLevel: "today" }], { dayStr: day });
     const line = out.split("\n").find(l => l.startsWith("- #long1"));
     expect(line.length).toBeLessThan(110);
-    expect(line.endsWith("…")).toBe(true);
+    expect(line).toContain("…");
+  });
+  it("keeps the end of a long title, so two titles that differ late stay distinct", () => {
+    const base = "Prepare CV and cover letter for the polymer engineer role, tailored for the interview at ";
+    const t = [{ uuid: "a1", title: `${base}Avery Denison`, horizonLevel: "today" }, { uuid: "b2", title: `${base}Paques Biomaterials`, horizonLevel: "today" }];
+    const out = buildLociTodaySnapshotContext(t, { dayStr: day });
+    expect(out).toContain("…iew at Avery Denison");
+    expect(out).toContain("…Paques Biomaterials");
+    expect(out).toContain("Paques Biomaterials");
+  });
+  it("keeps a named short title past the cap as a whole word only", () => {
+    const open = Array.from({ length: 15 }, (_, i) => ({ uuid: `o-${i}`, title: `Open task ${i}`, horizonLevel: "today", orderIndex: i }));
+    const pr = { uuid: "pr-1", title: "PR", horizonLevel: "today", orderIndex: 99 };
+    expect(buildLociTodaySnapshotContext([...open, pr], { dayStr: day, mentionText: "did I send the PR?" })).toContain("] PR");
+    expect(buildLociTodaySnapshotContext([...open, pr], { dayStr: day, mentionText: "april plans" })).not.toContain("] PR");
   });
   it("still sends the tasks while cloud sync is unconfirmed, labelled as this device's copy", () => {
     const out = buildLociTodaySnapshotContext(tasks, { dayStr: day, unconfirmed: true });

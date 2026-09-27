@@ -444,14 +444,28 @@ const SNAPSHOT_MAX_NAMED_EXTRA = 3;
 
 const oneLine = text => String(text || "").replace(/\s+/g, " ").trim();
 
+// A long title keeps its start and its end: two tasks that differ only late
+// in the title ("… Avery Denison" / "… Paques") must not look the same.
+const SNAPSHOT_TITLE_TAIL = 20;
 function snapshotTitle(title) {
   const t = oneLine(title);
-  return t.length > SNAPSHOT_MAX_TITLE ? `${t.slice(0, SNAPSHOT_MAX_TITLE - 1)}…` : t;
+  if (t.length <= SNAPSHOT_MAX_TITLE) return t;
+  const head = SNAPSHOT_MAX_TITLE - SNAPSHOT_TITLE_TAIL - 1;
+  return `${t.slice(0, head).trimEnd()}…${t.slice(-SNAPSHOT_TITLE_TAIL).trimStart()}`;
+}
+
+// Long titles match as a substring; a short one ("PR", "Go") only as a whole
+// word, so it is kept when named without matching inside other words.
+function mentionsTitle(mention, title) {
+  if (!title) return false;
+  if (title.length >= 3) return mention.includes(title);
+  const esc = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${esc}($|[^\\p{L}\\p{N}])`, "u").test(mention);
 }
 
 function capKeepingMentioned(list, max, mention) {
   if (list.length <= max) return { shown: list, omitted: 0 };
-  const named = t => { const title = oneLine(t.title).toLowerCase(); return title.length >= 3 && mention.includes(title); };
+  const named = t => mentionsTitle(mention, oneLine(t.title).toLowerCase());
   const shown = list.slice(0, max);
   let extra = 0;
   for (const t of list.slice(max)) {
