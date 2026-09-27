@@ -1143,7 +1143,7 @@ test("Split a task: rows are locked while the AI works, and an answer outside tw
 
 // Laptop, 1024px and up (Addendum X3; 35e/36c): edge to edge, content capped
 // at 1200px and centred; with the list hidden, the one task sits centred and
-// the foot carries the links, "Show today's list" and Low energy.
+// the foot carries "Show list", the + and Low energy (51b).
 test("laptop: no phone-card frame; content capped at 1200px, centred", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/");
@@ -1151,28 +1151,37 @@ test("laptop: no phone-card frame; content capped at 1200px, centred", async ({ 
   await page.getByTestId("demo-btn").click();
   const frame = await page.locator(".app-container").boundingBox();
   expect(Math.round(frame.width)).toBe(1920);
-  const band = await page.locator(".wall-goal").boundingBox();
-  expect(Math.round(band.width)).toBe(1200);
+  // With the list shown the two columns span the 1200px cap, centred.
+  await page.keyboard.press("l");
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  await page.waitForTimeout(500);
+  const [band, list] = await Promise.all([page.locator(".wall-goal").boundingBox(), page.locator(".tasks-section").boundingBox()]);
   expect(Math.round(band.x)).toBe(360);
+  expect(Math.round(list.x + list.width)).toBe(1560);
 });
 
-test("laptop: with the list hidden, the task is centred and the foot shows today's list and Low energy", async ({ page }) => {
+test("laptop: with the list hidden, the task is centred and the foot shows Show list, + and Low energy (51b)", async ({ page }) => {
   await enterLaptop(page);
-  const hero = await page.locator(".wall-title").boundingBox();
   const vw = page.viewportSize().width;
-  expect(Math.abs(hero.x + hero.width / 2 - vw / 2)).toBeLessThan(4);
-  // Start focus, Mark done and Split it in one row.
-  const [start, done, split] = await Promise.all([
+  // Goal and buttons share one centred 420px column; the title is 4/3 of it.
+  const [band, start, done, split, title] = await Promise.all([
+    page.locator(".wall-goal").boundingBox(),
     page.locator(".wall-primary").boundingBox(),
     page.getByRole("button", { name: /^Mark done/ }).boundingBox(),
     page.getByRole("button", { name: /^Split it/ }).boundingBox(),
+    page.locator(".wall-title").boundingBox(),
   ]);
-  expect(Math.round(done.y)).toBe(Math.round(start.y));
-  expect(Math.round(split.y)).toBe(Math.round(start.y));
+  expect(Math.round(band.width)).toBe(420);
+  expect(Math.abs(band.x + band.width / 2 - vw / 2)).toBeLessThan(2);
+  expect(Math.round(start.width)).toBe(420);
+  expect(Math.round(done.y)).toBe(Math.round(split.y));
+  expect(done.y).toBeGreaterThan(start.y);
+  expect(Math.round(title.width)).toBe(560);
+  expect(Math.abs(title.x + title.width / 2 - vw / 2)).toBeLessThan(2);
 
-  const show = page.getByRole("button", { name: /Show today's list/ });
+  const show = page.getByRole("button", { name: /^Show list · \d+/ });
   await expect(show).toBeVisible();
-  await expect(show).toContainText(/\d+ · \d+ done/);
+  await expect(page.locator(".wall-foot").getByRole("button", { name: "Add a task to Today" })).toBeVisible();
   // Low energy here and in the list are one setting.
   const energy = page.locator(".wall-foot").getByRole("switch", { name: "Low energy" });
   await expect(energy).toHaveAttribute("aria-checked", "false");
@@ -1182,4 +1191,69 @@ test("laptop: with the list hidden, the task is centred and the foot shows today
   await expect(page.locator(".tasks-section")).toBeVisible();
   await expect(page.locator(".today-energy").getByRole("switch", { name: "Low energy" })).toHaveAttribute("aria-checked", "true");
   await expect(page.locator(".wall-foot").getByRole("switch", { name: "Low energy" })).toBeHidden();
+  // The toggle keeps focus: Show list → Hide list, and back.
+  await expect(page.locator(".today-list-hide")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".wall-peek")).toBeFocused();
+});
+
+// 51a: no "+ Add" in the list header; the list ends with "Add a task · to
+// Today · N", which opens Add task on Today. The Day map link sits under
+// the task, and M opens it.
+test("laptop: the list's last row adds to Today; the header has no + Add; M opens the Day map (51a)", async ({ page }) => {
+  await enterLaptop(page);
+  await page.keyboard.press("l");
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  await expect(page.locator(".today-list-add")).toBeHidden();
+  await expect(page.locator(".today-list-link")).toBeHidden();
+  const addRow = page.getByRole("button", { name: "Add a task to Today" }).last();
+  await expect(addRow).toBeVisible();
+  const [row, card] = await Promise.all([addRow.boundingBox(), page.locator(".tasks-section").boundingBox()]);
+  expect(row.y + row.height).toBeLessThanOrEqual(card.y + card.height);
+  expect(Math.round(row.height)).toBe(52);
+  await addRow.click();
+  await expect(page.getByTestId("add-task-title")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("add-task-title")).toBeHidden();
+
+  await expect(page.locator(".wall-daymap")).toBeVisible();
+  await page.locator("body").click({ position: { x: 5, y: 300 } });
+  await page.keyboard.press("m");
+  await expect(page.getByRole("heading", { name: /Day map/i }).first()).toBeVisible();
+});
+
+// 51e–f: the show/hide is animated with transform and opacity only, and a
+// second L mid-move reverses it and leaves nothing behind.
+test("laptop: show/hide glides with transform and opacity, reverses mid-move and leaves no residue (51e–f)", async ({ page }) => {
+  await enterLaptop(page);
+  await page.keyboard.press("l");
+  const props = await page.evaluate(() => document.getAnimations().flatMap(a =>
+    a.effect.getKeyframes().flatMap(k => Object.keys(k).filter(p => !["offset", "easing", "composite", "computedOffset"].includes(p)))));
+  expect(props.length).toBeGreaterThan(0);
+  expect(new Set(props)).toEqual(new Set(["transform", "opacity"]));
+  const titleAnim = await page.evaluate(() => {
+    const a = document.getAnimations().find(x => x.effect.target.classList.contains("wall-title"));
+    return a && { d: a.effect.getTiming().duration, e: a.effect.getTiming().easing, from: a.effect.getKeyframes()[0].transform };
+  });
+  expect(titleAnim.d).toBe(280);
+  expect(titleAnim.e).toBe("cubic-bezier(0.2, 0, 0, 1)");
+  expect(titleAnim.from).toMatch(/scale\(1\.3/);
+  await page.waitForTimeout(120);
+  await page.keyboard.press("l");
+  await expect(page.locator(".tasks-section")).toBeHidden({ timeout: 2_000 });
+  await page.waitForTimeout(700);
+  expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
+  expect(await page.evaluate(() => [...document.body.children].filter(c => c.style.position === "fixed" && c.getAttribute("aria-hidden") === "true").length)).toBe(0);
+  await expect(page.getByRole("button", { name: /^Show list/ })).toBeVisible();
+});
+
+test("laptop: with Reduce Motion the list fades through paper and nothing moves", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await enterLaptop(page);
+  await page.keyboard.press("l");
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  await page.waitForTimeout(40);
+  const moved = await page.evaluate(() => document.getAnimations().some(a =>
+    a.effect.getKeyframes().some(k => k.transform && k.transform !== "none")));
+  expect(moved).toBe(false);
 });

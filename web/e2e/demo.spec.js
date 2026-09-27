@@ -94,8 +94,8 @@ test("6. User can create a new task", async ({ page }) => {
   const tasksList = page.getByTestId("today-tasks-list");
   const beforeCount = await tasksList.locator(".task-row:not(.completed)").count();
 
-  // Open add-task dialog from the list's "+ Add" (49c)
-  await page.locator(".today-list-add").click();
+  // Open add-task dialog from the list's last row (51a; laptop viewport)
+  await page.locator(".today-list-addrow").click();
   await expect(page.locator(".add-card")).toBeVisible({ timeout: 5_000 });
 
   // Fill in the title and submit
