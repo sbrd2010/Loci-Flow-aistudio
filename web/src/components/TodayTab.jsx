@@ -5,7 +5,7 @@ import SplitTaskSheet from "./SplitTaskSheet";
 import { buildSplit, undoSplit } from "../utils/splitTask";
 import TodayWall from "./TodayWall";
 import Momentum from "./Momentum";
-import { frontsFromConfig, commitmentDaysLeft, commitmentKickerFront, frontForCommitment, frontProgress } from "../utils/fronts";
+import { frontsFromConfig, frontsOnOffer, commitmentDaysLeft, commitmentKickerFront, frontForCommitment, frontProgress } from "../utils/fronts";
 import { useFocusLedger } from "../hooks/useFocusLedger";
 import { minutesForTaskOn, sessionsOnDay } from "../utils/focusLedger";
 import { buildMomentum } from "../utils/momentum";
@@ -1958,7 +1958,7 @@ export default function TodayTab({
             total={remainingTasks.length}
             variant={drawerViewport ? "drawer" : "sheet"}
             isGoal={!!wallKickerFront && detailTask.frontId === wallKickerFront.id}
-            fronts={frontsFromConfig(config).filter(f => !f.parked)}
+            fronts={frontsOnOffer(frontsFromConfig(config), detailTask.frontId)}
             editTitleSignal={editTitle?.uuid === detailTask.uuid ? editTitle.n : 0}
             onClose={closeDetail}
             onPatch={patch => handlePatchTask(detailTask.uuid, patch)}
