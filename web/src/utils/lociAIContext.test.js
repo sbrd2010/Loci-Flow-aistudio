@@ -859,6 +859,14 @@ describe("buildLociTodaySnapshotContext (every Coach request)", () => {
     expect(out).toContain("…Paques Biomaterials");
     expect(out).toContain("Paques Biomaterials");
   });
+  it("does not let a title found inside another word take a rescue slot", () => {
+    const open = Array.from({ length: 15 }, (_, i) => ({ uuid: `o-${i}`, title: `Open task ${i}`, horizonLevel: "today", orderIndex: i }));
+    const arts = Array.from({ length: 3 }, (_, i) => ({ uuid: `art-${i}`, title: "art", horizonLevel: "today", orderIndex: 50 + i }));
+    const named = { uuid: "sr-1", title: "Start report", horizonLevel: "today", orderIndex: 99 };
+    const out = buildLociTodaySnapshotContext([...open, ...arts, named], { dayStr: day, mentionText: "focus on Start report" });
+    expect(out).toContain("] Start report");
+    expect(out).not.toContain("] art");
+  });
   it("keeps a named short title past the cap as a whole word only", () => {
     const open = Array.from({ length: 15 }, (_, i) => ({ uuid: `o-${i}`, title: `Open task ${i}`, horizonLevel: "today", orderIndex: i }));
     const pr = { uuid: "pr-1", title: "PR", horizonLevel: "today", orderIndex: 99 };

@@ -58,9 +58,10 @@ export function parseCoachActionTags(text = "") {
 }
 
 function normalizeTitle(str = "") {
-  // "…" marks a gap (the Today snapshot shortens long titles to start…end),
-  // so it becomes a space rather than gluing the two parts into one word.
-  return String(str).toLowerCase().replace(/…/g, " ").trim().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim();
+  // "…" marks a gap (the Today snapshot shortens long titles to start…end,
+  // writing any literal one as "..."), so both become a space rather than
+  // gluing the parts into one word.
+  return String(str).toLowerCase().replace(/…|\.{3}/g, " ").trim().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim();
 }
 
 function normalizeStopWords(str = "") {

@@ -448,17 +448,18 @@ const oneLine = text => String(text || "").replace(/\s+/g, " ").trim();
 // in the title ("… Avery Denison" / "… Paques") must not look the same.
 const SNAPSHOT_TITLE_TAIL = 20;
 function snapshotTitle(title) {
-  const t = oneLine(title);
+  // The snapshot's own "…" marks the gap; a literal one in the title is
+  // written as "..." so the gap stays the only one.
+  const t = oneLine(title).replace(/…/g, "...");
   if (t.length <= SNAPSHOT_MAX_TITLE) return t;
   const head = SNAPSHOT_MAX_TITLE - SNAPSHOT_TITLE_TAIL - 1;
   return `${t.slice(0, head).trimEnd()}…${t.slice(-SNAPSHOT_TITLE_TAIL).trimStart()}`;
 }
 
-// Long titles match as a substring; a short one ("PR", "Go") only as a whole
-// word, so it is kept when named without matching inside other words.
+// A title counts as named only as a whole phrase, so "art" is not named by
+// "Start report" and cannot take a rescue slot from the task that is.
 function mentionsTitle(mention, title) {
   if (!title) return false;
-  if (title.length >= 3) return mention.includes(title);
   const esc = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`(^|[^\\p{L}\\p{N}])${esc}($|[^\\p{L}\\p{N}])`, "u").test(mention);
 }
