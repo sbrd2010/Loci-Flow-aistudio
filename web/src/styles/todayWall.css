@@ -508,6 +508,8 @@
 .wall-daymap,
 .wall-tip { display: none; }
 .wall-title { transform-origin: 0 0; }
+.wall-title.is-openable { cursor: pointer; }
+.wall-title:focus { outline: none; }
 
 @media (min-width: 1024px) {
   .today-wall:not(.is-done):not(.is-empty) .wall-title {

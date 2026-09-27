@@ -85,7 +85,7 @@ test("editing: no note, no ring, Save changes, and the extras sit under More det
   await enterDemo(page);
   const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']").first();
   await row.locator(".task-row-top").click();
-  await row.getByTestId("task-menu-edit").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^More details/ }).click();
   const dialog = page.getByRole("dialog", { name: "Edit task" });
   await expect(dialog).toBeVisible();
   await expect(dialog.locator(".add-note")).toHaveCount(0);

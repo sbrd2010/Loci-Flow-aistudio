@@ -120,7 +120,7 @@ test("7. User can edit a task", async ({ page }) => {
 
   // Open the ⋮ menu and click Edit
   await firstRow.locator(".task-row-top").click();
-  const editBtn = firstRow.getByTestId("task-menu-edit");
+  const editBtn = page.getByTestId("task-detail").getByRole("button", { name: /^More details/ });
   await expect(editBtn).toBeVisible({ timeout: 3_000 });
   await editBtn.click();
 
@@ -150,7 +150,7 @@ test("8. User can delete a task", async ({ page }) => {
 
   // Open ⋮ menu and click Delete
   await firstRow.locator(".task-row-top").click();
-  const deleteBtn = firstRow.getByTestId("task-menu-delete");
+  const deleteBtn = page.getByTestId("task-detail").getByRole("button", { name: /^Delete/ });
   await expect(deleteBtn).toBeVisible({ timeout: 3_000 });
   await deleteBtn.click();
 

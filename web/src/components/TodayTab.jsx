@@ -43,6 +43,9 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { isOnToday } from "../utils/deferral";
 import { IconPlus } from "./ui/icons";
+import TaskDetail from "./TaskDetail";
+import { makeOneThing, undoOneThing } from "../utils/oneThing";
+import { moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
 
 // Addendum A: on a Low Energy day the wall offers a smaller start instead of
@@ -183,9 +186,14 @@ export default function TodayTab({
   // starts at half; full is a choice made each time.
   const [sheetFull, setSheetFull] = useState(false);
   const [sheetViewport, setSheetViewport] = useState(() => typeof window !== "undefined" && window.innerWidth < 840);
+  // A task, opened (50a–b): a sheet below 1024px, a non-modal drawer above.
+  const [drawerViewport, setDrawerViewport] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1024);
+  const [detailUuid, setDetailUuid] = useState(null);
+  const [rowFocusUuid, setRowFocusUuid] = useState(null);
+  const [editTitleSignal, setEditTitleSignal] = useState(0);
   useEffect(() => { if (!peekOpen) setSheetFull(false); }, [peekOpen]);
   useEffect(() => {
-    const update = () => setSheetViewport(window.innerWidth < 840);
+    const update = () => { setSheetViewport(window.innerWidth < 840); setDrawerViewport(window.innerWidth >= 1024); };
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
@@ -286,7 +294,8 @@ export default function TodayTab({
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    // Space picks a row up; Enter is the row's own (it opens the task, 50b).
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates, keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space", "Enter"] } })
   );
 
   const openRescueMode = () => {
@@ -335,8 +344,9 @@ export default function TodayTab({
   // Split a task (45d): the wall's "Split it" and S open it for the one thing.
   const [splitTask, setSplitTask] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
-  // The one Undo toast: { kind: "done" | "delete" | "unpin" | "move" | "front",
-  // task (as it was), to, wasPinned, at }.
+  // The one Undo toast: { kind: "done" | "delete" | "move" | "front" | "split"
+  // | "swap" | "tomorrow" | "park", task (as it was), to, wasPinned, previous,
+  // before, at }.
   // Only the task is held — what undoing writes is built from the tasks as
   // they are when Undo is tapped, not as they were 5 seconds earlier.
   const [undo, setUndo] = useState(null);
@@ -634,11 +644,6 @@ export default function TodayTab({
       .catch(() => {});
   };
 
-  const handleUnpinWallTask = (task) => {
-    if (!task.isNowFocus) return handlePinTask(task);
-    setUndo({ kind: "unpin", task, at: Date.now() });
-    return handlePinTask(task);
-  };
 
   // Moves from a row (the swipe's "This week", and the menu's horizons) act at
   // once with Undo. Undo puts back the horizon and place it had, and the pin
@@ -646,6 +651,77 @@ export default function TodayTab({
   const handleMoveWithUndo = (task, horizon) => {
     setUndo({ kind: "move", task, to: horizon, wasPinned: !!task.isNowFocus, at: Date.now() });
     handleMoveToHorizon(task, horizon);
+  };
+
+  // — A task, opened (turn 50): the sheet/drawer's writes. Autosave commits
+  // can land a render late (on unmount, after ↑/↓), so they read the latest
+  // payload, not this render's. —
+  const latestPayloadRef = useRef(payload);
+  latestPayloadRef.current = payload;
+  const handlePatchTask = (uuid, patch) => {
+    const latest = latestPayloadRef.current;
+    const current = (latest.tasks || []).find(t => t.uuid === uuid && !t.isDeleted);
+    if (!current) return;
+    if (patch.horizonLevel && patch.horizonLevel !== current.horizonLevel) {
+      handleMoveWithUndo(current, patch.horizonLevel);
+      return;
+    }
+    if ("frontId" in patch) {
+      handlePutOnFront(current, patch.frontId);
+      return;
+    }
+    savePayload({ ...latest, tasks: (latest.tasks || []).map(t => t.uuid === uuid ? { ...t, ...patch, lastUpdated: Date.now() } : t) });
+  };
+  const handleAddStep = (uuid, text) => {
+    const latest = latestPayloadRef.current;
+    savePayload({ ...latest, tasks: (latest.tasks || []).map(t => t.uuid === uuid
+      ? { ...t, subSteps: [...(t.subSteps || []), { id: safeUUID(), text, done: false }], lastUpdated: Date.now() }
+      : t) });
+  };
+
+  // "Make this the one thing" (50c–d): the task takes the NOW spot; the old
+  // one goes back to the top of the list with its steps, a 2-second tint and
+  // Undo.
+  const [tintUuid, setTintUuid] = useState(null);
+  useEffect(() => {
+    if (!tintUuid) return undefined;
+    const t = setTimeout(() => setTintUuid(null), 2000);
+    return () => clearTimeout(t);
+  }, [tintUuid]);
+  const handleMakeOneThing = (task) => {
+    const { tasks: next, previous } = makeOneThing(tasks, task.uuid);
+    if (next === tasks) return;
+    // The pin moving off a task with an open session ends that session, as
+    // any other re-pin does (handlePinTask).
+    const endedFocusSession = previous ? endFocusSession("user_abandoned") : null;
+    if (endedFocusSession) {
+      setIsTimerRunning(false);
+      setIsFocusMode(false);
+      setFocusSessionActive(false);
+    }
+    const now = Date.now();
+    savePayloadAsync({ ...payload, tasks: next })
+      .then(() => {
+        if (endedFocusSession) {
+          writeActivityEvents(eventPatch(uid, buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now })));
+        }
+      })
+      .catch(() => {});
+    if (previous) {
+      setTintUuid(previous.uuid);
+      setUndo({ kind: "swap", task, previous, at: now });
+    }
+  };
+
+  // Tomorrow (50b, T): leaves today for the next Loci day, first in line there.
+  const handleTomorrow = (task) => {
+    const { tasks: next, before } = moveToTomorrow(tasks, [String(task.uuid || task.id)], nextDateStr(todayStr));
+    savePayload({ ...payload, tasks: next });
+    setUndo({ kind: "tomorrow", task, before, at: Date.now() });
+  };
+  const handleParkWithUndo = (task) => {
+    setUndo({ kind: "park", task, wasPinned: !!task.isNowFocus, at: Date.now() });
+    handleParkTask(task);
   };
 
   // "Put on a front": the swipe's Front and the menu item open this picker.
@@ -664,7 +740,7 @@ export default function TodayTab({
     // The swipe's Front stays mounted once the row closes, only hidden.
     const back = el && el.isConnected && el.offsetParent !== null && getComputedStyle(el).visibility !== "hidden"
       ? el
-      : document.querySelector(`[data-task-uuid="${uuid}"] .task-row-options, [data-task-uuid="${uuid}"] .task-row-kebab-btn`);
+      : document.querySelector(`[data-testid="today-tasks-list"] [data-task-uuid="${uuid}"]`);
     back?.focus?.();
   }, [frontPickerTask]);
   const handlePutOnFront = (task, frontId) => {
@@ -686,7 +762,8 @@ export default function TodayTab({
       const front = frontsFromConfig(config).find(f => f.id === u.to);
       return front ? `Put on ${front.name}: ${title}` : `Off its front: ${title}`;
     }
-    return `${{ done: "Marked done", delete: "Deleted", unpin: "Unpinned" }[u.kind]}: ${title}`;
+    if (u.kind === "swap") return `${u.previous.title} is back at the top of the list.`;
+    return `${{ done: "Marked done", delete: "Deleted", tomorrow: "Moved to tomorrow", park: "Parked", unpin: "Unpinned" }[u.kind]}: ${title}`;
   };
   const undoText = undo ? undoMessage(undo) : "";
 
@@ -746,6 +823,23 @@ export default function TodayTab({
       if (current && !current.isNowFocus && !tasks.some(t => t.isNowFocus && !t.isDeleted && !t.isCompleted)) {
         handlePinTask(current);
       }
+      return;
+    }
+    if (kind === "swap") {
+      savePayload({ ...payload, tasks: undoOneThing(tasks, task.uuid, undo.previous) });
+      return;
+    }
+    if (kind === "tomorrow") {
+      savePayload({ ...payload, tasks: restoreSchedule(tasks, undo.before) });
+      return;
+    }
+    if (kind === "park") {
+      const current = tasks.find(t => t.uuid === task.uuid && !t.isDeleted);
+      if (!current?.isParked) return;
+      const otherPinned = tasks.some(t => t.isNowFocus && t.uuid !== task.uuid && !t.isDeleted && !t.isCompleted);
+      savePayload({ ...payload, tasks: tasks.map(t => t.uuid === task.uuid ? {
+        ...t, isParked: false, ...(wasPinned && !otherPinned ? { isNowFocus: true } : {}), lastUpdated: Date.now(),
+      } : t) });
       return;
     }
     // Reopen only what is still done: a task reopened or deleted by another
@@ -975,19 +1069,6 @@ export default function TodayTab({
       .catch(() => {});
   };
 
-  const handleMoveTask = (task, direction) => {
-    const list = [...remainingTasks];
-    const idx = list.findIndex(t => t.uuid === task.uuid);
-    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= list.length) return;
-    [list[idx], list[swapIdx]] = [list[swapIdx], list[idx]];
-    // Re-assign clean sequential orderIndex to all visible tasks — heals any existing drift
-    const orderMap = new Map(list.map((t, i) => [t.uuid, i]));
-    savePayload({ ...payload, tasks: tasks.map(t =>
-      orderMap.has(t.uuid) ? { ...t, orderIndex: orderMap.get(t.uuid), lastUpdated: Date.now() } : t
-    )});
-  };
-
   const getTaskKey = (t) => t.uuid || String(t.id);
 
   const handleDragEnd = ({ active, over }) => {
@@ -1166,6 +1247,89 @@ export default function TodayTab({
     : null;
 
   const remainingTasks = todayTasksFiltered.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+
+  // — A task, opened (50a–b), and the list's keyboard (50b): one tab stop,
+  // ↑/↓ or J/K to move, Enter to open, D / T / P / E / ⌫ to act. —
+  // The one thing opens here too (its title on the wall, or E): it is the
+  // only way to edit or let go of it now the list has no NOW row.
+  const detailIsNow = !!detailUuid && detailUuid === pinnedFocusTask?.uuid;
+  const detailTask = detailUuid ? (detailIsNow ? pinnedFocusTask : remainingTasks.find(t => t.uuid === detailUuid) || null) : null;
+  const detailIndex = detailTask && !detailIsNow ? remainingTasks.indexOf(detailTask) : -1;
+  useEffect(() => {
+    // Done, moved, parked or deleted: the task left the list, so it closes.
+    if (detailUuid && !detailTask) setDetailUuid(null);
+  }, [detailUuid, detailTask]);
+  const rovingUuid = remainingTasks.some(t => t.uuid === rowFocusUuid) ? rowFocusUuid : remainingTasks[0]?.uuid;
+  const focusRow = (uuid) => {
+    if (!uuid) return;
+    setRowFocusUuid(uuid);
+    requestAnimationFrame(() => document.querySelector(`[data-testid="today-tasks-list"] [data-task-uuid="${uuid}"]`)?.focus());
+  };
+  const openDetail = (task) => { setRowFocusUuid(task.uuid); setDetailUuid(task.uuid); };
+  const closeDetail = () => {
+    const back = detailUuid;
+    const wasNow = detailIsNow;
+    setDetailUuid(null);
+    if (wasNow) requestAnimationFrame(() => document.querySelector(".wall-title")?.focus());
+    else if (back) focusRow(back);
+  };
+  // Letting go of the one thing, from its sheet, with Undo.
+  const handleUnpinWithUndo = (task) => {
+    setUndo({ kind: "unpin", task, at: Date.now() });
+    handlePinTask(task);
+  };
+  // The row after (or before) this one, for focus once this one leaves.
+  const neighbourOf = (task) => {
+    const i = remainingTasks.findIndex(t => t.uuid === task.uuid);
+    return remainingTasks[i + 1]?.uuid || remainingTasks[i - 1]?.uuid || null;
+  };
+  // Keys shared by a focused row and the open task.
+  const actOnTask = (task, key) => {
+    if (key === "d") { const next = neighbourOf(task); handleToggleComplete(task); focusRow(next); return true; }
+    if (key === "t") { const next = neighbourOf(task); handleTomorrow(task); focusRow(next); return true; }
+    if (key === "p") { handleMakeOneThing(task); return true; }
+    if (key === "e") { openDetail(task); setEditTitleSignal(n => n + 1); return true; }
+    if (key === "backspace" || key === "delete") { const next = neighbourOf(task); handleDeleteTask(task); focusRow(next); return true; }
+    return false;
+  };
+  const stepTask = (task, dir) => {
+    const i = remainingTasks.findIndex(t => t.uuid === task.uuid);
+    if (i < 0) return false;
+    const next = remainingTasks[i + dir];
+    if (!next) return false;
+    if (detailUuid) setDetailUuid(next.uuid);
+    focusRow(next.uuid);
+    return true;
+  };
+  const onListKeyDown = (e) => {
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+    const row = e.target;
+    if (!row?.matches?.('[data-testid="task-row"]')) return;
+    const task = remainingTasks.find(t => t.uuid === row.dataset.taskUuid);
+    if (!task) return;
+    const key = e.key.toLowerCase();
+    // The laptop drawer is not modal, so focus can stay on the row: Esc closes
+    // the open task first, and the list's own Escape stands down.
+    if (key === "escape" && detailTask) { e.preventDefault(); e.stopPropagation(); closeDetail(); return; }
+    let handled = false;
+    if (key === "arrowdown" || key === "j") handled = stepTask(task, 1) || true;
+    else if (key === "arrowup" || key === "k") handled = stepTask(task, -1) || true;
+    else if (key === "enter") { openDetail(task); handled = true; }
+    else handled = actOnTask(task, key);
+    if (handled) e.preventDefault();
+  };
+  const onDetailKeyDown = (e) => {
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || !detailTask) return;
+    const key = e.key.toLowerCase();
+    if (key === "escape") { e.preventDefault(); e.stopPropagation(); closeDetail(); return; }
+    const el = e.target;
+    if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+    let handled = false;
+    if (key === "arrowdown") handled = stepTask(detailTask, 1);
+    else if (key === "arrowup") handled = stepTask(detailTask, -1);
+    else if (drawerViewport) handled = actOnTask(detailTask, key);
+    if (handled) e.preventDefault();
+  };
   // Finished today — the same set the header's "N done" counts. A task done
   // on an earlier day keeps the Today horizon until something moves it, and
   // showing it here put "0 done" above a list of done rows.
@@ -1179,9 +1343,9 @@ export default function TodayTab({
   // the Today horizon until something moves it, so counting them all reported
   // last week's finished work as this morning's progress.
   const wallRemainingCount = todayTasksAll.filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).length;
-  // The open rows the list holds: the rest of the day, plus the NOW row that
-  // heads it — what the sheet's accessible name reports.
-  const listOpenRows = remainingTasks.length + (pinnedFocusTask ? 1 : 0);
+  // The open rows the list holds — what the sheet's accessible name reports.
+  // The one thing has no row of its own any more (50a: it lives on the wall).
+  const listOpenRows = remainingTasks.length;
   // App's floating timer (shown for a session left running behind the
   // overlay) sits over the sheet's bottom edge; the sheet makes room for it.
   const floatingTimerShown = !!(focusSessionActive && activeTask && !isFocusMode && !sessionCompletePending);
@@ -1320,7 +1484,7 @@ export default function TodayTab({
     return () => window.removeEventListener("keydown", onEsc);
   });
 
-  const wallKeysBlocked = isFocusMode || !!editingTask || isAddTaskDialogOpen || !!confirmDialog
+  const wallKeysBlocked = isFocusMode || !!editingTask || isAddTaskDialogOpen || !!confirmDialog || (!!detailUuid && !drawerViewport)
     || rescueActive || showDailyCheckin || sessionCompletePending || !!frontPickerTask || !!splitTask;
   useEffect(() => {
     if (wallKeysBlocked) return undefined;
@@ -1328,6 +1492,8 @@ export default function TodayTab({
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
       const el = e.target;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      // A focused row or the open task has its own keys (50b).
+      if (el?.closest?.('[data-testid="task-row"], [data-testid="task-detail"]')) return;
       const isNative = el && /^(BUTTON|A)$/.test(el.tagName);
       // Any other focused control — a row in Drag anywhere mode is a
       // focusable <div> whose keys drive a keyboard reorder, not the wall.
@@ -1347,6 +1513,11 @@ export default function TodayTab({
         return;
       }
       if (!pinnedFocusTask) return;
+      if (key === "e") {
+        e.preventDefault();
+        setDetailUuid(pinnedFocusTask.uuid);
+        return;
+      }
       if (key === "l") {
         if (listMotionActive()) toggleList(!peekOpenRef.current);
         else setPeekOpen(v => !v);
@@ -1379,6 +1550,7 @@ export default function TodayTab({
         onTogglePeek={() => (listMotionActive() ? toggleList(!peekOpen) : setPeekOpen(v => !v))}
         onAdd={onOpenAddTask}
         onOpenDayMap={onOpenDayMap}
+        onOpenTask={() => pinnedFocusTask && setDetailUuid(pinnedFocusTask.uuid)}
         remainingCount={wallRemainingCount}
         lowEnergy={!!config.isLowEnergyMode}
         onToggleLowEnergy={() => saveConfigPatch({ isLowEnergyMode: !config.isLowEnergyMode })}
@@ -1549,37 +1721,12 @@ export default function TodayTab({
         </div>
         </div>
 
-        <div className="tasks-list" data-testid="today-tasks-list">
-          {/* The wall's one thing heads the open list, marked NOW, so its row
-              menu can unpin it — the wall itself has no unpin. Not counted
-              in "After that", and not draggable. */}
-          {pinnedFocusTask && (
-            <TaskRow
-              task={pinnedFocusTask}
-              onToggleComplete={handleToggleComplete}
-              onPin={handleUnpinWallTask}
-              onDelete={handleDeleteTask}
-              onEdit={handleStartEdit}
-              onMoveToHorizon={handleMoveWithUndo}
-              onSwipeDone={handleToggleComplete}
-              onSwipeWeek={t => handleMoveWithUndo(t, "week")}
-              onPutOnFront={openFrontPicker}
-              onPark={handleParkTask}
-              onBreakdown={handleBreakdown}
-              onSubStepToggle={handleSubStepToggle}
-              onDeleteSubStep={handleDeleteSubStep}
-              isBreakingDown={breakdownLoadingUuid === pinnedFocusTask.uuid}
-              breakdownError={breakdownErrorUuid === pinnedFocusTask.uuid}
-              breakdownNoKey={breakdownNoKeyUuid === pinnedFocusTask.uuid}
-              onToggleMVD={handleToggleMVD}
-              isGoal={!!wallKickerFront && pinnedFocusTask.frontId === wallKickerFront.id}
-            />
-          )}
+        <div className="tasks-list" data-testid="today-tasks-list" onKeyDown={onListKeyDown}>
           {!wallIsAsking && todayTasksAll.length === 0 && (
             <p className="today-list-empty">Nothing else on Today.</p>
           )}
           {todayTasksAll.length > 0 && todayTasksFiltered.length === 0 && isMVDMode && (
-            <p className="today-list-empty">No must-dos yet. Tap a task and choose “Mark as must-do”.</p>
+            <p className="today-list-empty">No must-dos yet. Open a task and turn on Must-do.</p>
           )}
           {todayTasksFiltered.length > 0 && (
             <>
@@ -1600,23 +1747,20 @@ export default function TodayTab({
                           <TaskRow
                             task={task}
                             onToggleComplete={handleToggleComplete}
-                            onPin={handlePinTask}
                             onDelete={handleDeleteTask}
-                            onEdit={handleStartEdit}
-                            onMoveUp={idx > 0 ? t => handleMoveTask(t, "up") : undefined}
-                            onMoveDown={idx < remainingTasks.length - 1 ? t => handleMoveTask(t, "down") : undefined}
-                            onMoveToHorizon={handleMoveWithUndo}
+                            onOpen={openDetail}
+                            onMakeOneThing={handleMakeOneThing}
+                            tabStop={task.uuid === rovingUuid}
+                            isTinted={task.uuid === tintUuid}
                             onSwipeDone={handleToggleComplete}
                             onSwipeWeek={t => handleMoveWithUndo(t, "week")}
                             onPutOnFront={openFrontPicker}
-                            onPark={handleParkTask}
                             onBreakdown={handleBreakdown}
                             onSubStepToggle={handleSubStepToggle}
                             onDeleteSubStep={handleDeleteSubStep}
                             isBreakingDown={breakdownLoadingUuid === task.uuid}
                             breakdownError={breakdownErrorUuid === task.uuid}
                             breakdownNoKey={breakdownNoKeyUuid === task.uuid}
-                            onToggleMVD={handleToggleMVD}
                             dragHandleListeners={dragHandleListeners}
                             dragHandleAttributes={dragHandleAttributes}
                             dragActivatorRef={dragActivatorRef}
@@ -1776,7 +1920,45 @@ export default function TodayTab({
         );
       })()}
 
-      {/* ── Undo (done, delete, unpin, move, front) */}
+      {/* ── A task, opened (50a–b) */}
+      {detailTask && !drawerViewport && <div className="task-detail-scrim" onClick={closeDetail} aria-hidden="true" />}
+      {detailTask && (
+        <div onKeyDown={onDetailKeyDown}>
+          <TaskDetail
+            key={detailTask.uuid}
+            task={detailTask}
+            index={detailIndex}
+            isNow={detailIsNow}
+            total={remainingTasks.length}
+            variant={drawerViewport ? "drawer" : "sheet"}
+            isGoal={!!wallKickerFront && detailTask.frontId === wallKickerFront.id}
+            fronts={frontsFromConfig(config).filter(f => !f.parked)}
+            editTitleSignal={editTitleSignal}
+            onClose={closeDetail}
+            onPatch={patch => handlePatchTask(detailTask.uuid, patch)}
+            onToggleMVD={() => handleToggleMVD(detailTask)}
+            onToggleStep={stepId => handleSubStepToggle(detailTask, stepId)}
+            onDeleteStep={stepId => handleDeleteSubStep(detailTask, stepId)}
+            onAddStep={text => handleAddStep(detailTask.uuid, text)}
+            onMoreDetails={() => { handleStartEdit(detailTask); setDetailUuid(null); }}
+            onSuggestSteps={() => handleBreakdown(detailTask)}
+            suggestingSteps={breakdownLoadingUuid === detailTask.uuid}
+            onMakeOneThing={() => {
+              handleMakeOneThing(detailTask);
+              setDetailUuid(null);
+              // The button leaves with the sheet; focus goes to the task's new place.
+              requestAnimationFrame(() => document.querySelector(".wall-title")?.focus({ preventScroll: true }));
+            }}
+            onLetGo={detailIsNow ? () => { handleUnpinWithUndo(detailTask); setDetailUuid(null); } : undefined}
+            onDone={() => actOnTask(detailTask, "d")}
+            onTomorrow={() => actOnTask(detailTask, "t")}
+            onPark={() => { const next = neighbourOf(detailTask); handleParkWithUndo(detailTask); focusRow(next); }}
+            onDelete={() => actOnTask(detailTask, "delete")}
+          />
+        </div>
+      )}
+
+      {/* ── Undo (done, delete, move, front, split, swap, tomorrow, park) */}
       <UndoAnnouncer message={undoText} />
       {undo && (
         <UndoToast

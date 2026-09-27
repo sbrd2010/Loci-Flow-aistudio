@@ -63,7 +63,8 @@ test("stops after the day end are marked, and Move N to tomorrow takes them off 
   await expect(page.locator(".dm-stop")).toHaveCount(3);
   await expect(dayEnd).toContainText(/1 won't fit/i);
   await page.locator(".dm-back").click();
-  await expect(page.getByTestId("today-tasks-list").locator("[data-testid='task-row']")).toHaveCount(3);
+  // Three tasks: the one thing on the wall, two rows in the list.
+  await expect(page.getByTestId("today-tasks-list").locator("[data-testid='task-row']")).toHaveCount(2);
 });
 
 test("on a laptop the plan sits in a side panel with the full sentence", async ({ page }) => {
@@ -164,9 +165,8 @@ async function dayOverAt18(page, { unpin }) {
   await expect(page.getByLabel("Focus window 1 start time")).toHaveValue("09:00");
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
   if (unpin) {
-    const now = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { has: page.locator(".task-tag.is-now") });
-    await now.locator(".task-row-top").click();
-    await page.getByText("Unpin from Focus").click();
+    await page.locator(".wall-title").click();
+    await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
   }
   await page.getByRole("button", { name: "Day map →" }).click();
   await page.getByRole("button", { name: "Auto-fill" }).click();
