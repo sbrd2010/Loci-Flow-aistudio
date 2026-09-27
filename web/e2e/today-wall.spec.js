@@ -1585,3 +1585,35 @@ test("the task sheet keeps a P4 task's priority on offer", async ({ page }) => {
   await group.getByRole("radio", { name: "Priority 4" }).click();
   await expect(group.getByRole("radio", { name: "Priority 4" })).toHaveAttribute("aria-checked", "true");
 });
+
+// Codex review of #405: with nothing pinned the wall has no Day map link of
+// its own, so on a laptop the list header keeps it.
+test("laptop: with no one thing, the list header still opens the Day map", async ({ page }) => {
+  await enterLaptop(page);
+  await page.locator(".wall-title").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await expect(page.locator(".wall-commit-field")).toBeVisible();
+  const link = page.locator(".today-list-link");
+  await expect(link).toBeVisible();
+  await link.click();
+  await expect(page.getByRole("heading", { name: /Day map/i }).first()).toBeVisible();
+});
+
+// Codex review of #405: reversed mid-fade, what leaves fades out from where
+// it is, not from fully opaque.
+test("laptop: a toggle reversed mid-fade fades the leaving link from its current opacity", async ({ page }) => {
+  await enterLaptop(page);
+  const start = await page.evaluate(() => {
+    document.querySelector(".wall-peek").click();
+    const link = document.querySelector(".wall-daymap");
+    const enter = link.getAnimations()[0];
+    enter.currentTime = 60 + 110; // halfway through its 220ms fade-in, after the 60ms delay
+    const now = Number(getComputedStyle(link).opacity);
+    document.querySelector(".today-list-hide").click();
+    const ghost = [...document.body.children].find(c => c.style.position === "fixed" && c.getAttribute("aria-hidden") === "true" && c.classList.contains("wall-daymap"));
+    return { now, from: ghost?.getAnimations()[0]?.effect.getKeyframes()[0].opacity };
+  });
+  expect(start.now).toBeGreaterThan(0.05);
+  expect(start.now).toBeLessThan(0.95);
+  expect(Number(start.from)).toBeCloseTo(start.now, 2);
+});
