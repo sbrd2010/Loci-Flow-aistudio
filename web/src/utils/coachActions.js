@@ -58,7 +58,9 @@ export function parseCoachActionTags(text = "") {
 }
 
 function normalizeTitle(str = "") {
-  return String(str).toLowerCase().trim().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ");
+  // "…" marks a gap (the Today snapshot shortens long titles to start…end),
+  // so it becomes a space rather than gluing the two parts into one word.
+  return String(str).toLowerCase().replace(/…/g, " ").trim().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim();
 }
 
 function normalizeStopWords(str = "") {
@@ -388,6 +390,19 @@ export function findTaskByTitle(tasks = [], rawTitle = "") {
   const target = normalizeTitle(rawTitle);
   if (!target) return null;
   const active = (tasks || []).filter(isActiveLociTask);
+
+  // A title shortened to "start…end" names the one task that begins with the
+  // start and ends with the end.
+  const gap = String(rawTitle).split("…");
+  if (gap.length === 2) {
+    const head = normalizeTitle(gap[0]);
+    const tail = normalizeTitle(gap[1]);
+    if (head && tail) {
+      const spanned = active.filter(t => { const n = normalizeTitle(t.title); return n.startsWith(head) && n.endsWith(tail); });
+      if (spanned.length === 1) return spanned[0];
+      if (spanned.length > 1) return null;
+    }
+  }
 
   const exact = active.filter(t => normalizeTitle(t.title) === target);
   if (exact.length === 1) return exact[0];

@@ -165,6 +165,18 @@ describe("findTaskByTitle", () => {
     expect(findTaskByTitle(tasks, "Write Report!")).toBe(tasks[0]);
   });
 
+  it("resolves a title the Today snapshot shortened to start…end, and only when that picks one task", () => {
+    const base = "Prepare CV and cover letter for the polymer engineer role, tailored for the interview at ";
+    const long = [
+      { uuid: "a", title: `${base}Avery Denison`, isCompleted: false, isDeleted: false, isParked: false },
+      { uuid: "b", title: `${base}Paques Biomaterials`, isCompleted: false, isDeleted: false, isParked: false },
+    ];
+    expect(findTaskByTitle(long, "Prepare CV and cover letter for the polymer engineer role,…iew at Avery Denison")).toBe(long[0]);
+    expect(findTaskByTitle(long, "Prepare CV and cover letter for the polymer engineer role,…Paques Biomaterials")).toBe(long[1]);
+    expect(findTaskByTitle([...long, { ...long[0], uuid: "c" }], "Prepare CV and cover letter for the polymer engineer role,…iew at Avery Denison")).toBe(null);
+    expect(matchesUserIntent("COMPLETE_TASK", "I just finished the CV for Avery Denison", "Prepare CV and cover letter for the polymer engineer role,…iew at Avery Denison")).toBe(true);
+  });
+
   it("matches when the tag title is a substring of the task title", () => {
     expect(findTaskByTitle(tasks, "Email the client")).toBe(tasks[1]);
   });
