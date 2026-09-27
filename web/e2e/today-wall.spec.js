@@ -1679,3 +1679,20 @@ test("laptop: a toggle reversed mid-fade fades the leaving link from its current
   expect(start.now).toBeLessThan(0.95);
   expect(Number(start.from)).toBeCloseTo(start.now, 2);
 });
+
+// Codex review of #406: an estimate the chips don't carry (25m, the default)
+// is shown, and can be chosen back.
+test("the task sheet keeps a task's own estimate on offer", async ({ page }) => {
+  await laptopListOpen(page);
+  // The demo's tasks carry the app's 25-minute default.
+  await listRow(page, "10-minute walk").locator(".task-title-text").click();
+  const detail = page.getByTestId("task-detail");
+  await detail.getByRole("button", { name: /^Estimate/ }).click();
+  const group = detail.getByRole("radiogroup", { name: "Estimate" });
+  await expect(group.getByRole("radio", { name: "25m" })).toHaveAttribute("aria-checked", "true");
+  await group.getByRole("radio", { name: "1h", exact: true }).click();
+  await detail.getByRole("button", { name: /^Estimate/ }).click();
+  await group.getByRole("radio", { name: "25m" }).click();
+  await detail.getByRole("button", { name: /^Estimate/ }).click();
+  await expect(group.getByRole("radio", { name: "25m" })).toHaveAttribute("aria-checked", "true");
+});
