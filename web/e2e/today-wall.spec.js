@@ -1455,3 +1455,50 @@ test("mobile reliability: Tab stays inside the open task sheet", async ({ page }
     expect(await inside(), `Shift+Tab ${i + 1}`).toBe(true);
   }
 });
+
+// Codex review of #406: making the first one thing (nothing pinned) has its
+// Undo too.
+test("mobile reliability: making the one thing on an empty wall offers Undo", async ({ page }) => {
+  await emptyTheWall(page);
+  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first();
+  const title = (await row.locator(".task-title-text").innerText()).trim();
+  await row.locator(".task-row-top").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await expect(page.locator(".wall-title")).toHaveText(title);
+  await expect(page.getByRole("status").filter({ hasText: `Made the one thing: ${title}` })).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(".wall-commit-field")).toBeVisible({ timeout: 8_000 });
+});
+
+// Codex review of #406: P on a row sends it to the wall, and focus follows
+// it there; with the drawer open, P closes it.
+test("laptop: P on a row makes it the one thing and focus follows to the wall", async ({ page }) => {
+  await laptopListOpen(page);
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
+  const title = (await rows.first().locator(".task-title-text").innerText()).trim();
+  await rows.first().focus();
+  await page.keyboard.press("p");
+  await expect(page.locator(".wall-title")).toHaveText(title);
+  await expect(page.locator(".wall-title")).toBeFocused();
+
+  const next = (await rows.first().locator(".task-title-text").innerText()).trim();
+  await rows.first().locator(".task-title-text").click();
+  await expect(page.getByTestId("task-detail")).toBeVisible();
+  await page.keyboard.press("p");
+  await expect(page.getByTestId("task-detail")).toHaveCount(0);
+  await expect(page.locator(".wall-title")).toHaveText(next);
+  await expect(page.locator(".wall-title")).toBeFocused();
+});
+
+// Codex review of #406: an open task follows the window from drawer to sheet
+// without keeping the drawer's measured top.
+test("an open task becomes the full-height sheet when the window narrows", async ({ page }) => {
+  await laptopListOpen(page);
+  await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first().locator(".task-title-text").click();
+  const detail = page.getByTestId("task-detail");
+  await expect(detail).toHaveClass(/is-drawer/);
+  await page.setViewportSize({ width: 800, height: 900 });
+  await expect(detail).toHaveClass(/is-sheet/);
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+  expect(Math.round((await detail.boundingBox()).y)).toBe(12);
+});

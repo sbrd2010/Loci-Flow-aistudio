@@ -105,7 +105,7 @@ export default function TaskDetail({
       aria-modal={isDrawer ? "false" : "true"}
       aria-label={`Task: ${task.title}`}
       data-testid="task-detail"
-      style={drawerTop !== null ? { top: `${drawerTop}px` } : undefined}
+      style={isDrawer && drawerTop !== null ? { top: `${drawerTop}px` } : undefined}
     >
       {!isDrawer && <span className="detail-grabber" aria-hidden="true" />}
       <div className="detail-top">

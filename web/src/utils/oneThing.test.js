@@ -52,6 +52,12 @@ describe("undoOneThing", () => {
     expect(back.find(t => t.uuid === "verant").isNowFocus).toBe(false);
   });
 
+  it("with nothing pinned before, just unpins", () => {
+    const { tasks: pinned, previous } = makeOneThing(tasks.map(t => ({ ...t, isNowFocus: false })), "verant");
+    const back = undoOneThing(pinned, "verant", previous);
+    expect(back.filter(t => t.isNowFocus)).toHaveLength(0);
+  });
+
   it("does nothing once the pin has moved on", () => {
     const { tasks: swapped, previous } = makeOneThing(tasks, "verant");
     const moved = swapped.map(t => ({ ...t, isNowFocus: false }));

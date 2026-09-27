@@ -706,10 +706,8 @@ export default function TodayTab({
         }
       })
       .catch(() => {});
-    if (previous) {
-      setTintUuid(previous.uuid);
-      setUndo({ kind: "swap", task, previous, at: now });
-    }
+    if (previous) setTintUuid(previous.uuid);
+    setUndo({ kind: "swap", task, previous, at: now });
   };
 
   // Tomorrow (50b, T): leaves today for the next Loci day, first in line there.
@@ -777,7 +775,7 @@ export default function TodayTab({
       const front = frontsFromConfig(config).find(f => f.id === u.to);
       return front ? `Put on ${front.name}: ${title}` : `Off its front: ${title}`;
     }
-    if (u.kind === "swap") return `${u.previous.title} is back at the top of the list.`;
+    if (u.kind === "swap") return u.previous ? `${u.previous.title} is back at the top of the list.` : `Made the one thing: ${title}`;
     return `${{ done: "Marked done", delete: "Deleted", tomorrow: "Moved to tomorrow", park: "Parked", unpin: "Unpinned" }[u.kind]}: ${title}`;
   };
   const undoText = undo ? undoMessage(undo) : "";
@@ -1299,10 +1297,17 @@ export default function TodayTab({
     return remainingTasks[i + 1]?.uuid || remainingTasks[i - 1]?.uuid || null;
   };
   // Keys shared by a focused row and the open task.
+  // The row (or the open task) leaves for the wall: the detail closes and
+  // focus goes to the task's new place, from P and the footer button alike.
+  const makeOneThingAndFollow = (task) => {
+    handleMakeOneThing(task);
+    setDetailUuid(null);
+    requestAnimationFrame(() => document.querySelector(".wall-title")?.focus({ preventScroll: true }));
+  };
   const actOnTask = (task, key) => {
     if (key === "d") { const next = neighbourOf(task); handleToggleComplete(task); focusRow(next); return true; }
     if (key === "t") { const next = neighbourOf(task); handleTomorrow(task); focusRow(next); return true; }
-    if (key === "p") { handleMakeOneThing(task); return true; }
+    if (key === "p") { makeOneThingAndFollow(task); return true; }
     if (key === "e") { openDetail(task); setEditTitleSignal(n => n + 1); return true; }
     if (key === "backspace" || key === "delete") { const next = neighbourOf(task); handleDeleteTask(task); focusRow(next); return true; }
     return false;
@@ -1958,12 +1963,7 @@ export default function TodayTab({
             onMoreDetails={() => { handleStartEdit(detailTask); setDetailUuid(null); }}
             onSuggestSteps={() => handleBreakdown(detailTask)}
             suggestingSteps={breakdownLoadingUuid === detailTask.uuid}
-            onMakeOneThing={() => {
-              handleMakeOneThing(detailTask);
-              setDetailUuid(null);
-              // The button leaves with the sheet; focus goes to the task's new place.
-              requestAnimationFrame(() => document.querySelector(".wall-title")?.focus({ preventScroll: true }));
-            }}
+            onMakeOneThing={() => makeOneThingAndFollow(detailTask)}
             onLetGo={detailIsNow ? () => { handleUnpinWithUndo(detailTask); setDetailUuid(null); } : undefined}
             onDone={() => actOnTask(detailTask, "d")}
             onTomorrow={() => actOnTask(detailTask, "t")}
