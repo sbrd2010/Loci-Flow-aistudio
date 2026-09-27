@@ -1537,9 +1537,15 @@ test("laptop: the list is one tab stop, and Space on a row reorders it", async (
   await page.keyboard.press("Tab");
   expect(await page.evaluate(() => !!document.activeElement?.closest("[data-testid='today-tasks-list']"))).toBe(false);
 
+  // Each step waits for dnd-kit's own announcement, as a screen reader hears it.
+  const announced = (re) => page.waitForFunction((src) =>
+    [...document.querySelectorAll("[id^='DndLiveRegion']")].some(el => new RegExp(src).test(el.textContent)), re.source);
   await rows.first().focus();
   await page.keyboard.press("Space");
+  await announced(/Picked up|was moved over/);
   await page.keyboard.press("ArrowDown");
+  // Over another row, not over itself.
+  await announced(/Draggable item (\S+) was moved over droppable area (?!\1\b)\S+/);
   await page.keyboard.press("Space");
   await expect(rows.nth(1).locator(".task-title-text")).toHaveText(titles[0]);
   await expect(rows.nth(0).locator(".task-title-text")).toHaveText(titles[1]);
