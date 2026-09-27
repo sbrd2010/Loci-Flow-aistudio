@@ -1307,4 +1307,14 @@ test("laptop: with Reduce Motion the list fades through paper and nothing moves"
   const moved = await page.evaluate(() => document.getAnimations().some(a =>
     a.effect.getKeyframes().some(k => k.transform && k.transform !== "none")));
   expect(moved).toBe(false);
+  // Codex review of #405: the toggle keeps focus here too, once the fade has
+  // switched the layout.
+  await page.locator(".today-list-hide").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".tasks-section")).toBeHidden();
+  await expect(page.locator(".wall-peek")).toBeFocused();
+  await page.waitForTimeout(200); // past the 130ms guard against a double toggle
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  await expect(page.locator(".today-list-hide")).toBeFocused();
 });
