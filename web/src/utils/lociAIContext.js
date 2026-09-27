@@ -438,16 +438,26 @@ export const SNAPSHOT_MAX_OPEN = 15;
 export const SNAPSHOT_MAX_DONE = 10;
 const SNAPSHOT_MAX_TITLE = 80;
 
+// At most this many named tasks are rescued past a cap, so a message naming
+// a title shared by many duplicates cannot unbound the block.
+const SNAPSHOT_MAX_NAMED_EXTRA = 3;
+
+const oneLine = text => String(text || "").replace(/\s+/g, " ").trim();
+
 function snapshotTitle(title) {
-  const t = String(title || "").replace(/\s+/g, " ").trim();
+  const t = oneLine(title);
   return t.length > SNAPSHOT_MAX_TITLE ? `${t.slice(0, SNAPSHOT_MAX_TITLE - 1)}…` : t;
 }
 
 function capKeepingMentioned(list, max, mention) {
   if (list.length <= max) return { shown: list, omitted: 0 };
-  const named = t => { const title = String(t.title || "").toLowerCase().trim(); return title.length >= 3 && mention.includes(title); };
+  const named = t => { const title = oneLine(t.title).toLowerCase(); return title.length >= 3 && mention.includes(title); };
   const shown = list.slice(0, max);
-  for (const t of list.slice(max)) if (named(t)) shown.push(t);
+  let extra = 0;
+  for (const t of list.slice(max)) {
+    if (extra >= SNAPSHOT_MAX_NAMED_EXTRA) break;
+    if (named(t)) { shown.push(t); extra++; }
+  }
   return { shown, omitted: list.length - shown.length };
 }
 
@@ -459,7 +469,7 @@ export function buildLociTodaySnapshotContext(allTasks = [], { dayStr, focusTime
     .sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
   const tomorrow = onToday.filter(t => !t.isCompleted && isDeferred(t, dayStr)).length;
 
-  const mention = String(mentionText || "").toLowerCase();
+  const mention = oneLine(mentionText).toLowerCase();
   const openCap = capKeepingMentioned(open, SNAPSHOT_MAX_OPEN, mention);
   const doneCap = capKeepingMentioned(done, SNAPSHOT_MAX_DONE, mention);
 

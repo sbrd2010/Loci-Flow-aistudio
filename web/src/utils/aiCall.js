@@ -507,10 +507,11 @@ function compactZaiTodaySnapshot(systemPrompt, messages, latestMessageContent) {
   adjustedLines.splice(start + 1, 0,
     "- Provider limit: this list may omit tasks. Do not infer that an unlisted task is absent or unchanged; ask for a fresh scan if its status matters.");
   const shiftedIndices = taskIndices.map(index => index + 1);
-  const latest = String(latestMessageContent || "").toLowerCase();
+  const latest = String(latestMessageContent || "").replace(/\s+/g, " ").toLowerCase();
   const score = index => {
     const line = adjustedLines[index];
-    const title = line.replace(/^- #\S+ \[[^\]]+\]\s*(?:\[[^\]]+\]\s*)?/, "").toLowerCase();
+    // A long title is cut to "…" in the snapshot; match on the part shown.
+    const title = line.replace(/^- #\S+ \[[^\]]+\]\s*(?:\[[^\]]+\]\s*)?/, "").replace(/…$/, "").toLowerCase();
     if (title.length >= 3 && latest.includes(title)) return 1000;
     if (line.includes("NOW FOCUS")) return 500;
     if (line.includes("[done")) return 100;

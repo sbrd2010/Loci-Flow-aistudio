@@ -832,6 +832,19 @@ describe("buildLociTodaySnapshotContext (every Coach request)", () => {
     expect(out).toContain(`- +${22 - SNAPSHOT_MAX_OPEN - 1} more open on Today, not listed (capped).`);
     expect(out).toContain(`- +${13 - SNAPSHOT_MAX_DONE - 1} more done today, not listed (capped).`);
   });
+  it("matches a named task past the cap despite newlines or doubled spaces in its title", () => {
+    const open = Array.from({ length: 16 }, (_, i) => ({ uuid: `o-${i}`, title: `Open task ${i}`, horizonLevel: "today", orderIndex: i }));
+    open.push({ uuid: "call-1", title: "Call\nMom  today", horizonLevel: "today", orderIndex: 99 });
+    const out = buildLociTodaySnapshotContext(open, { dayStr: day, mentionText: "did I  call mom today?" });
+    expect(out).toContain("Call Mom today");
+  });
+  it("rescues at most three named duplicates past the cap and counts the rest as left out", () => {
+    const open = Array.from({ length: 15 }, (_, i) => ({ uuid: `o-${i}`, title: `Open task ${i}`, horizonLevel: "today", orderIndex: i }));
+    const dupes = Array.from({ length: 10 }, (_, i) => ({ uuid: `rent-${i}`, title: "Pay rent", horizonLevel: "today", orderIndex: 100 + i }));
+    const out = buildLociTodaySnapshotContext([...open, ...dupes], { dayStr: day, mentionText: "focus on Pay rent" });
+    expect(out.match(/Pay rent/g)).toHaveLength(3);
+    expect(out).toContain("- +7 more open on Today, not listed (capped).");
+  });
   it("shortens very long titles so one entry cannot blow the budget", () => {
     const out = buildLociTodaySnapshotContext([{ uuid: "long-1", title: "x".repeat(300), horizonLevel: "today" }], { dayStr: day });
     const line = out.split("\n").find(l => l.startsWith("- #long1"));

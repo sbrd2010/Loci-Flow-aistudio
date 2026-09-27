@@ -853,6 +853,24 @@ FOCUS SESSION: none running.`;
     expect(sent).toContain("FOCUS SESSION: none running.");
   });
 
+  it("keeps a named task whose title the snapshot cut short when Z.ai compacts it", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    fetch.mockResolvedValue(zaiOk("Z.ai reply."));
+    const fullTitle = "Prepare the referral request for the polymer engineer role at the membrane company";
+    const shown = `${fullTitle.slice(0, 79)}…`;
+    const filler = Array.from({ length: 40 }, (_, i) => `- #open${i} [open] [P3] Open task ${i} ${"o".repeat(300)}`);
+    const systemPrompt = `You are Loci Coach.
+TODAY SNAPSHOT (live — Today's tasks, with their id and status):
+${filler.join("\n")}
+- #named1 [open] [P1] ${shown}
+FOCUS SESSION: none running.`;
+    const messages = [{ role: "user", content: `Where am I with ${fullTitle}?` }];
+    expect(systemPrompt.length).toBeGreaterThan(12000);
+    await callAI(baseRequest({ groqKey: "", zaiKey: "test-zai-key", systemPrompt, messages }));
+    const sent = JSON.parse(fetch.mock.calls[0][1].body).messages[0].content;
+    expect(sent).toContain(`#named1 [open] [P1] ${shown}`);
+  });
+
   it("trims chat history to the latest exchange for Z.ai when compressing an oversized prompt", async () => {
     storage.setItem("loci_provider_pref", "zai");
     fetch.mockResolvedValue(zaiOk("Compressed Z.ai reply."));
