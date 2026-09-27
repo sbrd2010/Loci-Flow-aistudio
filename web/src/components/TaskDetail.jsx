@@ -85,6 +85,12 @@ export default function TaskDetail({
   // while it is open, as the full editor does, so it can be chosen back.
   const [hadP4] = useState(task.priority === "P4");
   const priorities = ["P1", "P2", "P3", ...(hadP4 ? ["P4"] : [])];
+  // Likewise an estimate the chips don't carry (25m, the app's default, or
+  // one set in the full editor) stays on offer, in order.
+  const [openedEstimate] = useState(() => Number(task.timeEstimateMinutes) || null);
+  const estimates = openedEstimate && !ESTIMATES.includes(openedEstimate)
+    ? [...ESTIMATES, openedEstimate].sort((a, b) => a - b)
+    : ESTIMATES;
 
   const kbd = k => isDrawer && <kbd className="wall-key detail-key" aria-hidden="true">{k}</kbd>;
 
@@ -229,7 +235,7 @@ export default function TaskDetail({
           </button>
           {picker === "estimate" && (
             <div className="detail-options is-chips" role="radiogroup" aria-label="Estimate">
-              {[...ESTIMATES, null].map(m => (
+              {[...estimates, null].map(m => (
                 <button key={m || "none"} type="button" role="radio" aria-checked={(Number(task.timeEstimateMinutes) || null) === m} className="detail-chip"
                   onClick={() => { setPicker(null); onPatch({ timeEstimateMinutes: m }); }}>
                   {formatEstimate(m)}
