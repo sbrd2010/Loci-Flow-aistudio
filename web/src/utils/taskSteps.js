@@ -3,23 +3,30 @@
 // `concreteStep` (Focus, the wall and Coach read it), so every write through
 // here keeps it equal to steps[0].
 //
-// A task from before this rule may carry a concreteStep and no steps. It is
-// shown as step 1, and becomes a real step the first time the steps change.
+// A task from before this rule may carry a concreteStep as its own first
+// action, with or without steps after it (Add task and Mind Box write both).
+// Unless one of the steps already is it, it is shown as step 1, and becomes a
+// real step the first time the steps change — never dropped by that write.
+
+import { safeUUID } from "./uuid";
 
 const PLACEHOLDER = "Do first tiny step";
 export const FIRST_STEP_ID = "first-step";
 
+const same = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
 export function taskSteps(task) {
   const steps = Array.isArray(task?.subSteps) ? task.subSteps : [];
-  if (steps.length) return steps;
   const first = typeof task?.concreteStep === "string" ? task.concreteStep.trim() : "";
-  return first && first !== PLACEHOLDER ? [{ id: FIRST_STEP_ID, text: first, done: false }] : [];
+  if (!first || first === PLACEHOLDER || steps.some(st => typeof st?.text === "string" && same(st.text, first))) return steps;
+  return [{ id: FIRST_STEP_ID, text: first, done: false }, ...steps];
 }
 
 // The patch that stores `steps` and keeps the first step in step. With no
-// steps left the first step goes too (it is omitted, not emptied).
+// steps left the first step goes too (it is omitted, not emptied). A first
+// step shown from the old field is stored with an id of its own.
 export function stepsPatch(task, steps) {
-  const patch = { subSteps: steps };
+  const patch = { subSteps: steps.map(st => (st.id === FIRST_STEP_ID ? { ...st, id: safeUUID() } : st)) };
   if (steps.length) patch.concreteStep = steps[0].text;
   else if (task?.concreteStep) patch.concreteStep = undefined;
   return patch;

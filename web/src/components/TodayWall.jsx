@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import LinkifyText from "./LinkifyText";
+import { taskSteps } from "../utils/taskSteps";
 import { IconPin, IconPlus } from "./ui/icons";
 import "../styles/todayWall.css";
 
@@ -225,9 +226,11 @@ export default function TodayWall({
 
   // With steps, the wall names the next one left (50c); otherwise the first
   // step the task was given.
-  const nextStep = Array.isArray(task.subSteps) ? task.subSteps.find(s => s && !s.done && s.text)?.text : null;
-  const firstStep = nextStep || task.concreteStep || null;
-  const stepLabel = nextStep ? "Next step" : "First step";
+  // The steps as the sheet shows them (52): the first one not yet done.
+  const steps = taskSteps(task);
+  const nextIndex = steps.findIndex(s => s && !s.done && s.text);
+  const firstStep = nextIndex === -1 ? null : steps[nextIndex].text;
+  const stepLabel = nextIndex > 0 ? "Next step" : "First step";
 
   return (
     <section className={`today-wall${peekOpen ? " is-open" : ""}`}>

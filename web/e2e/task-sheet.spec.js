@@ -59,7 +59,6 @@ test("Backspace in an emptied step removes it at once, with Undo; the wall's nex
   const before = await stepValues(page);
   const i = await nextOpen(page);
   expect(i).toBeGreaterThanOrEqual(0);
-  expect(i).toBeLessThan(before.length - 1);
   await expect(page.locator(".wall-first-step")).toContainText(before[i]);
 
   const step = sheet(page).getByLabel(`Step ${i + 1}`, { exact: true });
@@ -67,7 +66,9 @@ test("Backspace in an emptied step removes it at once, with Undo; the wall's nex
   await step.press("Backspace");
   await expect.poll(() => stepValues(page)).toEqual(before.filter((_, j) => j !== i));
   await expect(page.locator(".undo-toast")).toContainText(`Step removed: ${before[i]}`);
-  await expect(page.locator(".wall-first-step")).toContainText(before[i + 1]);
+  // The wall moves on to the next step not yet done.
+  const after = await stepValues(page);
+  await expect(page.locator(".wall-first-step")).toContainText(after[await nextOpen(page)]);
 
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
   await expect.poll(() => stepValues(page)).toEqual(before);
@@ -145,4 +146,22 @@ test("More opens Reminder and Category, closed until asked", async ({ page }) =>
   await expect(reminder.locator(".detail-value")).not.toHaveText("None");
   await sheet(page).getByRole("button", { name: "No reminder" }).click();
   await expect(reminder.locator(".detail-value")).toHaveText("None");
+});
+
+// Codex review of #418: a task's first action stored apart from its steps
+// (Add task, Mind Box, the demo) is step 1, and survives editing the others.
+test("a first step stored apart from the steps is step 1, and a change to another step keeps it", async ({ page }) => {
+  await enterDemo(page);
+  await openFromDetails(page);
+  const before = await stepValues(page);
+  const first = before[0];
+  await expect(page.locator(".wall-first-step")).toContainText(`First step — ${first}`);
+
+  // Tick the last step: the first one is still there, and still first.
+  await sheet(page).locator(".detail-step-check").last().click();
+  await expect(sheet(page).locator(".detail-step-check").last()).toHaveAttribute("aria-checked", "true");
+  await sheet(page).getByRole("button", { name: "Close", exact: true }).click();
+  await openFromDetails(page);
+  await expect.poll(() => stepValues(page)).toEqual(before);
+  await expect(page.locator(".wall-first-step")).toContainText(first);
 });

@@ -18,11 +18,17 @@ export async function suggestSteps(task, existing = []) {
       }],
       maxTokens: 200,
     });
-    const seen = new Set(have.map(s => s.toLowerCase()));
+    // Not a step the task has, and not one this answer already gave.
+    const seen = new Set(have.map(s => s.trim().toLowerCase()));
     const steps = extractJsonArray(raw)
       .filter(s => typeof s === "string" && s.trim())
       .map(s => s.trim().slice(0, 300))
-      .filter(s => !seen.has(s.toLowerCase()))
+      .filter(s => {
+        const key = s.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
       .slice(0, 5);
     return steps.length ? { steps } : { error: "failed" };
   } catch {

@@ -2,9 +2,18 @@ import { describe, it, expect } from "vitest";
 import { taskSteps, stepsPatch, applyStepsPatch, FIRST_STEP_ID } from "./taskSteps";
 
 describe("taskSteps", () => {
-  it("returns the task's steps when it has any", () => {
+  it("returns the task's steps when its first step is one of them", () => {
     const steps = [{ id: "a", text: "One", done: false }];
-    expect(taskSteps({ subSteps: steps, concreteStep: "Other" })).toBe(steps);
+    expect(taskSteps({ subSteps: steps, concreteStep: " one " })).toBe(steps);
+    expect(taskSteps({ subSteps: steps })).toBe(steps);
+  });
+  // Codex review of #418: Add task and Mind Box store the first action apart
+  // from the steps after it. It is step 1, not dropped.
+  it("puts a first step stored apart from the steps before them", () => {
+    const steps = [{ id: "a", text: "Then this", done: true }];
+    expect(taskSteps({ subSteps: steps, concreteStep: "Open the file" })).toEqual([
+      { id: FIRST_STEP_ID, text: "Open the file", done: false }, ...steps,
+    ]);
   });
   it("shows an older task's first step as step 1", () => {
     expect(taskSteps({ concreteStep: "  Open the file " })).toEqual([{ id: FIRST_STEP_ID, text: "Open the file", done: false }]);
@@ -29,6 +38,15 @@ describe("stepsPatch / applyStepsPatch", () => {
     expect(next).toEqual({ uuid: "t", subSteps: [], lastUpdated: 5 });
     expect("concreteStep" in next).toBe(false);
   });
+  it("gives a first step shown from the old field an id of its own, keeping it", () => {
+    const task = { concreteStep: "Open the file", subSteps: [{ id: "a", text: "Then this", done: false }] };
+    const patch = stepsPatch(task, taskSteps(task).map(st => (st.id === "a" ? { ...st, done: true } : st)));
+    expect(patch.concreteStep).toBe("Open the file");
+    expect(patch.subSteps.map(st => st.text)).toEqual(["Open the file", "Then this"]);
+    expect(patch.subSteps[0].id).not.toBe(FIRST_STEP_ID);
+    expect(patch.subSteps[0].id).toBeTruthy();
+  });
+
   it("leaves a task with no first step alone", () => {
     expect(stepsPatch({}, [])).toEqual({ subSteps: [] });
   });

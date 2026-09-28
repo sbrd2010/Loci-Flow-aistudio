@@ -3,7 +3,7 @@ import { IconPin, IconPlus, IconX, IconChevronRight, IconChevronDown, IconCheck 
 import { useAutosave } from "./settings/ui";
 import { ROADMAP_HORIZONS } from "./TaskRow";
 import { safeUUID } from "../utils/uuid";
-import { taskSteps, FIRST_STEP_ID } from "../utils/taskSteps";
+import { taskSteps } from "../utils/taskSteps";
 import { suggestSteps } from "../utils/stepSuggestions";
 import { formatReminderLabel } from "../utils/reminders";
 import { notifPermissionState, requestNotifPermission } from "../utils/nativeNotifs";
@@ -101,10 +101,10 @@ export default function TaskDetail({
     if (!title.trim()) setTitle(task.title);
     setEditingTitle(false);
   };
-  // Every step change goes up as the whole list. A first step shown from the
-  // old field becomes a real step here, with an id of its own.
+  // Every step change goes up as the whole list (stepsPatch gives a first step
+  // shown from the old field an id of its own).
   const stepsRef = useRef(null);
-  const setSteps = (next, meta) => onSetSteps?.(next.map(st => (st.id === FIRST_STEP_ID ? { ...st, id: safeUUID() } : st)), meta);
+  const setSteps = (next, meta) => onSetSteps?.(next, meta);
   const addStep = (text = newStep) => {
     const t = text.trim();
     if (!t) return;
