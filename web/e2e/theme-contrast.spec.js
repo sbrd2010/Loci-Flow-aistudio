@@ -126,26 +126,15 @@ for (const theme of THEMES) {
 
     await page.getByRole("button", { name: "Day map →" }).click();
 
-    // The unscheduled strip FIRST, before auto-fill empties it. Its chip sits
-    // on a lighter composited backdrop than a route card, so one foreground is
-    // not automatically legible on both.
-    const stripTags = page.locator(".dm-unscheduled .dm-p");
-    const stripCount = await stripTags.count();
-    expect(stripCount, "the strip should have tags before auto-fill").toBeGreaterThan(0);
-    for (let i = 0; i < stripCount; i++) {
-      await assertLegible(stripTags.nth(i), "unscheduled strip tag", theme);
-    }
-
-    // Then every priority tag on a route card — all four, because a P4-only
-    // override is exactly what survived the last collapse into one rule.
+    // Day map (50f, 52d): its smallest text — the Unscheduled count on the
+    // phone's bar, then the route's times and lengths, and the red DAY ENDS
+    // line on the page's ground.
+    await assertLegible(page.locator(".dm-pool-bar .dm-pool-count"), "Unscheduled count", theme);
     await page.getByRole("button", { name: /auto-fill/i }).click();
-    await expect(page.locator(".dm-stop .dm-p:visible").first()).toBeVisible();
-    const cardTags = page.locator(".dm-stop .dm-p:visible");
-    const cardCount = await cardTags.count();
-    expect(cardCount).toBeGreaterThan(0);
-    for (let i = 0; i < cardCount; i++) {
-      await assertLegible(cardTags.nth(i), "route card tag", theme);
-    }
+    await expect(page.locator(".dm-stop").first()).toBeVisible();
+    await assertLegible(page.locator(".dm-stop:not(.is-now) .dm-time").first(), "route stop time", theme);
+    await assertLegible(page.locator(".dm-stop .dm-dur").first(), "route stop length", theme);
+    await assertLegible(page.locator(".dm-dayend-label"), "DAY ENDS line", theme);
     await page.locator(".dm-back").click();
 
     // Plan (45h): the unselected view in its switch, and a row's figures —
