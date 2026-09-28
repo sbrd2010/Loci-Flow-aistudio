@@ -33,7 +33,6 @@ import { useFocusTimer } from "./hooks/useFocusTimer";
 import { useTodayStr } from "./hooks/useTodayStr";
 import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload, extendMinutesForSession } from "./utils/focusSession";
 import { celebrate } from "./utils/celebrations";
-import { safeUUID } from "./utils/uuid";
 import { submitOnEnter } from "./utils/formEvents";
 import { migrateStoredTheme, resolveTheme, watchColorScheme } from "./utils/theme";
 import { buildDayClock } from "./utils/dayClock";
@@ -60,7 +59,6 @@ export default function App() {
   // Where + was tapped ("Today", "Plan · Quarter"), for Add task's note (45a).
   const [addOpenedFrom, setAddOpenedFrom] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
-  const [fabExpanded, setFabExpanded] = useState(false);
   // "light" | "dark" | "auto" — see utils/theme.js.
   const [theme, setTheme] = useState(() => {
     let stored = null;
@@ -77,8 +75,6 @@ export default function App() {
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState("");
   const [showPrivacy, setShowPrivacy] = useState(false);
-  const [showQuickDump, setShowQuickDump] = useState(false);
-  const [quickDumpText, setQuickDumpText] = useState("");
 
   const sessionStartRef = useRef(Date.now());
   const tabStartRef = useRef(Date.now());
@@ -977,7 +973,6 @@ export default function App() {
     const dwellSec = Math.round((Date.now() - tabStartRef.current) / 1000);
     track("tab_switch", { tab, from: activeTab, dwell_sec: dwellSec });
     tabStartRef.current = Date.now();
-    setFabExpanded(false);
     // Leaving the Day map by a tab saves its pending edits, as its Back does.
     if (activeTab === "daymap") flushNow();
     if (tab === "mindbox") setMindBoxInitialPanel(null);
@@ -1004,7 +999,6 @@ export default function App() {
   // and Start focus come through here, as tabs do through handleTabSelect).
   const goToday = () => {
     if (activeTab === "daymap") flushNow();
-    setFabExpanded(false);
     setActiveTab("today");
   };
 
@@ -1014,12 +1008,11 @@ export default function App() {
   // on close, because by then activeTab is already "daymap".
   const [dayMapReturnTab, setDayMapReturnTab] = useState("today");
   const openDayMap = () => {
-    setFabExpanded(false);
     setDayMapReturnTab(activeTab === "daymap" ? "today" : activeTab);
     setActiveTab("daymap");
     track("day_map_open");
   };
-  const closeDayMap = () => { setFabExpanded(false); setActiveTab(dayMapReturnTab); };
+  const closeDayMap = () => { setActiveTab(dayMapReturnTab); };
 
   const handleSwitchUser = () => {
     // Flush any pending debounced write before signing out, then wipe the
@@ -1041,15 +1034,6 @@ export default function App() {
     setShowAddTask(true);
   };
 
-  const dumpCount = (payload?.brainDump || []).length;
-
-  const handleQuickDump = (e) => {
-    e.preventDefault();
-    if (!quickDumpText.trim() || dumpCount >= 50 || !payload) return;
-    savePayload({ ...payload, brainDump: [...(payload.brainDump || []), { id: safeUUID(), text: quickDumpText.trim(), createdAt: Date.now() }] });
-    track("braindump_added");
-    setQuickDumpText("");
-  };
 
   // ── Loading spinner ────────────────────────────────────────────────────────
   if (!demoMode && authLoading) {
@@ -1323,9 +1307,7 @@ export default function App() {
           <div role="tabpanel" aria-labelledby="plan-tab-plan">
             <PlanTab
               payload={payload}
-              savePayload={savePayload}
               saveConfigPatch={saveConfigPatch}
-              onScattered={() => openScattered("plan")}
             />
           </div>
         )}
@@ -1389,117 +1371,6 @@ export default function App() {
         )}
       </main>
 
-      {/* FAB — single + expands to two options. Plan only: Today adds from
-          its own "+" on the peek and "+ Add" in the list (49a–d). Plan keeps
-          this until its own "+ Add" lands (Phase 4). Not over Feeling
-          scattered, whose own buttons sit where it floats. */}
-      {activeTab === "roadmap" && roadmapView !== "scattered" && (
-        <>
-          {fabExpanded && (
-            <div
-              style={{ position: "fixed", inset: 0, zIndex: 88 }}
-              onClick={() => setFabExpanded(false)}
-            />
-          )}
-          {/* Option 2: Brain Dump */}
-          <button
-            className="fab-option"
-            data-testid="fab-brain-dump"
-            onClick={() => { setFabExpanded(false); setShowQuickDump(true); }}
-            style={{
-              opacity: fabExpanded ? 1 : 0,
-              transform: fabExpanded ? "translateY(0) scale(1)" : "translateY(20px) scale(0.85)",
-              pointerEvents: fabExpanded ? "auto" : "none",
-              bottom: `calc(88px + env(safe-area-inset-bottom, 0px) + 130px)`,
-              transitionDelay: fabExpanded ? "0.04s" : "0s"
-            }}
-            title="Brain Dump"
-            aria-label="Brain Dump"
-          >
-            <span style={{ fontSize: "20px" }}>💭</span>
-            <span style={{ fontSize: "12px", fontWeight: "700", whiteSpace: "nowrap" }}>Brain Dump</span>
-          </button>
-          {/* Option 1: Add Task */}
-          <button
-            className="fab-option"
-            data-testid="fab-add-task-option"
-            onClick={() => { setFabExpanded(false); openAddTask("week"); }}
-            style={{
-              opacity: fabExpanded ? 1 : 0,
-              transform: fabExpanded ? "translateY(0) scale(1)" : "translateY(20px) scale(0.85)",
-              pointerEvents: fabExpanded ? "auto" : "none",
-              bottom: `calc(88px + env(safe-area-inset-bottom, 0px) + 68px)`,
-              transitionDelay: fabExpanded ? "0s" : "0.04s"
-            }}
-            title="Add Task"
-            aria-label="Add Task"
-          >
-            <span style={{ fontSize: "18px", fontWeight: "700" }}>✚</span>
-            <span style={{ fontSize: "12px", fontWeight: "700", whiteSpace: "nowrap" }}>Add Task</span>
-          </button>
-          {/* Primary FAB */}
-          <button
-            className="fab"
-            data-testid="fab-add-task"
-            onClick={() => setFabExpanded(e => !e)}
-            title={fabExpanded ? "Close" : "Add or Brain Dump"}
-            style={{ transform: fabExpanded ? "rotate(45deg)" : "none" }}
-          >
-            +
-          </button>
-        </>
-      )}
-
-      {/* Quick Brain Dump sheet */}
-      {showQuickDump && (
-        <>
-          <div
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 200 }}
-            onClick={() => { setShowQuickDump(false); setQuickDumpText(""); }}
-          />
-          <div style={{
-            position: "fixed", top: "50%", left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: "calc(100% - 32px)", maxWidth: "440px",
-            background: "var(--bg-card)", borderRadius: "20px",
-            padding: "22px 20px 24px",
-            boxShadow: "0 8px 40px rgba(0,0,0,0.35)", zIndex: 201
-          }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-              <h3 style={{ fontSize: "15px", fontWeight: "800", margin: 0, color: "var(--text-primary)" }}>📝 Brain Dump</h3>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                {dumpCount > 0 && (
-                  <span style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--text-muted)", fontWeight: "700" }}>
-                    {dumpCount}/50
-                  </span>
-                )}
-                <button
-                  onClick={() => { setShowQuickDump(false); setQuickDumpText(""); }}
-                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: "20px", color: "var(--text-muted)", lineHeight: 1, padding: "2px 4px" }}
-                >×</button>
-              </div>
-            </div>
-            {dumpCount >= 50 && (
-              <p style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "8px", fontWeight: "600" }}>
-                Inbox full — triage items in Mind Box first.
-              </p>
-            )}
-            <form onSubmit={handleQuickDump} className="braindump-form">
-              <textarea
-                autoFocus
-                className="braindump-input"
-                rows={3}
-                placeholder="What's on your mind? (Shift+Enter for a new line)"
-                value={quickDumpText}
-                onChange={e => setQuickDumpText(e.target.value)}
-                onKeyDown={submitOnEnter}
-                disabled={dumpCount >= 50}
-              />
-              <button type="submit" className="braindump-submit" disabled={dumpCount >= 50 || !quickDumpText.trim()}>➔</button>
-            </form>
-          </div>
-        </>
-      )}
 
       {/* Floating Focus timer — visible across pages while a session is active,
           hidden on Day Map and on the dark Focus overlay itself */}

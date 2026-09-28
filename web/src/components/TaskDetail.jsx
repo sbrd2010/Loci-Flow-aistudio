@@ -8,7 +8,9 @@ import "../styles/taskDetail.css";
 // bottom sheet on phones, a 480px drawer beside the list on a laptop that is
 // not modal, so the list stays usable. Everything saves as you type. From
 // here: make it the one thing, or Done / Tomorrow / Park / Delete, each with
-// Undo.
+// Undo. A task in another horizon (Plan, 52h) has "Move to Today" instead,
+// then Pin to top · Park · Delete; Done is its circle, and the one thing and
+// Must-do are Today's alone.
 
 const HORIZONS = [{ key: "today", label: "Today" }, ...ROADMAP_HORIZONS];
 const ESTIMATES = [15, 30, 60, 120, 180];
@@ -25,7 +27,7 @@ export default function TaskDetail({
   onClose, onPatch, onToggleMVD, onToggleStep, onAddStep, onDeleteStep,
   onMakeOneThing, onDone, onTomorrow, onPark, onDelete, editTitleSignal = 0,
   onMoreDetails, onSuggestSteps, suggestingSteps = false, isNow = false, onLetGo,
-  onShowAll,
+  onShowAll, kicker = null, onMoveToToday, onTogglePin,
 }) {
   const [picker, setPicker] = useState(null);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -93,7 +95,8 @@ export default function TaskDetail({
     ? [...ESTIMATES, openedEstimate].sort((a, b) => a - b)
     : ESTIMATES;
 
-  const kbd = k => isDrawer && <kbd className="wall-key detail-key" aria-hidden="true">{k}</kbd>;
+  const isHorizon = typeof onMoveToToday === "function";
+  const kbd = k => isDrawer && !isHorizon && <kbd className="wall-key detail-key" aria-hidden="true">{k}</kbd>;
 
   // The phone sheet is modal: Tab stays inside it, as in the other sheets.
   // The laptop drawer is not, so Tab moves on to the page.
@@ -123,7 +126,7 @@ export default function TaskDetail({
       <div className="detail-top">
         {/* A Day map stop the Must-do filter hides (52): it opens anyway,
             and the filter stays the user's to change. */}
-        <span className="detail-kicker">{isNow ? "TODAY · THE ONE THING" : onShowAll ? "TODAY · HIDDEN BY MUST-DO" : `TODAY · ${index + 1} OF ${total}`}</span>
+        <span className="detail-kicker">{kicker || (isNow ? "TODAY · THE ONE THING" : onShowAll ? "TODAY · HIDDEN BY MUST-DO" : `TODAY · ${index + 1} OF ${total}`)}</span>
         {onShowAll && <button type="button" className="detail-showall" onClick={onShowAll}>Show all</button>}
         {isDrawer && !isNow && (
           <span className="detail-keys" aria-hidden="true">
@@ -175,7 +178,7 @@ export default function TaskDetail({
             )}
             <div className="detail-tags">
               {isGoal && <span className="task-tag is-goal">GOAL</span>}
-              {isDrawer && !editingTitle && <span className="detail-hint">E to edit the title</span>}
+              {isDrawer && !isHorizon && !editingTitle && <span className="detail-hint">E to edit the title</span>}
             </div>
           </div>
         </div>
@@ -248,10 +251,12 @@ export default function TaskDetail({
             </div>
           )}
 
-          <div className="detail-row">
-            <span className="detail-label">{isDrawer ? "Must-do" : "Must-do today"}</span>
-            <button type="button" role="switch" className="today-energy-switch detail-switch" aria-checked={!!task.isMVD} aria-label="Must-do" onClick={onToggleMVD} />
-          </div>
+          {onToggleMVD && (
+            <div className="detail-row">
+              <span className="detail-label">{isDrawer ? "Must-do" : "Must-do today"}</span>
+              <button type="button" role="switch" className="today-energy-switch detail-switch" aria-checked={!!task.isMVD} aria-label="Must-do" onClick={onToggleMVD} />
+            </div>
+          )}
           {/* Reminder, first step and category live in the full editor. */}
           {onMoreDetails && (
             <button type="button" className="detail-row is-link" onClick={onMoreDetails}>
@@ -313,6 +318,16 @@ export default function TaskDetail({
         </div>
       </div>
 
+      {isHorizon ? (
+        <div className="detail-foot">
+          <button type="button" className="detail-one" onClick={onMoveToToday}>Move to Today</button>
+          <div className="detail-actions">
+            <button type="button" className="detail-action" onClick={onTogglePin}>{task.isHorizonPinned ? "Unpin" : "Pin to top"}</button>
+            <button type="button" className="detail-action" onClick={onPark}>Park</button>
+            <button type="button" className="detail-action is-quiet" onClick={onDelete}>Delete</button>
+          </div>
+        </div>
+      ) : (
       <div className="detail-foot">
         {!task.isNowFocus && (
           <button type="button" className="detail-one" onClick={onMakeOneThing}>
@@ -331,6 +346,7 @@ export default function TaskDetail({
           <button type="button" className="detail-action is-quiet" onClick={onDelete}>Delete {kbd("⌫")}</button>
         </div>
       </div>
+      )}
     </div>
   );
 }

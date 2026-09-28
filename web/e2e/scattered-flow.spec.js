@@ -24,13 +24,12 @@ async function enterDemo(page) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
 }
 
+// 52: Plan's "I'm scattered" is gone; Today's link is the door.
 async function openScattered(page) {
-  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  // Plan opens on Horizons (45h); the door is on its Fronts view.
-  await page.getByRole("tab", { name: "Fronts" }).click();
-  const entry = page.getByRole("button", { name: /I'm scattered/i });
-  await entry.scrollIntoViewIfNeeded();
-  await entry.click();
+  // The link is on the wall, under the list's sheet on a phone.
+  const hide = page.locator(".today-list-hide");
+  if (await hide.isVisible()) await hide.click();
+  await page.locator(".wall-link", { hasText: "Feeling scattered?" }).click();
   await expect(page.locator(".scattered-actions")).toBeVisible({ timeout: 10_000 });
 }
 
@@ -53,8 +52,6 @@ test("at most three picks; the first is ringed and shows its smallest start; tap
   await openScattered(page);
 
   await expect(page.getByRole("heading", { name: "Feeling scattered?" })).toBeVisible();
-  // Plan's floating + would sit on top of this screen's own buttons.
-  await expect(page.getByTestId("fab-add-task")).toHaveCount(0);
   const picks = page.locator(".scattered-pick");
   const n = await picks.count();
   expect(n).toBeGreaterThan(0);
@@ -81,17 +78,13 @@ test("at most three picks; the first is ringed and shows its smallest start; tap
 test("Empty my head into Mind Box goes to Mind Box, and Back returns through the door it came in", async ({ page }) => {
   await enterDemo(page);
   await openScattered(page);
-  // Opened from Plan, the back link says Plan and goes there.
-  await expect(page.locator(".scattered-back")).toHaveText(/Plan/);
+  // From Today, the back link says Today and goes there.
+  await expect(page.locator(".scattered-back")).toHaveText(/Today/);
   await page.locator(".scattered-back").click();
   await expect(page.locator(".scattered")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /I'm scattered/i })).toBeVisible();
+  await expect(page.locator(".wall-link", { hasText: "Feeling scattered?" })).toBeVisible();
 
-  // From Today, the back link says Today and goes there.
-  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
-  await page.locator(".today-list-hide").click().catch(() => {});
-  await page.locator(".wall-link", { hasText: "Feeling scattered?" }).click();
-  await expect(page.locator(".scattered-back")).toHaveText(/Today/);
+  await openScattered(page);
   await page.getByRole("button", { name: "Empty my head into Mind Box" }).click();
   await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 8_000 });
 });

@@ -257,88 +257,6 @@
   .plan-tab { padding-left: 20px; padding-right: 20px; }
 }
 
-/* — "Not on a front" (Addendum C) — a list, not a front: no next-move row,
-   no progress track, no deadline. Never labelled "Uncategorised". */
-.plan-loose {
-  margin-top: 26px;
-  padding-top: 18px;
-  border-top: 1px solid var(--divider, var(--border));
-}
-.plan-loose-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-.plan-loose-name {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: 15.5px;
-  font-weight: 600;
-  color: var(--text-soft, var(--text-secondary));
-}
-.plan-loose-count {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--text-quiet, var(--text-muted));
-}
-.plan-loose-list { margin: 10px 0 0; padding: 0; list-style: none; }
-.plan-loose-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 0;
-  font-size: 13.5px;
-  line-height: 1.35;
-  color: var(--text-soft, var(--text-secondary));
-  border-top: 1px solid var(--divider, var(--border));
-}
-.plan-loose-row:first-child { border-top: 0; }
-.plan-loose-title { min-width: 0; overflow-wrap: anywhere; }
-
-/* The one control in this list. An edge, not a fill: it is an offer, and the
-   fronts above it are what the screen is about. */
-.plan-loose-assign {
-  flex-shrink: 0;
-  margin-left: auto;
-  max-width: 45%;
-  min-height: 34px;
-  padding: 0 8px;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--text-quiet, var(--text-muted));
-  background: transparent;
-  border: 1px solid var(--control-edge, var(--border));
-  border-radius: var(--radius-sm, 4px);
-  cursor: pointer;
-}
-.plan-loose-assign:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* The door into screen 14. The handoff puts it in the Plan header on desktop;
-   on mobile it sits at the foot of the list, where you actually reach for it
-   after reading down the fronts and feeling it is too much. */
-.plan-scattered {
-  display: block;
-  width: 100%;
-  min-height: 44px;
-  margin-top: 20px;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink, var(--text-primary));
-  background: transparent;
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-sm, 4px);
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.plan-scattered:hover { background: var(--accent-tint); }
-
 /* ── Plan's head (45h–j): the title and Horizons | Fronts ──
    Phone: the switch takes the width under the title. From 840px it sits
    beside it. */
@@ -441,6 +359,7 @@
 
 /* A row: the 44px circle, the title, and under it GOAL · P · estimate. */
 .roadmap-task-card.plan-row {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -456,21 +375,30 @@
 }
 .roadmap-task-card.plan-row:hover { background: none; transform: none; }
 .roadmap-task-card.plan-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The grip (52h): 24px in the gutter, shown on hover and focus; touch
+   drags with a long press instead, so it has none. */
 .plan-row-grip {
-  flex-shrink: 0;
-  align-self: center;
-  width: 20px;
-  margin-left: -22px;
+  position: absolute;
+  top: 50%;
+  left: -26px;
+  width: 24px;
+  height: 36px;
+  margin-top: -18px;
   padding: 0;
   font-size: 13px;
   line-height: 1;
   color: var(--ink-2, var(--text-muted));
   background: none;
   border: 0;
-  opacity: 0.45;
+  border-radius: 4px;
+  opacity: 0;
   cursor: grab;
   touch-action: none;
 }
+.plan-row:hover .plan-row-grip,
+.plan-row:focus-within .plan-row-grip { opacity: 1; }
+.plan-row-grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+@media (hover: none) { .plan-row-grip { display: none; } }
 .plan-row-circle {
   display: inline-flex;
   align-items: center;
@@ -499,11 +427,26 @@
   line-height: 1.35;
   color: var(--ink, var(--text-primary));
 }
-.plan-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.plan-row-meta { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .plan-row-figures {
+  flex-shrink: 0;
   font-family: var(--font-mono);
   font-size: 0.75rem;
   color: var(--ink-2, var(--text-secondary));
+  white-space: nowrap;
+}
+/* The front goes first when the column is narrow (52). */
+.plan-row-figures.plan-row-front { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.plan-row-pin { display: inline-flex; flex-shrink: 0; color: var(--ink-2, var(--text-secondary)); }
+.plan-row-meta .task-tag { flex-shrink: 0; }
+/* The open task's row (52h): tinted, with the focus ring. */
+.roadmap-task-card.plan-row.is-open {
+  margin: 0 -8px;
+  padding-left: 8px;
+  padding-right: 8px;
+  background: var(--accent-tint);
+  outline: 1.5px solid var(--accent);
+  border-radius: 6px;
 }
 
 /* ── Inbox: Mind Box's notes, until they are sent to a horizon ── */

@@ -7,7 +7,6 @@ import {
   sortFronts,
   frontNextMove,
   frontProgress,
-  unassignedTasks,
   frontDueLabel,
   frontDaysLeft,
   planFooterSentence,
@@ -87,7 +86,7 @@ function FrontBlock({ front, tasks, isLead, now, onClose }) {
   );
 }
 
-export default function PlanTab({ payload = {}, savePayload, saveConfigPatch, onScattered }) {
+export default function PlanTab({ payload = {}, saveConfigPatch }) {
   const { tasks = [], config = {} } = payload;
   const [adding, setAdding] = useState(false);
   const [draftName, setDraftName] = useState("");
@@ -115,39 +114,15 @@ export default function PlanTab({ payload = {}, savePayload, saveConfigPatch, on
   const now = useMemo(() => new Date(), [tasks, config, dayKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const fronts = useMemo(() => sortFronts(frontsFromConfig(config), now), [config, now]);
   const footer = useMemo(() => planFooterSentence(fronts, tasks, now), [fronts, tasks, now]);
-  // A task needs no front (Addendum C). Loose tasks are listed, never labelled
-  // "Uncategorised" and never counted against the fronts above.
-  const loose = useMemo(
-    // Pass the fronts that actually rendered: a task pointing at a front that
-    // was dropped in normalization belongs here, not nowhere.
-    () => unassignedTasks(tasks, fronts.map(f => f.id)).filter(t => !t.isCompleted && !t.isParked),
-    [tasks, fronts],
-  );
-
   // The LIMIT applies to stored fronts. frontsFromConfig can return one more
   // than this (the legacy Key Deadline projection), which is not stored and so
   // does not consume a slot.
   const stored = useMemo(() => normalizeFronts(config.fronts), [config]);
   const atFrontLimit = stored.length >= FRONT_LIMIT;
 
-  // Putting a loose task on a front. This writes task.frontId and nothing else:
-  // a front's next move and progress are DERIVED from the tasks on it
-  // (frontNextMove, frontProgress), so assignment alone is what makes a front
-  // real. No ledger event — the app writes those for horizon moves, not for
-  // category-like fields, and this is the latter.
-  const assignToFront = (task, nextFrontId) => {
-    if (!task?.uuid || !nextFrontId || typeof savePayload !== "function") return;
-    savePayload({
-      ...payload,
-      tasks: (payload.tasks || []).map(t => (
-        t.uuid === task.uuid ? { ...t, frontId: nextFrontId, lastUpdated: Date.now() } : t
-      )),
-    });
-  };
-
   // Closing a front. It is removed from config.fronts; the tasks on it are not
-  // touched and reappear under "Not on a front" (unassignedTasks already counts
-  // a frontId naming no front as loose). Without this the cap was a dead end:
+  // touched and are left with no front (52: the sheet's Front picker puts them
+  // on another). Without this the cap was a dead end:
   // at FRONT_LIMIT the screen told the user to close one and nothing could.
   //
   // The legacy Key Deadline front is PROJECTED from config.deadlineLabel at
@@ -251,48 +226,11 @@ export default function PlanTab({ payload = {}, savePayload, saveConfigPatch, on
         </div>
       )}
 
-      {loose.length > 0 && (
-        <section className="plan-loose">
-          <div className="plan-loose-head">
-            <h3 className="plan-loose-name">Not on a front</h3>
-            <span className="plan-loose-count">{loose.length}</span>
-          </div>
-          <ul className="plan-loose-list">
-            {loose.map(t => (
-              <li key={t.uuid || t.id} className="plan-loose-row">
-                <span className="plan-loose-title"><LinkifyText text={t.title} /></span>
-                {fronts.length > 0 && typeof savePayload === "function" && (
-                  // Resets to "" after each change: it is an action, not a
-                  // stored value — once assigned, the row leaves this list.
-                  <select
-                    className="plan-loose-assign"
-                    value=""
-                    aria-label={`Put ${t.title} on a front`}
-                    onChange={e => assignToFront(t, e.target.value)}
-                  >
-                    <option value="">Put on a front…</option>
-                    {fronts.map(f => (
-                      <option key={f.id} value={f.id}>{f.name}</option>
-                    ))}
-                  </select>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
       {footer && <p className="plan-footer">{footer}</p>}
-
-      {onScattered && (
-        <button type="button" className="plan-scattered" onClick={onScattered}>
-          I'm scattered
-        </button>
-      )}
 
       {closing && (
         <ConfirmDialog
-          message={`Close "${closing.name}"?\n\nThe front goes away. Nothing on it is deleted — those tasks move back to "Not on a front".`}
+          message={`Close "${closing.name}"?\n\nThe front goes away. Nothing on it is deleted — those tasks are left with no front.`}
           confirmLabel="Close the front"
           cancelLabel="Keep it"
           danger

@@ -5,7 +5,6 @@ import { celebrate } from "../utils/celebrations";
 import { getAIKeys, callAI, hasAIKey, extractJsonArray } from "../utils/aiCall";
 import { sanitizeTaskField, CATEGORY_ICONS, byPriorityThenOrder } from "../utils/taskOps";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
-import { safeCopyToClipboard } from "../utils/clipboard";
 import { buildTaskMutationEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor,
@@ -17,20 +16,24 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import LinkifyText from "./LinkifyText";
-import { formatEstimate } from "./TaskDetail";
-import { IconPlus } from "./ui/icons";
-import { commitmentKickerFront, frontForCommitment, frontsFromConfig } from "../utils/fronts";
+import TaskDetail, { formatEstimate } from "./TaskDetail";
+import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
+import { IconPin, IconPlus } from "./ui/icons";
+import { commitmentKickerFront, frontForCommitment, frontsFromConfig, frontsOnOffer } from "../utils/fronts";
 
-// A horizon row (45h): the circle marks it done; the title; then GOAL, the
-// priority, and the estimate — or, without one, the front it is on. The whole
-// row opens the task. Drag keeps working: by the grip, or by the whole row in
-// Drag anywhere mode.
-function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, frontName = null, interactionStyle = "classic" }) {
+// A horizon row (45h, 52h): the circle marks it done; the title; then a pin
+// if it is pinned, GOAL, and priority · estimate · front, whatever is set
+// (the front truncates first). The row opens the task. Drag: by the grip on
+// a laptop (shown on hover and focus), by a long press on touch, or by the
+// whole row in Drag anywhere mode.
+function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, frontName = null, interactionStyle = "classic", isOpen = false }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   const isDragAnywhere = interactionStyle === "dragAnywhere";
   const estimate = Number(task.timeEstimateMinutes) > 0 ? formatEstimate(task.timeEstimateMinutes) : null;
-  const meta = [task.priority || "P3", estimate || frontName].filter(Boolean);
-  const steps = Array.isArray(task.subSteps) ? task.subSteps : [];
+  const figures = [task.priority || "P3", estimate].filter(Boolean).join(" · ");
+  // Classic: the mouse and the keyboard drag by the grip; touch by holding
+  // the row, since the grip only shows on hover.
+  const { onTouchStart, ...gripListeners } = listeners || {};
   return (
     <div
       ref={setNodeRef}
@@ -43,23 +46,40 @@ function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, fr
     >
       <div
         ref={isDragAnywhere ? setActivatorNodeRef : undefined}
-        className={`roadmap-task-card plan-row${isDragAnywhere ? " is-drag-anywhere" : ""}`}
+        className={`roadmap-task-card plan-row${isDragAnywhere ? " is-drag-anywhere" : ""}${isOpen ? " is-open" : ""}`}
+        data-task-uuid={task.uuid}
         onClick={() => onTaskClick(task)}
         {...(isDragAnywhere ? {
           ...listeners,
+          // As in Today's list: Enter opens the row; Space picks it up.
+          onKeyDown: e => {
+            if (e.key === "Enter" && e.target === e.currentTarget) { e.preventDefault(); onTaskClick(task); return; }
+            listeners?.onKeyDown?.(e);
+          },
           tabIndex: attributes?.tabIndex,
           "aria-disabled": attributes?.["aria-disabled"],
           "aria-describedby": attributes?.["aria-describedby"],
-        } : {})}
+        } : {
+          onTouchStart,
+          tabIndex: 0,
+          role: "button",
+          "aria-label": `Open: ${task.title}`,
+          onKeyDown: e => {
+            if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+            e.preventDefault();
+            onTaskClick(task);
+          },
+        })}
       >
         {!isDragAnywhere && (
           <button
             type="button"
-            {...listeners}
+            ref={setActivatorNodeRef}
+            {...gripListeners}
             {...attributes}
             className="plan-row-grip"
             onClick={e => e.stopPropagation()}
-            aria-label="Drag to reorder"
+            aria-label={`Drag to reorder: ${task.title}`}
           >
             ⠿
           </button>
@@ -79,13 +99,13 @@ function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, fr
         )}
         <span className="plan-row-body">
           <span className="roadmap-task-title plan-row-title">
-            {task.isHorizonPinned && <span className="plan-row-pinned" title="Pinned to top" aria-label="Pinned to top">📌 </span>}
             <LinkifyText text={task.title} />
           </span>
           <span className="plan-row-meta">
+            {task.isHorizonPinned && <span className="plan-row-pin" role="img" aria-label="Pinned to top"><IconPin size={14} /></span>}
             {isGoal && <span className="task-tag is-goal">GOAL</span>}
-            <span className="plan-row-figures">{meta.join(" · ")}</span>
-            {steps.length > 0 && <span className="plan-row-figures">{steps.filter(s => s.done).length}/{steps.length} steps</span>}
+            <span className="plan-row-figures">{figures}</span>
+            {frontName && <span className="plan-row-figures plan-row-front">· {frontName}</span>}
           </span>
         </span>
         {isDragAnywhere && (
@@ -104,7 +124,7 @@ function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, fr
   );
 }
 
-function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, onTaskClick, onDone, isGoal = () => false, frontNameOf = () => null }) {
+function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, onTaskClick, onDone, isGoal = () => false, frontNameOf = () => null, openUuid = null }) {
   const interactionStyle = payload?.config?.taskRowInteractionStyle === "dragAnywhere" ? "dragAnywhere" : "classic";
   const [activeId, setActiveId] = useState(null);
   const getKey = (t) => t.uuid || String(t.id);
@@ -164,6 +184,7 @@ function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, on
             isGoal={isGoal(task)}
             frontName={frontNameOf(task)}
             interactionStyle={interactionStyle}
+            isOpen={task.uuid === openUuid}
           />
         ))}
       </SortableContext>
@@ -190,7 +211,7 @@ function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, on
 }
 
 export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, onEditTask, focusInbox = false, uid, writeActivityEvents, focusTimer = {} }) {
-  const { tasks = [], config = {}, contributions = [] } = payload;
+  const { tasks = [], config = {} } = payload;
   const windows = getFocusWindows(config);
 
   // 45h: the four horizons, always shown. Work (the older horizon) is shown
@@ -200,32 +221,31 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
     { key: "month",    label: "This month" },
     { key: "quarter",  label: "This quarter" },
     { key: "halfyear", label: "6 months" },
-    { key: "office",   label: "Work", onlyWithTasks: true },
+    // 52: Work stays only while it holds tasks, "older", with no +.
+    { key: "office",   label: "Work · older", onlyWithTasks: true, noAdd: true },
   ];
 
-  const [selectedTask, setSelectedTask] = useState(null);
+  // A task, opened (52h): the same sheet as Today's, with Plan's footer.
+  const [detailUuid, setDetailUuid] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
-  const [undoTask, setUndoTask] = useState(null);
-  const undoTimeoutRef = useRef(null);
+  // The one Undo toast (done, delete, park, today, step), as on Today.
+  const [undo, setUndo] = useState(null);
+  const [drawerViewport, setDrawerViewport] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1024);
+  useEffect(() => {
+    const update = () => setDrawerViewport(window.innerWidth >= 1024);
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
   // Brain dump deletion is confirmed via a deferred onConfirm callback — by the
   // time the user clicks "Delete", `payload` in that closure may be stale (e.g.
   // a background save landed while the dialog was open). Track the latest
   // payload in a ref so the delete reads/writes current data, not a snapshot.
   const payloadRef = useRef(payload);
   payloadRef.current = payload;
-  const [copied, setCopied] = useState(false);
-  const copyTimeoutRef = useRef(null);
   const [longDumpWarning, setLongDumpWarning] = useState(null); // {id, horizon}
   const [aiBreakdownSuggestion, setAiBreakdownSuggestion] = useState(null); // {id, items: [{title, concreteStep}], noKey, error}
   const [aiBreakdownLoading, setAiBreakdownLoading] = useState(null); // item.id
   const [editingDumpItem, setEditingDumpItem] = useState(null); // {id, text}
-
-  useEffect(() => {
-    return () => {
-      if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
-      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-    };
-  }, []);
 
   // Mind Box's "N notes waiting" lands here: bring the Inbox into view.
   const inboxRef = useRef(null);
@@ -233,25 +253,7 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
     if (focusInbox) inboxRef.current?.scrollIntoView({ block: "start" });
   }, [focusInbox]);
 
-  const openTask = (task) => {
-    setCopied(false);
-    setSelectedTask(task);
-  };
-
-  const handleCopy = (task) => {
-    const text = task.concreteStep && task.concreteStep !== "Do first tiny step"
-      ? `${task.title}\n${task.concreteStep}`
-      : task.title;
-    safeCopyToClipboard(text).then(ok => {
-      if (!ok) return;
-      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-      setCopied(true);
-      copyTimeoutRef.current = setTimeout(() => {
-        setCopied(false);
-        copyTimeoutRef.current = null;
-      }, 900);
-    });
-  };
+  const openTask = (task) => setDetailUuid(task.uuid);
 
   const isVisibleRoadmapTask = (t) => !t.isDeleted && !t.isCompleted && !t.isParked;
 
@@ -272,30 +274,82 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
     return newContributions;
   };
 
+  // Each action writes from the latest payload: the sheet stays open across
+  // saves, so a closure's `tasks` can be a render behind.
+  const latestTasks = () => payloadRef.current?.tasks || [];
+  const patchTask = (uuid, patch) => {
+    const latest = payloadRef.current;
+    savePayload({ ...latest, tasks: latestTasks().map(t => t.uuid === uuid ? { ...t, ...patch, lastUpdated: Date.now() } : t) });
+  };
+
   const handleMoveToToday = (task) => {
-    const todayTasksCount = tasks.filter((t) => t.horizonLevel === "today" && isVisibleRoadmapTask(t)).length;
+    const todayTasksCount = latestTasks().filter((t) => t.horizonLevel === "today" && isVisibleRoadmapTask(t)).length;
     const event = buildTaskMutationEvent("task_moved", task, {
       fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: "today" }, windows,
     });
     savePayloadAsync({
-      ...payload,
-      tasks: tasks.map((t) =>
+      ...payloadRef.current,
+      tasks: latestTasks().map((t) =>
         t.uuid === task.uuid ? { ...t, horizonLevel: "today", deferredUntil: null, orderIndex: todayTasksCount, lastUpdated: Date.now() } : t
       )
     })
       .then(() => writeActivityEvents(eventPatch(uid, event)))
       .catch(() => {});
-    setSelectedTask(null);
+    setUndo({ kind: "today", task, at: Date.now() });
   };
 
-  const handleTogglePin = (task) => {
-    savePayload({
-      ...payload,
-      tasks: tasks.map((t) =>
-        t.uuid === task.uuid ? { ...t, isHorizonPinned: !t.isHorizonPinned, lastUpdated: Date.now() } : t
-      )
+  // A horizon change from the sheet's picker. To Today it leaves Plan, so it
+  // goes the way Move to Today does, with Undo.
+  const handleChangeHorizon = (task, horizon) => {
+    if (horizon === "today") { handleMoveToToday(task); return; }
+    const event = buildTaskMutationEvent("task_moved", task, {
+      fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: horizon }, windows,
     });
-    setSelectedTask(null);
+    const orderIndex = latestTasks().filter(t => t.horizonLevel === horizon && isVisibleRoadmapTask(t)).length;
+    savePayloadAsync({ ...payloadRef.current, tasks: latestTasks().map(t => t.uuid === task.uuid ? { ...t, horizonLevel: horizon, orderIndex, lastUpdated: Date.now() } : t) })
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
+      .catch(() => {});
+  };
+
+  const handleTogglePin = (task) => patchTask(task.uuid, { isHorizonPinned: !task.isHorizonPinned });
+
+  const handlePark = (task) => {
+    const now = Date.now();
+    const event = buildTaskMutationEvent("task_parked", task, { windows, now });
+    // Parking clears isNowFocus: a session running on this task (one started
+    // from Coach, say) ends here, recorded, as Done and Delete end theirs.
+    const endedFocusSession = task.isNowFocus && typeof focusTimer.endFocusSession === "function"
+      ? focusTimer.endFocusSession("user_abandoned")
+      : null;
+    savePayloadAsync({ ...payloadRef.current, tasks: latestTasks().map(t => t.uuid === task.uuid ? { ...t, isParked: true, isNowFocus: false, lastUpdated: Date.now() } : t) })
+      .then(() => {
+        const events = [event];
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+        }
+        writeActivityEvents(eventsPatch(uid, events));
+      })
+      .catch(() => {});
+    setUndo({ kind: "park", task, wasFocus: !!task.isNowFocus, at: now });
+  };
+
+  const handleToggleStep = (task, stepId) => {
+    const current = latestTasks().find(t => t.uuid === task.uuid);
+    if (!current) return;
+    patchTask(task.uuid, { subSteps: (current.subSteps || []).map(st => st.id === stepId ? { ...st, done: !st.done } : st) });
+  };
+  const handleAddStep = (task, text) => {
+    const current = latestTasks().find(t => t.uuid === task.uuid);
+    if (!current) return;
+    patchTask(task.uuid, { subSteps: [...(current.subSteps || []), { id: safeUUID(), text, done: false }] });
+  };
+  // A step goes at once, with Undo (52: Undo, not confirm).
+  const handleDeleteStep = (task, stepId) => {
+    const current = latestTasks().find(t => t.uuid === task.uuid);
+    const step = (current?.subSteps || []).find(st => st.id === stepId);
+    if (!step) return;
+    patchTask(task.uuid, { subSteps: current.subSteps.filter(st => st.id !== stepId) });
+    setUndo({ kind: "step", task: current, step, atIndex: current.subSteps.indexOf(step), at: Date.now() });
   };
 
   const handleMarkDone = (task) => {
@@ -310,11 +364,11 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
       ? focusTimer.endFocusSession("completed_task")
       : null;
     savePayloadAsync({
-      ...payload,
-      tasks: tasks.map((t) =>
+      ...payloadRef.current,
+      tasks: latestTasks().map((t) =>
         t.uuid === task.uuid ? { ...t, isCompleted: true, isNowFocus: false, dateCompletedString: lociTodayStr, lastUpdated: Date.now() } : t
       ),
-      contributions: incrementContribution([...contributions], todayDateStr)
+      contributions: incrementContribution([...(payloadRef.current.contributions || [])], todayDateStr)
     })
       .then(() => {
         const events = [event];
@@ -328,7 +382,7 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
         writeActivityEvents(eventsPatch(uid, events));
       })
       .catch(() => {});
-    setSelectedTask(null);
+    setUndo({ kind: "done", task, wasFocus: !!task.isNowFocus, at: actionAt, dateStr: todayDateStr });
   };
 
   const doTriageBrainDump = (item, horizon, overrideText) => {
@@ -457,48 +511,65 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
     setEditingDumpItem(null);
   };
 
+  // Delete goes at once, with Undo (50: Undo, not confirm).
   const handleDelete = (task) => {
-    setConfirmDialog({
-      message: `Delete "${task.title}"?\n\nYou can undo this for a few seconds after deleting.`,
-      confirmLabel: "Delete", cancelLabel: "Cancel", danger: true,
-      onConfirm: () => {
-        const now = Date.now();
-        const event = buildTaskMutationEvent("task_deleted", task, { windows, now });
-        // Deleting the actively focused task (e.g. one started from Coach)
-        // drops it out of activeTask (isDeleted-filtered) without ever
-        // clearing isNowFocus itself — end its session here or it's left
-        // open with no terminal event.
-        const endedFocusSession = task.isNowFocus && typeof focusTimer.endFocusSession === "function"
-          ? focusTimer.endFocusSession("user_abandoned")
-          : null;
-        savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t) })
-          .then(() => {
-            const events = [event];
-            if (endedFocusSession) {
-              events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
-            }
-            writeActivityEvents(eventsPatch(uid, events));
-          })
-          .catch(() => {});
-        if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
-        setUndoTask(task);
-        undoTimeoutRef.current = setTimeout(() => setUndoTask(null), 5000);
-        setSelectedTask(null);
-        setConfirmDialog(null);
-      },
-      onCancel: () => setConfirmDialog(null)
-    });
+    const now = Date.now();
+    const event = buildTaskMutationEvent("task_deleted", task, { windows, now });
+    // Deleting the actively focused task (e.g. one started from Coach)
+    // drops it out of activeTask (isDeleted-filtered) without ever
+    // clearing isNowFocus itself — end its session here or it's left
+    // open with no terminal event.
+    const endedFocusSession = task.isNowFocus && typeof focusTimer.endFocusSession === "function"
+      ? focusTimer.endFocusSession("user_abandoned")
+      : null;
+    savePayloadAsync({ ...payloadRef.current, tasks: latestTasks().map((t) => t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t) })
+      .then(() => {
+        const events = [event];
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+        }
+        writeActivityEvents(eventsPatch(uid, events));
+      })
+      .catch(() => {});
+    setUndo({ kind: "delete", task, at: now });
   };
 
-  const handleUndoDelete = () => {
-    if (!undoTask) return;
-    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
-    const event = buildTaskMutationEvent("task_restored", undoTask, { windows });
-    savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === undoTask.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t) })
-      .then(() => writeActivityEvents(eventPatch(uid, event)))
-      .catch(() => {});
-    setUndoTask(null);
+  // Undo puts back only what the action changed, on the task as it is now.
+  const handleUndo = () => {
+    if (!undo) return;
+    const { kind, task } = undo;
+    setUndo(null);
+    const latest = payloadRef.current;
+    const current = latestTasks().find(t => t.uuid === task.uuid);
+    if (!current) return;
+    const put = (patch, eventType, opts = {}) => {
+      const next = { ...latest, ...opts, tasks: latestTasks().map(t => t.uuid === task.uuid ? { ...t, ...patch, lastUpdated: Date.now() } : t) };
+      if (!eventType) { savePayload(next); return; }
+      const event = buildTaskMutationEvent(eventType, current, { windows, ...(eventType === "task_moved" ? { fromState: { horizonLevel: current.horizonLevel }, toState: { horizonLevel: task.horizonLevel } } : {}) });
+      savePayloadAsync(next).then(() => writeActivityEvents(eventPatch(uid, event))).catch(() => {});
+    };
+    // Park and Done clear the focus flag; Undo gives it back — unless another
+    // task has become the one thing since (as Today's Undo does).
+    const refocus = undo.wasFocus && !latestTasks().some(t => t.isNowFocus && t.uuid !== task.uuid && !t.isDeleted && !t.isCompleted)
+      ? { isNowFocus: true } : {};
+    if (kind === "delete" && current.isDeleted) put({ isDeleted: false }, "task_restored");
+    else if (kind === "park" && current.isParked) put({ isParked: false, ...refocus });
+    else if (kind === "today" && current.horizonLevel === "today") put({ horizonLevel: task.horizonLevel, orderIndex: task.orderIndex, deferredUntil: task.deferredUntil ?? null }, "task_moved");
+    else if (kind === "step") {
+      // Back where it was; steps added since stay where they are.
+      const steps = [...(current.subSteps || [])];
+      steps.splice(Math.min(undo.atIndex, steps.length), 0, undo.step);
+      put({ subSteps: steps });
+    }
+    else if (kind === "done" && current.isCompleted) {
+      const contributions = [...(latest.contributions || [])];
+      const idx = contributions.findIndex(c => c.dateString === undo.dateStr);
+      if (idx !== -1 && contributions[idx].count > 0) contributions[idx] = { ...contributions[idx], count: contributions[idx].count - 1, lastUpdated: Date.now() };
+      put({ isCompleted: false, dateCompletedString: null, ...refocus }, "task_reopened", { contributions });
+    }
   };
+  const UNDO_LABELS = { done: "Marked done", delete: "Deleted", park: "Parked", today: "Moved to Today" };
+  const undoText = !undo ? "" : undo.kind === "step" ? `Step removed: ${undo.step.text}` : `${UNDO_LABELS[undo.kind]}: ${undo.task.title}`;
 
   const handleClearAllBrainDump = () => {
     setConfirmDialog({
@@ -645,23 +716,57 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
     </section>
   );
 
+  const shownColumns = columns
+    .map(col => ({ ...col, tasks: tasks.filter(t => t.horizonLevel === col.key && isVisibleRoadmapTask(t)).sort(byPriorityThenOrder) }))
+    .filter(col => !col.onlyWithTasks || col.tasks.length > 0);
+  const detailCol = detailUuid ? shownColumns.find(col => col.tasks.some(t => t.uuid === detailUuid)) : null;
+  const detailTask = detailCol ? detailCol.tasks.find(t => t.uuid === detailUuid) : null;
+  const detailIndex = detailTask ? detailCol.tasks.indexOf(detailTask) : -1;
+  // Done, moved to Today, parked or deleted: it left Plan, so the sheet closes.
+  useEffect(() => {
+    if (detailUuid && !detailTask) setDetailUuid(null);
+  }, [detailUuid, detailTask]);
+  const focusRow = (uuid) => requestAnimationFrame(() => document.querySelector(`.plan-horizons [data-task-uuid="${uuid}"]`)?.focus());
+  const closeDetail = () => { const back = detailUuid; setDetailUuid(null); if (back) focusRow(back); };
+  // An action that takes the task out of Plan: focus goes to its neighbour
+  // in the horizon, as on Today.
+  const leaving = (task, act) => {
+    const col = detailCol?.tasks || [];
+    const i = col.findIndex(t => t.uuid === task.uuid);
+    const next = col[i + 1] || col[i - 1];
+    act(task);
+    if (next) focusRow(next.uuid);
+  };
+  // The drawer's keys (50b): ↑/↓ move through the horizon, Esc closes and
+  // hands focus back to the row.
+  const onDetailKeyDown = (e) => {
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || !detailTask) return;
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeDetail(); return; }
+    const el = e.target;
+    if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+    const dir = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
+    const next = dir && detailCol.tasks[detailIndex + dir];
+    if (!next) return;
+    e.preventDefault();
+    setDetailUuid(next.uuid);
+  };
+
   return (
     <div className="roadmap-container plan-horizons-view">
       <div className="plan-horizons">
-        {columns.map(col => {
-          const colTasks = tasks
-            .filter(t => t.horizonLevel === col.key && isVisibleRoadmapTask(t))
-            .sort(byPriorityThenOrder);
-          if (col.onlyWithTasks && colTasks.length === 0) return null;
+        {shownColumns.map(col => {
+          const colTasks = col.tasks;
           return (
             <section key={col.key} className="plan-horizon" aria-labelledby={`plan-h-${col.key}`}>
               <div className="plan-horizon-head">
                 <h3 className="plan-horizon-name" id={`plan-h-${col.key}`}>
                   {col.label} <span className="plan-horizon-count">{colTasks.length}</span>
                 </h3>
-                <button type="button" className="plan-horizon-add" onClick={() => onOpenAddTask(col.key)} aria-label={`Add a task to ${col.label}`}>
-                  <IconPlus size={20} />
-                </button>
+                {!col.noAdd && (
+                  <button type="button" className="plan-horizon-add" onClick={() => onOpenAddTask(col.key)} aria-label={`Add a task to ${col.label}`}>
+                    <IconPlus size={20} />
+                  </button>
+                )}
               </div>
               <SortableRoadmapList
                 colKey={col.key}
@@ -673,6 +778,7 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
                 onDone={handleMarkDone}
                 isGoal={isGoal}
                 frontNameOf={frontNameOf}
+                openUuid={detailUuid}
               />
             </section>
           );
@@ -681,84 +787,39 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
       {/* Mind Box's notes wait below the horizons (45h has none on top). */}
       {inbox}
 
-      {/* Task management overlay */}
-      {selectedTask && (
-        <div className="modal-overlay" onClick={() => setSelectedTask(null)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "360px" }}>
-            <div className="modal-header">
-              <h2 className="modal-title" style={{ fontSize: "16px" }}>Manage Commitment</h2>
-              <button className="close-btn" onClick={() => setSelectedTask(null)}>✕</button>
-            </div>
-            <div className="modal-body" style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
-              <div style={{ marginBottom: "8px" }}>
-                <span className={`priority-badge ${(selectedTask.priority || "P3").toLowerCase()}`} style={{ marginBottom: "6px", display: "inline-block" }}>
-                  {selectedTask.priority || "P3"}
-                </span>
-                {selectedTask.isHorizonPinned && (
-                  <span title="Pinned to top" aria-label="Pinned to top" style={{ marginLeft: "6px", fontSize: "13px" }}>📌</span>
-                )}
-                <h4 style={{ fontSize: "15px", fontWeight: "600", color: "var(--text-primary)", lineHeight: "1.4", overflowWrap: "anywhere", wordBreak: "break-word" }}>
-                  <LinkifyText text={selectedTask.title} />
-                </h4>
-                {selectedTask.concreteStep && selectedTask.concreteStep !== "Do first tiny step" && (
-                  <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px", overflowWrap: "anywhere", wordBreak: "break-word" }}>
-                    ⚡ <LinkifyText text={selectedTask.concreteStep} />
-                  </p>
-                )}
-                {selectedTask.subSteps && selectedTask.subSteps.length > 0 && (
-                  <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
-                    {selectedTask.subSteps.map(s => (
-                      <div key={s.id} style={{ fontSize: "12px", display: "flex", gap: "6px", color: s.done ? "var(--text-muted)" : "var(--text-secondary)", textDecoration: s.done ? "line-through" : "none" }}>
-                        <span style={{ flexShrink: 0 }}>{s.done ? "☑" : "☐"}</span>
-                        <span style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}><LinkifyText text={s.text} /></span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <button className="btn" onClick={() => handleMoveToToday(selectedTask)}>
-                🚀 Move to Today
-              </button>
-              <button className="btn" onClick={() => handleTogglePin(selectedTask)}
-                style={{ background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1.5px solid var(--border)", boxShadow: "none" }}>
-                {selectedTask.isHorizonPinned ? "📌 Unpin from top" : "📌 Pin to top"}
-              </button>
-              {onEditTask && (
-                <button className="btn" onClick={() => { onEditTask(selectedTask); setSelectedTask(null); }}
-                  style={{ background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1.5px solid var(--border)", boxShadow: "none" }}>
-                  ✏ Edit task
-                </button>
-              )}
-              <button className="btn" onClick={() => handleCopy(selectedTask)}
-                style={{ background: "var(--bg-secondary)", color: copied ? "var(--success)" : "var(--text-primary)", border: "1.5px solid var(--border)", boxShadow: "none" }}>
-                {copied ? "✓ Copied!" : "📋 Copy"}
-              </button>
-              <button className="btn" onClick={() => handleMarkDone(selectedTask)} style={{ background: "var(--success)" }}>
-                ✓ Mark Done
-              </button>
-              <button className="btn btn-cancel" onClick={() => handleDelete(selectedTask)}
-                style={{ color: "var(--danger)", border: "1.5px solid var(--border)" }}>
-                🗑 Delete Task
-              </button>
-            </div>
-          </div>
+      {/* A task, opened (52h): the sheet on phones and tablets, the drawer
+          from 1024px. */}
+      {detailTask && !drawerViewport && <div className="task-detail-scrim" onClick={closeDetail} aria-hidden="true" />}
+      {detailTask && (
+        <div onKeyDown={onDetailKeyDown}>
+          <TaskDetail
+            key={detailTask.uuid}
+            task={detailTask}
+            variant={drawerViewport ? "drawer" : "sheet"}
+            kicker={`${detailCol.label.toUpperCase()} · ${detailIndex + 1} OF ${detailCol.tasks.length}`}
+            isGoal={isGoal(detailTask)}
+            fronts={frontsOnOffer(fronts, detailTask.frontId)}
+            onClose={closeDetail}
+            onPatch={patch => (patch.horizonLevel && patch.horizonLevel !== detailTask.horizonLevel
+              ? handleChangeHorizon(detailTask, patch.horizonLevel)
+              : patchTask(detailTask.uuid, patch))}
+            onToggleStep={stepId => handleToggleStep(detailTask, stepId)}
+            onDeleteStep={stepId => handleDeleteStep(detailTask, stepId)}
+            onAddStep={text => handleAddStep(detailTask, text)}
+            onMoreDetails={onEditTask ? () => { onEditTask(detailTask); setDetailUuid(null); } : undefined}
+            onDone={() => leaving(detailTask, handleMarkDone)}
+            onMoveToToday={() => leaving(detailTask, handleMoveToToday)}
+            onTogglePin={() => handleTogglePin(detailTask)}
+            onPark={() => leaving(detailTask, handlePark)}
+            onDelete={() => leaving(detailTask, handleDelete)}
+          />
         </div>
       )}
 
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
 
-      {/* Undo Delete Toast */}
-      {undoTask && (
-        <div className="bottom-toast" style={{ position: "fixed", bottom: "calc(76px + env(safe-area-inset-bottom, 0px))", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "20px", padding: "10px 16px", display: "flex", alignItems: "center", gap: "12px", boxShadow: "0 4px 20px rgba(0,0,0,0.35)", zIndex: 200, fontSize: "12.5px", whiteSpace: "nowrap" }}>
-          <span style={{ color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis" }}>
-            "{undoTask.title.length > 28 ? undoTask.title.substring(0, 28) + "..." : undoTask.title}" deleted
-          </span>
-          <button onClick={handleUndoDelete}
-            style={{ background: "var(--accent)", color: "var(--btn-text, #fff)", border: "none", borderRadius: "12px", padding: "5px 14px", fontSize: "12px", fontWeight: "700", cursor: "pointer", flexShrink: 0 }}>
-            Undo
-          </button>
-        </div>
-      )}
+      <UndoAnnouncer message={undoText} />
+      {undo && <UndoToast key={undo.at} message={undoText} onUndo={handleUndo} onClose={() => setUndo(null)} />}
     </div>
   );
 }

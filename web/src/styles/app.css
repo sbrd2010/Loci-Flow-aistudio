@@ -903,47 +903,6 @@ textarea.text-input {
   font-weight: 600;
 }
 
-/* Floating Action Button (Add Task Dialog Launcher) */
-.fab {
-  position: fixed;
-  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
-  right: calc(50% - 220px);
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  box-shadow: var(--shadow-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 90;
-  transition: var(--transition);
-}
-
-@media (max-width: 480px) {
-  .fab {
-    right: 20px;
-  }
-}
-@media (min-width: 720px) {
-  .fab {
-    right: calc(50% - 340px);
-  }
-}
-@media (min-width: 1024px) {
-  .fab { right: max(48px, calc(50% - 600px)); }
-}
-
-.fab:hover {
-  background: var(--accent-dark);
-  box-shadow: var(--shadow-lg);
-  filter: brightness(1.08);
-}
-
 .fab-secondary {
   position: fixed;
   bottom: calc(88px + env(safe-area-inset-bottom, 0px) + 66px);
@@ -978,30 +937,6 @@ textarea.text-input {
   .fab-secondary { right: max(48px, calc(50% - 600px)); }
 }
 
-/* FAB speed-dial option pills */
-.fab-option {
-  position: fixed;
-  right: calc(50% - 220px);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px 10px 14px;
-  border-radius: 50px;
-  background: var(--bg-card);
-  border: 1.5px solid var(--border);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.18);
-  cursor: pointer;
-  z-index: 90;
-  transition: opacity 0.18s ease, transform 0.18s ease;
-  color: var(--text-primary);
-}
-.fab-option:hover {
-  background: var(--bg-secondary);
-  box-shadow: 0 6px 24px rgba(0,0,0,0.24);
-}
-@media (max-width: 480px) { .fab-option { right: 20px; } }
-@media (min-width: 720px) { .fab-option { right: calc(50% - 340px); } }
-@media (min-width: 1024px) { .fab-option { right: max(48px, calc(50% - 600px)); } }
 
 /* Shared by the Undo Delete toast (Today/Roadmap) and the App-level sync-warning
    pill. Centered by default, but on phone-width screens (same breakpoint as
