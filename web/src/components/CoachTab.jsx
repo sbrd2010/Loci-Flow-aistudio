@@ -33,6 +33,7 @@ import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import "../styles/coachUI.css";
 import { isOnToday } from "../utils/deferral";
+import { focusBlockSeconds } from "../utils/focusSession";
 
 // Visible/stored chat history cap (was 20) — the raw window actually sent to
 // the LLM stays at historyLimitForMode's 3/10, unaffected by this; the
@@ -983,8 +984,9 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           if (startFocus) {
             const isSwitchingTask = focusTimerRef.current.activeTask?.uuid !== startFocus.task.uuid;
             if (!focusTimerRef.current.isTimerRunning || isSwitchingTask) {
+              // A duration the Coach names, else one block (53e) — not the estimate.
               const mins = Number(startFocus.durationMinutes) > 0 ? Number(startFocus.durationMinutes)
-                : Number(startFocus.task.timeEstimateMinutes) > 0 ? Number(startFocus.task.timeEstimateMinutes) : 25;
+                : focusBlockSeconds(config) / 60;
               // Also mint a session when the target is already pinned but no
               // session is currently open (e.g. it was only ever pinned via
               // SET_NOW_FOCUS, or a prior session already ended) — not just

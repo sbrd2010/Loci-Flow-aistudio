@@ -25,6 +25,35 @@ export function getTimerState(secondsLeft, maxSeconds) {
   return "normal";
 }
 
+// A focus session runs in blocks, not the whole estimate (53e, 59j): Start
+// runs one block of the Focus timer setting, 25 minutes unless set.
+export const DEFAULT_BLOCK_MINUTES = 25;
+export function focusBlockSeconds(config = {}) {
+  const mins = Number(config.pomodoroDurationMinutes);
+  return (mins > 0 ? mins : DEFAULT_BLOCK_MINUTES) * 60;
+}
+
+// 59j: a session is one sitting on one task. A pause of 15 minutes or less
+// keeps it; a longer one closes it, as does the Loci day ending.
+export const PAUSE_EXPIRY_MS = 15 * 60 * 1000;
+export const EXPIRY_REASONS = new Set(["paused_too_long", "day_ended"]);
+
+// Why the open session has to close now, or null. `pausedAt` is when it last
+// stopped counting (null while running); `startDay` and `today` are Loci days.
+export function focusExpiryReason({ sessionOpen, pausedAt, startDay, today, now = Date.now() }) {
+  if (!sessionOpen) return null;
+  if (startDay && today && startDay !== today) return "day_ended";
+  if (Number.isFinite(pausedAt) && now - pausedAt > PAUSE_EXPIRY_MS) return "paused_too_long";
+  return null;
+}
+
+// The session's outcome as 59j names it: done, ended (by the user, or the
+// block's provisional entry), or expired.
+export function focusOutcome(type, focusEndReason) {
+  if (type === "focus_completed") return "done";
+  return EXPIRY_REASONS.has(focusEndReason) ? "expired" : "ended";
+}
+
 // Build the timer state for restarting the timer on the same task ("Keep going").
 export function buildExtendedTimerState(minutes) {
   const secs = Math.max(0, Math.round(minutes)) * 60;
@@ -35,8 +64,7 @@ export function buildExtendedTimerState(minutes) {
 // (login, logout, or switching accounts on the same browser) — guarantees one
 // account's timer/session/completion-prompt state can never leak into another's.
 export function buildResetFocusState(config = {}) {
-  const rawMins = Number(config.pomodoroDurationMinutes);
-  const secs = (rawMins > 0 ? rawMins : 25) * 60;
+  const secs = focusBlockSeconds(config);
   return {
     isTimerRunning: false,
     timerSecondsLeft: secs,

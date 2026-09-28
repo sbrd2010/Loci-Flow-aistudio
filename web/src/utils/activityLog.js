@@ -1,6 +1,7 @@
 import { safeUUID } from "./uuid";
 import { getLociDayStr, getFocusWindows } from "./focusWindows";
 import { isOnToday } from "./deferral";
+import { focusOutcome } from "./focusSession";
 
 // Storage lives at activityLogs/${uid}/... — a separate root the normal
 // sync/${uid} listener never subscribes to, so ordinary app startup never
@@ -141,12 +142,21 @@ export function buildFocusStartedEvent(task, focusSessionId, { source = "user", 
 // not at all; the caller passes what the hold recorded and never recomputes
 // either. Absent (the ordinary case: no hold happened), both are derived as
 // before. `now` still moves: utcTimestamp/focusEndedAt record the real end.
+//
+// This event is the session record of 59j: one per sitting, amended in place.
+// focusInitialPlannedSeconds is the block chosen at Start (plannedBlockMin),
+// focusBlocks counts the blocks run and focusExtensions the +5s, and
+// focusOutcome is done / ended / expired. The two counts are written only
+// when the caller has them, so an event built without a session stays sparse.
 export function buildFocusTerminalEvent(type, task, focusSessionId, {
   focusStartedAt, focusInitialPlannedSeconds, focusFinalPlannedSeconds,
   focusElapsedSeconds, focusEndReason, now = Date.now(), windows,
-  eventId, lociDateString,
+  eventId, lociDateString, focusBlocks, focusExtensions,
 } = {}) {
   const nowMs = toEpochMs(now);
+  const counts = {};
+  if (Number.isFinite(focusBlocks)) counts.focusBlocks = focusBlocks;
+  if (Number.isFinite(focusExtensions)) counts.focusExtensions = focusExtensions;
   return {
     eventId: eventId || safeUUID(),
     schemaVersion: 1,
@@ -161,6 +171,8 @@ export function buildFocusTerminalEvent(type, task, focusSessionId, {
     focusFinalPlannedSeconds,
     focusElapsedSeconds,
     focusEndReason,
+    focusOutcome: focusOutcome(type, focusEndReason),
+    ...counts,
     taskSnapshot: taskSnapshotFrom(task),
   };
 }

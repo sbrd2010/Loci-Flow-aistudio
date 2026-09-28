@@ -31,7 +31,7 @@ import FloatingFocusTimer from "./components/FloatingFocusTimer";
 import ConfirmDialog from "./components/ConfirmDialog";
 import { useFocusTimer } from "./hooks/useFocusTimer";
 import { useTodayStr } from "./hooks/useTodayStr";
-import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload, extendMinutesForSession } from "./utils/focusSession";
+import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload, extendMinutesForSession, focusExpiryReason } from "./utils/focusSession";
 import { celebrate } from "./utils/celebrations";
 import { submitOnEnter } from "./utils/formEvents";
 import { migrateStoredTheme, resolveTheme, watchColorScheme } from "./utils/theme";
@@ -851,7 +851,11 @@ export default function App() {
   const [lociDayTick, setLociDayTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setLociDayTick(n => n + 1), 60000);
-    return () => clearInterval(id);
+    // A background tab's interval is throttled, so coming back ticks at once:
+    // a session that expired meanwhile closes before it can be resumed.
+    const onVisible = () => { if (document.visibilityState === "visible") setLociDayTick(n => n + 1); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
   }, []);
   const commitmentDayStr = useMemo(
     () => getLociDayStr(new Date(), getFocusWindows(payload?.config || {})),
@@ -939,6 +943,32 @@ export default function App() {
   // commitments complete right now" — see deriveCommitmentDeadlineMove. It
   // returns undefined when it has no opinion, and the write is guarded on a
   // real change so this cannot loop against its own config update.
+  // 59j: a session closes on its own after a pause of more than 15 minutes, or
+  // when the Loci day it began in ends. It is recorded as expired, ending when
+  // focus last stopped, on the day it began — or amends the entry its block
+  // already banked, which carries its own day.
+  useEffect(() => {
+    const session = focusTimer.peekFocusSession("expired");
+    if (!session?.task) return;
+    const windows = getFocusWindows(payload?.config || {});
+    const now = Date.now();
+    const startDay = getLociDayStr(new Date(session.focusStartedAt), windows);
+    const reason = focusExpiryReason({
+      sessionOpen: true, pausedAt: session.focusPausedAt, startDay, today: commitmentDayStr, now,
+    });
+    if (!reason) return;
+    const ended = focusTimer.endFocusSession(reason);
+    focusTimer.setIsTimerRunning(false);
+    focusTimer.setIsFocusMode(false);
+    focusTimer.setFocusSessionActive(false);
+    focusTimer.dismissSessionComplete();
+    if (!ended?.task) return;
+    const event = buildFocusTerminalEvent("focus_abandoned", ended.task, ended.focusSessionId, {
+      lociDateString: startDay, ...ended, windows, now: ended.focusPausedAt ?? now,
+    });
+    writeActivityEvents(eventPatch(activityUid, event));
+  }, [lociDayTick, commitmentDayStr]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const deadlineMoveState = deriveCommitmentDeadlineMove(payload?.config || {}, payload?.tasks || [], commitmentDayStr);
   useEffect(() => {
     if (!payload?.config || syncUnconfirmed || deadlineMoveState === undefined) return;

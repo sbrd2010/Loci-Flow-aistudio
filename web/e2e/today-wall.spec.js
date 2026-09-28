@@ -401,9 +401,12 @@ test("mobile reliability: an estimate can still be chosen for a wall task", asyn
   await page.getByLabel("Minutes").selectOption("45");
   await page.getByTestId("add-task-submit").click();
 
-  // It sticks: the wall's start control now offers the length the user chose,
-  // not the 25 it falls back to when there is no estimate.
-  await expect(page.locator(".wall-primary")).toContainText("45:00", { timeout: 8_000 });
+  // It sticks: the task's sheet shows the length the user chose. (The start
+  // control runs one block, not the estimate — 53e.)
+  await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 8_000 });
+  await page.locator(".wall-title").click();
+  await expect(page.getByTestId("task-detail").getByRole("button", { name: /^Estimate/ }).locator(".detail-value")).toHaveText("45m");
+  await expect(page.locator(".wall-primary")).toContainText("25:00");
 });
 
 // 37l / 41a: laptop keys on the wall — Space starts focus, D marks done, S

@@ -196,6 +196,24 @@ describe("buildFocusStartedEvent / buildFocusTerminalEvent", () => {
     expect(terminal.type).toBe("focus_abandoned");
     expect(terminal.focusEndReason).toBe("user_abandoned");
   });
+
+  // 59j: the closing event is the session record.
+  it("records the session's outcome, blocks and +5s; the counts only when given", () => {
+    const opts = {
+      focusStartedAt: dt(2026, 7, 10, 10).getTime(), focusInitialPlannedSeconds: 1500,
+      focusFinalPlannedSeconds: 3300, focusElapsedSeconds: 3000, now: dt(2026, 7, 10, 11), windows,
+    };
+    const done = buildFocusTerminalEvent("focus_completed", task, "s", { ...opts, focusEndReason: "completed_task", focusBlocks: 2, focusExtensions: 1 });
+    expect(done).toMatchObject({ focusOutcome: "done", focusBlocks: 2, focusExtensions: 1 });
+    const expired = buildFocusTerminalEvent("focus_abandoned", task, "s", { ...opts, focusEndReason: "paused_too_long", focusBlocks: 1, focusExtensions: 0 });
+    expect(expired).toMatchObject({ focusOutcome: "expired", focusBlocks: 1, focusExtensions: 0 });
+    const bare = buildFocusTerminalEvent("focus_abandoned", task, "s", { ...opts, focusEndReason: "user_abandoned" });
+    expect(bare.focusOutcome).toBe("ended");
+    expect("focusBlocks" in bare).toBe(false);
+    expect("focusExtensions" in bare).toBe(false);
+    // Nothing undefined reaches RTDB.
+    expect(Object.values(done).includes(undefined)).toBe(false);
+  });
 });
 
 describe("buildTodaySnapshot", () => {

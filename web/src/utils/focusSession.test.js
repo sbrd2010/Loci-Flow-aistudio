@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   shouldShowFloatingTimer, buildExtendedTimerState, shouldStopFocusOnComplete,
   shouldTriggerSessionComplete, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload,
-  buildResetFocusState, getTimerState,
+  buildResetFocusState, getTimerState, focusBlockSeconds, focusExpiryReason, focusOutcome, PAUSE_EXPIRY_MS,
 } from "./focusSession";
 
 describe("shouldShowFloatingTimer", () => {
@@ -234,5 +234,41 @@ describe("shouldShowFocusCompletionPrompt — not over the Focus session", () =>
   it("still needs a pending bell and a task, focus mode or not", () => {
     expect(shouldShowFocusCompletionPrompt({ sessionCompletePending: false, hasActiveTask: true })).toBe(false);
     expect(shouldShowFocusCompletionPrompt({ sessionCompletePending: true, hasActiveTask: false })).toBe(false);
+  });
+});
+
+describe("focusBlockSeconds (53e)", () => {
+  it("is one block of the Focus timer setting, 25 minutes unless set", () => {
+    expect(focusBlockSeconds({})).toBe(25 * 60);
+    expect(focusBlockSeconds({ pomodoroDurationMinutes: 50 })).toBe(50 * 60);
+    expect(focusBlockSeconds({ pomodoroDurationMinutes: 0 })).toBe(25 * 60);
+    expect(focusBlockSeconds()).toBe(25 * 60);
+  });
+});
+
+describe("focusExpiryReason (59j)", () => {
+  const base = { sessionOpen: true, pausedAt: null, startDay: "2024-06-15", today: "2024-06-15", now: 10_000_000 };
+  it("keeps a running session, and a pause of 15 minutes or less", () => {
+    expect(focusExpiryReason(base)).toBeNull();
+    expect(focusExpiryReason({ ...base, pausedAt: base.now - PAUSE_EXPIRY_MS })).toBeNull();
+  });
+  it("closes a session paused for more than 15 minutes", () => {
+    expect(focusExpiryReason({ ...base, pausedAt: base.now - PAUSE_EXPIRY_MS - 1 })).toBe("paused_too_long");
+  });
+  it("closes a session once its Loci day has ended, running or not", () => {
+    expect(focusExpiryReason({ ...base, today: "2024-06-16" })).toBe("day_ended");
+  });
+  it("has nothing to close without an open session", () => {
+    expect(focusExpiryReason({ ...base, sessionOpen: false, today: "2024-06-16" })).toBeNull();
+  });
+});
+
+describe("focusOutcome (59j)", () => {
+  it("is done, ended or expired", () => {
+    expect(focusOutcome("focus_completed", "completed_task")).toBe("done");
+    expect(focusOutcome("focus_abandoned", "user_abandoned")).toBe("ended");
+    expect(focusOutcome("focus_abandoned", "timer_elapsed")).toBe("ended");
+    expect(focusOutcome("focus_abandoned", "paused_too_long")).toBe("expired");
+    expect(focusOutcome("focus_abandoned", "day_ended")).toBe("expired");
   });
 });
