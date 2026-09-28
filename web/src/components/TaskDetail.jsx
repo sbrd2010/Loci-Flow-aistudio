@@ -115,10 +115,13 @@ export default function TaskDetail({
     if (text === newStep) setNewStep("");
   };
   const toggleStep = id => setSteps(steps.map(st => (st.id === id ? { ...st, done: !st.done } : st)));
+  // A step left empty is removed, with Undo — however it was emptied — so
+  // the sheet never shows a blank step while the old text stays saved.
   const editStep = (id, text) => {
     const t = text.trim();
     const cur = steps.find(st => st.id === id);
-    if (!cur || !t || t === cur.text) return;
+    if (!cur || t === cur.text) return;
+    if (!t) { removeStep(id); return; }
     setSteps(steps.map(st => (st.id === id ? { ...st, text: t.slice(0, 300) } : st)));
   };
   const removeStep = (id) => {
@@ -141,8 +144,9 @@ export default function TaskDetail({
   const onStepKeyDown = (e, st, i) => {
     if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); focusStepInput(i + 1); return; }
     if (e.key === "Backspace" && e.currentTarget.value === "") {
+      // Leaving the empty step removes it (editStep); focus goes back one.
       e.preventDefault();
-      removeStep(st.id);
+      e.currentTarget.blur();
       focusStepInput(Math.max(0, i - 1));
     }
   };

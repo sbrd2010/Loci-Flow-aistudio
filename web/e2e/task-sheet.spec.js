@@ -213,3 +213,22 @@ test("suggestions that arrive after the drawer moved to another task are dropped
   await expect(sheet(page).locator(".detail-suggested")).toHaveCount(0);
   await expect(sheet(page).getByText("Meant for the first task")).toHaveCount(0);
 });
+
+// Codex review of #418: a step emptied some other way (select-all + Delete,
+// Cut) and then left is removed too, with Undo — never left blank on screen
+// while its old text stays saved.
+test("a step emptied and then left is removed, with Undo", async ({ page }) => {
+  await enterDemo(page);
+  await openFromDetails(page);
+  const before = await stepValues(page);
+  const step = sheet(page).getByLabel("Step 2", { exact: true });
+  await step.fill("");
+  await sheet(page).getByLabel("Add a step").focus();
+  await expect.poll(() => stepValues(page)).toEqual(before.filter((_, j) => j !== 1));
+  await expect(page.locator(".undo-toast")).toContainText(`Step removed: ${before[1]}`);
+  await sheet(page).getByRole("button", { name: "Close", exact: true }).click();
+  await openFromDetails(page);
+  await expect.poll(() => stepValues(page)).toEqual(before.filter((_, j) => j !== 1));
+  await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
+  await expect.poll(() => stepValues(page)).toEqual(before);
+});
