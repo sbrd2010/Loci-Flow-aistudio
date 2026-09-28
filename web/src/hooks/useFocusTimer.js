@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotifications";
-import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete } from "../utils/focusSession";
+import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete, focusBlockSeconds, focusExpiryReason } from "../utils/focusSession";
+import { getFocusWindows, getLociDayStr, lociDayEndsAt } from "../utils/focusWindows";
 import { safeUUID } from "../utils/uuid";
 
 // Lifts the Focus timer state to the App level so it survives tab switches
@@ -75,10 +76,25 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // instead of appending a second one. Lives and dies with focusSessionIdRef
   // — every site that clears one clears the other.
   const focusLedgerEntryRef = useRef(null);
+  // 59j's counts for the open session: blocks run (the first, then each new
+  // block in the same sitting) and +5s taken. And when it last stopped
+  // counting — null while the timer runs — which is what a pause of more than
+  // 15 minutes is measured from. All three live and die with focusSessionIdRef.
+  const focusBlocksRef = useRef(0);
+  const focusExtensionsRef = useRef(0);
+  const focusPausedAtRef = useRef(null);
+  // The Loci day the open session began in, and when that day ends — fixed at
+  // Start, so editing focus windows mid-session cannot move its expiry or the
+  // day it is recorded on (Codex review of #419).
+  const focusStartDayRef = useRef(null);
+  const focusDayEndsAtRef = useRef(null);
+  // Bumped when a pause is found to have run out, so App's expiry check runs
+  // now rather than on its next minute tick.
+  const [expiryCheck, setExpiryCheck] = useState(0);
   const [focusSessionId, setFocusSessionId] = useState(null);
   // Lets the activeTask-sync effect tell "switched to a different task" apart
-  // from "same task, duration edited mid-session" (the two need different responses).
-  const prevActiveTaskRef = useRef({ uuid: null, timeEstimateMinutes: null });
+  // from a re-run for the same task (only the first starts a fresh block).
+  const prevActiveTaskRef = useRef({ uuid: null });
   // Set by startFocusSession when a caller supplies an explicit plannedSeconds
   // override (Coach's one-off duration) — tells the activeTask-sync effect to
   // skip its own task-estimate-derived reset the very next time it would
@@ -89,6 +105,24 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   const skipNextDurationSyncRef = useRef(false);
 
   const activeTask = tasks.find((t) => t.isNowFocus && !t.isDeleted && !t.isCompleted) || null;
+
+  // A session is over (59j) the moment a pause passes 15 minutes or the Loci
+  // day it began in ends — not when App's check next notices. So the session
+  // itself answers: every read of it reports the expiry (below), and nothing
+  // may resume or change it meanwhile — a +5 would log an extension, a reset
+  // would wipe its work. Codex review of #419.
+  const expiryReasonNow = () => {
+    if (!focusSessionIdRef.current) return null;
+    return focusExpiryReason({
+      sessionOpen: true, pausedAt: focusPausedAtRef.current, dayEndsAt: focusDayEndsAtRef.current, now: Date.now(),
+    });
+  };
+  // True (and App asked to close the session now) when it has expired.
+  const pauseRanOut = () => {
+    if (!expiryReasonNow()) return false;
+    setExpiryCheck((n) => n + 1);
+    return true;
+  };
 
   const closePiP = () => {
     try {
@@ -255,6 +289,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       resetBtn.id = "pip-reset";
       resetBtn.textContent = "↺";
       resetBtn.addEventListener("click", () => {
+        if (pauseRanOut()) return;
         setIsTimerRunning(false);
         setTimerSecondsLeft(timerMaxSecondsRef.current);
       });
@@ -321,6 +356,11 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusSessionAccumulatedElapsedRef.current = 0;
     focusSessionAccumulatedPlannedRef.current = 0;
     focusLedgerEntryRef.current = null;
+    focusBlocksRef.current = 0;
+    focusExtensionsRef.current = 0;
+    focusPausedAtRef.current = null;
+    focusStartDayRef.current = null;
+    focusDayEndsAtRef.current = null;
     setFocusSessionId(null);
 
     closePiP(); // Close pop-out on account switch
@@ -348,7 +388,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     // Both conditions are required: a hold with no open session has nothing to
     // protect, and an open session with no hold still syncs as it always did.
     if (sessionCompletePendingRef.current && focusSessionIdRef.current) {
-      prevActiveTaskRef.current = { uuid: activeTask?.uuid ?? null, timeEstimateMinutes: activeTask?.timeEstimateMinutes ?? null };
+      prevActiveTaskRef.current = { uuid: activeTask?.uuid ?? null };
       return;
     }
     if (skipNextDurationSyncRef.current) {
@@ -357,44 +397,28 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       // alone for this one pass instead of re-deriving them from the task's own
       // estimate, or the override would be overwritten the instant `tasks` syncs.
       skipNextDurationSyncRef.current = false;
-      prevActiveTaskRef.current = { uuid: activeTask?.uuid ?? null, timeEstimateMinutes: activeTask?.timeEstimateMinutes ?? null };
+      prevActiveTaskRef.current = { uuid: activeTask?.uuid ?? null };
       return;
     }
-    if (activeTask) {
-      const rawMins = Number(activeTask.timeEstimateMinutes);
-      const taskSecs = (rawMins > 0 ? rawMins : 25) * 60;
-      setTimerMaxSeconds(taskSecs);
-      const sameTask = prev.uuid === activeTask.uuid;
-      if (!isTimerRunning || !sameTask) {
-        // Not running yet, or the active task itself just changed (e.g. "Start
-        // Focus" pinned a different task while a session was already running) —
-        // start the countdown from this task's own duration, not whatever time
-        // was left on the previous task.
-        setTimerSecondsLeft(taskSecs);
-        if (isTimerRunning) deadlineRef.current = Date.now() + taskSecs * 1000;
-      } else if (prev.timeEstimateMinutes !== activeTask.timeEstimateMinutes) {
-        // Same task whose Focus timer is already running had its duration edited
-        // elsewhere (e.g. DayMap) — preserve elapsed time instead of resetting it,
-        // and re-anchor the wall-clock deadline the running interval reads from.
-        const elapsed = timerMaxSeconds - timerSecondsLeft;
-        const newSecondsLeft = Math.max(0, taskSecs - elapsed);
-        setTimerSecondsLeft(newSecondsLeft);
-        deadlineRef.current = Date.now() + newSecondsLeft * 1000;
-      }
-    } else {
-      const rawMins = Number(config.pomodoroDurationMinutes);
-      const defaultSecs = (rawMins > 0 ? rawMins : 25) * 60;
-      setTimerMaxSeconds(defaultSecs);
-      if (!isTimerRunning) setTimerSecondsLeft(defaultSecs);
+    // The timer runs one block (53e, 59j), so the task's estimate no longer
+    // sets it: a new task, or no open session, starts a fresh block of the
+    // Focus timer setting. An open session on the same task is left alone —
+    // resetting it while paused would zero the time already worked.
+    const blockSecs = focusBlockSeconds(config);
+    const sameTask = prev.uuid === (activeTask?.uuid ?? null);
+    if (!sameTask || !focusSessionIdRef.current) {
+      setTimerMaxSeconds(blockSecs);
+      setTimerSecondsLeft(blockSecs);
+      if (isTimerRunning) deadlineRef.current = Date.now() + blockSecs * 1000;
     }
-    prevActiveTaskRef.current = { uuid: activeTask?.uuid ?? null, timeEstimateMinutes: activeTask?.timeEstimateMinutes ?? null };
-  }, [activeTask?.uuid, activeTask?.timeEstimateMinutes, config.pomodoroDurationMinutes]); // eslint-disable-line react-hooks/exhaustive-deps
+    prevActiveTaskRef.current = { uuid: activeTask?.uuid ?? null };
+  }, [activeTask?.uuid, config.pomodoroDurationMinutes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isTimerRunning) {
       // Anchor to wall-clock time so background tabs / GC pauses don't cause drift.
-      // Reads/writes go through deadlineRef.current (not a local const) so an
-      // external duration edit mid-session (see the activeTask-sync effect above)
+      // Reads/writes go through deadlineRef.current (not a local const) so a
+      // task switch mid-session (see the activeTask-sync effect above) or a +5
       // can re-anchor the deadline this running interval is already using.
       deadlineRef.current = Date.now() + timerSecondsLeft * 1000;
       timerIntervalRef.current = setInterval(() => {
@@ -421,6 +445,20 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     }
     return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
   }, [isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When the open session stopped counting (a pause, or its block ending), so
+  // a pause is measured from when focus stopped; running again clears it.
+  // Resuming after the pause has already run out does not: that sitting is
+  // over, so the timer stops again and the stop stays on record for App's
+  // expiry check, which closes the session (Codex review of #419).
+  useEffect(() => {
+    if (isTimerRunning) {
+      if (pauseRanOut()) { setIsTimerRunning(false); return; }
+      focusPausedAtRef.current = null;
+    } else if (focusSessionIdRef.current && focusPausedAtRef.current == null) {
+      focusPausedAtRef.current = Date.now();
+    }
+  }, [isTimerRunning, focusSessionId]);
 
   // Detect the timer reaching 0:00 while running and surface the global
   // "session complete" prompt — lives here (App level, always mounted) so it
@@ -490,16 +528,25 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // (used by the "Finish task" path, which ends the session instead).
   const dismissSessionComplete = () => setSessionCompletePending(false);
 
+  // A new block in the same session: bank the one it replaces. It counts as a
+  // block of its own (59j) only if it held any focus — replacing a block
+  // before it ran (a length picked on the way in) is still the first block.
+  const bankBlock = () => {
+    if (!focusSessionIdRef.current) return;
+    const elapsed = Math.max(0, timerMaxSeconds - timerSecondsLeft);
+    focusSessionAccumulatedElapsedRef.current += elapsed;
+    focusSessionAccumulatedPlannedRef.current += timerMaxSeconds;
+    if (elapsed > 0) focusBlocksRef.current += 1;
+  };
+
   // Restart the timer for the same task with a fresh duration ("Keep going" extension)
   const extendTimer = (minutes) => {
+    if (pauseRanOut()) return;
     // Accumulate the block that's ending before resetting timerMaxSeconds/
     // timerSecondsLeft for the new one — the session (focusSessionId) stays
     // the same across "Keep Going", so without this the eventual terminal
     // event would only see the final block's numbers.
-    if (focusSessionIdRef.current) {
-      focusSessionAccumulatedElapsedRef.current += Math.max(0, timerMaxSeconds - timerSecondsLeft);
-      focusSessionAccumulatedPlannedRef.current += timerMaxSeconds;
-    }
+    bankBlock();
     const next = buildExtendedTimerState(minutes);
     setTimerMaxSeconds(next.timerMaxSeconds);
     setTimerSecondsLeft(next.timerSecondsLeft);
@@ -515,10 +562,8 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // later report an elapsed time near 0, since endFocusSession only ever
   // sees the current (post-change) block's timerMaxSeconds/timerSecondsLeft.
   const changeFocusDuration = (minutes) => {
-    if (focusSessionIdRef.current) {
-      focusSessionAccumulatedElapsedRef.current += Math.max(0, timerMaxSeconds - timerSecondsLeft);
-      focusSessionAccumulatedPlannedRef.current += timerMaxSeconds;
-    }
+    if (pauseRanOut()) return;
+    bankBlock();
     setIsTimerRunning(false);
     const secs = minutes * 60;
     setTimerSecondsLeft(secs);
@@ -534,7 +579,8 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // can't resurrect or skew a just-completed 0:00 countdown behind the
   // global "session complete" prompt.
   const addTimeToSession = (minutes) => {
-    if (sessionCompletePendingRef.current || showExtendPickerRef.current) return;
+    if (sessionCompletePendingRef.current || showExtendPickerRef.current || pauseRanOut()) return;
+    if (focusSessionIdRef.current) focusExtensionsRef.current += 1;
     const addSecs = Math.round(minutes) * 60;
     setTimerMaxSeconds((m) => m + addSecs);
     setTimerSecondsLeft((s) => s + addSecs);
@@ -575,16 +621,11 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
 
     const sessionId = safeUUID();
     const startedAt = Date.now();
-    // Derived directly from `task` (same fallback formula as the
-    // activeTask-sync effect below), NOT read from `timerMaxSeconds` state —
-    // a caller that just pinned `task` (savePayload) and immediately calls
-    // this in the same synchronous handler hasn't seen that pin reflected in
-    // `tasks`/`activeTask` yet (React state updates are batched), so
-    // `timerMaxSeconds` would still be whatever the PREVIOUS active task's
-    // duration was, silently recording the wrong planned duration.
-    const derivedPlannedSeconds = task
-      ? (Number(task.timeEstimateMinutes) > 0 ? Number(task.timeEstimateMinutes) : 25) * 60
-      : timerMaxSeconds;
+    // One block of the Focus timer setting, not the task's estimate (53e).
+    // Derived here (the same formula as the activeTask-sync effect), NOT read
+    // from `timerMaxSeconds` state, which can still hold the previous
+    // session's block while a new pin has not yet reached `tasks`.
+    const derivedPlannedSeconds = focusBlockSeconds(config);
     const initialPlannedSeconds = Number(plannedSeconds) > 0 ? Number(plannedSeconds) : derivedPlannedSeconds;
     focusSessionIdRef.current = sessionId;
     focusStartedAtRef.current = startedAt;
@@ -593,6 +634,12 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusSessionAccumulatedElapsedRef.current = 0;
     focusSessionAccumulatedPlannedRef.current = 0;
     focusLedgerEntryRef.current = null;
+    focusBlocksRef.current = 1;
+    focusExtensionsRef.current = 0;
+    focusPausedAtRef.current = null;
+    const windows = getFocusWindows(config);
+    focusStartDayRef.current = getLociDayStr(new Date(startedAt), windows);
+    focusDayEndsAtRef.current = lociDayEndsAt(focusStartDayRef.current, windows);
     setFocusSessionId(sessionId);
     if (enterFocusMode) setIsFocusMode(true);
     setIsTimerRunning(true);
@@ -655,10 +702,25 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // and the 00:00 hold MUST report the same figures for the same session —
   // the hold's entry is the one the stop then amends — so both read them
   // here rather than each assembling its own copy.
+  //
+  // An expired session reads as expired whoever ends it — Mark done or End
+  // session in the moment before App's check must not record it as done or
+  // ended — ending when focus last stopped, on the day it began (unless its
+  // block's entry already carries a day).
   const readOpenSession = (focusEndReason) => {
     const sessionId = focusSessionIdRef.current;
     if (!sessionId) return null;
     const entry = focusLedgerEntryRef.current;
+    const expired = expiryReasonNow();
+    // It ends when focus stopped — and no later than the end of its day, so
+    // time counted past the boundary (up to the check, or longer in a
+    // background tab) is not credited to it (Codex review of #419).
+    const stopAt = focusPausedAtRef.current ?? Date.now();
+    const startDay = focusStartDayRef.current;
+    const endAt = expired === "day_ended" ? Math.min(stopAt, focusDayEndsAtRef.current) : stopAt;
+    const elapsed = expired
+      ? Math.max(focusSessionAccumulatedElapsedRef.current, Math.round(currentElapsedSeconds() - (stopAt - endAt) / 1000))
+      : currentElapsedSeconds();
     return {
       focusSessionId: sessionId,
       focusStartedAt: focusStartedAtRef.current,
@@ -666,13 +728,19 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       // Sum of every earlier "Keep Going" block's numbers plus the current
       // (final) block's — see extendTimer's accumulation above.
       focusFinalPlannedSeconds: focusSessionAccumulatedPlannedRef.current + timerMaxSeconds,
-      focusElapsedSeconds: currentElapsedSeconds(),
-      focusEndReason,
+      focusElapsedSeconds: elapsed,
+      focusEndReason: expired || focusEndReason,
+      focusBlocks: focusBlocksRef.current,
+      focusExtensions: focusExtensionsRef.current,
+      // When it stopped counting, or null while running: an expired session
+      // ends here, not at the moment the expiry was noticed.
+      focusPausedAt: focusPausedAtRef.current,
       task: focusSessionTaskRef.current,
       // Spread only when the hold actually banked an entry: the keys have to
       // be ABSENT otherwise, not present-and-undefined, so a caller passing
       // this straight into buildFocusTerminalEvent mints a fresh id for an
       // ordinary session and pins the held one only when there is one.
+      ...(expired ? { focusEndedAt: endAt, lociDateString: startDay } : {}),
       ...(entry ? { eventId: entry.eventId, lociDateString: entry.lociDateString } : {}),
     };
   };
@@ -709,6 +777,11 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusSessionAccumulatedElapsedRef.current = 0;
     focusSessionAccumulatedPlannedRef.current = 0;
     focusLedgerEntryRef.current = null;
+    focusBlocksRef.current = 0;
+    focusExtensionsRef.current = 0;
+    focusPausedAtRef.current = null;
+    focusStartDayRef.current = null;
+    focusDayEndsAtRef.current = null;
     setFocusSessionId(null);
     return result;
   };
@@ -739,6 +812,9 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     // five minutes while the ledger holds thirty.
     focusElapsedSeconds: currentElapsedSeconds(),
     peekFocusSession, markFocusLedgerEntry,
+    // Changes when a pause is found to have run out; App's expiry check
+    // watches it.
+    expiryCheck,
     // Which task the currently open session (if any) actually belongs to —
     // NOT necessarily the same as `activeTask`, which reflects the current
     // isNowFocus pin and can point at a different task than the still-open

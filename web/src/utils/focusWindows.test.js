@@ -10,6 +10,7 @@ import {
   getCurrentFocusSlot,
   getFocusProgress,
   getLociDayStr,
+  lociDayEndsAt,
   hasConfiguredFocusWindow,
   getTotalFocusMinutes,
   isHourInWindow,
@@ -406,5 +407,27 @@ describe("isHourInWindow", () => {
     expect(fallback.overnight).toBe(true);
     for (const h of [7, 8, 9, 14, 20, 23]) expect(isHourInWindow(h, fallback)).toBe(true);
     for (const h of [0, 1, 3, 5, 6]) expect(isHourInWindow(h, fallback)).toBe(false);
+  });
+});
+
+describe("lociDayEndsAt", () => {
+  // It must agree with getLociDayStr on both sides of the boundary.
+  const agrees = (windows, day) => {
+    const end = lociDayEndsAt(day, windows);
+    expect(getLociDayStr(new Date(end - 1000), windows)).toBe(day);
+    expect(getLociDayStr(new Date(end), windows)).not.toBe(day);
+    return new Date(end);
+  };
+  it("is the next midnight for a day that ends by midnight", () => {
+    const end = agrees(getFocusWindows({}), "2024-06-15");
+    expect([end.getDate(), end.getHours(), end.getMinutes()]).toEqual([16, 0, 0]);
+  });
+  it("is the end of the latest overnight window after midnight", () => {
+    const end = agrees(getFocusWindows({ dayStartHour: 7, dayEndHour: 26 }), "2024-06-15");
+    expect([end.getDate(), end.getHours(), end.getMinutes()]).toEqual([16, 2, 0]);
+  });
+  it("crosses a month end", () => {
+    const end = agrees(getFocusWindows({}), "2024-09-30");
+    expect([end.getMonth(), end.getDate()]).toEqual([9, 1]);
   });
 });

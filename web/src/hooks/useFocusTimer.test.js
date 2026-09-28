@@ -123,61 +123,58 @@ describe("useFocusTimer", () => {
     document.title = "Loci";
   });
 
-  it("starts the countdown from the active task's own time estimate", () => {
+  // 53e / 59j: Start runs one block of the Focus timer setting, not the
+  // task's estimate.
+  it("starts the countdown from one block of the Focus timer setting, not the task's estimate", () => {
     const tasks = [{ uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 15 }];
-    const { result } = renderHook(useFocusTimer, [tasks, {}, "u1"]);
-    expect(result.current.timerMaxSeconds).toBe(15 * 60);
-    expect(result.current.timerSecondsLeft).toBe(15 * 60);
+    const { result } = renderHook(useFocusTimer, [tasks, { pomodoroDurationMinutes: 50 }, "u1"]);
+    expect(result.current.timerMaxSeconds).toBe(50 * 60);
+    expect(result.current.timerSecondsLeft).toBe(50 * 60);
+    const { result: unset } = renderHook(useFocusTimer, [tasks, {}, "u1"]);
+    expect(unset.current.timerMaxSeconds).toBe(25 * 60);
   });
 
-  it("resets the countdown to the new task's duration when switching focus tasks mid-session", () => {
-    // Reproduces the reported bug: a 25-min default session is already
-    // running (no estimate on the original task), then the user pins a
-    // different task — e.g. via DayMap's "Start Focus" — that has its own
-    // 15-minute estimate. The countdown must restart from that task's
-    // duration, not keep ticking down from the old task's session.
+  it("starts a fresh block when switching focus tasks mid-session", () => {
+    // A session is running on task A with time already elapsed, then the user
+    // pins a different task — e.g. via DayMap's "Start Focus". The countdown
+    // restarts from a fresh block, not from what was left on task A.
     const taskA = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: null };
     const { result, rerender } = renderHook(useFocusTimer, [[taskA], {}, "u1"]);
 
-    expect(result.current.timerMaxSeconds).toBe(25 * 60);
-
-    // Start the session for task A.
     result.current.setIsTimerRunning(true);
     rerender([[taskA], {}, "u1"]);
     expect(result.current.timerSecondsLeft).toBe(25 * 60);
-
-    // Let some real time elapse on task A's session before the switch —
-    // mirrors the actual bug report, where the prior session wasn't fresh.
     result.current.setTimerSecondsLeft(10 * 60);
 
-    // Switch the active task to a different one with a 15-minute estimate,
-    // while the timer is still marked running (mirrors DayMap's
-    // pin-then-auto-start flow).
     const taskB = { uuid: "b", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 15 };
     const taskAUnfocused = { ...taskA, isNowFocus: false };
     rerender([[taskAUnfocused, taskB], {}, "u1"]);
 
-    expect(result.current.timerMaxSeconds).toBe(15 * 60);
+    expect(result.current.timerMaxSeconds).toBe(25 * 60);
+    expect(result.current.timerSecondsLeft).toBe(25 * 60);
+  });
+
+  it("leaves the running block alone when the task's estimate is edited mid-session", () => {
+    const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 60 };
+    const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+    result.current.startFocusSession(task, { enterFocusMode: false });
+    rerender([[task], {}, "u1"]);
+    result.current.setTimerSecondsLeft(15 * 60);
+    rerender([[{ ...task, timeEstimateMinutes: 30 }], {}, "u1"]);
+    expect(result.current.timerMaxSeconds).toBe(25 * 60);
     expect(result.current.timerSecondsLeft).toBe(15 * 60);
   });
 
-  it("preserves elapsed time (does not reset) when the same task's duration is edited mid-session", () => {
-    const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 60 };
+  it("a Focus timer setting changed while a session is paused keeps the time worked", () => {
+    const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
     const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
-
-    result.current.setIsTimerRunning(true);
+    result.current.startFocusSession(task, { enterFocusMode: false });
     rerender([[task], {}, "u1"]);
-    expect(result.current.timerSecondsLeft).toBe(60 * 60);
-
-    // Simulate 10 minutes elapsed, then the same task's estimate is edited
-    // (e.g. from DayMap) down to 30 minutes.
-    result.current.setTimerSecondsLeft(50 * 60);
-    const editedTask = { ...task, timeEstimateMinutes: 30 };
-    rerender([[editedTask], {}, "u1"]);
-
-    // 10 minutes had elapsed out of the original 60; the new 30-minute
-    // estimate should leave 20 minutes, not reset to a full 30 or keep 50.
-    expect(result.current.timerSecondsLeft).toBe(20 * 60);
+    result.current.setTimerSecondsLeft(15 * 60);
+    result.current.setIsTimerRunning(false);
+    rerender([[task], { pomodoroDurationMinutes: 50 }, "u1"]);
+    expect(result.current.timerSecondsLeft).toBe(15 * 60);
+    expect(result.current.focusElapsedSeconds).toBe(10 * 60);
   });
 
   it("adds time to both the countdown and its max without resetting elapsed progress", () => {
@@ -487,13 +484,196 @@ describe("useFocusTimer", () => {
       rerender([[taskA, taskB], {}, "u1"]);
       expect(result.current.timerMaxSeconds).toBe(10 * 60);
 
-      // Now switch the pin to taskB (a genuinely new activeTask) — its own
-      // 15-minute estimate must apply, not be silently skipped by a dangling flag.
+      // Now switch the pin to taskB (a genuinely new activeTask) — its fresh
+      // block must apply, not be silently skipped by a dangling flag.
       const pinnedB = [{ ...taskA, isNowFocus: false }, { ...taskB, isNowFocus: true }];
       rerender([pinnedB, {}, "u1"]);
 
-      expect(result.current.timerMaxSeconds).toBe(15 * 60);
-      expect(result.current.timerSecondsLeft).toBe(15 * 60);
+      expect(result.current.timerMaxSeconds).toBe(25 * 60);
+      expect(result.current.timerSecondsLeft).toBe(25 * 60);
+    });
+
+    // 59j: one session = one sitting. It counts its blocks and its +5s, and
+    // knows when it last stopped counting.
+    it("counts a session's blocks and +5s; a block replaced before it ran is still the first", () => {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+      // A length picked on the way in, before any focus: still block 1.
+      result.current.changeFocusDuration(5);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.peekFocusSession("x")).toMatchObject({ focusBlocks: 1, focusExtensions: 0 });
+
+      result.current.setTimerSecondsLeft(2 * 60);
+      rerender([[task], {}, "u1"]);
+      result.current.addTimeToSession(5);
+      rerender([[task], {}, "u1"]);
+      result.current.extendTimer(25);
+      rerender([[task], {}, "u1"]);
+      const ended = result.current.endFocusSession("completed_task");
+      expect(ended).toMatchObject({ focusBlocks: 2, focusExtensions: 1 });
+      // The next session starts its own count.
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+      expect(result.current.peekFocusSession("x")).toMatchObject({ focusBlocks: 1, focusExtensions: 0 });
+    });
+
+    it("keeps when the open session stopped counting, until it runs again", () => {
+      vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+      expect(result.current.peekFocusSession("x").focusPausedAt).toBeNull();
+
+      Date.now.mockReturnValue(2_000_000);
+      result.current.setIsTimerRunning(false);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.peekFocusSession("x").focusPausedAt).toBe(2_000_000);
+
+      result.current.setIsTimerRunning(true);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.peekFocusSession("x").focusPausedAt).toBeNull();
+      Date.now.mockRestore();
+    });
+
+    // Codex review of #419: a Resume after the 15-minute limit, before App's
+    // minute check, must not carry the sitting on as if unbroken.
+    it("a Resume after the pause ran out stops again and keeps the pause on record", () => {
+      vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+      result.current.setIsTimerRunning(false);
+      rerender([[task], {}, "u1"]);
+
+      // Within 15 minutes: a Resume carries on.
+      Date.now.mockReturnValue(1_000_000 + 15 * 60_000);
+      result.current.setIsTimerRunning(true);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.isTimerRunning).toBe(true);
+      expect(result.current.peekFocusSession("x").focusPausedAt).toBeNull();
+
+      // Over 15 minutes: it does not.
+      Date.now.mockReturnValue(2_000_000);
+      result.current.setIsTimerRunning(false);
+      rerender([[task], {}, "u1"]);
+      Date.now.mockReturnValue(2_000_000 + 15 * 60_000 + 1);
+      result.current.setIsTimerRunning(true);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.isTimerRunning).toBe(false);
+      expect(result.current.peekFocusSession("x").focusPausedAt).toBe(2_000_000);
+      Date.now.mockRestore();
+    });
+
+    // Codex review of #419: nothing changes a session whose pause has run
+    // out; App is asked to close it at once instead.
+    it("refuses +5, a new block or a new length once the pause has run out, and asks for the check", () => {
+      vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+      result.current.setTimerSecondsLeft(20 * 60);
+      result.current.setIsTimerRunning(false);
+      rerender([[task], {}, "u1"]);
+      const check = result.current.expiryCheck;
+
+      Date.now.mockReturnValue(1_000_000 + 15 * 60_000 + 1);
+      result.current.addTimeToSession(5);
+      result.current.extendTimer(25);
+      result.current.changeFocusDuration(50);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.peekFocusSession("x")).toMatchObject({
+        focusExtensions: 0, focusBlocks: 1, focusElapsedSeconds: 5 * 60, focusFinalPlannedSeconds: 25 * 60,
+      });
+      expect(result.current.expiryCheck).toBeGreaterThan(check);
+      Date.now.mockRestore();
+    });
+
+    // Codex review of #419: whoever ends an expired session — Mark done, End
+    // session — it is recorded as expired, ending when focus stopped, on the
+    // day it began.
+    it("an expired session reads as expired whoever ends it, ending when focus stopped", () => {
+      const start = new Date("2024-06-15T10:00:00").getTime();
+      vi.spyOn(Date, "now").mockReturnValue(start);
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+      Date.now.mockReturnValue(start + 10 * 60_000);
+      result.current.setIsTimerRunning(false);
+      rerender([[task], {}, "u1"]);
+
+      Date.now.mockReturnValue(start + 26 * 60_000);
+      const ended = result.current.endFocusSession("completed_task");
+      expect(ended).toMatchObject({
+        focusEndReason: "paused_too_long", focusEndedAt: start + 10 * 60_000, lociDateString: "2024-06-15",
+      });
+      Date.now.mockRestore();
+    });
+
+    it("once the Loci day has ended, a running session refuses +5 and reads as ended with the day", () => {
+      const start = new Date("2024-06-15T10:00:00").getTime();
+      vi.spyOn(Date, "now").mockReturnValue(start);
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+      const check = result.current.expiryCheck;
+
+      Date.now.mockReturnValue(new Date("2024-06-16T10:00:00").getTime());
+      result.current.addTimeToSession(5);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.expiryCheck).toBeGreaterThan(check);
+      expect(result.current.peekFocusSession(null)).toMatchObject({
+        focusEndReason: "day_ended", focusExtensions: 0, lociDateString: "2024-06-15",
+      });
+      Date.now.mockRestore();
+    });
+
+    // Codex review of #419: a session still running when its day ended is
+    // capped at the boundary — end time and focused time both.
+    it("a session running past the end of its day ends at the boundary, with only the time before it", () => {
+      const start = new Date("2024-06-15T23:50:00").getTime();
+      vi.spyOn(Date, "now").mockReturnValue(start);
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], { pomodoroDurationMinutes: 90 }, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], { pomodoroDurationMinutes: 90 }, "u1"]);
+      // Back 40 minutes later: the countdown shows 40 minutes gone.
+      Date.now.mockReturnValue(start + 40 * 60_000);
+      result.current.setTimerSecondsLeft(50 * 60);
+      rerender([[task], { pomodoroDurationMinutes: 90 }, "u1"]);
+      const ended = result.current.endFocusSession("user_abandoned");
+      expect(ended).toMatchObject({
+        focusEndReason: "day_ended", lociDateString: "2024-06-15",
+        focusEndedAt: new Date("2024-06-16T00:00:00").getTime(), focusElapsedSeconds: 10 * 60,
+      });
+      Date.now.mockRestore();
+    });
+
+    // Codex review of #419: the session's day, and when it ends, are fixed at
+    // Start — editing focus windows mid-session does not move its expiry.
+    it("keeps the day it started in, and that day's end, when focus windows change mid-session", () => {
+      const start = new Date("2024-06-16T01:00:00").getTime(); // the 15th's day under a window to 02:00
+      vi.spyOn(Date, "now").mockReturnValue(start);
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const until2 = { dayStartHour: 7, dayEndHour: 26 };
+      const until4 = { dayStartHour: 7, dayEndHour: 28 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], until2, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], until2, "u1"]);
+      // The window is stretched to 04:00; it is now 02:30.
+      Date.now.mockReturnValue(new Date("2024-06-16T02:30:00").getTime());
+      rerender([[task], until4, "u1"]);
+      expect(result.current.peekFocusSession(null)).toMatchObject({
+        focusEndReason: "day_ended", lociDateString: "2024-06-15",
+        focusEndedAt: new Date("2024-06-16T02:00:00").getTime(),
+      });
+      Date.now.mockRestore();
     });
 
     it("endFocusSession returns null when no session was ever started", () => {

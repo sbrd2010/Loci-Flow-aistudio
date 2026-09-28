@@ -15,7 +15,7 @@ import { safeUUID } from "../utils/uuid";
 import { taskSteps, stepsPatch, applyStepsPatch } from "../utils/taskSteps";
 import { buildToggleCompletedTasks, byPriorityThenOrder } from "../utils/taskOps";
 import { buildParkTaskTasks } from "../utils/coachActions";
-import { shouldStopFocusOnComplete } from "../utils/focusSession";
+import { shouldStopFocusOnComplete, focusBlockSeconds } from "../utils/focusSession";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
@@ -1608,7 +1608,7 @@ export default function TodayTab({
         task={pinnedFocusTask}
         goal={wallGoal}
         anchors={config.anchorsOnToday === "off" ? [] : anchors.filter(a => a && typeof a.text === "string" && a.text.trim())}
-        focusMinutes={Number(pinnedFocusTask?.timeEstimateMinutes) > 0 ? Number(pinnedFocusTask.timeEstimateMinutes) : 25}
+        focusMinutes={focusBlockSeconds(config) / 60}
         peekOpen={peekOpen}
         onTogglePeek={() => (listMotionActive() ? toggleList(!peekOpen) : setPeekOpen(v => !v))}
         onAdd={onOpenAddTask}
