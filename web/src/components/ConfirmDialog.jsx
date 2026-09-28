@@ -7,7 +7,9 @@ export default function ConfirmDialog({ message, confirmLabel = "Confirm", cance
       zIndex: 9000, display: "flex", alignItems: "center",
       justifyContent: "center", padding: "24px"
     }}>
-      <div onClick={e => e.stopPropagation()} style={{
+      {/* A modal: role and aria-modal let every page's Esc (and assistive
+          tech) see that it is up. */}
+      <div role="dialog" aria-modal="true" aria-label={String(message).split("\n")[0]} onClick={e => e.stopPropagation()} style={{
         background: "var(--bg-card)", border: "1px solid var(--border)",
         borderRadius: "var(--radius)", padding: "24px",
         maxWidth: "320px", width: "100%",

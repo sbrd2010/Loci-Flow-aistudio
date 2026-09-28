@@ -280,3 +280,66 @@ test("a task on this front moved to tomorrow counts as TOMORROW, not ON TODAY", 
   await card(page, "Thesis").click();
   await expect(page.locator(".plan-fp-stats")).toHaveText(/^2 OPEN · 1 TOMORROW · 0 DONE/);
 });
+
+// Codex review of #414: the focus prompt that pops up over any screen is a
+// modal too, so Esc under it does not leave the front's page.
+test("laptop: Esc with the focus-complete prompt up does not leave the front's page", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
+  });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.clock.install({ time: new Date("2024-06-15T10:00:00") });
+  await page.goto("/");
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  // A focus session, left running in the background.
+  await page.locator(".today-wall .wall-primary").click();
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 5_000 });
+  await overlay.getByLabel("Leave focus").click();
+  await expect(overlay).toHaveCount(0);
+
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  await page.getByRole("tab", { name: "Fronts" }).click();
+  await page.locator(".plan-front").first().click();
+  await expect(back(page)).toBeVisible();
+
+  await page.clock.runFor(26 * 60_000);
+  const prompt = page.getByRole("dialog").filter({ hasText: "Focus block complete" });
+  await expect(prompt).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(back(page)).toBeVisible();
+});
+
+// Codex review of #414: with a window past midnight the Loci day moves on
+// at the window's end, not at 00:00; a task moved to tomorrow comes back
+// then, and the page says so without anything else changing.
+test("at the end of a window past midnight, tomorrow's task counts as ON TODAY again", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
+  });
+  await page.setViewportSize({ width: 375, height: 812 });
+  // The demo's window runs 07:00–02:00: at 01:50 it is still the 15th's day.
+  await page.clock.install({ time: new Date("2024-06-16T01:50:00") });
+  await page.goto("/");
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  const [title] = await frontWith(page, "Thesis", ["week"]);
+  await card(page, "Thesis").click();
+  await page.locator(".plan-front-tasks .plan-row", { hasText: title }).click();
+  await sheet(page).getByRole("button", { name: "Move to Today" }).click();
+
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Today", exact: true }).click();
+  await page.getByTestId("today-tasks-list").getByText(title, { exact: true }).click();
+  await sheet(page).getByRole("button", { name: /^Tomorrow/ }).click();
+  await nav.getByRole("button", { name: "Plan", exact: true }).click();
+  await page.getByRole("tab", { name: "Fronts" }).click();
+  await card(page, "Thesis").click();
+  await expect(page.locator(".plan-fp-stats")).toHaveText(/^1 OPEN · 1 TOMORROW · 0 DONE/);
+
+  // 02:05: the window has ended, the 16th has begun, and nothing else moved.
+  await page.clock.runFor(15 * 60_000);
+  await expect(page.locator(".plan-fp-stats")).toHaveText(/^1 OPEN · 1 ON TODAY · 0 DONE/);
+});

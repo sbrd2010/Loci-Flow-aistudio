@@ -1436,7 +1436,7 @@ export default function App() {
           className="focus-now-backdrop"
           onClick={() => focusTimer.extendTimer(extendMinutesForSession(focusTimer.timerMaxSeconds))}
         >
-          <div className="focus-now-sheet" onClick={e => e.stopPropagation()}>
+          <div className="focus-now-sheet" role="dialog" aria-modal="true" aria-label="Keep going" onClick={e => e.stopPropagation()}>
             <div className="focus-now-sheet-header">
               <span className="focus-now-sheet-title">Keep going on "{focusTimer.activeTask.title}"</span>
             </div>

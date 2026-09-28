@@ -17,7 +17,8 @@ import {
   LEGACY_DEADLINE_FRONT_ID,
 } from "../utils/fronts";
 import { isDeferred } from "../utils/deferral";
-import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
+import { getFocusWindows } from "../utils/focusWindows";
+import { useLociDayStr } from "../hooks/useTodayStr";
 import "../styles/plan.css";
 
 // Plan's Fronts (45i): one card per front — its name, GOAL on the goal
@@ -83,8 +84,8 @@ function FrontCard({ front, tasks, isGoal, onOpen }) {
 
 // A front's page (52f–g). The tasks come from Plan's own rows and sheet
 // (renderTasks), so a row here behaves as it does in Horizons.
-function FrontPage({ front, tasks, config, isGoal, now, onBack, onPark, onClose, onAdd, renderTasks }) {
-  const { open, onToday, tomorrow, done } = frontCounts(tasks, front.id, getLociDayStr(now, getFocusWindows(config)));
+function FrontPage({ front, tasks, lociDay, isGoal, now, onBack, onPark, onClose, onAdd, renderTasks }) {
+  const { open, onToday, tomorrow, done } = frontCounts(tasks, front.id, lociDay);
   const due = frontDueLine(front, now);
   // The Key Deadline front is projected from Settings, not stored: there is
   // nothing here to park or close.
@@ -186,7 +187,10 @@ export default function PlanTab({ payload = {}, saveConfigPatch, openFrontId = n
     return () => clearInterval(id);
   }, []);
 
-  const now = useMemo(() => new Date(), [tasks, config, dayKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The Loci day too: a window past midnight moves it on at the window's end,
+  // when the calendar date doesn't change — and tomorrow's tasks come back.
+  const lociDay = useLociDayStr(getFocusWindows(config));
+  const now = useMemo(() => new Date(), [tasks, config, dayKey, lociDay]); // eslint-disable-line react-hooks/exhaustive-deps
   const fronts = useMemo(() => sortFronts(frontsFromConfig(config), now), [config, now]);
   // The LIMIT applies to stored fronts. frontsFromConfig can return one more
   // than this (the legacy Key Deadline projection), which is not stored and so
@@ -280,7 +284,7 @@ export default function PlanTab({ payload = {}, saveConfigPatch, openFrontId = n
         <FrontPage
           front={openFront}
           tasks={tasks}
-          config={config}
+          lociDay={lociDay}
           isGoal={isGoal(openFront)}
           now={now}
           onBack={() => backToList(openFront.id)}
