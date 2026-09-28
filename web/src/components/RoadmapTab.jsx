@@ -309,11 +309,23 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
   const handleTogglePin = (task) => patchTask(task.uuid, { isHorizonPinned: !task.isHorizonPinned });
 
   const handlePark = (task) => {
-    const event = buildTaskMutationEvent("task_parked", task, { windows });
+    const now = Date.now();
+    const event = buildTaskMutationEvent("task_parked", task, { windows, now });
+    // Parking clears isNowFocus: a session running on this task (one started
+    // from Coach, say) ends here, recorded, as Done and Delete end theirs.
+    const endedFocusSession = task.isNowFocus && typeof focusTimer.endFocusSession === "function"
+      ? focusTimer.endFocusSession("user_abandoned")
+      : null;
     savePayloadAsync({ ...payloadRef.current, tasks: latestTasks().map(t => t.uuid === task.uuid ? { ...t, isParked: true, isNowFocus: false, lastUpdated: Date.now() } : t) })
-      .then(() => writeActivityEvents(eventPatch(uid, event)))
+      .then(() => {
+        const events = [event];
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+        }
+        writeActivityEvents(eventsPatch(uid, events));
+      })
       .catch(() => {});
-    setUndo({ kind: "park", task, at: Date.now() });
+    setUndo({ kind: "park", task, at: now });
   };
 
   const handleToggleStep = (task, stepId) => {
