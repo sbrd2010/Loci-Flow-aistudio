@@ -381,3 +381,44 @@
     box-shadow: 12px 0 30px rgba(15, 31, 22, 0.08);
   }
 }
+
+/* Wide (50b, 50k, 52): from 1600px the drawer replaces the Day map column
+   and takes its width, 360 to 480px, so it never covers the list. The column
+   starts at margin + 420 + 36 + 720 + 36; at 1600–1619 it is under 360px, and
+   the drawer keeps 360 by starting further left, still clear of the list. */
+@media (min-width: 1600px) {
+  .task-detail.is-drawer {
+    --wide-margin: max(48px, calc((100vw - 1760px) / 2));
+    left: min(calc(var(--wide-margin) + 1212px), calc(100vw - 360px));
+    right: auto;
+    width: clamp(360px, calc(100vw - var(--wide-margin) - 1212px), 480px);
+  }
+}
+/* Under 420px wide (1600–1679) the footer's buttons keep to one row and the
+   title wraps: the key hints give way, the keys themselves still work. */
+.task-detail.is-drawer { container-type: inline-size; }
+.detail-action { white-space: nowrap; }
+@container (max-width: 419px) {
+  .detail-keys,
+  .detail-action .detail-key { display: none; }
+  .detail-actions { justify-content: space-between; }
+  .detail-action { padding: 0 6px; }
+  .detail-showall { margin-left: auto; }
+  .detail-keys + .detail-close { margin-left: auto; }
+  .detail-showall ~ .detail-close { margin-left: 0; }
+}
+.detail-showall {
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-height: 44px;
+  margin: -12px 0;
+  padding: 0 4px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.detail-showall:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

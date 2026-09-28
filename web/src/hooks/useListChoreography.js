@@ -86,7 +86,7 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
     return a;
   };
 
-  const fadeOutGhost = (el, duration, easing) => {
+  const fadeOutGhost = (el, duration, easing, shift = false) => {
     if (!visible(el)) return;
     const g = ghostOf(el);
     if (!g) return;
@@ -94,7 +94,11 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
     // From where it is: a toggle reversed mid-fade leaves it part-faded, and
     // the copy carries that opacity (ghostOf copies computed styles).
     const from = Number.parseFloat(g.style.opacity);
-    const a = g.animate([{ opacity: Number.isFinite(from) ? from : 1 }, { opacity: 0 }], { duration, easing, fill: "forwards" });
+    const a = g.animate(
+      shift
+        ? [{ opacity: Number.isFinite(from) ? from : 1, transform: "none" }, { opacity: 0, transform: "translateX(12px)" }]
+        : [{ opacity: Number.isFinite(from) ? from : 1 }, { opacity: 0 }],
+      { duration, easing, fill: "forwards" });
     a.onfinish = () => { g.remove(); ghosts.current = ghosts.current.filter(x => x !== g); };
   };
 
@@ -163,6 +167,9 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
     if (next) controlsBefore.forEach(el => fadeOutGhost(el, 80, "linear"));
     else entersBefore.forEach(el => fadeOutGhost(el, 80, "linear"));
     if (mode === "rise") fadeOutGhost(heroBefore, 120, EXIT);
+    // Wide (≥1600): the Day map column leaves with the list; React unmounts
+    // it, so a copy of it fades out the way the list does.
+    if (!next) fadeOutGhost(root.querySelector("[data-flip-column]"), 120, EXIT, true);
 
     settle(staleGhosts);
     flushSync(() => setOpen(next));
@@ -194,6 +201,13 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
           play(list,
             [{ opacity: interrupted ? listOpacity : 0, transform: "translateX(12px)" }, { opacity: 1, transform: "none" }],
             { duration: 220, easing: ENTER, delay: d(60) });
+        }
+        // Wide (≥1600): the Day map column rides with the list, 30ms behind.
+        const column = root.querySelector("[data-flip-column]");
+        if (visible(column)) {
+          play(column,
+            [{ opacity: 0, transform: "translateX(12px)" }, { opacity: 1, transform: "none" }],
+            { duration: 220, easing: ENTER, delay: d(90) });
         }
         root.querySelectorAll("[data-flip-enter]").forEach(el => visible(el) && play(el,
           [{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: ENTER, delay: d(60) }));

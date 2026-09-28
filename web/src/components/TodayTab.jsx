@@ -44,6 +44,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { isDeferred, isOnToday } from "../utils/deferral";
 import { IconPlus } from "./ui/icons";
 import TaskDetail from "./TaskDetail";
+import DayMapColumn from "./DayMapColumn";
 import { makeOneThing, undoOneThing } from "../utils/oneThing";
 import { bringBack, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
@@ -189,6 +190,8 @@ export default function TodayTab({
   const [sheetViewport, setSheetViewport] = useState(() => typeof window !== "undefined" && window.innerWidth < 840);
   // A task, opened (50a–b): a sheet below 1024px, a non-modal drawer above.
   const [drawerViewport, setDrawerViewport] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1024);
+  // From 1600px the Day map is Today's third column while the list is open (50k–l).
+  const [wideViewport, setWideViewport] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1600);
   const [detailUuid, setDetailUuid] = useState(null);
   const [rowFocusUuid, setRowFocusUuid] = useState(null);
   // E asks the open task to edit its title: tied to that task, so a task
@@ -196,7 +199,7 @@ export default function TodayTab({
   const [editTitle, setEditTitle] = useState(null); // { uuid, n }
   useEffect(() => { if (!peekOpen) setSheetFull(false); }, [peekOpen]);
   useEffect(() => {
-    const update = () => { setSheetViewport(window.innerWidth < 840); setDrawerViewport(window.innerWidth >= 1024); };
+    const update = () => { setSheetViewport(window.innerWidth < 840); setDrawerViewport(window.innerWidth >= 1024); setWideViewport(window.innerWidth >= 1600); };
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
@@ -735,6 +738,14 @@ export default function TodayTab({
       .catch(() => {});
     setUndo({ kind: "tomorrow", task, before, at: actionAt });
   };
+  // The Day map column's "Move N to tomorrow" (50k): the stops past the day's
+  // end, never the one thing, with Today's own Undo.
+  const handleMoveManyToTomorrow = (ids) => {
+    if (!ids.length) return;
+    const { tasks: next, before } = moveToTomorrow(tasks, ids, nextDateStr(todayStr));
+    savePayload({ ...payload, tasks: next });
+    setUndo({ kind: "tomorrow", count: ids.length, before, at: Date.now() });
+  };
   // Bring back (50h): to its old spot in today's list, tinted, with Undo.
   const handleBringBack = (task) => {
     const { tasks: next, before } = bringBack(tasks, String(task.uuid || task.id));
@@ -777,6 +788,7 @@ export default function TodayTab({
   };
 
   const undoMessage = (u) => {
+    if (u.count) return `${u.count} ${u.count === 1 ? "task" : "tasks"} moved to tomorrow`;
     const title = u.task.title;
     if (u.kind === "move") {
       const label = u.to === "week" ? "This week" : (ROADMAP_HORIZONS.find(h => h.key === u.to)?.label || u.to);
@@ -1291,8 +1303,11 @@ export default function TodayTab({
   // The one thing opens here too (its title on the wall, or E): it is the
   // only way to edit or let go of it now the list has no NOW row.
   const detailIsNow = !!detailUuid && detailUuid === pinnedFocusTask?.uuid;
-  const detailTask = detailUuid ? (detailIsNow ? pinnedFocusTask : remainingTasks.find(t => t.uuid === detailUuid) || null) : null;
+  // A Day map stop the Must-do filter hides opens too (52), from all of Today.
+  const detailTask = detailUuid ? (detailIsNow ? pinnedFocusTask : remainingTasks.find(t => t.uuid === detailUuid)
+    || (isMVDMode && todayTasksAll.find(t => t.uuid === detailUuid && !t.isCompleted)) || null) : null;
   const detailIndex = detailTask && !detailIsNow ? remainingTasks.indexOf(detailTask) : -1;
+  const detailHidden = !!detailTask && !detailIsNow && detailIndex === -1;
   useEffect(() => {
     // Done, moved, parked or deleted: the task left the list, so it closes.
     if (detailUuid && !detailTask) setDetailUuid(null);
@@ -1306,11 +1321,21 @@ export default function TodayTab({
     setRowFocusUuid(uuid);
     requestAnimationFrame(() => document.querySelector(`[data-testid="today-tasks-list"] [data-task-uuid="${uuid}"]`)?.focus());
   };
-  const openDetail = (task) => { setRowFocusUuid(task.uuid); setDetailUuid(task.uuid); };
+  // Opened from the Day map column (50k): Esc goes back to that stop.
+  const detailOpenerRef = useRef(null);
+  const openDetail = (task) => { detailOpenerRef.current = null; setRowFocusUuid(task.uuid); setDetailUuid(task.uuid); };
+  const openFromDayMap = (task) => {
+    detailOpenerRef.current = document.activeElement;
+    if (remainingTasks.some(t => t.uuid === task.uuid)) setRowFocusUuid(task.uuid);
+    setDetailUuid(task.uuid);
+  };
   const closeDetail = () => {
     const back = detailUuid;
     const wasNow = detailIsNow;
+    const opener = detailOpenerRef.current;
+    detailOpenerRef.current = null;
     setDetailUuid(null);
+    if (opener?.isConnected) { requestAnimationFrame(() => opener.focus()); return; }
     if (wasNow) requestAnimationFrame(() => document.querySelector(".wall-title")?.focus());
     else if (back) focusRow(back);
   };
@@ -1342,8 +1367,9 @@ export default function TodayTab({
   };
   const stepTask = (task, dir) => {
     const i = remainingTasks.findIndex(t => t.uuid === task.uuid);
-    if (i < 0) return false;
-    const next = remainingTasks[i + dir];
+    // From a task the filter hides, ↑/↓ step into the filtered list.
+    if (i < 0 && !(detailHidden && task.uuid === detailUuid)) return false;
+    const next = i < 0 ? remainingTasks[dir > 0 ? 0 : remainingTasks.length - 1] : remainingTasks[i + dir];
     if (!next) return false;
     if (detailUuid) setDetailUuid(next.uuid);
     focusRow(next.uuid);
@@ -1582,12 +1608,15 @@ export default function TodayTab({
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  const listShown = peekOpen || !pinnedFocusTask;
+  const dayMapColumn = wideViewport && listShown;
+
   return (
     <>
       {/* ── Today (turns 37, 41). On a laptop the wall is a 420px column with
            the list beside it once the list is open (41a); on phones and
            tablets the two stack. ── */}
-      <div ref={layoutRef} className={`today-layout${peekOpen || !pinnedFocusTask ? " is-list-open" : ""}`}>
+      <div ref={layoutRef} className={`today-layout${listShown ? " is-list-open" : ""}${dayMapColumn ? " has-day-map" : ""}`}>
       <div className="today-layout-main" inert={wallCovered ? "" : undefined} aria-hidden={wallCovered ? "true" : undefined}>
       <TodayWall
         task={pinnedFocusTask}
@@ -1899,6 +1928,16 @@ export default function TodayTab({
           </div>
         )}
       </section>
+      {dayMapColumn && (
+        <DayMapColumn
+          payload={payload}
+          savePayload={savePayload}
+          onOpenDayMap={onOpenDayMap}
+          onOpenTask={openFromDayMap}
+          onMoveToTomorrow={handleMoveManyToTomorrow}
+          covered={!!detailTask}
+        />
+      )}
       </div>
 
       {/* ── Momentum (J4). Below the ledger, never beside the hero. Hidden
@@ -2026,6 +2065,7 @@ export default function TodayTab({
             onTomorrow={() => actOnTask(detailTask, "t")}
             onPark={() => { const next = neighbourOf(detailTask); handleParkWithUndo(detailTask); focusRow(next); }}
             onDelete={() => actOnTask(detailTask, "delete")}
+            onShowAll={detailHidden ? () => setIsMVDMode(false) : undefined}
           />
         </div>
       )}

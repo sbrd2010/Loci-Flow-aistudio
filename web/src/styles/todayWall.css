@@ -624,3 +624,121 @@
     cursor: pointer;
   }
 }
+
+/* — Wide (50k–l): from 1600px the cap is 1760px and the extra width becomes a
+   third column, the Day map, while the list is open. The list never passes
+   720px (about 72 characters a row); past 1856px the margins just grow. — */
+@media (min-width: 1600px) {
+  .screen-content.screen-content-today { padding-inline: max(48px, calc((100% - 1760px) / 2)); }
+  .today-layout.is-list-open.has-day-map {
+    grid-template-columns: 420px minmax(0, 720px) minmax(0, 1fr);
+  }
+}
+.today-daymap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding-left: 36px;
+  border-left: 1px solid var(--line);
+  align-self: stretch;
+}
+.today-daymap.is-covered { visibility: hidden; }
+.tdm-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.tdm-heading { margin: 0; font-size: 1rem; font-weight: 800; }
+.tdm-open {
+  min-height: 44px;
+  margin: -12px 0;
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.tdm-open:hover { text-decoration: underline; text-underline-offset: 4px; }
+.tdm-open:focus-visible,
+.tdm-stop:focus-visible,
+.tdm-empty-link:focus-visible,
+.tdm-move:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tdm-status {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.tdm-status.is-over { color: var(--coral); }
+.tdm-clock .dm-dayclock-bar { margin-top: 0; }
+.tdm-route { margin: 0; padding: 0; list-style: none; }
+.tdm-stop {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: baseline;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 0;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.tdm-stop.is-now {
+  width: calc(100% + 20px);
+  margin: 0 -10px;
+  padding-inline: 10px;
+  background: var(--accent-tint);
+  border-radius: 6px;
+}
+.tdm-time,
+.tdm-dur {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.tdm-stop.is-now .tdm-time { color: var(--accent); }
+.tdm-stop.is-over .tdm-time { color: var(--coral); }
+.tdm-title { font-size: 0.875rem; font-weight: 600; line-height: 1.4; text-wrap: pretty; }
+.tdm-dayend,
+.tdm-wontfit {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--coral);
+}
+.tdm-dayend { display: flex; align-items: center; gap: 10px; padding-top: 2px; }
+.tdm-dayend::after { content: ""; flex: 1; border-top: 2px solid var(--coral); }
+.tdm-empty { margin: 0; font-size: 0.875rem; color: var(--ink-2); }
+.tdm-empty-link {
+  min-height: 44px;
+  padding: 0;
+  font: inherit;
+  font-weight: 800;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.tdm-move {
+  min-height: 52px;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 0;
+  border-radius: 6px;
+  box-shadow: 0 2px 0 var(--accent-edge);
+  cursor: pointer;
+}

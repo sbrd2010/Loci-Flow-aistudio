@@ -1270,7 +1270,7 @@ export default function App() {
       />
 
       {/* Main Tab Screen Router */}
-      <main className={`screen-content${activeTab === "daymap" ? " screen-content-day-map" : ""}`}>
+      <main className={`screen-content${activeTab === "daymap" ? " screen-content-day-map" : activeTab === "today" ? " screen-content-today" : ""}`}>
         {syncWarning === "offline" && (
           <div className="offline-banner" role="status">
             <IconWifiOff size={18} />
