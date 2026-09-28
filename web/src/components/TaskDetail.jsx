@@ -27,7 +27,7 @@ export default function TaskDetail({
   onClose, onPatch, onToggleMVD, onToggleStep, onAddStep, onDeleteStep,
   onMakeOneThing, onDone, onTomorrow, onPark, onDelete, editTitleSignal = 0,
   onMoreDetails, onSuggestSteps, suggestingSteps = false, isNow = false, onLetGo,
-  onShowAll, kicker = null, onMoveToToday, onTogglePin,
+  onShowAll, kicker = null, onMoveToToday, onTogglePin, onRemoveFromRoute,
 }) {
   const [picker, setPicker] = useState(null);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -96,7 +96,9 @@ export default function TaskDetail({
     : ESTIMATES;
 
   const isHorizon = typeof onMoveToToday === "function";
-  const kbd = k => isDrawer && !isHorizon && <kbd className="wall-key detail-key" aria-hidden="true">{k}</kbd>;
+  // Opened from a Day map stop: its footer takes the stop off the route.
+  const isRoute = typeof onRemoveFromRoute === "function";
+  const kbd = k => isDrawer && !isHorizon && !isRoute && <kbd className="wall-key detail-key" aria-hidden="true">{k}</kbd>;
 
   // The phone sheet is modal: Tab stays inside it, as in the other sheets.
   // The laptop drawer is not, so Tab moves on to the page.
@@ -178,7 +180,7 @@ export default function TaskDetail({
             )}
             <div className="detail-tags">
               {isGoal && <span className="task-tag is-goal">GOAL</span>}
-              {isDrawer && !isHorizon && !editingTitle && <span className="detail-hint">E to edit the title</span>}
+              {isDrawer && !isHorizon && !isRoute && !editingTitle && <span className="detail-hint">E to edit the title</span>}
             </div>
           </div>
         </div>
@@ -318,7 +320,15 @@ export default function TaskDetail({
         </div>
       </div>
 
-      {isHorizon ? (
+      {isRoute ? (
+        <div className="detail-foot">
+          <button type="button" className="detail-one" onClick={onRemoveFromRoute}>Remove from route</button>
+          <div className="detail-actions">
+            <button type="button" className="detail-action" onClick={onPark}>Park</button>
+            <button type="button" className="detail-action is-quiet" onClick={onDelete}>Delete</button>
+          </div>
+        </div>
+      ) : isHorizon ? (
         <div className="detail-foot">
           <button type="button" className="detail-one" onClick={onMoveToToday}>Move to Today</button>
           <div className="detail-actions">

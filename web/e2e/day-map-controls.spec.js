@@ -144,18 +144,21 @@ test("phone: Unscheduled is a bar above the action at the bottom; it opens a she
   await expect(bar).toBeFocused();
 });
 
-// Codex review of #413: a stop's panel opens from the keyboard (Enter), while
-// Space still picks it up to reorder.
-test("keyboard: Enter on a stop opens its panel; Space picks it up to reorder", async ({ page }) => {
+// Codex review of #413: a stop opens from the keyboard (Enter) — now its
+// task sheet (52) — while Space still picks it up to reorder.
+test("keyboard: Enter on a stop opens its sheet, Esc hands focus back; Space picks it up to reorder", async ({ page }) => {
   await openDayMap(page, { width: 1280, height: 800 });
   await page.getByRole("button", { name: "Auto-fill" }).click();
   const stops = page.locator(".dm-stop .dm-main");
   await stops.nth(1).focus();
   await page.keyboard.press("Enter");
-  await expect(page.locator(".dm-stop").nth(1).getByRole("button", { name: "Remove from route" })).toBeVisible();
-  await expect(stops.nth(1)).toHaveAttribute("aria-expanded", "true");
-  await page.keyboard.press("Enter");
-  await expect(page.getByRole("button", { name: "Remove from route" })).toHaveCount(0);
+  await expect(page.getByTestId("task-detail").getByRole("button", { name: "Remove from route" })).toBeVisible();
+  await expect(page.locator(".dm-stop").nth(1)).toHaveClass(/is-open/);
+  await page.getByTestId("task-detail").getByRole("button", { name: "Remove from route" }).focus();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("task-detail")).toHaveCount(0);
+  await expect(page.locator(".day-map-page")).toBeVisible();
+  await expect(stops.nth(1)).toBeFocused();
 
   const before = await stopTitles(page);
   // Each step waits for the page's own state: the stop held, then moved.

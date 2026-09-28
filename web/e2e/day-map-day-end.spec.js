@@ -24,12 +24,17 @@ async function openDayMapAt(page, time, viewport = { width: 412, height: 892 }) 
 const unscheduled = (page) => page.locator(".dm-pool-count:visible").first();
 const planned = (page) => page.locator(".dm-dayclock-plan");
 
-// Makes the second stop 6h long, so the third starts after the day ends.
+// Makes the first two stops 3h each (from their sheets), so the third
+// starts after the day ends.
 async function overfill(page) {
-  const second = page.locator(".dm-stop").nth(1);
-  await second.locator(".dm-main").click();
-  await second.locator(".dm-panel select").selectOption("360");
-  await second.locator(".dm-main").click();
+  const sheet = page.getByTestId("task-detail");
+  for (const i of [0, 1]) {
+    await page.locator(".dm-stop .dm-main").nth(i).click();
+    await sheet.getByRole("button", { name: /^Estimate/ }).click();
+    await sheet.getByRole("radio", { name: "3h" }).click();
+    await sheet.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(sheet).toHaveCount(0);
+  }
 }
 
 test("a route that fits: the day ends at the end of the focus window, with the time to spare", async ({ page }) => {
@@ -48,7 +53,7 @@ test("stops after the day end are marked, and Move N to tomorrow takes them off 
   await expect(dayEnd).toContainText("DAY ENDS 02:00");
   await expect(page.locator(".dm-wontfit")).toHaveText(/^WON’T FIT TODAY · \d+m$/);
   await expect(page.locator(".dm-stop.is-over")).toHaveCount(1);
-  await expect(planned(page)).toHaveText("7h planned · 2h over");
+  await expect(planned(page)).toHaveText("6h35m planned · 1h35m over");
   await expect(planned(page)).toHaveClass(/is-over/);
   // Screen readers hear where a stop sits against the day's end (brief §6).
   await expect(page.locator(".dm-stop.is-over .dm-main")).toHaveAttribute("aria-label", /after the day ends$/);
@@ -59,8 +64,9 @@ test("stops after the day end are marked, and Move N to tomorrow takes them off 
   await expect(page.locator(".dm-tomorrow-note")).toHaveText("1 task now starts tomorrow.");
   // Not deleted, and not back in today's pool either.
   await expect(unscheduled(page)).toHaveText("0");
-  // The 6h stop still starts in time but runs past the end: said, not hidden.
-  await expect(dayEnd).toContainText("RUNS 1h30m PAST");
+  // The second 3h stop still starts in time but runs past the end: said,
+  // not hidden.
+  await expect(dayEnd).toContainText("00:05 RUNS 1h05m PAST");
 
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
   await expect(page.locator(".dm-stop")).toHaveCount(3);

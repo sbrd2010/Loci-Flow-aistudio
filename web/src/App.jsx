@@ -1296,6 +1296,10 @@ export default function App() {
             onStartFocus={(pinPromise) => { pendingFocusPinPromiseRef.current = pinPromise; setPendingFocusOpen(true); goToday(); }}
             onAddTask={() => openAddTask("today", "Day map")}
             onHelpChoose={() => openScattered("daymap")}
+            onEditTask={(task) => { setEditingTask(task); setShowAddTask(true); }}
+            uid={activityUid}
+            writeActivityEvents={writeActivityEvents}
+            focusTimer={focusTimer}
             dayClock={dayClock}
             flushNow={flushNow}
           />

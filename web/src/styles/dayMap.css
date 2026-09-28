@@ -244,6 +244,15 @@
   border-radius: 6px;
 }
 .dm-stop.is-now .dm-time { color: var(--accent); }
+/* The stop whose sheet is open (as Plan's open row): tinted, ringed. */
+.dm-stop.is-open {
+  margin: 0 -10px;
+  padding: 0 10px;
+  background: var(--accent-tint);
+  outline: 1.5px solid var(--accent);
+  border-bottom-color: transparent;
+  border-radius: 6px;
+}
 .dm-stop.is-over .dm-time { color: var(--coral); }
 .dm-stop.is-dragging { box-shadow: var(--shadow-md); }
 .dm-start {
@@ -286,8 +295,6 @@
   font-size: 0.875rem;
   color: var(--ink-2);
 }
-.dm-step { margin: 0; font-size: 0.8125rem; color: var(--ink-2); }
-.dm-panel { padding-left: 64px; }
 
 /* ── The side: Move N to tomorrow, then Unscheduled ── */
 .dm-side { display: flex; flex-direction: column; gap: 12px; }
@@ -428,76 +435,6 @@
   background: none;
   border: 0;
   border-radius: 50%;
-  cursor: pointer;
-}
-
-/* Row options: steps, duration, remove. */
-.dm-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 4px 0 10px;
-}
-.dm-substeps {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.dm-substep {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 0.8125rem;
-}
-.dm-substep-check {
-  flex-shrink: 0;
-  width: 12px;
-  height: 12px;
-  margin-top: 3px;
-  border: 1.5px solid var(--control-edge);
-  border-radius: 50%;
-}
-.dm-substep.is-done { color: var(--ink-2); text-decoration: line-through; }
-.dm-substep.is-done .dm-substep-check { background: var(--accent); border-color: var(--accent); }
-.dm-panel-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 16px;
-}
-.dm-field {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.8125rem;
-  font-weight: 700;
-}
-.dm-field select {
-  min-height: 44px;
-  padding: 0 8px;
-  font-family: var(--font-mono);
-  font-size: 0.8125rem;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--control-edge);
-  border-radius: 6px;
-}
-.dm-remove {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  padding: 0 12px;
-  font: inherit;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: var(--ink);
-  background: none;
-  border: 1px solid var(--line);
-  border-radius: 6px;
   cursor: pointer;
 }
 
