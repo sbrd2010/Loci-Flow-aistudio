@@ -19,6 +19,9 @@ import "../styles/taskDetail.css";
 
 const HORIZONS = [{ key: "today", label: "Today" }, ...ROADMAP_HORIZONS];
 const ESTIMATES = [15, 30, 60, 120, 180];
+// Every other length Add task offers, so the sheet — the only editor — can
+// set any of them (Codex review of #418).
+const OTHER_ESTIMATES = [10, 20, 25, 45, 90, 240, 360];
 const CATEGORIES = ["Career", "Health", "Work", "Personal"];
 
 // "YYYY-MM-DD" and "HH:MM" in local time, for the reminder's inputs.
@@ -342,6 +345,12 @@ export default function TaskDetail({
                   {formatEstimate(m)}
                 </button>
               ))}
+              <select className="detail-input detail-estimate-other" aria-label="Other length"
+                value={OTHER_ESTIMATES.includes(Number(task.timeEstimateMinutes)) ? String(task.timeEstimateMinutes) : ""}
+                onChange={e => { if (!e.target.value) return; setPicker(null); onPatch({ timeEstimateMinutes: Number(e.target.value) }); }}>
+                <option value="">Other…</option>
+                {OTHER_ESTIMATES.map(m => <option key={m} value={m}>{formatEstimate(m)}</option>)}
+              </select>
             </div>
           )}
 

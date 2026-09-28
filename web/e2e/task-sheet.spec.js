@@ -174,3 +174,42 @@ test("a first step stored apart from the steps is step 1, and a change to anothe
   await expect.poll(() => stepValues(page)).toEqual(before);
   await expect(page.locator(".wall-first-step")).toContainText(first);
 });
+
+// Codex review of #418: the sheet is the only editor, so every length Add
+// task offers can be set here.
+test("an estimate outside the chips can be set from Other", async ({ page }) => {
+  await enterDemo(page);
+  await openFromDetails(page);
+  await sheet(page).getByRole("button", { name: /^Estimate/ }).click();
+  await sheet(page).getByLabel("Other length").selectOption("45");
+  await expect(sheet(page).getByRole("button", { name: /^Estimate/ }).locator(".detail-value")).toHaveText("45m");
+});
+
+// Codex review of #418: Plan's drawer can move to another task while the AI
+// answers; that answer must not show up on (and be added to) the new task.
+// Each task mounts its own sheet (key = uuid), which is what keeps it off.
+test("suggestions that arrive after the drawer moved to another task are dropped", async ({ page }) => {
+  await withKey(page);
+  let release;
+  const answered = new Promise(r => { release = r; });
+  await page.route("https://api.groq.com/**", async (route) => {
+    await answered;
+    await route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(["Meant for the first task"]) } }] }),
+    });
+  });
+  await enterDemo(page);
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  const rows = page.locator(".plan-row");
+  await rows.nth(0).click();
+  await sheet(page).getByRole("button", { name: "Suggest steps" }).click();
+  await expect(sheet(page).getByRole("button", { name: "Suggesting…" })).toBeVisible();
+  const second = (await rows.nth(1).locator(".plan-row-title").innerText()).trim();
+  await rows.nth(1).click();
+  await expect(sheet(page)).toHaveAttribute("aria-label", `Task: ${second}`);
+  release();
+  await page.waitForTimeout(500);
+  await expect(sheet(page).locator(".detail-suggested")).toHaveCount(0);
+  await expect(sheet(page).getByText("Meant for the first task")).toHaveCount(0);
+});
