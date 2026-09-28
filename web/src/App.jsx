@@ -946,7 +946,10 @@ export default function App() {
   // 59j: a session closes on its own after a pause of more than 15 minutes, or
   // when the Loci day it began in ends. It is recorded as expired, ending when
   // focus last stopped, on the day it began — or amends the entry its block
-  // already banked, which carries its own day.
+  // already banked, which carries its own day. Checked on the minute tick and
+  // whenever the timer starts or stops, so a Resume after the limit but before
+  // the next tick is caught too (the hook keeps such a pause on record); the
+  // day is read now, not from the tick.
   useEffect(() => {
     const session = focusTimer.peekFocusSession("expired");
     if (!session?.task) return;
@@ -954,7 +957,7 @@ export default function App() {
     const now = Date.now();
     const startDay = getLociDayStr(new Date(session.focusStartedAt), windows);
     const reason = focusExpiryReason({
-      sessionOpen: true, pausedAt: session.focusPausedAt, startDay, today: commitmentDayStr, now,
+      sessionOpen: true, pausedAt: session.focusPausedAt, startDay, today: getLociDayStr(new Date(now), windows), now,
     });
     if (!reason) return;
     const ended = focusTimer.endFocusSession(reason);
@@ -967,7 +970,7 @@ export default function App() {
       lociDateString: startDay, ...ended, windows, now: ended.focusPausedAt ?? now,
     });
     writeActivityEvents(eventPatch(activityUid, event));
-  }, [lociDayTick, commitmentDayStr]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [lociDayTick, commitmentDayStr, focusTimer.isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deadlineMoveState = deriveCommitmentDeadlineMove(payload?.config || {}, payload?.tasks || [], commitmentDayStr);
   useEffect(() => {

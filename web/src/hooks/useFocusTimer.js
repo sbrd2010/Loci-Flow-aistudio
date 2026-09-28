@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotifications";
-import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete, focusBlockSeconds } from "../utils/focusSession";
+import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete, focusBlockSeconds, PAUSE_EXPIRY_MS } from "../utils/focusSession";
 import { safeUUID } from "../utils/uuid";
 
 // Lifts the Focus timer state to the App level so it survives tab switches
@@ -418,9 +418,17 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
 
   // When the open session stopped counting (a pause, or its block ending), so
   // a pause is measured from when focus stopped; running again clears it.
+  // Resuming after the pause has already run out does not: that sitting is
+  // over, so the timer stops again and the stop stays on record for App's
+  // expiry check, which closes the session (Codex review of #419).
   useEffect(() => {
-    if (isTimerRunning) focusPausedAtRef.current = null;
-    else if (focusSessionIdRef.current) focusPausedAtRef.current = Date.now();
+    if (isTimerRunning) {
+      const pausedAt = focusPausedAtRef.current;
+      if (pausedAt != null && Date.now() - pausedAt > PAUSE_EXPIRY_MS) { setIsTimerRunning(false); return; }
+      focusPausedAtRef.current = null;
+    } else if (focusSessionIdRef.current && focusPausedAtRef.current == null) {
+      focusPausedAtRef.current = Date.now();
+    }
   }, [isTimerRunning, focusSessionId]);
 
   // Detect the timer reaching 0:00 while running and surface the global

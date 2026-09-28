@@ -54,6 +54,20 @@ test("a pause of 15 minutes keeps the session; a longer one closes it", async ({
   await expect(page.getByRole("button", { name: /^Return to Focus/ })).toHaveCount(0);
 });
 
+// Codex review of #419: Resume pressed after the limit but before the minute
+// check still finds the session closed. setSystemTime moves the clock without
+// firing the minute tick.
+test("Resume after a pause of more than 15 minutes, before the minute check, does not carry on", async ({ page }) => {
+  await enterDemo(page, "2024-06-15T10:00:00");
+  const overlay = await startFocus(page);
+  await page.clock.runFor(5 * 60_000);
+  await overlay.getByRole("button", { name: "Pause timer" }).click();
+  await page.clock.setSystemTime(new Date("2024-06-15T10:20:30"));
+  await overlay.getByRole("button", { name: "Resume timer" }).click();
+  await expect(overlay).toHaveCount(0);
+  await expect(page.locator(".wall-primary")).toContainText("Start focus");
+});
+
 test("a session still running when the Loci day ends is closed", async ({ page }) => {
   // The demo's window runs 07:00–02:00: at 01:50 it is still the 15th's day.
   await enterDemo(page, "2024-06-16T01:50:00");

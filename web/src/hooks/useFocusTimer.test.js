@@ -538,6 +538,36 @@ describe("useFocusTimer", () => {
       Date.now.mockRestore();
     });
 
+    // Codex review of #419: a Resume after the 15-minute limit, before App's
+    // minute check, must not carry the sitting on as if unbroken.
+    it("a Resume after the pause ran out stops again and keeps the pause on record", () => {
+      vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+      result.current.setIsTimerRunning(false);
+      rerender([[task], {}, "u1"]);
+
+      // Within 15 minutes: a Resume carries on.
+      Date.now.mockReturnValue(1_000_000 + 15 * 60_000);
+      result.current.setIsTimerRunning(true);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.isTimerRunning).toBe(true);
+      expect(result.current.peekFocusSession("x").focusPausedAt).toBeNull();
+
+      // Over 15 minutes: it does not.
+      Date.now.mockReturnValue(2_000_000);
+      result.current.setIsTimerRunning(false);
+      rerender([[task], {}, "u1"]);
+      Date.now.mockReturnValue(2_000_000 + 15 * 60_000 + 1);
+      result.current.setIsTimerRunning(true);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.isTimerRunning).toBe(false);
+      expect(result.current.peekFocusSession("x").focusPausedAt).toBe(2_000_000);
+      Date.now.mockRestore();
+    });
+
     it("endFocusSession returns null when no session was ever started", () => {
       const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
       const { result } = renderHook(useFocusTimer, [[task], {}, "u1"]);
