@@ -1151,6 +1151,20 @@ test("laptop: no phone-card frame; content capped at 1200px, centred", async ({ 
   expect(Math.round(list.x + list.width)).toBe(1320);
 });
 
+test("wide: from 1600px the cap is 1760px, centred (50k)", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto("/");
+  await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
+  await page.getByTestId("demo-btn").click();
+  await page.keyboard.press("l");
+  await expect(page.locator(".tasks-section")).toBeVisible();
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+  const [band, map] = await Promise.all([page.locator(".wall-goal").boundingBox(), page.locator(".today-daymap").boundingBox()]);
+  // (1920 − 1760) / 2 = 80 each side.
+  expect(Math.round(band.x)).toBe(80);
+  expect(Math.round(map.x + map.width)).toBe(1840);
+});
+
 test("laptop: with the list hidden, the task is centred and the foot shows Show list, + and Low energy (51b)", async ({ page }) => {
   await enterLaptop(page);
   const vw = page.viewportSize().width;

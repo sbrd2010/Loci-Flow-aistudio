@@ -108,23 +108,69 @@ test("won't fit: Move N to tomorrow moves the stops past the day's end, with Tod
   await expect(list.getByText(title, { exact: true })).toBeVisible();
 });
 
-test("a stop opens its task in a drawer over the map column, not the list; Esc goes back to the stop", async ({ page }) => {
+test("a stop opens its task in a drawer in the map column's place, clear of the list; Esc goes back to the stop", async ({ page }) => {
   await enterDemo(page, { width: 1680, height: 1000 });
   await autoFillRoute(page);
-  // The Must-do filter hides every demo task: opening one shows them all.
-  await page.getByRole("button", { name: /^Must-do · \d+$/ }).click();
   const stop = column(page).getByRole("list", { name: "Today's route" }).getByRole("button").nth(1);
   await stop.click();
   const drawer = page.locator(".task-detail.is-drawer");
   await expect(drawer).toBeVisible();
-  await expect(page.getByRole("button", { name: /^All · \d+$/ })).toHaveAttribute("aria-pressed", "true");
-
+  // 52: the drawer takes the column's place and width (360–480).
+  await expect(column(page)).toBeHidden();
   const listBox = await page.locator("section.today-list").boundingBox();
   const drawerBox = await drawer.boundingBox();
   expect(drawerBox.x).toBeGreaterThanOrEqual(listBox.x + listBox.width);
   expect(drawerBox.x + drawerBox.width).toBeLessThanOrEqual(1680 + 1);
+  expect(Math.round(drawerBox.width)).toBe(420);
 
   await page.keyboard.press("Escape");
   await expect(drawer).toHaveCount(0);
+  await expect(column(page)).toBeVisible();
   await expect(stop).toBeFocused();
+});
+
+test("1600: the drawer keeps 360px, clear of the list, its footer on one row", async ({ page }) => {
+  await enterDemo(page, { width: 1600, height: 900 });
+  await autoFillRoute(page);
+  await column(page).getByRole("list", { name: "Today's route" }).getByRole("button").nth(1).click();
+  const drawer = page.locator(".task-detail.is-drawer");
+  await expect(drawer).toBeVisible();
+  const listBox = await page.locator("section.today-list").boundingBox();
+  const drawerBox = await drawer.boundingBox();
+  expect(Math.round(drawerBox.width)).toBe(360);
+  expect(drawerBox.x).toBeGreaterThanOrEqual(listBox.x + listBox.width);
+  const actions = await drawer.locator(".detail-action").evaluateAll(els => els.map(el => el.getBoundingClientRect()).map(r => ({ top: r.top, right: r.right })));
+  expect(actions).toHaveLength(4);
+  expect(new Set(actions.map(a => Math.round(a.top))).size).toBe(1);
+  for (const a of actions) expect(a.right).toBeLessThanOrEqual(drawerBox.x + drawerBox.width);
+});
+
+test("a stop the Must-do filter hides opens anyway, the filter stays; Show all, and ↑/↓ into the filtered list", async ({ page }) => {
+  await enterDemo(page, { width: 1680, height: 1000 });
+  await autoFillRoute(page);
+  const list = page.getByTestId("today-tasks-list");
+  const drawer = page.locator(".task-detail.is-drawer");
+  const kicker = drawer.locator(".detail-kicker").first();
+  // One must-do, so the filtered list has a task in it.
+  await list.getByText("10-minute walk between tasks to reset your focus").click();
+  await drawer.getByRole("switch", { name: "Must-do" }).click();
+  await page.keyboard.press("Escape");
+  const mustDo = page.getByRole("button", { name: /^Must-do · \d+$/ });
+  await mustDo.click();
+  await expect(mustDo).toHaveAttribute("aria-pressed", "true");
+
+  const hidden = column(page).getByRole("button", { name: /25-minute deep work block/ });
+  await hidden.click();
+  await expect(kicker).toHaveText("TODAY · HIDDEN BY MUST-DO");
+  await expect(mustDo).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("ArrowDown");
+  await expect(kicker).toHaveText("TODAY · 1 OF 1");
+  await expect(drawer.locator(".detail-title")).toHaveText(/10-minute walk/);
+  await page.keyboard.press("Escape");
+
+  await hidden.click();
+  await drawer.getByRole("button", { name: "Show all" }).click();
+  await expect(page.getByRole("button", { name: /^All · \d+$/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(kicker).toHaveText(/^TODAY · \d+ OF \d+$/);
+  await expect(drawer.getByRole("button", { name: "Show all" })).toHaveCount(0);
 });

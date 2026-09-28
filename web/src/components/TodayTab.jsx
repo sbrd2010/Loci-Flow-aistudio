@@ -1303,8 +1303,11 @@ export default function TodayTab({
   // The one thing opens here too (its title on the wall, or E): it is the
   // only way to edit or let go of it now the list has no NOW row.
   const detailIsNow = !!detailUuid && detailUuid === pinnedFocusTask?.uuid;
-  const detailTask = detailUuid ? (detailIsNow ? pinnedFocusTask : remainingTasks.find(t => t.uuid === detailUuid) || null) : null;
+  // A Day map stop the Must-do filter hides opens too (52), from all of Today.
+  const detailTask = detailUuid ? (detailIsNow ? pinnedFocusTask : remainingTasks.find(t => t.uuid === detailUuid)
+    || (isMVDMode && todayTasksAll.find(t => t.uuid === detailUuid && !t.isCompleted)) || null) : null;
   const detailIndex = detailTask && !detailIsNow ? remainingTasks.indexOf(detailTask) : -1;
+  const detailHidden = !!detailTask && !detailIsNow && detailIndex === -1;
   useEffect(() => {
     // Done, moved, parked or deleted: the task left the list, so it closes.
     if (detailUuid && !detailTask) setDetailUuid(null);
@@ -1322,10 +1325,8 @@ export default function TodayTab({
   const detailOpenerRef = useRef(null);
   const openDetail = (task) => { detailOpenerRef.current = null; setRowFocusUuid(task.uuid); setDetailUuid(task.uuid); };
   const openFromDayMap = (task) => {
-    // A stop the Must-do filter hides opens with the whole list shown.
-    if (task.uuid !== pinnedFocusTask?.uuid && !remainingTasks.some(t => t.uuid === task.uuid)) setIsMVDMode(false);
     detailOpenerRef.current = document.activeElement;
-    if (task.uuid !== pinnedFocusTask?.uuid) setRowFocusUuid(task.uuid);
+    if (remainingTasks.some(t => t.uuid === task.uuid)) setRowFocusUuid(task.uuid);
     setDetailUuid(task.uuid);
   };
   const closeDetail = () => {
@@ -1366,8 +1367,9 @@ export default function TodayTab({
   };
   const stepTask = (task, dir) => {
     const i = remainingTasks.findIndex(t => t.uuid === task.uuid);
-    if (i < 0) return false;
-    const next = remainingTasks[i + dir];
+    // From a task the filter hides, ↑/↓ step into the filtered list.
+    if (i < 0 && !(detailHidden && task.uuid === detailUuid)) return false;
+    const next = i < 0 ? remainingTasks[dir > 0 ? 0 : remainingTasks.length - 1] : remainingTasks[i + dir];
     if (!next) return false;
     if (detailUuid) setDetailUuid(next.uuid);
     focusRow(next.uuid);
@@ -1933,6 +1935,7 @@ export default function TodayTab({
           onOpenDayMap={onOpenDayMap}
           onOpenTask={openFromDayMap}
           onMoveToTomorrow={handleMoveManyToTomorrow}
+          covered={!!detailTask}
         />
       )}
       </div>
@@ -2062,6 +2065,7 @@ export default function TodayTab({
             onTomorrow={() => actOnTask(detailTask, "t")}
             onPark={() => { const next = neighbourOf(detailTask); handleParkWithUndo(detailTask); focusRow(next); }}
             onDelete={() => actOnTask(detailTask, "delete")}
+            onShowAll={detailHidden ? () => setIsMVDMode(false) : undefined}
           />
         </div>
       )}

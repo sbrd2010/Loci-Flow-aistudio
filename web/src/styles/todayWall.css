@@ -643,6 +643,7 @@
   border-left: 1px solid var(--line);
   align-self: stretch;
 }
+.today-daymap.is-covered { visibility: hidden; }
 .tdm-head {
   display: flex;
   justify-content: space-between;

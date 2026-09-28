@@ -8,7 +8,7 @@ import "../styles/dayMap.css";
 // compact. How far over the day is, the day clock, the route's stops with the
 // DAY ENDS line where it falls, and "Move N to tomorrow". A stop opens that
 // task; the heading opens the Day map itself, where the route is edited.
-export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpenTask, onMoveToTomorrow }) {
+export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpenTask, onMoveToTomorrow, covered = false }) {
   const { windows, scheduledTasks, plan } = useDayRoute({ payload, savePayload });
 
   const progress = dayProgress(new Date(), windows);
@@ -44,7 +44,9 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
   };
 
   return (
-    <aside className="today-daymap" aria-label="Day map" data-flip-column="">
+    // An open task's drawer takes this column's place (52): hidden, not gone,
+    // so Esc can hand focus back to the stop that opened it.
+    <aside className={`today-daymap${covered ? " is-covered" : ""}`} aria-label="Day map" data-flip-column="">
       <div className="tdm-head">
         <h2 className="tdm-heading">
           <button type="button" className="tdm-open" onClick={onOpenDayMap}>Day map</button>
