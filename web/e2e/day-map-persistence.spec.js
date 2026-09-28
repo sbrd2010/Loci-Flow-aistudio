@@ -77,7 +77,7 @@ test("mobile reliability: Day Map auto-fill persists route anchor and reflows du
   await expectStopTime(taskStops(page).first(), "11:00");
 
   const firstStop = taskStops(page).first();
-  await firstStop.locator(".dm-options").click();
+  await firstStop.locator(".dm-main").click();
   await firstStop.locator("select").selectOption("90");
   await expect(firstStop.locator(".dm-dur")).toHaveText("1h30m", { timeout: 5_000 });
   await expectStopTime(taskStops(page).nth(1), "12:35");

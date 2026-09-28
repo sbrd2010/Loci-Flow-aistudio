@@ -37,8 +37,11 @@ async function autoFillDayMap(page) {
   const autoFill = page.getByRole("button", { name: "Auto-fill" });
   await expect(autoFill).toBeEnabled({ timeout: 5_000 });
   await autoFill.click();
-  await expect(page.getByText("Unscheduled · 0")).toBeVisible({ timeout: 5_000 });
+  await expect(unscheduled(page)).toHaveText("0", { timeout: 5_000 });
 }
+
+// How many wait in Unscheduled: the laptop's card, or the phone's bar (52d–e).
+const unscheduled = (page) => page.locator(".dm-pool-count:visible").first();
 
 async function expectVisibleRouteTimeLabels(page) {
   const routeTimes = page.locator(".dm-stop .dm-time");
@@ -76,7 +79,7 @@ for (const viewport of MOBILE_VIEWPORTS) {
 
     await autoFillDayMap(page);
     await expectVisibleRouteTimeLabels(page);
-    await expect(page.getByText(/^Day ends\./)).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator(".dm-dayend")).toContainText("DAY ENDS", { timeout: 5_000 });
     await expectNoHorizontalOverflow(page);
   });
 }
@@ -92,24 +95,24 @@ test("reliability: Day Map route persists after closing and reopening", async ({
   await expect(page.getByRole("button", { name: "Day map →" })).toBeVisible({ timeout: 5_000 });
 
   await openDayMap(page);
-  await expect(page.getByText("Unscheduled · 0")).toBeVisible({ timeout: 5_000 });
+  await expect(unscheduled(page)).toHaveText("0", { timeout: 5_000 });
   await expectVisibleRouteTimeLabels(page);
-  await expect(page.getByText(/^Day ends\./)).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".dm-dayend")).toContainText("DAY ENDS", { timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
 });
 
-test("Day Map cards show sub-step progress and reveal the full sub-step list when expanded", async ({ page }) => {
+test("a Day Map stop reveals its full sub-step list when opened", async ({ page }) => {
   await enterDemo(page, { width: 375, height: 812 });
 
   await openDayMap(page);
   await autoFillDayMap(page);
 
-  // demo-t1 ("Reply to the important message...") is P1 with 4 sub-steps (2 done)
-  // and sorts first into the auto-filled route.
+  // demo-t1 ("Reply to the important message...") has 4 sub-steps (2 done)
+  // and comes first into the auto-filled route. 50f's rows are time · task ·
+  // how long; the steps show when the stop is opened.
   const firstCard = page.locator(".dm-main").first();
-  await expect(firstCard.getByText("2/4 steps done")).toBeVisible({ timeout: 5_000 });
-
-  await page.locator(".dm-options").first().click();
+  await expect(firstCard).toContainText("Reply to the important message");
+  await firstCard.click();
   const substepsList = page.locator(".dm-substeps").first();
   await expect(substepsList).toBeVisible({ timeout: 3_000 });
   await expect(substepsList.getByText("Open email / LinkedIn / WhatsApp")).toBeVisible();
@@ -138,13 +141,13 @@ test("reliability: removing a Day Map task reflows the remaining route", async (
   await openDayMap(page);
   await autoFillDayMap(page);
 
-  // Open the first row's options to reveal the remove button
-  await page.locator(".dm-options").first().click();
+  // Open the first stop to reveal the remove button
+  await page.locator(".dm-main").first().click();
   const removeButton = page.getByRole("button", { name: "Remove from route" });
   await expect(removeButton).toBeVisible({ timeout: 3_000 });
   await removeButton.click();
 
-  await expect(page.getByText("Unscheduled · 1")).toBeVisible({ timeout: 5_000 });
+  await expect(unscheduled(page)).toHaveText("1", { timeout: 5_000 });
   await expectVisibleRouteTimeLabels(page);
   await expectNoHorizontalOverflow(page);
 });

@@ -55,34 +55,21 @@ test("Horizons: one column on a phone, two on a tablet, four on a laptop (45h–
   await expect.poll(columns).toBe(4);
 });
 
-test("priority tags are mono wherever Day Map draws them", async ({ page }) => {
+// 50f, 52e: Day map rows are time · task · how long, and the Unscheduled
+// rows task · how long · +. No priority tag is drawn there, so none can carry
+// the four old priority colours; the lengths share one colour everywhere.
+test("Day Map draws no priority tags, and its lengths share one colour", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
   await enterDemo(page);
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.getByRole("button", { name: "Day map →" }).click();
   await expect(page.locator(".day-map-page")).toBeVisible();
-
-  // Day Map draws a priority tag in two places: in the unscheduled strip, and
-  // on a route card. An earlier pass styled only the card — the selector was
-  // scoped to the route card — so the strip kept painting red, amber, teal and blue
-  // on the one screen whose point is that those four colours are gone. Both
-  // sites are asserted, because fixing the site you are looking at and missing
-  // its twin is how every colour in this PR survived its own deletion.
-  const mono = async (locator, where) => {
-    const style = await locator.first().evaluate((el) => {
-      const c = getComputedStyle(el);
-      return { bg: c.backgroundColor, color: c.color };
-    });
-    expect(style.bg, `${where} tag should have no fill`).toBe("rgba(0, 0, 0, 0)");
-    return style.color;
-  };
-
-  const stripColor = await mono(page.locator(".dm-unscheduled .dm-p"), "unscheduled strip");
-
+  const color = (loc) => loc.first().evaluate(el => getComputedStyle(el).color);
+  const poolLength = await color(page.locator(".dm-pool-row .dm-dur"));
   await page.getByRole("button", { name: /auto-fill/i }).click();
-  await expect(page.locator(".dm-stop .dm-p:visible").first()).toBeVisible();
-  const cardColor = await mono(page.locator(".dm-stop .dm-p:visible"), "route card");
-
-  // One declaration site means one colour; two means they can drift apart.
-  expect(cardColor).toBe(stripColor);
+  await expect(page.locator(".dm-stop:not(.is-now)").first()).toBeVisible();
+  expect(await color(page.locator(".dm-stop:not(.is-now) .dm-dur"))).toBe(poolLength);
+  await expect(page.locator(".day-map-page .dm-p, .day-map-page .task-row-priority")).toHaveCount(0);
 });
 
 test("Horizons: each horizon's + and each row's circle are 44px targets", async ({ page }) => {
