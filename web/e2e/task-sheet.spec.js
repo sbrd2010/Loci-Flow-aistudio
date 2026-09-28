@@ -232,3 +232,20 @@ test("a step emptied and then left is removed, with Undo", async ({ page }) => {
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
   await expect.poll(() => stepValues(page)).toEqual(before);
 });
+
+// Codex review of #418: Esc closes the sheet with focus still in a step;
+// the edit is saved, as the title's and note's are.
+for (const [name, viewport] of [["phone", { width: 375, height: 812 }], ["laptop", { width: 1280, height: 800 }]]) {
+  test(`${name}: a step edit is kept when Esc closes the sheet mid-edit`, async ({ page }) => {
+    await enterDemo(page, viewport);
+    await openFromDetails(page);
+    const before = await stepValues(page);
+    const step = sheet(page).getByLabel("Step 2", { exact: true });
+    await step.click();
+    await step.fill("Read it slowly, twice");
+    await page.keyboard.press("Escape");
+    await expect(sheet(page)).toHaveCount(0);
+    await openFromDetails(page);
+    await expect.poll(() => stepValues(page)).toEqual(before.map((t, j) => (j === 1 ? "Read it slowly, twice" : t)));
+  });
+}

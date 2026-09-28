@@ -115,9 +115,26 @@ export default function TaskDetail({
     if (text === newStep) setNewStep("");
   };
   const toggleStep = id => setSteps(steps.map(st => (st.id === id ? { ...st, done: !st.done } : st)));
+  // A step edited and not yet left is saved when the sheet closes (Esc
+  // closes it with focus still in the step), as the title and note are.
+  const stepDraftsRef = useRef({});
+  const latestStepsRef = useRef(steps);
+  latestStepsRef.current = steps;
+  const onSetStepsRef = useRef(onSetSteps);
+  onSetStepsRef.current = onSetSteps;
+  useEffect(() => () => {
+    const drafts = stepDraftsRef.current;
+    if (!Object.keys(drafts).length) return;
+    const next = latestStepsRef.current
+      .map(st => (st.id in drafts ? { ...st, text: drafts[st.id].trim().slice(0, 300) } : st))
+      .filter(st => st.text);
+    onSetStepsRef.current?.(next);
+  }, []);
+
   // A step left empty is removed, with Undo — however it was emptied — so
   // the sheet never shows a blank step while the old text stays saved.
   const editStep = (id, text) => {
+    delete stepDraftsRef.current[id];
     const t = text.trim();
     const cur = steps.find(st => st.id === id);
     if (!cur || t === cur.text) return;
@@ -395,7 +412,7 @@ export default function TaskDetail({
                   defaultValue={st.text}
                   aria-label={`Step ${i + 1}`}
                   maxLength={300}
-                  onInput={e => fitHeight(e.currentTarget)}
+                  onInput={e => { fitHeight(e.currentTarget); stepDraftsRef.current[st.id] = e.currentTarget.value; }}
                   onBlur={e => editStep(st.id, e.target.value)}
                   onKeyDown={e => onStepKeyDown(e, st, i)}
                 />
