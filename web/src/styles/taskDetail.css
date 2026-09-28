@@ -382,12 +382,12 @@
   }
 }
 
-/* Wide (50b, 50k, 52): from 1600px the drawer replaces the Day map column
+/* Wide Today (50b, 50k, 52): from 1600px the drawer replaces the Day map column
    and takes its width, 360 to 480px, so it never covers the list. The column
    starts at margin + 420 + 36 + 720 + 36; at 1600–1619 it is under 360px, and
    the drawer keeps 360 by starting further left, still clear of the list. */
 @media (min-width: 1600px) {
-  .task-detail.is-drawer {
+  .screen-content-today .task-detail.is-drawer {
     --wide-margin: max(48px, calc((100vw - 1760px) / 2));
     left: min(calc(var(--wide-margin) + 1212px), calc(100vw - 360px));
     right: auto;

@@ -64,9 +64,11 @@ test("reliability: roadmap task can be added, edited, and moved to Today", async
   await expect(roadmapCard(page, originalTitle)).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
 
+  // The row opens the task's sheet (52h); the full editor is its More details.
   await roadmapCard(page, originalTitle).click();
-  await expect(page.getByRole("heading", { name: "Manage Commitment" })).toBeVisible({ timeout: 5_000 });
-  await page.getByRole("button", { name: /Edit task/i }).click();
+  await expect(page.getByTestId("task-detail")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByTestId("task-detail").locator(".detail-kicker").first()).toHaveText(/^THIS WEEK · \d+ OF \d+$/);
+  await page.getByTestId("task-detail").getByRole("button", { name: /^More details/ }).click();
 
   await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
   await page.getByTestId("add-task-title").fill(editedTitle);
@@ -77,14 +79,16 @@ test("reliability: roadmap task can be added, edited, and moved to Today", async
   await expect(roadmapCard(page, originalTitle)).not.toBeVisible({ timeout: 5_000 });
 
   await roadmapCard(page, editedTitle).click();
-  await page.getByRole("button", { name: /Move to Today/i }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: "Move to Today" }).click();
   await expect(roadmapCard(page, editedTitle)).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.getByTestId("task-detail")).toHaveCount(0);
+  await expect(page.locator(".undo-toast")).toContainText(`Moved to Today: ${editedTitle}`);
 
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
   await expect(page.getByTestId("today-tasks-list").getByText(editedTitle)).toBeVisible({ timeout: 5_000 });
 });
 
-test("reliability: manual sub-steps added on a roadmap task are visible on the card and detail modal", async ({ page }) => {
+test("reliability: manual sub-steps added on a roadmap task are visible in its sheet", async ({ page }) => {
   await enterDemo(page);
   await openRoadmap(page);
 
@@ -100,15 +104,16 @@ test("reliability: manual sub-steps added on a roadmap task are visible on the c
 
   const card = roadmapCard(page, title);
   await expect(card).toBeVisible({ timeout: 5_000 });
-  await expect(card).toContainText("0/2");
 
+  // 52h: the row's meta is priority · estimate · front; the steps are in the sheet.
   await card.click();
-  await expect(page.getByRole("heading", { name: "Manage Commitment" })).toBeVisible({ timeout: 5_000 });
-  await expect(page.getByText("Check visa rules")).toBeVisible();
-  await expect(page.getByText("Compare flight prices")).toBeVisible();
+  const sheet = page.getByTestId("task-detail");
+  await expect(sheet.getByText("STEPS · 0 OF 2")).toBeVisible({ timeout: 5_000 });
+  await expect(sheet.getByText("Check visa rules")).toBeVisible();
+  await expect(sheet.getByText("Compare flight prices")).toBeVisible();
 });
 
-test("reliability: roadmap task can be deleted through confirmation", async ({ page }) => {
+test("reliability: roadmap task can be deleted, with Undo (no confirm)", async ({ page }) => {
   await enterDemo(page);
   await openRoadmap(page);
 
@@ -116,12 +121,15 @@ test("reliability: roadmap task can be deleted through confirmation", async ({ p
   await expect(roadmapCard(page, title)).toBeVisible({ timeout: 8_000 });
 
   await roadmapCard(page, title).click();
-  await expect(page.getByRole("heading", { name: "Manage Commitment" })).toBeVisible({ timeout: 5_000 });
-  await page.getByRole("button", { name: /Delete Task/i }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(roadmapCard(page, title)).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".undo-toast")).toContainText(`Deleted: ${title}`);
 
-  await expect(page.getByText(`Delete "${title}"?`)).toBeVisible({ timeout: 5_000 });
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
-
+  // Undo brings it back; deleting again sticks.
+  await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
+  await expect(roadmapCard(page, title)).toBeVisible({ timeout: 5_000 });
+  await roadmapCard(page, title).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: "Delete", exact: true }).click();
   await expect(roadmapCard(page, title)).not.toBeVisible({ timeout: 5_000 });
   await expect(page.getByRole("heading", { name: "Plan", level: 1 })).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
