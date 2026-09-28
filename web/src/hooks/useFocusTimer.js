@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotifications";
 import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete, focusBlockSeconds, focusExpiryReason } from "../utils/focusSession";
-import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
+import { getFocusWindows, getLociDayStr, lociDayEndsAt } from "../utils/focusWindows";
 import { safeUUID } from "../utils/uuid";
 
 // Lifts the Focus timer state to the App level so it survives tab switches
@@ -705,6 +705,15 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     if (!sessionId) return null;
     const entry = focusLedgerEntryRef.current;
     const expired = expiryReasonNow();
+    // It ends when focus stopped — and no later than the end of its day, so
+    // time counted past the boundary (up to the check, or longer in a
+    // background tab) is not credited to it (Codex review of #419).
+    const stopAt = focusPausedAtRef.current ?? Date.now();
+    const startDay = lociDayOf(focusStartedAtRef.current);
+    const endAt = expired === "day_ended" ? Math.min(stopAt, lociDayEndsAt(startDay, getFocusWindows(config))) : stopAt;
+    const elapsed = expired
+      ? Math.max(focusSessionAccumulatedElapsedRef.current, Math.round(currentElapsedSeconds() - (stopAt - endAt) / 1000))
+      : currentElapsedSeconds();
     return {
       focusSessionId: sessionId,
       focusStartedAt: focusStartedAtRef.current,
@@ -712,7 +721,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       // Sum of every earlier "Keep Going" block's numbers plus the current
       // (final) block's — see extendTimer's accumulation above.
       focusFinalPlannedSeconds: focusSessionAccumulatedPlannedRef.current + timerMaxSeconds,
-      focusElapsedSeconds: currentElapsedSeconds(),
+      focusElapsedSeconds: elapsed,
       focusEndReason: expired || focusEndReason,
       focusBlocks: focusBlocksRef.current,
       focusExtensions: focusExtensionsRef.current,
@@ -724,7 +733,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       // be ABSENT otherwise, not present-and-undefined, so a caller passing
       // this straight into buildFocusTerminalEvent mints a fresh id for an
       // ordinary session and pins the held one only when there is one.
-      ...(expired ? { focusEndedAt: focusPausedAtRef.current ?? Date.now(), lociDateString: lociDayOf(focusStartedAtRef.current) } : {}),
+      ...(expired ? { focusEndedAt: endAt, lociDateString: startDay } : {}),
       ...(entry ? { eventId: entry.eventId, lociDateString: entry.lociDateString } : {}),
     };
   };

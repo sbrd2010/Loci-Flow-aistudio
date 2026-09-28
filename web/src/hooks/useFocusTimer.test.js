@@ -634,6 +634,27 @@ describe("useFocusTimer", () => {
       Date.now.mockRestore();
     });
 
+    // Codex review of #419: a session still running when its day ended is
+    // capped at the boundary — end time and focused time both.
+    it("a session running past the end of its day ends at the boundary, with only the time before it", () => {
+      const start = new Date("2024-06-15T23:50:00").getTime();
+      vi.spyOn(Date, "now").mockReturnValue(start);
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], { pomodoroDurationMinutes: 90 }, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], { pomodoroDurationMinutes: 90 }, "u1"]);
+      // Back 40 minutes later: the countdown shows 40 minutes gone.
+      Date.now.mockReturnValue(start + 40 * 60_000);
+      result.current.setTimerSecondsLeft(50 * 60);
+      rerender([[task], { pomodoroDurationMinutes: 90 }, "u1"]);
+      const ended = result.current.endFocusSession("user_abandoned");
+      expect(ended).toMatchObject({
+        focusEndReason: "day_ended", lociDateString: "2024-06-15",
+        focusEndedAt: new Date("2024-06-16T00:00:00").getTime(), focusElapsedSeconds: 10 * 60,
+      });
+      Date.now.mockRestore();
+    });
+
     it("endFocusSession returns null when no session was ever started", () => {
       const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
       const { result } = renderHook(useFocusTimer, [[task], {}, "u1"]);

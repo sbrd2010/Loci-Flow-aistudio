@@ -205,3 +205,12 @@ export function getLociDayStr(now, windows) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+
+// When the Loci day `dayStr` ("YYYY-MM-DD") ends — the moment getLociDayStr
+// moves on: the next midnight, or the end of the latest overnight window
+// after it.
+export function lociDayEndsAt(dayStr, windows) {
+  const [y, m, d] = String(dayStr).split("-").map(Number);
+  const tail = Math.max(0, ...windows.filter(w => w.overnight).map(w => w.endMin));
+  return new Date(y, m - 1, d + 1, 0, tail).getTime();
+}
