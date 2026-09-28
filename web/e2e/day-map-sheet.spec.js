@@ -188,3 +188,25 @@ test("moving the one thing off Today from the sheet ends its focus session", asy
   await expect(floating).toHaveCount(0);
   await expect(page.locator(".today-wall .wall-title", { hasText: wallTitle })).toHaveCount(0);
 });
+
+// Codex review of #415: a stop moved to a later horizon leaves the route for
+// good; brought back to Today it waits in Unscheduled, not in its old slot.
+test("a stop moved off Today and back waits in Unscheduled, not in its old slot", async ({ page }) => {
+  await openDayMap(page, { width: 1280, height: 800 });
+  const before = await titles(page);
+  await stops(page).nth(1).click();
+  await sheet(page).getByRole("button", { name: /^Horizon/ }).click();
+  await sheet(page).getByRole("radio", { name: "This week" }).click();
+  await expect.poll(() => titles(page)).toEqual([before[0], before[2]]);
+
+  // Back to Today from Plan's sheet.
+  await page.locator(".dm-back").click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  await page.locator(".plan-row", { hasText: before[1] }).click();
+  await sheet(page).getByRole("button", { name: "Move to Today" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
+  await page.getByRole("button", { name: "Day map →" }).click();
+
+  await expect.poll(() => titles(page)).toEqual([before[0], before[2]]);
+  await expect(page.locator(".dm-pool .dm-pool-list")).toContainText(before[1]);
+});

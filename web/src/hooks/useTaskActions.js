@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { safeUUID } from "../utils/uuid";
 import { celebrate } from "../utils/celebrations";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
+import { removeScheduleFields } from "./useDayRoute";
 import { buildTaskMutationEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 
 // What a task's sheet does to the task, with the one Undo toast: done, park,
@@ -71,7 +72,10 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
     const endedFocusSession = task.isNowFocus && typeof focusTimer.endFocusSession === "function"
       ? focusTimer.endFocusSession("user_abandoned")
       : null;
-    savePayloadAsync({ ...payloadRef.current, tasks: latestTasks().map(t => t.uuid === task.uuid ? { ...t, horizonLevel: horizon, orderIndex, isNowFocus: false, lastUpdated: now } : t) })
+    // Off Today it is off the Day map too: without its old slot, a return to
+    // Today lands in Unscheduled rather than over the stop now in that slot.
+    const offRoute = (t) => (t.horizonLevel === "today" ? removeScheduleFields(t) : t);
+    savePayloadAsync({ ...payloadRef.current, tasks: latestTasks().map(t => t.uuid === task.uuid ? { ...offRoute(t), horizonLevel: horizon, orderIndex, isNowFocus: false, lastUpdated: now } : t) })
       .then(() => {
         const events = [event];
         if (endedFocusSession) {
