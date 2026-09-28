@@ -77,9 +77,13 @@ test("mobile reliability: Day Map auto-fill persists route anchor and reflows du
   await expectStopTime(taskStops(page).first(), "11:00");
 
   const firstStop = taskStops(page).first();
+  // The sheet's estimate is the stop's duration (52).
   await firstStop.locator(".dm-main").click();
-  await firstStop.locator("select").selectOption("90");
-  await expect(firstStop.locator(".dm-dur")).toHaveText("1h30m", { timeout: 5_000 });
-  await expectStopTime(taskStops(page).nth(1), "12:35");
+  const sheet = page.getByTestId("task-detail");
+  await sheet.getByRole("button", { name: /^Estimate/ }).click();
+  await sheet.getByRole("radio", { name: "2h" }).click();
+  await sheet.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(firstStop.locator(".dm-dur")).toHaveText("2h", { timeout: 5_000 });
+  await expectStopTime(taskStops(page).nth(1), "13:05");
   await expectNoHorizontalOverflow(page);
 });

@@ -101,7 +101,7 @@ test("reliability: Day Map route persists after closing and reopening", async ({
   await expectNoHorizontalOverflow(page);
 });
 
-test("a Day Map stop reveals its full sub-step list when opened", async ({ page }) => {
+test("a Day Map stop opens its task sheet, with its steps", async ({ page }) => {
   await enterDemo(page, { width: 375, height: 812 });
 
   await openDayMap(page);
@@ -109,28 +109,18 @@ test("a Day Map stop reveals its full sub-step list when opened", async ({ page 
 
   // demo-t1 ("Reply to the important message...") has 4 sub-steps (2 done)
   // and comes first into the auto-filled route. 50f's rows are time · task ·
-  // how long; the steps show when the stop is opened.
+  // how long; the stop opens the task sheet (52), steps and all.
   const firstCard = page.locator(".dm-main").first();
   await expect(firstCard).toContainText("Reply to the important message");
   await firstCard.click();
-  const substepsList = page.locator(".dm-substeps").first();
-  await expect(substepsList).toBeVisible({ timeout: 3_000 });
-  await expect(substepsList.getByText("Open email / LinkedIn / WhatsApp")).toBeVisible();
-  await expect(substepsList.getByText("Write a short, honest reply (3 sentences is enough)")).toBeVisible();
-
-  // Not-done steps render first, done steps last (matches TaskRow.jsx's ordering),
-  // and each row's done/not-done state is reflected in both class and checkmark glyph.
-  await expect(substepsList.locator(".dm-substep")).toHaveCount(4);
-  await expect(substepsList.locator(".dm-substep.is-done")).toHaveCount(2);
-  const rows = substepsList.locator(".dm-substep");
-  await expect(rows.nth(0)).not.toHaveClass(/is-done/);
-  await expect(rows.nth(0).getByText("Write a short, honest reply (3 sentences is enough)")).toBeVisible();
-  await expect(rows.nth(0)).toHaveAttribute(
-    "aria-label",
-    "Not completed: Write a short, honest reply (3 sentences is enough)"
-  );
-  await expect(rows.nth(3)).toHaveClass(/is-done/);
-  await expect(rows.nth(3)).toHaveAttribute("aria-label", "Completed: Read the message properly");
+  const sheet = page.getByTestId("task-detail");
+  await expect(sheet).toBeVisible({ timeout: 3_000 });
+  await expect(sheet.locator(".detail-kicker").first()).toHaveText(/^DAY MAP · 1 OF \d+$/);
+  await expect(sheet.getByText("STEPS · 2 OF 4")).toBeVisible();
+  await expect(sheet.locator(".detail-step")).toHaveCount(4);
+  await expect(sheet.locator(".detail-step.is-done")).toHaveCount(2);
+  await expect(sheet.getByRole("checkbox", { name: "Open email / LinkedIn / WhatsApp" })).toBeVisible();
+  await expect(sheet.getByRole("checkbox", { name: "Write a short, honest reply (3 sentences is enough)" })).toBeVisible();
 
   await expectNoHorizontalOverflow(page);
 });
@@ -141,7 +131,7 @@ test("reliability: removing a Day Map task reflows the remaining route", async (
   await openDayMap(page);
   await autoFillDayMap(page);
 
-  // Open the first stop to reveal the remove button
+  // The first stop's sheet has Remove from route.
   await page.locator(".dm-main").first().click();
   const removeButton = page.getByRole("button", { name: "Remove from route" });
   await expect(removeButton).toBeVisible({ timeout: 3_000 });

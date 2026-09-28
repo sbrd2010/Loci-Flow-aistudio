@@ -7,7 +7,8 @@ import { notifPermissionState, requestNotifPermission as nativeRequestPermission
 import { applyAiRewriteToTask } from "../utils/taskOps";
 import { getFocusWindows } from "../utils/focusWindows";
 import { frontsFromConfig, sortFronts } from "../utils/fronts";
-import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
+import { buildTaskMutationEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
+import { removeScheduleFields } from "../hooks/useDayRoute";
 import { IconCheck, IconChevronRight, IconPencil, IconX } from "./ui/icons";
 import "../styles/addTask.css";
 
@@ -31,7 +32,7 @@ function parseManualSubSteps(raw) {
 // the save path has to tell "the user chose 25" from "nobody chose anything".
 const DEFAULT_ESTIMATE_MINUTES = 25;
 
-export default function AddTaskDialog({ email, payload, savePayload, savePayloadAsync, userProfile, defaultHorizon, defaultFrontId = null, openedFrom = null, onClose, editTask, uid, writeActivityEvents }) {
+export default function AddTaskDialog({ email, payload, savePayload, savePayloadAsync, userProfile, defaultHorizon, defaultFrontId = null, openedFrom = null, onClose, editTask, uid, writeActivityEvents, focusTimer = {} }) {
   const windows = getFocusWindows(payload.config || {});
   const isEditMode = !!editTask;
   const [title, setTitle] = useState(editTask?.title || "");
@@ -305,11 +306,26 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       if (!reminderAt && editTask.reminderAt) cancelReminder(editTask.uuid);
       const horizonChanged = horizonLevel !== editTask.horizonLevel;
       if (horizonChanged) {
-        const event = buildTaskMutationEvent("task_moved", updatedTask, {
+        // Off Today it is no longer the one thing, nor on the Day map: its
+        // session ends, recorded, and its route slot goes (as the task
+        // sheet's Horizon picker does).
+        const leavesToday = editTask.horizonLevel === "today";
+        const savedTask = leavesToday ? { ...removeScheduleFields(updatedTask), isNowFocus: false } : updatedTask;
+        const now = Date.now();
+        const endedFocusSession = leavesToday && editTask.isNowFocus && typeof focusTimer.endFocusSession === "function"
+          ? focusTimer.endFocusSession("user_abandoned")
+          : null;
+        const event = buildTaskMutationEvent("task_moved", savedTask, {
           fromState: { horizonLevel: editTask.horizonLevel }, toState: { horizonLevel }, windows,
         });
-        savePayloadAsync({ ...payload, tasks: (payload.tasks || []).map(t => t.uuid === editTask.uuid ? updatedTask : t) })
-          .then(() => writeActivityEvents(eventPatch(uid, event)))
+        savePayloadAsync({ ...payload, tasks: (payload.tasks || []).map(t => t.uuid === editTask.uuid ? savedTask : t) })
+          .then(() => {
+            if (!endedFocusSession) { writeActivityEvents(eventPatch(uid, event)); return; }
+            writeActivityEvents(eventsPatch(uid, [
+              event,
+              buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }),
+            ]));
+          })
           .catch(() => {});
       } else {
         savePayload({ ...payload, tasks: (payload.tasks || []).map(t => t.uuid === editTask.uuid ? updatedTask : t) });

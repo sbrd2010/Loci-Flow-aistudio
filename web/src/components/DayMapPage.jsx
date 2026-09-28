@@ -22,12 +22,15 @@ import { dayProgress, formatClock24, formatSpan, moveToTomorrow, restoreSchedule
 import { mergeWindowSpans } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
 import {
-  DURATION_OPTIONS, applyReflow, currentDayMinutes, getEstimate, getTaskId,
-  normalizePriority, reflowRoute, removeScheduleFields, useDayRoute,
+  applyReflow, currentDayMinutes, getEstimate, getTaskId,
+  normalizePriority, reflowRoute, removeScheduleFields, roundToQuarter, routeIsContiguous, useDayRoute,
 } from "../hooks/useDayRoute";
 import DayClockBar from "./DayClockBar";
 import LinkifyText from "./LinkifyText";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
+import TaskDetail from "./TaskDetail";
+import useTaskActions from "../hooks/useTaskActions";
+import { frontsFromConfig, frontsOnOffer } from "../utils/fronts";
 import { IconChevronLeft, IconPlus, IconX } from "./ui/icons";
 import "../styles/dayMap.css";
 
@@ -40,7 +43,7 @@ import "../styles/dayMap.css";
 // it wait in Unscheduled — a card on the right (laptop), a bar that opens a
 // sheet (phone) — and "+" adds one to the end of the route.
 
-function RouteStop({ task, isNow, isOver, isGoal, isExpanded, onToggle, onRemove, onDurationChange, onStartFocus }) {
+function RouteStop({ task, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus }) {
   const taskId = getTaskId(task);
   const {
     attributes, listeners, setActivatorNodeRef,
@@ -50,8 +53,6 @@ function RouteStop({ task, isNow, isOver, isGoal, isExpanded, onToggle, onRemove
   const duration = getEstimate(task);
   const start = Number(task.dayMapStartMinutes ?? 0);
   const p = normalizePriority(task.priority);
-  const subSteps = task.subSteps || [];
-  const orderedSubSteps = [...subSteps.filter(s => !s.done), ...subSteps.filter(s => s.done)];
   // Brief §6: each block reads "09:00 to 10:15, Acme CV".
   const label = `${isNow ? "Now" : formatClock24(start)} to ${formatClock24(start + duration)}, ${task.title}, Priority ${p.slice(1)}`
     + (isGoal ? ", goal task" : "") + (isOver ? ", after the day ends" : "");
@@ -67,25 +68,25 @@ function RouteStop({ task, isNow, isOver, isGoal, isExpanded, onToggle, onRemove
     <li
       ref={setNodeRef}
       style={style}
-      className={`dm-stop${isNow ? " is-now" : ""}${isOver ? " is-over" : ""}${isDragging ? " is-dragging" : ""}`}
+      className={`dm-stop${isNow ? " is-now" : ""}${isOver ? " is-over" : ""}${isDragging ? " is-dragging" : ""}${isOpen ? " is-open" : ""}`}
       data-task-uuid={taskId}
     >
       <div
         ref={setActivatorNodeRef}
         className="dm-main"
         aria-label={label}
-        aria-expanded={isExpanded}
+        aria-haspopup="dialog"
         tabIndex={attributes.tabIndex}
         role={attributes.role}
         aria-roledescription={attributes["aria-roledescription"]}
         aria-describedby={attributes["aria-describedby"]}
-        onClick={onToggle}
+        onClick={onOpen}
         {...listeners}
-        // Space picks the stop up (the drag's key); Enter opens it, as a
-        // row does in Today's list.
+        // Space picks the stop up (the drag's key); Enter opens its sheet,
+        // as a row does in Today's list.
         onKeyDown={e => {
-          // (While it is held, onToggle ignores it: Enter drops it instead.)
-          if (e.key === "Enter" && e.target === e.currentTarget) { e.preventDefault(); onToggle(); return; }
+          // (While it is held, onOpen ignores it: Enter drops it instead.)
+          if (e.key === "Enter" && e.target === e.currentTarget) { e.preventDefault(); onOpen(); return; }
           listeners?.onKeyDown?.(e);
         }}
       >
@@ -102,36 +103,6 @@ function RouteStop({ task, isNow, isOver, isGoal, isExpanded, onToggle, onRemove
         </button>
       )}
 
-      {isExpanded && (
-        <div className="dm-panel" onPointerDown={e => e.stopPropagation()}>
-          {task.concreteStep && <p className="dm-step"><LinkifyText text={task.concreteStep} /></p>}
-          {subSteps.length > 0 && (
-            <ul className="dm-substeps">
-              {orderedSubSteps.map(step => (
-                <li
-                  key={step.id}
-                  className={`dm-substep${step.done ? " is-done" : ""}`}
-                  aria-label={`${step.done ? "Completed" : "Not completed"}: ${step.text}`}
-                >
-                  <span className="dm-substep-check" aria-hidden="true" />
-                  <span className="dm-substep-text">{step.text}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="dm-panel-row">
-            <label className="dm-field">
-              Duration
-              <select value={duration} onChange={e => onDurationChange(taskId, Number(e.target.value))}>
-                {DURATION_OPTIONS.map(m => <option key={m} value={m}>{formatSpan(m)}</option>)}
-              </select>
-            </label>
-            <button type="button" className="dm-remove" onClick={() => onRemove(taskId)}>
-              <IconX size={16} /> Remove from route
-            </button>
-          </div>
-        </div>
-      )}
     </li>
   );
 }
@@ -205,10 +176,26 @@ function StartControl({ anchorMinutes, onChangeAnchor, windows }) {
   );
 }
 
-export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onAddTask, onHelpChoose, dayClock, flushNow = () => {}, backLabel = "Today" }) {
-  const [expandedTaskId, setExpandedTaskId] = useState(null);
-  // One Undo toast: { message, before, at } — before is what to put back.
-  const [undo, setUndo] = useState(null);
+export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onAddTask, onHelpChoose, dayClock, flushNow = () => {}, backLabel = "Today", onEditTask, uid, writeActivityEvents, focusTimer }) {
+  // A stop, opened (52): the task sheet, with Remove from route.
+  const [detailId, setDetailId] = useState(null);
+  // The route's own Undo: { message, before, at } — before is what to put back.
+  const [routeUndo, setRouteUndo] = useState(null);
+  // The sheet's actions (done, park, delete, a step) and their Undo, as in
+  // Plan. One toast shows: whichever came last.
+  const actions = useTaskActions({ payload, savePayload, savePayloadAsync, uid, writeActivityEvents, focusTimer });
+  const setUndo = (u) => { setRouteUndo(u); if (u) actions.setUndo(null); };
+  // Done, Park, Delete or a horizon change take a stop off the route, and
+  // their Undo puts it back: either way the route is timed again once the
+  // write has landed (the effect below), so no gap or overlap is left.
+  const pendingReflowRef = useRef(null);
+  const act = (fn) => (...args) => { setRouteUndo(null); pendingReflowRef.current = { prefer: null }; fn(...args); };
+  const undoAction = () => {
+    const task = actions.undo?.task;
+    if (task && actions.undo.kind !== "step") pendingReflowRef.current = { prefer: getTaskId(task) };
+    actions.handleUndo();
+  };
+  const undo = routeUndo;
   // Phone (52d): Unscheduled is a bar that opens this sheet.
   const [poolOpen, setPoolOpen] = useState(false);
   const [dragTitle, setDragTitle] = useState(null);
@@ -223,7 +210,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   }, []);
 
   const {
-    tasks, windows, todayStr, tomorrowStr, payloadRef,
+    tasks, config: routeConfig, windows, todayStr, tomorrowStr, payloadRef,
     activeTodayTasks, scheduledTasks, tomorrowTasks, unscheduledTasks,
     anchorMinutes, plan, isGoal, sortableIds, latestTasks, applyAndSave,
   } = useDayRoute({ payload, savePayload });
@@ -260,14 +247,15 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       return reflowed.find(r => getTaskId(r) === getTaskId(t)) || t;
     });
     savePayload({ ...p, tasks: nextTasks, timestamp: Date.now() });
-    if (expandedTaskId === taskId) setExpandedTaskId(null);
+    const task = latestTasks().find(t => getTaskId(t) === taskId);
+    if (task) setUndo({ message: `Removed from route: ${task.title}`, before: [task], at: Date.now() });
   };
 
-  // The duration edit also updates timeEstimateMinutes, so Today and Focus
-  // (which read that field) pick up the same value.
+  // The sheet's estimate is the stop's duration: both fields change, and the
+  // route is timed again.
   const changeDuration = (taskId, duration) => {
     applyAndSave(scheduledTasks.map(t =>
-      getTaskId(t) === taskId ? { ...t, dayMapDurationMinutes: duration, timeEstimateMinutes: duration } : t
+      getTaskId(t) === taskId ? { ...t, dayMapDurationMinutes: duration || null, timeEstimateMinutes: duration || null } : t
     ), anchorMinutes);
   };
 
@@ -290,7 +278,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       tasks: latestTasks().map(t => t.dayMapDate === todayStr ? removeScheduleFields(t) : t),
       timestamp: Date.now(),
     });
-    setExpandedTaskId(null);
+    setDetailId(null);
     setUndo({ kind: "clear", message: "Route cleared", before, at: Date.now() });
   };
 
@@ -302,7 +290,6 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     if (!ids.length) return;
     const { tasks: nextTasks, before } = moveToTomorrow(latestTasks(), ids, tomorrowStr);
     savePayload({ ...payloadRef.current, tasks: nextTasks, timestamp: Date.now() });
-    setExpandedTaskId(null);
     setUndo({ message: `${ids.length} ${ids.length === 1 ? "task" : "tasks"} moved to tomorrow`, before, at: Date.now() });
   };
 
@@ -385,14 +372,73 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         isNow={index === 0 && start <= nowMins + 15}
         isOver={plan.overIndex !== -1 && index >= plan.overIndex}
         isGoal={isGoal(task)}
-        isExpanded={expandedTaskId === id}
-        onToggle={() => { if (!draggingRef.current) setExpandedTaskId(expandedTaskId === id ? null : id); }}
-        onRemove={removeFromRoute}
-        onDurationChange={changeDuration}
+        isOpen={detailId === id}
+        onOpen={() => { if (!draggingRef.current) setDetailId(id); }}
         onStartFocus={() => startFocus(id)}
       />
     );
   };
+  // The route is timed again when a sheet action asks (Done, Park, Delete
+  // and their Undo), or when it has a gap or an overlap from any other write
+  // (the full editor, Today, another device). A stop put back by Undo keeps
+  // its old order, which it now shares with the stop that moved up into its
+  // place: it goes first, back where it was.
+  //
+  // With no From set, the route starts now: a first stop that starts later
+  // than now's quarter hour is a gap too (the stop before it went).
+  useEffect(() => {
+    const pending = pendingReflowRef.current;
+    const fromSet = routeConfig.dayMapDate === todayStr && routeConfig.dayMapAnchorMinutes != null;
+    const start = fromSet ? anchorMinutes : currentDayMinutes(windows);
+    const first = scheduledTasks[0]?.dayMapStartMinutes;
+    const headGap = !fromSet && first != null && Number(first) > roundToQuarter(start);
+    if (!pending && !headGap && routeIsContiguous(scheduledTasks)) return;
+    pendingReflowRef.current = null;
+    const prefer = pending?.prefer ?? null;
+    const order = (t) => t.dayMapOrder ?? Infinity;
+    const route = [...scheduledTasks].sort((a, b) => (order(a) - order(b))
+      || ((getTaskId(b) === prefer) - (getTaskId(a) === prefer)));
+    applyAndSave(route, start);
+  }, [scheduledTasks]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The sheet on phones and tablets, the drawer from 1024px (as in Plan).
+  const detailTask = detailId ? scheduledTasks.find(t => getTaskId(t) === detailId) : null;
+  const detailIndex = detailTask ? scheduledTasks.indexOf(detailTask) : -1;
+  // Done, parked, deleted, off the route or off Today: the sheet closes.
+  useEffect(() => {
+    if (detailId && !detailTask) setDetailId(null);
+  }, [detailId, detailTask]);
+  const focusStop = (id) => requestAnimationFrame(() => document.querySelector(`.dm-route [data-task-uuid="${window.CSS.escape(id)}"] .dm-main`)?.focus());
+  const closeDetail = () => { const back = detailId; setDetailId(null); if (back) focusStop(back); };
+  // An action that takes the task off the route: focus goes to its neighbour.
+  const leaving = (fn, arg = detailTask) => {
+    const next = scheduledTasks[detailIndex + 1] || scheduledTasks[detailIndex - 1];
+    fn(arg);
+    if (next) focusStop(getTaskId(next));
+  };
+  // ↑/↓ move through the route; Esc closes and hands focus back to the stop.
+  const onDetailKeyDown = (e) => {
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || !detailTask) return;
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeDetail(); return; }
+    const el = e.target;
+    if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+    const dir = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
+    const next = dir && scheduledTasks[detailIndex + dir];
+    if (!next) return;
+    e.preventDefault();
+    setDetailId(getTaskId(next));
+  };
+  const detailOpenRef = useRef(false);
+  detailOpenRef.current = !!detailTask;
+  const closeDetailRef = useRef(closeDetail);
+  closeDetailRef.current = closeDetail;
+  const [drawerViewport, setDrawerViewport] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1024);
+  useEffect(() => {
+    const update = () => setDrawerViewport(window.innerWidth >= 1024);
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
   const poolRows = (
     <ul className="dm-pool-list">
       {unscheduledTasks.map(t => <PoolRow key={getTaskId(t)} task={t} onAdd={addToRoute} draggable />)}
@@ -455,6 +501,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       const el = e.target;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
       if (poolOpenRef.current) { closePoolRef.current(); return; }
+      // An open drawer takes Esc before the page does, wherever focus is.
+      if (detailOpenRef.current) { closeDetailRef.current(); return; }
       if (document.querySelector("[role='dialog'][aria-modal='true']")) return;
       closeRef.current();
     };
@@ -462,7 +510,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const undoText = undo ? undo.message : "";
+  const undoText = actions.undo ? actions.undoText : undo ? undo.message : "";
+  const onUndo = actions.undo ? undoAction : handleUndo;
+  const toastAt = actions.undo?.at ?? undo?.at;
 
   return (
     <div className="day-map-page">
@@ -620,7 +670,38 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       )}
 
       <UndoAnnouncer message={undoText} />
-      {undo && <UndoToast key={undo.at} message={undoText} onUndo={handleUndo} onClose={() => setUndo(null)} />}
+      {detailTask && !drawerViewport && <div className="task-detail-scrim" onClick={closeDetail} aria-hidden="true" />}
+      {detailTask && (
+        <div onKeyDown={onDetailKeyDown}>
+          <TaskDetail
+            key={detailTask.uuid || detailId}
+            // Its estimate is the stop's duration, as the route times it.
+            task={{ ...detailTask, timeEstimateMinutes: getEstimate(detailTask) }}
+            variant={drawerViewport ? "drawer" : "sheet"}
+            kicker={`DAY MAP · ${detailIndex + 1} OF ${scheduledTasks.length}`}
+            isGoal={isGoal(detailTask)}
+            fronts={frontsOnOffer(frontsFromConfig(payload.config || {}), detailTask.frontId)}
+            onClose={closeDetail}
+            onPatch={patch => {
+              const { timeEstimateMinutes, horizonLevel, ...rest } = patch;
+              if (timeEstimateMinutes !== undefined) changeDuration(detailId, timeEstimateMinutes);
+              if (horizonLevel && horizonLevel !== detailTask.horizonLevel) act(actions.handleChangeHorizon)(detailTask, horizonLevel);
+              if (Object.keys(rest).length) actions.patchTask(detailTask.uuid, rest);
+            }}
+            onToggleStep={stepId => actions.handleToggleStep(detailTask, stepId)}
+            onDeleteStep={act(stepId => actions.handleDeleteStep(detailTask, stepId))}
+            onAddStep={text => actions.handleAddStep(detailTask, text)}
+            // The editor, too, starts from the stop's duration.
+            onMoreDetails={onEditTask ? () => { onEditTask({ ...detailTask, timeEstimateMinutes: getEstimate(detailTask) }); setDetailId(null); } : undefined}
+            onDone={() => leaving(act(actions.handleMarkDone))}
+            onRemoveFromRoute={() => leaving(removeFromRoute, detailId)}
+            onPark={() => leaving(act(actions.handlePark))}
+            onDelete={() => leaving(act(actions.handleDelete))}
+          />
+        </div>
+      )}
+
+      {(undo || actions.undo) && <UndoToast key={toastAt} message={undoText} onUndo={onUndo} onClose={() => { setRouteUndo(null); actions.setUndo(null); }} />}
     </div>
   );
 }
