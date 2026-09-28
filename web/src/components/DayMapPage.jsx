@@ -13,14 +13,16 @@ import {
 import {
   SortableContext,
   arrayMove,
+  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { dayProgress, formatClock24, formatSpan, moveToTomorrow, restoreSchedule } from "../utils/dayMapPlan";
 import { mergeWindowSpans } from "../utils/focusWindows";
+import { isDeferred } from "../utils/deferral";
 import {
-  DURATION_OPTIONS, currentDayMinutes, getEstimate, getTaskId,
+  DURATION_OPTIONS, applyReflow, currentDayMinutes, getEstimate, getTaskId,
   normalizePriority, reflowRoute, removeScheduleFields, useDayRoute,
 } from "../hooks/useDayRoute";
 import DayClockBar from "./DayClockBar";
@@ -149,6 +151,8 @@ function PoolRow({ task, onAdd, draggable = false }) {
         onClick={() => onAdd(taskId)}
         onPointerDown={e => e.stopPropagation()}
         onMouseDown={e => e.stopPropagation()}
+        // Its own keys (Space, Enter) press it; they never start the row's drag.
+        onKeyDown={e => { if (e.key === " " || e.key === "Enter") e.stopPropagation(); }}
       >
         <IconPlus size={18} />
       </button>
@@ -229,7 +233,12 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
-    useSensor(KeyboardSensor, { keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space", "Enter"] } })
+    // One stop per ↑/↓; Space picks up and drops, Enter drops (it opens a
+    // stop when nothing is held).
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+      keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space", "Enter"] },
+    })
   );
 
   const setAnchor = (minutes) => {
@@ -281,7 +290,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       timestamp: Date.now(),
     });
     setExpandedTaskId(null);
-    setUndo({ message: "Route cleared", before, at: Date.now() });
+    setUndo({ kind: "clear", message: "Route cleared", before, at: Date.now() });
   };
 
   // The pinned task is what you are doing now, and may have a focus session
@@ -296,9 +305,23 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     setUndo({ message: `${ids.length} ${ids.length === 1 ? "task" : "tasks"} moved to tomorrow`, before, at: Date.now() });
   };
 
+  // Undo puts the tasks back, then times the whole route again: the route may
+  // have changed since (a task added after Clear route, say), and restored
+  // stops must not share an order or a start time with it.
   const handleUndo = () => {
     if (!undo) return;
-    savePayload({ ...payloadRef.current, tasks: restoreSchedule(latestTasks(), undo.before), timestamp: Date.now() });
+    const restored = restoreSchedule(latestTasks(), undo.before);
+    const put = new Set(undo.before.map(getTaskId));
+    const onRoute = restored.filter(t => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted && !t.isParked
+      && t.dayMapDate === todayStr && !isDeferred(t, todayStr) && (t.dayMapOrder != null || !!t.dayMapPeriod));
+    const byOrder = (a, b) => ((a.dayMapOrder ?? Infinity) - (b.dayMapOrder ?? Infinity))
+      || (put.has(getTaskId(b)) - put.has(getTaskId(a)))
+      || ((a.dayMapStartMinutes ?? 0) - (b.dayMapStartMinutes ?? 0));
+    // After Clear route, what was added since goes after what comes back.
+    const route = undo.kind === "clear"
+      ? [...onRoute.filter(t => put.has(getTaskId(t))).sort(byOrder), ...onRoute.filter(t => !put.has(getTaskId(t))).sort(byOrder)]
+      : [...onRoute].sort(byOrder);
+    savePayload({ ...payloadRef.current, tasks: applyReflow(restored, reflowRoute(route, anchorMinutes, todayStr)), timestamp: Date.now() });
     setUndo(null);
   };
 
@@ -390,6 +413,15 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     setPoolOpen(false);
     requestAnimationFrame(() => document.querySelector(".dm-route .dm-main")?.focus());
   }, [poolOpen, unscheduledTasks.length]);
+  // The sheet is the phone's and tablet's: crossing into the laptop layout
+  // (a tablet turned, a window widened) closes it rather than hiding it.
+  useEffect(() => {
+    if (!poolOpen) return undefined;
+    const close = () => { if (window.innerWidth >= 1024) setPoolOpen(false); };
+    close();
+    window.addEventListener("resize", close);
+    return () => window.removeEventListener("resize", close);
+  }, [poolOpen]);
   const poolOpenRef = useRef(poolOpen);
   poolOpenRef.current = poolOpen;
   // "+" in the sheet takes its row away; focus goes to the next row's "+".

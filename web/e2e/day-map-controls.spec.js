@@ -189,3 +189,47 @@ test("phone: Tab stays in the Unscheduled sheet; adding its last task closes it,
   await expect(page.locator(".dm-pool-bar")).toContainText("Unscheduled 3");
   await expect(sheet).toHaveCount(0);
 });
+
+// Codex review of #413, round two.
+test("Undo of Clear route after adding a task times the whole route again: no two stops share a start", async ({ page }) => {
+  await openDayMap(page, { width: 1280, height: 800 });
+  // Two on the route, one left in Unscheduled.
+  const titles = (await pool(page).locator(".dm-pool-title").allInnerTexts()).map(t => t.trim());
+  await pool(page).getByRole("button", { name: `Add to route: ${titles[0]}` }).click();
+  await pool(page).getByRole("button", { name: `Add to route: ${titles[1]}` }).click();
+  await page.getByRole("button", { name: "Clear route" }).click();
+  // Then one that was not on it — it takes the first start time.
+  await pool(page).getByRole("button", { name: `Add to route: ${titles[2]}` }).click();
+  await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
+  // What came back keeps its order; what was added since goes after it.
+  await expect.poll(() => stopTitles(page)).toEqual([titles[0], titles[1], titles[2]]);
+  const labels = await page.locator(".dm-stop .dm-main").evaluateAll(els => els.map(e => e.getAttribute("aria-label")));
+  const starts = labels.map(l => l.split(" to ")[0]);
+  expect(new Set(starts).size).toBe(3);
+});
+
+test("Space on an Unscheduled + adds the task; it never starts a drag", async ({ page }) => {
+  await openDayMap(page, { width: 1280, height: 800 });
+  const title = (await pool(page).locator(".dm-pool-title").first().innerText()).trim();
+  await pool(page).getByRole("button", { name: `Add to route: ${title}` }).focus();
+  await page.keyboard.press("Space");
+  await expect.poll(() => stopTitles(page)).toEqual([title]);
+  await expect(page.locator(".dm-drag-ghost")).toHaveCount(0);
+});
+
+test("the phone's sheet closes when the page crosses into the laptop layout, and stays closed", async ({ page }) => {
+  await openDayMap(page, { width: 800, height: 1000 });
+  await page.locator(".dm-pool-bar").click();
+  await expect(page.getByRole("dialog", { name: "Unscheduled" })).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  // Closed, not just hidden by the laptop's CSS.
+  await expect(page.locator(".dm-pool-bar")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator(".dm-pool-sheet")).toHaveCount(0);
+  await page.setViewportSize({ width: 800, height: 1000 });
+  await expect(page.getByRole("dialog", { name: "Unscheduled" })).toHaveCount(0);
+  await expect(page.locator(".dm-pool-bar")).toHaveAttribute("aria-expanded", "false");
+  // And Esc, on the page, goes back as it should.
+  await page.locator(".dm-heading").click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".day-map-page")).toHaveCount(0);
+});
