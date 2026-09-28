@@ -325,7 +325,7 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
         writeActivityEvents(eventsPatch(uid, events));
       })
       .catch(() => {});
-    setUndo({ kind: "park", task, at: now });
+    setUndo({ kind: "park", task, wasFocus: !!task.isNowFocus, at: now });
   };
 
   const handleToggleStep = (task, stepId) => {
@@ -377,7 +377,7 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
         writeActivityEvents(eventsPatch(uid, events));
       })
       .catch(() => {});
-    setUndo({ kind: "done", task, at: actionAt, dateStr: todayDateStr });
+    setUndo({ kind: "done", task, wasFocus: !!task.isNowFocus, at: actionAt, dateStr: todayDateStr });
   };
 
   const doTriageBrainDump = (item, horizon, overrideText) => {
@@ -543,15 +543,19 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
       const event = buildTaskMutationEvent(eventType, current, { windows, ...(eventType === "task_moved" ? { fromState: { horizonLevel: current.horizonLevel }, toState: { horizonLevel: task.horizonLevel } } : {}) });
       savePayloadAsync(next).then(() => writeActivityEvents(eventPatch(uid, event))).catch(() => {});
     };
+    // Park and Done clear the focus flag; Undo gives it back — unless another
+    // task has become the one thing since (as Today's Undo does).
+    const refocus = undo.wasFocus && !latestTasks().some(t => t.isNowFocus && t.uuid !== task.uuid && !t.isDeleted && !t.isCompleted)
+      ? { isNowFocus: true } : {};
     if (kind === "delete" && current.isDeleted) put({ isDeleted: false }, "task_restored");
-    else if (kind === "park" && current.isParked) put({ isParked: false });
+    else if (kind === "park" && current.isParked) put({ isParked: false, ...refocus });
     else if (kind === "today" && current.horizonLevel === "today") put({ horizonLevel: task.horizonLevel, orderIndex: task.orderIndex, deferredUntil: task.deferredUntil ?? null }, "task_moved");
     else if (kind === "step") put({ subSteps: [...(current.subSteps || []), undo.step].sort((a, b) => (task.subSteps || []).findIndex(x => x.id === a.id) - (task.subSteps || []).findIndex(x => x.id === b.id)) });
     else if (kind === "done" && current.isCompleted) {
       const contributions = [...(latest.contributions || [])];
       const idx = contributions.findIndex(c => c.dateString === undo.dateStr);
       if (idx !== -1 && contributions[idx].count > 0) contributions[idx] = { ...contributions[idx], count: contributions[idx].count - 1, lastUpdated: Date.now() };
-      put({ isCompleted: false, dateCompletedString: null }, "task_reopened", { contributions });
+      put({ isCompleted: false, dateCompletedString: null, ...refocus }, "task_reopened", { contributions });
     }
   };
   const UNDO_LABELS = { done: "Marked done", delete: "Deleted", park: "Parked", today: "Moved to Today" };
