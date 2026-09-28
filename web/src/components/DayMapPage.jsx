@@ -185,7 +185,16 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   // Plan. One toast shows: whichever came last.
   const actions = useTaskActions({ payload, savePayload, savePayloadAsync, uid, writeActivityEvents, focusTimer });
   const setUndo = (u) => { setRouteUndo(u); if (u) actions.setUndo(null); };
-  const act = (fn) => (...args) => { setRouteUndo(null); fn(...args); };
+  // Done, Park, Delete or a horizon change take a stop off the route, and
+  // their Undo puts it back: either way the route is timed again once the
+  // write has landed (the effect below), so no gap or overlap is left.
+  const pendingReflowRef = useRef(null);
+  const act = (fn) => (...args) => { setRouteUndo(null); pendingReflowRef.current = { prefer: null }; fn(...args); };
+  const undoAction = () => {
+    const task = actions.undo?.task;
+    if (task && actions.undo.kind !== "step") pendingReflowRef.current = { prefer: getTaskId(task) };
+    actions.handleUndo();
+  };
   const undo = routeUndo;
   // Phone (52d): Unscheduled is a bar that opens this sheet.
   const [poolOpen, setPoolOpen] = useState(false);
@@ -369,6 +378,19 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       />
     );
   };
+  // The re-timing Done, Park, Delete and their Undo ask for. A stop put back
+  // keeps its old order, which it now shares with the stop that moved up
+  // into its place: it goes first, back where it was.
+  useEffect(() => {
+    const pending = pendingReflowRef.current;
+    if (!pending) return;
+    pendingReflowRef.current = null;
+    const order = (t) => t.dayMapOrder ?? Infinity;
+    const route = [...scheduledTasks].sort((a, b) => (order(a) - order(b))
+      || ((getTaskId(b) === pending.prefer) - (getTaskId(a) === pending.prefer)));
+    applyAndSave(route, anchorMinutes);
+  }, [scheduledTasks]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // The sheet on phones and tablets, the drawer from 1024px (as in Plan).
   const detailTask = detailId ? scheduledTasks.find(t => getTaskId(t) === detailId) : null;
   const detailIndex = detailTask ? scheduledTasks.indexOf(detailTask) : -1;
@@ -479,7 +501,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   }, []);
 
   const undoText = actions.undo ? actions.undoText : undo ? undo.message : "";
-  const onUndo = actions.undo ? actions.handleUndo : handleUndo;
+  const onUndo = actions.undo ? undoAction : handleUndo;
   const toastAt = actions.undo?.at ?? undo?.at;
 
   return (
@@ -643,7 +665,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         <div onKeyDown={onDetailKeyDown}>
           <TaskDetail
             key={detailTask.uuid || detailId}
-            task={detailTask}
+            // Its estimate is the stop's duration, as the route times it.
+            task={{ ...detailTask, timeEstimateMinutes: getEstimate(detailTask) }}
             variant={drawerViewport ? "drawer" : "sheet"}
             kicker={`DAY MAP · ${detailIndex + 1} OF ${scheduledTasks.length}`}
             isGoal={isGoal(detailTask)}
@@ -652,7 +675,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
             onPatch={patch => {
               const { timeEstimateMinutes, horizonLevel, ...rest } = patch;
               if (timeEstimateMinutes !== undefined) changeDuration(detailId, timeEstimateMinutes);
-              if (horizonLevel && horizonLevel !== detailTask.horizonLevel) actions.handleChangeHorizon(detailTask, horizonLevel);
+              if (horizonLevel && horizonLevel !== detailTask.horizonLevel) act(actions.handleChangeHorizon)(detailTask, horizonLevel);
               if (Object.keys(rest).length) actions.patchTask(detailTask.uuid, rest);
             }}
             onToggleStep={stepId => actions.handleToggleStep(detailTask, stepId)}

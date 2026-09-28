@@ -113,3 +113,44 @@ test("the sheet's estimate is the stop's duration, and the route is timed again"
   // 11:35 rounds to 11:45; an hour, then the 5-minute gap.
   expect(second).toBe("12:50");
 });
+
+// Codex review of #415: Done (and Park, Delete) from the sheet times the
+// route again, and Undo puts the stop back in its place and its time.
+test("Done from the sheet closes the gap; Undo puts the stop back where it was", async ({ page }) => {
+  await openDayMap(page, { width: 1280, height: 800 });
+  // Route order unlike the list's: the last stop moved up one. The stop put
+  // back then shares its order with one that sits before it in the list.
+  const start = await titles(page);
+  await stops(page).nth(2).focus();
+  await page.keyboard.press("Space");
+  await expect(page.locator(".dm-stop.is-dragging")).toHaveCount(1);
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await page.keyboard.press("ArrowUp");
+  await page.waitForFunction(() => {
+    const el = document.querySelector(".dm-stop.is-dragging");
+    return !!el && el.style.transform && !/translate3d\(0px, 0px/.test(el.style.transform);
+  });
+  await page.keyboard.press("Space");
+  await expect.poll(() => titles(page)).toEqual([start[0], start[2], start[1]]);
+  const before = await titles(page);
+  const beforeTimes = await times(page);
+
+  await stops(page).nth(1).click();
+  await sheet(page).getByRole("button", { name: `Mark done: ${before[1]}` }).click();
+  await expect.poll(() => titles(page)).toEqual([before[0], before[2]]);
+  await expect.poll(() => times(page)).toEqual([beforeTimes[0], beforeTimes[1]]);
+
+  await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
+  await expect.poll(() => titles(page)).toEqual(before);
+  await expect.poll(() => times(page)).toEqual(beforeTimes);
+});
+
+// Codex review of #415: the sheet shows the duration the route uses.
+test("the sheet's estimate is the stop's duration even when set to None", async ({ page }) => {
+  await openDayMap(page, { width: 375, height: 812 });
+  await stops(page).nth(0).click();
+  await sheet(page).getByRole("button", { name: /^Estimate/ }).click();
+  await sheet(page).getByRole("radio", { name: "None" }).click();
+  await expect(page.locator(".dm-stop").nth(0).locator(".dm-dur")).toHaveText("25m");
+  await expect(sheet(page).getByRole("button", { name: /^Estimate/ }).locator(".detail-value")).toHaveText("25m");
+});
