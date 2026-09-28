@@ -79,6 +79,12 @@ function RouteStop({ task, isNow, isOver, isGoal, isExpanded, onToggle, onRemove
         aria-describedby={attributes["aria-describedby"]}
         onClick={onToggle}
         {...listeners}
+        // Space picks the stop up (the drag's key); Enter opens it, as a
+        // row does in Today's list.
+        onKeyDown={e => {
+          if (e.key === "Enter" && e.target === e.currentTarget) { e.preventDefault(); onToggle(); return; }
+          listeners?.onKeyDown?.(e);
+        }}
       >
         <span className="dm-time">{isNow ? "NOW" : formatClock24(start)}</span>
         <span className="dm-title">
@@ -223,7 +229,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
-    useSensor(KeyboardSensor)
+    useSensor(KeyboardSensor, { keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space", "Enter"] } })
   );
 
   const setAnchor = (minutes) => {
@@ -377,6 +383,13 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     setPoolOpen(false);
     requestAnimationFrame(() => document.querySelector(".dm-pool-bar")?.focus());
   };
+  // Its last task added, the sheet has nothing left: it closes, and focus
+  // goes to the first stop (the bar is disabled with nothing to add).
+  useEffect(() => {
+    if (!poolOpen || unscheduledTasks.length > 0) return;
+    setPoolOpen(false);
+    requestAnimationFrame(() => document.querySelector(".dm-route .dm-main")?.focus());
+  }, [poolOpen, unscheduledTasks.length]);
   const poolOpenRef = useRef(poolOpen);
   poolOpenRef.current = poolOpen;
   // "+" in the sheet takes its row away; focus goes to the next row's "+".
@@ -531,7 +544,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         </DndContext>
       )}
 
-      {poolOpen && unscheduledTasks.length > 0 && (
+      {poolOpen && (
         <>
           <div className="dm-sheet-scrim" onClick={closePool} aria-hidden="true" />
           <div
@@ -539,7 +552,17 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
             role="dialog"
             aria-modal="true"
             aria-label="Unscheduled"
-            onKeyDown={e => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closePool(); } }}
+            onKeyDown={e => {
+              if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closePool(); return; }
+              // Modal: Tab and Shift+Tab stay among the sheet's buttons.
+              if (e.key !== "Tab") return;
+              const items = [...e.currentTarget.querySelectorAll("button:enabled")];
+              if (!items.length) return;
+              const i = items.indexOf(document.activeElement);
+              const next = e.shiftKey ? (i <= 0 ? items.length - 1 : i - 1) : (i === items.length - 1 ? 0 : i + 1);
+              e.preventDefault();
+              items[next].focus();
+            }}
           >
             <div className="dm-pool-head">
               <h2 className="dm-pool-name">Unscheduled <span className="dm-pool-count">{unscheduledTasks.length}</span></h2>

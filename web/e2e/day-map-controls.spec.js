@@ -143,3 +143,49 @@ test("phone: Unscheduled is a bar above the action at the bottom; it opens a she
   await expect(bar).toContainText("Unscheduled 2");
   await expect(bar).toBeFocused();
 });
+
+// Codex review of #413: a stop's panel opens from the keyboard (Enter), while
+// Space still picks it up to reorder.
+test("keyboard: Enter on a stop opens its panel; Space picks it up to reorder", async ({ page }) => {
+  await openDayMap(page, { width: 1280, height: 800 });
+  await page.getByRole("button", { name: "Auto-fill" }).click();
+  const stops = page.locator(".dm-stop .dm-main");
+  await stops.nth(1).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".dm-stop").nth(1).getByRole("button", { name: "Remove from route" })).toBeVisible();
+  await expect(stops.nth(1)).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Remove from route" })).toHaveCount(0);
+
+  const before = await stopTitles(page);
+  const announced = (re) => page.waitForFunction((src) =>
+    [...document.querySelectorAll("[id^='DndLiveRegion']")].some(el => new RegExp(src).test(el.textContent)), re.source);
+  await stops.nth(1).focus();
+  await page.keyboard.press("Space");
+  await announced(/Picked up|was moved over/);
+  await page.keyboard.press("ArrowDown");
+  await announced(/Draggable item (\S+) was moved over droppable area (?!\1\b)\S+/);
+  await page.keyboard.press("Space");
+  await expect.poll(() => stopTitles(page)).toEqual([before[0], before[2], before[1]]);
+});
+
+// Codex review of #413: the sheet is modal — Tab stays in it — and adding its
+// last task closes it for good, rather than leaving it open to come back.
+test("phone: Tab stays in the Unscheduled sheet; adding its last task closes it, and it stays closed", async ({ page }) => {
+  await openDayMap(page, { width: 412, height: 892 });
+  await page.locator(".dm-pool-bar").click();
+  const sheet = page.getByRole("dialog", { name: "Unscheduled" });
+  const inSheet = () => page.evaluate(() => !!document.activeElement?.closest(".dm-pool-sheet"));
+  await expect(sheet.getByRole("button", { name: "Close" })).toBeFocused();
+  for (let i = 0; i < 5; i++) { await page.keyboard.press("Tab"); expect(await inSheet()).toBe(true); }
+  for (let i = 0; i < 5; i++) { await page.keyboard.press("Shift+Tab"); expect(await inSheet()).toBe(true); }
+
+  for (let i = 3; i > 0; i--) await sheet.locator(".dm-pool-add").first().click();
+  await expect(sheet).toHaveCount(0);
+  await expect(page.locator(".dm-pool-bar")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator(".dm-stop .dm-main").first()).toBeFocused();
+  // A task back in the pool must not bring the sheet back on its own.
+  await page.getByRole("button", { name: "Clear route" }).click();
+  await expect(page.locator(".dm-pool-bar")).toContainText("Unscheduled 3");
+  await expect(sheet).toHaveCount(0);
+});
