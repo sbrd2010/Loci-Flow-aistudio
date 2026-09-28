@@ -2,13 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { safeUUID } from "../utils/uuid";
-import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
+import { scheduleReminder, formatReminderLabel } from "../utils/reminders";
 import { notifPermissionState, requestNotifPermission as nativeRequestPermission } from "../utils/nativeNotifs";
-import { applyAiRewriteToTask } from "../utils/taskOps";
 import { getFocusWindows } from "../utils/focusWindows";
 import { frontsFromConfig, sortFronts } from "../utils/fronts";
-import { buildTaskMutationEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
-import { removeScheduleFields } from "../hooks/useDayRoute";
+import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { IconCheck, IconChevronRight, IconPencil, IconX } from "./ui/icons";
 import "../styles/addTask.css";
 
@@ -32,29 +30,28 @@ function parseManualSubSteps(raw) {
 // the save path has to tell "the user chose 25" from "nobody chose anything".
 const DEFAULT_ESTIMATE_MINUTES = 25;
 
-export default function AddTaskDialog({ email, payload, savePayload, savePayloadAsync, userProfile, defaultHorizon, defaultFrontId = null, openedFrom = null, onClose, editTask, uid, writeActivityEvents, focusTimer = {} }) {
+export default function AddTaskDialog({ email, payload, savePayload, savePayloadAsync, userProfile, defaultHorizon, defaultFrontId = null, openedFrom = null, onClose, uid, writeActivityEvents }) {
   const windows = getFocusWindows(payload.config || {});
-  const isEditMode = !!editTask;
-  const [title, setTitle] = useState(editTask?.title || "");
-  const [concreteStep, setConcreteStep] = useState(editTask?.concreteStep || "");
-  const [horizonLevel, setHorizonLevel] = useState(editTask?.horizonLevel || defaultHorizon || "today");
+  const [title, setTitle] = useState("");
+  const [concreteStep, setConcreteStep] = useState("");
+  const [horizonLevel, setHorizonLevel] = useState(defaultHorizon || "today");
   const [saved, setSaved] = useState(false);
-  const [priority, setPriority] = useState(editTask?.priority || "P3");
-  const [category, setCategory] = useState(editTask?.category || "Personal");
+  const [priority, setPriority] = useState("P3");
+  const [category, setCategory] = useState("Personal");
   // "" means no front. Stored as null, never "", so the field is absent rather
   // than empty for a task that belongs to nothing.
-  const [frontId, setFrontId] = useState(editTask?.frontId || defaultFrontId || "");
-  const [estimateMinutes, setEstimateMinutes] = useState(editTask?.timeEstimateMinutes || DEFAULT_ESTIMATE_MINUTES);
+  const [frontId, setFrontId] = useState(defaultFrontId || "");
+  const [estimateMinutes, setEstimateMinutes] = useState(DEFAULT_ESTIMATE_MINUTES);
   // A task can legitimately have NO estimate, and the selector shows the
   // default for one. Comparing the value alone cannot tell "the user chose 25"
   // from "nobody chose anything", so choosing 25 on such a task — or leaving
   // and returning to it — would silently not stick. This records the act.
   const [estimatePicked, setEstimatePicked] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(isEditMode);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
   const [aiSuggestion, setAiSuggestion] = useState(null);
-  const [subSteps, setSubSteps] = useState(editTask?.subSteps || []);
+  const [subSteps, setSubSteps] = useState([]);
   const [subStepDraft, setSubStepDraft] = useState("");
   const [editingSubStepId, setEditingSubStepId] = useState(null);
   const [editingSubStepText, setEditingSubStepText] = useState("");
@@ -67,20 +64,9 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
   );
 
   const [formError, setFormError] = useState("");
-  const [reminderOn, setReminderOn] = useState(!!editTask?.reminderAt);
-  const [reminderDate, setReminderDate] = useState(() => {
-    if (editTask?.reminderAt) {
-      return new Date(editTask.reminderAt).toISOString().slice(0, 10);
-    }
-    return defaultReminderDateTime().dateStr;
-  });
-  const [reminderTime, setReminderTime] = useState(() => {
-    if (editTask?.reminderAt) {
-      const d = new Date(editTask.reminderAt);
-      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-    }
-    return defaultReminderDateTime().timeStr;
-  });
+  const [reminderOn, setReminderOn] = useState(false);
+  const [reminderDate, setReminderDate] = useState(() => defaultReminderDateTime().dateStr);
+  const [reminderTime, setReminderTime] = useState(() => defaultReminderDateTime().timeStr);
 
   const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const hasAnyKey = hasAIKey();
@@ -173,16 +159,8 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
   const handleApplyAISuggestion = () => {
     if (!aiSuggestion) return;
-    if (isEditMode) {
-      // Rewrite mode: only update text content; preserve ALL planning metadata
-      // (horizonLevel, priority, timeEstimate, uuid, id, dayMap fields, etc.)
-      const merged = applyAiRewriteToTask(editTask, aiSuggestion);
-      setTitle(merged.title);
-      setConcreteStep(merged.concreteStep);
-      setSubSteps(merged.subSteps || []);
-      setAdvancedOpen(true);
-    } else {
-      // New task: AI may suggest all fields
+    {
+      // AI may suggest all fields
       if (aiSuggestion.title) setTitle(aiSuggestion.title);
       if (aiSuggestion.microStep) { setConcreteStep(aiSuggestion.microStep); setAdvancedOpen(true); }
       if (["P1","P2","P3","P4"].includes(aiSuggestion.priority)) setPriority(aiSuggestion.priority);
@@ -210,9 +188,9 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     { key: "month", label: "Month" },
     { key: "quarter", label: "Quarter" },
     { key: "halfyear", label: "6 mo" },
-    ...(editTask?.horizonLevel === "office" || defaultHorizon === "office" ? [{ key: "office", label: "Work" }] : []),
+    ...(defaultHorizon === "office" ? [{ key: "office", label: "Work" }] : []),
   ];
-  const priorities = ["P1", "P2", "P3", ...(editTask?.priority === "P4" || priority === "P4" ? ["P4"] : [])];
+  const priorities = ["P1", "P2", "P3", ...(priority === "P4" ? ["P4"] : [])];
   const categories = ["Career", "Health", "Work", "Personal"];
   const parsedSubStepDraft = parseManualSubSteps(subStepDraft);
   const hasSubStepDraft = parsedSubStepDraft.length > 0;
@@ -220,7 +198,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
   const timeChips = [{ min: 15, label: "15m" }, { min: 30, label: "30m" }, { min: 60, label: "1h" }, { min: 120, label: "2h" }];
   const otherTimes = [10, 20, 25, 45, 90, 180, 240, 360];
   const onChip = timeChips.some(c => c.min === Number(estimateMinutes));
-  const [otherOpen, setOtherOpen] = useState(() => isEditMode && !timeChips.some(c => c.min === Number(editTask?.timeEstimateMinutes || DEFAULT_ESTIMATE_MINUTES)) && Number(editTask?.timeEstimateMinutes) > 0);
+  const [otherOpen, setOtherOpen] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -260,79 +238,6 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     // Request notification permission if a reminder is set
     if (reminderAt && notifPermissionState() === "default") {
       await nativeRequestPermission();
-    }
-
-    if (isEditMode) {
-      const newEstimate = Number(estimateMinutes);
-      // Only sync dayMapDurationMinutes when the estimate actually changed in this
-      // edit — otherwise saving an unrelated field (title, priority, reminder...)
-      // would silently clobber a DayMap duration the user deliberately set apart
-      // from the task's general estimate (e.g. extra buffer blocked for today).
-      // When it did change, mirror DayMap's own duration edit (DayMapPage.jsx's
-      // changeDuration), which writes both fields so DayMap doesn't keep showing
-      // a stale duration (DayMap's getEstimate prefers dayMapDurationMinutes).
-      // A task can legitimately have NO estimate and NO subtask — the wall's
-      // commit field creates exactly that (K1). Writing the form's defaults
-      // back on an edit that never touched those fields invents data the user
-      // never entered: rename a wall task and it silently gained a 25-minute
-      // estimate and a "Do first tiny step". The spread preserves whatever
-      // editTask already had, so omitting the key is how absence survives.
-      const hadEstimate = Number(editTask.timeEstimateMinutes) > 0;
-      // With no estimate to compare against, "changed" is the act of picking,
-      // not the value: Number(undefined) is NaN and differs from everything,
-      // while comparing to the default cannot tell a deliberate 25 from an
-      // untouched selector.
-      const estimateChanged = hadEstimate
-        ? newEstimate !== Number(editTask.timeEstimateMinutes)
-        : estimatePicked;
-      const stepText = concreteStep.trim();
-      const updatedTask = {
-        ...editTask,
-        title: title.trim(),
-        // Clearing the field on a task that HAD a step still keeps the old
-        // one, exactly as before — the spread does it.
-        ...(stepText ? { concreteStep: stepText } : {}),
-        horizonLevel,
-        priority,
-        category,
-        frontId: frontId || null,
-        ...(hadEstimate || estimatePicked ? { timeEstimateMinutes: newEstimate } : {}),
-        ...(estimateChanged ? { dayMapDurationMinutes: newEstimate } : {}),
-        reminderAt,
-        subSteps: effectiveSubSteps,
-        lastUpdated: Date.now()
-      };
-      if (reminderAt && reminderAt !== editTask.reminderAt) scheduleReminder(updatedTask);
-      if (!reminderAt && editTask.reminderAt) cancelReminder(editTask.uuid);
-      const horizonChanged = horizonLevel !== editTask.horizonLevel;
-      if (horizonChanged) {
-        // Off Today it is no longer the one thing, nor on the Day map: its
-        // session ends, recorded, and its route slot goes (as the task
-        // sheet's Horizon picker does).
-        const leavesToday = editTask.horizonLevel === "today";
-        const savedTask = leavesToday ? { ...removeScheduleFields(updatedTask), isNowFocus: false } : updatedTask;
-        const now = Date.now();
-        const endedFocusSession = leavesToday && editTask.isNowFocus && typeof focusTimer.endFocusSession === "function"
-          ? focusTimer.endFocusSession("user_abandoned")
-          : null;
-        const event = buildTaskMutationEvent("task_moved", savedTask, {
-          fromState: { horizonLevel: editTask.horizonLevel }, toState: { horizonLevel }, windows,
-        });
-        savePayloadAsync({ ...payload, tasks: (payload.tasks || []).map(t => t.uuid === editTask.uuid ? savedTask : t) })
-          .then(() => {
-            if (!endedFocusSession) { writeActivityEvents(eventPatch(uid, event)); return; }
-            writeActivityEvents(eventsPatch(uid, [
-              event,
-              buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }),
-            ]));
-          })
-          .catch(() => {});
-      } else {
-        savePayload({ ...payload, tasks: (payload.tasks || []).map(t => t.uuid === editTask.uuid ? updatedTask : t) });
-      }
-      setSaved(true);
-      setTimeout(onClose, 900);
-      return;
     }
 
     const freshTask = {
@@ -380,7 +285,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
   // the Horizon + Priority block wears a 2px ring for about 1.5s on open.
   const HORIZON_NAMES = { today: "Today", week: "This week", month: "This month", quarter: "This quarter", halfyear: "6 months", office: "Work" };
   const horizonName = HORIZON_NAMES[horizonLevel] || "Today";
-  const [ringOn, setRingOn] = useState(!isEditMode);
+  const [ringOn, setRingOn] = useState(true);
   useEffect(() => {
     if (!ringOn) return undefined;
     const t = setTimeout(() => setRingOn(false), 1500);
@@ -416,7 +321,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       >
         <span className="add-grabber" aria-hidden="true" />
         <div className="add-head">
-          <h2 id="add-task-heading" className="add-heading">{isEditMode ? "Edit task" : "New task"}</h2>
+          <h2 id="add-task-heading" className="add-heading">New task</h2>
           <button type="button" className="add-close" onClick={onClose} aria-label="Close"><IconX size={20} /></button>
         </div>
 
@@ -458,7 +363,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
             </div>
           )}
 
-          {!isEditMode && openedFrom && (
+          {openedFrom && (
             <p className="add-note">
               Adding to <strong>{HORIZON_NAMES[defaultHorizon] || horizonName}</strong> because you opened it from {openedFrom}. Change below.
             </p>
@@ -494,8 +399,8 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
                 <button
                   key={c.min}
                   type="button"
-                  className={chip(!otherOpen && Number(estimateMinutes) === c.min && (estimatePicked || isEditMode))}
-                  aria-pressed={!otherOpen && Number(estimateMinutes) === c.min && (estimatePicked || isEditMode)}
+                  className={chip(!otherOpen && Number(estimateMinutes) === c.min && estimatePicked)}
+                  aria-pressed={!otherOpen && Number(estimateMinutes) === c.min && estimatePicked}
                   onClick={() => { setEstimateMinutes(c.min); setEstimatePicked(true); setOtherOpen(false); }}
                 >
                   {c.label}
@@ -662,11 +567,11 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
           <div className="add-foot">
             {saved ? (
-              <p className="add-saved" role="status">{isEditMode ? "Saved" : `Added to ${horizonName}`}</p>
+              <p className="add-saved" role="status">{`Added to ${horizonName}`}</p>
             ) : (
               <>
                 <button type="submit" className="add-submit" data-testid="add-task-submit">
-                  {isEditMode ? "Save changes" : `Add to ${horizonName}`}
+                  {`Add to ${horizonName}`}
                 </button>
                 <kbd className="add-kbd" aria-hidden="true">⌘ ↵</kbd>
               </>

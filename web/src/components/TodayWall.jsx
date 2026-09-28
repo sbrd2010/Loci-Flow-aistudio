@@ -246,9 +246,17 @@ export default function TodayWall({
         >
           <LinkifyText text={task.title} />
         </h2>
-        {firstStep && (
+        {/* "Details ›" (52a, 57b answer 15): touch has no hover, so the
+            title's sheet gets a visible way in — at the end of the step
+            line, or under the title when there is no step. */}
+        {firstStep ? (
           <p className="wall-first-step" data-flip="step">
             <span className="wall-first-step-label">{stepLabel}</span> — <LinkifyText text={firstStep} />
+            {onOpenTask && <>{" "}<button type="button" className="wall-details" onClick={onOpenTask}>Details ›</button></>}
+          </p>
+        ) : onOpenTask && (
+          <p className="wall-details-line" data-flip="step">
+            <button type="button" className="wall-details" onClick={onOpenTask}>Details ›</button>
           </p>
         )}
 

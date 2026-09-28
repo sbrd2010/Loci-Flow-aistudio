@@ -81,20 +81,6 @@ test("a laptop gets a 520px dialog, and ⌘↵ adds the task", async ({ page }) 
   await expect(page.getByTestId("today-tasks-list").getByText("Reply to Prof. Hale about the draft")).toBeVisible();
 });
 
-test("editing: no note, no ring, Save changes, and the extras sit under More details", async ({ page }) => {
-  await enterDemo(page);
-  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']").first();
-  await row.locator(".task-row-top").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^More details/ }).click();
-  const dialog = page.getByRole("dialog", { name: "Edit task" });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.locator(".add-note")).toHaveCount(0);
-  await expect(dialog.locator(".add-block")).not.toHaveClass(/is-ringed/);
-  await expect(dialog.getByTestId("add-task-submit")).toHaveText("Save changes");
-  await expect(dialog.getByRole("button", { name: /More details/ })).toHaveAttribute("aria-expanded", "true");
-  await expect(dialog.getByText("First step", { exact: true })).toBeVisible();
-});
-
 // The AI can suggest P4 and a length with no chip of its own (45m). Applying
 // it must show both, not leave every chip unpressed while saving them.
 test("an AI suggestion of P4 and 45m shows P4 and opens Other at 45m", async ({ page }) => {

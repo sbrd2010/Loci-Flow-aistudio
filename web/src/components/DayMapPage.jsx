@@ -176,7 +176,7 @@ function StartControl({ anchorMinutes, onChangeAnchor, windows }) {
   );
 }
 
-export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onAddTask, onHelpChoose, dayClock, flushNow = () => {}, backLabel = "Today", onEditTask, uid, writeActivityEvents, focusTimer }) {
+export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onAddTask, onHelpChoose, dayClock, flushNow = () => {}, backLabel = "Today", uid, writeActivityEvents, focusTimer }) {
   // A stop, opened (52): the task sheet, with Remove from route.
   const [detailId, setDetailId] = useState(null);
   // The route's own Undo: { message, before, at } — before is what to put back.
@@ -688,11 +688,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
               if (horizonLevel && horizonLevel !== detailTask.horizonLevel) act(actions.handleChangeHorizon)(detailTask, horizonLevel);
               if (Object.keys(rest).length) actions.patchTask(detailTask.uuid, rest);
             }}
-            onToggleStep={stepId => actions.handleToggleStep(detailTask, stepId)}
-            onDeleteStep={act(stepId => actions.handleDeleteStep(detailTask, stepId))}
-            onAddStep={text => actions.handleAddStep(detailTask, text)}
-            // The editor, too, starts from the stop's duration.
-            onMoreDetails={onEditTask ? () => { onEditTask({ ...detailTask, timeEstimateMinutes: getEstimate(detailTask) }); setDetailId(null); } : undefined}
+            onSetSteps={(steps, meta) => { if (meta?.removed) setRouteUndo(null); actions.handleSetSteps(detailTask, steps, meta); }}
             onDone={() => leaving(act(actions.handleMarkDone))}
             onRemoveFromRoute={() => leaving(removeFromRoute, detailId)}
             onPark={() => leaving(act(actions.handlePark))}

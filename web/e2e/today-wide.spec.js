@@ -140,9 +140,14 @@ test("1600: the drawer keeps 360px, clear of the list, its footer on one row", a
   expect(Math.round(drawerBox.width)).toBe(360);
   expect(drawerBox.x).toBeGreaterThanOrEqual(listBox.x + listBox.width);
   const actions = await drawer.locator(".detail-action").evaluateAll(els => els.map(el => el.getBoundingClientRect()).map(r => ({ top: r.top, right: r.right })));
-  expect(actions).toHaveLength(4);
+  // 52b: three text buttons (Tomorrow · Park · Delete; Done is the circle).
+  expect(actions).toHaveLength(3);
   expect(new Set(actions.map(a => Math.round(a.top))).size).toBe(1);
   for (const a of actions) expect(a.right).toBeLessThanOrEqual(drawerBox.x + drawerBox.width);
+  // …and the 186px Priority segment stays whole inside it (52b).
+  const seg = await drawer.locator(".detail-seg").boundingBox();
+  expect(Math.round(seg.width)).toBeGreaterThanOrEqual(186);
+  expect(seg.x + seg.width).toBeLessThanOrEqual(drawerBox.x + drawerBox.width);
 });
 
 test("a stop the Must-do filter hides opens anyway, the filter stays; Show all, and ↑/↓ into the filtered list", async ({ page }) => {

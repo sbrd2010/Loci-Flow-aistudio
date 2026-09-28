@@ -125,32 +125,6 @@ test("mobile reliability: the sheet's Front picker offers exactly the fronts the
   expect(offered.slice(1)).toEqual(names);
 });
 
-test("mobile reliability: the task editor shows a task's front and can change it", async ({ page }) => {
-  await enterDemo(page);
-  await openPlan(page);
-  await addFront(page, "Grant proposal");
-  const taskTitle = await putFirstWeekTaskOn(page, "Grant proposal");
-
-  // Open that task's full editor from its sheet and confirm the field
-  // reflects reality rather than defaulting to blank.
-  await page.getByRole("tab", { name: "Horizons" }).click();
-  await page.locator(".plan-row", { hasText: taskTitle }).first().click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^More details/ }).click();
-  await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
-
-  const select = page.locator("#task-front");
-  await expect(select).toBeVisible();
-  await expect(select.locator("option:checked")).toHaveText("Grant proposal");
-
-  // Taking it off a front from here leaves the front empty.
-  await select.selectOption({ label: "Not on a front" });
-  await page.getByTestId("add-task-submit").click();
-
-  await page.getByRole("tab", { name: "Fronts" }).click();
-  await expect(card(page, "Grant proposal").locator(".plan-front-move-empty")).toBeVisible({ timeout: 5_000 });
-  expect(await frontOfTask(page, taskTitle)).toBe("None");
-});
-
 test("mobile reliability: a front can be closed, and its tasks are left with no front rather than vanish", async ({ page }) => {
   await enterDemo(page);
   await openPlan(page);
