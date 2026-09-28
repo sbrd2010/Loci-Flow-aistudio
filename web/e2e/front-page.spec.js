@@ -178,3 +178,19 @@ test("Add to this front opens Add task on that front, and the new task lands on 
     .locator(".plan-row", { hasText: "Draft the methods section" })).toBeVisible();
   await expect(page.locator(".plan-fp-stats")).toHaveText(/^2 OPEN/);
 });
+
+test("a task moved to Today leaves the rows but still counts: the figures say it is on Today", async ({ page }) => {
+  await enterDemo(page);
+  const [title] = await frontWith(page, "Thesis", ["week", "month"]);
+  await card(page, "Thesis").click();
+  await expect(page.locator(".plan-fp-stats")).toHaveText("2 OPEN · 0 DONE · DUE 3 JUL · 18 DAYS");
+
+  await page.locator(".plan-front-tasks .plan-row", { hasText: title }).click();
+  await sheet(page).getByRole("button", { name: "Move to Today" }).click();
+
+  await expect(page.locator(".plan-front-tasks .plan-row")).toHaveCount(1);
+  await expect(page.locator(".plan-fp-stats")).toHaveText("2 OPEN · 1 ON TODAY · 0 DONE · DUE 3 JUL · 18 DAYS");
+  // The card counts it too.
+  await back(page).click();
+  await expect(card(page, "Thesis").locator(".plan-front-open")).toHaveText("2 OPEN");
+});

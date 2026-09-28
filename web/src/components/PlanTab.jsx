@@ -24,11 +24,14 @@ import "../styles/plan.css";
 // front's own page (52f–g): its open tasks by horizon, Add to this front, and
 // Park / Close, both with Undo.
 
-// Open and done tasks on a front. Open is every horizon's, Today's too.
+// Open and done tasks on a front. Open is every horizon's, Today's too;
+// the page lists Plan's horizons only, so it says how many are on Today.
 function frontCounts(tasks, frontId) {
   const mine = tasksForFront(tasks, frontId);
+  const open = mine.filter(t => !t.isCompleted && !t.isParked);
   return {
-    open: mine.filter(t => !t.isCompleted && !t.isParked).length,
+    open: open.length,
+    onToday: open.filter(t => t.horizonLevel === "today").length,
     done: mine.filter(t => t.isCompleted).length,
   };
 }
@@ -73,7 +76,7 @@ function FrontCard({ front, tasks, isGoal, onOpen }) {
 // A front's page (52f–g). The tasks come from Plan's own rows and sheet
 // (renderTasks), so a row here behaves as it does in Horizons.
 function FrontPage({ front, tasks, isGoal, now, onBack, onPark, onClose, onAdd, renderTasks }) {
-  const { open, done } = frontCounts(tasks, front.id);
+  const { open, onToday, done } = frontCounts(tasks, front.id);
   const due = frontDueLine(front, now);
   // The Key Deadline front is projected from Settings, not stored: there is
   // nothing here to park or close.
@@ -134,7 +137,7 @@ function FrontPage({ front, tasks, isGoal, now, onBack, onPark, onClose, onAdd, 
             {front.parked && <span className="task-tag plan-fp-parked">PARKED</span>}
           </h2>
           <p className="plan-fp-stats">
-            {`${open} OPEN · ${done} DONE`}
+            {`${open} OPEN${onToday ? ` · ${onToday} ON TODAY` : ""} · ${done} DONE`}
             {due && <span className="plan-fp-due"> · {due}</span>}
           </p>
         </div>
