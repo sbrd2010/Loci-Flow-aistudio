@@ -16,6 +16,8 @@ import {
   FRONT_LIMIT,
   LEGACY_DEADLINE_FRONT_ID,
 } from "../utils/fronts";
+import { isDeferred } from "../utils/deferral";
+import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import "../styles/plan.css";
 
 // Plan's Fronts (45i): one card per front — its name, GOAL on the goal
@@ -24,13 +26,18 @@ import "../styles/plan.css";
 // Park / Close, both with Undo.
 
 // Open and done tasks on a front. Open is every horizon's, Today's too;
-// the page lists Plan's horizons only, so it says how many are on Today.
-function frontCounts(tasks, frontId) {
+// the page lists Plan's horizons only, so it says how many of them are on
+// Today, and how many were moved to tomorrow (still Today's horizon, off
+// Today until their day).
+function frontCounts(tasks, frontId, lociDay) {
   const mine = tasksForFront(tasks, frontId);
   const open = mine.filter(t => !t.isCompleted && !t.isParked);
+  const today = open.filter(t => t.horizonLevel === "today");
+  const tomorrow = lociDay ? today.filter(t => isDeferred(t, lociDay)).length : 0;
   return {
     open: open.length,
-    onToday: open.filter(t => t.horizonLevel === "today").length,
+    onToday: today.length - tomorrow,
+    tomorrow,
     done: mine.filter(t => t.isCompleted).length,
   };
 }
@@ -76,8 +83,8 @@ function FrontCard({ front, tasks, isGoal, onOpen }) {
 
 // A front's page (52f–g). The tasks come from Plan's own rows and sheet
 // (renderTasks), so a row here behaves as it does in Horizons.
-function FrontPage({ front, tasks, isGoal, now, onBack, onPark, onClose, onAdd, renderTasks }) {
-  const { open, onToday, done } = frontCounts(tasks, front.id);
+function FrontPage({ front, tasks, config, isGoal, now, onBack, onPark, onClose, onAdd, renderTasks }) {
+  const { open, onToday, tomorrow, done } = frontCounts(tasks, front.id, getLociDayStr(now, getFocusWindows(config)));
   const due = frontDueLine(front, now);
   // The Key Deadline front is projected from Settings, not stored: there is
   // nothing here to park or close.
@@ -138,7 +145,7 @@ function FrontPage({ front, tasks, isGoal, now, onBack, onPark, onClose, onAdd, 
             {front.parked && <span className="task-tag plan-fp-parked">PARKED</span>}
           </h2>
           <p className="plan-fp-stats">
-            {`${open} OPEN${onToday ? ` · ${onToday} ON TODAY` : ""} · ${done} DONE`}
+            {`${open} OPEN${onToday ? ` · ${onToday} ON TODAY` : ""}${tomorrow ? ` · ${tomorrow} TOMORROW` : ""} · ${done} DONE`}
             {due && <span className="plan-fp-due"> · {due}</span>}
           </p>
         </div>
@@ -273,6 +280,7 @@ export default function PlanTab({ payload = {}, saveConfigPatch, openFrontId = n
         <FrontPage
           front={openFront}
           tasks={tasks}
+          config={config}
           isGoal={isGoal(openFront)}
           now={now}
           onBack={() => backToList(openFront.id)}

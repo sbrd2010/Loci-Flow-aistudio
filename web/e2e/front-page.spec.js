@@ -254,3 +254,29 @@ test("a next move with a URL shows as text on the card, not a link", async ({ pa
   await expect(card(page, "Links").locator(".plan-front-move-text")).toHaveText("Read https://example.com/brief");
   await expect(card(page, "Links").locator("a")).toHaveCount(0);
 });
+
+// Codex review of #414: a task moved to tomorrow keeps Today's horizon but
+// is off Today until its day, so it is counted as tomorrow's, not Today's.
+test("a task on this front moved to tomorrow counts as TOMORROW, not ON TODAY", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
+  });
+  await enterDemo(page);
+  const [title] = await frontWith(page, "Thesis", ["week", "month"]);
+  await card(page, "Thesis").click();
+  await page.locator(".plan-front-tasks .plan-row", { hasText: title }).click();
+  await sheet(page).getByRole("button", { name: "Move to Today" }).click();
+  await expect(page.locator(".plan-fp-stats")).toHaveText(/^2 OPEN · 1 ON TODAY · 0 DONE/);
+
+  // From Today's own sheet: Tomorrow.
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Today", exact: true }).click();
+  await page.getByTestId("today-tasks-list").getByText(title, { exact: true }).click();
+  await sheet(page).getByRole("button", { name: /^Tomorrow/ }).click();
+  await expect(sheet(page)).toHaveCount(0);
+
+  await nav.getByRole("button", { name: "Plan", exact: true }).click();
+  await page.getByRole("tab", { name: "Fronts" }).click();
+  await card(page, "Thesis").click();
+  await expect(page.locator(".plan-fp-stats")).toHaveText(/^2 OPEN · 1 TOMORROW · 0 DONE/);
+});
