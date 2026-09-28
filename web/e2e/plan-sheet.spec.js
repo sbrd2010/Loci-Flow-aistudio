@@ -146,3 +146,38 @@ test("Plan has no floating +, no 'Not on a front' and no 'I'm scattered' (52)", 
   await expect(page.getByText("Not on a front")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /I'm scattered/ })).toHaveCount(0);
 });
+
+// Codex review of #412, round three.
+test("Undo of a removed step puts it back where it was; a step added since stays put", async ({ page }) => {
+  await enterDemo(page);
+  await horizon(page, "This week").locator(".plan-row").first().click();
+  const add = sheet(page).getByLabel("Add a step");
+  for (const text of ["Alpha step", "Beta step"]) { await add.fill(text); await add.press("Enter"); }
+  await sheet(page).getByRole("button", { name: "Remove step Beta step" }).click();
+  await add.fill("Gamma step");
+  await add.press("Enter");
+  await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
+  await expect(sheet(page).locator(".detail-step-text")).toHaveText(["Alpha step", "Beta step", "Gamma step"]);
+});
+
+test("Drag anywhere: Enter on a Plan row opens its sheet; Space picks it up", async ({ page }) => {
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto("/");
+  await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
+  await page.getByTestId("demo-btn").click();
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("switch", { name: "Drag anywhere" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  const rows = horizon(page, "This week").locator(".plan-row");
+  await rows.nth(1).focus();
+  await page.keyboard.press("Enter");
+  await expect(sheet(page).locator(".detail-kicker").first()).toHaveText(/^THIS WEEK · 2 OF \d+$/);
+  await page.keyboard.press("Escape");
+  await expect(sheet(page)).toHaveCount(0);
+  await rows.nth(1).focus();
+  await page.keyboard.press("Space");
+  // Each horizon is its own drag context, with its own announcer.
+  await page.waitForFunction(() => [...document.querySelectorAll("[id^='DndLiveRegion']")].some(el => /Picked up|was moved over/.test(el.textContent)));
+  await page.keyboard.press("Escape");
+  await expect(sheet(page)).toHaveCount(0);
+});

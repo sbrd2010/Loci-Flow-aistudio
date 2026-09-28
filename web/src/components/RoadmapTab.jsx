@@ -51,6 +51,11 @@ function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, fr
         onClick={() => onTaskClick(task)}
         {...(isDragAnywhere ? {
           ...listeners,
+          // As in Today's list: Enter opens the row; Space picks it up.
+          onKeyDown: e => {
+            if (e.key === "Enter" && e.target === e.currentTarget) { e.preventDefault(); onTaskClick(task); return; }
+            listeners?.onKeyDown?.(e);
+          },
           tabIndex: attributes?.tabIndex,
           "aria-disabled": attributes?.["aria-disabled"],
           "aria-describedby": attributes?.["aria-describedby"],
@@ -344,7 +349,7 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
     const step = (current?.subSteps || []).find(st => st.id === stepId);
     if (!step) return;
     patchTask(task.uuid, { subSteps: current.subSteps.filter(st => st.id !== stepId) });
-    setUndo({ kind: "step", task: current, step, at: Date.now() });
+    setUndo({ kind: "step", task: current, step, atIndex: current.subSteps.indexOf(step), at: Date.now() });
   };
 
   const handleMarkDone = (task) => {
@@ -550,7 +555,12 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
     if (kind === "delete" && current.isDeleted) put({ isDeleted: false }, "task_restored");
     else if (kind === "park" && current.isParked) put({ isParked: false, ...refocus });
     else if (kind === "today" && current.horizonLevel === "today") put({ horizonLevel: task.horizonLevel, orderIndex: task.orderIndex, deferredUntil: task.deferredUntil ?? null }, "task_moved");
-    else if (kind === "step") put({ subSteps: [...(current.subSteps || []), undo.step].sort((a, b) => (task.subSteps || []).findIndex(x => x.id === a.id) - (task.subSteps || []).findIndex(x => x.id === b.id)) });
+    else if (kind === "step") {
+      // Back where it was; steps added since stay where they are.
+      const steps = [...(current.subSteps || [])];
+      steps.splice(Math.min(undo.atIndex, steps.length), 0, undo.step);
+      put({ subSteps: steps });
+    }
     else if (kind === "done" && current.isCompleted) {
       const contributions = [...(latest.contributions || [])];
       const idx = contributions.findIndex(c => c.dateString === undo.dateStr);
