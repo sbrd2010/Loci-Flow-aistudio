@@ -39,10 +39,11 @@ export const PAUSE_EXPIRY_MS = 15 * 60 * 1000;
 export const EXPIRY_REASONS = new Set(["paused_too_long", "day_ended"]);
 
 // Why the open session has to close now, or null. `pausedAt` is when it last
-// stopped counting (null while running); `startDay` and `today` are Loci days.
-export function focusExpiryReason({ sessionOpen, pausedAt, startDay, today, now = Date.now() }) {
+// stopped counting (null while running); `dayEndsAt` is when the Loci day it
+// began in ends, fixed when it started.
+export function focusExpiryReason({ sessionOpen, pausedAt, dayEndsAt, now = Date.now() }) {
   if (!sessionOpen) return null;
-  if (startDay && today && startDay !== today) return "day_ended";
+  if (Number.isFinite(dayEndsAt) && now >= dayEndsAt) return "day_ended";
   if (Number.isFinite(pausedAt) && now - pausedAt > PAUSE_EXPIRY_MS) return "paused_too_long";
   return null;
 }

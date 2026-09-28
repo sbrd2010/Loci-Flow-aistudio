@@ -83,6 +83,11 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   const focusBlocksRef = useRef(0);
   const focusExtensionsRef = useRef(0);
   const focusPausedAtRef = useRef(null);
+  // The Loci day the open session began in, and when that day ends — fixed at
+  // Start, so editing focus windows mid-session cannot move its expiry or the
+  // day it is recorded on (Codex review of #419).
+  const focusStartDayRef = useRef(null);
+  const focusDayEndsAtRef = useRef(null);
   // Bumped when a pause is found to have run out, so App's expiry check runs
   // now rather than on its next minute tick.
   const [expiryCheck, setExpiryCheck] = useState(0);
@@ -106,13 +111,10 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // itself answers: every read of it reports the expiry (below), and nothing
   // may resume or change it meanwhile — a +5 would log an extension, a reset
   // would wipe its work. Codex review of #419.
-  const lociDayOf = (ts) => getLociDayStr(new Date(ts), getFocusWindows(config));
   const expiryReasonNow = () => {
     if (!focusSessionIdRef.current) return null;
-    const now = Date.now();
     return focusExpiryReason({
-      sessionOpen: true, pausedAt: focusPausedAtRef.current,
-      startDay: lociDayOf(focusStartedAtRef.current), today: lociDayOf(now), now,
+      sessionOpen: true, pausedAt: focusPausedAtRef.current, dayEndsAt: focusDayEndsAtRef.current, now: Date.now(),
     });
   };
   // True (and App asked to close the session now) when it has expired.
@@ -357,6 +359,8 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusBlocksRef.current = 0;
     focusExtensionsRef.current = 0;
     focusPausedAtRef.current = null;
+    focusStartDayRef.current = null;
+    focusDayEndsAtRef.current = null;
     setFocusSessionId(null);
 
     closePiP(); // Close pop-out on account switch
@@ -633,6 +637,9 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusBlocksRef.current = 1;
     focusExtensionsRef.current = 0;
     focusPausedAtRef.current = null;
+    const windows = getFocusWindows(config);
+    focusStartDayRef.current = getLociDayStr(new Date(startedAt), windows);
+    focusDayEndsAtRef.current = lociDayEndsAt(focusStartDayRef.current, windows);
     setFocusSessionId(sessionId);
     if (enterFocusMode) setIsFocusMode(true);
     setIsTimerRunning(true);
@@ -709,8 +716,8 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     // time counted past the boundary (up to the check, or longer in a
     // background tab) is not credited to it (Codex review of #419).
     const stopAt = focusPausedAtRef.current ?? Date.now();
-    const startDay = lociDayOf(focusStartedAtRef.current);
-    const endAt = expired === "day_ended" ? Math.min(stopAt, lociDayEndsAt(startDay, getFocusWindows(config))) : stopAt;
+    const startDay = focusStartDayRef.current;
+    const endAt = expired === "day_ended" ? Math.min(stopAt, focusDayEndsAtRef.current) : stopAt;
     const elapsed = expired
       ? Math.max(focusSessionAccumulatedElapsedRef.current, Math.round(currentElapsedSeconds() - (stopAt - endAt) / 1000))
       : currentElapsedSeconds();
@@ -773,6 +780,8 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     focusBlocksRef.current = 0;
     focusExtensionsRef.current = 0;
     focusPausedAtRef.current = null;
+    focusStartDayRef.current = null;
+    focusDayEndsAtRef.current = null;
     setFocusSessionId(null);
     return result;
   };

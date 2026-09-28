@@ -655,6 +655,27 @@ describe("useFocusTimer", () => {
       Date.now.mockRestore();
     });
 
+    // Codex review of #419: the session's day, and when it ends, are fixed at
+    // Start — editing focus windows mid-session does not move its expiry.
+    it("keeps the day it started in, and that day's end, when focus windows change mid-session", () => {
+      const start = new Date("2024-06-16T01:00:00").getTime(); // the 15th's day under a window to 02:00
+      vi.spyOn(Date, "now").mockReturnValue(start);
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const until2 = { dayStartHour: 7, dayEndHour: 26 };
+      const until4 = { dayStartHour: 7, dayEndHour: 28 };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], until2, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], until2, "u1"]);
+      // The window is stretched to 04:00; it is now 02:30.
+      Date.now.mockReturnValue(new Date("2024-06-16T02:30:00").getTime());
+      rerender([[task], until4, "u1"]);
+      expect(result.current.peekFocusSession(null)).toMatchObject({
+        focusEndReason: "day_ended", lociDateString: "2024-06-15",
+        focusEndedAt: new Date("2024-06-16T02:00:00").getTime(),
+      });
+      Date.now.mockRestore();
+    });
+
     it("endFocusSession returns null when no session was ever started", () => {
       const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
       const { result } = renderHook(useFocusTimer, [[task], {}, "u1"]);

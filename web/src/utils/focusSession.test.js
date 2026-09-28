@@ -247,7 +247,7 @@ describe("focusBlockSeconds (53e)", () => {
 });
 
 describe("focusExpiryReason (59j)", () => {
-  const base = { sessionOpen: true, pausedAt: null, startDay: "2024-06-15", today: "2024-06-15", now: 10_000_000 };
+  const base = { sessionOpen: true, pausedAt: null, dayEndsAt: 20_000_000, now: 10_000_000 };
   it("keeps a running session, and a pause of 15 minutes or less", () => {
     expect(focusExpiryReason(base)).toBeNull();
     expect(focusExpiryReason({ ...base, pausedAt: base.now - PAUSE_EXPIRY_MS })).toBeNull();
@@ -256,10 +256,11 @@ describe("focusExpiryReason (59j)", () => {
     expect(focusExpiryReason({ ...base, pausedAt: base.now - PAUSE_EXPIRY_MS - 1 })).toBe("paused_too_long");
   });
   it("closes a session once its Loci day has ended, running or not", () => {
-    expect(focusExpiryReason({ ...base, today: "2024-06-16" })).toBe("day_ended");
+    expect(focusExpiryReason({ ...base, now: base.dayEndsAt })).toBe("day_ended");
+    expect(focusExpiryReason({ ...base, now: base.dayEndsAt - 1 })).toBeNull();
   });
   it("has nothing to close without an open session", () => {
-    expect(focusExpiryReason({ ...base, sessionOpen: false, today: "2024-06-16" })).toBeNull();
+    expect(focusExpiryReason({ ...base, sessionOpen: false, now: base.dayEndsAt })).toBeNull();
   });
 });
 
