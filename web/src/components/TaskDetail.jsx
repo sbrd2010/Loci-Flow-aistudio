@@ -148,15 +148,17 @@ export default function TaskDetail({
     const res = await suggestSteps(task, steps);
     setSuggested(res.steps ? { steps: res.steps } : { error: res.error });
   };
+  // A suggestion already among the steps (typed meanwhile) is not added twice.
+  const hasStep = (text) => steps.some(st => st.text.trim().toLowerCase() === text.trim().toLowerCase());
   const takeSuggestion = (text) => {
-    addStep(text);
+    if (!hasStep(text)) addStep(text);
     setSuggested(sug => {
       const left = (sug?.steps || []).filter(s => s !== text);
       return left.length ? { steps: left } : null;
     });
   };
   const takeAllSuggestions = () => {
-    const add = (suggested?.steps || []).map(text => ({ id: safeUUID(), text, done: false }));
+    const add = (suggested?.steps || []).filter(text => !hasStep(text)).map(text => ({ id: safeUUID(), text, done: false }));
     if (add.length) setSteps([...steps, ...add]);
     setSuggested(null);
   };

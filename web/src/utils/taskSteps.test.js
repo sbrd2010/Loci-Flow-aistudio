@@ -47,6 +47,19 @@ describe("stepsPatch / applyStepsPatch", () => {
     expect(patch.subSteps[0].id).toBeTruthy();
   });
 
+  // Codex review of #418: concreteStep is the next action Focus, Coach and
+  // Scattered read, so a step ticked done stops being it.
+  it("keeps the next action on the first step not yet done, and drops it when all are done", () => {
+    const a = { id: "a", text: "Write", done: true };
+    const b = { id: "b", text: "Send", done: false };
+    expect(stepsPatch({ concreteStep: "Write" }, [a, b]).concreteStep).toBe("Send");
+    const all = stepsPatch({ concreteStep: "Send" }, [a, { ...b, done: true }]);
+    expect(all).toHaveProperty("concreteStep", undefined);
+    expect(all.subSteps.map(st => st.text)).toEqual(["Write", "Send"]);
+    // Its steps still show once, with no step 1 put back from the old field.
+    expect(taskSteps(applyStepsPatch({ concreteStep: "Send" }, stepsPatch({ concreteStep: "Write" }, [a, b])))).toEqual([a, b]);
+  });
+
   it("leaves a task with no first step alone", () => {
     expect(stepsPatch({}, [])).toEqual({ subSteps: [] });
   });

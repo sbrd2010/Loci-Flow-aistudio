@@ -1,7 +1,8 @@
 // A task's steps, as the sheet shows and edits them (52): the first step is
 // step 1 of STEPS, not a field of its own. The model still stores
-// `concreteStep` (Focus, the wall and Coach read it), so every write through
-// here keeps it equal to steps[0].
+// `concreteStep` (Focus, Coach and Scattered read it as the next action), so
+// every write through here keeps it equal to the first step not yet done —
+// and removes it once every step is done.
 //
 // A task from before this rule may carry a concreteStep as its own first
 // action, with or without steps after it (Add task and Mind Box write both).
@@ -22,12 +23,13 @@ export function taskSteps(task) {
   return [{ id: FIRST_STEP_ID, text: first, done: false }, ...steps];
 }
 
-// The patch that stores `steps` and keeps the first step in step. With no
-// steps left the first step goes too (it is omitted, not emptied). A first
-// step shown from the old field is stored with an id of its own.
+// The patch that stores `steps` and keeps the next action in step: the first
+// step not yet done. With none left open it goes (omitted, not emptied). A
+// first step shown from the old field is stored with an id of its own.
 export function stepsPatch(task, steps) {
   const patch = { subSteps: steps.map(st => (st.id === FIRST_STEP_ID ? { ...st, id: safeUUID() } : st)) };
-  if (steps.length) patch.concreteStep = steps[0].text;
+  const next = steps.find(st => !st.done && st.text);
+  if (next) patch.concreteStep = next.text;
   else if (task?.concreteStep) patch.concreteStep = undefined;
   return patch;
 }

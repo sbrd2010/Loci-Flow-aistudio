@@ -109,6 +109,15 @@ test("suggested steps are offered, never added: Add takes one, Add all the rest,
   await expect.poll(() => stepValues(page)).toEqual([...before, "Write two sentences", "Find the thread", "Press send"]);
   await expect(suggested).toHaveCount(0);
 
+  // A suggestion typed in meanwhile is not added twice by Add all.
+  await mockSuggestions(page, ["Close the tabs", "Save a draft"]);
+  await sheet(page).getByRole("button", { name: /^Suggest (steps|again)$/ }).click();
+  await expect(suggested.locator(".detail-suggested-text")).toHaveText(["Close the tabs", "Save a draft"]);
+  await sheet(page).getByLabel("Add a step").fill("close the tabs");
+  await sheet(page).getByLabel("Add a step").press("Enter");
+  await suggested.getByRole("button", { name: "Add all" }).click();
+  await expect.poll(() => stepValues(page)).toEqual([...before, "Write two sentences", "Find the thread", "Press send", "close the tabs", "Save a draft"]);
+
   // Dismiss adds nothing.
   await mockSuggestions(page, ["Close the laptop"]);
   await sheet(page).getByRole("button", { name: /^Suggest (steps|again)$/ }).click();
