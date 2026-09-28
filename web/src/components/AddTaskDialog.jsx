@@ -31,7 +31,7 @@ function parseManualSubSteps(raw) {
 // the save path has to tell "the user chose 25" from "nobody chose anything".
 const DEFAULT_ESTIMATE_MINUTES = 25;
 
-export default function AddTaskDialog({ email, payload, savePayload, savePayloadAsync, userProfile, defaultHorizon, openedFrom = null, onClose, editTask, uid, writeActivityEvents }) {
+export default function AddTaskDialog({ email, payload, savePayload, savePayloadAsync, userProfile, defaultHorizon, defaultFrontId = null, openedFrom = null, onClose, editTask, uid, writeActivityEvents }) {
   const windows = getFocusWindows(payload.config || {});
   const isEditMode = !!editTask;
   const [title, setTitle] = useState(editTask?.title || "");
@@ -42,7 +42,7 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
   const [category, setCategory] = useState(editTask?.category || "Personal");
   // "" means no front. Stored as null, never "", so the field is absent rather
   // than empty for a task that belongs to nothing.
-  const [frontId, setFrontId] = useState(editTask?.frontId || "");
+  const [frontId, setFrontId] = useState(editTask?.frontId || defaultFrontId || "");
   const [estimateMinutes, setEstimateMinutes] = useState(editTask?.timeEstimateMinutes || DEFAULT_ESTIMATE_MINUTES);
   // A task can legitimately have NO estimate, and the selector shows the
   // default for one. Comparing the value alone cannot tell "the user chose 25"

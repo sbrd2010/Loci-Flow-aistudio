@@ -1,15 +1,17 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import LinkifyText from "./LinkifyText";
-import ConfirmDialog from "./ConfirmDialog";
+import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
+import { IconChevronLeft, IconChevronRight, IconPlus } from "./ui/icons";
 import {
   frontsFromConfig,
   normalizeFronts,
   sortFronts,
   frontNextMove,
-  frontProgress,
-  frontDueLabel,
+  tasksForFront,
+  parseDueDate,
   frontDaysLeft,
-  planFooterSentence,
+  frontForCommitment,
+  commitmentKickerFront,
   makeFront,
   FRONT_NAME_MAX,
   FRONT_LIMIT,
@@ -17,88 +19,150 @@ import {
 } from "../utils/fronts";
 import "../styles/plan.css";
 
-// Plan — screen 4 of the redesign: every front, each showing its single next
-// move. Hairline rows, no cards, exactly one dominant element (the front with
-// the nearest deadline).
-//
-// This does not replace the horizon board. Roadmap's week/month/quarter/6-month
-// planning is real functionality the redesign has no screen for, so it stays
-// reachable from the footer until the designer says where it goes.
+// Plan's Fronts (45i): one card per front — its name, GOAL on the goal
+// front, how many tasks are open on it and its next move. The card opens the
+// front's own page (52f–g): its open tasks by horizon, Add to this front, and
+// Park / Close, both with Undo.
 
-const NUMBER_WORDS = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
-
-function countLabel(n) {
-  const word = NUMBER_WORDS[n] ?? String(n);
-  return `${word} ${n === 1 ? "front" : "fronts"}`;
+// Open and done tasks on a front. Open is every horizon's, Today's too.
+function frontCounts(tasks, frontId) {
+  const mine = tasksForFront(tasks, frontId);
+  return {
+    open: mine.filter(t => !t.isCompleted && !t.isParked).length,
+    done: mine.filter(t => t.isCompleted).length,
+  };
 }
 
-function FrontBlock({ front, tasks, isLead, now, onClose }) {
-  const nextMove = frontNextMove(front, tasks);
-  const { done, total } = frontProgress(tasks, front.id);
-  const due = frontDueLabel(front, now);
+// "DUE 14 NOV · 18 DAYS" (52f), or nothing for a front with no deadline.
+function frontDueLine(front, now) {
+  const due = parseDueDate(front.dueAt);
+  if (!due) return null;
   const days = frontDaysLeft(front, now);
-  // Clay is time pressure only, and only on the one that is actually pressing.
-  const pressing = !front.parked && days !== null && days <= 14;
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const date = `${due.getDate()} ${due.toLocaleString("en-GB", { month: "short" })}`.toUpperCase();
+  const left = days < 0 ? "OVERDUE" : days === 0 ? "TODAY" : `${days} ${days === 1 ? "DAY" : "DAYS"}`;
+  return `DUE ${date} · ${left}`;
+}
 
+function FrontCard({ front, tasks, isGoal, onOpen }) {
+  const nextMove = frontNextMove(front, tasks);
+  const { open } = frontCounts(tasks, front.id);
   return (
-    <section className={`plan-front${front.parked ? " is-parked" : ""}${isLead ? " is-lead" : ""}`}>
-      <div className="plan-front-head">
-        <h3 className="plan-front-name">{front.name}</h3>
-        {due && (
-          <span className={`plan-front-due${pressing ? " is-pressing" : ""}${front.parked ? " is-parked-tag" : ""}`}>
-            {due}
-          </span>
+    <button
+      type="button"
+      className={`plan-front${front.parked ? " is-parked" : ""}`}
+      data-front-id={front.id}
+      onClick={() => onOpen(front)}
+    >
+      <span className="plan-front-head">
+        <span className="plan-front-name">{front.name}</span>
+        {isGoal && <span className="task-tag is-goal">GOAL</span>}
+        <span className="plan-front-open">{front.parked ? "PARKED" : `${open} OPEN`}</span>
+      </span>
+      <span className="plan-front-move">
+        {nextMove ? (
+          <span className="plan-front-move-line">Next: <span className="plan-front-move-text"><LinkifyText text={nextMove} /></span></span>
+        ) : (
+          <span className="plan-front-move-line plan-front-move-empty">No next move yet.</span>
         )}
-        {onClose && (
-          <button
-            type="button"
-            className="plan-front-close"
-            aria-label={`Close the front ${front.name}`}
-            onClick={() => onClose(front)}
-          >
-            Close
-          </button>
-        )}
-      </div>
-
-      {nextMove ? (
-        <div className="plan-front-move">
-          <span className="plan-front-rule" aria-hidden="true" />
-          <span className="plan-front-move-text"><LinkifyText text={nextMove} /></span>
-        </div>
-      ) : (
-        <div className="plan-front-move">
-          <span className="plan-front-rule" aria-hidden="true" />
-          <span className="plan-front-move-text plan-front-move-empty">No next move yet.</span>
-        </div>
-      )}
-
-      {total > 0 && (
-        <div className="plan-front-progress">
-          <div className="plan-front-track">
-            <div className="plan-front-fill" style={{ width: `${pct}%` }} />
-          </div>
-          <span className="plan-front-figure">{done}/{total}</span>
-        </div>
-      )}
-    </section>
+        <IconChevronRight size={18} aria-hidden="true" />
+      </span>
+    </button>
   );
 }
 
-export default function PlanTab({ payload = {}, saveConfigPatch }) {
+// A front's page (52f–g). The tasks come from Plan's own rows and sheet
+// (renderTasks), so a row here behaves as it does in Horizons.
+function FrontPage({ front, tasks, isGoal, now, onBack, onPark, onClose, onAdd, renderTasks }) {
+  const { open, done } = frontCounts(tasks, front.id);
+  const due = frontDueLine(front, now);
+  // The Key Deadline front is projected from Settings, not stored: there is
+  // nothing here to park or close.
+  const stored = front.id !== LEGACY_DEADLINE_FRONT_ID;
+  const backRef = useRef(null);
+  useEffect(() => { backRef.current?.focus(); }, [front.id]);
+
+  // The phone's Park / Close bar sits on the nav, whose height depends on
+  // the safe area and the text size, so it is measured.
+  const [navHeight, setNavHeight] = useState(0);
+  useEffect(() => {
+    const nav = document.querySelector(".tab-bar");
+    if (!nav || typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(() => setNavHeight(nav.getBoundingClientRect().height));
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, []);
+
+  // Esc goes back, as the Day map's does — unless a sheet, drawer or dialog
+  // is open, which takes it first.
+  const backFn = useRef(onBack);
+  backFn.current = onBack;
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      const el = e.target;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (document.querySelector("[role='dialog']")) return;
+      backFn.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const actions = stored && (
+    <>
+      <button type="button" className="plan-fp-action" onClick={() => onPark(front)}>
+        {front.parked ? "Unpark front" : "Park front"}
+      </button>
+      <button type="button" className="plan-fp-action is-close" onClick={() => onClose(front)}>
+        Close front
+      </button>
+    </>
+  );
+
+  return (
+    <div className={`plan-fp${actions ? " has-bar" : ""}`} style={{ "--fp-nav-h": `${navHeight}px` }}>
+      <button type="button" className="plan-fp-back" ref={backRef} onClick={onBack} aria-label="Back to Fronts">
+        <IconChevronLeft size={20} aria-hidden="true" />
+        <span>Fronts</span>
+        <kbd className="wall-key plan-fp-key" aria-hidden="true">Esc</kbd>
+      </button>
+      <header className="plan-fp-head">
+        <div className="plan-fp-heading">
+          <h2 className="plan-fp-name">
+            {front.name}
+            {isGoal && <span className="task-tag is-goal">GOAL</span>}
+            {front.parked && <span className="task-tag plan-fp-parked">PARKED</span>}
+          </h2>
+          <p className="plan-fp-stats">
+            {`${open} OPEN · ${done} DONE`}
+            {due && <span className="plan-fp-due"> · {due}</span>}
+          </p>
+        </div>
+        {actions && <div className="plan-fp-actions is-inline">{actions}</div>}
+      </header>
+      {renderTasks?.(front)}
+      <button type="button" className="plan-add-front plan-fp-add" onClick={() => onAdd?.(front)}>
+        <IconPlus size={20} aria-hidden="true" />
+        Add to this front
+      </button>
+      {actions && <div className="plan-fp-actions is-bar">{actions}</div>}
+    </div>
+  );
+}
+
+export default function PlanTab({ payload = {}, saveConfigPatch, openFrontId = null, onOpenFront, onAddToFront, renderFrontTasks }) {
   const { tasks = [], config = {} } = payload;
   const [adding, setAdding] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftDate, setDraftDate] = useState("");
+  // Undo for Park and Close (52f): { kind, front, index, at }.
+  const [undo, setUndo] = useState(null);
+  const configRef = useRef(config);
+  configRef.current = config;
 
-  // One `now` per render so every front on screen is measured against the same
-  // instant — otherwise a render spanning midnight could show two different days.
-  // Front deadlines are CALENDAR days parsed at local midnight, so this ticks on
-  // the local date — not the loci day The week uses. Without it, a screen left
-  // open across midnight (or resumed after sleep) kept "1d" instead of "0d" or
-  // OVERDUE, and the ordering, the lead front and the fortnight footer all
-  // stayed on yesterday.
+  // Front deadlines are CALENDAR days parsed at local midnight, so this ticks
+  // on the local date: a page left open across midnight would otherwise keep
+  // yesterday's day count and order.
   const [dayKey, setDayKey] = useState(() => new Date().toDateString());
   useEffect(() => {
     const id = setInterval(
@@ -113,28 +177,67 @@ export default function PlanTab({ payload = {}, saveConfigPatch }) {
 
   const now = useMemo(() => new Date(), [tasks, config, dayKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const fronts = useMemo(() => sortFronts(frontsFromConfig(config), now), [config, now]);
-  const footer = useMemo(() => planFooterSentence(fronts, tasks, now), [fronts, tasks, now]);
   // The LIMIT applies to stored fronts. frontsFromConfig can return one more
   // than this (the legacy Key Deadline projection), which is not stored and so
   // does not consume a slot.
   const stored = useMemo(() => normalizeFronts(config.fronts), [config]);
   const atFrontLimit = stored.length >= FRONT_LIMIT;
+  // GOAL: the same rule as the rows' — the front the wall's kicker names.
+  const goalFront = commitmentKickerFront(frontForCommitment(tasks.find(t => t.isNowFocus && !t.isDeleted && !t.isCompleted), fronts), config);
+  const isGoal = (front) => !!goalFront && front.id === goalFront.id;
 
-  // Closing a front. It is removed from config.fronts; the tasks on it are not
-  // touched and are left with no front (52: the sheet's Front picker puts them
-  // on another). Without this the cap was a dead end:
-  // at FRONT_LIMIT the screen told the user to close one and nothing could.
-  //
-  // The legacy Key Deadline front is PROJECTED from config.deadlineLabel at
-  // read time rather than stored, so there is nothing here to remove — it is
-  // closed by clearing the deadline in Settings, and offering a button that
-  // silently did nothing would be worse than offering none.
-  const [closing, setClosing] = useState(null);
-  const closeFront = (front) => {
-    if (!front?.id || typeof saveConfigPatch !== "function") return;
-    saveConfigPatch({ fronts: normalizeFronts(config.fronts).filter(f => f.id !== front.id) });
-    setClosing(null);
+  const openFront = openFrontId ? fronts.find(f => f.id === openFrontId) : null;
+  // A front closed elsewhere (another device) leaves its page.
+  useEffect(() => {
+    if (openFrontId && !openFront) onOpenFront?.(null);
+  }, [openFrontId, openFront]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const focusLater = (selector) => requestAnimationFrame(() => document.querySelector(selector)?.focus());
+  const cardSelector = (id) => `.plan-fronts [data-front-id="${CSS.escape(id)}"]`;
+  const backToList = (focusId) => {
+    onOpenFront?.(null);
+    focusLater(focusId ? cardSelector(focusId) : ".plan-new-front");
   };
+
+  // Park and Close go back to Fronts, where the card shows the result and
+  // the Undo sits. Closing removes the front from config.fronts only: its
+  // tasks keep their frontId, so they read as on no front, and Undo puts the
+  // front back where it was with them still on it.
+  const parkFront = (front) => {
+    const list = normalizeFronts(configRef.current.fronts);
+    const index = list.findIndex(f => f.id === front.id);
+    if (index === -1 || typeof saveConfigPatch !== "function") return;
+    saveConfigPatch({ fronts: list.map(f => (f.id === front.id ? { ...f, parked: !front.parked } : f)) });
+    setUndo({ kind: front.parked ? "unpark" : "park", front, index, at: Date.now() });
+    backToList(front.id);
+  };
+  const closeFront = (front) => {
+    const list = normalizeFronts(configRef.current.fronts);
+    const index = list.findIndex(f => f.id === front.id);
+    if (index === -1 || typeof saveConfigPatch !== "function") return;
+    saveConfigPatch({ fronts: list.filter(f => f.id !== front.id) });
+    setUndo({ kind: "close", front, index, at: Date.now() });
+    backToList(null);
+  };
+  const handleUndo = () => {
+    if (!undo) return;
+    const { kind, front, index } = undo;
+    const list = normalizeFronts(configRef.current.fronts);
+    if (kind === "close") {
+      // Not if it came back some other way, or the list filled up meanwhile.
+      if (!list.some(f => f.id === front.id) && list.length < FRONT_LIMIT) {
+        const next = [...list];
+        next.splice(Math.min(index, next.length), 0, front);
+        saveConfigPatch({ fronts: next });
+      }
+    } else {
+      saveConfigPatch({ fronts: list.map(f => (f.id === front.id ? { ...f, parked: front.parked } : f)) });
+    }
+    setUndo(null);
+    focusLater(cardSelector(front.id));
+  };
+  const UNDO_LABELS = { park: "Parked", unpark: "Unparked", close: "Closed" };
+  const undoText = undo ? `${UNDO_LABELS[undo.kind]}: ${undo.front.name}` : "";
 
   const commitFront = () => {
     const front = makeFront({ name: draftName, dueAt: draftDate || null });
@@ -150,33 +253,51 @@ export default function PlanTab({ payload = {}, saveConfigPatch }) {
     setDraftName("");
     setDraftDate("");
     setAdding(false);
+    focusLater(cardSelector(front.id));
   };
+
+  const toast = (
+    <>
+      <UndoAnnouncer message={undoText} />
+      {undo && <UndoToast key={undo.at} message={undoText} onUndo={handleUndo} onClose={() => setUndo(null)} />}
+    </>
+  );
+
+  if (openFront) {
+    return (
+      <div className="plan-tab is-front-page">
+        <FrontPage
+          front={openFront}
+          tasks={tasks}
+          isGoal={isGoal(openFront)}
+          now={now}
+          onBack={() => backToList(openFront.id)}
+          onPark={parkFront}
+          onClose={closeFront}
+          onAdd={onAddToFront}
+          renderTasks={renderFrontTasks}
+        />
+        {toast}
+      </div>
+    );
+  }
 
   return (
     <div className="plan-tab">
-      <header className="plan-header">
-        <div className="plan-header-text">
-          <h2 className="plan-title">{countLabel(fronts.length)}</h2>
-          <div className="plan-kicker">ONE NEXT MOVE EACH</div>
-        </div>
-        <button
-          type="button"
-          className="plan-new-front"
-          onClick={() => setAdding(v => !v)}
-          aria-expanded={adding}
-          disabled={atFrontLimit}
-        >
-          New front
-        </button>
-      </header>
-
-      {atFrontLimit && (
-        <p className="plan-limit-note">
-          That is {FRONT_LIMIT} fronts — the most Loci holds. Close one to make room.
+      {fronts.length === 0 ? (
+        <p className="plan-empty">
+          Nothing is running yet. A front is one piece of work with its own deadline —
+          a paper, a rig, a resubmission. Name the first one.
         </p>
+      ) : (
+        <div className="plan-fronts">
+          {fronts.map(front => (
+            <FrontCard key={front.id} front={front} tasks={tasks} isGoal={isGoal(front)} onOpen={f => onOpenFront?.(f.id)} />
+          ))}
+        </div>
       )}
 
-      {adding && (
+      {adding ? (
         <div className="plan-new-form">
           <label className="plan-new-label" htmlFor="plan-new-name">What is the front?</label>
           <input
@@ -187,7 +308,10 @@ export default function PlanTab({ payload = {}, saveConfigPatch }) {
             autoFocus
             placeholder="Membrane paper"
             onChange={e => setDraftName(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && draftName.trim()) commitFront(); }}
+            onKeyDown={e => {
+              if (e.key === "Enter" && draftName.trim()) commitFront();
+              if (e.key === "Escape") { e.preventDefault(); setAdding(false); focusLater(".plan-new-front"); }
+            }}
           />
           <label className="plan-new-label" htmlFor="plan-new-date">Deadline, if it has one</label>
           <input
@@ -201,43 +325,23 @@ export default function PlanTab({ payload = {}, saveConfigPatch }) {
             <button type="button" className="plan-new-commit" disabled={!draftName.trim() || atFrontLimit} onClick={commitFront}>
               Add the front
             </button>
-            <button type="button" className="plan-new-cancel" onClick={() => setAdding(false)}>Cancel</button>
+            <button type="button" className="plan-new-cancel" onClick={() => { setAdding(false); focusLater(".plan-new-front"); }}>Cancel</button>
           </div>
         </div>
-      )}
-
-      {fronts.length === 0 ? (
-        <p className="plan-empty">
-          Nothing is running yet. A front is one piece of work with its own deadline —
-          a paper, a rig, a resubmission. Name the first one.
-        </p>
       ) : (
-        <div className="plan-fronts">
-          {fronts.map((front, i) => (
-            <FrontBlock
-              key={front.id}
-              front={front}
-              tasks={tasks}
-              isLead={i === 0 && !front.parked}
-              now={now}
-              onClose={front.id === LEGACY_DEADLINE_FRONT_ID ? undefined : setClosing}
-            />
-          ))}
-        </div>
+        <button type="button" className="plan-add-front plan-new-front" onClick={() => setAdding(true)} disabled={atFrontLimit}>
+          <IconPlus size={20} aria-hidden="true" />
+          New front
+        </button>
       )}
 
-      {footer && <p className="plan-footer">{footer}</p>}
-
-      {closing && (
-        <ConfirmDialog
-          message={`Close "${closing.name}"?\n\nThe front goes away. Nothing on it is deleted — those tasks are left with no front.`}
-          confirmLabel="Close the front"
-          cancelLabel="Keep it"
-          danger
-          onConfirm={() => closeFront(closing)}
-          onCancel={() => setClosing(null)}
-        />
+      {atFrontLimit && (
+        <p className="plan-limit-note">
+          That is {FRONT_LIMIT} fronts — the most Loci holds. Close one to make room.
+        </p>
       )}
+
+      {toast}
     </div>
   );
 }
