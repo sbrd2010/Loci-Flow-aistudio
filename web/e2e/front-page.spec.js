@@ -194,3 +194,63 @@ test("a task moved to Today leaves the rows but still counts: the figures say it
   await back(page).click();
   await expect(card(page, "Thesis").locator(".plan-front-open")).toHaveText("2 OPEN");
 });
+
+// Codex review of #414: a drag on a front's page reorders the whole horizon,
+// so the horizon's tasks on no front keep their places around it.
+test("a drag on a front's page keeps the horizon's other tasks in place", async ({ page }) => {
+  await enterDemo(page, 1280, 800);
+  const week = () => page.locator(".plan-horizon", { has: page.locator("#plan-h-week") }).locator(".plan-row-title");
+  const [w1, w2, w3] = (await week().allInnerTexts()).map(t => t.trim());
+  // One priority for all three, so their order is theirs alone.
+  for (const t of [w1, w2, w3]) {
+    await page.locator(".plan-row", { hasText: t }).click();
+    await sheet(page).getByRole("radio", { name: "Priority 2" }).click();
+    await sheet(page).getByRole("button", { name: "Close", exact: true }).click();
+  }
+  await expect.poll(async () => (await week().allInnerTexts()).map(t => t.trim())).toEqual([w1, w2, w3]);
+
+  // The first and the last on a front; the middle one on none.
+  await page.getByRole("tab", { name: "Fronts" }).click();
+  await page.getByRole("button", { name: "New front" }).click();
+  await page.locator("#plan-new-name").fill("Thesis");
+  await page.getByRole("button", { name: "Add the front" }).click();
+  for (const t of [w1, w3]) {
+    await page.getByRole("tab", { name: "Horizons" }).click();
+    await page.locator(".plan-row", { hasText: t }).click();
+    await sheet(page).getByRole("button", { name: /^Front/ }).click();
+    await sheet(page).getByRole("radio", { name: "Thesis", exact: true }).click();
+    await sheet(page).getByRole("button", { name: "Close", exact: true }).click();
+  }
+  await page.getByRole("tab", { name: "Fronts" }).click();
+  await card(page, "Thesis").click();
+
+  // Keyboard drag: the first below the second.
+  const held = page.locator(".plan-front-tasks .plan-row-grip[aria-pressed='true']");
+  await page.getByRole("button", { name: `Drag to reorder: ${w1}` }).focus();
+  await page.keyboard.press("Space");
+  await expect(held).toHaveCount(1);
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await page.keyboard.press("ArrowDown");
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await page.keyboard.press("Space");
+  await expect(page.locator(".plan-front-tasks .plan-row-title")).toHaveText([w3, w1]);
+
+  // In Horizons: w1 moved past w3, and w2 kept its place ahead of both.
+  await back(page).click();
+  await page.getByRole("tab", { name: "Horizons" }).click();
+  await expect.poll(async () => (await week().allInnerTexts()).map(t => t.trim())).toEqual([w2, w3, w1]);
+});
+
+// Codex review of #414: the card is one button, so its next move is plain
+// text — a link inside it would be a control inside a control.
+test("a next move with a URL shows as text on the card, not a link", async ({ page }) => {
+  await enterDemo(page);
+  await frontWith(page, "Links", []);
+  await card(page, "Links").click();
+  await page.getByRole("button", { name: "Add to this front" }).click();
+  await page.getByTestId("add-task-title").fill("Read https://example.com/brief");
+  await page.getByTestId("add-task-submit").click();
+  await back(page).click();
+  await expect(card(page, "Links").locator(".plan-front-move-text")).toHaveText("Read https://example.com/brief");
+  await expect(card(page, "Links").locator("a")).toHaveCount(0);
+});

@@ -124,7 +124,8 @@ function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, fr
   );
 }
 
-function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, onTaskClick, onDone, isGoal = () => false, frontNameOf = () => null, openUuid = null }) {
+// fullColTasks: the whole horizon when colTasks is a front's share of it.
+function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks, payload, savePayload, onTaskClick, onDone, isGoal = () => false, frontNameOf = () => null, openUuid = null }) {
   const interactionStyle = payload?.config?.taskRowInteractionStyle === "dragAnywhere" ? "dragAnywhere" : "classic";
   const [activeId, setActiveId] = useState(null);
   const getKey = (t) => t.uuid || String(t.id);
@@ -149,7 +150,9 @@ function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, on
     // pin/unpinned boundary — pin status alone decides that ordering, not orderIndex.
     const draggedPinned = !!colTasks[oldIdx].isHorizonPinned;
     if (!!colTasks[newIdx].isHorizonPinned !== draggedPinned) return;
-    const tier = colTasks.filter(t => !!t.isHorizonPinned === draggedPinned);
+    // Renumber the whole horizon's tier, not only the rows on screen: on a
+    // front's page the horizon's other tasks keep their places around it.
+    const tier = fullColTasks.filter(t => !!t.isHorizonPinned === draggedPinned);
     const tierOldIdx = tier.findIndex(t => getKey(t) === active.id);
     const tierNewIdx = tier.findIndex(t => getKey(t) === over.id);
     const reordered = arrayMove([...tier], tierOldIdx, tierNewIdx);
@@ -720,7 +723,10 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
   );
 
   const shownColumns = columns
-    .map(col => ({ ...col, tasks: tasks.filter(t => t.horizonLevel === col.key && isVisibleRoadmapTask(t) && (!frontId || t.frontId === frontId)).sort(byPriorityThenOrder) }))
+    .map(col => {
+      const all = tasks.filter(t => t.horizonLevel === col.key && isVisibleRoadmapTask(t)).sort(byPriorityThenOrder);
+      return { ...col, allTasks: all, tasks: frontId ? all.filter(t => t.frontId === frontId) : all };
+    })
     .filter(col => !(col.onlyWithTasks || frontId) || col.tasks.length > 0);
   const detailCol = detailUuid ? shownColumns.find(col => col.tasks.some(t => t.uuid === detailUuid)) : null;
   const detailTask = detailCol ? detailCol.tasks.find(t => t.uuid === detailUuid) : null;
@@ -775,6 +781,7 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
               <SortableRoadmapList
                 colKey={col.key}
                 colTasks={colTasks}
+                fullColTasks={col.allTasks}
                 tasks={tasks}
                 payload={payload}
                 savePayload={savePayload}

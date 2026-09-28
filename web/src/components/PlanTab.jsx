@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import LinkifyText from "./LinkifyText";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import { IconChevronLeft, IconChevronRight, IconPlus } from "./ui/icons";
 import {
@@ -63,7 +62,9 @@ function FrontCard({ front, tasks, isGoal, onOpen }) {
       </span>
       <span className="plan-front-move">
         {nextMove ? (
-          <span className="plan-front-move-line">Next: <span className="plan-front-move-text"><LinkifyText text={nextMove} /></span></span>
+          // Plain text: a link inside the card's button would be a control
+          // inside a control.
+          <span className="plan-front-move-line">Next: <span className="plan-front-move-text">{nextMove}</span></span>
         ) : (
           <span className="plan-front-move-line plan-front-move-empty">No next move yet.</span>
         )}
