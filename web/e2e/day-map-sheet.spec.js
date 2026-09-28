@@ -106,6 +106,8 @@ test("the sheet's estimate is the stop's duration, and the route is timed again"
   await openDayMap(page, { width: 375, height: 812 });
   await stops(page).nth(0).click();
   await sheet(page).getByRole("button", { name: /^Estimate/ }).click();
+  // Codex review of #418: a stop always has a length — no None to pick.
+  await expect(sheet(page).getByRole("radio", { name: "None" })).toHaveCount(0);
   await sheet(page).getByRole("radio", { name: "1h" }).click();
   await expect(page.locator(".dm-stop").nth(0).locator(".dm-dur")).toHaveText("1h");
   const [first, second] = await times(page);
@@ -145,13 +147,22 @@ test("Done from the sheet closes the gap; Undo puts the stop back where it was",
   await expect.poll(() => times(page)).toEqual(beforeTimes);
 });
 
-// Codex review of #415: the sheet shows the duration the route uses.
-test("the sheet's estimate is the stop's duration even when set to None", async ({ page }) => {
+// Codex review of #415: the sheet shows the duration the route uses — for a
+// task with no estimate (cleared from Today's sheet; a stop offers no None),
+// the 25m the route gives it.
+test("the sheet's estimate is the stop's duration for a task with no estimate", async ({ page }) => {
   await openDayMap(page, { width: 375, height: 812 });
-  await stops(page).nth(0).click();
+  const title = (await titles(page))[1];
+  await page.locator(".dm-back").click();
+  await page.getByTestId("today-tasks-list").getByText(title, { exact: true }).click();
   await sheet(page).getByRole("button", { name: /^Estimate/ }).click();
-  await sheet(page).getByRole("radio", { name: "None" }).click();
-  await expect(page.locator(".dm-stop").nth(0).locator(".dm-dur")).toHaveText("25m");
+  await sheet(page).getByRole("radio", { name: "None", exact: true }).click();
+  await sheet(page).getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Day map →" }).click();
+
+  const stop = page.locator(".dm-stop", { hasText: title });
+  await expect(stop.locator(".dm-dur")).toHaveText("25m");
+  await stop.locator(".dm-main").click();
   await expect(sheet(page).getByRole("button", { name: /^Estimate/ }).locator(".detail-value")).toHaveText("25m");
 });
 
@@ -211,25 +222,9 @@ test("a stop moved off Today and back waits in Unscheduled, not in its old slot"
   await expect(page.locator(".dm-pool .dm-pool-list")).toContainText(before[1]);
 });
 
-// Codex review of #415: More details opens the full editor from a stop. An
-// estimate changed there times the route again, as the sheet's does.
-test("More details: an estimate changed in the full editor times the route again", async ({ page }) => {
-  await openDayMap(page, { width: 1280, height: 800 });
-  const beforeTimes = await times(page);
-  await stops(page).nth(0).click();
-  await sheet(page).getByRole("button", { name: /^More details/ }).click();
-  const editor = page.getByRole("dialog", { name: "Edit task" });
-  await editor.getByRole("button", { name: "2h", exact: true }).click();
-  await page.getByTestId("add-task-submit").click();
-  await expect(page.locator(".dm-stop").nth(0).locator(".dm-dur")).toHaveText("2h");
-  // 11:45 + 2h + the 5-minute gap.
-  await expect.poll(async () => (await times(page))[1]).toBe("13:50");
-  expect(beforeTimes[1]).not.toBe("13:50");
-});
-
-// …and a horizon changed there takes the one thing off Today properly: its
-// session ends and its slot goes (Today's own editor gets the same).
-test("More details: the one thing moved off Today in the full editor ends its session and leaves the route", async ({ page }) => {
+// Codex review of #415: a horizon changed in a stop's sheet takes the one
+// thing off Today properly: its session ends and its slot goes.
+test("the one thing moved off Today from its stop's sheet ends its session and leaves the route", async ({ page }) => {
   await page.addInitScript(() => {
     try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
   });
@@ -250,10 +245,8 @@ test("More details: the one thing moved off Today in the full editor ends its se
   await page.getByRole("button", { name: "Auto-fill" }).click();
   const before = await titles(page);
   await page.locator(".dm-stop .dm-main", { hasText: wallTitle }).click();
-  await sheet(page).getByRole("button", { name: /^More details/ }).click();
-  const editor = page.getByRole("dialog", { name: "Edit task" });
-  await editor.getByRole("group", { name: "Horizon" }).getByRole("button", { name: "Week", exact: true }).click();
-  await page.getByTestId("add-task-submit").click();
+  await sheet(page).getByRole("button", { name: /^Horizon/ }).click();
+  await sheet(page).getByRole("radio", { name: "This Week", exact: true }).click();
 
   await expect.poll(() => titles(page)).toEqual(before.filter(t => t !== wallTitle));
   // The next stop moved up into the freed start.
@@ -261,29 +254,4 @@ test("More details: the one thing moved off Today in the full editor ends its se
   await page.locator(".dm-back").click();
   await expect(page.getByTestId("today-tasks-list")).toBeVisible();
   await expect(floating).toHaveCount(0);
-});
-
-// Codex review of #415: the full editor, opened from a stop, starts from the
-// stop's duration, as the sheet does — even when the task's own estimate
-// has since been changed elsewhere (Today's sheet sets only the estimate).
-test("More details: the editor opens on the stop's duration, not a different estimate", async ({ page }) => {
-  await openDayMap(page, { width: 1280, height: 800 });
-  const stopTitle = (await titles(page))[1];
-  // Today's sheet: the estimate to 2h.
-  await page.locator(".dm-back").click();
-  await page.getByTestId("today-tasks-list").getByText(stopTitle, { exact: true }).click();
-  await sheet(page).getByRole("button", { name: /^Estimate/ }).click();
-  await sheet(page).getByRole("radio", { name: "2h" }).click();
-  await sheet(page).getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("button", { name: "Day map →" }).click();
-
-  const stop = page.locator(".dm-stop", { hasText: stopTitle });
-  const dur = (await stop.locator(".dm-dur").innerText()).trim();
-  await stop.locator(".dm-main").click();
-  await expect(sheet(page).getByRole("button", { name: /^Estimate/ }).locator(".detail-value")).toHaveText(dur);
-  await sheet(page).getByRole("button", { name: /^More details/ }).click();
-  const editor = page.getByRole("dialog", { name: "Edit task" });
-  expect(dur).toBe("25m");
-  // Not the 2h estimate: 25m is not a chip, so none of them is on.
-  await expect(editor.getByRole("button", { name: "2h", exact: true })).toHaveAttribute("aria-pressed", "false");
 });

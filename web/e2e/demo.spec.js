@@ -118,21 +118,14 @@ test("7. User can edit a task", async ({ page }) => {
   const firstRow = tasksList.locator(".task-row:not(.completed)").first();
   await expect(firstRow).toBeVisible({ timeout: 8_000 });
 
-  // Open the ⋮ menu and click Edit
+  // The row opens the task sheet (52: it edits in place, no separate
+  // editor); the title is edited there.
   await firstRow.locator(".task-row-top").click();
-  const editBtn = page.getByTestId("task-detail").getByRole("button", { name: /^More details/ });
-  await expect(editBtn).toBeVisible({ timeout: 3_000 });
-  await editBtn.click();
-
-  // Full edit dialog (AddTaskDialog) should open
-  await expect(page.locator(".add-card")).toBeVisible({ timeout: 5_000 });
-
-  // Change the title
+  const sheet = page.getByTestId("task-detail");
+  await sheet.locator(".detail-title").click();
   const editedTitle = "Edited by Playwright";
-  await page.getByTestId("add-task-title").fill(editedTitle);
-
-  // Save
-  await page.getByTestId("add-task-submit").click();
+  await sheet.getByLabel("Title").fill(editedTitle);
+  await sheet.getByLabel("Title").press("Enter");
 
   // Edited title appears in the list
   await expect(tasksList.getByText(editedTitle)).toBeVisible({ timeout: 5_000 });

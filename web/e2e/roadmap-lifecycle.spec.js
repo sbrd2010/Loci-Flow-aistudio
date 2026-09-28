@@ -64,17 +64,17 @@ test("reliability: roadmap task can be added, edited, and moved to Today", async
   await expect(roadmapCard(page, originalTitle)).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
 
-  // The row opens the task's sheet (52h); the full editor is its More details.
+  // The row opens the task's sheet (52h), which edits in place (52: no
+  // separate editor).
   await roadmapCard(page, originalTitle).click();
-  await expect(page.getByTestId("task-detail")).toBeVisible({ timeout: 5_000 });
-  await expect(page.getByTestId("task-detail").locator(".detail-kicker").first()).toHaveText(/^THIS WEEK · \d+ OF \d+$/);
-  await page.getByTestId("task-detail").getByRole("button", { name: /^More details/ }).click();
+  const sheet = page.getByTestId("task-detail");
+  await expect(sheet).toBeVisible({ timeout: 5_000 });
+  await expect(sheet.locator(".detail-kicker").first()).toHaveText(/^THIS WEEK · \d+ OF \d+$/);
+  await sheet.locator(".detail-title").click();
+  await sheet.getByLabel("Title").fill(editedTitle);
+  await sheet.getByLabel("Title").press("Enter");
+  await sheet.getByRole("button", { name: "Close", exact: true }).click();
 
-  await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
-  await page.getByTestId("add-task-title").fill(editedTitle);
-  await page.getByTestId("add-task-submit").click();
-
-  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   await expect(roadmapCard(page, editedTitle)).toBeVisible({ timeout: 5_000 });
   await expect(roadmapCard(page, originalTitle)).not.toBeVisible({ timeout: 5_000 });
 

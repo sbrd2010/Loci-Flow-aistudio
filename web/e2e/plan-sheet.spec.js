@@ -19,6 +19,9 @@ async function enterDemo(page, viewport = { width: 1280, height: 800 }) {
 const horizon = (page, name) => page.locator(".plan-horizon", { has: page.getByRole("heading", { name: new RegExp(`^${name}`) }) });
 const sheet = (page) => page.getByTestId("task-detail");
 
+// Steps are edited in place (52), so their text is the fields' values.
+const stepTexts = (page) => sheet(page).locator(".detail-step-input").evaluateAll(els => els.map(el => el.value));
+
 test("a row opens the sheet: its horizon and place, no Must-do or one thing, and Plan's footer", async ({ page }) => {
   await enterDemo(page);
   const rows = horizon(page, "This week").locator(".plan-row");
@@ -113,14 +116,16 @@ test("the sheet's circle marks it done, with Undo; a step removed comes back wit
   const rows = horizon(page, "This week").locator(".plan-row");
   const title = (await rows.first().locator(".plan-row-title").innerText()).trim();
   await rows.first().click();
+  // A first step the task already has is step 1 of STEPS (52).
+  const before = await stepTexts(page);
   await sheet(page).getByLabel("Add a step").fill("Draft the outline");
   await sheet(page).getByLabel("Add a step").press("Enter");
-  await expect(sheet(page).getByText("STEPS · 0 OF 1")).toBeVisible();
+  await expect(sheet(page).getByText(`STEPS · 0 OF ${before.length + 1}`)).toBeVisible();
   await sheet(page).getByRole("button", { name: "Remove step Draft the outline" }).click();
-  await expect(sheet(page).getByText("Draft the outline")).toHaveCount(0);
+  await expect.poll(() => stepTexts(page)).toEqual(before);
   await expect(page.locator(".undo-toast")).toContainText("Step removed: Draft the outline");
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
-  await expect(sheet(page).getByText("Draft the outline")).toBeVisible();
+  await expect.poll(() => stepTexts(page)).toEqual([...before, "Draft the outline"]);
 
   await sheet(page).getByRole("button", { name: `Mark done: ${title}` }).click();
   await expect(sheet(page)).toHaveCount(0);
@@ -151,13 +156,14 @@ test("Plan has no floating +, no 'Not on a front' and no 'I'm scattered' (52)", 
 test("Undo of a removed step puts it back where it was; a step added since stays put", async ({ page }) => {
   await enterDemo(page);
   await horizon(page, "This week").locator(".plan-row").first().click();
+  const before = await stepTexts(page);
   const add = sheet(page).getByLabel("Add a step");
   for (const text of ["Alpha step", "Beta step"]) { await add.fill(text); await add.press("Enter"); }
   await sheet(page).getByRole("button", { name: "Remove step Beta step" }).click();
   await add.fill("Gamma step");
   await add.press("Enter");
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
-  await expect(sheet(page).locator(".detail-step-text")).toHaveText(["Alpha step", "Beta step", "Gamma step"]);
+  await expect.poll(() => stepTexts(page)).toEqual([...before, "Alpha step", "Beta step", "Gamma step"]);
 });
 
 test("Drag anywhere: Enter on a Plan row opens its sheet; Space picks it up", async ({ page }) => {

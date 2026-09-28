@@ -1,19 +1,41 @@
 import React, { useEffect, useRef, useState } from "react";
-import { IconPin, IconPlus, IconX, IconChevronRight, IconCheck } from "./ui/icons";
+import { IconPin, IconPlus, IconX, IconChevronRight, IconChevronDown, IconCheck } from "./ui/icons";
 import { useAutosave } from "./settings/ui";
 import { ROADMAP_HORIZONS } from "./TaskRow";
+import { safeUUID } from "../utils/uuid";
+import { taskSteps } from "../utils/taskSteps";
+import { suggestSteps } from "../utils/stepSuggestions";
+import { formatReminderLabel } from "../utils/reminders";
+import { notifPermissionState, requestNotifPermission } from "../utils/nativeNotifs";
 import "../styles/taskDetail.css";
 
 // A task, opened (turn 50, 50a–b). Tapping a row opens it: a full-height
 // bottom sheet on phones, a 480px drawer beside the list on a laptop that is
 // not modal, so the list stays usable. Everything saves as you type. From
-// here: make it the one thing, or Done / Tomorrow / Park / Delete, each with
-// Undo. A task in another horizon (Plan, 52h) has "Move to Today" instead,
+// here: make it the one thing, or Tomorrow / Park / Delete, each with Undo;
+// Done is the title's circle (52a). A task in another horizon (Plan, 52h) has "Move to Today" instead,
 // then Pin to top · Park · Delete; Done is its circle, and the one thing and
 // Must-do are Today's alone.
 
 const HORIZONS = [{ key: "today", label: "Today" }, ...ROADMAP_HORIZONS];
 const ESTIMATES = [15, 30, 60, 120, 180];
+// Every other length Add task offers, so the sheet — the only editor — can
+// set any of them (Codex review of #418).
+const OTHER_ESTIMATES = [10, 20, 25, 45, 90, 240, 360];
+const CATEGORIES = ["Career", "Health", "Work", "Personal"];
+
+// "YYYY-MM-DD" and "HH:MM" in local time, for the reminder's inputs.
+function localDateTime(ts) {
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, "0");
+  return { date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, time: `${pad(d.getHours())}:${pad(d.getMinutes())}` };
+}
+// A new reminder starts at the next whole hour.
+function nextHour() {
+  const d = new Date();
+  d.setHours(d.getHours() + 1, 0, 0, 0);
+  return d.getTime();
+}
 
 export function formatEstimate(min) {
   const m = Number(min);
@@ -24,9 +46,9 @@ export function formatEstimate(min) {
 
 export default function TaskDetail({
   task, index = 0, total = 0, variant = "drawer", isGoal = false, fronts = [],
-  onClose, onPatch, onToggleMVD, onToggleStep, onAddStep, onDeleteStep,
+  onClose, onPatch, onToggleMVD, onSetSteps,
   onMakeOneThing, onDone, onTomorrow, onPark, onDelete, editTitleSignal = 0,
-  onMoreDetails, onSuggestSteps, suggestingSteps = false, isNow = false, onLetGo,
+  isNow = false, onLetGo,
   onShowAll, kicker = null, onMoveToToday, onTogglePin, onRemoveFromRoute,
 }) {
   const [picker, setPicker] = useState(null);
@@ -57,15 +79,20 @@ export default function TaskDetail({
     if (v.trim() !== (task.note || "").trim()) onPatch({ note: v.trim() || null });
   });
 
+  // "More · Reminder, category" (52b–c), closed until opened; and the
+  // suggested steps (52c), which are offered, never added on their own.
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [suggested, setSuggested] = useState(null); // { loading } | { steps } | { error }
   // A new task shown (↑/↓) closes any open picker; arriving focuses the title
   // so a screen reader hears which task this is.
-  useEffect(() => { setPicker(null); setEditingTitle(false); }, [task.uuid]);
+  useEffect(() => { setPicker(null); setEditingTitle(false); setMoreOpen(false); setSuggested(null); }, [task.uuid]);
   useEffect(() => { headingRef.current?.focus({ preventScroll: true }); }, [task.uuid]);
   // E from the list edits the title.
   useEffect(() => { if (editTitleSignal) setEditingTitle(true); }, [editTitleSignal]);
   useEffect(() => { if (editingTitle) titleInputRef.current?.select(); }, [editingTitle]);
 
-  const steps = Array.isArray(task.subSteps) ? task.subSteps : [];
+  // The first step is step 1 (52): a task that only has one is shown with it.
+  const steps = taskSteps(task);
   const doneSteps = steps.filter(s => s.done).length;
   const front = fronts.find(f => f.id === task.frontId) || null;
   const horizon = HORIZONS.find(h => h.key === task.horizonLevel) || HORIZONS[0];
@@ -77,11 +104,99 @@ export default function TaskDetail({
     if (!title.trim()) setTitle(task.title);
     setEditingTitle(false);
   };
-  const addStep = () => {
-    const text = newStep.trim();
-    if (!text) return;
-    onAddStep(text);
-    setNewStep("");
+  // Every step change goes up as the whole list (stepsPatch gives a first step
+  // shown from the old field an id of its own).
+  const stepsRef = useRef(null);
+  const setSteps = (next, meta) => onSetSteps?.(next, meta);
+  const addStep = (text = newStep) => {
+    const t = text.trim();
+    if (!t) return;
+    setSteps([...steps, { id: safeUUID(), text: t.slice(0, 300), done: false }]);
+    if (text === newStep) setNewStep("");
+  };
+  const toggleStep = id => setSteps(steps.map(st => (st.id === id ? { ...st, done: !st.done } : st)));
+  // A step edited and not yet left is saved when the sheet closes (Esc
+  // closes it with focus still in the step), as the title and note are.
+  const stepDraftsRef = useRef({});
+  const latestStepsRef = useRef(steps);
+  latestStepsRef.current = steps;
+  const onSetStepsRef = useRef(onSetSteps);
+  onSetStepsRef.current = onSetSteps;
+  useEffect(() => () => {
+    const drafts = stepDraftsRef.current;
+    if (!Object.keys(drafts).length) return;
+    const next = latestStepsRef.current
+      .map(st => (st.id in drafts ? { ...st, text: drafts[st.id].trim().slice(0, 300) } : st))
+      .filter(st => st.text);
+    onSetStepsRef.current?.(next);
+  }, []);
+
+  // A step left empty is removed, with Undo — however it was emptied — so
+  // the sheet never shows a blank step while the old text stays saved.
+  const editStep = (id, text) => {
+    delete stepDraftsRef.current[id];
+    const t = text.trim();
+    const cur = steps.find(st => st.id === id);
+    if (!cur || t === cur.text) return;
+    if (!t) { removeStep(id); return; }
+    setSteps(steps.map(st => (st.id === id ? { ...st, text: t.slice(0, 300) } : st)));
+  };
+  const removeStep = (id) => {
+    const at = steps.findIndex(st => st.id === id);
+    if (at === -1) return;
+    setSteps(steps.filter(st => st.id !== id), { removed: steps[at], atIndex: at });
+  };
+  // Backspace in an empty step deletes it (52), and focus goes to the step
+  // before it, or to "Add a step".
+  const focusStepInput = (i) => requestAnimationFrame(() => {
+    const inputs = stepsRef.current?.querySelectorAll(".detail-step-input");
+    (inputs?.[i] || rootRef.current?.querySelector(".detail-add-step-input"))?.focus();
+  });
+  // A step wraps like text; the field grows to fit it.
+  const fitHeight = (el) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+  const onStepKeyDown = (e, st, i) => {
+    if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); focusStepInput(i + 1); return; }
+    if (e.key === "Backspace" && e.currentTarget.value === "") {
+      // Leaving the empty step removes it (editStep); focus goes back one.
+      e.preventDefault();
+      e.currentTarget.blur();
+      focusStepInput(Math.max(0, i - 1));
+    }
+  };
+  const askForSteps = async () => {
+    setSuggested({ loading: true });
+    const res = await suggestSteps(task, steps);
+    setSuggested(res.steps ? { steps: res.steps } : { error: res.error });
+  };
+  // A suggestion already among the steps (typed meanwhile) is not added twice.
+  const hasStep = (text) => steps.some(st => st.text.trim().toLowerCase() === text.trim().toLowerCase());
+  const takeSuggestion = (text) => {
+    if (!hasStep(text)) addStep(text);
+    setSuggested(sug => {
+      const left = (sug?.steps || []).filter(s => s !== text);
+      return left.length ? { steps: left } : null;
+    });
+  };
+  const takeAllSuggestions = () => {
+    const add = (suggested?.steps || []).filter(text => !hasStep(text)).map(text => ({ id: safeUUID(), text, done: false }));
+    if (add.length) setSteps([...steps, ...add]);
+    setSuggested(null);
+  };
+
+  // Reminder: the time is kept as the two inputs show it and saved on each
+  // change; a time already past is not saved.
+  const [remind, setRemind] = useState(() => localDateTime(task.reminderAt || nextHour()));
+  useEffect(() => { setRemind(localDateTime(task.reminderAt || nextHour())); }, [task.uuid, task.reminderAt]);
+  const saveReminder = async (next) => {
+    setRemind(next);
+    const at = new Date(`${next.date}T${next.time}`).getTime();
+    if (!Number.isFinite(at) || at <= Date.now()) return;
+    if (notifPermissionState() === "default") await requestNotifPermission();
+    if (at !== task.reminderAt) onPatch({ reminderAt: at });
   };
 
   // Three priorities (45a); a task that has the older P4 keeps it on offer
@@ -244,12 +359,19 @@ export default function TaskDetail({
           </button>
           {picker === "estimate" && (
             <div className="detail-options is-chips" role="radiogroup" aria-label="Estimate">
-              {[...estimates, null].map(m => (
+              {/* A route stop always has a length, so None is not offered there. */}
+              {(isRoute ? estimates : [...estimates, null]).map(m => (
                 <button key={m || "none"} type="button" role="radio" aria-checked={(Number(task.timeEstimateMinutes) || null) === m} className="detail-chip"
                   onClick={() => { setPicker(null); onPatch({ timeEstimateMinutes: m }); }}>
                   {formatEstimate(m)}
                 </button>
               ))}
+              <select className="detail-input detail-estimate-other" aria-label="Other length"
+                value={OTHER_ESTIMATES.includes(Number(task.timeEstimateMinutes)) ? String(task.timeEstimateMinutes) : ""}
+                onChange={e => { if (!e.target.value) return; setPicker(null); onPatch({ timeEstimateMinutes: Number(e.target.value) }); }}>
+                <option value="">Other…</option>
+                {OTHER_ESTIMATES.map(m => <option key={m} value={m}>{formatEstimate(m)}</option>)}
+              </select>
             </div>
           )}
 
@@ -258,14 +380,6 @@ export default function TaskDetail({
               <span className="detail-label">{isDrawer ? "Must-do" : "Must-do today"}</span>
               <button type="button" role="switch" className="today-energy-switch detail-switch" aria-checked={!!task.isMVD} aria-label="Must-do" onClick={onToggleMVD} />
             </div>
-          )}
-          {/* Reminder, first step and category live in the full editor. */}
-          {onMoreDetails && (
-            <button type="button" className="detail-row is-link" onClick={onMoreDetails}>
-              <span className="detail-label">More details</span>
-              <span className="detail-value">Reminder, first step</span>
-              <IconChevronRight size={18} />
-            </button>
           )}
         </div>
 
@@ -283,26 +397,54 @@ export default function TaskDetail({
         </label>
 
         <div className="detail-block">
-          <span className="detail-kicker">STEPS{steps.length ? ` · ${doneSteps} OF ${steps.length}` : ""}</span>
-          <ul className="detail-steps">
-            {steps.map(s => (
-              <li key={s.id} className={`detail-step${s.done ? " is-done" : ""}`}>
-                <button type="button" className="detail-step-check" role="checkbox" aria-checked={!!s.done} aria-label={s.text} onClick={() => onToggleStep(s.id)}>
-                  {s.done && <IconCheck size={14} />}
+          <span className="detail-kicker" id="detail-steps">STEPS{steps.length ? ` · ${doneSteps} OF ${steps.length}` : ""}</span>
+          <ul className="detail-steps" ref={stepsRef} aria-labelledby="detail-steps">
+            {steps.map((st, i) => (
+              <li key={st.id} className={`detail-step${st.done ? " is-done" : ""}`}>
+                <button type="button" className="detail-step-check" role="checkbox" aria-checked={!!st.done} aria-label={st.text} onClick={() => toggleStep(st.id)}>
+                  {st.done && <IconCheck size={14} />}
                 </button>
-                <span className="detail-step-text">{s.text}</span>
-                {onDeleteStep && (
-                  <button type="button" className="detail-step-remove" aria-label={`Remove step ${s.text}`} onClick={() => onDeleteStep(s.id)}>
-                    <IconX size={14} />
-                  </button>
-                )}
+                <textarea
+                  key={st.text}
+                  ref={fitHeight}
+                  rows={1}
+                  className="detail-step-input"
+                  defaultValue={st.text}
+                  aria-label={`Step ${i + 1}`}
+                  maxLength={300}
+                  onInput={e => { fitHeight(e.currentTarget); stepDraftsRef.current[st.id] = e.currentTarget.value; }}
+                  onBlur={e => editStep(st.id, e.target.value)}
+                  onKeyDown={e => onStepKeyDown(e, st, i)}
+                />
+                <button type="button" className="detail-step-remove" aria-label={`Remove step ${st.text}`} onClick={() => removeStep(st.id)}>
+                  <IconX size={14} />
+                </button>
               </li>
             ))}
           </ul>
-          {steps.length === 0 && onSuggestSteps && (
-            <button type="button" className="detail-suggest" onClick={onSuggestSteps} disabled={suggestingSteps}>
-              {suggestingSteps ? "Suggesting steps…" : "Suggest steps"}
-            </button>
+          {/* 52c: suggestions are offered, never added until tapped. */}
+          {suggested?.steps && (
+            <div className="detail-suggested">
+              <div className="detail-suggested-head">
+                <span className="detail-kicker">SUGGESTED · {suggested.steps.length}</span>
+                <button type="button" className="detail-text-btn" onClick={takeAllSuggestions}>Add all</button>
+                <button type="button" className="detail-text-btn" onClick={() => setSuggested(null)}>Dismiss</button>
+              </div>
+              <ul className="detail-suggested-list">
+                {suggested.steps.map(text => (
+                  <li key={text} className="detail-suggested-row">
+                    <IconPlus size={16} />
+                    <span className="detail-suggested-text">{text}</span>
+                    <button type="button" className="detail-text-btn" aria-label={`Add step ${text}`} onClick={() => takeSuggestion(text)}>Add</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {suggested?.error && (
+            <p className="detail-suggest-note" role="status">
+              {suggested.error === "no-key" ? "Add an AI key in Settings to get suggested steps." : "Couldn't suggest steps just now. Try again."}
+            </p>
           )}
           <div className="detail-add-step">
             <IconPlus size={18} />
@@ -314,9 +456,57 @@ export default function TaskDetail({
               maxLength={300}
               onChange={e => setNewStep(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addStep(); } }}
-              onBlur={addStep}
+              onBlur={() => addStep()}
             />
+            <button type="button" className="detail-suggest" onClick={askForSteps} disabled={!!suggested?.loading}>
+              {suggested?.loading ? "Suggesting…" : suggested ? "Suggest again" : "Suggest steps"}
+            </button>
           </div>
+        </div>
+
+        {/* 52b–c: reminder and category, in place of a separate editor. */}
+        <div className="detail-more">
+          <button type="button" className="detail-row is-link detail-more-toggle" aria-expanded={moreOpen} onClick={() => setMoreOpen(o => !o)}>
+            <span className="detail-label">More <span className="detail-more-hint">· Reminder, category</span></span>
+            <IconChevronDown size={18} />
+          </button>
+          {moreOpen && (
+            <div className="detail-more-body">
+              <button type="button" className="detail-row is-link" aria-expanded={picker === "reminder"} onClick={() => togglePicker("reminder")}>
+                <span className="detail-label">Reminder</span>
+                <span className="detail-value">{task.reminderAt ? formatReminderLabel(task.reminderAt) : "None"}</span>
+                <IconChevronRight size={18} />
+              </button>
+              {picker === "reminder" && (
+                <div className="detail-options detail-reminder">
+                  <input type="date" className="detail-input" aria-label="Reminder date" value={remind.date} min={localDateTime(Date.now()).date}
+                    onChange={e => saveReminder({ ...remind, date: e.target.value })} />
+                  <input type="time" className="detail-input" aria-label="Reminder time" value={remind.time}
+                    onChange={e => saveReminder({ ...remind, time: e.target.value })} />
+                  {task.reminderAt ? (
+                    <button type="button" className="detail-text-btn" onClick={() => { setPicker(null); onPatch({ reminderAt: null }); }}>No reminder</button>
+                  ) : (
+                    <button type="button" className="detail-text-btn" onClick={() => saveReminder(remind)}>Set reminder</button>
+                  )}
+                </div>
+              )}
+              <button type="button" className="detail-row is-link" aria-expanded={picker === "category"} onClick={() => togglePicker("category")}>
+                <span className="detail-label">Category</span>
+                <span className="detail-value">{task.category || "Personal"}</span>
+                <IconChevronRight size={18} />
+              </button>
+              {picker === "category" && (
+                <div className="detail-options" role="radiogroup" aria-label="Category">
+                  {CATEGORIES.map(c => (
+                    <button key={c} type="button" role="radio" aria-checked={(task.category || "Personal") === c} className="detail-option"
+                      onClick={() => { setPicker(null); if (c !== task.category) onPatch({ category: c }); }}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -350,7 +540,6 @@ export default function TaskDetail({
           </button>
         )}
         <div className="detail-actions">
-          {isDrawer && <button type="button" className="detail-action" onClick={onDone}>Done {kbd("D")}</button>}
           <button type="button" className="detail-action" onClick={onTomorrow}>Tomorrow {kbd("T")}</button>
           <button type="button" className="detail-action" onClick={onPark}>Park</button>
           <button type="button" className="detail-action is-quiet" onClick={onDelete}>Delete {kbd("⌫")}</button>
