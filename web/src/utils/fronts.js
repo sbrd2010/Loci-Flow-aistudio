@@ -225,48 +225,6 @@ export function frontIsWaiting(tasks, frontId) {
   return open.length > 0 && open.every(t => typeof t.waitingOn === "string" && t.waitingOn.trim());
 }
 
-// The right-aligned figure on a front's row. The design shows "11d" when a
-// deadline is close enough to feel, a month/date when it isn't, and "PARKED"
-// in place of a date for a parked front.
-export function frontDueLabel(front, now = new Date()) {
-  if (front?.parked) return "PARKED";
-  const days = frontDaysLeft(front, now);
-  if (days === null) return null;
-  if (days < 0) return "OVERDUE";
-  if (days <= 30) return `${days}d`;
-  const due = parseDueDate(front.dueAt);
-  const sameYear = due.getFullYear() === now.getFullYear();
-  const month = due.toLocaleString("en-GB", { month: "short" });
-  return days <= 120 && sameYear ? `${due.getDate()} ${month}` : month;
-}
-
-// The one plain-language sentence under the list. It states what is actually
-// true of the fronts — never an encouragement, and never a number that shames.
-export function planFooterSentence(fronts, tasks, now = new Date()) {
-  const live = (fronts || []).filter(f => !f.parked);
-  if (!live.length) return null;
-  const moving = live.filter(f => frontNextMove(f, tasks)).length;
-  const parked = (fronts || []).length - live.length;
-  // frontDaysLeft is NEGATIVE for an overdue front, which also satisfies
-  // `d <= 14` — so a deadline three months gone was being reported as "inside a
-  // fortnight". A front that is already past due is not upcoming.
-  const pressing = live.filter(f => {
-    const d = frontDaysLeft(f, now);
-    return d !== null && d >= 0 && d <= 14;
-  }).length;
-
-  const parts = [];
-  if (moving === 0) parts.push(`No front has a next move yet.`);
-  else if (moving === live.length) parts.push(`Every front has a next move.`);
-  else parts.push(`${moving} of ${live.length} fronts have a next move.`);
-
-  if (pressing === 1) parts.push(`One has a deadline inside a fortnight.`);
-  else if (pressing > 1) parts.push(`${pressing} have deadlines inside a fortnight.`);
-  if (parked) parts.push(`${parked} ${parked === 1 ? "is" : "are"} parked, and stays that way until you say otherwise.`);
-
-  return parts.join(" ");
-}
-
 // The fronts a task can be put on: the open ones, plus its own even when
 // that front is parked, so its assignment shows and can be chosen back.
 export function frontsOnOffer(fronts, currentFrontId) {

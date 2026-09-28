@@ -124,7 +124,8 @@ function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, fr
   );
 }
 
-function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, onTaskClick, onDone, isGoal = () => false, frontNameOf = () => null, openUuid = null }) {
+// fullColTasks: the whole horizon when colTasks is a front's share of it.
+function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks, payload, savePayload, onTaskClick, onDone, isGoal = () => false, frontNameOf = () => null, openUuid = null }) {
   const interactionStyle = payload?.config?.taskRowInteractionStyle === "dragAnywhere" ? "dragAnywhere" : "classic";
   const [activeId, setActiveId] = useState(null);
   const getKey = (t) => t.uuid || String(t.id);
@@ -149,7 +150,9 @@ function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, on
     // pin/unpinned boundary — pin status alone decides that ordering, not orderIndex.
     const draggedPinned = !!colTasks[oldIdx].isHorizonPinned;
     if (!!colTasks[newIdx].isHorizonPinned !== draggedPinned) return;
-    const tier = colTasks.filter(t => !!t.isHorizonPinned === draggedPinned);
+    // Renumber the whole horizon's tier, not only the rows on screen: on a
+    // front's page the horizon's other tasks keep their places around it.
+    const tier = fullColTasks.filter(t => !!t.isHorizonPinned === draggedPinned);
     const tierOldIdx = tier.findIndex(t => getKey(t) === active.id);
     const tierNewIdx = tier.findIndex(t => getKey(t) === over.id);
     const reordered = arrayMove([...tier], tierOldIdx, tierNewIdx);
@@ -210,7 +213,9 @@ function SortableRoadmapList({ colKey, colTasks, tasks, payload, savePayload, on
   );
 }
 
-export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, onEditTask, focusInbox = false, uid, writeActivityEvents, focusTimer = {} }) {
+// frontId: a front's page (52f–g) — only that front's open tasks, in the
+// horizons that hold any, with no per-horizon + and no Inbox.
+export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, onEditTask, focusInbox = false, uid, writeActivityEvents, focusTimer = {}, frontId = null }) {
   const { tasks = [], config = {} } = payload;
   const windows = getFocusWindows(config);
 
@@ -701,7 +706,8 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
   const fronts = frontsFromConfig(config);
   const goalFront = commitmentKickerFront(frontForCommitment(tasks.find(t => t.isNowFocus && !t.isDeleted && !t.isCompleted), fronts), config);
   const isGoal = (task) => !!goalFront && task.frontId === goalFront.id;
-  const frontNameOf = (task) => fronts.find(f => f.id === task.frontId)?.name || null;
+  // A front's page names the front once, in its title, not on every row.
+  const frontNameOf = (task) => (frontId ? null : fronts.find(f => f.id === task.frontId)?.name || null);
 
   const inbox = brainDump.length > 0 && (
     <section className="plan-inbox" aria-labelledby="plan-inbox-title" ref={inboxRef}>
@@ -717,8 +723,11 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
   );
 
   const shownColumns = columns
-    .map(col => ({ ...col, tasks: tasks.filter(t => t.horizonLevel === col.key && isVisibleRoadmapTask(t)).sort(byPriorityThenOrder) }))
-    .filter(col => !col.onlyWithTasks || col.tasks.length > 0);
+    .map(col => {
+      const all = tasks.filter(t => t.horizonLevel === col.key && isVisibleRoadmapTask(t)).sort(byPriorityThenOrder);
+      return { ...col, allTasks: all, tasks: frontId ? all.filter(t => t.frontId === frontId) : all };
+    })
+    .filter(col => !(col.onlyWithTasks || frontId) || col.tasks.length > 0);
   const detailCol = detailUuid ? shownColumns.find(col => col.tasks.some(t => t.uuid === detailUuid)) : null;
   const detailTask = detailCol ? detailCol.tasks.find(t => t.uuid === detailUuid) : null;
   const detailIndex = detailTask ? detailCol.tasks.indexOf(detailTask) : -1;
@@ -752,7 +761,8 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
   };
 
   return (
-    <div className="roadmap-container plan-horizons-view">
+    <div className={`roadmap-container ${frontId ? "plan-front-tasks" : "plan-horizons-view"}`}>
+      {frontId && shownColumns.length === 0 && <p className="plan-empty">Nothing open on this front.</p>}
       <div className="plan-horizons">
         {shownColumns.map(col => {
           const colTasks = col.tasks;
@@ -762,7 +772,7 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
                 <h3 className="plan-horizon-name" id={`plan-h-${col.key}`}>
                   {col.label} <span className="plan-horizon-count">{colTasks.length}</span>
                 </h3>
-                {!col.noAdd && (
+                {!col.noAdd && !frontId && (
                   <button type="button" className="plan-horizon-add" onClick={() => onOpenAddTask(col.key)} aria-label={`Add a task to ${col.label}`}>
                     <IconPlus size={20} />
                   </button>
@@ -771,6 +781,7 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
               <SortableRoadmapList
                 colKey={col.key}
                 colTasks={colTasks}
+                fullColTasks={col.allTasks}
                 tasks={tasks}
                 payload={payload}
                 savePayload={savePayload}
@@ -785,7 +796,7 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
         })}
       </div>
       {/* Mind Box's notes wait below the horizons (45h has none on top). */}
-      {inbox}
+      {!frontId && inbox}
 
       {/* A task, opened (52h): the sheet on phones and tablets, the drawer
           from 1024px. */}
