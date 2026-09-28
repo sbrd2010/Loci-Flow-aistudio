@@ -949,7 +949,8 @@ export default function App() {
   // already banked, which carries its own day. Checked on the minute tick and
   // whenever the timer starts or stops, so a Resume after the limit but before
   // the next tick is caught too (the hook keeps such a pause on record); the
-  // day is read now, not from the tick.
+  // day is read now, not from the tick. The hook refuses any other change to
+  // a pause that has run out and asks for this check at once (expiryCheck).
   useEffect(() => {
     const session = focusTimer.peekFocusSession("expired");
     if (!session?.task) return;
@@ -970,7 +971,7 @@ export default function App() {
       lociDateString: startDay, ...ended, windows, now: ended.focusPausedAt ?? now,
     });
     writeActivityEvents(eventPatch(activityUid, event));
-  }, [lociDayTick, commitmentDayStr, focusTimer.isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [lociDayTick, commitmentDayStr, focusTimer.isTimerRunning, focusTimer.expiryCheck]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deadlineMoveState = deriveCommitmentDeadlineMove(payload?.config || {}, payload?.tasks || [], commitmentDayStr);
   useEffect(() => {

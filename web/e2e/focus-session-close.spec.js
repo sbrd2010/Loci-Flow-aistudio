@@ -68,6 +68,17 @@ test("Resume after a pause of more than 15 minutes, before the minute check, doe
   await expect(page.locator(".wall-primary")).toContainText("Start focus");
 });
 
+// …nor does +5 in that gap: the session closes instead of logging it.
+test("+5 on a pause of more than 15 minutes, before the minute check, closes the session", async ({ page }) => {
+  await enterDemo(page, "2024-06-15T10:00:00");
+  const overlay = await startFocus(page);
+  await page.clock.runFor(5 * 60_000);
+  await overlay.getByRole("button", { name: "Pause timer" }).click();
+  await page.clock.setSystemTime(new Date("2024-06-15T10:20:30"));
+  await overlay.getByRole("button", { name: "Add 5 minutes" }).click();
+  await expect(overlay).toHaveCount(0);
+});
+
 test("a session still running when the Loci day ends is closed", async ({ page }) => {
   // The demo's window runs 07:00–02:00: at 01:50 it is still the 15th's day.
   await enterDemo(page, "2024-06-16T01:50:00");

@@ -82,6 +82,9 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   const focusBlocksRef = useRef(0);
   const focusExtensionsRef = useRef(0);
   const focusPausedAtRef = useRef(null);
+  // Bumped when a pause is found to have run out, so App's expiry check runs
+  // now rather than on its next minute tick.
+  const [expiryCheck, setExpiryCheck] = useState(0);
   const [focusSessionId, setFocusSessionId] = useState(null);
   // Lets the activeTask-sync effect tell "switched to a different task" apart
   // from a re-run for the same task (only the first starts a fresh block).
@@ -96,6 +99,16 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   const skipNextDurationSyncRef = useRef(false);
 
   const activeTask = tasks.find((t) => t.isNowFocus && !t.isDeleted && !t.isCompleted) || null;
+
+  // A session paused for more than 15 minutes is over (59j) even before App's
+  // check closes it: nothing may resume or change it meanwhile — a +5 would
+  // log an extension, a reset would wipe its work (Codex review of #419).
+  const pauseRanOut = () => {
+    const pausedAt = focusPausedAtRef.current;
+    if (!focusSessionIdRef.current || pausedAt == null || Date.now() - pausedAt <= PAUSE_EXPIRY_MS) return false;
+    setExpiryCheck((n) => n + 1);
+    return true;
+  };
 
   const closePiP = () => {
     try {
@@ -262,6 +275,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       resetBtn.id = "pip-reset";
       resetBtn.textContent = "↺";
       resetBtn.addEventListener("click", () => {
+        if (pauseRanOut()) return;
         setIsTimerRunning(false);
         setTimerSecondsLeft(timerMaxSecondsRef.current);
       });
@@ -423,8 +437,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // expiry check, which closes the session (Codex review of #419).
   useEffect(() => {
     if (isTimerRunning) {
-      const pausedAt = focusPausedAtRef.current;
-      if (pausedAt != null && Date.now() - pausedAt > PAUSE_EXPIRY_MS) { setIsTimerRunning(false); return; }
+      if (pauseRanOut()) { setIsTimerRunning(false); return; }
       focusPausedAtRef.current = null;
     } else if (focusSessionIdRef.current && focusPausedAtRef.current == null) {
       focusPausedAtRef.current = Date.now();
@@ -512,6 +525,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
 
   // Restart the timer for the same task with a fresh duration ("Keep going" extension)
   const extendTimer = (minutes) => {
+    if (pauseRanOut()) return;
     // Accumulate the block that's ending before resetting timerMaxSeconds/
     // timerSecondsLeft for the new one — the session (focusSessionId) stays
     // the same across "Keep Going", so without this the eventual terminal
@@ -532,6 +546,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // later report an elapsed time near 0, since endFocusSession only ever
   // sees the current (post-change) block's timerMaxSeconds/timerSecondsLeft.
   const changeFocusDuration = (minutes) => {
+    if (pauseRanOut()) return;
     bankBlock();
     setIsTimerRunning(false);
     const secs = minutes * 60;
@@ -548,7 +563,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // can't resurrect or skew a just-completed 0:00 countdown behind the
   // global "session complete" prompt.
   const addTimeToSession = (minutes) => {
-    if (sessionCompletePendingRef.current || showExtendPickerRef.current) return;
+    if (sessionCompletePendingRef.current || showExtendPickerRef.current || pauseRanOut()) return;
     if (focusSessionIdRef.current) focusExtensionsRef.current += 1;
     const addSecs = Math.round(minutes) * 60;
     setTimerMaxSeconds((m) => m + addSecs);
@@ -760,6 +775,9 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     // five minutes while the ledger holds thirty.
     focusElapsedSeconds: currentElapsedSeconds(),
     peekFocusSession, markFocusLedgerEntry,
+    // Changes when a pause is found to have run out; App's expiry check
+    // watches it.
+    expiryCheck,
     // Which task the currently open session (if any) actually belongs to —
     // NOT necessarily the same as `activeTask`, which reflects the current
     // isNowFocus pin and can point at a different task than the still-open

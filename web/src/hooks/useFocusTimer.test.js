@@ -568,6 +568,31 @@ describe("useFocusTimer", () => {
       Date.now.mockRestore();
     });
 
+    // Codex review of #419: nothing changes a session whose pause has run
+    // out; App is asked to close it at once instead.
+    it("refuses +5, a new block or a new length once the pause has run out, and asks for the check", () => {
+      vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+      result.current.setTimerSecondsLeft(20 * 60);
+      result.current.setIsTimerRunning(false);
+      rerender([[task], {}, "u1"]);
+      const check = result.current.expiryCheck;
+
+      Date.now.mockReturnValue(1_000_000 + 15 * 60_000 + 1);
+      result.current.addTimeToSession(5);
+      result.current.extendTimer(25);
+      result.current.changeFocusDuration(50);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.peekFocusSession("x")).toMatchObject({
+        focusExtensions: 0, focusBlocks: 1, focusElapsedSeconds: 5 * 60, focusFinalPlannedSeconds: 25 * 60,
+      });
+      expect(result.current.expiryCheck).toBeGreaterThan(check);
+      Date.now.mockRestore();
+    });
+
     it("endFocusSession returns null when no session was ever started", () => {
       const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
       const { result } = renderHook(useFocusTimer, [[task], {}, "u1"]);
