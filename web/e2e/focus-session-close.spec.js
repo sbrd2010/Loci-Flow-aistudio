@@ -88,3 +88,13 @@ test("a session still running when the Loci day ends is closed", async ({ page }
   await page.clock.runFor(4 * 60_000);
   await expect(overlay).toHaveCount(0);
 });
+
+// Codex review of #419: +5 just after the Loci day ended, before the minute
+// check, closes the session instead of logging an extension.
+test("+5 just after the Loci day ended, before the minute check, closes the session", async ({ page }) => {
+  await enterDemo(page, "2024-06-16T01:50:00");
+  const overlay = await startFocus(page);
+  await page.clock.setSystemTime(new Date("2024-06-16T02:00:30"));
+  await overlay.getByRole("button", { name: "Add 5 minutes" }).click();
+  await expect(overlay).toHaveCount(0);
+});

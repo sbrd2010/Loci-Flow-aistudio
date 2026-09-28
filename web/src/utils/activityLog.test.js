@@ -211,6 +211,10 @@ describe("buildFocusStartedEvent / buildFocusTerminalEvent", () => {
     expect(bare.focusOutcome).toBe("ended");
     expect("focusBlocks" in bare).toBe(false);
     expect("focusExtensions" in bare).toBe(false);
+    // An expired session ends when focus stopped, not when it was logged.
+    const late = buildFocusTerminalEvent("focus_abandoned", task, "s", { ...opts, focusEndReason: "paused_too_long", focusEndedAt: 123 });
+    expect(late.focusEndedAt).toBe(123);
+    expect(done.focusEndedAt).toBe(dt(2026, 7, 10, 11).getTime());
     // Nothing undefined reaches RTDB.
     expect(Object.values(done).includes(undefined)).toBe(false);
   });

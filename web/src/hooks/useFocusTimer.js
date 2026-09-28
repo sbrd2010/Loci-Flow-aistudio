@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotifications";
-import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete, focusBlockSeconds, PAUSE_EXPIRY_MS } from "../utils/focusSession";
+import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete, focusBlockSeconds, focusExpiryReason } from "../utils/focusSession";
+import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import { safeUUID } from "../utils/uuid";
 
 // Lifts the Focus timer state to the App level so it survives tab switches
@@ -100,12 +101,23 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
 
   const activeTask = tasks.find((t) => t.isNowFocus && !t.isDeleted && !t.isCompleted) || null;
 
-  // A session paused for more than 15 minutes is over (59j) even before App's
-  // check closes it: nothing may resume or change it meanwhile — a +5 would
-  // log an extension, a reset would wipe its work (Codex review of #419).
+  // A session is over (59j) the moment a pause passes 15 minutes or the Loci
+  // day it began in ends — not when App's check next notices. So the session
+  // itself answers: every read of it reports the expiry (below), and nothing
+  // may resume or change it meanwhile — a +5 would log an extension, a reset
+  // would wipe its work. Codex review of #419.
+  const lociDayOf = (ts) => getLociDayStr(new Date(ts), getFocusWindows(config));
+  const expiryReasonNow = () => {
+    if (!focusSessionIdRef.current) return null;
+    const now = Date.now();
+    return focusExpiryReason({
+      sessionOpen: true, pausedAt: focusPausedAtRef.current,
+      startDay: lociDayOf(focusStartedAtRef.current), today: lociDayOf(now), now,
+    });
+  };
+  // True (and App asked to close the session now) when it has expired.
   const pauseRanOut = () => {
-    const pausedAt = focusPausedAtRef.current;
-    if (!focusSessionIdRef.current || pausedAt == null || Date.now() - pausedAt <= PAUSE_EXPIRY_MS) return false;
+    if (!expiryReasonNow()) return false;
     setExpiryCheck((n) => n + 1);
     return true;
   };
@@ -683,10 +695,16 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // and the 00:00 hold MUST report the same figures for the same session —
   // the hold's entry is the one the stop then amends — so both read them
   // here rather than each assembling its own copy.
+  //
+  // An expired session reads as expired whoever ends it — Mark done or End
+  // session in the moment before App's check must not record it as done or
+  // ended — ending when focus last stopped, on the day it began (unless its
+  // block's entry already carries a day).
   const readOpenSession = (focusEndReason) => {
     const sessionId = focusSessionIdRef.current;
     if (!sessionId) return null;
     const entry = focusLedgerEntryRef.current;
+    const expired = expiryReasonNow();
     return {
       focusSessionId: sessionId,
       focusStartedAt: focusStartedAtRef.current,
@@ -695,7 +713,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       // (final) block's — see extendTimer's accumulation above.
       focusFinalPlannedSeconds: focusSessionAccumulatedPlannedRef.current + timerMaxSeconds,
       focusElapsedSeconds: currentElapsedSeconds(),
-      focusEndReason,
+      focusEndReason: expired || focusEndReason,
       focusBlocks: focusBlocksRef.current,
       focusExtensions: focusExtensionsRef.current,
       // When it stopped counting, or null while running: an expired session
@@ -706,6 +724,7 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       // be ABSENT otherwise, not present-and-undefined, so a caller passing
       // this straight into buildFocusTerminalEvent mints a fresh id for an
       // ordinary session and pins the held one only when there is one.
+      ...(expired ? { focusEndedAt: focusPausedAtRef.current ?? Date.now(), lociDateString: lociDayOf(focusStartedAtRef.current) } : {}),
       ...(entry ? { eventId: entry.eventId, lociDateString: entry.lociDateString } : {}),
     };
   };

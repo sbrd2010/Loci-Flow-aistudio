@@ -31,7 +31,7 @@ import FloatingFocusTimer from "./components/FloatingFocusTimer";
 import ConfirmDialog from "./components/ConfirmDialog";
 import { useFocusTimer } from "./hooks/useFocusTimer";
 import { useTodayStr } from "./hooks/useTodayStr";
-import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload, extendMinutesForSession, focusExpiryReason } from "./utils/focusSession";
+import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload, extendMinutesForSession, EXPIRY_REASONS } from "./utils/focusSession";
 import { celebrate } from "./utils/celebrations";
 import { submitOnEnter } from "./utils/formEvents";
 import { migrateStoredTheme, resolveTheme, watchColorScheme } from "./utils/theme";
@@ -944,31 +944,21 @@ export default function App() {
   // returns undefined when it has no opinion, and the write is guarded on a
   // real change so this cannot loop against its own config update.
   // 59j: a session closes on its own after a pause of more than 15 minutes, or
-  // when the Loci day it began in ends. It is recorded as expired, ending when
-  // focus last stopped, on the day it began — or amends the entry its block
-  // already banked, which carries its own day. Checked on the minute tick and
-  // whenever the timer starts or stops, so a Resume after the limit but before
-  // the next tick is caught too (the hook keeps such a pause on record); the
-  // day is read now, not from the tick. The hook refuses any other change to
-  // a pause that has run out and asks for this check at once (expiryCheck).
+  // when the Loci day it began in ends. The session reports its own expiry
+  // (useFocusTimer), with the end time and day to record; this closes it —
+  // on the minute tick, whenever the timer starts or stops, and at once when
+  // the hook refuses a change to an expired session (expiryCheck).
   useEffect(() => {
-    const session = focusTimer.peekFocusSession("expired");
-    if (!session?.task) return;
-    const windows = getFocusWindows(payload?.config || {});
-    const now = Date.now();
-    const startDay = getLociDayStr(new Date(session.focusStartedAt), windows);
-    const reason = focusExpiryReason({
-      sessionOpen: true, pausedAt: session.focusPausedAt, startDay, today: getLociDayStr(new Date(now), windows), now,
-    });
-    if (!reason) return;
-    const ended = focusTimer.endFocusSession(reason);
+    const session = focusTimer.peekFocusSession(null);
+    if (!session?.task || !EXPIRY_REASONS.has(session.focusEndReason)) return;
+    const ended = focusTimer.endFocusSession(session.focusEndReason);
     focusTimer.setIsTimerRunning(false);
     focusTimer.setIsFocusMode(false);
     focusTimer.setFocusSessionActive(false);
     focusTimer.dismissSessionComplete();
     if (!ended?.task) return;
     const event = buildFocusTerminalEvent("focus_abandoned", ended.task, ended.focusSessionId, {
-      lociDateString: startDay, ...ended, windows, now: ended.focusPausedAt ?? now,
+      ...ended, windows: getFocusWindows(payload?.config || {}),
     });
     writeActivityEvents(eventPatch(activityUid, event));
   }, [lociDayTick, commitmentDayStr, focusTimer.isTimerRunning, focusTimer.expiryCheck]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -270,5 +270,7 @@ describe("focusOutcome (59j)", () => {
     expect(focusOutcome("focus_abandoned", "timer_elapsed")).toBe("ended");
     expect(focusOutcome("focus_abandoned", "paused_too_long")).toBe("expired");
     expect(focusOutcome("focus_abandoned", "day_ended")).toBe("expired");
+    // A task marked done after its sitting expired was not done in it.
+    expect(focusOutcome("focus_completed", "paused_too_long")).toBe("expired");
   });
 });

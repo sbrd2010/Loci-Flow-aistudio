@@ -49,9 +49,11 @@ export function focusExpiryReason({ sessionOpen, pausedAt, startDay, today, now 
 
 // The session's outcome as 59j names it: done, ended (by the user, or the
 // block's provisional entry), or expired.
+// Expiry comes first: a task marked done after its sitting had already
+// expired was not done in that sitting.
 export function focusOutcome(type, focusEndReason) {
-  if (type === "focus_completed") return "done";
-  return EXPIRY_REASONS.has(focusEndReason) ? "expired" : "ended";
+  if (EXPIRY_REASONS.has(focusEndReason)) return "expired";
+  return type === "focus_completed" ? "done" : "ended";
 }
 
 // Build the timer state for restarting the timer on the same task ("Keep going").

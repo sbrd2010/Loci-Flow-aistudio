@@ -593,6 +593,47 @@ describe("useFocusTimer", () => {
       Date.now.mockRestore();
     });
 
+    // Codex review of #419: whoever ends an expired session — Mark done, End
+    // session — it is recorded as expired, ending when focus stopped, on the
+    // day it began.
+    it("an expired session reads as expired whoever ends it, ending when focus stopped", () => {
+      const start = new Date("2024-06-15T10:00:00").getTime();
+      vi.spyOn(Date, "now").mockReturnValue(start);
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+      Date.now.mockReturnValue(start + 10 * 60_000);
+      result.current.setIsTimerRunning(false);
+      rerender([[task], {}, "u1"]);
+
+      Date.now.mockReturnValue(start + 26 * 60_000);
+      const ended = result.current.endFocusSession("completed_task");
+      expect(ended).toMatchObject({
+        focusEndReason: "paused_too_long", focusEndedAt: start + 10 * 60_000, lociDateString: "2024-06-15",
+      });
+      Date.now.mockRestore();
+    });
+
+    it("once the Loci day has ended, a running session refuses +5 and reads as ended with the day", () => {
+      const start = new Date("2024-06-15T10:00:00").getTime();
+      vi.spyOn(Date, "now").mockReturnValue(start);
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+      const check = result.current.expiryCheck;
+
+      Date.now.mockReturnValue(new Date("2024-06-16T10:00:00").getTime());
+      result.current.addTimeToSession(5);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.expiryCheck).toBeGreaterThan(check);
+      expect(result.current.peekFocusSession(null)).toMatchObject({
+        focusEndReason: "day_ended", focusExtensions: 0, lociDateString: "2024-06-15",
+      });
+      Date.now.mockRestore();
+    });
+
     it("endFocusSession returns null when no session was ever started", () => {
       const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
       const { result } = renderHook(useFocusTimer, [[task], {}, "u1"]);

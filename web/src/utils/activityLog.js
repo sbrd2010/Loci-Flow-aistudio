@@ -151,7 +151,7 @@ export function buildFocusStartedEvent(task, focusSessionId, { source = "user", 
 export function buildFocusTerminalEvent(type, task, focusSessionId, {
   focusStartedAt, focusInitialPlannedSeconds, focusFinalPlannedSeconds,
   focusElapsedSeconds, focusEndReason, now = Date.now(), windows,
-  eventId, lociDateString, focusBlocks, focusExtensions,
+  eventId, lociDateString, focusBlocks, focusExtensions, focusEndedAt,
 } = {}) {
   const nowMs = toEpochMs(now);
   const counts = {};
@@ -167,7 +167,8 @@ export function buildFocusTerminalEvent(type, task, focusSessionId, {
     focusSessionId,
     focusStartedAt,
     focusInitialPlannedSeconds,
-    focusEndedAt: nowMs,
+    // An expired session ends when focus last stopped, not when it was logged.
+    focusEndedAt: Number.isFinite(focusEndedAt) ? focusEndedAt : nowMs,
     focusFinalPlannedSeconds,
     focusElapsedSeconds,
     focusEndReason,
