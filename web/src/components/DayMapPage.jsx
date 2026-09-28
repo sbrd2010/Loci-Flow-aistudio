@@ -23,7 +23,7 @@ import { mergeWindowSpans } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
 import {
   applyReflow, currentDayMinutes, getEstimate, getTaskId,
-  normalizePriority, reflowRoute, removeScheduleFields, useDayRoute,
+  normalizePriority, reflowRoute, removeScheduleFields, roundToQuarter, routeIsContiguous, useDayRoute,
 } from "../hooks/useDayRoute";
 import DayClockBar from "./DayClockBar";
 import LinkifyText from "./LinkifyText";
@@ -210,7 +210,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   }, []);
 
   const {
-    tasks, windows, todayStr, tomorrowStr, payloadRef,
+    tasks, config: routeConfig, windows, todayStr, tomorrowStr, payloadRef,
     activeTodayTasks, scheduledTasks, tomorrowTasks, unscheduledTasks,
     anchorMinutes, plan, isGoal, sortableIds, latestTasks, applyAndSave,
   } = useDayRoute({ payload, savePayload });
@@ -378,17 +378,27 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       />
     );
   };
-  // The re-timing Done, Park, Delete and their Undo ask for. A stop put back
-  // keeps its old order, which it now shares with the stop that moved up
-  // into its place: it goes first, back where it was.
+  // The route is timed again when a sheet action asks (Done, Park, Delete
+  // and their Undo), or when it has a gap or an overlap from any other write
+  // (the full editor, Today, another device). A stop put back by Undo keeps
+  // its old order, which it now shares with the stop that moved up into its
+  // place: it goes first, back where it was.
+  //
+  // With no From set, the route starts now: a first stop that starts later
+  // than now's quarter hour is a gap too (the stop before it went).
   useEffect(() => {
     const pending = pendingReflowRef.current;
-    if (!pending) return;
+    const fromSet = routeConfig.dayMapDate === todayStr && routeConfig.dayMapAnchorMinutes != null;
+    const start = fromSet ? anchorMinutes : currentDayMinutes(windows);
+    const first = scheduledTasks[0]?.dayMapStartMinutes;
+    const headGap = !fromSet && first != null && Number(first) > roundToQuarter(start);
+    if (!pending && !headGap && routeIsContiguous(scheduledTasks)) return;
     pendingReflowRef.current = null;
+    const prefer = pending?.prefer ?? null;
     const order = (t) => t.dayMapOrder ?? Infinity;
     const route = [...scheduledTasks].sort((a, b) => (order(a) - order(b))
-      || ((getTaskId(b) === pending.prefer) - (getTaskId(a) === pending.prefer)));
-    applyAndSave(route, anchorMinutes);
+      || ((getTaskId(b) === prefer) - (getTaskId(a) === prefer)));
+    applyAndSave(route, start);
   }, [scheduledTasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The sheet on phones and tablets, the drawer from 1024px (as in Plan).

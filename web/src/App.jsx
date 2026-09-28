@@ -1484,6 +1484,7 @@ export default function App() {
           onClose={() => { setShowAddTask(false); setEditingTask(null); }}
           uid={activityUid}
           writeActivityEvents={writeActivityEvents}
+          focusTimer={focusTimer}
         />
       )}
     </div>

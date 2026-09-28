@@ -210,3 +210,55 @@ test("a stop moved off Today and back waits in Unscheduled, not in its old slot"
   await expect.poll(() => titles(page)).toEqual([before[0], before[2]]);
   await expect(page.locator(".dm-pool .dm-pool-list")).toContainText(before[1]);
 });
+
+// Codex review of #415: More details opens the full editor from a stop. An
+// estimate changed there times the route again, as the sheet's does.
+test("More details: an estimate changed in the full editor times the route again", async ({ page }) => {
+  await openDayMap(page, { width: 1280, height: 800 });
+  const beforeTimes = await times(page);
+  await stops(page).nth(0).click();
+  await sheet(page).getByRole("button", { name: /^More details/ }).click();
+  const editor = page.getByRole("dialog", { name: "Edit task" });
+  await editor.getByRole("button", { name: "2h", exact: true }).click();
+  await page.getByTestId("add-task-submit").click();
+  await expect(page.locator(".dm-stop").nth(0).locator(".dm-dur")).toHaveText("2h");
+  // 11:45 + 2h + the 5-minute gap.
+  await expect.poll(async () => (await times(page))[1]).toBe("13:50");
+  expect(beforeTimes[1]).not.toBe("13:50");
+});
+
+// …and a horizon changed there takes the one thing off Today properly: its
+// session ends and its slot goes (Today's own editor gets the same).
+test("More details: the one thing moved off Today in the full editor ends its session and leaves the route", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
+  });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.clock.install({ time: new Date("2024-06-15T11:35:00") });
+  await page.goto("/");
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  const wallTitle = (await page.locator(".today-wall .wall-title").innerText()).trim();
+  await page.locator(".today-wall .wall-primary").click();
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 5_000 });
+  await overlay.getByLabel("Leave focus").click();
+  const floating = page.getByRole("button", { name: /^Return to Focus/ });
+  await expect(floating).toBeVisible();
+
+  await page.getByRole("button", { name: "Day map →" }).click();
+  await page.getByRole("button", { name: "Auto-fill" }).click();
+  const before = await titles(page);
+  await page.locator(".dm-stop .dm-main", { hasText: wallTitle }).click();
+  await sheet(page).getByRole("button", { name: /^More details/ }).click();
+  const editor = page.getByRole("dialog", { name: "Edit task" });
+  await editor.getByRole("group", { name: "Horizon" }).getByRole("button", { name: "Week", exact: true }).click();
+  await page.getByTestId("add-task-submit").click();
+
+  await expect.poll(() => titles(page)).toEqual(before.filter(t => t !== wallTitle));
+  // The next stop moved up into the freed start.
+  await expect(page.locator(".dm-stop").nth(0).locator(".dm-time")).toHaveText("NOW");
+  await page.locator(".dm-back").click();
+  await expect(page.getByTestId("today-tasks-list")).toBeVisible();
+  await expect(floating).toHaveCount(0);
+});

@@ -72,6 +72,19 @@ export function reflowRoute(orderedTasks, anchorMinutes, todayStr) {
   });
 }
 
+// Each stop starts where the one before it ends (plus the buffer). A write
+// from anywhere — Done on Today, the full editor, another device — can leave
+// a gap or an overlap; this is how the Day map sees it. Untimed stops are
+// the timing effect's to place, so they don't count here.
+export function routeIsContiguous(route) {
+  for (let i = 1; i < route.length; i += 1) {
+    const prev = route[i - 1], cur = route[i];
+    if (prev.dayMapStartMinutes == null || cur.dayMapStartMinutes == null) return true;
+    if (Number(prev.dayMapStartMinutes) + getEstimate(prev) + TRANSITION_BUFFER !== Number(cur.dayMapStartMinutes)) return false;
+  }
+  return true;
+}
+
 export function applyReflow(allTasks, reflowed) {
   const map = new Map(reflowed.map(t => [getTaskId(t), t]));
   return allTasks.map(t => map.has(getTaskId(t)) ? map.get(getTaskId(t)) : t);
