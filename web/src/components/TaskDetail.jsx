@@ -335,7 +335,8 @@ export default function TaskDetail({
           </button>
           {picker === "estimate" && (
             <div className="detail-options is-chips" role="radiogroup" aria-label="Estimate">
-              {[...estimates, null].map(m => (
+              {/* A route stop always has a length, so None is not offered there. */}
+              {(isRoute ? estimates : [...estimates, null]).map(m => (
                 <button key={m || "none"} type="button" role="radio" aria-checked={(Number(task.timeEstimateMinutes) || null) === m} className="detail-chip"
                   onClick={() => { setPicker(null); onPatch({ timeEstimateMinutes: m }); }}>
                   {formatEstimate(m)}

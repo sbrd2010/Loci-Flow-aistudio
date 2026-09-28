@@ -106,6 +106,8 @@ test("the sheet's estimate is the stop's duration, and the route is timed again"
   await openDayMap(page, { width: 375, height: 812 });
   await stops(page).nth(0).click();
   await sheet(page).getByRole("button", { name: /^Estimate/ }).click();
+  // Codex review of #418: a stop always has a length — no None to pick.
+  await expect(sheet(page).getByRole("radio", { name: "None" })).toHaveCount(0);
   await sheet(page).getByRole("radio", { name: "1h" }).click();
   await expect(page.locator(".dm-stop").nth(0).locator(".dm-dur")).toHaveText("1h");
   const [first, second] = await times(page);
@@ -145,13 +147,22 @@ test("Done from the sheet closes the gap; Undo puts the stop back where it was",
   await expect.poll(() => times(page)).toEqual(beforeTimes);
 });
 
-// Codex review of #415: the sheet shows the duration the route uses.
-test("the sheet's estimate is the stop's duration even when set to None", async ({ page }) => {
+// Codex review of #415: the sheet shows the duration the route uses — for a
+// task with no estimate (cleared from Today's sheet; a stop offers no None),
+// the 25m the route gives it.
+test("the sheet's estimate is the stop's duration for a task with no estimate", async ({ page }) => {
   await openDayMap(page, { width: 375, height: 812 });
-  await stops(page).nth(0).click();
+  const title = (await titles(page))[1];
+  await page.locator(".dm-back").click();
+  await page.getByTestId("today-tasks-list").getByText(title, { exact: true }).click();
   await sheet(page).getByRole("button", { name: /^Estimate/ }).click();
-  await sheet(page).getByRole("radio", { name: "None" }).click();
-  await expect(page.locator(".dm-stop").nth(0).locator(".dm-dur")).toHaveText("25m");
+  await sheet(page).getByRole("radio", { name: "None", exact: true }).click();
+  await sheet(page).getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Day map →" }).click();
+
+  const stop = page.locator(".dm-stop", { hasText: title });
+  await expect(stop.locator(".dm-dur")).toHaveText("25m");
+  await stop.locator(".dm-main").click();
   await expect(sheet(page).getByRole("button", { name: /^Estimate/ }).locator(".detail-value")).toHaveText("25m");
 });
 
