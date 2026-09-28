@@ -158,15 +158,36 @@ test("keyboard: Enter on a stop opens its panel; Space picks it up to reorder", 
   await expect(page.getByRole("button", { name: "Remove from route" })).toHaveCount(0);
 
   const before = await stopTitles(page);
-  const announced = (re) => page.waitForFunction((src) =>
-    [...document.querySelectorAll("[id^='DndLiveRegion']")].some(el => new RegExp(src).test(el.textContent)), re.source);
+  // Each step waits for the page's own state: the stop held, then moved.
+  // dnd-kit measures the list a frame or two after the pick-up; an arrow key
+  // before that is ignored, which no person types fast enough to hit.
+  const held = page.locator(".dm-stop.is-dragging");
+  const settle = () => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+  const moved = () => page.waitForFunction(() => {
+    const el = document.querySelector(".dm-stop.is-dragging");
+    return !!el && el.style.transform && el.style.transform !== "none" && !/translate3d\(0px, 0px/.test(el.style.transform);
+  });
   await stops.nth(1).focus();
   await page.keyboard.press("Space");
-  await announced(/Picked up|was moved over/);
+  await expect(held).toHaveCount(1);
+  await settle();
   await page.keyboard.press("ArrowDown");
-  await announced(/Draggable item (\S+) was moved over droppable area (?!\1\b)\S+/);
+  await moved();
   await page.keyboard.press("Space");
+  await expect(held).toHaveCount(0);
   await expect.poll(() => stopTitles(page)).toEqual([before[0], before[2], before[1]]);
+
+  // Enter drops a held stop too — and opens nothing.
+  await page.locator(".dm-stop .dm-main").nth(2).focus();
+  await page.keyboard.press("Space");
+  await expect(held).toHaveCount(1);
+  await settle();
+  await page.keyboard.press("ArrowUp");
+  await moved();
+  await page.keyboard.press("Enter");
+  await expect(held).toHaveCount(0);
+  await expect.poll(() => stopTitles(page)).toEqual(before);
+  await expect(page.getByRole("button", { name: "Remove from route" })).toHaveCount(0);
 });
 
 // Codex review of #413: the sheet is modal — Tab stays in it — and adding its
@@ -220,8 +241,10 @@ test("Space on an Unscheduled + adds the task; it never starts a drag", async ({
 test("the phone's sheet closes when the page crosses into the laptop layout, and stays closed", async ({ page }) => {
   await openDayMap(page, { width: 800, height: 1000 });
   await page.locator(".dm-pool-bar").click();
-  await expect(page.getByRole("dialog", { name: "Unscheduled" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Unscheduled" }).getByRole("button", { name: "Close" })).toBeFocused();
   await page.setViewportSize({ width: 1280, height: 800 });
+  // Focus goes to what took the sheet's place, not to the page.
+  await expect(pool(page).locator(".dm-pool-add").first()).toBeFocused();
   // Closed, not just hidden by the laptop's CSS.
   await expect(page.locator(".dm-pool-bar")).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator(".dm-pool-sheet")).toHaveCount(0);
@@ -232,4 +255,18 @@ test("the phone's sheet closes when the page crosses into the laptop layout, and
   await page.locator(".dm-heading").click();
   await page.keyboard.press("Escape");
   await expect(page.locator(".day-map-page")).toHaveCount(0);
+});
+
+test("laptop: a task dragged from Unscheduled onto an empty route becomes its first stop", async ({ page }) => {
+  await openDayMap(page, { width: 1280, height: 800 });
+  const card = pool(page);
+  const title = (await card.locator(".dm-pool-title").first().innerText()).trim();
+  const from = await card.locator(".dm-pool-row").first().locator(".dm-pool-title").boundingBox();
+  const to = await page.locator(".dm-route-empty").boundingBox();
+  await page.mouse.move(from.x + 10, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 30, from.y + from.height / 2, { steps: 4 });
+  await page.mouse.move(to.x + 40, to.y + to.height / 2, { steps: 12 });
+  await page.mouse.up();
+  expect(await stopTitles(page)).toEqual([title]);
 });

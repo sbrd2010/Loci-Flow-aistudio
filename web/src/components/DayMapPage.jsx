@@ -84,6 +84,7 @@ function RouteStop({ task, isNow, isOver, isGoal, isExpanded, onToggle, onRemove
         // Space picks the stop up (the drag's key); Enter opens it, as a
         // row does in Today's list.
         onKeyDown={e => {
+          // (While it is held, onToggle ignores it: Enter drops it instead.)
           if (e.key === "Enter" && e.target === e.currentTarget) { e.preventDefault(); onToggle(); return; }
           listeners?.onKeyDown?.(e);
         }}
@@ -417,7 +418,16 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   // (a tablet turned, a window widened) closes it rather than hiding it.
   useEffect(() => {
     if (!poolOpen) return undefined;
-    const close = () => { if (window.innerWidth >= 1024) setPoolOpen(false); };
+    const close = () => {
+      if (window.innerWidth < 1024) return;
+      // Focus in the sheet goes to what takes its place: the card's first +.
+      // (The laptop's CSS hides the sheet first, and a hidden element loses
+      // focus to the page, so focus on the page counts as the sheet's.)
+      const el = document.activeElement;
+      const hadFocus = !el || el === document.body || !!el.closest(".dm-pool-sheet");
+      setPoolOpen(false);
+      if (hadFocus) requestAnimationFrame(() => (document.querySelector(".dm-pool .dm-pool-add") || document.querySelector(".dm-route .dm-main"))?.focus());
+    };
     close();
     window.addEventListener("resize", close);
     return () => window.removeEventListener("resize", close);
