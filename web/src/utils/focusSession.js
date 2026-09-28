@@ -43,8 +43,12 @@ export const EXPIRY_REASONS = new Set(["paused_too_long", "day_ended"]);
 // began in ends, fixed when it started.
 export function focusExpiryReason({ sessionOpen, pausedAt, dayEndsAt, now = Date.now() }) {
   if (!sessionOpen) return null;
-  if (Number.isFinite(dayEndsAt) && now >= dayEndsAt) return "day_ended";
-  if (Number.isFinite(pausedAt) && now - pausedAt > PAUSE_EXPIRY_MS) return "paused_too_long";
+  const dayEnded = Number.isFinite(dayEndsAt) && now >= dayEndsAt;
+  const pauseRanOut = Number.isFinite(pausedAt) && now - pausedAt > PAUSE_EXPIRY_MS;
+  // Both can be true when nothing looked in between (a background tab): the
+  // one that happened first is why it closed (Codex review of #419).
+  if (pauseRanOut && (!dayEnded || pausedAt + PAUSE_EXPIRY_MS < dayEndsAt)) return "paused_too_long";
+  if (dayEnded) return "day_ended";
   return null;
 }
 

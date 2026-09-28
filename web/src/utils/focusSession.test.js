@@ -262,6 +262,12 @@ describe("focusExpiryReason (59j)", () => {
   it("has nothing to close without an open session", () => {
     expect(focusExpiryReason({ ...base, sessionOpen: false, now: base.dayEndsAt })).toBeNull();
   });
+  // Codex review of #419: when both have happened, the first one is why.
+  it("names whichever expiry came first when both have happened", () => {
+    const late = base.dayEndsAt + 60_000;
+    expect(focusExpiryReason({ ...base, now: late, pausedAt: base.dayEndsAt - PAUSE_EXPIRY_MS - 1000 })).toBe("paused_too_long");
+    expect(focusExpiryReason({ ...base, now: late + PAUSE_EXPIRY_MS, pausedAt: base.dayEndsAt - 1000 })).toBe("day_ended");
+  });
 });
 
 describe("focusOutcome (59j)", () => {
