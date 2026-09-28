@@ -262,3 +262,28 @@ test("More details: the one thing moved off Today in the full editor ends its se
   await expect(page.getByTestId("today-tasks-list")).toBeVisible();
   await expect(floating).toHaveCount(0);
 });
+
+// Codex review of #415: the full editor, opened from a stop, starts from the
+// stop's duration, as the sheet does — even when the task's own estimate
+// has since been changed elsewhere (Today's sheet sets only the estimate).
+test("More details: the editor opens on the stop's duration, not a different estimate", async ({ page }) => {
+  await openDayMap(page, { width: 1280, height: 800 });
+  const stopTitle = (await titles(page))[1];
+  // Today's sheet: the estimate to 2h.
+  await page.locator(".dm-back").click();
+  await page.getByTestId("today-tasks-list").getByText(stopTitle, { exact: true }).click();
+  await sheet(page).getByRole("button", { name: /^Estimate/ }).click();
+  await sheet(page).getByRole("radio", { name: "2h" }).click();
+  await sheet(page).getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Day map →" }).click();
+
+  const stop = page.locator(".dm-stop", { hasText: stopTitle });
+  const dur = (await stop.locator(".dm-dur").innerText()).trim();
+  await stop.locator(".dm-main").click();
+  await expect(sheet(page).getByRole("button", { name: /^Estimate/ }).locator(".detail-value")).toHaveText(dur);
+  await sheet(page).getByRole("button", { name: /^More details/ }).click();
+  const editor = page.getByRole("dialog", { name: "Edit task" });
+  expect(dur).toBe("25m");
+  // Not the 2h estimate: 25m is not a chip, so none of them is on.
+  await expect(editor.getByRole("button", { name: "2h", exact: true })).toHaveAttribute("aria-pressed", "false");
+});

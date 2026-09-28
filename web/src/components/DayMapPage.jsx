@@ -691,7 +691,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
             onToggleStep={stepId => actions.handleToggleStep(detailTask, stepId)}
             onDeleteStep={act(stepId => actions.handleDeleteStep(detailTask, stepId))}
             onAddStep={text => actions.handleAddStep(detailTask, text)}
-            onMoreDetails={onEditTask ? () => { onEditTask(detailTask); setDetailId(null); } : undefined}
+            // The editor, too, starts from the stop's duration.
+            onMoreDetails={onEditTask ? () => { onEditTask({ ...detailTask, timeEstimateMinutes: getEstimate(detailTask) }); setDetailId(null); } : undefined}
             onDone={() => leaving(act(actions.handleMarkDone))}
             onRemoveFromRoute={() => leaving(removeFromRoute, detailId)}
             onPark={() => leaving(act(actions.handlePark))}
