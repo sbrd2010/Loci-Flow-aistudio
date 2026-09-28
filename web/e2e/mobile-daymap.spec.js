@@ -107,17 +107,19 @@ test("a Day Map stop opens its task sheet, with its steps", async ({ page }) => 
   await openDayMap(page);
   await autoFillDayMap(page);
 
-  // demo-t1 ("Reply to the important message...") has 4 sub-steps (2 done)
-  // and comes first into the auto-filled route. 50f's rows are time · task ·
-  // how long; the stop opens the task sheet (52), steps and all.
+  // demo-t1 ("Reply to the important message...") has a first step and 4
+  // sub-steps (2 done), and comes first into the auto-filled route. 50f's rows
+  // are time · task · how long; the stop opens the task sheet (52), steps and
+  // all — the first step as step 1.
   const firstCard = page.locator(".dm-main").first();
   await expect(firstCard).toContainText("Reply to the important message");
   await firstCard.click();
   const sheet = page.getByTestId("task-detail");
   await expect(sheet).toBeVisible({ timeout: 3_000 });
   await expect(sheet.locator(".detail-kicker").first()).toHaveText(/^DAY MAP · 1 OF \d+$/);
-  await expect(sheet.getByText("STEPS · 2 OF 4")).toBeVisible();
-  await expect(sheet.locator(".detail-step")).toHaveCount(4);
+  await expect(sheet.getByText("STEPS · 2 OF 5")).toBeVisible();
+  await expect(sheet.locator(".detail-step")).toHaveCount(5);
+  await expect(sheet.locator(".detail-step-check").first()).toHaveAccessibleName("Open the thread, write 3 honest sentences, hit send");
   await expect(sheet.locator(".detail-step.is-done")).toHaveCount(2);
   await expect(sheet.getByRole("checkbox", { name: "Open email / LinkedIn / WhatsApp" })).toBeVisible();
   await expect(sheet.getByRole("checkbox", { name: "Write a short, honest reply (3 sentences is enough)" })).toBeVisible();

@@ -10,32 +10,6 @@ function normalizeSubSteps(rawSubSteps, idPrefix, maxCount = Infinity, maxTextLe
     .map((s, i) => ({ id: s.id || `${idPrefix}-${i}`, text: s.text.trim().slice(0, maxTextLength), done: false }));
 }
 
-// Merges an AI rewrite suggestion into an existing task, preserving ALL original
-// metadata. Only title, concreteStep, subSteps, and lastUpdated may change.
-// This is the canonical merge path for the AI rewrite/reword flow.
-export function applyAiRewriteToTask(originalTask, aiSuggestion) {
-  if (!originalTask || typeof originalTask !== "object") return originalTask;
-  const title =
-    (typeof aiSuggestion?.title === "string" && aiSuggestion.title.trim()) ||
-    originalTask.title;
-  const concreteStep =
-    (typeof aiSuggestion?.microStep === "string" && aiSuggestion.microStep.trim()) ||
-    originalTask.concreteStep ||
-    "";
-  const now = Date.now();
-  const subSteps = normalizeSubSteps(aiSuggestion?.subSteps, `ai-ss-${now}`) ?? (originalTask.subSteps ?? []);
-  return {
-    ...originalTask,   // preserves uuid, id, userId, horizonLevel, priority, category,
-                       // orderIndex, isCompleted, isDeleted, isParked, isNowFocus, isMVD,
-                       // timeEstimateMinutes, dayMap*, reminderAt, dateCompletedString,
-                       // and any unknown future fields
-    title,
-    concreteStep,
-    subSteps,
-    lastUpdated: now,
-  };
-}
-
 // Small glanceable icon shown next to a task's priority badge (TaskRow,
 // Roadmap cards), keyed by the categories offered in AddTaskDialog. Tasks
 // with no category, or one outside this map, show no icon — never inferred.
@@ -114,8 +88,7 @@ function sanitizeTimeEstimate(value) {
 // creating bad tasks. Multiple suggestions may share the same sourceId — a single
 // entry can split into several tasks (capped per-source and overall). `subSteps`
 // (key details from long entries that would be lost in the short
-// title/concreteStep) are normalized the same way as applyAiRewriteToTask's
-// subSteps, defaulting to [] when absent or malformed. `category` and
+// title/concreteStep) are normalized to {id, text, done:false}, defaulting to [] when absent or malformed. `category` and
 // `timeEstimateMinutes` are coerced to the values AddTaskDialog offers
 // (defaulting to "Personal"/25 when missing or unrecognized) rather than
 // rejecting the suggestion. `sourceSummary` (free-text context that doesn't fit

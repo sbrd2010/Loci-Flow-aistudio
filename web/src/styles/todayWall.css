@@ -122,6 +122,26 @@
   font-weight: 800;
   color: var(--accent);
 }
+.wall-details-line { margin: 0; }
+/* "Details ›" (52a): 15px/700 --ink-2, a 44px hit area. */
+.wall-details {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: -12px 0;
+  padding: 0 4px;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--ink-2);
+  vertical-align: middle;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.wall-details:hover { color: var(--ink); }
+.wall-details:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* The screen's one filled action. */
 .wall-primary {
@@ -509,6 +529,11 @@
 .wall-tip { display: none; }
 .wall-title { transform-origin: 0 0; }
 .wall-title.is-openable { cursor: pointer; }
+/* 52a: hovering the title that opens the sheet underlines it, 1px in --edge. */
+.wall-title.is-openable:hover {
+  text-decoration: underline 1px var(--edge);
+  text-underline-offset: 0.12em;
+}
 .wall-title:focus { outline: none; }
 
 @media (min-width: 1024px) {

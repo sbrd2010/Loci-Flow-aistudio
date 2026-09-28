@@ -269,8 +269,26 @@
   cursor: pointer;
 }
 .detail-step.is-done .detail-step-check { background: var(--accent); border-color: var(--accent); }
-.detail-step-text { flex: 1; font-size: 0.9375rem; overflow-wrap: anywhere; }
-.detail-step.is-done .detail-step-text { color: var(--ink-2); text-decoration: line-through; }
+/* A step is edited in place; Backspace in an empty one deletes it (52). */
+.detail-step-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 24px;
+  margin: 10px 0;
+  padding: 0;
+  line-height: 1.45;
+  resize: none;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: 0.9375rem;
+  color: var(--ink);
+  background: none;
+  border: 0;
+}
+.detail-step-input:focus { outline: none; }
+.detail-step:focus-within { box-shadow: inset 0 -2px 0 var(--accent); }
+.detail-step.is-done .detail-step-input { color: var(--ink-2); text-decoration: line-through; }
 .detail-step-remove {
   display: inline-flex;
   align-items: center;
@@ -352,8 +370,9 @@
 @keyframes detail-rise { from { transform: translateY(24px); opacity: 0; } }
 @keyframes detail-slide { from { opacity: 0; } }
 
+/* "Suggest steps" sits at the right of the "Add a step…" line (52b). */
 .detail-suggest {
-  align-self: flex-start;
+  flex-shrink: 0;
   min-height: 44px;
   padding: 0;
   font: inherit;
@@ -422,3 +441,58 @@
   cursor: pointer;
 }
 .detail-showall:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* SUGGESTED · N (52c): dashed, italic rows, each added only when tapped. */
+.detail-suggested { padding-top: 10px; }
+.detail-suggested-head { display: flex; align-items: center; gap: 16px; min-height: 36px; }
+.detail-suggested-head .detail-kicker { margin-right: auto; }
+.detail-suggested-list { margin: 0; padding: 0; list-style: none; }
+.detail-suggested-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  color: var(--ink-2);
+  border-bottom: 1px dashed var(--line);
+}
+.detail-suggested-text { flex: 1; min-width: 0; font-size: 0.9375rem; font-style: italic; overflow-wrap: anywhere; }
+.detail-suggest-note { margin: 8px 0 0; font-size: 0.875rem; color: var(--ink-2); }
+.detail-text-btn {
+  min-height: 44px;
+  padding: 0 4px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.detail-text-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* More · Reminder, category (52b–c): a row that opens in place. */
+.detail-more { margin-top: 8px; }
+.detail-more-toggle { border-top: 1px solid var(--line); }
+.detail-more-toggle .detail-label { flex: 1; }
+.detail-more-hint { font-weight: 700; color: var(--ink-2); }
+.detail-more-toggle > svg { transition: transform 0.18s ease; }
+.detail-more-toggle[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.detail-more-body { padding-left: 16px; animation: detail-more-open 0.18s ease-out; }
+@keyframes detail-more-open { from { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) {
+  .detail-more-body { animation: none; }
+  .detail-more-toggle > svg { transition: none; }
+}
+.detail-reminder { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
+.detail-input {
+  min-height: 44px;
+  padding: 0 10px;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+}
+.detail-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

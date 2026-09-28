@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { safeUUID } from "../utils/uuid";
+import { taskSteps, stepsPatch, applyStepsPatch } from "../utils/taskSteps";
 import { celebrate } from "../utils/celebrations";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import { removeScheduleFields } from "./useDayRoute";
@@ -108,23 +108,14 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
     setUndo({ kind: "park", task, wasFocus: !!task.isNowFocus, at: now });
   };
 
-  const handleToggleStep = (task, stepId) => {
+  // A task's steps, written as a whole from the sheet. A removed step has
+  // Undo (52: Undo, not confirm), and the first step stays step 1.
+  const handleSetSteps = (task, steps, meta) => {
     const current = latestTasks().find(t => t.uuid === task.uuid);
     if (!current) return;
-    patchTask(task.uuid, { subSteps: (current.subSteps || []).map(st => st.id === stepId ? { ...st, done: !st.done } : st) });
-  };
-  const handleAddStep = (task, text) => {
-    const current = latestTasks().find(t => t.uuid === task.uuid);
-    if (!current) return;
-    patchTask(task.uuid, { subSteps: [...(current.subSteps || []), { id: safeUUID(), text, done: false }] });
-  };
-  // A step goes at once, with Undo (52: Undo, not confirm).
-  const handleDeleteStep = (task, stepId) => {
-    const current = latestTasks().find(t => t.uuid === task.uuid);
-    const step = (current?.subSteps || []).find(st => st.id === stepId);
-    if (!step) return;
-    patchTask(task.uuid, { subSteps: current.subSteps.filter(st => st.id !== stepId) });
-    setUndo({ kind: "step", task: current, step, atIndex: current.subSteps.indexOf(step), at: Date.now() });
+    const patch = stepsPatch(current, steps);
+    savePayload({ ...payloadRef.current, tasks: latestTasks().map(t => (t.uuid === task.uuid ? applyStepsPatch(t, patch) : t)) });
+    if (meta?.removed) setUndo({ kind: "step", task: current, step: meta.removed, atIndex: meta.atIndex, at: Date.now() });
   };
 
   const handleMarkDone = (task) => {
@@ -205,9 +196,11 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
     else if (kind === "today" && current.horizonLevel === "today") put({ horizonLevel: task.horizonLevel, orderIndex: task.orderIndex, deferredUntil: task.deferredUntil ?? null }, "task_moved");
     else if (kind === "step") {
       // Back where it was; steps added since stay where they are.
-      const steps = [...(current.subSteps || [])];
-      steps.splice(Math.min(undo.atIndex, steps.length), 0, undo.step);
-      put({ subSteps: steps });
+      const steps = [...taskSteps(current)];
+      if (!steps.some(st => st.id === undo.step.id)) {
+        steps.splice(Math.min(undo.atIndex, steps.length), 0, undo.step);
+        handleSetSteps(current, steps);
+      }
     }
     else if (kind === "done" && current.isCompleted) {
       const contributions = [...(latest.contributions || [])];
@@ -223,6 +216,6 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
   return {
     undo, setUndo, undoText, handleUndo,
     patchTask, handleMoveToToday, handleChangeHorizon, handleTogglePin, handlePark,
-    handleToggleStep, handleAddStep, handleDeleteStep, handleMarkDone, handleDelete,
+    handleSetSteps, handleMarkDone, handleDelete,
   };
 }

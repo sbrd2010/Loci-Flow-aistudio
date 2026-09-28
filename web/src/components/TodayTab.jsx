@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import TaskRow, { ROADMAP_HORIZONS } from "./TaskRow";
-import AddTaskDialog from "./AddTaskDialog";
 import SplitTaskSheet from "./SplitTaskSheet";
 import { buildSplit, undoSplit } from "../utils/splitTask";
 import TodayWall from "./TodayWall";
@@ -12,8 +11,8 @@ import { buildMomentum } from "../utils/momentum";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import FocusModePage from "./FocusModePage";
 import RescueMode from "./RescueMode";
-import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
+import { taskSteps, stepsPatch, applyStepsPatch } from "../utils/taskSteps";
 import { buildToggleCompletedTasks, byPriorityThenOrder } from "../utils/taskOps";
 import { buildParkTaskTasks } from "../utils/coachActions";
 import { shouldStopFocusOnComplete, focusBlockSeconds } from "../utils/focusSession";
@@ -346,10 +345,8 @@ export default function TodayTab({
   const [breakdownErrorUuid, setBreakdownErrorUuid] = useState(null);
   const [breakdownNoKeyUuid, setBreakdownNoKeyUuid] = useState(null);
 
-  const [editingTask, setEditingTask] = useState(null);
   // Split a task (45d): the wall's "Split it" and S open it for the one thing.
   const [splitTask, setSplitTask] = useState(null);
-  const [confirmDialog, setConfirmDialog] = useState(null);
   // The one Undo toast: { kind: "done" | "delete" | "move" | "front" | "split"
   // | "swap" | "tomorrow" | "bringback" | "park", task (as it was), to, wasPinned, previous,
   // before, at }.
@@ -677,11 +674,16 @@ export default function TodayTab({
     }
     savePayload({ ...latest, tasks: (latest.tasks || []).map(t => t.uuid === uuid ? { ...t, ...patch, lastUpdated: Date.now() } : t) });
   };
-  const handleAddStep = (uuid, text) => {
+  // A task's steps, written as a whole (the sheet and the row's steps). A
+  // removed step has Undo (52: Undo, not confirm), and the first step stays
+  // step 1 (taskSteps).
+  const handleSetSteps = (uuid, steps, meta) => {
     const latest = latestPayloadRef.current;
-    savePayload({ ...latest, tasks: (latest.tasks || []).map(t => t.uuid === uuid
-      ? { ...t, subSteps: [...(t.subSteps || []), { id: safeUUID(), text, done: false }], lastUpdated: Date.now() }
-      : t) });
+    const current = (latest.tasks || []).find(t => t.uuid === uuid);
+    if (!current) return;
+    const patch = stepsPatch(current, steps);
+    savePayload({ ...latest, tasks: (latest.tasks || []).map(t => (t.uuid === uuid ? applyStepsPatch(t, patch) : t)) });
+    if (meta?.removed) setUndo({ kind: "step", task: current, step: meta.removed, atIndex: meta.atIndex, at: Date.now() });
   };
 
   // "Make this the one thing" (50c–d): the task takes the NOW spot; the old
@@ -789,6 +791,7 @@ export default function TodayTab({
 
   const undoMessage = (u) => {
     if (u.count) return `${u.count} ${u.count === 1 ? "task" : "tasks"} moved to tomorrow`;
+    if (u.kind === "step") return `Step removed: ${u.step.text}`;
     const title = u.task.title;
     if (u.kind === "move") {
       const label = u.to === "week" ? "This week" : (ROADMAP_HORIZONS.find(h => h.key === u.to)?.label || u.to);
@@ -808,6 +811,16 @@ export default function TodayTab({
     if (!undo) return;
     const { kind, task, wasPinned } = undo;
     setUndo(null);
+    if (kind === "step") {
+      // Back where it was; steps added since stay where they are.
+      const current = tasks.find(t => t.uuid === task.uuid && !t.isDeleted);
+      if (!current) return;
+      const steps = [...taskSteps(current)];
+      if (steps.some(st => st.id === undo.step.id)) return;
+      steps.splice(Math.min(undo.atIndex, steps.length), 0, undo.step);
+      handleSetSteps(current.uuid, steps);
+      return;
+    }
     if (kind === "delete") {
       const event = buildTaskMutationEvent("task_restored", task, { windows });
       savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t) })
@@ -902,7 +915,7 @@ export default function TodayTab({
 
   // ── Day Close auto-show — the one scheduled interruption, at day's end ──
   useEffect(() => {
-    if (isFocusMode || editingTask || sessionCompletePending || isAddTaskDialogOpen || showDailyCheckin || rescueActive) return;
+    if (isFocusMode || sessionCompletePending || isAddTaskDialogOpen || showDailyCheckin || rescueActive) return;
     const now = new Date();
     // Addendum B: the morning commitment and the midday progress check are
     // gone, and so is the morning ritual popup — "an app that interrupts an
@@ -935,7 +948,7 @@ export default function TodayTab({
     }, 2500);
     return () => clearTimeout(timer);
   }, [
-    anchorTodayStr, isFocusMode, !!editingTask, sessionCompletePending, isAddTaskDialogOpen,
+    anchorTodayStr, isFocusMode, sessionCompletePending, isAddTaskDialogOpen,
     showDailyCheckin, rescueActive, pendingCheckinSlot, config.anchorsSnoozeUntil,
     visibilityTick,
     config.dailyCommitmentDate, config.dailyCommitmentSkippedDate, config.dailyCommitmentSnoozeUntil, config.dailyCommitmentTaskIds,
@@ -981,8 +994,6 @@ export default function TodayTab({
   // itself rather than waiting to be handed one, so nothing is lost by the card
   // going away.
 
-  const handleStartEdit = (task) => setEditingTask(task);
-
   const handleBreakdown = async (task) => {
     setBreakdownErrorUuid(null);
     setBreakdownNoKeyUuid(null);
@@ -1015,40 +1026,15 @@ export default function TodayTab({
   };
 
   const handleSubStepToggle = (task, stepId) => {
-    const updatedTasks = tasks.map(t => {
-      if (t.uuid !== task.uuid) return t;
-      const newSubSteps = (t.subSteps || []).map(s => s.id === stepId ? { ...s, done: !s.done } : s);
-      return { ...t, subSteps: newSubSteps, lastUpdated: Date.now() };
-    });
-    savePayload({ ...payload, tasks: updatedTasks });
+    const steps = taskSteps(task).map(st => (st.id === stepId ? { ...st, done: !st.done } : st));
+    handleSetSteps(task.uuid, steps);
   };
 
-  // Only the pending step's identity is stored in confirmation state — never
-  // an onConfirm closure capturing `tasks`/`payload` from the moment the "×"
-  // was tapped. If another tab/device syncs a change while the dialog is
-  // open, a stale closure could write a stale full payload over the newer
-  // one; re-reading `tasks`/`payload` fresh at confirm time (below) avoids
-  // that, since this component re-renders on every incoming sync update.
   const handleDeleteSubStep = (task, stepId) => {
-    const step = (task.subSteps || []).find(s => s.id === stepId);
-    setConfirmDialog({ taskUuid: task.uuid, stepId, stepText: step?.text || null });
-  };
-
-  const handleConfirmDeleteSubStep = () => {
-    if (!confirmDialog) return;
-    const { taskUuid, stepId } = confirmDialog;
-    const task = tasks.find(t => t.uuid === taskUuid);
-    const stepStillExists = !!task && (task.subSteps || []).some(s => s.id === stepId);
-    if (!stepStillExists) {
-      setConfirmDialog(null);
-      return;
-    }
-    const updatedTasks = tasks.map(t => {
-      if (t.uuid !== taskUuid) return t;
-      return { ...t, subSteps: (t.subSteps || []).filter(s => s.id !== stepId), lastUpdated: Date.now() };
-    });
-    savePayload({ ...payload, tasks: updatedTasks });
-    setConfirmDialog(null);
+    const steps = taskSteps(task);
+    const at = steps.findIndex(st => st.id === stepId);
+    if (at === -1) return;
+    handleSetSteps(task.uuid, steps.filter(st => st.id !== stepId), { removed: steps[at], atIndex: at });
   };
 
   const handleMoveToHorizon = (task, horizon) => {
@@ -1551,14 +1537,14 @@ export default function TodayTab({
       // where the key came from, not by state: closing that layer re-renders
       // before this listener runs, so its state already reads "closed".
       if (e.target?.closest?.('[role="dialog"], .modal-card, [data-testid="task-options-menu"]')) return;
-      if (isFocusMode || editingTask || splitTask || isAddTaskDialogOpen || confirmDialog || rescueActive || showDailyCheckin || frontPickerTask) return;
+      if (isFocusMode || splitTask || isAddTaskDialogOpen || rescueActive || showDailyCheckin || frontPickerTask) return;
       closeSheet();
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
   });
 
-  const wallKeysBlocked = isFocusMode || !!editingTask || isAddTaskDialogOpen || !!confirmDialog || (!!detailUuid && !drawerViewport)
+  const wallKeysBlocked = isFocusMode || isAddTaskDialogOpen || (!!detailUuid && !drawerViewport)
     || rescueActive || showDailyCheckin || sessionCompletePending || !!frontPickerTask || !!splitTask;
   useEffect(() => {
     if (wallKeysBlocked) return undefined;
@@ -2053,12 +2039,7 @@ export default function TodayTab({
             onClose={closeDetail}
             onPatch={patch => handlePatchTask(detailTask.uuid, patch)}
             onToggleMVD={() => handleToggleMVD(detailTask)}
-            onToggleStep={stepId => handleSubStepToggle(detailTask, stepId)}
-            onDeleteStep={stepId => handleDeleteSubStep(detailTask, stepId)}
-            onAddStep={text => handleAddStep(detailTask.uuid, text)}
-            onMoreDetails={() => { handleStartEdit(detailTask); setDetailUuid(null); }}
-            onSuggestSteps={() => handleBreakdown(detailTask)}
-            suggestingSteps={breakdownLoadingUuid === detailTask.uuid}
+            onSetSteps={(steps, meta) => handleSetSteps(detailTask.uuid, steps, meta)}
             onMakeOneThing={() => makeOneThingAndFollow(detailTask)}
             onLetGo={detailIsNow ? () => { handleUnpinWithUndo(detailTask); setDetailUuid(null); } : undefined}
             onDone={() => actOnTask(detailTask, "d")}
@@ -2084,31 +2065,6 @@ export default function TodayTab({
       {splitTask && (
         <SplitTaskSheet task={splitTask} onClose={() => setSplitTask(null)} onSplit={handleSplit} />
       )}
-      {editingTask && (
-        <AddTaskDialog
-          email={payload.config?.userId || ""}
-          payload={payload}
-          savePayload={savePayload}
-          savePayloadAsync={savePayloadAsync}
-          defaultHorizon="today"
-          editTask={editingTask}
-          onClose={() => setEditingTask(null)}
-          uid={uid}
-          writeActivityEvents={writeActivityEvents}
-        />
-      )}
-
-      {confirmDialog && (
-        <ConfirmDialog
-          message={confirmDialog.stepText ? `Remove this step?\n\n"${confirmDialog.stepText}"` : "Remove this step?"}
-          confirmLabel="Remove"
-          cancelLabel="Cancel"
-          danger
-          onConfirm={handleConfirmDeleteSubStep}
-          onCancel={() => setConfirmDialog(null)}
-        />
-      )}
-
       {/* Rescue Mode — triggered by the Rescue chip or Deep Focus's Stuck? button */}
       {rescueActive && (
         <RescueMode

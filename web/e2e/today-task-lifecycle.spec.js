@@ -76,13 +76,14 @@ test("mobile reliability: Today task can be added, edited, focused, completed, r
   await expect(todayRow(page, originalTitle)).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
 
+  // The sheet edits in place (52: no separate editor).
   await openTaskMenu(page, originalTitle);
-  await page.getByTestId("task-detail").getByRole("button", { name: /^More details/ }).click();
-  await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
-  await page.getByTestId("add-task-title").fill(editedTitle);
-  await page.getByTestId("add-task-submit").click();
+  const detail = page.getByTestId("task-detail");
+  await detail.locator(".detail-title").click();
+  await detail.getByLabel("Title").fill(editedTitle);
+  await detail.getByLabel("Title").press("Enter");
+  await detail.getByRole("button", { name: "Close", exact: true }).click();
 
-  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   await expect(todayRow(page, editedTitle)).toBeVisible({ timeout: 5_000 });
   await expect(todayRow(page, originalTitle)).not.toBeVisible({ timeout: 5_000 });
 
@@ -257,15 +258,13 @@ test("mobile reliability: editing the wall's task off Today clears its focus/pin
   await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
   await expect(page.locator(".wall-title")).toHaveText(title, { timeout: 5_000 });
 
-  // The task editor can move the task off Today. The one thing has no row;
-  // its title on the wall opens it (50a).
+  // The sheet's Horizon picker can move the task off Today. The one thing
+  // has no row; its title on the wall opens it (50a).
   await putListAway(page);
   await page.locator(".wall-title").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^More details/ }).click();
-  await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
-  await page.getByRole("button", { name: "Week", exact: true }).click();
-  await page.getByTestId("add-task-submit").click();
-  await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
+  const detail = page.getByTestId("task-detail");
+  await detail.getByRole("button", { name: /^Horizon/ }).click();
+  await detail.getByRole("radio", { name: "This Week", exact: true }).click();
 
   // The task leaving Today must also clear isNowFocus — otherwise it stays
   // the app's globally "active" focused task (orphaned timer/session) even
@@ -284,27 +283,24 @@ test("mobile reliability: editing the wall's task off Today clears its focus/pin
   await expect(page.locator(".wall-title")).toHaveCount(0);
 });
 
-test("mobile reliability: deleting a sub-step requires confirmation and can be cancelled", async ({ page }) => {
+// 52: a step goes at once, with Undo — never "Are you sure?".
+test("mobile reliability: deleting a sub-step from its row removes it at once, with Undo", async ({ page }) => {
   await enterDemo(page);
 
-  const title = "Substep delete confirmation seed task";
+  const title = "Substep delete undo seed task";
   await addTaskWithSubSteps(page, title, ["Keep this step", "Remove this step"]);
   const row = todayRow(page, title);
   await expect(row).toBeVisible({ timeout: 5_000 });
   await expect(row).toContainText("Remove this step");
 
-  // Cancel — the step must survive.
   await row.getByRole("button", { name: "Remove step" }).nth(1).click();
-  await expect(page.getByText("Remove this step?", { exact: false })).toBeVisible({ timeout: 5_000 });
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(row).toContainText("Remove this step");
-
-  // Confirm — the step is actually removed.
-  await row.getByRole("button", { name: "Remove step" }).nth(1).click();
-  await expect(page.getByText("Remove this step?", { exact: false })).toBeVisible({ timeout: 5_000 });
-  await page.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(page.getByText("Remove this step?", { exact: false })).toHaveCount(0);
   await expect(row).not.toContainText("Remove this step");
   await expect(row).toContainText("Keep this step");
+  await expect(page.locator(".undo-toast")).toContainText("Step removed: Remove this step");
+
+  await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
+  await expect(row.locator(".task-substep")).toContainText(["Keep this step", "Remove this step"]);
 });
 
 // The toast's live region is always on the page and only its text changes —

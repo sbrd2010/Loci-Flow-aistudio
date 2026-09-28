@@ -192,11 +192,11 @@ async function unpinFromList(page) {
   await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
 }
 
-// The task editor, for the wall's one thing: its title opens it → More details.
-// (The wall's "Split it" opens Split a task now, 45d.)
+// The task sheet, for the wall's one thing: its title opens it (52: the sheet
+// edits in place). (The wall's "Split it" opens Split a task now, 45d.)
 async function editWallTask(page) {
   await page.locator(".wall-title").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^More details/ }).click();
+  return page.getByTestId("task-detail");
 }
 
 async function emptyTheWall(page) {
@@ -358,10 +358,11 @@ test("mobile reliability: editing a wall task keeps its no-estimate, no-subtask 
   await expect(page.locator(".wall-first-step")).toHaveCount(0);
 
   // Open the editor for the wall's task and change ONLY the title.
-  await editWallTask(page);
-  await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
-  await page.getByTestId("add-task-title").fill("Draft the abstract properly");
-  await page.getByTestId("add-task-submit").click();
+  const detail = await editWallTask(page);
+  await detail.locator(".detail-title").click();
+  await detail.getByLabel("Title").fill("Draft the abstract properly");
+  await detail.getByLabel("Title").press("Enter");
+  await detail.getByRole("button", { name: "Close", exact: true }).click();
 
   await expect(page.locator(".wall-title")).toContainText("Draft the abstract properly", { timeout: 8_000 });
   // Still no invented subtask, and still no duration presented as chosen.
@@ -395,17 +396,15 @@ test("mobile reliability: an estimate can still be chosen for a wall task", asyn
   await page.locator(".wall-commit-field").press("Enter");
   await expect(page.locator(".wall-title")).toContainText("Size this one properly", { timeout: 8_000 });
 
-  await editWallTask(page);
-  await expect(page.getByRole("heading", { name: "Edit task" })).toBeVisible({ timeout: 5_000 });
-  await page.getByRole("button", { name: "Other", exact: true }).click();
-  await page.getByLabel("Minutes").selectOption("45");
-  await page.getByTestId("add-task-submit").click();
+  const detail = await editWallTask(page);
+  await detail.getByRole("button", { name: /^Estimate/ }).click();
+  await detail.getByRole("radio", { name: "30m" }).click();
+  await detail.getByRole("button", { name: "Close", exact: true }).click();
 
   // It sticks: the task's sheet shows the length the user chose. (The start
   // control runs one block, not the estimate — 53e.)
-  await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 8_000 });
   await page.locator(".wall-title").click();
-  await expect(page.getByTestId("task-detail").getByRole("button", { name: /^Estimate/ }).locator(".detail-value")).toHaveText("45m");
+  await expect(page.getByTestId("task-detail").getByRole("button", { name: /^Estimate/ }).locator(".detail-value")).toHaveText("30m");
   await expect(page.locator(".wall-primary")).toContainText("25:00");
 });
 

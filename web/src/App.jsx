@@ -59,7 +59,6 @@ export default function App() {
   // Where + was tapped ("Today", "Plan · Quarter"), for Add task's note (45a).
   const [addOpenedFrom, setAddOpenedFrom] = useState(null);
   const [preselectedFrontId, setPreselectedFrontId] = useState(null);
-  const [editingTask, setEditingTask] = useState(null);
   // "light" | "dark" | "auto" — see utils/theme.js.
   const [theme, setTheme] = useState(() => {
     let stored = null;
@@ -1055,7 +1054,6 @@ export default function App() {
   };
 
   const openAddTask = (horizon = "today", from = null, frontId = null) => {
-    setEditingTask(null);
     setPreselectedHorizon(horizon);
     setPreselectedFrontId(frontId);
     setAddOpenedFrom(from);
@@ -1324,7 +1322,6 @@ export default function App() {
             onStartFocus={(pinPromise) => { pendingFocusPinPromiseRef.current = pinPromise; setPendingFocusOpen(true); goToday(); }}
             onAddTask={() => openAddTask("today", "Day map")}
             onHelpChoose={() => openScattered("daymap")}
-            onEditTask={(task) => { setEditingTask(task); setShowAddTask(true); }}
             uid={activityUid}
             writeActivityEvents={writeActivityEvents}
             focusTimer={focusTimer}
@@ -1349,7 +1346,6 @@ export default function App() {
                   payload={payload}
                   savePayload={savePayload}
                   savePayloadAsync={savePayloadAsync}
-                  onEditTask={(task) => { setEditingTask(task); setShowAddTask(true); }}
                   uid={activityUid}
                   writeActivityEvents={writeActivityEvents}
                   focusTimer={focusTimer}
@@ -1392,7 +1388,6 @@ export default function App() {
             savePayload={savePayload}
             savePayloadAsync={savePayloadAsync}
             onOpenAddTask={(h) => openAddTask(h, `Plan · ${PLAN_COLUMN_NAMES[h] || h}`)}
-            onEditTask={(task) => { setEditingTask(task); setShowAddTask(true); }}
             focusInbox={planFocusInbox}
             uid={activityUid}
             writeActivityEvents={writeActivityEvents}
@@ -1502,10 +1497,9 @@ export default function App() {
           savePayloadAsync={savePayloadAsync}
           userProfile={userProfile}
           defaultHorizon={preselectedHorizon}
-          defaultFrontId={editingTask ? null : preselectedFrontId}
-          openedFrom={editingTask ? null : addOpenedFrom}
-          editTask={editingTask}
-          onClose={() => { setShowAddTask(false); setEditingTask(null); }}
+          defaultFrontId={preselectedFrontId}
+          openedFrom={addOpenedFrom}
+          onClose={() => setShowAddTask(false)}
           uid={activityUid}
           writeActivityEvents={writeActivityEvents}
           focusTimer={focusTimer}

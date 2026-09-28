@@ -215,7 +215,7 @@ function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks,
 
 // frontId: a front's page (52f–g) — only that front's open tasks, in the
 // horizons that hold any, with no per-horizon + and no Inbox.
-export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, onEditTask, focusInbox = false, uid, writeActivityEvents, focusTimer = {}, frontId = null }) {
+export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, focusInbox = false, uid, writeActivityEvents, focusTimer = {}, frontId = null }) {
   const { tasks = [], config = {} } = payload;
   const windows = getFocusWindows(config);
 
@@ -237,7 +237,7 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
   const {
     undo, setUndo, undoText, handleUndo,
     patchTask, handleMoveToToday, handleChangeHorizon, handleTogglePin, handlePark,
-    handleToggleStep, handleAddStep, handleDeleteStep, handleMarkDone, handleDelete,
+    handleSetSteps, handleMarkDone, handleDelete,
   } = useTaskActions({ payload, savePayload, savePayloadAsync, uid, writeActivityEvents, focusTimer });
   const [drawerViewport, setDrawerViewport] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1024);
   useEffect(() => {
@@ -631,10 +631,7 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
             onPatch={patch => (patch.horizonLevel && patch.horizonLevel !== detailTask.horizonLevel
               ? handleChangeHorizon(detailTask, patch.horizonLevel)
               : patchTask(detailTask.uuid, patch))}
-            onToggleStep={stepId => handleToggleStep(detailTask, stepId)}
-            onDeleteStep={stepId => handleDeleteStep(detailTask, stepId)}
-            onAddStep={text => handleAddStep(detailTask, text)}
-            onMoreDetails={onEditTask ? () => { onEditTask(detailTask); setDetailUuid(null); } : undefined}
+            onSetSteps={(steps, meta) => handleSetSteps(detailTask, steps, meta)}
             onDone={() => leaving(detailTask, handleMarkDone)}
             onMoveToToday={() => leaving(detailTask, handleMoveToToday)}
             onTogglePin={() => handleTogglePin(detailTask)}
