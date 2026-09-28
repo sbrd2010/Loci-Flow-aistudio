@@ -154,3 +154,37 @@ test("the sheet's estimate is the stop's duration even when set to None", async 
   await expect(page.locator(".dm-stop").nth(0).locator(".dm-dur")).toHaveText("25m");
   await expect(sheet(page).getByRole("button", { name: /^Estimate/ }).locator(".detail-value")).toHaveText("25m");
 });
+
+// Codex review of #415: the sheet's Horizon picker can take the one thing
+// off Today; its focus session ends then, as Today's own move ends it.
+test("moving the one thing off Today from the sheet ends its focus session", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
+  });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.clock.install({ time: new Date("2024-06-15T11:35:00") });
+  await page.goto("/");
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  // A session on the one thing, left running.
+  const wallTitle = (await page.locator(".today-wall .wall-title").innerText()).trim();
+  await page.locator(".today-wall .wall-primary").click();
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 5_000 });
+  await overlay.getByLabel("Leave focus").click();
+  const floating = page.getByRole("button", { name: /^Return to Focus/ });
+  await expect(floating).toBeVisible();
+
+  await page.getByRole("button", { name: "Day map →" }).click();
+  await page.getByRole("button", { name: "Auto-fill" }).click();
+  await page.locator(".dm-stop .dm-main", { hasText: wallTitle }).click();
+  await sheet(page).getByRole("button", { name: /^Horizon/ }).click();
+  await sheet(page).getByRole("radio", { name: "This week" }).click();
+
+  await expect(page.locator(".dm-stop", { hasText: wallTitle })).toHaveCount(0);
+  // (The Day map hides the floating timer, so look for it back on Today.)
+  await page.locator(".dm-back").click();
+  await expect(page.getByTestId("today-tasks-list")).toBeVisible();
+  await expect(floating).toHaveCount(0);
+  await expect(page.locator(".today-wall .wall-title", { hasText: wallTitle })).toHaveCount(0);
+});

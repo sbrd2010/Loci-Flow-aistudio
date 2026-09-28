@@ -65,8 +65,20 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
       fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: horizon }, windows,
     });
     const orderIndex = latestTasks().filter(t => t.horizonLevel === horizon && isVisibleRoadmapTask(t)).length;
-    savePayloadAsync({ ...payloadRef.current, tasks: latestTasks().map(t => t.uuid === task.uuid ? { ...t, horizonLevel: horizon, orderIndex, lastUpdated: Date.now() } : t) })
-      .then(() => writeActivityEvents(eventPatch(uid, event)))
+    // Off Today, a task is no longer the one thing (from the Day map it can
+    // be): its session ends, recorded, as Today's own move does.
+    const now = Date.now();
+    const endedFocusSession = task.isNowFocus && typeof focusTimer.endFocusSession === "function"
+      ? focusTimer.endFocusSession("user_abandoned")
+      : null;
+    savePayloadAsync({ ...payloadRef.current, tasks: latestTasks().map(t => t.uuid === task.uuid ? { ...t, horizonLevel: horizon, orderIndex, isNowFocus: false, lastUpdated: now } : t) })
+      .then(() => {
+        const events = [event];
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+        }
+        writeActivityEvents(eventsPatch(uid, events));
+      })
       .catch(() => {});
   };
 
