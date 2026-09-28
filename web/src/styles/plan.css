@@ -8,6 +8,49 @@
   color: var(--ink, var(--text-primary));
 }
 
+/* — header — */
+.plan-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+.plan-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+.plan-kicker {
+  margin-top: 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+/* The design gives this button nowrap + no shrink: "New front" wrapping to two
+   lines is what breaks this header at 320px. */
+.plan-new-front {
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-height: 44px;
+  padding: 0 14px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, var(--text-primary));
+  background: transparent;
+  border: 1px solid var(--divider, var(--border));
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.plan-new-front:hover { background: var(--hover-paper, var(--bg-card-hover)); }
+
 /* — new front form — */
 .plan-new-form {
   display: flex;
@@ -67,197 +110,121 @@
   cursor: pointer;
 }
 
-/* — the fronts (45i): one card each — */
-.plan-fronts {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
+/* — the fronts — */
+.plan-fronts { margin-top: 18px; }
+
 .plan-front {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  width: 100%;
-  padding: 16px 16px 16px 16px;
-  font: inherit;
-  text-align: left;
-  color: var(--ink, var(--text-primary));
-  background: var(--surface, var(--bg-card));
-  border: 1px solid var(--line, var(--border));
-  border-radius: 12px;
-  cursor: pointer;
+  padding: 18px 0;
+  border-top: 1px solid var(--divider, var(--border));
 }
-.plan-front:hover { background: var(--hover-paper, var(--bg-card-hover)); }
-.plan-front:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.plan-front:last-child { border-bottom: 1px solid var(--divider, var(--border)); }
 /* Parked is a choice, not a failure — quieter, never struck through or hidden. */
 .plan-front.is-parked { opacity: 0.6; }
+
 .plan-front-head {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
 }
 .plan-front-name {
+  margin: 0;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 1.0625rem;
-  font-weight: 800;
+  font-family: var(--font-sans);
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.25;
 }
-.plan-front-open {
+/* Exactly one front is dominant: the one with the nearest deadline. */
+.plan-front.is-lead .plan-front-name { font-size: 17px; font-weight: 700; }
+
+.plan-front-due {
   flex-shrink: 0;
-  margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 0.6875rem;
+  font-size: 12.5px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--ink-2, var(--text-secondary));
+  letter-spacing: 0.02em;
+  color: var(--text-quiet, var(--text-muted));
 }
+/* Clay is time pressure and nothing else. */
+.plan-front-due.is-pressing { color: var(--clay, var(--warning)); }
+.plan-front-due.is-parked-tag {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  font-weight: 400;
+}
+
+/* — the single next move — */
 .plan-front-move {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 10px;
+}
+.plan-front-rule {
+  flex-shrink: 0;
+  width: 22px;
+  height: 1px;
+  margin-top: 9px;
+  background: var(--divider, var(--border));
+}
+/* A gold rule marks the front you are actually on. */
+.plan-front.is-lead .plan-front-rule { background: var(--accent); }
+.plan-front-move-text {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-soft, var(--text-secondary));
+  overflow-wrap: anywhere;
+}
+.plan-front-move-empty { color: var(--text-quiet, var(--text-muted)); font-style: italic; }
+
+/* — progress — */
+.plan-front-progress {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--ink-2, var(--text-secondary));
-}
-.plan-front-move > svg { flex-shrink: 0; margin-left: auto; }
-.plan-front-move-line {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.9375rem;
-}
-.plan-front-move-text { font-weight: 700; color: var(--ink, var(--text-primary)); }
-.plan-front-move-empty { font-style: italic; }
-
-/* "+ New front" and "+ Add to this front": accent text, a 44px target. */
-.plan-add-front {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 44px;
   margin-top: 14px;
-  padding: 0 4px;
-  font: inherit;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  color: var(--accent);
-  background: none;
-  border: 0;
-  border-radius: var(--radius-sm, 4px);
-  cursor: pointer;
 }
-.plan-add-front:disabled { opacity: 0.45; cursor: not-allowed; }
-.plan-add-front:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-/* — a front's page (52f–g) — */
-.plan-tab.is-front-page { padding-top: 8px; }
-.plan-fp {
-  max-width: 720px;
-  margin: 0 auto;
+.plan-front-track {
+  flex: 1;
+  height: 2px;
+  background: var(--divider-soft, var(--border));
+  border-radius: 1px;
+  overflow: hidden;
 }
-.plan-fp-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  margin-left: -8px;
-  padding: 0 8px;
-  font: inherit;
-  font-size: 0.9375rem;
-  font-weight: 800;
-  color: var(--ink, var(--text-primary));
-  background: none;
-  border: 0;
-  border-radius: var(--radius-sm, 4px);
-  cursor: pointer;
+.plan-front-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.18s ease-out;
 }
-.plan-fp-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.plan-fp-key { display: none; }
-.plan-fp-head {
-  display: flex;
-  align-items: flex-end;
-  gap: 16px;
-  padding: 6px 0 14px;
-  border-bottom: 1px solid var(--line, var(--border));
-}
-.plan-fp-heading { min-width: 0; flex: 1; }
-.plan-fp-name {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 12px;
-  margin: 0;
-  font-size: 1.875rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-  overflow-wrap: anywhere;
-}
-.plan-fp-name .task-tag { font-size: 0.6875rem; letter-spacing: 0.06em; }
-.plan-fp-parked {
-  padding: 1px 6px;
-  color: var(--ink-2, var(--text-secondary));
-  border: 1px solid var(--line, var(--border));
-}
-.plan-fp-stats {
-  margin: 8px 0 0;
+.plan-front-figure {
+  flex-shrink: 0;
   font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 700;
+  font-size: 11px;
   letter-spacing: 0.08em;
-  color: var(--ink-2, var(--text-secondary));
+  color: var(--text-quiet, var(--text-muted));
 }
-.plan-fp-due { color: var(--ink, var(--text-primary)); }
-/* The horizons stack in one column here, at every width. */
-.plan-front-tasks .plan-horizons { display: block; }
-.plan-front-tasks .plan-horizon { padding: 0; border: 0; background: none; }
-.plan-fp-actions { display: flex; gap: 10px; }
-.plan-fp-actions.is-inline { display: none; }
-/* Phone and tablet: a bar above the nav. */
-.plan-fp-actions.is-bar {
-  position: fixed;
-  left: 50%;
-  bottom: var(--fp-nav-h, 0px);
-  z-index: 99;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
-  box-sizing: border-box;
-  padding: 6px 16px;
-  background: var(--surface, var(--bg-card));
-  border-top: 1px solid var(--line, var(--border));
-}
-.plan-fp.has-bar { padding-bottom: 64px; }
-/* A task's Undo sits above the bar, not over it. */
-.plan-fp.has-bar .undo-toast { bottom: calc(var(--fp-nav-h, 0px) + 64px); }
-@media (min-width: 768px) {
-  .plan-fp-actions.is-bar { max-width: 720px; }
-}
-.plan-fp-actions.is-bar .plan-fp-action { flex: 1; border: 0; background: none; }
-.plan-fp-action {
+
+/* Quiet by default — a front's deadline and its next move are what this block
+   is for, and closing one is rare. It is still a 44px target. */
+.plan-front-close {
+  flex-shrink: 0;
   min-height: 44px;
-  padding: 0 16px;
-  font: inherit;
-  font-size: 0.9375rem;
-  font-weight: 800;
-  color: var(--ink, var(--text-primary));
-  background: none;
-  border: 1px solid var(--line, var(--border));
-  border-radius: 8px;
+  padding: 0 4px;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-quiet, var(--text-muted));
+  background: transparent;
+  border: 0;
   cursor: pointer;
 }
-.plan-fp-action.is-close { color: var(--ink-2, var(--text-secondary)); }
-.plan-fp-action:hover { background: var(--hover-paper, var(--bg-card-hover)); }
-.plan-fp-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media (min-width: 1024px) {
-  .plan-fp-key { display: inline-flex; }
-  .plan-fp-name { font-size: 2.125rem; }
-  .plan-fp-actions.is-inline { display: flex; flex-shrink: 0; }
-  .plan-fp-actions.is-bar { display: none; }
-  .plan-fp.has-bar { padding-bottom: 0; }
-  .plan-fp.has-bar .undo-toast { bottom: 28px; }
+.plan-front-close:hover { color: var(--clay, var(--warning)); }
+.plan-front-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* Only appears at the storage ceiling, in place of the disabled button's
@@ -278,6 +245,13 @@
   font-size: 15px;
   line-height: 1.6;
   color: var(--text-soft, var(--text-secondary));
+}
+.plan-footer {
+  margin: 22px 0 0;
+  font-family: var(--font-serif, var(--font-sans));
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-quiet, var(--text-muted));
 }
 @media (max-width: 430px) {
   .plan-tab { padding-left: 20px; padding-right: 20px; }

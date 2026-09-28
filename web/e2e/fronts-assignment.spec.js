@@ -38,9 +38,6 @@ async function addFront(page, name) {
   await expect(page.locator(".plan-front-name", { hasText: name })).toBeVisible();
 }
 
-// A front's card (45i).
-const card = (page, name) => page.locator(".plan-front", { has: page.locator(".plan-front-name", { hasText: name }) });
-
 // 52: a task is put on a front from its sheet (the "Not on a front" list is
 // gone). Opens the first This week task in Plan's Horizons, picks the front,
 // closes the sheet, and returns the task's title.
@@ -75,16 +72,16 @@ test("mobile reliability: a task can be put on a front, and the front then shows
   await openPlan(page);
   await addFront(page, "Membrane paper");
 
-  const front = card(page, "Membrane paper");
+  const front = page.locator(".plan-front", { has: page.locator(".plan-front-name", { hasText: "Membrane paper" }) });
   // A brand-new front has nothing on it.
   await expect(front.locator(".plan-front-move-empty")).toBeVisible();
-  await expect(front.locator(".plan-front-open")).toHaveText("0 OPEN");
+  await expect(front.locator(".plan-front-progress")).toHaveCount(0);
 
   const taskTitle = await putFirstWeekTaskOn(page, "Membrane paper");
 
-  // The front now derives its next move and its count from that task.
+  // The front now derives its next move and progress from that task.
   await expect(front.locator(".plan-front-move-text")).toHaveText(taskTitle);
-  await expect(front.locator(".plan-front-open")).toHaveText("1 OPEN");
+  await expect(front.locator(".plan-front-figure")).toHaveText("0/1");
 });
 
 test("mobile reliability: assignment survives leaving and re-entering Plan", async ({ page }) => {
@@ -93,7 +90,7 @@ test("mobile reliability: assignment survives leaving and re-entering Plan", asy
   await addFront(page, "Thesis chapter 3");
   const taskTitle = await putFirstWeekTaskOn(page, "Thesis chapter 3");
 
-  const front = card(page, "Thesis chapter 3");
+  const front = page.locator(".plan-front", { has: page.locator(".plan-front-name", { hasText: "Thesis chapter 3" }) });
   await expect(front.locator(".plan-front-move-text")).toHaveText(taskTitle);
 
   // Leaving Plan and coming back must not lose it — the write went to the
@@ -101,7 +98,7 @@ test("mobile reliability: assignment survives leaving and re-entering Plan", asy
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
   await openPlan(page);
   await expect(front.locator(".plan-front-move-text")).toHaveText(taskTitle);
-  await expect(front.locator(".plan-front-open")).toHaveText("1 OPEN");
+  await expect(front.locator(".plan-front-figure")).toHaveText("0/1");
 });
 
 test("mobile reliability: the sheet's Front picker offers exactly the fronts the screen shows", async ({ page }) => {
@@ -147,7 +144,8 @@ test("mobile reliability: the task editor shows a task's front and can change it
   await page.getByTestId("add-task-submit").click();
 
   await page.getByRole("tab", { name: "Fronts" }).click();
-  await expect(card(page, "Grant proposal").locator(".plan-front-move-empty")).toBeVisible({ timeout: 5_000 });
+  const front = page.locator(".plan-front", { has: page.locator(".plan-front-name", { hasText: "Grant proposal" }) });
+  await expect(front.locator(".plan-front-move-empty")).toBeVisible({ timeout: 5_000 });
   expect(await frontOfTask(page, taskTitle)).toBe("None");
 });
 
@@ -157,30 +155,31 @@ test("mobile reliability: a front can be closed, and its tasks are left with no 
   await addFront(page, "Temporary front");
   const taskTitle = await putFirstWeekTaskOn(page, "Temporary front");
 
-  // Closing is on the front's page (52f), and is undone, not confirmed.
-  await card(page, "Temporary front").click();
-  await page.getByRole("button", { name: "Close front" }).click();
-  await expect(page.getByRole("button", { name: "Back to Fronts" })).toHaveCount(0);
-  await expect(page.locator(".undo-toast")).toContainText("Closed: Temporary front");
+  const front = page.locator(".plan-front", { has: page.locator(".plan-front-name", { hasText: "Temporary front" }) });
+  await front.getByRole("button", { name: /Close the front Temporary front/ }).click();
+
+  // Destructive, so it asks — and cancelling really cancels.
+  await page.getByRole("button", { name: "Keep it" }).click();
+  await expect(front).toHaveCount(1);
+
+  await front.getByRole("button", { name: /Close the front Temporary front/ }).click();
+  // exact, or it also matches the trigger's aria-label "Close the front <name>".
+  await page.getByRole("button", { name: "Close the front", exact: true }).click();
 
   await expect(page.locator(".plan-front-name", { hasText: "Temporary front" })).toHaveCount(0);
   // The task is still in Plan, on no front — not lost with the front.
   expect(await frontOfTask(page, taskTitle)).toBe("None");
 });
 
-test("mobile reliability: the projected Key Deadline front offers no Park or Close", async ({ page }) => {
+test("mobile reliability: the projected Key Deadline front offers no Close button", async ({ page }) => {
   await enterDemo(page);
   await openPlan(page);
 
-  // It is derived from the deadline in Settings rather than stored, so there
-  // is nothing for either button to change.
-  await card(page, "Project launch").click();
-  await expect(page.getByRole("button", { name: "Back to Fronts" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Close front" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Park front" })).toHaveCount(0);
+  // It is derived from the deadline in Settings rather than stored, so there is
+  // nothing for a Close button here to remove.
+  const closeButtons = page.locator(".plan-front-close");
+  await expect(closeButtons).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Back to Fronts" }).click();
   await addFront(page, "A real front");
-  await card(page, "A real front").click();
-  await expect(page.getByRole("button", { name: "Close front" })).toBeVisible();
+  await expect(page.locator(".plan-front-close")).toHaveCount(1);
 });

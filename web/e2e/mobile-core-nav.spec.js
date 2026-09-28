@@ -61,10 +61,9 @@ for (const viewport of MOBILE_VIEWPORTS) {
     await expect(page.getByTestId("today-tasks-list")).toBeVisible({ timeout: 8_000 });
     await expectNoHorizontalOverflow(page);
 
-    // Plan opens on Horizons (45h); Fronts is the other view (45i). Both need
-    // the overflow guard — a front card puts its name, GOAL and "N OPEN" on
-    // one line, which is exactly the kind of thing that overflows at 320px.
-    // So does a front's page (52f), with its title and Park / Close bar.
+    // Plan opens on Horizons (45h); Fronts is the other view. Both need the
+    // overflow guard — the fronts header puts a title and a "New front" button
+    // on one row, which is exactly the kind of thing that overflows at 320px.
     await openTab(page, "Plan");
     await expect(page.getByRole("heading", { name: "Plan", level: 1 })).toBeVisible({ timeout: 8_000 });
     await expect(page.locator(".plan-horizons")).toBeVisible({ timeout: 8_000 });
@@ -72,10 +71,7 @@ for (const viewport of MOBILE_VIEWPORTS) {
 
     await page.getByRole("tab", { name: "Fronts" }).click();
     await expect(page.locator(".plan-tab")).toBeVisible({ timeout: 8_000 });
-    await expect(page.locator(".plan-front").first()).toBeVisible({ timeout: 8_000 });
-    await expectNoHorizontalOverflow(page);
-    await page.locator(".plan-front").first().click();
-    await expect(page.getByRole("button", { name: "Back to Fronts" })).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText("ONE NEXT MOVE EACH")).toBeVisible({ timeout: 8_000 });
     await expectNoHorizontalOverflow(page);
 
     await openTab(page, "Mind Box");

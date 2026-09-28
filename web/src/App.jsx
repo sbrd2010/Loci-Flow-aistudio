@@ -58,7 +58,6 @@ export default function App() {
   const [preselectedHorizon, setPreselectedHorizon] = useState("today");
   // Where + was tapped ("Today", "Plan · Quarter"), for Add task's note (45a).
   const [addOpenedFrom, setAddOpenedFrom] = useState(null);
-  const [preselectedFrontId, setPreselectedFrontId] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
   // "light" | "dark" | "auto" — see utils/theme.js.
   const [theme, setTheme] = useState(() => {
@@ -68,8 +67,6 @@ export default function App() {
   });
   // Plan opens on Horizons (45h); "plan" is its Fronts view.
   const [roadmapView, setRoadmapView] = useState("horizons");
-  // The front whose page (52f–g) is open in Plan's Fronts; null is the list.
-  const [planFrontId, setPlanFrontId] = useState(null);
   const [planFocusInbox, setPlanFocusInbox] = useState(false);
   // Feeling scattered has three doors (Today, Day map, Plan); its back link
   // returns through the one it came in by.
@@ -979,7 +976,7 @@ export default function App() {
     // Leaving the Day map by a tab saves its pending edits, as its Back does.
     if (activeTab === "daymap") flushNow();
     if (tab === "mindbox") setMindBoxInitialPanel(null);
-    if (tab === "roadmap") { setRoadmapView("horizons"); setPlanFocusInbox(false); setPlanFrontId(null); }
+    if (tab === "roadmap") { setRoadmapView("horizons"); setPlanFocusInbox(false); }
     setActiveTab(tab);
   };
 
@@ -1030,10 +1027,9 @@ export default function App() {
     signOut(auth).then(() => { setUser(null); setActiveTab("today"); });
   };
 
-  const openAddTask = (horizon = "today", from = null, frontId = null) => {
+  const openAddTask = (horizon = "today", from = null) => {
     setEditingTask(null);
     setPreselectedHorizon(horizon);
-    setPreselectedFrontId(frontId);
     setAddOpenedFrom(from);
     setShowAddTask(true);
   };
@@ -1304,29 +1300,14 @@ export default function App() {
             flushNow={flushNow}
           />
         )}
-        {activeTab === "roadmap" && (roadmapView === "horizons" || (roadmapView === "plan" && !planFrontId)) && (
-          <PlanHeader view={roadmapView} onChange={v => { setPlanFrontId(null); setRoadmapView(v); }} />
+        {activeTab === "roadmap" && (roadmapView === "plan" || roadmapView === "horizons") && (
+          <PlanHeader view={roadmapView} onChange={setRoadmapView} />
         )}
         {activeTab === "roadmap" && roadmapView === "plan" && (
-          <div role={planFrontId ? undefined : "tabpanel"} aria-labelledby={planFrontId ? undefined : "plan-tab-plan"}>
+          <div role="tabpanel" aria-labelledby="plan-tab-plan">
             <PlanTab
               payload={payload}
               saveConfigPatch={saveConfigPatch}
-              openFrontId={planFrontId}
-              onOpenFront={setPlanFrontId}
-              onAddToFront={front => openAddTask("week", `Plan · ${front.name}`, front.id)}
-              renderFrontTasks={front => (
-                <RoadmapTab
-                  frontId={front.id}
-                  payload={payload}
-                  savePayload={savePayload}
-                  savePayloadAsync={savePayloadAsync}
-                  onEditTask={(task) => { setEditingTask(task); setShowAddTask(true); }}
-                  uid={activityUid}
-                  writeActivityEvents={writeActivityEvents}
-                  focusTimer={focusTimer}
-                />
-              )}
             />
           </div>
         )}
@@ -1474,7 +1455,6 @@ export default function App() {
           savePayloadAsync={savePayloadAsync}
           userProfile={userProfile}
           defaultHorizon={preselectedHorizon}
-          defaultFrontId={editingTask ? null : preselectedFrontId}
           openedFrom={editingTask ? null : addOpenedFrom}
           editTask={editingTask}
           onClose={() => { setShowAddTask(false); setEditingTask(null); }}
