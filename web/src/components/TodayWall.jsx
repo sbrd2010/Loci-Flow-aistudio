@@ -464,7 +464,8 @@ export default function TodayWall({
           {onAdd && (
             <button type="button" className="wall-peek-add" onClick={onAdd} aria-label="Add a task to Today">
               <IconPlus size={20} />
-              <span className="wall-tip" role="presentation" aria-hidden="true">Add a task <kbd className="wall-key">N</kbd></span>
+              {/* The bottom bar's words (54a/c), from 1024px with the list hidden. */}
+              <span className="wall-peek-add-label" aria-hidden="true">Add a task <kbd className="wall-key">N</kbd></span>
             </button>
           )}
         </div>

@@ -141,6 +141,17 @@
   font-size: 0.875rem;
   color: var(--ink-2);
 }
+.today-list-empty-link {
+  min-height: 44px;
+  padding: 0;
+  font: inherit;
+  font-weight: 800;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.today-list-empty-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .today-list-head button:focus-visible,
 .today-seg-opt:focus-visible,
