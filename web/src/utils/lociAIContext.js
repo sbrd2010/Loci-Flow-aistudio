@@ -2,6 +2,7 @@ import { getValidCommittedTaskIds, REFLECTION_MOODS } from "./dailyCoachCheckins
 import { buildDeadlineProgressMirror } from "./deadlineProgressMirror";
 import { formatMinutesToTime, getFocusWindows, getLociDayStr } from "./focusWindows";
 import { isDeferred } from "./deferral";
+import { isEventTask } from "./dayMapRoute";
 
 // "tomorrow" is not a horizon: it is Today's tasks moved to tomorrow
 // (deferral.js), listed apart so the Coach neither loses them nor offers
@@ -77,9 +78,11 @@ export function buildLociTaskContext(allTasks = [], date = new Date(), windows =
     lines.push(`${HORIZON_LABELS[horizon]} (${horizonTasks.length}):`);
     horizonTasks.slice(0, cap).forEach(task => {
       const focus = task.isNowFocus ? " [NOW FOCUS]" : "";
+      // Q36.3: a call or meeting at a set time is never suggested as work.
+      const event = isEventTask(task) ? ` [SET-TIME EVENT ${formatMinutesToTime(task.dayMapFixedMinutes)}: not focus work, never suggest it]` : "";
       const estimate = task.timeEstimateMinutes ? ` (${task.timeEstimateMinutes}min)` : "";
       const category = ` {${task.category || "Personal"}}`;
-      lines.push(`  - [${task.priority || "P3"}]${focus} ${task.title}${estimate}${category}`);
+      lines.push(`  - [${task.priority || "P3"}]${focus}${event} ${task.title}${estimate}${category}`);
     });
     if (horizonTasks.length > cap) lines.push(`  ... +${horizonTasks.length - cap} more`);
   }
@@ -489,7 +492,10 @@ export function buildLociTodaySnapshotContext(allTasks = [], { dayStr, focusTime
     : `TODAY SNAPSHOT (live — Today's tasks, with their id and status):`];
   if (open.length === 0 && done.length === 0) lines.push("- Nothing on Today yet.");
   for (const t of openCap.shown) {
-    lines.push(`- #${shortId(t)} [open${t.isNowFocus ? " · NOW FOCUS" : ""}] [${t.priority || "P3"}] ${snapshotTitle(t.title)}`);
+    // Q36.3: the shortened Coach modes read this, not the task list — mark
+    // set-time events here too (Codex review of #431).
+    const event = isEventTask(t) ? ` · SET-TIME EVENT ${formatMinutesToTime(t.dayMapFixedMinutes)}, not focus work, never suggest it` : "";
+    lines.push(`- #${shortId(t)} [open${t.isNowFocus ? " · NOW FOCUS" : ""}${event}] [${t.priority || "P3"}] ${snapshotTitle(t.title)}`);
   }
   if (openCap.omitted > 0) lines.push(`- +${openCap.omitted} more open on Today, not listed (capped).`);
   for (const t of doneCap.shown) {

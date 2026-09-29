@@ -28,13 +28,15 @@ function parseClock(text) {
 
 export default function FixTimeSheet({
   routeTasks, unscheduledTasks, stops, task: initialTask, from, breaks, nowMins, dayStart, dayEnd, durationOf, getTaskId, onFix, onClose, newBlocked = false,
-  breakDefault, laterAt, busy = [], breakItem = null, onBreak, onRemoveBreak,
+  breakDefault, laterAt, busy = [], breakItem = null, onBreak, onRemoveBreak, onTomorrow,
 }) {
   const [task, setTask] = useState(initialTask || null);
   const [draft, setDraft] = useState(null); // { title, minutes } for something new
   const [brk, setBrk] = useState(breakItem ? { minutes: breakItem.lengthMin } : null); // { minutes } for a break
   const projected = initialTask ? routeTasks.find(t => getTaskId(t) === getTaskId(initialTask))?.dayMapStartMinutes : undefined;
-  const [at, setAt] = useState(() => (breakItem ? breakItem.start : defaultFixTime(initialTask?.dayMapFixedMinutes ?? projected, nowMins)));
+  // Moving something whose time has passed ("Did it happen?" → Move, Q36a)
+  // starts from now, not from the time it missed.
+  const [at, setAt] = useState(() => (breakItem ? breakItem.start : onTomorrow ? defaultFixTime(undefined, nowMins) : defaultFixTime(initialTask?.dayMapFixedMinutes ?? projected, nowMins)));
   const [typed, setTyped] = useState(null);
   const [page, setPage] = useState(0);
   const timeRef = useRef(null);
@@ -87,7 +89,7 @@ export default function FixTimeSheet({
         <div className="fx-head">
           <div>
             <h2 className="fx-title">{title}</h2>
-            <p className="fx-sub">{step === "choose" ? "Choose what happens at a set time." : task ? "It stays at this time; the rest of the route flows around it." : brk ? "On today’s route only; what comes after it moves." : "A fixed stop that isn’t on your list yet."}</p>
+            <p className="fx-sub">{step === "choose" ? "Choose what happens at a set time." : task && onTomorrow ? "A new time today, or tomorrow." : task ? "It stays at this time; the rest of the route flows around it." : brk ? "On today’s route only; what comes after it moves." : "A fixed stop that isn’t on your list yet."}</p>
           </div>
           <button type="button" className="dm-sheet-close" onClick={onClose} aria-label="Close" autoFocus={step === "choose"}>
             <IconX size={20} />
@@ -215,6 +217,7 @@ export default function FixTimeSheet({
                 {brk ? (breakItem ? `Save · ${toClock(fitted.start)}` : `Add break at ${toClock(fitted.start)}`) : <><IconLock size={16} /> Fix at {toClock(at)}</>}
               </button>
               {breakItem && <button type="button" className="fx-back" onClick={() => onRemoveBreak(breakItem.index)}>Remove</button>}
+              {task && onTomorrow && <button type="button" className="fx-back" onClick={onTomorrow}>Tomorrow</button>}
               <button type="button" className="fx-back" onClick={back}>{breakItem ? "Cancel" : "Back"}</button>
             </div>
           </div>

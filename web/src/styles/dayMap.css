@@ -869,3 +869,20 @@
 .dm-pool-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
 .dm-pool-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .dm-pool-toggle svg { transition: none; } }
+
+/* Q36.3: a call still open 5 minutes after it ended asks. */
+.dm-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px 64px;
+}
+.dm-ask-text { font-size: 0.875rem; font-weight: 700; color: var(--ink); }
+.tdm-ask {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink);
+}

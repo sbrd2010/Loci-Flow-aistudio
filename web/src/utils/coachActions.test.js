@@ -752,6 +752,19 @@ describe("applyCoachActions", () => {
     expect(results).toEqual([{ type: "SET_NOW_FOCUS", title: "Email client", matched: true, task: next.tasks.find(t => t.uuid === "2") }]);
   });
 
+  it("SET_NOW_FOCUS never pins something at a set time, and says why (Q36.3)", () => {
+    const payload = {
+      tasks: [{ uuid: "1", title: "Call with the recruiter", fixedKind: "event", dayMapFixedMinutes: 750, isNowFocus: false, isCompleted: false, isDeleted: false, isParked: false }],
+      config: {},
+      contributions: [],
+    };
+    const { payload: next, results } = applyCoachActions(payload, [{ type: "SET_NOW_FOCUS", title: "Call with the recruiter" }], { ...dateOpts, lastUserMessage: "Let's focus on the call with the recruiter." });
+    expect(next.tasks[0].isNowFocus).toBe(false);
+    expect(results[0]).toMatchObject({ matched: false, eventBlocked: true });
+    expect(buildActionReplyText("Okay.", results, "Let's focus on the call with the recruiter.")).toContain(
+      "\"Call with the recruiter\" is at a set time, so it isn't a focus session");
+  });
+
   it("COMPLETE_TASK marks the task done, leaves config alone, and increments today's contribution", () => {
     const payload = {
       userId: "user-1",

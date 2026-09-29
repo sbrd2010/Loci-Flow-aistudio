@@ -11,6 +11,7 @@ import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import { buildTaskMutationEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import { isOnToday } from "../utils/deferral";
+import { isEventTask } from "../utils/dayMapRoute";
 
 function IconTrendingUp() {
   return (
@@ -211,7 +212,8 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
   // ── Handlers ───────────────────────────────────────────────────────────────
   const openRescueMode = () => {
     const pinned = tasks.find(t => !t.isDeleted && !t.isCompleted && t.isNowFocus);
-    const first = tasks.find(t => !t.isDeleted && !t.isCompleted);
+    // Q36.3: a call at a set time is never Rescue's one task.
+    const first = tasks.find(t => !t.isDeleted && !t.isCompleted && !isEventTask(t));
     setRescueTask(pinned || first || null);
     setRescueActive(true);
   };
@@ -219,7 +221,8 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
 
   const setRescueTaskAsNowFocus = ({ close = false } = {}) => {
     if (close) setRescueActive(false);
-    if (!rescueTask) return;
+    // Q36.3: something at a set time is never the focus (Codex review of #431).
+    if (!rescueTask || isEventTask(rescueTask)) return;
     const now = Date.now();
     // Retargeting focus to rescueTask clears isNowFocus on whichever task
     // currently holds it — end that task's open session first, or it's left
