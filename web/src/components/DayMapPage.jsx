@@ -23,13 +23,15 @@ import { mergeWindowSpans } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
 import {
   applyReflow, currentDayMinutes, getEstimate, getTaskId,
-  normalizePriority, reflowRoute, removeScheduleFields, roundToQuarter, routeIsContiguous, useDayRoute,
+  normalizePriority, reflowRoute, removeScheduleFields, routeIsContiguous, useDayRoute,
 } from "../hooks/useDayRoute";
 import { isFixedStop } from "../utils/dayMapRoute";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { safeUUID } from "../utils/uuid";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import DayBar from "./DayBar";
+import MinimumDay from "./MinimumDay";
+import { confirmMinimumDay, minimumDay } from "../utils/minimumDay";
 import DayMapFrom from "./DayMapFrom";
 import LinkifyText from "./LinkifyText";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
@@ -54,7 +56,7 @@ import "../styles/dayMap.css";
 // `row` is the stop as the route engine laid it out (utils/dayMapRoute): its
 // start and end, and whether it is fixed, late, pulled forward, or stops for
 // a break. A fixed stop keeps its time, so it is not dragged.
-function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus, until = null, was = null, flash = false }) {
+function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus, until = null, min = null, was = null, flash = false }) {
   const taskId = getTaskId(task);
   const {
     attributes, listeners, setActivatorNodeRef,
@@ -67,7 +69,7 @@ function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFo
   const label = `${isNow || row.late ? "Now" : formatClock24(start)} to ${formatClock24(end)}, ${task.title}, Priority ${p.slice(1)}`
     + (row.fixed ? ", fixed time" : "") + (row.pulledForward ? ", pulled forward" : "")
     + (row.continues ? ", continues after the break" : "")
-    + (isGoal ? ", goal task" : "") + (isOver ? ", after the day ends" : "");
+    + (isGoal ? ", goal task" : "") + (min === "confirmed" ? ", minimum day" : "") + (isOver ? ", after the day ends" : "");
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -111,6 +113,9 @@ function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFo
           {/* 58e: a stop a fixed time moved says where it was, until you leave. */}
           {was != null && <span className="dm-pulled">WAS {formatClock24(was)}</span>}
           {isGoal && <span className="task-tag is-goal">GOAL</span>}
+          {/* Q33.1: a dotted MIN while the minimum day is suggested; the
+              green one once it's confirmed. */}
+          {min && <span className={`task-tag is-min${min === "suggested" ? " is-suggested" : ""}`}>MIN</span>}
         </span>
         <span className="dm-dur">{formatSpan(end - start)}</span>
         {/* 56a: the one thing, at NOW, until the end of its stop. */}
@@ -192,6 +197,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   }, [flashId]);
   // Phone (52d): Unscheduled is a bar that opens this sheet.
   const [poolOpen, setPoolOpen] = useState(false);
+  // Laptop (57b answer 1): Unscheduled is a row that opens in place — open
+  // while the route is empty, folded once it has stops, unless you choose.
+  const [poolShown, setPoolShown] = useState(null);
   // "Done so far today" (56a–c): open on a monitor, folded below 1600px.
   const [doneOpen, setDoneOpen] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1600);
   const [dragTitle, setDragTitle] = useState(null);
@@ -462,6 +470,26 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const cut = plan.overIndex === -1 ? rows.length
     : rows.findIndex(r => r.kind === "stop" && routeIndex.get(getTaskId(r.task)) >= plan.overIndex);
   const rowIsOver = (r) => rows.indexOf(r) >= cut;
+  // Minimum day (56a–b): today's open tasks in the order they come — the
+  // route as it shows, then the rest.
+  const openToday = [
+    ...routeTasks.map(t => scheduledTasks.find(s => getTaskId(s) === getTaskId(t))).filter(Boolean),
+    ...unscheduledTasks,
+  ];
+  const minDay = minimumDay({ config: routeConfig, todayStr, ordered: openToday, isGoal });
+  const minIds = new Set(minDay.ids);
+  const timeOf = (id) => {
+    const r = rows.find(x => x.kind === "stop" && getTaskId(x.task) === id);
+    if (!r) return "";
+    return r === firstOnTime && r.start <= nowMins + 15 ? "NOW" : formatClock24(r.start);
+  };
+  const confirmMin = (ids) => {
+    const p = payloadRef.current;
+    savePayload({ ...p, config: confirmMinimumDay(p?.config || {}, todayStr, ids), timestamp: Date.now() });
+  };
+  // 56a–b: "Over by 40m. Two tasks won't fit." beside an outlined Move.
+  const NUMBER_WORDS = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
+  const wontFitCount = plan.wontFit.length;
   const renderRow = (r) => {
     if (r.kind === "break") {
       return (
@@ -512,6 +540,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         task={task}
         row={r}
         isNow={isNowRow}
+        min={minIds.has(id) ? minDay.state : null}
         until={isNowRow && task.isNowFocus ? routeTasks.find(t => getTaskId(t) === id)?.routeEndMinutes ?? null : null}
         isOver={rowIsOver(r)}
         isGoal={isGoal(task)}
@@ -538,7 +567,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     // A fixed stop keeps its own time: the head is the first stop that flows.
     const flowing = scheduledTasks.filter(t => !isFixedStop(t) && t.dayMapStartMinutes != null);
     const first = flowing.length ? Math.min(...flowing.map(t => Number(t.dayMapStartMinutes))) : null;
-    const headGap = !fromSet && first != null && first > roundToQuarter(start);
+    const headGap = !fromSet && first != null && first > start;
     if (!pending && !headGap && routeIsContiguous(scheduledTasks, breaks)) return;
     pendingReflowRef.current = null;
     const prefer = pending?.prefer ?? null;
@@ -592,9 +621,22 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     return () => window.removeEventListener("resize", update);
   }, []);
 
+  // 52d–e / 56a–b: From · Auto-fill · Fixed time · Clear route. Above the
+  // route on a phone; in the right column from 1024px.
+  const controls = (
+            <div className="dm-controls">
+      <DayMapFrom anchorMinutes={anchorMinutes} onChangeAnchor={setAnchor} windows={windows} />
+      <button type="button" className="dm-text-btn" onClick={autoFill} disabled={!unscheduledTasks.length}>Auto-fill</button>
+      <button type="button" className="dm-text-btn" onClick={() => setFixing({})}>Fixed time</button>
+      {/* 56a–b label it "Clear"; its name stays "Clear route". */}
+      <button type="button" className="dm-text-btn" onClick={clearRoute} disabled={!scheduledTasks.length} aria-label="Clear route">Clear</button>
+    </div>
+  );
+
   const poolRows = (
     <ul className="dm-pool-list">
-      {unscheduledTasks.map(t => <PoolRow key={getTaskId(t)} task={t} onAdd={addToRoute} draggable />)}
+      {/* Adding from the open row keeps it open: the next + is where it was. */}
+      {unscheduledTasks.map(t => <PoolRow key={getTaskId(t)} task={t} onAdd={(id) => { setPoolShown(true); addToRoute(id); }} draggable />)}
     </ul>
   );
 
@@ -741,12 +783,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
               <DayBar bar={bar} now={nowMins} doneMinutes={doneMinutes} plannedMinutes={barPlanned} overBy={barOverBy} />
             )}
             {/* 52d–e: From · Auto-fill · Clear route, as text, above the route. */}
-            <div className="dm-controls">
-              <DayMapFrom anchorMinutes={anchorMinutes} onChangeAnchor={setAnchor} windows={windows} />
-              <button type="button" className="dm-text-btn" onClick={autoFill} disabled={!unscheduledTasks.length}>Auto-fill</button>
-              <button type="button" className="dm-text-btn" onClick={() => setFixing({})}>Fixed time</button>
-              <button type="button" className="dm-text-btn" onClick={clearRoute} disabled={!scheduledTasks.length}>Clear route</button>
-            </div>
+            {!drawerViewport && controls}
 
             <RouteDrop>
               {doneFold}
@@ -766,6 +803,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
               {tomorrowTasks.length > 0 && (
                 <p className="dm-tomorrow-note">{tomorrowTasks.length} {tomorrowTasks.length === 1 ? "task now starts" : "tasks now start"} tomorrow.</p>
               )}
+              {!drawerViewport && openToday.length > 0 && (
+                <MinimumDay state={minDay.state} ids={minDay.ids} tasks={openToday} timeOf={timeOf} onConfirm={confirmMin} />
+              )}
               {(isOver || plan.overBy > 0) && onHelpChoose && (
                 <button type="button" className="dm-text-btn is-alert dm-help" onClick={onHelpChoose}>Help me choose</button>
               )}
@@ -774,17 +814,39 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
             {/* The action, then the pool: a card on a laptop (52e); on a
                 phone a bar above the action that opens a sheet (52d). */}
             <div className="dm-side" style={navHeight ? { "--dm-nav-h": `${navHeight}px` } : undefined}>
-              {movable.length > 0 && (
-                <button type="button" className="dm-move" onClick={moveOverToTomorrow}>Move {movable.length} to tomorrow</button>
+              {drawerViewport && openToday.length > 0 && (
+                <MinimumDay state={minDay.state} ids={minDay.ids} tasks={openToday} timeOf={timeOf} onConfirm={confirmMin} />
               )}
-              <section className="dm-pool" aria-labelledby="dm-pool-title">
-                <div className="dm-pool-head">
-                  <h2 className="dm-pool-name" id="dm-pool-title">Unscheduled <span className="dm-pool-count">{unscheduledTasks.length}</span></h2>
-                  {unscheduledTasks.length > 0 && <span className="dm-pool-hint" aria-hidden="true">+ OR DRAG IN</span>}
+              {drawerViewport && controls}
+              {movable.length > 0 && (drawerViewport ? (
+                <div className="dm-over">
+                  <p className="dm-over-text">
+                    <strong>Over by {formatSpan(plan.overBy)}.</strong>{" "}
+                    {wontFitCount <= 10 ? NUMBER_WORDS[wontFitCount] : wontFitCount} {wontFitCount === 1 ? "task won’t" : "tasks won’t"} fit.
+                  </p>
+                  <button type="button" className="dm-btn-outline" onClick={moveOverToTomorrow}>Move {movable.length} to tomorrow</button>
                 </div>
-                {unscheduledTasks.length > 0
-                  ? poolRows
-                  : <p className="dm-pool-empty">All of today’s tasks are on the route.</p>}
+              ) : (
+                <button type="button" className="dm-move" onClick={moveOverToTomorrow}>Move {movable.length} to tomorrow</button>
+              ))}
+              <section className="dm-pool" aria-labelledby="dm-pool-title">
+                <h2 className="dm-pool-name" id="dm-pool-title">
+                  <button
+                    type="button"
+                    className="dm-pool-toggle"
+                    aria-expanded={poolShown ?? !scheduledTasks.length}
+                    onClick={() => setPoolShown(!(poolShown ?? !scheduledTasks.length))}
+                  >
+                    Unscheduled <span className="dm-pool-count">{unscheduledTasks.length}</span>
+                    <IconChevronDown size={18} />
+                  </button>
+                </h2>
+                {(poolShown ?? !scheduledTasks.length) && (unscheduledTasks.length > 0 ? (
+                  <>
+                    <span className="dm-pool-hint" aria-hidden="true">+ OR DRAG IN</span>
+                    {poolRows}
+                  </>
+                ) : <p className="dm-pool-empty">All of today’s tasks are on the route.</p>)}
               </section>
               <button
                 type="button"
@@ -844,7 +906,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           unscheduledTasks={unscheduledTasks}
           stops={scheduledTasks}
           task={fixing.task}
-          from={roundToQuarter(anchorMinutes)}
+          from={anchorMinutes}
           breaks={breaks}
           nowMins={nowMins}
           dayStart={mergeWindowSpans(windows)[0]?.[0] ?? 0}

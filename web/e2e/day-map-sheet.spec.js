@@ -112,8 +112,8 @@ test("the sheet's estimate is the stop's duration, and the route is timed again"
   await expect(page.locator(".dm-stop").nth(0).locator(".dm-dur")).toHaveText("1h");
   const [first, second] = await times(page);
   expect(first).toBe("NOW");
-  // 11:35 rounds to 11:45; an hour, then the 5-minute gap.
-  expect(second).toBe("12:50");
+  // From 11:35 exactly; an hour, then the 5-minute gap on a 5-minute mark.
+  expect(second).toBe("12:40");
 });
 
 // Codex review of #415: Done (and Park, Delete) from the sheet times the
@@ -219,6 +219,8 @@ test("a stop moved off Today and back waits in Unscheduled, not in its old slot"
   await page.getByRole("button", { name: "Day map →" }).click();
 
   await expect.poll(() => titles(page)).toEqual([before[0], before[2]]);
+  // Unscheduled is a row, folded while the route has stops (57b answer 1).
+  await page.locator(".dm-pool-toggle").click();
   await expect(page.locator(".dm-pool .dm-pool-list")).toContainText(before[1]);
 });
 

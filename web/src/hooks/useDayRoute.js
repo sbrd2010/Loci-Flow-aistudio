@@ -18,7 +18,6 @@ export const PERIOD_LABELS = { morning: "Morning", afternoon: "Afternoon", eveni
 export function getTaskId(task) { return String(task.uuid || task.id); }
 export function normalizePriority(p) { return String(p || "P3").toUpperCase(); }
 export function clamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
-export function roundToQuarter(m) { return Math.ceil(m / 15) * 15; }
 
 // "Now" on the Loci day's clock: past midnight in a window that runs on (to
 // 02:00, say), 00:30 is 1470, not 30 — the same scale as the route's times.
@@ -55,7 +54,7 @@ export function removeScheduleFields(task) {
 // buffers) and stores each stop's start; the order stays the user's. Period
 // is derived from the start time, never stored alone.
 export function reflowRoute(orderedTasks, anchorMinutes, todayStr, breaks = []) {
-  const starts = layoutStarts(layoutRoute(orderedTasks, { from: roundToQuarter(anchorMinutes), breaks, durationOf: getEstimate }));
+  const starts = layoutStarts(layoutRoute(orderedTasks, { from: anchorMinutes, breaks, durationOf: getEstimate }));
   return orderedTasks.map((task, index) => {
     const duration = getEstimate(task);
     const start = starts.get(task);
@@ -186,7 +185,7 @@ export function useDayRoute({ payload, savePayload }) {
   // split by a break ends after it).
   const { rows, routeTasks } = useMemo(() => {
     const laid = layoutRoute(scheduledTasks, {
-      from: roundToQuarter(anchorMinutes), breaks, now: currentDayMinutes(windows), durationOf: getEstimate,
+      from: anchorMinutes, breaks, now: currentDayMinutes(windows), durationOf: getEstimate,
     });
     const byTask = new Map();
     for (const r of laid) {
@@ -198,7 +197,7 @@ export function useDayRoute({ payload, savePayload }) {
   }, [scheduledTasks, anchorMinutes, breaks, windows]);
 
   const plan = useMemo(() => (
-    planDay(routeTasks, roundToQuarter(anchorMinutes), dayLeftFrom(roundToQuarter(anchorMinutes), new Date(), windows))
+    planDay(routeTasks, anchorMinutes, dayLeftFrom(anchorMinutes, new Date(), windows))
   ), [routeTasks, anchorMinutes, windows]);
 
   // The same GOAL rule as Today's rows: the front the wall's kicker names.

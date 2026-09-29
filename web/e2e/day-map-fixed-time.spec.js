@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 // Fixed time (58c–e). Demo mode at 11:35: Auto-fill lays three 25-minute
-// stops from 11:45 (11:45, 12:15, 12:45). Nothing reaches Firebase.
+// stops from 11:35 (11:35, 12:05, 12:35). Nothing reaches Firebase.
 
 async function openDayMap(page, viewport = { width: 1280, height: 800 }) {
   await page.setViewportSize(viewport);
@@ -26,35 +26,36 @@ test("Something else, fixed at 12:30: the route flows around it, moved stops say
   const dialog = page.getByRole("dialog", { name: "Fix a time" });
   // Step 1: today's route, with each stop's time and length.
   await expect(dialog.locator(".fx-option")).toHaveCount(3);
-  await expect(dialog.locator(".fx-option").first()).toContainText("11:45 · 25m");
+  await expect(dialog.locator(".fx-option").first()).toContainText("11:35 · 25m");
   await dialog.getByRole("button", { name: /Something else/ }).click();
 
   // Step 2: what, how long, and when; the sentence says what moves first.
   const step2 = page.getByRole("dialog", { name: /^Fix a time: Something else/ });
   await step2.getByRole("textbox", { name: "What" }).fill("Call with the recruiter");
-  await step2.getByRole("radio", { name: "12:30" }).click();
-  await expect(step2.getByRole("radio", { name: "12:30" })).toHaveAttribute("aria-checked", "true");
+  await step2.getByRole("radio", { name: "12:00" }).click();
+  await expect(step2.getByRole("radio", { name: "12:00" })).toHaveAttribute("aria-checked", "true");
   await expect(step2.locator(".fx-moves-text")).toHaveText(
-    `${titles[0]} (11:45–12:10) still fits before it. ${titles[1]} moves from 12:15 to 13:05, after it; 1 more stop moves too. Your day now ends at 14:00.`);
-  await step2.getByRole("button", { name: "Fix at 12:30" }).click();
+    `${titles[0]} (11:35–12:00) still fits before it. ${titles[1]} moves from 12:05 to 12:35, after it; 1 more stop moves too. Your day now ends at 13:30.`);
+  await step2.getByRole("button", { name: "Fix at 12:00" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
-  // The route: the call keeps 12:30 behind a lock, what it moved says WAS.
+  // The route: the call keeps 12:00 behind a lock, what it moved says WAS.
   const call = route(page).locator(".dm-stop", { hasText: "Call with the recruiter" });
-  await expect(call.locator(".dm-time")).toHaveText("12:30");
+  await expect(call.locator(".dm-time")).toHaveText("12:00");
   await expect(call.locator(".dm-main")).toHaveAttribute("aria-label", /, fixed time/);
-  await expect(route(page).locator(".dm-free")).toHaveText(/12:15\s*free 15m/);
-  expect(await times(page)).toEqual(["NOW", "12:30", "13:05", "13:35"]);
-  await expect(route(page).locator(".dm-stop", { hasText: titles[1] })).toContainText("WAS 12:15");
-  await expect(route(page).locator(".dm-stop", { hasText: titles[2] })).toContainText("WAS 12:45");
-  await expect(page.locator(".undo-toast")).toContainText("Call with the recruiter fixed at 12:30 · 2 stops moved");
+  // The first stop ends at 12:00, as the call starts: no buffer, no gap (Q35).
+  await expect(route(page).locator(".dm-free")).toHaveCount(0);
+  expect(await times(page)).toEqual(["NOW", "12:00", "12:35", "13:05"]);
+  await expect(route(page).locator(".dm-stop", { hasText: titles[1] })).toContainText("WAS 12:05");
+  await expect(route(page).locator(".dm-stop", { hasText: titles[2] })).toContainText("WAS 12:35");
+  await expect(page.locator(".undo-toast")).toContainText("Call with the recruiter fixed at 12:00 · 2 stops moved");
 
   // Undo: the call is gone (it was made for this), and the route is as it was.
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
   await expect(route(page).locator(".dm-stop", { hasText: "Call with the recruiter" })).toHaveCount(0);
   // Gone from Today altogether, not left waiting in Unscheduled.
   await expect(page.locator(".dm-pool-count:visible").first()).toHaveText("0");
-  expect(await times(page)).toEqual(["NOW", "12:15", "12:45"]);
+  expect(await times(page)).toEqual(["NOW", "12:05", "12:35"]);
   await expect(route(page).getByText(/^WAS /)).toHaveCount(0);
 });
 
@@ -69,19 +70,19 @@ test("a stop's sheet fixes its time, then shows Change time and Unfix; Unfix let
 
   // Straight to step 2, at where it sits now.
   const step2 = page.getByRole("dialog", { name: `Fix a time: ${title}` });
-  await expect(step2.getByRole("textbox", { name: "At" })).toHaveValue("12:45");
+  await expect(step2.getByRole("textbox", { name: "At" })).toHaveValue("12:35");
   // ↑ moves 5 minutes; Enter fixes it.
   await step2.getByRole("textbox", { name: "At" }).focus();
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("ArrowUp");
-  await expect(step2.getByRole("textbox", { name: "At" })).toHaveValue("12:55");
+  await expect(step2.getByRole("textbox", { name: "At" })).toHaveValue("12:45");
   await page.keyboard.press("Enter");
-  await expect(route(page).locator(".dm-stop", { hasText: title }).locator(".dm-time")).toHaveText("12:55");
+  await expect(route(page).locator(".dm-stop", { hasText: title }).locator(".dm-time")).toHaveText("12:45");
 
   await route(page).locator(".dm-stop", { hasText: title }).locator(".dm-main").click();
-  await expect(sheet.getByRole("button", { name: "Fixed at 12:55 · Change time" })).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Fixed at 12:45 · Change time" })).toBeVisible();
   await sheet.getByRole("button", { name: "Unfix" }).click();
-  await expect(route(page).locator(".dm-stop", { hasText: title }).locator(".dm-time")).toHaveText("12:45");
+  await expect(route(page).locator(".dm-stop", { hasText: title }).locator(".dm-time")).toHaveText("12:35");
   await expect(page.locator(".undo-toast")).toContainText(`No fixed time: ${title}`);
 });
 
@@ -96,7 +97,7 @@ test("Unfix clears the WAS badges of the stops the fix moved", async ({ page }) 
   const at = page.getByRole("dialog", { name: `Fix a time: ${title}` }).getByRole("textbox", { name: "At" });
   await at.focus();
   for (let i = 0; i < 6; i += 1) await page.keyboard.press("ArrowDown");
-  await expect(at).toHaveValue("12:15");
+  await expect(at).toHaveValue("12:05");
   await page.keyboard.press("Enter");
   await expect(route(page).getByText(/^WAS /)).not.toHaveCount(0);
 

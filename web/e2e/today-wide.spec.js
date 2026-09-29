@@ -46,7 +46,8 @@ test("1680: task 480 · list · Day map 520; hiding the list widens the Day map 
   const stops = column(page).getByRole("list", { name: "Today's route" }).getByRole("button");
   await expect(stops).toHaveCount(3);
   await expect(stops.first()).toHaveAccessibleName(/^Now to /);
-  await expect(column(page).locator(".tdm-dayend")).toHaveText(/^DAY ENDS 02:00 · \d+h\d{2}m FREE$/);
+  // From 11:35 exactly (Q35) the route can end on the hour: "13h FREE".
+  await expect(column(page).locator(".tdm-dayend")).toHaveText(/^DAY ENDS 02:00 · \d+h(\d{2}m)? FREE$/);
 
   // Hiding the list keeps the column (54a): no copy fades out, and it takes
   // 620px. The toggle runs in the keydown, so a copy would be there at once.

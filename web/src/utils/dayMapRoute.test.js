@@ -154,3 +154,31 @@ describe("shouldReflowPastRoute with fixed stops", () => {
     expect(shouldReflowPastRoute([{ dayMapStartMinutes: 965 }, { dayMapStartMinutes: 890 }], 930)).toBe(true);
   });
 });
+
+// Q35 / Q35a: NOW keeps its exact minute; after a task, 5 minutes rounded up
+// to a 5-minute mark; after a break, nothing; fixed times stay exact.
+describe("route timing (Q35, Q35a)", () => {
+  const t = (id, minutes, extra = {}) => ({ uuid: id, minutes, ...extra });
+  const lay = (stops, opts) => layoutRoute(stops, { durationOf: s => s.minutes, ...opts })
+    .filter(r => r.kind === "stop").map(r => [r.task.uuid, r.start, r.end]);
+
+  it("starts at the exact minute, then each stop after end + 5, rounded up to 5", () => {
+    // 10:02 for 3h ends 13:02; next at 13:10; 13:10 + 25m = 13:35, +5 = 13:40.
+    expect(lay([t("cv", 180), t("hale", 25), t("dad", 25)], { from: 602 }))
+      .toEqual([["cv", 602, 782], ["hale", 790, 815], ["dad", 820, 845]]);
+  });
+
+  it("starts right when a break ends, with no buffer after it", () => {
+    const breaks = [{ start: 815, end: 855, name: "Lunch" }];
+    // Hale ends 13:35 as lunch starts; the pharmacy starts at 14:15 exactly.
+    expect(lay([t("hale", 25), t("pharm", 15)], { from: 790, breaks }))
+      .toEqual([["hale", 790, 815], ["pharm", 855, 870]]);
+  });
+
+  it("keeps a fixed time exact, dropping a buffer that doesn't fit before it", () => {
+    // Pharmacy ends 14:30; the call is fixed at 14:30; after it, 15:05.
+    const call = t("call", 30, { dayMapFixedMinutes: 870 });
+    expect(lay([t("pharm", 15), call, t("hale", 25)], { from: 855 }))
+      .toEqual([["pharm", 855, 870], ["call", 870, 900], ["hale", 905, 930]]);
+  });
+});

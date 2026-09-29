@@ -45,6 +45,7 @@ import { IconPlus } from "./ui/icons";
 import TaskDetail from "./TaskDetail";
 import DayMapColumn from "./DayMapColumn";
 import { makeOneThing, undoOneThing } from "../utils/oneThing";
+import { confirmedMinimumDay } from "../utils/minimumDay";
 import { currentDayMinutes, oneThingToNow, restoreRoute } from "../hooks/useDayRoute";
 import { breaksFromWindows } from "../utils/dayMapRoute";
 import { bringBack, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
@@ -702,6 +703,9 @@ export default function TodayTab({
     const t = setTimeout(() => setTintUuid(null), 2000);
     return () => clearTimeout(t);
   }, [tintUuid]);
+  // Minimum day (57b answer 6): once confirmed on the Day map, its tasks
+  // carry MIN in the list, for today only.
+  const minimumDayIds = new Set(confirmedMinimumDay(config, todayStr) || []);
   const handleMakeOneThing = (task) => {
     const { tasks: pinned, previous } = makeOneThing(tasks, task.uuid);
     if (pinned === tasks) return;
@@ -1869,6 +1873,7 @@ export default function TodayTab({
                             onDelete={handleDeleteTask}
                             onOpen={openDetail}
                             onMakeOneThing={handleMakeOneThing}
+                            isMin={minimumDayIds.has(String(task.uuid))}
                             tabStop={task.uuid === rovingUuid}
                             isTinted={task.uuid === tintUuid}
                             onSwipeDone={handleToggleComplete}

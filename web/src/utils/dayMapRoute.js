@@ -15,9 +15,12 @@ export function shouldReflowPastRoute(scheduledTasks, anchorMinutes) {
 // Times are Loci minutes, the scale getLociNowMinutes and the route use: a
 // window past midnight runs on past 1440.
 
-// 5 minutes after each task, fixed or not. None after a break, and none when
-// the next stop is fixed or a break: that gap absorbs it.
+// 5 minutes after each task, fixed or not, and the next start rounded up to
+// a 5-minute mark (Q35: a task ending 13:02 → the next at 13:10). None after
+// a break, and none when the next stop is fixed or a break: that gap absorbs
+// it (Q35a). NOW, "From" and fixed times keep their exact minute.
 export const ROUTE_BUFFER = 5;
+export function afterTask(end) { return Math.ceil((end + ROUTE_BUFFER) / 5) * 5; }
 // A gap before a fixed stop shorter than this is not worth a "free" row.
 export const MIN_FREE = 5;
 
@@ -90,14 +93,14 @@ export function layoutRoute(stops, { from, breaks = [], now = -Infinity, duratio
   // shorter stop takes its place (Codex review of #427).
   if (queue[0]?.isNowFocus) {
     const task = queue.shift();
-    const pauses = [...sortedBreaks, ...walls.map(x => ({ start: x.start, end: x.start + x.minutes + ROUTE_BUFFER }))]
+    const pauses = [...sortedBreaks, ...walls.map(x => ({ start: x.start, end: afterTask(x.start + x.minutes) }))]
       .sort((a, b) => a.start - b.start);
     const parts = runThrough(afterBreaks(from, pauses), durationOf(task), pauses);
     parts.forEach((p, i) => rows.push({
       kind: "stop", task, start: p.start, end: p.end, fixed: false, late: false,
       pulledForward: false, continues: i < parts.length - 1, continued: i > 0,
     }));
-    cursor = parts[parts.length - 1].end + ROUTE_BUFFER;
+    cursor = afterTask(parts[parts.length - 1].end);
   }
 
   while (queue.length || w < walls.length) {
@@ -105,7 +108,7 @@ export function layoutRoute(stops, { from, breaks = [], now = -Infinity, duratio
     if (wall && wall.start <= cursor) {
       const end = wall.start + wall.minutes;
       rows.push({ kind: "stop", task: wall.task, start: wall.start, end, fixed: true, late: now >= wall.start });
-      cursor = Math.max(cursor, end + ROUTE_BUFFER);
+      cursor = Math.max(cursor, afterTask(end));
       w += 1;
       continue;
     }
@@ -137,7 +140,7 @@ export function layoutRoute(stops, { from, breaks = [], now = -Infinity, duratio
     }));
     // A fixed stop or break right after it absorbs the buffer: it keeps its
     // own time whatever the cursor says.
-    cursor = parts[parts.length - 1].end + ROUTE_BUFFER;
+    cursor = afterTask(parts[parts.length - 1].end);
   }
 
   // A break shows only between stops: one with nothing after it is just the

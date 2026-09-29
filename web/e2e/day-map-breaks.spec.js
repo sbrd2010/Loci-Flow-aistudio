@@ -36,7 +36,7 @@ async function openDayMapWithLunch(page, viewport = { width: 412, height: 892 },
 test("a task that runs into the break stops for it and continues after; the next stop follows it", async ({ page }) => {
   await openDayMapWithLunch(page);
 
-  // The first stop, 3h from 11:45: 1h50m before the break, 1h10m after it.
+  // The first stop, 3h from 11:35: 2h before the break, 1h after it.
   const first = page.locator(".dm-stop .dm-main").first();
   const title = (await first.locator(".dm-title").innerText()).trim();
   await first.click();
@@ -48,14 +48,14 @@ test("a task that runs into the break stops for it and continues after; the next
   const route = page.getByRole("list", { name: "Today's route" });
   await expect(route.locator(".dm-break")).toHaveAttribute("aria-label", "13:35 to 14:15, Lunch");
   await expect(route.locator(".dm-break .dm-dur")).toHaveText("40m");
-  await expect(route.locator(".dm-stop").first().locator(".dm-dur")).toHaveText("1h50m");
+  await expect(route.locator(".dm-stop").first().locator(".dm-dur")).toHaveText("2h");
   const rest = route.locator(".dm-stop.is-continued");
   await expect(rest).toHaveCount(1);
   await expect(rest.locator(".dm-time")).toHaveText("14:15");
   await expect(rest.locator(".dm-title")).toHaveText(`${title} · continued`);
-  await expect(rest.locator(".dm-dur")).toHaveText("1h10m");
-  // 15:25 plus the 5-minute buffer.
-  await expect(rest.locator("xpath=following-sibling::li[1]").locator(".dm-time")).toHaveText("15:30");
+  await expect(rest.locator(".dm-dur")).toHaveText("1h");
+  // 15:15 plus the 5-minute buffer, on a 5-minute mark (Q35).
+  await expect(rest.locator("xpath=following-sibling::li[1]").locator(".dm-time")).toHaveText("15:20");
 
   // The continued row opens the same task.
   await rest.locator(".dm-main").click();
@@ -74,7 +74,7 @@ test("a split stop that ends past the day end is under the line, in time order",
   await sheet.getByRole("radio", { name: "3h" }).click();
   await sheet.getByRole("button", { name: "Close", exact: true }).click();
 
-  // 11:45–13:35, Lunch, then 14:15–15:25: past 15:00.
+  // 11:35–13:35, Lunch, then 14:15–15:15: past 15:00.
   const order = await page.getByRole("list", { name: "Today's route" }).evaluate(ol =>
     [...ol.children].map(li => li.className.split(" ")[0] + (li.classList.contains("is-continued") ? ":continued" : "")));
   const line = order.indexOf("dm-dayend");

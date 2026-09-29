@@ -120,6 +120,17 @@
   color: var(--ink);
   border: 1px solid var(--ink);
 }
+/* Minimum day (Q33.1): green once confirmed; a dotted neutral outline while
+   it's only suggested. */
+.task-tag.is-min {
+  padding: 0 5px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.task-tag.is-min.is-suggested {
+  color: var(--ink-2);
+  border: 1px dotted var(--edge);
+}
 /* The wall's one thing, when it shows in the list (so it can be unpinned). */
 .task-tag.is-now {
   padding: 1px 6px;
