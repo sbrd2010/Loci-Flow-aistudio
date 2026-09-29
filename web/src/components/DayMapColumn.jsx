@@ -45,7 +45,7 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
     const isNow = r === firstOnTime && r.start <= nowMins + 15;
     const isOver = rowIsOver(r);
     return (
-      <li key={`${getTaskId(task)}${r.continued ? ":continued" : ""}`}>
+      <li key={`${getTaskId(task)}${r.continued ? `:continued:${r.start}` : ""}`}>
         <button
           type="button"
           className={`tdm-stop${isNow ? " is-now" : ""}${r.late ? " is-late" : ""}${isOver ? " is-over" : ""}`}

@@ -400,7 +400,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     if (r.continued) {
       // The rest of a stop a break split: it opens the same task.
       return (
-        <li key={`${id}:continued`} className={`dm-stop is-continued${rowIsOver(r) ? " is-over" : ""}`}>
+        <li key={`${id}:continued:${r.start}`} className={`dm-stop is-continued${rowIsOver(r) ? " is-over" : ""}`}>
           <div
             className="dm-main"
             role="button"

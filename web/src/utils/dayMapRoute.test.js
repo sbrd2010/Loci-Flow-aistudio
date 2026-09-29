@@ -87,6 +87,13 @@ describe("layoutRoute", () => {
     expect(rows[2].end).toBe(hm("15:15"));
   });
 
+  it("splits a task over two breaks into three parts, each with its own start", () => {
+    const twoBreaks = [...lunch, { start: hm("15:00"), end: hm("15:15"), name: "Tea" }];
+    const rows = layoutRoute([task("Long", 240)], { from: hm("12:35"), breaks: twoBreaks, durationOf });
+    expect(read(rows)).toEqual(["12:35 Long", "13:35 Lunch", "14:15 Long (continued)", "15:00 Tea", "15:15 Long (continued)"]);
+    expect(rows[rows.length - 1].end).toBe(hm("17:30"));
+  });
+
   it("starts after a break when the route's start falls inside it", () => {
     const rows = layoutRoute([task("A", 25)], { from: hm("13:50"), breaks: lunch, durationOf });
     expect(read(rows)).toEqual(["13:35 Lunch", "14:15 A"]);
