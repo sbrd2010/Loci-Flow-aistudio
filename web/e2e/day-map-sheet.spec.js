@@ -183,20 +183,22 @@ test("moving the one thing off Today from the sheet ends its focus session", asy
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 5_000 });
   await overlay.getByLabel("Leave focus").click();
-  const floating = page.getByRole("button", { name: /^Return to Focus/ });
-  await expect(floating).toBeVisible();
+  // 59e: no focus bar on Today; the Day map shows it.
+  const floating = page.getByRole("region", { name: "Focus session" });
+  await expect(floating).toHaveCount(0);
 
   await page.getByRole("button", { name: "Day map →" }).click();
+  await expect(floating.getByRole("button", { name: /^Back to focus/ })).toBeVisible();
   await page.getByRole("button", { name: "Auto-fill" }).click();
   await page.locator(".dm-stop .dm-main", { hasText: wallTitle }).click();
   await sheet(page).getByRole("button", { name: /^Horizon/ }).click();
   await sheet(page).getByRole("radio", { name: "This week" }).click();
 
   await expect(page.locator(".dm-stop", { hasText: wallTitle })).toHaveCount(0);
-  // (The Day map hides the floating timer, so look for it back on Today.)
+  // The session ended: the Day map's focus bar goes.
+  await expect(floating).toHaveCount(0);
   await page.locator(".dm-back").click();
   await expect(page.getByTestId("today-tasks-list")).toBeVisible();
-  await expect(floating).toHaveCount(0);
   await expect(page.locator(".today-wall .wall-title", { hasText: wallTitle })).toHaveCount(0);
 });
 
@@ -240,10 +242,12 @@ test("the one thing moved off Today from its stop's sheet ends its session and l
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 5_000 });
   await overlay.getByLabel("Leave focus").click();
-  const floating = page.getByRole("button", { name: /^Return to Focus/ });
-  await expect(floating).toBeVisible();
+  // 59e: no focus bar on Today; the Day map shows it.
+  const floating = page.getByRole("region", { name: "Focus session" });
+  await expect(floating).toHaveCount(0);
 
   await page.getByRole("button", { name: "Day map →" }).click();
+  await expect(floating.getByRole("button", { name: /^Back to focus/ })).toBeVisible();
   await page.getByRole("button", { name: "Auto-fill" }).click();
   const before = await titles(page);
   await page.locator(".dm-stop .dm-main", { hasText: wallTitle }).click();
@@ -253,7 +257,6 @@ test("the one thing moved off Today from its stop's sheet ends its session and l
   await expect.poll(() => titles(page)).toEqual(before.filter(t => t !== wallTitle));
   // The next stop moved up into the freed start.
   await expect(page.locator(".dm-stop").nth(0).locator(".dm-time")).toHaveText("NOW");
-  await page.locator(".dm-back").click();
-  await expect(page.getByTestId("today-tasks-list")).toBeVisible();
+  // The session ended: the Day map's focus bar goes.
   await expect(floating).toHaveCount(0);
 });

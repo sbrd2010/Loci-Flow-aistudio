@@ -6,6 +6,7 @@ import { SOUND_CATEGORIES, getCategoryKeyForTrack, getTrackTitle } from "../util
 import { taskSteps } from "../utils/taskSteps";
 import { titleLength } from "./TodayWall";
 import FocusClock from "./FocusClock";
+import EndSessionDialog from "./EndSessionDialog";
 import LinkifyText from "./LinkifyText";
 import { IconCheck, IconX } from "./ui/icons";
 import "../styles/focusMode.css";
@@ -107,9 +108,8 @@ export default function FocusModePage({
   const [dumpSaved, setDumpSaved] = useState(false);
   const dumpInputRef = useRef(null);
   const [showSoundsDrawer, setShowSoundsDrawer] = useState(false);
-  // 59h: the End session question, and its optional "Where did you stop?".
+  // 59h: the End session question.
   const [ending, setEnding] = useState(false);
-  const [stopNote, setStopNote] = useState("");
   // 59i: the break after a block — when it ends (ms), and a tick to count it.
   const [breakUntil, setBreakUntil] = useState(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -164,7 +164,7 @@ export default function FocusModePage({
   const stepIndex = nextStep ? steps.indexOf(nextStep) + 1 : steps.length;
   const estimate = Number(task.timeEstimateMinutes) || 0;
 
-  const openEnd = () => { setStopNote(""); setEnding(true); };
+  const openEnd = () => setEnding(true);
   const startBreak = () => { setBreakUntil(Date.now() + BREAK_SECONDS * 1000); setNowMs(Date.now()); };
   const continueNow = () => { setBreakUntil(null); onKeepGoing?.(blockMinutes); };
 
@@ -187,7 +187,7 @@ export default function FocusModePage({
     return () => clearTimeout(id);
   }, [isComplete, breakUntil, ending]);
   const breakLeft = breakUntil == null ? 0 : Math.max(0, Math.ceil((breakUntil - nowMs) / 1000));
-  const endSession = (tomorrow) => { setEnding(false); onEndSession?.({ note: stopNote, tomorrow }); };
+  const endSession = ({ note, tomorrow }) => { setEnding(false); onEndSession?.({ note, tomorrow }); };
 
   // Keys (45l, 59a–h): Space pauses, D marks done, E asks to end, P opens the
   // mini window, Esc leaves. Not while typing, not while Rescue is open, and
@@ -479,38 +479,7 @@ export default function FocusModePage({
       {/* 59h: ending asks first. The minutes are saved either way; the task
           stays open, or goes to tomorrow. */}
       {ending && (
-        <div className="fm-end-scrim" onClick={() => setEnding(false)}>
-          <div
-            className="fm-end"
-            role="dialog"
-            aria-modal="true"
-            aria-label="End this session?"
-            onClick={e => e.stopPropagation()}
-            onKeyDown={e => {
-              if (e.key === "Escape") { e.preventDefault(); setEnding(false); }
-              // Enter ends it — except on a button, which is its own.
-              else if (e.key === "Enter" && e.target.tagName !== "BUTTON") { e.preventDefault(); endSession(false); }
-            }}
-          >
-            <h2 className="fm-end-title">End this session?</h2>
-            <p className="fm-end-text">
-              {loggedMinutes} {loggedMinutes === 1 ? "minute" : "minutes"} of focus {loggedMinutes === 1 ? "is" : "are"} saved. The task stays open.
-            </p>
-            <label className="fm-end-field">
-              <span>Where did you stop? <span className="fm-end-optional">Optional</span></span>
-              {/* The next step is stored as concreteStep, which the database caps
-                  at 300 characters (Codex review of #432). */}
-              <input autoFocus maxLength={300} value={stopNote} onChange={e => setStopNote(e.target.value)} placeholder="It becomes the next step" />
-            </label>
-            <div className="fm-end-actions">
-              <button type="button" className="focus-mode-done-btn" onClick={() => endSession(false)}>
-                End session <kbd className="focus-mode-kbd">Enter</kbd>
-              </button>
-              <button type="button" className="focus-mode-ctrl-btn" onClick={() => endSession(true)}>End and move to tomorrow</button>
-              <button type="button" className="focus-mode-ctrl-btn" onClick={() => setEnding(false)}>Keep going</button>
-            </div>
-          </div>
-        </div>
+        <EndSessionDialog minutes={loggedMinutes} onEnd={endSession} onClose={() => setEnding(false)} />
       )}
 
       {showSoundsDrawer && (

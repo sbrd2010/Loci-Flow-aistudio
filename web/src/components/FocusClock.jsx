@@ -48,3 +48,26 @@ export default function FocusClock({ mode = "ring", size, secondsLeft, maxSecond
     </div>
   );
 }
+
+// The small ring (59e–f): the focus bar's 28px ring and the one on Today's
+// "Back to focus" — the arc alone, no digits.
+export function MiniRing({ size = 28, secondsLeft, maxSeconds, paused = false }) {
+  const stroke = Math.max(3, size / 10);
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const f = Number(maxSeconds) > 0 ? Math.min(1, Math.max(0, Number(secondsLeft) / Number(maxSeconds))) : 0;
+  const mid = size / 2;
+  return (
+    <svg className={`fm-mini-ring${paused ? " is-paused" : ""}`} width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+      <circle className="fm-ring-track" cx={mid} cy={mid} r={r} strokeWidth={stroke} fill="none" />
+      {secondsLeft > 0 && (
+        <circle
+          className="fm-ring-arc"
+          cx={mid} cy={mid} r={r} strokeWidth={stroke} fill="none"
+          strokeLinecap="round" strokeDasharray={`${f * c} ${c}`} strokeDashoffset={-(1 - f) * c}
+          transform={`rotate(-90 ${mid} ${mid})`}
+        />
+      )}
+    </svg>
+  );
+}

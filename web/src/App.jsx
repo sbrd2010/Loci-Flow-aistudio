@@ -27,7 +27,10 @@ import AddTaskDialog from "./components/AddTaskDialog";
 import OnboardingWizard from "./components/OnboardingWizard";
 import PrivacyPolicy from "./components/PrivacyPolicy";
 import DayMapPage from "./components/DayMapPage";
-import FloatingFocusTimer from "./components/FloatingFocusTimer";
+import FocusBar from "./components/FocusBar";
+import { endSessionTasks } from "./utils/focusEnd";
+import { minutesFromSeconds } from "./utils/focusLedger";
+import { nextDateStr } from "./utils/dayMapPlan";
 import ConfirmDialog from "./components/ConfirmDialog";
 import { useFocusTimer } from "./hooks/useFocusTimer";
 import { useTodayStr } from "./hooks/useTodayStr";
@@ -755,6 +758,15 @@ export default function App() {
     focusTimer.setIsFocusMode(true);
   };
 
+  // 59h from the focus bar (59e): the session ends, recorded; "Where did you
+  // stop?" becomes the next step; "End and move to tomorrow" moves the task.
+  const handleEndFromBar = ({ note, tomorrow } = {}) => {
+    const task = focusTimer.activeTask;
+    handleEndFocusSession();
+    const result = endSessionTasks(payload?.tasks || [], task, { note, tomorrow, tomorrowStr: nextDateStr(commitmentDayStr) });
+    if (result) savePayload({ ...payload, tasks: result.tasks });
+  };
+
   // K4, the 00:00 hold: the ledger entry is written AT THE BELL, before
   // either button is touched — background, lock or kill the app and the
   // minutes are already banked. Until now the terminal event was written
@@ -1425,14 +1437,15 @@ export default function App() {
         isFocusMode: focusTimer.isFocusMode,
         sessionCompletePending: focusTimer.sessionCompletePending,
       }) && (
-        <FloatingFocusTimer
+        <FocusBar
           task={focusTimer.activeTask}
           secondsLeft={focusTimer.timerSecondsLeft}
           maxSeconds={focusTimer.timerMaxSeconds}
           isRunning={focusTimer.isTimerRunning}
+          sessionMinutes={minutesFromSeconds(focusTimer.focusElapsedSeconds)}
           onPlayPause={() => focusTimer.setIsTimerRunning(r => !r)}
-          onReturnToFocus={handleReturnToFocus}
-          onEndSession={handleEndFocusSession}
+          onBack={handleReturnToFocus}
+          onEnd={handleEndFromBar}
           pipOpen={focusTimer.pipOpen}
           onOpenPiP={focusTimer.handleOpenPiP}
         />

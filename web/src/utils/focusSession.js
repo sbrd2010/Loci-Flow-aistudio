@@ -1,14 +1,14 @@
 import { buildToggleCompletedTasks } from "./taskOps";
 import { getFocusWindows, getLociDayStr } from "./focusWindows";
 
-// Decide whether the floating Focus timer should render on the current screen.
-// Hidden on Day Map, when completion is pending, when no session is active,
-// and on the dark Focus overlay itself (where the full timer is already shown).
-export function shouldShowFloatingTimer({ activeTab, focusSessionActive, hasActiveTask, isFocusMode, sessionCompletePending }) {
-  if (activeTab === "daymap") return false;
+// Whether the focus bar (59e) shows: while a session runs, off the focus
+// page — on Plan, Mind Box, Coach and the Day map page. Never on Today (its
+// wall says "Back to focus", 59f, and the focus page opens there), nor while
+// a block's end is waiting for an answer.
+export function shouldShowFloatingTimer({ activeTab, focusSessionActive, hasActiveTask, sessionCompletePending }) {
+  if (activeTab === "today") return false;
   if (sessionCompletePending) return false;
   if (!focusSessionActive || !hasActiveTask) return false;
-  if (activeTab === "today" && isFocusMode) return false;
   return true;
 }
 

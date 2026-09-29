@@ -12,6 +12,7 @@ import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import FocusModePage from "./FocusModePage";
 import RescueMode from "./RescueMode";
 import { safeUUID } from "../utils/uuid";
+import { endSessionTasks } from "../utils/focusEnd";
 import { taskSteps, stepsPatch, applyStepsPatch } from "../utils/taskSteps";
 import { buildToggleCompletedTasks, byPriorityThenOrder } from "../utils/taskOps";
 import { buildParkTaskTasks } from "../utils/coachActions";
@@ -601,23 +602,11 @@ export default function TodayTab({
     const task = activeTask;
     handleStopHere();
     if (!task) return;
-    // At most 300 characters: the next step is stored as concreteStep, which
-    // the database caps there; longer, the whole write would be refused.
-    const step = note.trim().slice(0, 300);
-    if (!step && !tomorrow) return;
     const now = Date.now();
-    let next = tasks;
-    if (step) {
-      const steps = taskSteps(task);
-      const at = steps.findIndex(st => !st.done);
-      const withNote = [...steps];
-      withNote.splice(at === -1 ? steps.length : at, 0, { id: safeUUID(), text: step, done: false });
-      next = tasks.map(t => (t.uuid === task.uuid ? applyStepsPatch(t, stepsPatch(t, withNote), now) : t));
-    }
-    let before = null;
-    if (tomorrow) ({ tasks: next, before } = moveToTomorrow(next, [String(task.uuid || task.id)], nextDateStr(todayStr)));
-    savePayload({ ...payload, tasks: next });
-    if (tomorrow) setUndo({ kind: "tomorrow", task, before, at: now });
+    const result = endSessionTasks(tasks, task, { note, tomorrow, tomorrowStr: nextDateStr(todayStr), now });
+    if (!result) return;
+    savePayload({ ...payload, tasks: result.tasks });
+    if (tomorrow) setUndo({ kind: "tomorrow", task, before: result.before, at: now });
   };
 
   const handleToggleMVD = (task) => {
@@ -1483,7 +1472,6 @@ export default function TodayTab({
   const listOpenRows = remainingTasks.length;
   // App's floating timer (shown for a session left running behind the
   // overlay) sits over the sheet's bottom edge; the sheet makes room for it.
-  const floatingTimerShown = !!(focusSessionActive && activeTask && !isFocusMode && !sessionCompletePending);
   // The list header's figures (41a: "11 · 0 done", "All · 11", "Must-do · 2").
   // "Done" is done TODAY — a finished task keeps the Today horizon until
   // something moves it.
@@ -1700,6 +1688,7 @@ export default function TodayTab({
         nextTitle={remainingTasks[0]?.title || null}
         onStepDone={(stepId) => pinnedFocusTask && handleSubStepToggle(pinnedFocusTask, stepId)}
         timerLabel={wallLiveTimerLabel}
+        live={wallSessionLive ? { secondsLeft: timerSecondsLeft, maxSeconds: timerMaxSeconds, running: isTimerRunning, onPauseResume: () => setIsTimerRunning(r => !r) } : null}
         onStartFocus={() => pinnedFocusTask && startWallFocus(pinnedFocusTask)}
         onMarkDone={() => pinnedFocusTask && handleToggleComplete(pinnedFocusTask)}
         onSplit={() => pinnedFocusTask && setSplitTask(pinnedFocusTask)}
@@ -1779,7 +1768,7 @@ export default function TodayTab({
            rather than leaving the screen empty. */}
       <section
         ref={sheetRef}
-        className={`tasks-section today-list${pinnedFocusTask ? " is-sheet" : ""}${sheetFull ? " is-full" : ""}${floatingTimerShown ? " has-floating-timer" : ""}`}
+        className={`tasks-section today-list${pinnedFocusTask ? " is-sheet" : ""}${sheetFull ? " is-full" : ""}`}
         aria-label={`Today's list, ${listOpenRows} ${listOpenRows === 1 ? "task" : "tasks"}`}
         // Conditional INLINE, not via a class: an inline display beats any
         // class rule, and this element needs one for the open state.
