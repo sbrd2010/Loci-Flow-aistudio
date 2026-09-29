@@ -49,20 +49,22 @@ test("mobile reliability: the task sits above the number, not below it", async (
   expect(title.y).toBeLessThan(digits.y);
 });
 
-test("mobile reliability: progress is a track, and it reports what is done", async ({ page }) => {
+// 59a–c: the clock is a ring (248 on a phone) with the digits inside, and it
+// reports what is done.
+test("mobile reliability: progress is a ring around the digits, and it reports what is done", async ({ page }) => {
   const overlay = await openSession(page);
-  const track = overlay.getByRole("progressbar", { name: "Session progress" });
-  await expect(track).toBeVisible();
+  const ring = overlay.getByRole("progressbar", { name: "Session progress" });
+  await expect(ring).toBeVisible();
+  const box = await ring.boundingBox();
+  expect(Math.round(box.width)).toBe(248);
+  const digits = await overlay.locator(".focus-mode-time-digits").boundingBox();
+  expect(digits.x).toBeGreaterThan(box.x);
+  expect(digits.x + digits.width).toBeLessThan(box.x + box.width);
 
-  const box = await overlay.locator(".focus-mode-track").boundingBox();
-  // A bar under the figure, not a ring around it (45b draws it about 6px).
-  expect(box.height).toBeLessThanOrEqual(7);
-
-  // The fill grows with elapsed time rather than shrinking with what is left.
-  const before = (await overlay.locator(".focus-mode-track-fill").boundingBox()).width;
+  // What is done grows with elapsed time.
+  const before = Number(await ring.getAttribute("aria-valuenow"));
   await page.clock.runFor(120_000);
-  const after = (await overlay.locator(".focus-mode-track-fill").boundingBox()).width;
-  expect(after).toBeGreaterThan(before);
+  await expect.poll(async () => Number(await ring.getAttribute("aria-valuenow"))).toBeGreaterThan(before);
 });
 
 test("mobile reliability: the session names its length and when it ends (45b)", async ({ page }) => {
@@ -78,12 +80,16 @@ test("the block can be paused, resumed and given five more minutes, and the keys
   await expect(overlay.getByRole("button", { name: "Resume timer" })).toBeVisible();
   // A paused block has no end time to claim.
   await expect(overlay.locator(".focus-mode-figures")).not.toContainText("ENDS");
+  // +5 min is for a running block (59a); paused, it is not offered (59g).
+  await expect(overlay.getByRole("button", { name: "Add 5 minutes" })).toHaveCount(0);
+  await overlay.getByRole("button", { name: "Resume timer" }).click();
   const before = await digits.innerText();
   await overlay.getByRole("button", { name: "Add 5 minutes" }).click();
   const [bm, bs] = before.split(":").map(Number);
   await expect(digits).toHaveText(`${bm + 5}:${String(bs).padStart(2, "0")}`);
   // The block itself is five minutes longer (the demo wall starts 25:00).
   await expect(overlay.locator(".focus-mode-figures")).toContainText("OF 30:00");
+  await overlay.getByRole("button", { name: "Pause timer" }).click();
   // Space resumes; Esc leaves.
   await page.evaluate(() => document.activeElement?.blur());
   await page.keyboard.press("Space");
@@ -164,16 +170,39 @@ test("mobile reliability: Stop here ends the session without handing over to a m
   await expect(page.getByText(/Focus block complete/i)).toHaveCount(0);
 });
 
-// Codex review of #397. The length picker is for a stopped timer: every
-// session opens running, so "before the first start" never came.
-test("paused, the block's length can be changed", async ({ page }) => {
+// 59g: paused — Resume, Mark done, End session, and a fresh block of a new
+// length (5m · 25m · 50m · Whole task), which starts at once.
+test("paused, a fresh block of a new length restarts the timer", async ({ page }) => {
   const overlay = await openSession(page);
   await page.clock.runFor(2_000);
-  await expect(overlay.getByRole("group", { name: "Focus duration" })).toHaveCount(0);
+  await expect(overlay.getByRole("group", { name: "Restart with a new length" })).toHaveCount(0);
   await overlay.getByRole("button", { name: "Pause timer" }).click();
-  const picker = overlay.getByRole("group", { name: "Focus duration" });
-  await picker.getByRole("button", { name: "45m" }).click();
-  await expect(overlay.locator(".focus-mode-figures")).toContainText("OF 45:00");
+  await expect(overlay.getByRole("button", { name: /^End session/ })).toBeVisible();
+  const chips = overlay.getByRole("group", { name: "Restart with a new length" });
+  await expect(chips.getByRole("button")).toHaveText(["5m", "25m", "50m", "Whole task"]);
+  await chips.getByRole("button", { name: "50m" }).click();
+  await expect(overlay.locator(".focus-mode-figures")).toContainText("OF 50:00");
+  await expect(overlay.getByRole("button", { name: "Pause timer" })).toBeVisible();
+});
+
+// 59h: End session asks first. The minutes are saved, the task stays open,
+// and "Where did you stop?" becomes its next step.
+test("End session asks, and where you stopped becomes the next step", async ({ page }) => {
+  const overlay = await openSession(page);
+  await page.clock.runFor(60_000);
+  await overlay.getByRole("button", { name: "Pause timer" }).click();
+  await overlay.getByRole("button", { name: /^End session/ }).click();
+  const ask = page.getByRole("dialog", { name: "End this session?" });
+  await expect(ask).toContainText("The task stays open.");
+  await ask.getByRole("button", { name: "Keep going" }).click();
+  await expect(ask).toHaveCount(0);
+  await expect(overlay).toBeVisible();
+
+  await overlay.getByRole("button", { name: /^End session/ }).click();
+  await ask.getByRole("textbox", { name: /Where did you stop/ }).fill("Draft the second paragraph");
+  await ask.getByRole("textbox", { name: /Where did you stop/ }).press("Enter");
+  await expect(overlay).toHaveCount(0);
+  await expect(page.locator(".wall-first-step-text")).toContainText("Next step — Draft the second paragraph");
 });
 
 test("a held Space toggles the timer once, not on every repeat", async ({ page }) => {

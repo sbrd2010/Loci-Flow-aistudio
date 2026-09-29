@@ -164,12 +164,20 @@ function withCurrent(list, current) {
   return list.includes(current) || !(current > 0) ? list : [...list, current].sort((a, b) => a - b);
 }
 
+export const CLOCK_MODES = [
+  { value: "ring", label: "Ring", sub: "The time left as a ring, the digits inside." },
+  { value: "numbers", label: "Numbers", sub: "The digits alone, large." },
+];
+
 export function TimerPage({ config, saveConfigPatch, onBack, backLabel }) {
   const current = Number(config.pomodoroDurationMinutes) || 25;
   const options = withCurrent([15, 20, 25, 30, 45, 50, 60, 90], current).map(m => ({ value: m, label: `${m} min` }));
   return (
     <SubPage title="Focus timer" onBack={onBack} backLabel={backLabel} lede="How long one block of focus runs. Start runs one block, whatever the task's estimate.">
       <RadioList label="Focus timer" options={options} value={current} onChange={(m) => saveConfigPatch({ pomodoroDurationMinutes: m })} />
+      {/* 59a / 58a–b: how the focus session shows the time left. */}
+      <h3 className="set-kicker">Clock</h3>
+      <RadioList label="Clock" options={CLOCK_MODES} value={config.focusClock === "numbers" ? "numbers" : "ring"} onChange={(v) => saveConfigPatch({ focusClock: v })} />
     </SubPage>
   );
 }

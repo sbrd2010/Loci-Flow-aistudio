@@ -1,0 +1,50 @@
+import React from "react";
+import { clockParts, ringGeometry } from "../utils/focusClock";
+
+// The focus clock (59a). A ring by default: the time left in this block as an
+// `--accent` arc over a `--panel` track, from 12 o'clock and shrinking
+// clockwise, `--edge` while paused; the digits inside. Settings → Focus timer
+// → Clock can make it Numbers (58a–b): the digits alone, large, with "Left in
+// this block." under them.
+export default function FocusClock({ mode = "ring", size, secondsLeft, maxSeconds, paused = false, valueText }) {
+  const { lead, seconds, hours, lastMinute } = clockParts(secondsLeft, maxSeconds);
+  const digits = (
+    <span className={`focus-mode-time-digits${lastMinute ? " is-last-minute" : ""}`} aria-hidden="true">
+      {lead}:<span className="fm-secs">{seconds}</span>
+    </span>
+  );
+  const progress = {
+    role: "progressbar",
+    "aria-label": "Session progress",
+    "aria-valuemin": 0,
+    "aria-valuemax": maxSeconds,
+    "aria-valuenow": Math.max(0, maxSeconds - secondsLeft),
+    "aria-valuetext": valueText,
+  };
+
+  if (mode === "numbers") {
+    return (
+      <div className={`fm-numbers${paused ? " is-paused" : ""}`} {...progress}>
+        {digits}
+        <span className="fm-numbers-caption">Left in this block.</span>
+      </div>
+    );
+  }
+
+  const g = ringGeometry(size, secondsLeft, maxSeconds, hours);
+  const mid = size / 2;
+  return (
+    <div className={`fm-ring${paused ? " is-paused" : ""}`} style={{ width: size, height: size, fontSize: g.fontSize }} {...progress}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <circle className="fm-ring-track" cx={mid} cy={mid} r={g.r} strokeWidth={g.stroke} fill="none" />
+        {secondsLeft > 0 && <circle
+          className="fm-ring-arc"
+          cx={mid} cy={mid} r={g.r} strokeWidth={g.stroke} fill="none"
+          strokeLinecap="round" strokeDasharray={g.dash} strokeDashoffset={g.offset}
+          transform={`rotate(-90 ${mid} ${mid})`}
+        />}
+      </svg>
+      {digits}
+    </div>
+  );
+}

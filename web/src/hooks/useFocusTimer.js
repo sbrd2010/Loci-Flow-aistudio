@@ -810,6 +810,9 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     // per session and never changes within one, so it needs no re-render of
     // its own.
     focusStartedAt: focusStartedAtRef.current,
+    // Which block of the session is running (59a's "BLOCK 2 OF 25 MIN"):
+    // read from the ref each render, as focusStartedAt is.
+    focusBlockNumber: focusBlocksRef.current,
     // What screen 3's "+Nm LOGGED SO FAR" reports. Whole-session, not
     // current-block: after a "Keep Going" extension the earlier blocks live in
     // the accumulator, and a figure ignoring them tells the user they logged
