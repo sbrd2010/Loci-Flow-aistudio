@@ -21,7 +21,7 @@ function parseClock(text) {
 }
 
 export default function FixTimeSheet({
-  routeTasks, unscheduledTasks, stops, task: initialTask, from, breaks, nowMins, dayStart, dayEnd, durationOf, getTaskId, onFix, onClose,
+  routeTasks, unscheduledTasks, stops, task: initialTask, from, breaks, nowMins, dayStart, dayEnd, durationOf, getTaskId, onFix, onClose, newBlocked = false,
 }) {
   const [task, setTask] = useState(initialTask || null);
   const [draft, setDraft] = useState(null); // { title, minutes } for something new
@@ -50,8 +50,11 @@ export default function FixTimeSheet({
     setTask(null); setDraft(null); setTyped(null);
   };
   const setTime = (m) => { setAt(toLociMinutes(m, dayStart, dayEnd)); setTyped(null); setPage(0); };
+  // Evening Guard (Codex review of #425): something new is a new task, and
+  // none are added at or after 8 PM while it is on; fixing a task's time is not.
+  const blocked = !!draft && newBlocked;
   const confirm = () => {
-    if (draft && !draft.title.trim()) return;
+    if (draft && (!draft.title.trim() || blocked)) return;
     onFix(task || { title: draft.title.trim(), minutes: draft.minutes }, at, !task);
   };
 
@@ -115,6 +118,9 @@ export default function FixTimeSheet({
           </div>
         ) : (
           <div className="fx-time">
+            {blocked && (
+              <p className="add-warning" role="status">Evening Guard is on: adding tasks after 8 PM is blocked. Rest now.</p>
+            )}
             {draft && (
               <div className="fx-fields">
                 <label className="fx-field is-what">
@@ -172,7 +178,7 @@ export default function FixTimeSheet({
               </div>
             )}
             <div className="fx-foot">
-              <button type="button" className="fx-confirm" onClick={confirm} disabled={!!draft && !draft.title.trim()}>
+              <button type="button" className="fx-confirm" onClick={confirm} disabled={!!draft && (!draft.title.trim() || blocked)}>
                 <IconLock size={16} /> Fix at {toClock(at)}
               </button>
               <button type="button" className="fx-back" onClick={back}>Back</button>

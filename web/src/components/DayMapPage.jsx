@@ -28,6 +28,7 @@ import {
 import { isFixedStop } from "../utils/dayMapRoute";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { safeUUID } from "../utils/uuid";
+import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import DayClockBar from "./DayClockBar";
 import LinkifyText from "./LinkifyText";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
@@ -357,6 +358,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const p = payloadRef.current;
     let all = latestTasks();
     let task = target;
+    if (isNew && isEveningGuardBlocked(p?.config)) return;
     if (isNew) {
       task = {
         id: Date.now(), userId: p?.config?.userId || "", uuid: safeUUID(), title: target.title,
@@ -847,6 +849,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           getTaskId={getTaskId}
           onFix={fixTime}
           onClose={() => setFixing(null)}
+          newBlocked={isEveningGuardBlocked(routeConfig)}
         />
       )}
 

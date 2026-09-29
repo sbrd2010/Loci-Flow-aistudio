@@ -126,3 +126,40 @@ test("an empty day offers Fixed time, and Something else puts the first stop on 
   await page.getByRole("button", { name: "Fix at 12:30" }).click();
   await expect(route(page).locator(".dm-stop", { hasText: "Call with the recruiter" }).locator(".dm-time")).toHaveText("12:30");
 });
+
+// Codex review of #425: Evening Guard holds here too. Something new is a new
+// task, so at or after 20:00 it is blocked; fixing a task's time is not.
+test("Evening Guard: after 20:00 Something else is blocked, fixing an existing stop still works", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.clock.setFixedTime(new Date("2024-06-15T20:30:00"));
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  // On a laptop Settings opens in two panes; the switch is under "The day".
+  await page.getByRole("button", { name: "The day", exact: true }).first().click();
+  const guard = page.getByRole("switch", { name: /Evening guard/ });
+  if ((await guard.getAttribute("aria-checked")) !== "true") await guard.click();
+  await expect(guard).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("banner").getByRole("button", { name: "Today", exact: true }).click();
+  await page.locator("body").click({ position: { x: 5, y: 300 } });
+  await page.keyboard.press("m");
+  await page.getByRole("button", { name: "Auto-fill" }).click();
+
+  await page.getByRole("button", { name: "Fixed time" }).click();
+  await page.getByRole("dialog", { name: "Fix a time" }).getByRole("button", { name: /Something else/ }).click();
+  await page.getByRole("textbox", { name: "What" }).fill("Call with the recruiter");
+  await expect(page.locator(".fx-dialog .add-warning")).toHaveText("Evening Guard is on: adding tasks after 8 PM is blocked. Rest now.");
+  await expect(page.getByRole("button", { name: /^Fix at/ })).toBeDisabled();
+
+  // Back to the list: a stop already on Today can still take a fixed time.
+  await page.locator(".fx-dialog").getByRole("button", { name: "Back", exact: true }).click();
+  await page.locator(".fx-dialog").getByRole("button", { name: "Close", exact: true }).click();
+  const last = route(page).locator(".dm-stop").last();
+  const title = (await last.locator(".dm-title").innerText()).trim();
+  await last.locator(".dm-main").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: "Fix time" }).click();
+  await expect(page.locator(".fx-dialog .add-warning")).toHaveCount(0);
+  await page.getByRole("button", { name: /^Fix at/ }).click();
+  await expect(route(page).locator(".dm-stop", { hasText: title }).locator(".dm-main")).toHaveAttribute("aria-label", /, fixed time/);
+});
