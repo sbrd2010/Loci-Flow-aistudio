@@ -54,6 +54,9 @@ export function factualLine({ doneMinutes, routeEmpty, openTasks, finish, dayEnd
       alert: "",
     };
   }
+  // A fixed stop whose time has passed but is still open ends "earlier"
+  // than now; the finish is never before now (Codex review of #429).
+  finish = Math.max(finish, now);
   const done = doneMinutes == null ? "" : doneMinutes > 0 ? `${formatSpan(doneMinutes)} done so far today. ` : "Nothing done yet. ";
   if (finish > dayEnd) {
     return {

@@ -18,6 +18,10 @@ describe("factualLine (Q33.3, Q34.2)", () => {
     expect(factualLine({ ...base, doneMinutes: 0, finish: 1000 }).text).toBe("Nothing done yet. On track: done by 16:40.");
   });
 
+  it("never reports a finish before now (a late fixed stop still open)", () => {
+    expect(factualLine({ ...base, doneMinutes: null, finish: 630 }).text).toBe("On track: done by 11:35.");
+  });
+
   it("leaves the done part out when the ledger can't be read", () => {
     expect(factualLine({ ...base, doneMinutes: null, finish: 1000 }).text).toBe("On track: done by 16:40.");
   });
