@@ -84,6 +84,22 @@ export function layoutRoute(stops, { from, breaks = [], now = -Infinity, duratio
   let cursor = from;
   let w = 0;
 
+  // The one thing sits at NOW (53–56): heading the route, it starts at
+  // `from` and stops for a fixed stop as it does for a break, continuing
+  // after it (and its buffer). It never goes after the fixed stop, and no
+  // shorter stop takes its place (Codex review of #427).
+  if (queue[0]?.isNowFocus) {
+    const task = queue.shift();
+    const pauses = [...sortedBreaks, ...walls.map(x => ({ start: x.start, end: x.start + x.minutes + ROUTE_BUFFER }))]
+      .sort((a, b) => a.start - b.start);
+    const parts = runThrough(afterBreaks(from, pauses), durationOf(task), pauses);
+    parts.forEach((p, i) => rows.push({
+      kind: "stop", task, start: p.start, end: p.end, fixed: false, late: false,
+      pulledForward: false, continues: i < parts.length - 1, continued: i > 0,
+    }));
+    cursor = parts[parts.length - 1].end + ROUTE_BUFFER;
+  }
+
   while (queue.length || w < walls.length) {
     const wall = walls[w];
     if (wall && wall.start <= cursor) {

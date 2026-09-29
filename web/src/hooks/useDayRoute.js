@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { breaksFromWindows, isFixedStop, layoutRoute, layoutStarts, shouldReflowPastRoute } from "../utils/dayMapRoute";
-import { dayLeftFrom, nextDateStr, planDay } from "../utils/dayMapPlan";
+import { dayLeftFrom, nextDateStr, planDay, restoreSchedule } from "../utils/dayMapPlan";
 import { getFocusWindows, getLociNowMinutes } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
 import { commitmentKickerFront, frontForCommitment, frontsFromConfig } from "../utils/fronts";
@@ -102,6 +102,21 @@ function byRouteOrder(a, b) {
   const ob = b.dayMapOrder ?? Infinity;
   if (oa !== ob) return oa - ob;
   return (a.dayMapStartMinutes ?? 0) - (b.dayMapStartMinutes ?? 0);
+}
+
+// Undo of Clear route: the stops come back first, in their old order, then
+// anything added since; and the whole route is timed again, so no two stops
+// share an order or a start (as the Day map page's Undo; Codex review of
+// #427).
+export function restoreClearedRoute(allTasks, before, { todayStr, anchorMinutes, breaks = [] }) {
+  const restored = restoreSchedule(allTasks, before);
+  const put = new Set(before.map(getTaskId));
+  const onRoute = restored.filter(t => isOnRoute(t, todayStr));
+  const route = [
+    ...onRoute.filter(t => put.has(getTaskId(t))).sort(byRouteOrder),
+    ...onRoute.filter(t => !put.has(getTaskId(t))).sort(byRouteOrder),
+  ];
+  return applyReflow(restored, reflowRoute(route, anchorMinutes, todayStr, breaks));
 }
 
 // The one thing sits at NOW (53–56): made the one thing, a task heads the

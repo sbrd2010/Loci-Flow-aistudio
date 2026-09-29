@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { oneThingToNow } from "./useDayRoute";
+import { oneThingToNow, restoreClearedRoute } from "./useDayRoute";
 
 const DAY = "2026-09-29";
 const stop = (uuid, order, minutes, extra = {}) => ({
@@ -39,5 +39,35 @@ describe("oneThingToNow (53–56: the one thing sits at NOW)", () => {
     expect(oneThingToNow(loose, "n", { todayStr: DAY, nowMinutes: 600 })).toBeNull();
     const tasks = [stop("a", 0, 60), stop("f", 1, 30, { dayMapFixedMinutes: 660 })];
     expect(oneThingToNow(tasks, "f", { todayStr: DAY, nowMinutes: 600 })).toBeNull();
+  });
+});
+
+// Codex review of #427: a one thing longer than the gap before a fixed stop
+// still starts at NOW; it stops for the fixed stop as for a break.
+describe("the one thing before a fixed stop", () => {
+  it("starts at NOW and continues after the fixed stop; nothing is pulled into its place", () => {
+    const tasks = [
+      stop("b", 0, 10),
+      stop("f", 1, 30, { dayMapFixedMinutes: 630 }),
+      stop("c", 2, 60, { isNowFocus: true }),
+    ];
+    const t = byId(oneThingToNow(tasks, "c", { todayStr: DAY, nowMinutes: 600 }).tasks);
+    expect(t.c.dayMapStartMinutes).toBe(600);
+    expect(t.f.dayMapStartMinutes).toBe(630);
+    expect(t.b.dayMapStartMinutes).toBeGreaterThan(660);
+  });
+});
+
+// Codex review of #427: Clear route, add a task, Undo: one route, timed again.
+describe("restoreClearedRoute", () => {
+  it("puts the cleared stops back first and times the whole route again", () => {
+    const cleared = [stop("a", 0, 30), stop("b", 1, 30)];
+    const bare = ({ dayMapDate, dayMapOrder, dayMapStartMinutes, ...t }) => t; // eslint-disable-line no-unused-vars
+    const now = [bare(cleared[0]), bare(cleared[1]), stop("n", 0, 20)];
+    const t = byId(restoreClearedRoute(now, cleared, { todayStr: DAY, anchorMinutes: 600 }));
+    expect([t.a.dayMapOrder, t.b.dayMapOrder, t.n.dayMapOrder]).toEqual([0, 1, 2]);
+    const starts = [t.a.dayMapStartMinutes, t.b.dayMapStartMinutes, t.n.dayMapStartMinutes];
+    expect(new Set(starts).size).toBe(3);
+    expect(starts).toEqual([...starts].sort((x, y) => x - y));
   });
 });
