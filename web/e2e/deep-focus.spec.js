@@ -115,7 +115,7 @@ test("mobile reliability: Rescue Mode is reachable from Today, and I'm stuck ins
   await expect(sheet).toBeVisible({ timeout: 5_000 });
 
   // Opening it mid-session pauses the underlying focus timer…
-  await expect(overlay.getByText("Paused")).toBeVisible({ timeout: 5_000 });
+  await expect(overlay.getByLabel("Resume timer")).toBeVisible({ timeout: 5_000 });
 
   // …and "Back to the timer" resumes it.
   await sheet.getByRole("button", { name: "Back to the timer" }).click();
