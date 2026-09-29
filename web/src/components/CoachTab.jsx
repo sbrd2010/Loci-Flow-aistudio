@@ -1307,6 +1307,10 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const current = tasksRef.current;
     const task = current.find(t => t.uuid === taskUuid && !t.isDeleted);
     if (!task) return;
+    // Q36.3: checked again on confirm, not only when the chip was drawn — a
+    // sync can fix the task's time while the dialog is open (Codex review
+    // of #431).
+    if ((action === 'focus' || action === 'focus+today') && isEventTask(task)) return;
     const now = Date.now();
     if (action === 'focus') {
       // Same retargeting gap as 'focus+today' below — end whichever task's
