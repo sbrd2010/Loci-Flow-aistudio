@@ -16,10 +16,12 @@ export function timeChips(at, page = 0) {
 
 // A clock time (0–1439, however reached: a chip, ↑↓, typing) on the Loci
 // day's scale, which the route uses: past midnight in a window that runs on,
-// 00:30 is 1470 (Codex review of #425). `dayStart` is where the day begins.
-export function toLociMinutes(m, dayStart) {
+// 00:30 is 1470 (Codex review of #425). Only a time in that tail moves: on a
+// 09:00–17:00 day, 08:30 is 08:30 (dayStart and dayEnd are the day's first
+// window start and last window end, in Loci minutes).
+export function toLociMinutes(m, dayStart, dayEnd) {
   const wall = ((Math.round(m) % 1440) + 1440) % 1440;
-  return wall < dayStart ? wall + 1440 : wall;
+  return wall < dayStart && wall + 1440 <= dayEnd ? wall + 1440 : wall;
 }
 
 // The time a stop would be fixed at by default: where it sits now, or for

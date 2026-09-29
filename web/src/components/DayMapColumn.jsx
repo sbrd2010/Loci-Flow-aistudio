@@ -25,9 +25,11 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
   const movable = plan.wontFit.filter(t => !t.isNowFocus);
   const routeIndex = new Map(routeTasks.map((t, i) => [getTaskId(t), i]));
   const firstOnTime = rows.find(r => r.kind === "stop" && !r.late);
-  const rowIsOver = (r) => (r.kind === "stop"
-    ? overIndex !== -1 && routeIndex.get(getTaskId(r.task)) >= overIndex
-    : r.start >= plan.dayEnd);
+  // The line falls before the first row of the first stop that won't fit,
+  // as on the Day map page.
+  const cut = overIndex === -1 ? rows.length
+    : rows.findIndex(r => r.kind === "stop" && routeIndex.get(getTaskId(r.task)) >= overIndex);
+  const rowIsOver = (r) => rows.indexOf(r) >= cut;
 
   // The rows as the Day map lays them out (utils/dayMapRoute): stops, the
   // rest of one a break split, the break, free time before a fixed stop.

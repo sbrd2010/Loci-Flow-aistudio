@@ -20,11 +20,18 @@ describe("timeChips (58d)", () => {
 
 describe("toLociMinutes", () => {
   // A day from 07:00 with a window to 02:00.
+  const lateEnd = 1440 + hm("02:00");
   it("keeps a time after midnight on the day's scale", () => {
-    expect(toLociMinutes(hm("00:30"), hm("07:00"))).toBe(1440 + 30);
-    expect(toLociMinutes(1440 + 30 + 5, hm("07:00"))).toBe(1440 + 35);
-    expect(toLociMinutes(hm("14:30"), hm("07:00"))).toBe(hm("14:30"));
-    expect(toLociMinutes(-5, hm("07:00"))).toBe(hm("23:55"));
+    expect(toLociMinutes(hm("00:30"), hm("07:00"), lateEnd)).toBe(1440 + 30);
+    expect(toLociMinutes(1440 + 30 + 5, hm("07:00"), lateEnd)).toBe(1440 + 35);
+    expect(toLociMinutes(hm("14:30"), hm("07:00"), lateEnd)).toBe(hm("14:30"));
+    expect(toLociMinutes(-5, hm("07:00"), lateEnd)).toBe(hm("23:55"));
+  });
+  // Codex review of #425: with no window past midnight, nothing moves.
+  it("leaves an early time on a day that ends before midnight where it is", () => {
+    expect(toLociMinutes(hm("08:30"), hm("09:00"), hm("17:00"))).toBe(hm("08:30"));
+    // Past the late window's tail it is early morning, not after midnight.
+    expect(toLociMinutes(hm("03:00"), hm("07:00"), lateEnd)).toBe(hm("03:00"));
   });
 });
 

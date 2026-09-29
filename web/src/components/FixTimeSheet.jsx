@@ -21,7 +21,7 @@ function parseClock(text) {
 }
 
 export default function FixTimeSheet({
-  routeTasks, unscheduledTasks, stops, task: initialTask, from, breaks, nowMins, dayStart, durationOf, getTaskId, onFix, onClose,
+  routeTasks, unscheduledTasks, stops, task: initialTask, from, breaks, nowMins, dayStart, dayEnd, durationOf, getTaskId, onFix, onClose,
 }) {
   const [task, setTask] = useState(initialTask || null);
   const [draft, setDraft] = useState(null); // { title, minutes } for something new
@@ -49,7 +49,7 @@ export default function FixTimeSheet({
     if (initialTask) { onClose(); return; }
     setTask(null); setDraft(null); setTyped(null);
   };
-  const setTime = (m) => { setAt(toLociMinutes(m, dayStart)); setTyped(null); setPage(0); };
+  const setTime = (m) => { setAt(toLociMinutes(m, dayStart, dayEnd)); setTyped(null); setPage(0); };
   const confirm = () => {
     if (draft && !draft.title.trim()) return;
     onFix(task || { title: draft.title.trim(), minutes: draft.minutes }, at, !task);
@@ -139,7 +139,7 @@ export default function FixTimeSheet({
                 inputMode="numeric"
                 autoFocus={!draft}
                 value={typed ?? toClock(at)}
-                onChange={e => { setTyped(e.target.value); const m = parseClock(e.target.value); if (m != null) { setAt(toLociMinutes(m, dayStart)); setPage(0); } }}
+                onChange={e => { setTyped(e.target.value); const m = parseClock(e.target.value); if (m != null) { setAt(toLociMinutes(m, dayStart, dayEnd)); setPage(0); } }}
                 onBlur={() => setTyped(null)}
                 onKeyDown={e => {
                   if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); setTime(at + (e.key === "ArrowUp" ? 5 : -5)); }

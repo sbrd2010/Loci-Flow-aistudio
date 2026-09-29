@@ -213,6 +213,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const [fixing, setFixing] = useState(null); // { task? }
   const [wasStarts, setWasStarts] = useState(null); // Map id → earlier start
   const [flashId, setFlashId] = useState(null);
+  // A "Something else" stop's creation write, by task id: its Undo logs the
+  // removal only after the creation has been logged.
+  const createdWritesRef = useRef(new Map());
   useEffect(() => {
     if (!flashId) return undefined;
     const t = setTimeout(() => setFlashId(null), 600);
@@ -336,6 +339,15 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     savePayload({ ...payloadRef.current, tasks: applyReflow(kept, reflowRoute(route.filter(t => getTaskId(t) !== undo.created), anchorMinutes, todayStr, breaks)), timestamp: Date.now() });
     setUndo(null);
     setWasStarts(null);
+    // Undo takes back the stop it made: the ledger says so, after the
+    // creation it undoes (Codex review of #425).
+    if (undo.created && undo.createdTask) {
+      const removed = buildTaskMutationEvent("task_deleted", undo.createdTask, { windows });
+      (createdWritesRef.current.get(undo.created) || Promise.resolve())
+        .then(() => writeActivityEvents?.(eventPatch(uid, removed)))
+        .catch(() => {});
+      createdWritesRef.current.delete(undo.created);
+    }
   };
 
   // Fixes `target` at `at` (58c–e). A task not on the route joins it; for
@@ -370,18 +382,22 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const next = { ...p, tasks: applyReflow(all, reflowed), config: { ...(p?.config || {}), dayMapDate: todayStr, dayMapAnchorMinutes: anchorMinutes, lastUpdated: Date.now() }, timestamp: Date.now() };
     // A new task is logged once its write has landed, as Add task does
     // (Codex review of #425).
+    // The event is made now, when you confirm, and written once the task's
+    // write has landed, as Add task does (Codex review of #425).
+    const created = isNew ? buildTaskMutationEvent("task_created", task, { windows }) : null;
     const written = typeof savePayloadAsync === "function"
       ? savePayloadAsync(next)
       : (savePayload(next), Promise.resolve());
-    if (isNew) {
-      written.then(() => writeActivityEvents?.(eventPatch(uid, buildTaskMutationEvent("task_created", task, { windows })))).catch(() => {});
+    if (created) {
+      createdWritesRef.current.set(getTaskId(task), written.then(() => writeActivityEvents?.(eventPatch(uid, created))));
+      createdWritesRef.current.get(getTaskId(task)).catch(() => {});
     }
     setFixing(null);
     setWasStarts(was);
     setFlashId(id);
     setUndo({
       message: `${task.title} fixed at ${formatClock24(at)} · ${was.size} ${was.size === 1 ? "stop" : "stops"} moved`,
-      before, created: isNew ? id : null, at: Date.now(),
+      before, created: isNew ? id : null, createdTask: isNew ? task : null, at: Date.now(),
     });
   };
 
@@ -452,9 +468,12 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   // NOW is the first stop, unless it is a fixed time already passed (that
   // row says "now" in red instead).
   const firstOnTime = rows.find(r => r.kind === "stop" && !r.late);
-  const rowIsOver = (r) => (r.kind === "stop"
-    ? plan.overIndex !== -1 && routeIndex.get(getTaskId(r.task)) >= plan.overIndex
-    : r.start >= plan.dayEnd);
+  // The DAY ENDS line falls before the first row of the first stop that
+  // won't fit, so a stop a break split stays in one piece, in time order,
+  // under it (Codex review of #425).
+  const cut = plan.overIndex === -1 ? rows.length
+    : rows.findIndex(r => r.kind === "stop" && routeIndex.get(getTaskId(r.task)) >= plan.overIndex);
+  const rowIsOver = (r) => rows.indexOf(r) >= cut;
   const renderRow = (r) => {
     if (r.kind === "break") {
       return (
@@ -823,6 +842,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           breaks={breaks}
           nowMins={nowMins}
           dayStart={mergeWindowSpans(windows)[0]?.[0] ?? 0}
+          dayEnd={Math.max(0, ...mergeWindowSpans(windows).map(([, end]) => end))}
           durationOf={getEstimate}
           getTaskId={getTaskId}
           onFix={fixTime}
