@@ -91,7 +91,8 @@ test("mobile reliability: Deep Focus overlay supports pause, resume, and brain-d
   await expectNoHorizontalOverflow(page);
 });
 
-test("mobile reliability: Rescue Mode is reachable from Today and from inside Deep Focus", async ({ page }) => {
+// 59d: inside a session, I'm stuck opens its own sheet, not Rescue.
+test("mobile reliability: Rescue Mode is reachable from Today, and I'm stuck inside Deep Focus pauses and resumes", async ({ page }) => {
   await enterDemo(page);
 
   // Today: Open Rescue opens the same triage flow Mind Box's button opens.
@@ -110,15 +111,16 @@ test("mobile reliability: Rescue Mode is reachable from Today and from inside De
   await expect(overlay.getByLabel("Pause timer")).toBeVisible({ timeout: 5_000 });
 
   await overlay.getByRole("button", { name: "I'm stuck" }).click();
-  await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
+  const sheet = page.getByRole("dialog", { name: "Stuck?" });
+  await expect(sheet).toBeVisible({ timeout: 5_000 });
 
-  // Opening Rescue Mode mid-session pauses the underlying focus timer.
+  // Opening it mid-session pauses the underlying focus timer…
   await expect(overlay.getByText("Paused")).toBeVisible({ timeout: 5_000 });
 
-  await page.getByText("Exit rescue mode").click();
-  await expect(page.getByRole("heading", { name: "What's happening right now?" })).not.toBeVisible({ timeout: 5_000 });
-  await expect(overlay).toBeVisible();
-  await expect(overlay.getByLabel(/^(Start|Resume) timer$/)).toBeVisible({ timeout: 5_000 });
+  // …and "Back to the timer" resumes it.
+  await sheet.getByRole("button", { name: "Back to the timer" }).click();
+  await expect(sheet).not.toBeVisible({ timeout: 5_000 });
+  await expect(overlay.getByLabel("Pause timer")).toBeVisible({ timeout: 5_000 });
 
   await overlay.getByLabel("Leave focus").click();
   await expect(overlay).not.toBeVisible({ timeout: 5_000 });

@@ -227,15 +227,17 @@ test("Escape closes the sounds drawer even from its volume slider", async ({ pag
   await expect(overlay).toBeVisible();
 });
 
-test("with Rescue open over the session, D and Esc are Rescue's, not the session's", async ({ page }) => {
+test("with I'm stuck open, D is not the session's and Esc goes back to the timer", async ({ page }) => {
   const overlay = await openSession(page);
   const title = await overlay.getByRole("heading", { level: 1 }).innerText();
   await overlay.getByRole("button", { name: "I'm stuck" }).click();
-  await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
+  const sheet = page.getByRole("dialog", { name: "Stuck?" });
+  await expect(sheet).toBeVisible({ timeout: 5_000 });
   await page.evaluate(() => document.activeElement?.blur());
   await page.keyboard.press("d");
   await page.keyboard.press("Escape");
-  await page.getByText("Exit rescue mode").click();
-  // Still in the same session, and the task is not done.
+  await expect(sheet).toHaveCount(0);
+  // Still in the same session, running again, and the task is not done.
   await expect(overlay.getByRole("heading", { level: 1 })).toHaveText(title);
+  await expect(overlay.getByLabel("Pause timer")).toBeVisible();
 });

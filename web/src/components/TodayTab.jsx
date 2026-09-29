@@ -12,7 +12,7 @@ import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import FocusModePage from "./FocusModePage";
 import RescueMode from "./RescueMode";
 import { safeUUID } from "../utils/uuid";
-import { endSessionTasks } from "../utils/focusEnd";
+import { endSessionTasks, switchToNextTasks, withNextStep } from "../utils/focusEnd";
 import { taskSteps, stepsPatch, applyStepsPatch } from "../utils/taskSteps";
 import { buildToggleCompletedTasks, byPriorityThenOrder } from "../utils/taskOps";
 import { buildParkTaskTasks } from "../utils/coachActions";
@@ -84,6 +84,8 @@ function SortableTaskItem({ id, children }) {
 
 export default function TodayTab({
   payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenPlan, onOpenCoach, onScattered, onOpenAddTask,
+  // The mini window's I'm stuck (59b → 59d).
+  stuckPending = false, onStuckShown,
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
@@ -560,10 +562,33 @@ export default function TodayTab({
     return true;
   };
 
+  // "N parked this session": counted per focus session.
+  const [parked, setParked] = useState({ sessionId: null, n: 0 });
   const handleFocusBrainDump = (text) => {
     if (!text.trim()) return;
     const newItem = { id: `bd_${Date.now()}`, text: text.trim(), createdAt: Date.now() };
     savePayload({ ...payload, brainDump: [...(payload.brainDump || []), newItem] });
+    setParked(p => ({ sessionId: focusSessionId, n: p.sessionId === focusSessionId ? p.n + 1 : 1 }));
+  };
+
+  // 59d, I'm stuck. A smaller step goes ahead of the steps still open.
+  const handleSmallerStep = (text) => {
+    if (!activeTask) return;
+    savePayload({ ...payload, tasks: withNextStep(tasks, activeTask, text) });
+  };
+  // Split: the sheet opens on Today; splitting ends the session (handleSplit).
+  const handleStuckSplit = () => {
+    if (!activeTask) return;
+    setIsFocusMode(false);
+    setSplitTask(activeTask);
+  };
+  // Talk it through: the session stays paused (the focus bar shows on
+  // Coach); the task and its next step wait in Coach's box, to send or edit.
+  const handleStuckCoach = () => {
+    if (!activeTask) return;
+    const step = taskSteps(activeTask).find(st => !st.done && st.text)?.text;
+    setIsFocusMode(false);
+    onOpenCoach?.(`I'm stuck on "${activeTask.title}".${step ? ` The next step is "${step}".` : ""} Can we talk it through?`);
   };
 
   // 59g: "Restart with a new length" — a fresh block in the same session.
@@ -1343,6 +1368,16 @@ export default function TodayTab({
     .filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid)
     .sort((a, b) => (isFromYesterday(b) - isFromYesterday(a)) || ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)));
   const fromYesterdayCount = remainingTasks.filter(isFromYesterday).length;
+  // 59d, Switch to the next task: the list's first, never one at a set time.
+  // The session ends (its minutes are saved); the next task is the one thing,
+  // not yet started, and this one heads the list.
+  const stuckNext = activeTask ? remainingTasks.find(t => t.uuid !== activeTask.uuid && !isEventTask(t)) || null : null;
+  const handleSwitchNext = () => {
+    const task = activeTask;
+    if (!task || !stuckNext) return;
+    handleStopHere();
+    savePayload({ ...payload, tasks: switchToNextTasks(tasks, task, stuckNext) });
+  };
   // 50g–h: what was moved to tomorrow, listed under a quiet line at the end.
   const movedToTomorrow = tasks
     .filter((t) => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted && !t.isParked && isDeferred(t, todayStr))
@@ -2028,7 +2063,14 @@ export default function TodayTab({
           startedAt={focusStartedAt}
           elapsedSeconds={focusElapsedSeconds}
           onAddBrainDump={handleFocusBrainDump}
-          onRescue={openRescueMode}
+          parkedCount={parked.sessionId === focusSessionId ? parked.n : 0}
+          onSmallerStep={handleSmallerStep}
+          onSplit={handleStuckSplit}
+          onSwitchNext={stuckNext ? handleSwitchNext : null}
+          nextTitle={stuckNext?.title}
+          onTalkToCoach={handleStuckCoach}
+          openStuck={stuckPending}
+          onStuckShown={onStuckShown}
           pipOpen={pipOpen}
           onOpenPiP={handleOpenPiP}
           selectedTrack={selectedTrack}

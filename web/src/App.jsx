@@ -602,6 +602,8 @@ export default function App() {
   // tab switches — CoachTab unmounts when activeTab !== "coach". In-memory
   // only, cleared by CoachTab once the message actually sends.
   const [coachChatDraft, setCoachChatDraft] = useState("");
+  // The mini window's I'm stuck: the focus page opens on 59d.
+  const [stuckPending, setStuckPending] = useState(false);
 
   // Clear the draft on sign-out/switch-account so one user's unsent text
   // never leaks into another user's session.
@@ -999,7 +1001,7 @@ export default function App() {
 
   // 59b: the mini window's Done completes the task (as Finish task does);
   // I'm stuck brings the main window back to the focus page.
-  pipActionsRef.current = { onDone: handleFocusSessionDone, onStuck: handleReturnToFocus };
+  pipActionsRef.current = { onDone: handleFocusSessionDone, onStuck: () => { handleReturnToFocus(); setStuckPending(true); } };
 
   // Global Focus completion prompt: "Keep going" — opens the duration picker
   // so the same task's timer can be restarted from any tab.
@@ -1316,7 +1318,10 @@ export default function App() {
             onOpenDayMap={openDayMap}
             onOpenMindBox={openMindBox}
             onOpenPlan={() => handleTabSelect("roadmap")}
-            onOpenCoach={() => setActiveTab("coach")}
+            // 59d: Talk it through arrives with its message in the box.
+            onOpenCoach={(draft) => { if (typeof draft === "string") setCoachChatDraft(draft); setActiveTab("coach"); }}
+            stuckPending={stuckPending}
+            onStuckShown={() => setStuckPending(false)}
             onScattered={() => openScattered("today")}
             isAddTaskDialogOpen={showAddTask}
             pendingCheckinSlot={pendingCheckinSlot}
