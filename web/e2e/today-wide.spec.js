@@ -31,7 +31,7 @@ const column = (page) => page.getByRole("complementary", { name: "Day map" });
 test("1680: task 480 · list · Day map 520; hiding the list widens the Day map to 620 and keeps it (54a, 54e)", async ({ page }) => {
   await enterDemo(page, { width: 1680, height: 1000 });
   await expect(column(page)).toBeVisible();
-  await expect(column(page)).toContainText("Nothing on the route yet.");
+  await expect(column(page)).toContainText("Nothing on the route yet · Auto-fill");
 
   const band = await page.locator(".wall-goal").boundingBox();
   const list = await page.locator("section.today-list").boundingBox();
@@ -235,4 +235,47 @@ test("a stop the Must-do filter hides opens anyway, the filter stays; Show all, 
   await expect(page.getByRole("button", { name: /^All · \d+$/ })).toHaveAttribute("aria-pressed", "true");
   await expect(kicker).toHaveText(/^TODAY · \d+ OF \d+$/);
   await expect(drawer.getByRole("button", { name: "Show all" })).toHaveCount(0);
+});
+
+test("the column's own route controls: Auto-fill from the empty state, Clear route with Undo, Unscheduled's + (54e)", async ({ page }) => {
+  await enterDemo(page, { width: 1680, height: 1000 });
+  const stops = column(page).getByRole("list", { name: "Today's route" }).getByRole("button");
+  await column(page).getByRole("button", { name: "Auto-fill" }).click();
+  await expect(stops).toHaveCount(3);
+  await expect(column(page).getByLabel("Route start time")).toBeVisible();
+
+  await column(page).getByRole("button", { name: "Clear route" }).click();
+  await expect(page.locator(".undo-toast")).toContainText("Route cleared");
+  await expect(stops).toHaveCount(0);
+  await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
+  await expect(stops).toHaveCount(3);
+
+  await column(page).getByRole("button", { name: "Clear route" }).click();
+  const pool = column(page).getByRole("region", { name: "Unscheduled" });
+  const toggle = pool.getByRole("button", { name: /^Unscheduled 3/ });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
+  await pool.getByRole("button", { name: /^Add to route: / }).first().click();
+  await expect(stops).toHaveCount(1);
+  await expect(pool.getByRole("button", { name: /^Unscheduled 2/ })).toBeVisible();
+});
+
+test("made the one thing, a task moves to NOW on the route; the rest flows after it; Undo puts it back (53–56)", async ({ page }) => {
+  await enterDemo(page, { width: 1680, height: 1000 });
+  await autoFillRoute(page);
+  const stops = column(page).getByRole("list", { name: "Today's route" }).getByRole("button");
+  await expect(stops).toHaveCount(3);
+  const firstBefore = (await stops.first().locator(".tdm-title").textContent()).trim();
+  const lastTitle = (await stops.last().locator(".tdm-title").textContent()).trim();
+
+  await page.getByTestId("today-tasks-list").getByText(lastTitle, { exact: true }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await expect(page.locator(".wall-title")).toHaveText(lastTitle);
+  await expect(stops.first()).toHaveAccessibleName(new RegExp(`^Now to \\d\\d:\\d\\d, ${lastTitle}, the one thing`));
+  await expect(stops.first().locator(".tdm-one-thing")).toHaveText(/^THE ONE THING · UNTIL \d\d:\d\d$/);
+  await expect(stops).toHaveCount(3);
+
+  await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
+  await expect(stops.first().locator(".tdm-title")).toHaveText(new RegExp(`^${firstBefore.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  await expect(stops.last().locator(".tdm-title")).toHaveText(lastTitle);
 });

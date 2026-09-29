@@ -45,6 +45,8 @@ import { IconPlus } from "./ui/icons";
 import TaskDetail from "./TaskDetail";
 import DayMapColumn from "./DayMapColumn";
 import { makeOneThing, undoOneThing } from "../utils/oneThing";
+import { currentDayMinutes, oneThingToNow } from "../hooks/useDayRoute";
+import { breaksFromWindows } from "../utils/dayMapRoute";
 import { bringBack, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
 
@@ -701,8 +703,19 @@ export default function TodayTab({
     return () => clearTimeout(t);
   }, [tintUuid]);
   const handleMakeOneThing = (task) => {
-    const { tasks: next, previous } = makeOneThing(tasks, task.uuid);
-    if (next === tasks) return;
+    const { tasks: pinned, previous } = makeOneThing(tasks, task.uuid);
+    if (pinned === tasks) return;
+    // On the Day map it moves to NOW: the route flows on from its end, fixed
+    // stops stay (53–56). Undo puts the stops and the route's start back.
+    const nowMinutes = currentDayMinutes(windows);
+    const moved = oneThingToNow(pinned, String(task.uuid), {
+      todayStr, nowMinutes, breaks: breaksFromWindows(windows, (config.breakName || "").trim() || "Break"),
+    });
+    const next = moved ? moved.tasks : pinned;
+    const route = moved && {
+      before: tasks.filter(t => moved.ids.includes(String(t.uuid || t.id))),
+      config: { dayMapDate: config.dayMapDate, dayMapAnchorMinutes: config.dayMapAnchorMinutes },
+    };
     // The pin moving off a task with an open session ends that session, as
     // any other re-pin does (handlePinTask).
     const endedFocusSession = previous ? endFocusSession("user_abandoned") : null;
@@ -712,7 +725,8 @@ export default function TodayTab({
       setFocusSessionActive(false);
     }
     const now = Date.now();
-    savePayloadAsync({ ...payload, tasks: next })
+    const nextConfig = moved ? { ...config, dayMapDate: todayStr, dayMapAnchorMinutes: nowMinutes, lastUpdated: now } : config;
+    savePayloadAsync({ ...payload, tasks: next, config: nextConfig })
       .then(() => {
         if (endedFocusSession) {
           writeActivityEvents(eventPatch(uid, buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now })));
@@ -720,7 +734,7 @@ export default function TodayTab({
       })
       .catch(() => {});
     if (previous) setTintUuid(previous.uuid);
-    setUndo({ kind: "swap", task, previous, at: now });
+    setUndo({ kind: "swap", task, previous, route, at: now });
   };
 
   // Tomorrow (50b, T): leaves today for the next Loci day, first in line there.
@@ -797,6 +811,7 @@ export default function TodayTab({
   const undoMessage = (u) => {
     if (u.count) return `${u.count} ${u.count === 1 ? "task" : "tasks"} moved to tomorrow`;
     if (u.kind === "step") return `Step removed: ${u.step.text}`;
+    if (u.kind === "route") return "Route cleared";
     const title = u.task.title;
     if (u.kind === "move") {
       const label = u.to === "week" ? "This week" : (ROADMAP_HORIZONS.find(h => h.key === u.to)?.label || u.to);
@@ -881,10 +896,22 @@ export default function TodayTab({
       return;
     }
     if (kind === "swap") {
-      savePayload({ ...payload, tasks: undoOneThing(tasks, task.uuid, undo.previous) });
+      // The route comes back only with the pin: if the pin has moved on
+      // since, undoOneThing leaves it, and so does this.
+      const stillPinned = tasks.some(t => t.uuid === task.uuid && t.isNowFocus);
+      const unpinned = undoOneThing(tasks, task.uuid, undo.previous);
+      if (!undo.route || !stillPinned) {
+        savePayload({ ...payload, tasks: unpinned });
+        return;
+      }
+      const { dayMapDate, dayMapAnchorMinutes } = undo.route.config;
+      const restoredConfig = { ...config, lastUpdated: Date.now() };
+      if (dayMapDate === undefined) delete restoredConfig.dayMapDate; else restoredConfig.dayMapDate = dayMapDate;
+      if (dayMapAnchorMinutes === undefined) delete restoredConfig.dayMapAnchorMinutes; else restoredConfig.dayMapAnchorMinutes = dayMapAnchorMinutes;
+      savePayload({ ...payload, tasks: restoreSchedule(unpinned, undo.route.before), config: restoredConfig });
       return;
     }
-    if (kind === "tomorrow" || kind === "bringback") {
+    if (kind === "tomorrow" || kind === "bringback" || kind === "route") {
       savePayload({ ...payload, tasks: restoreSchedule(tasks, undo.before) });
       return;
     }
@@ -1924,6 +1951,7 @@ export default function TodayTab({
           onOpenDayMap={onOpenDayMap}
           onOpenTask={openFromDayMap}
           onMoveToTomorrow={handleMoveManyToTomorrow}
+          onRouteCleared={(before) => setUndo({ kind: "route", before, at: Date.now() })}
           covered={!!detailTask}
         />
       )}

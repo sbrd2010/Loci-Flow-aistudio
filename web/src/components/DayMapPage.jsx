@@ -30,6 +30,7 @@ import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { safeUUID } from "../utils/uuid";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import DayClockBar from "./DayClockBar";
+import DayMapFrom from "./DayMapFrom";
 import LinkifyText from "./LinkifyText";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import TaskDetail from "./TaskDetail";
@@ -151,44 +152,6 @@ function RouteDrop({ children }) {
   return <div ref={setNodeRef} className={`dm-route-wrap${isOver ? " is-drop" : ""}`}>{children}</div>;
 }
 
-function StartControl({ anchorMinutes, onChangeAnchor, windows }) {
-  const windowsRef = useRef(windows);
-  windowsRef.current = windows;
-  const [actualNow, setActualNow] = useState(() => currentDayMinutes(windows));
-  useEffect(() => {
-    const id = setInterval(() => setActualNow(currentDayMinutes(windowsRef.current)), 30_000);
-    return () => clearInterval(id);
-  }, []);
-
-  // Start times run to the end of the day: midnight, or later when the last
-  // window runs past it.
-  const dayEnd = Math.max(1440, ...mergeWindowSpans(windows).map(([, end]) => end));
-  const options = [actualNow];
-  for (let m = Math.ceil(actualNow / 15) * 15; m <= actualNow + 600 && m < dayEnd; m += 15) {
-    if (m !== actualNow) options.push(m);
-  }
-  if (!options.includes(anchorMinutes) && anchorMinutes > actualNow) {
-    options.push(anchorMinutes);
-    options.sort((a, b) => a - b);
-  }
-
-  return (
-    <label className="dm-from">
-      <span className="dm-from-label">From</span>
-      <select
-        className="dm-from-select"
-        value={anchorMinutes}
-        onChange={e => onChangeAnchor(Number(e.target.value))}
-        aria-label="Route start time"
-      >
-        {options.map(m => (
-          <option key={m} value={m}>{formatClock24(m)}{m === actualNow ? " (now)" : ""}</option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
 export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onAddTask, onHelpChoose, dayClock, flushNow = () => {}, backLabel = "Today", uid, writeActivityEvents, focusTimer }) {
   // A stop, opened (52): the task sheet, with Remove from route.
   const [detailId, setDetailId] = useState(null);
@@ -239,6 +202,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     tasks, config: routeConfig, windows, breaks, todayStr, tomorrowStr, payloadRef,
     activeTodayTasks, scheduledTasks, tomorrowTasks, unscheduledTasks,
     anchorMinutes, rows, routeTasks, plan, isGoal, sortableIds, latestTasks, applyAndSave,
+    setAnchor, addToRoute, autoFill, clearRoute: clearRouteTasks,
   } = useDayRoute({ payload, savePayload });
 
   // A drag ends in a click on the row it dropped; that click must not open it.
@@ -254,16 +218,6 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space", "Enter"] },
     })
   );
-
-  const setAnchor = (minutes) => {
-    applyAndSave(scheduledTasks, minutes, { dayMapDate: todayStr, dayMapAnchorMinutes: minutes });
-  };
-
-  const addToRoute = (taskId) => {
-    const task = latestTasks().find(t => getTaskId(t) === taskId);
-    if (!task) return;
-    applyAndSave([...scheduledTasks, task], anchorMinutes);
-  };
 
   const removeFromRoute = (taskId) => {
     const reflowed = reflowRoute(scheduledTasks.filter(t => getTaskId(t) !== taskId), anchorMinutes, todayStr, breaks);
@@ -285,25 +239,10 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     ), anchorMinutes);
   };
 
-  // 52d: Auto-fill fills from Today's list order — what moved from
-  // yesterday first, then the list as it stands.
-  const autoFill = () => {
-    if (!unscheduledTasks.length) return;
-    const fromYesterday = (t) => t.deferredUntil === todayStr;
-    const inListOrder = [...unscheduledTasks].sort((a, b) => (fromYesterday(b) - fromYesterday(a)) || ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)));
-    applyAndSave([...scheduledTasks, ...inListOrder], anchorMinutes);
-  };
-
   // 52: Clear route has Undo, no confirm.
   const clearRoute = () => {
-    const p = payloadRef.current;
-    const before = latestTasks().filter(t => t.dayMapDate === todayStr);
-    if (!before.length) return;
-    savePayload({
-      ...p,
-      tasks: latestTasks().map(t => t.dayMapDate === todayStr ? removeScheduleFields(t) : t),
-      timestamp: Date.now(),
-    });
+    const before = clearRouteTasks();
+    if (!before) return;
     setDetailId(null);
     setUndo({ kind: "clear", message: "Route cleared", before, at: Date.now() });
   };
@@ -736,7 +675,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           <div className="dm-layout">
             {/* 52d–e: From · Auto-fill · Clear route, as text, above the route. */}
             <div className="dm-controls">
-              <StartControl anchorMinutes={anchorMinutes} onChangeAnchor={setAnchor} windows={windows} />
+              <DayMapFrom anchorMinutes={anchorMinutes} onChangeAnchor={setAnchor} windows={windows} />
               <button type="button" className="dm-text-btn" onClick={autoFill} disabled={!unscheduledTasks.length}>Auto-fill</button>
               <button type="button" className="dm-text-btn" onClick={() => setFixing({})}>Fixed time</button>
               <button type="button" className="dm-text-btn" onClick={clearRoute} disabled={!scheduledTasks.length}>Clear route</button>
