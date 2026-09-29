@@ -28,6 +28,13 @@ export function isFixedStop(task) {
   return task?.dayMapFixedMinutes != null && Number.isFinite(Number(task.dayMapFixedMinutes));
 }
 
+// Q31: "Something else" — a call, a meeting — while it has its time. Never
+// the one thing or a focus session; unfixed, it is a task like any other
+// (loopcheck of #430), and fixed again, an event again.
+export function isEventTask(task) {
+  return task?.fixedKind === "event" && isFixedStop(task);
+}
+
 // Breaks are the gaps between focus windows (09:00–13:35 and 14:15–17:30
 // make 13:35–14:15 a break). With one window there are none.
 export function breaksFromWindows(windows, name = "Break") {
@@ -59,17 +66,23 @@ function runThrough(start, minutes, breaks) {
 }
 
 function afterBreaks(at, breaks) {
-  for (const b of breaks) if (b.start <= at && at < b.end) return b.end;
+  // In start order, so a break that runs into another carries on to its end.
+  for (const b of breaks) if (b.start <= at && at < b.end) at = b.end;
   return at;
 }
 
 // Lays out today's route. `stops` is the route in its order; `durationOf`
 // gives a stop's minutes. Returns the rows in time order:
 //   { kind: "stop", task, start, end, fixed, late, pulledForward, continues, continued }
-//   { kind: "break", name, start, end }
+//   { kind: "break", name, start, end, added }  (added: a break you added, by index)
 //   { kind: "free", start, end }
 // A task split by a break gives two stop rows (the first `continues`, the
 // second is `continued`).
+//
+// Breaks between focus windows split a task that reaches them (it continues
+// after). A break you added (`added` set) is a wall, like a fixed stop: a
+// task never crosses it but goes after it whole, and the time before it takes
+// a later stop that fits (Q36.2). No buffer after a break (Q35a).
 //
 // The rule (58): fixed stops never move. Flexible stops flow in order from
 // `from`. One that would overlap a fixed stop goes after it, order kept; the
@@ -77,11 +90,15 @@ function afterBreaks(at, breaks) {
 // (pulled forward), and what is left shows as free. If now has passed a fixed
 // stop's time, it is `late` and nothing is pushed.
 export function layoutRoute(stops, { from, breaks = [], now = -Infinity, durationOf }) {
-  const sortedBreaks = [...breaks].sort((a, b) => a.start - b.start);
-  const walls = stops
-    .filter(isFixedStop)
-    .map(task => ({ task, start: Number(task.dayMapFixedMinutes), minutes: durationOf(task) }))
-    .sort((a, b) => a.start - b.start);
+  const allBreaks = [...breaks].sort((a, b) => a.start - b.start);
+  const sortedBreaks = allBreaks.filter(b => b.added == null);
+  const walls = [
+    ...stops.filter(isFixedStop).map(task => ({ task, start: Number(task.dayMapFixedMinutes), minutes: durationOf(task) })),
+    ...allBreaks.filter(b => b.added != null).map(b => ({ start: b.start, minutes: b.end - b.start })),
+  ].sort((a, b) => a.start - b.start);
+  // The time a wall holds the route: a fixed stop and its buffer, a break
+  // to its end.
+  const wallEnd = (x) => (x.task ? afterTask(x.start + x.minutes) : x.start + x.minutes);
   const queue = stops.filter(t => !isFixedStop(t));
   const rows = [];
   let cursor = from;
@@ -93,7 +110,7 @@ export function layoutRoute(stops, { from, breaks = [], now = -Infinity, duratio
   // shorter stop takes its place (Codex review of #427).
   if (queue[0]?.isNowFocus) {
     const task = queue.shift();
-    const pauses = [...sortedBreaks, ...walls.map(x => ({ start: x.start, end: afterTask(x.start + x.minutes) }))]
+    const pauses = [...sortedBreaks, ...walls.map(x => ({ start: x.start, end: wallEnd(x) }))]
       .sort((a, b) => a.start - b.start);
     const parts = runThrough(afterBreaks(from, pauses), durationOf(task), pauses);
     parts.forEach((p, i) => rows.push({
@@ -106,9 +123,8 @@ export function layoutRoute(stops, { from, breaks = [], now = -Infinity, duratio
   while (queue.length || w < walls.length) {
     const wall = walls[w];
     if (wall && wall.start <= cursor) {
-      const end = wall.start + wall.minutes;
-      rows.push({ kind: "stop", task: wall.task, start: wall.start, end, fixed: true, late: now >= wall.start });
-      cursor = Math.max(cursor, afterTask(end));
+      if (wall.task) rows.push({ kind: "stop", task: wall.task, start: wall.start, end: wall.start + wall.minutes, fixed: true, late: now >= wall.start });
+      cursor = Math.max(cursor, wallEnd(wall));
       w += 1;
       continue;
     }
@@ -144,20 +160,25 @@ export function layoutRoute(stops, { from, breaks = [], now = -Infinity, duratio
   }
 
   // A break shows only between stops: one with nothing after it is just the
-  // end of the day's work.
+  // end of the day's work — unless you added it (Q31): that one shows.
   // A fixed stop inside a break (a call over lunch) takes that time: the
-  // break shows only around it (Codex review of #421).
+  // break shows only around it (Codex review of #421). Breaks that overlap
+  // show their time once — except one you added, which always keeps its
+  // own row, to open (loopcheck of #430).
   const lastEnd = Math.max(-Infinity, ...rows.filter(r => r.kind === "stop").map(r => r.end));
   const fixedRows = rows.filter(r => r.fixed).sort((a, b) => a.start - b.start);
-  for (const b of sortedBreaks) {
-    if (b.end <= from || b.start >= lastEnd) continue;
-    let s = b.start;
+  let shownTo = -Infinity;
+  for (const b of allBreaks) {
+    if (b.end <= from || (b.start >= lastEnd && b.added == null)) continue;
+    const row = (start, end) => rows.push({ kind: "break", name: b.name, start, end, ...(b.added != null ? { added: b.added } : {}) });
+    let s = b.added != null ? b.start : Math.max(b.start, shownTo);
+    shownTo = Math.max(shownTo, b.end);
     for (const f of fixedRows) {
       if (f.end <= s || f.start >= b.end) continue;
-      if (f.start > s) rows.push({ kind: "break", name: b.name, start: s, end: f.start });
+      if (f.start > s) row(s, f.start);
       s = Math.max(s, f.end);
     }
-    if (s < b.end) rows.push({ kind: "break", name: b.name, start: s, end: b.end });
+    if (s < b.end) row(s, b.end);
   }
   return rows.sort((a, b) => a.start - b.start);
 }

@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import { formatClock24, formatSpan } from "../utils/dayMapPlan";
 import { defaultFixTime, describeFixMoves, previewFix, timeChips, toLociMinutes } from "../utils/fixedTime";
+import { BREAK_LENGTHS, fitBreak } from "../utils/dayMapBreaks";
 import { IconChevronRight, IconLock, IconPlus, IconX } from "./ui/icons";
 
 // Setting a fixed time (58c–e). Step 1 chooses what: a stop on today's
@@ -8,6 +9,11 @@ import { IconChevronRight, IconLock, IconPlus, IconX } from "./ui/icons";
 // picks the time: six half-hour chips, the time typed, ↑↓ for 5 minutes,
 // and a plain sentence of what moves before you confirm. A stop's own sheet
 // ("Fix time") opens straight at step 2.
+//
+// A break (Q31) is chosen here too, on today's route only: now by default,
+// or "Later…", the next free slot (Q36.1). It fits around fixed stops and
+// other breaks, and says so (Q36.2, Q36a). A break row opens this sheet on
+// its own break: Length, Time, Remove.
 
 const LENGTHS = [15, 30, 45, 60, 90, 120];
 const DRAFT_ID = "__fix-draft__";
@@ -22,16 +28,19 @@ function parseClock(text) {
 
 export default function FixTimeSheet({
   routeTasks, unscheduledTasks, stops, task: initialTask, from, breaks, nowMins, dayStart, dayEnd, durationOf, getTaskId, onFix, onClose, newBlocked = false,
+  breakDefault, laterAt, busy = [], breakItem = null, onBreak, onRemoveBreak,
 }) {
   const [task, setTask] = useState(initialTask || null);
   const [draft, setDraft] = useState(null); // { title, minutes } for something new
+  const [brk, setBrk] = useState(breakItem ? { minutes: breakItem.lengthMin } : null); // { minutes } for a break
   const projected = initialTask ? routeTasks.find(t => getTaskId(t) === getTaskId(initialTask))?.dayMapStartMinutes : undefined;
-  const [at, setAt] = useState(() => defaultFixTime(initialTask?.dayMapFixedMinutes ?? projected, nowMins));
+  const [at, setAt] = useState(() => (breakItem ? breakItem.start : defaultFixTime(initialTask?.dayMapFixedMinutes ?? projected, nowMins)));
   const [typed, setTyped] = useState(null);
   const [page, setPage] = useState(0);
   const timeRef = useRef(null);
 
-  const step = task || draft ? "time" : "choose";
+  const step = task || draft || brk ? "time" : "choose";
+  const fitted = brk ? fitBreak(at, brk.minutes, busy) : null;
   const subject = task || (draft && { uuid: DRAFT_ID, title: draft.title.trim() || "it", timeEstimateMinutes: draft.minutes });
   const moves = useMemo(() => {
     if (!subject) return null;
@@ -46,14 +55,15 @@ export default function FixTimeSheet({
     setPage(0);
   };
   const back = () => {
-    if (initialTask) { onClose(); return; }
-    setTask(null); setDraft(null); setTyped(null);
+    if (initialTask || breakItem) { onClose(); return; }
+    setTask(null); setDraft(null); setBrk(null); setTyped(null);
   };
   const setTime = (m) => { setAt(toLociMinutes(m, dayStart, dayEnd)); setTyped(null); setPage(0); };
   // Evening Guard (Codex review of #425): something new is a new task, and
   // none are added at or after 8 PM while it is on; fixing a task's time is not.
   const blocked = !!draft && newBlocked;
   const confirm = () => {
+    if (brk) { onBreak(fitted.start, fitted.lengthMin, breakItem ? breakItem.index : null); return; }
     if (draft && (!draft.title.trim() || blocked)) return;
     onFix(task || { title: draft.title.trim(), minutes: draft.minutes }, at, !task);
   };
@@ -69,15 +79,15 @@ export default function FixTimeSheet({
     items[next]?.focus();
   };
 
-  const title = step === "choose" ? "Fix a time" : task ? task.title : "Something else";
+  const title = step === "choose" ? "Fix a time" : task ? task.title : brk ? (breakItem ? "Break" : "A break") : "Something else";
   return (
     <>
       <div className="dm-sheet-scrim fx-scrim" onClick={onClose} aria-hidden="true" />
-      <div className="fx-dialog" role="dialog" aria-modal="true" aria-label={step === "choose" ? "Fix a time" : `Fix a time: ${title}`} onKeyDown={onKeyDown}>
+      <div className="fx-dialog" role="dialog" aria-modal="true" aria-label={step === "choose" ? "Fix a time" : breakItem ? "Break" : `Fix a time: ${title}`} onKeyDown={onKeyDown}>
         <div className="fx-head">
           <div>
             <h2 className="fx-title">{title}</h2>
-            <p className="fx-sub">{step === "choose" ? "Choose what happens at a set time." : task ? "It stays at this time; the rest of the route flows around it." : "A fixed stop that isn’t on your list yet."}</p>
+            <p className="fx-sub">{step === "choose" ? "Choose what happens at a set time." : task ? "It stays at this time; the rest of the route flows around it." : brk ? "On today’s route only; what comes after it moves." : "A fixed stop that isn’t on your list yet."}</p>
           </div>
           <button type="button" className="dm-sheet-close" onClick={onClose} aria-label="Close" autoFocus={step === "choose"}>
             <IconX size={20} />
@@ -115,6 +125,11 @@ export default function FixTimeSheet({
               <span className="fx-else-title">Something else…</span>
               <span className="fx-else-hint">a call, a meeting</span>
             </button>
+            <button type="button" className="fx-else" onClick={() => { setBrk({ minutes: breakDefault.lengthMin }); setAt(breakDefault.start); }}>
+              <IconPlus size={18} />
+              <span className="fx-else-title">A break</span>
+              <span className="fx-else-hint">on today’s route only</span>
+            </button>
           </div>
         ) : (
           <div className="fx-time">
@@ -135,6 +150,17 @@ export default function FixTimeSheet({
                 </label>
               </div>
             )}
+            {brk && (
+              <div className="fx-fields">
+                <label className="fx-field is-length">
+                  <span className="fx-label">Length</span>
+                  <select className="fx-input" autoFocus value={brk.minutes} onChange={e => setBrk({ minutes: Number(e.target.value) })}>
+                    {[...new Set([...BREAK_LENGTHS, brk.minutes])].sort((a, b) => a - b).map(m => <option key={m} value={m}>{formatSpan(m)}</option>)}
+                  </select>
+                </label>
+                {!breakItem && <button type="button" className="fx-page fx-later" onClick={() => { setAt(laterAt); setTyped(null); setPage(0); }}>Later…</button>}
+              </div>
+            )}
             <div className="fx-at">
               <span className="fx-label" id="fx-at-label">At</span>
               <input
@@ -143,7 +169,7 @@ export default function FixTimeSheet({
                 aria-labelledby="fx-at-label"
                 aria-describedby="fx-at-help"
                 inputMode="numeric"
-                autoFocus={!draft}
+                autoFocus={!draft && !brk}
                 value={typed ?? toClock(at)}
                 onChange={e => { setTyped(e.target.value); const m = parseClock(e.target.value); if (m != null) { setAt(toLociMinutes(m, dayStart, dayEnd)); setPage(0); } }}
                 onBlur={() => setTyped(null)}
@@ -165,6 +191,13 @@ export default function FixTimeSheet({
               <span className="fx-help" id="fx-at-help">Tap the time to type it · ↑↓ = 5 min</span>
               <button type="button" className="fx-page" onClick={() => setPage(p => p + 1)}>→ Later</button>
             </div>
+            {fitted && (fitted.after || fitted.cut) && (
+              <p className="fx-help fx-fit" aria-live="polite">
+                {fitted.after && <>Starts at {toClock(fitted.start)} · after {fitted.after}</>}
+                {fitted.after && fitted.cut && <br />}
+                {fitted.cut && <>Ends at {toClock(fitted.start + fitted.lengthMin)} · {fitted.cut}</>}
+              </p>
+            )}
             {moves && (
               <div className="fx-moves" aria-live="polite">
                 <p className="fx-moves-kicker">What moves</p>
@@ -179,9 +212,10 @@ export default function FixTimeSheet({
             )}
             <div className="fx-foot">
               <button type="button" className="fx-confirm" onClick={confirm} disabled={!!draft && (!draft.title.trim() || blocked)}>
-                <IconLock size={16} /> Fix at {toClock(at)}
+                {brk ? (breakItem ? `Save · ${toClock(fitted.start)}` : `Add break at ${toClock(fitted.start)}`) : <><IconLock size={16} /> Fix at {toClock(at)}</>}
               </button>
-              <button type="button" className="fx-back" onClick={back}>Back</button>
+              {breakItem && <button type="button" className="fx-back" onClick={() => onRemoveBreak(breakItem.index)}>Remove</button>}
+              <button type="button" className="fx-back" onClick={back}>{breakItem ? "Cancel" : "Back"}</button>
             </div>
           </div>
         )}

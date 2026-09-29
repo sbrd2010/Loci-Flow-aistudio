@@ -1,6 +1,9 @@
 import React, { useState, useRef, useCallback } from "react";
 import { formatReminderLabel } from "../utils/reminders";
 import LinkifyText from "./LinkifyText";
+import { formatClock24 } from "../utils/dayMapPlan";
+import { isEventTask } from "../utils/dayMapRoute";
+import { IconLock } from "./ui/icons";
 import "../styles/taskRow.css";
 
 const GripIcon = () => (
@@ -56,7 +59,7 @@ export const ROADMAP_HORIZONS = [
 // MUST / GOAL tags. Tapping the row opens the task (50a–b); the list moves
 // keyboard focus between rows (one tab stop, ↑/↓). On a laptop a pin shows at
 // the row's right on hover or focus: "Make the one thing · P" (50d).
-export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, isMin = false, onSwipeDone, onSwipeTomorrow, onPutOnFront }) {
+export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, isMin = false, fixedAt = null, onSwipeDone, onSwipeTomorrow, onPutOnFront }) {
   const { title, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
 
   const hasActions = !isCompleted && !!onOpen;
@@ -216,6 +219,10 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
       <div className="task-middle">
         <div className="task-row-top">
           <span className="task-title-text"><LinkifyText text={title} /></span>
+          {/* Q31, Q36.4: a task at a set time shows its lock and time. */}
+          {fixedAt != null && !isCompleted && (
+            <span className="task-row-fixed" aria-label={`Fixed at ${formatClock24(fixedAt)}`}><IconLock size={12} /> {formatClock24(fixedAt)}</span>
+          )}
           {!isCompleted && (isNowFocus || isMVD || isGoal || isMin) && (
             <span className="task-row-tags">
               {isNowFocus && <span className="task-tag is-now" aria-label="Today's one thing">NOW</span>}
@@ -287,7 +294,7 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
         )}
       </div>
 
-      {onMakeOneThing && !isCompleted && !isNowFocus && (
+      {onMakeOneThing && !isCompleted && !isNowFocus && !isEventTask(task) && (
         <button
           type="button"
           className="task-row-pin"

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
-import { breaksFromWindows, isFixedStop, layoutRoute, layoutStarts, shouldReflowPastRoute } from "../utils/dayMapRoute";
+import { isFixedStop, layoutRoute, layoutStarts, shouldReflowPastRoute } from "../utils/dayMapRoute";
+import { routeBreaks, withAddedBreaks } from "../utils/dayMapBreaks";
 import { dayLeftFrom, nextDateStr, planDay, restoreSchedule } from "../utils/dayMapPlan";
 import { getFocusWindows, getLociNowMinutes } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
@@ -140,8 +141,9 @@ export function useDayRoute({ payload, savePayload }) {
   // The Loci day, not the calendar date: with a window past midnight, the
   // route and "tomorrow" both hold until that window ends.
   const windows = getFocusWindows(config);
-  const breaks = useMemo(() => breaksFromWindows(windows, (config.breakName || "").trim() || "Break"), [windows, config.breakName]);
   const todayStr = useLociDayStr(windows);
+  // The gaps between focus windows, and the breaks you added today (Q31).
+  const breaks = useMemo(() => routeBreaks(windows, config, todayStr), [windows, config.breakName, config.dayMapBreaks, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
   const tomorrowStr = nextDateStr(todayStr);
 
   const payloadRef = useRef(payload);
@@ -252,6 +254,17 @@ export function useDayRoute({ payload, savePayload }) {
     return before;
   };
 
+  // Q31: today's added breaks set to `items` ({ start, lengthMin }), and the
+  // route timed again around them, in one write. The route's start is kept
+  // where it is: inferred from the first stop, a break now would move it to
+  // the break's end and hide the break.
+  const setAddedBreaks = (items) => {
+    const p = payloadRef.current;
+    const nextConfig = { ...withAddedBreaks(p?.config || {}, todayStr, items), dayMapDate: todayStr, dayMapAnchorMinutes: anchorMinutes };
+    const reflowed = reflowRoute(scheduledTasks, anchorMinutes, todayStr, routeBreaks(windows, nextConfig, todayStr));
+    savePayload({ ...p, tasks: applyReflow(latestTasks(), reflowed), config: nextConfig, timestamp: Date.now() });
+  };
+
   useEffect(() => {
     // Tasks moved here from yesterday ("Move N to tomorrow") arrive at the top
     // with no start time; they are timed from this route's start like the rest.
@@ -267,6 +280,6 @@ export function useDayRoute({ payload, savePayload }) {
     tasks, config, windows, breaks, todayStr, tomorrowStr, payloadRef,
     activeTodayTasks, scheduledTasks, tomorrowTasks, unscheduledTasks,
     anchorMinutes, rows, routeTasks, plan, isGoal, sortableIds, latestTasks, applyAndSave,
-    setAnchor, addToRoute, autoFill, clearRoute,
+    setAnchor, addToRoute, autoFill, clearRoute, setAddedBreaks,
   };
 }

@@ -302,6 +302,8 @@
   border-bottom: 1px solid var(--line);
 }
 .dm-break .dm-title { font-style: italic; font-weight: 600; }
+/* Q31: a break you added is a row you can open (Length, Time, Remove). */
+.dm-break.is-added { display: block; padding: 0; }
 .dm-free .dm-title { font-weight: 400; color: var(--ink-2); }
 /* The same rows in Today's Day map column (its base rules: todayWall.css). */
 .tdm-stop.is-late .tdm-time { color: var(--coral); }
@@ -669,6 +671,9 @@
   cursor: pointer;
 }
 .fx-help { font-size: 0.8125rem; color: var(--ink-2); text-align: center; }
+/* Q36: a break's own sheet — Later…, and where it fits around a fixed stop. */
+.fx-later { align-self: end; }
+.fx-fit { text-align: left; margin: 10px 0 0; }
 .fx-moves { margin-top: 14px; padding: 12px 14px; background: var(--panel); border-radius: 8px; }
 .fx-moves-kicker { margin: 0 0 4px; font-family: var(--font-serif); font-style: italic; font-size: 0.8125rem; color: var(--ink-2); }
 .fx-moves-text { margin: 0; font-size: 0.9375rem; line-height: 1.5; }

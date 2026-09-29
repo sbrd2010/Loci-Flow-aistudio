@@ -25,7 +25,8 @@ import {
   applyReflow, currentDayMinutes, getEstimate, getTaskId,
   normalizePriority, reflowRoute, removeScheduleFields, routeIsContiguous, useDayRoute,
 } from "../hooks/useDayRoute";
-import { isFixedStop } from "../utils/dayMapRoute";
+import { isEventTask, isFixedStop } from "../utils/dayMapRoute";
+import { addedBreaks, busyFromRows, defaultBreak, nextFreeSlot } from "../utils/dayMapBreaks";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { safeUUID } from "../utils/uuid";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
@@ -121,7 +122,8 @@ function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFo
         {/* 56a: the one thing, at NOW, until the end of its stop. */}
         {until != null && <span className="dm-one-thing"><IconPin size={12} />THE ONE THING · UNTIL {formatClock24(until)}</span>}
       </div>
-      {isNow && (
+      {/* Q31: something at a set time (a call) is never a focus session. */}
+      {isNow && !isEventTask(task) && (
         <button type="button" className="dm-start" onClick={onStartFocus} onPointerDown={e => e.stopPropagation()}>
           Start focus
         </button>
@@ -162,7 +164,7 @@ function RouteDrop({ children }) {
   return <div ref={setNodeRef} className={`dm-route-wrap${isOver ? " is-drop" : ""}`}>{children}</div>;
 }
 
-export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onAddTask, onHelpChoose, dayClock, flushNow = () => {}, backLabel = "Today", uid, writeActivityEvents, focusTimer }) {
+export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onEndFocus, onAddTask, onHelpChoose, dayClock, flushNow = () => {}, backLabel = "Today", uid, writeActivityEvents, focusTimer }) {
   // A stop, opened (52): the task sheet, with Remove from route.
   const [detailId, setDetailId] = useState(null);
   // The route's own Undo: { message, before, at } — before is what to put back.
@@ -184,7 +186,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const undo = routeUndo;
   // Fixed time (58c–e): the sheet, open on step 1 or on a stop; the stops it
   // moved and where they were (shown until you leave); the fixed row's flash.
-  const [fixing, setFixing] = useState(null); // { task? }
+  const [fixing, setFixing] = useState(null); // { task?, breakItem? }
   const [wasStarts, setWasStarts] = useState(null); // Map id → earlier start
   const [flashId, setFlashId] = useState(null);
   // A "Something else" stop's creation write, by task id: its Undo logs the
@@ -217,7 +219,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     tasks, config: routeConfig, windows, breaks, todayStr, tomorrowStr, payloadRef,
     activeTodayTasks, scheduledTasks, tomorrowTasks, unscheduledTasks,
     anchorMinutes, rows, routeTasks, plan, isGoal, sortableIds, latestTasks, applyAndSave,
-    setAnchor, addToRoute, autoFill, clearRoute: clearRouteTasks,
+    setAnchor, addToRoute, autoFill, clearRoute: clearRouteTasks, setAddedBreaks,
   } = useDayRoute({ payload, savePayload });
 
   // A drag ends in a click on the row it dropped; that click must not open it.
@@ -278,6 +280,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   // stops must not share an order or a start time with it.
   const handleUndo = () => {
     if (!undo) return;
+    // Breaks are one day's: past midnight, Undo has nothing to put back.
+    if (undo.kind === "breaks") { setUndo(null); if (undo.date === todayStr) setAddedBreaks(undo.breaks); return; }
     const restored = restoreSchedule(latestTasks(), undo.before);
     const put = new Set(undo.before.map(getTaskId));
     const onRoute = restored.filter(t => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted && !t.isParked
@@ -320,6 +324,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         horizonLevel: "today", priority: "P3", category: "Personal", frontId: null,
         timeEstimateMinutes: target.minutes, deadlineTimestamp: null, reminderAt: null,
         isCompleted: false, isParked: false, isNowFocus: false,
+        // Q31: something at a set time — a lock and its time in Today's
+        // list, and never a focus session.
+        fixedKind: "event",
         orderIndex: all.filter(t => t.horizonLevel === "today" && !t.isDeleted).length,
         dateCompletedString: null, isDeleted: false, lastUpdated: Date.now(), subSteps: [],
       };
@@ -356,6 +363,27 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       message: `${task.title} fixed at ${formatClock24(at)} · ${was.size} ${was.size === 1 ? "stop" : "stops"} moved`,
       before, created: isNew ? id : null, createdTask: isNew ? task : null, at: Date.now(),
     });
+  };
+
+  // Q31: a break you add, or change (`index`), and Remove; each with Undo.
+  const saveBreak = (start, lengthMin, index) => {
+    const before = addedBreaks(routeConfig, todayStr);
+    const item = { kind: "break", start, lengthMin };
+    setAddedBreaks(index == null ? [...before, item] : before.map((b, i) => (i === index ? item : b)));
+    // Q36a: a break now ends a focus session running, saved as it stands
+    // (until Focus 59's pause, when Resume starts a new one). Changing a
+    // break that already covered now doesn't end one started during it.
+    const nowMin = currentDayMinutes(windows);
+    const covers = (b) => !!b && b.start <= nowMin && nowMin < b.start + b.lengthMin;
+    if (covers(item) && !covers(index == null ? null : before[index]) && focusTimer?.focusSessionId) onEndFocus?.();
+    setFixing(null);
+    setUndo({ kind: "breaks", date: todayStr, breaks: before, message: `Break ${formatClock24(start)}–${formatClock24(start + lengthMin)}${index == null ? " added" : ""}`, at: Date.now() });
+  };
+  const removeBreak = (index) => {
+    const before = addedBreaks(routeConfig, todayStr);
+    setAddedBreaks(before.filter((_, i) => i !== index));
+    setFixing(null);
+    setUndo({ kind: "breaks", date: todayStr, breaks: before, message: "Break removed", at: Date.now() });
   };
 
   // Unfix: the stop flows with the route again, with Undo.
@@ -491,6 +519,28 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const NUMBER_WORDS = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
   const wontFitCount = plan.wontFit.length;
   const renderRow = (r) => {
+    if (r.kind === "break" && r.added != null) {
+      // A break you added opens its own sheet: Length, Time, Remove (Q31).
+      const item = addedBreaks(routeConfig, todayStr)[r.added];
+      const open = () => item && setFixing({ breakItem: { index: r.added, start: Number(item.start), lengthMin: Number(item.lengthMin) } });
+      return (
+        <li key={`added:${r.added}:${r.start}`} className="dm-break is-added">
+          <div
+            className="dm-main"
+            role="button"
+            tabIndex={0}
+            aria-label={`${formatClock24(r.start)} to ${formatClock24(r.end)}, ${r.name}`}
+            onClick={open}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
+          >
+            <span className="dm-time">{formatClock24(r.start)}</span>
+            <span className="dm-rail" aria-hidden="true"><span className="dm-dash" /></span>
+            <span className="dm-title">{r.name}</span>
+            <span className="dm-dur">{formatSpan(r.end - r.start)}</span>
+          </div>
+        </li>
+      );
+    }
     if (r.kind === "break") {
       return (
         <li key={`break:${r.start}`} className="dm-break" aria-label={`${formatClock24(r.start)} to ${formatClock24(r.end)}, ${r.name}`}>
@@ -651,7 +701,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   useEffect(() => {
     if (!poolOpen || unscheduledTasks.length > 0) return;
     setPoolOpen(false);
-    requestAnimationFrame(() => document.querySelector(".dm-route .dm-main")?.focus());
+    requestAnimationFrame(() => document.querySelector(".dm-route .dm-stop .dm-main")?.focus());
   }, [poolOpen, unscheduledTasks.length]);
   // The sheet is the phone's and tablet's: crossing into the laptop layout
   // (a tablet turned, a window widened) closes it rather than hiding it.
@@ -665,7 +715,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       const el = document.activeElement;
       const hadFocus = !el || el === document.body || !!el.closest(".dm-pool-sheet");
       setPoolOpen(false);
-      if (hadFocus) requestAnimationFrame(() => (document.querySelector(".dm-pool .dm-pool-add") || document.querySelector(".dm-route .dm-main"))?.focus());
+      if (hadFocus) requestAnimationFrame(() => (document.querySelector(".dm-pool .dm-pool-add") || document.querySelector(".dm-route .dm-stop .dm-main"))?.focus());
     };
     close();
     window.addEventListener("resize", close);
@@ -906,6 +956,14 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           unscheduledTasks={unscheduledTasks}
           stops={scheduledTasks}
           task={fixing.task}
+          breakItem={fixing.breakItem}
+          // From a later From, the route's start: a break before it would
+          // never show (loopcheck of #430).
+          breakDefault={defaultBreak(rows, Math.max(nowMins, anchorMinutes), busyFromRows(rows, breaks))}
+          laterAt={nextFreeSlot(rows, Math.max(nowMins, anchorMinutes))}
+          busy={busyFromRows(rows, breaks, fixing.breakItem ? fixing.breakItem.index : null)}
+          onBreak={saveBreak}
+          onRemoveBreak={removeBreak}
           from={anchorMinutes}
           breaks={breaks}
           nowMins={nowMins}

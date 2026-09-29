@@ -1321,6 +1321,7 @@ export default function App() {
             savePayloadAsync={savePayloadAsync}
             onClose={closeDayMap}
             onStartFocus={(pinPromise) => { pendingFocusPinPromiseRef.current = pinPromise; setPendingFocusOpen(true); goToday(); }}
+            onEndFocus={handleEndFocusSession}
             onAddTask={() => openAddTask("today", "Day map")}
             onHelpChoose={() => openScattered("daymap")}
             uid={activityUid}

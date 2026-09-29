@@ -7,6 +7,7 @@ import { taskSteps } from "../utils/taskSteps";
 import { suggestSteps } from "../utils/stepSuggestions";
 import { formatReminderLabel } from "../utils/reminders";
 import { notifPermissionState, requestNotifPermission } from "../utils/nativeNotifs";
+import { isEventTask } from "../utils/dayMapRoute";
 import "../styles/taskDetail.css";
 
 // A task, opened (turn 50, 50a–b). Tapping a row opens it: a full-height
@@ -537,7 +538,8 @@ export default function TaskDetail({
         </div>
       ) : (
       <div className="detail-foot">
-        {!task.isNowFocus && (
+        {/* Q31: something at a set time is never the one thing. */}
+        {!task.isNowFocus && !isEventTask(task) && (
           <button type="button" className="detail-one" onClick={onMakeOneThing}>
             <IconPin size={18} /> Make this the one thing {kbd("P")}
           </button>
