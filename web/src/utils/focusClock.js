@@ -2,14 +2,15 @@
 // drawn. Pure, so the page, and later the focus bar and the mini window
 // (59b, 59e), draw the same clock.
 
-// "18:42" or, for a block over 99 minutes, "1:05:42": the part before the
+// "18:42", "4:55" or, for a block over 99 minutes, "1:05:42": the part before the
 // seconds, and the seconds. From 0:59 left the seconds stand at full size
 // and weight (`lastMinute`).
 export function clockParts(secondsLeft, maxSeconds) {
   const s = Math.max(0, Math.round(Number(secondsLeft) || 0));
   const hours = Number(maxSeconds) > 99 * 60;
   const pad = (n) => String(n).padStart(2, "0");
-  const lead = hours ? `${Math.floor(s / 3600)}:${pad(Math.floor((s % 3600) / 60))}` : pad(Math.floor(s / 60));
+  // Minutes unpadded, as the focus screen has always read them ("4:55").
+  const lead = hours ? `${Math.floor(s / 3600)}:${pad(Math.floor((s % 3600) / 60))}` : String(Math.floor(s / 60));
   return { lead, seconds: pad(s % 60), hours, lastMinute: s < 60 };
 }
 

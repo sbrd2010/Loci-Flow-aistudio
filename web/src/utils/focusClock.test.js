@@ -6,6 +6,7 @@ describe("the focus clock (59a)", () => {
     expect(clockParts(18 * 60 + 42, 25 * 60)).toEqual({ lead: "18", seconds: "42", hours: false, lastMinute: false });
     expect(clockParts(65 * 60 + 7, 120 * 60)).toEqual({ lead: "1:05", seconds: "07", hours: true, lastMinute: false });
     expect(clockParts(99 * 60, 99 * 60).hours).toBe(false);
+    expect(clockParts(4 * 60 + 55, 300).lead).toBe("4");
   });
 
   it("puts the seconds at full size from 0:59 left", () => {

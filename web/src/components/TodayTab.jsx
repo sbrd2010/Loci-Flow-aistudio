@@ -564,8 +564,8 @@ export default function TodayTab({
 
   // 59g: "Restart with a new length" — a fresh block in the same session.
   const handleRestartFocus = (minutes) => {
-    changeFocusDuration(minutes);
-    setIsTimerRunning(true);
+    // A pause that ran out closes the session instead (59j): no restart.
+    if (changeFocusDuration(minutes)) setIsTimerRunning(true);
   };
 
   // K4's "Stop here". The minutes are already banked, so this is only a
