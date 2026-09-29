@@ -154,4 +154,18 @@ test("the minimum day: Change picks, Confirm makes it one line with MIN on the r
   for (const title of picked) {
     await expect(list.locator("[data-testid='task-row']", { hasText: title }).getByLabel("Minimum day")).toBeVisible();
   }
+// Codex review of #428: with every task done, the page's empty state still
+// shows "Done so far today", where the day's sessions matter most.
+test("with every task done, Done so far today stays on the page", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await openDayMapByKey(page);
+  await page.getByRole("button", { name: "Auto-fill" }).click();
+  for (let i = 0; i < 3; i += 1) {
+    const title = (await page.locator(".dm-stop .dm-title").first().innerText()).split("\n")[0].trim();
+    await page.locator(".dm-stop .dm-main").first().click();
+    await page.getByTestId("task-detail").getByRole("button", { name: `Mark done: ${title}` }).click();
+    await expect(page.getByTestId("task-detail")).toHaveCount(0);
+  }
+  await expect(page.locator(".dm-empty")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Done so far today" }).getByRole("button", { name: /^Done so far today · 3/ })).toBeVisible();
 });
