@@ -1,7 +1,8 @@
 import { test, expect } from "@playwright/test";
 
-// 50k–l: from 1600px the cap is 1760px, and the Day map is Today's third
-// column while the list is open. The list never passes 720px.
+// 54a, 54e: from 1600px the cap is 1760px (2240px from 2200px). With the
+// list shown Today is task 480 · list · Day map 520; with it hidden, the task
+// and a 620px Day map. Below 1600 the list and the Day map trade places.
 
 async function enterDemo(page, viewport, time = "2024-06-15T11:35:00") {
   await page.addInitScript(() => {
@@ -27,14 +28,17 @@ async function autoFillRoute(page) {
 
 const column = (page) => page.getByRole("complementary", { name: "Day map" });
 
-test("1680: the Day map is a third column beside a 720px list, and goes with the list", async ({ page }) => {
+test("1680: task 480 · list · Day map 520; hiding the list widens the Day map to 620 and keeps it (54a, 54e)", async ({ page }) => {
   await enterDemo(page, { width: 1680, height: 1000 });
   await expect(column(page)).toBeVisible();
   await expect(column(page)).toContainText("Nothing on the route yet.");
 
+  const band = await page.locator(".wall-goal").boundingBox();
   const list = await page.locator("section.today-list").boundingBox();
   const map = await column(page).boundingBox();
-  expect(Math.round(list.width)).toBe(720);
+  expect(Math.round(band.width)).toBe(480);
+  expect(Math.round(map.width)).toBe(520);
+  expect(list.x).toBeGreaterThan(band.x + band.width);
   expect(map.x).toBeGreaterThan(list.x + list.width);
   expect(map.x + map.width).toBeLessThanOrEqual(1680 - 40);
 
@@ -44,32 +48,50 @@ test("1680: the Day map is a third column beside a 720px list, and goes with the
   await expect(stops.first()).toHaveAccessibleName(/^Now to /);
   await expect(column(page).locator(".tdm-dayend")).toHaveText(/^DAY ENDS 02:00 · \d+h\d{2}m FREE$/);
 
-  // Hiding the list takes the column with it; showing it brings it back.
-  // (51e: it leaves as the list does, and rides in 30ms behind it.)
-  // The toggle runs in the keydown, so its copy is there the moment it ends.
+  // Hiding the list keeps the column (54a): no copy fades out, and it takes
+  // 620px. The toggle runs in the keydown, so a copy would be there at once.
   const ghosts = await page.evaluate(() => {
     document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "l", bubbles: true }));
     return document.querySelectorAll("body > .today-daymap[aria-hidden='true']").length;
   });
-  expect(ghosts).toBe(1);
-  await expect(column(page)).toHaveCount(0);
-  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
-  await page.keyboard.press("l");
+  expect(ghosts).toBe(0);
+  await expect(page.locator("section.today-list")).toBeHidden();
   await expect(column(page)).toBeVisible();
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+  expect(Math.round((await column(page).boundingBox()).width)).toBe(620);
+  // Showing the list brings it in; the column, already there, doesn't ride in.
+  await page.keyboard.press("l");
+  await expect(page.locator("section.today-list")).toBeVisible();
   const delays = await page.evaluate(() => ({
     list: document.querySelector("section.today-list").getAnimations().map(a => a.effect.getTiming().delay),
     column: document.querySelector(".today-daymap:not([aria-hidden])").getAnimations().map(a => a.effect.getTiming().delay),
   }));
   expect(delays.list).toContain(60);
-  expect(delays.column).toEqual([90]);
+  expect(delays.column).toEqual([]);
 
   // The heading opens the Day map itself.
   await column(page).getByRole("button", { name: "Day map" }).click();
   await expect(page.locator(".day-map-page")).toBeVisible();
 });
 
-test("below 1600 there is no Day map column", async ({ page }) => {
+// 54c: on a laptop L swaps the list and the Day map column. The column
+// leaves as a fading copy, as the list does, and rides back in 30ms behind
+// the list's timing.
+test("below 1600 the list and the Day map column trade places (L)", async ({ page }) => {
   await enterDemo(page, { width: 1599, height: 1000 });
+  await expect(page.getByTestId("today-tasks-list")).toBeVisible();
+  await expect(column(page)).toHaveCount(0);
+  await page.locator("body").click({ position: { x: 5, y: 300 } });
+  await page.keyboard.press("l");
+  await expect(page.locator("section.today-list")).toBeHidden();
+  await expect(column(page)).toBeVisible();
+  expect(await page.evaluate(() => document.querySelector(".today-daymap:not([aria-hidden])").getAnimations().map(a => a.effect.getTiming().delay))).toEqual([90]);
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+  const ghosts = await page.evaluate(() => {
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "l", bubbles: true }));
+    return document.querySelectorAll("body > .today-daymap[aria-hidden='true']").length;
+  });
+  expect(ghosts).toBe(1);
   await expect(page.getByTestId("today-tasks-list")).toBeVisible();
   await expect(column(page)).toHaveCount(0);
 });
@@ -79,10 +101,26 @@ test("2130: the content stops at 1760px and the margins take the rest", async ({
   const wall = await page.locator(".today-layout").boundingBox();
   expect(Math.round(wall.width)).toBeLessThanOrEqual(1760);
   expect(Math.round(wall.width)).toBeGreaterThanOrEqual(1740);
+  // 1760 − 480 − 520 − two 36px gaps: under 720px, about 72 characters a row.
   const list = await page.locator("section.today-list").boundingBox();
-  expect(Math.round(list.width)).toBe(720);
+  expect(Math.round(list.width)).toBe(688);
   const brand = await page.getByRole("banner").getByRole("button", { name: "Loci" }).boundingBox();
   expect(Math.abs(brand.x - wall.x)).toBeLessThan(2);
+});
+
+// 57b: from 2200px the cap is 2240px and the title is one step up.
+test("2400: the content stops at 2240px, and the list-hidden title is one step up", async ({ page }) => {
+  await enterDemo(page, { width: 2400, height: 1200 });
+  const wall = await page.locator(".today-layout").boundingBox();
+  expect(Math.round(wall.width)).toBe(2240);
+  const shown = await page.locator(".wall-title").evaluate(el => [el.dataset.len, parseFloat(getComputedStyle(el).fontSize)]);
+  await page.locator("body").click({ position: { x: 5, y: 300 } });
+  await page.keyboard.press("l");
+  await expect(page.locator("section.today-list")).toBeHidden();
+  const hidden = await page.locator(".wall-title").evaluate(el => parseFloat(getComputedStyle(el).fontSize));
+  // Wide sizes with the list shown, one step up with it hidden.
+  const steps = { s: [64, 72], m: [52, 58], l: [42, 48], xl: [36, 40] }[shown[0]];
+  expect([shown[1], hidden]).toEqual(steps);
 });
 
 test("won't fit: Move N to tomorrow moves the stops past the day's end, with Today's Undo", async ({ page }) => {

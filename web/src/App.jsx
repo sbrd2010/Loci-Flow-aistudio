@@ -1302,6 +1302,7 @@ export default function App() {
             onOpenAddTask={() => openAddTask("today", "Today")}
             onOpenDayMap={openDayMap}
             onOpenMindBox={openMindBox}
+            onOpenPlan={() => handleTabSelect("roadmap")}
             onOpenCoach={() => setActiveTab("coach")}
             onScattered={() => openScattered("today")}
             isAddTaskDialogOpen={showAddTask}

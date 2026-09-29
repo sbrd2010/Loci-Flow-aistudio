@@ -78,7 +78,7 @@ function SortableTaskItem({ id, children }) {
 }
 
 export default function TodayTab({
-  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenCoach, onScattered, onOpenAddTask,
+  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenPlan, onOpenCoach, onScattered, onOpenAddTask,
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
@@ -194,7 +194,7 @@ export default function TodayTab({
   const [sheetViewport, setSheetViewport] = useState(() => typeof window !== "undefined" && window.innerWidth < 840);
   // A task, opened (50a–b): a sheet below 1024px, a non-modal drawer above.
   const [drawerViewport, setDrawerViewport] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1024);
-  // From 1600px the Day map is Today's third column while the list is open (50k–l).
+  // From 1600px the Day map is Today's third column while the list is open (54e).
   const [wideViewport, setWideViewport] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1600);
   const [detailUuid, setDetailUuid] = useState(null);
   const [rowFocusUuid, setRowFocusUuid] = useState(null);
@@ -1599,13 +1599,16 @@ export default function TodayTab({
   });
 
   const listShown = peekOpen || !pinnedFocusTask;
-  const dayMapColumn = wideViewport && listShown;
+  // The Day map column (54): beside the task whenever the list is hidden
+  // from 1024px (54a, 54c) — so L swaps the list and the Day map on a laptop
+  // — and as a third column with the list shown from 1600px (54e).
+  const dayMapColumn = (wideViewport && listShown) || (drawerViewport && !listShown);
 
   return (
     <>
-      {/* ── Today (turns 37, 41). On a laptop the wall is a 420px column with
-           the list beside it once the list is open (41a); on phones and
-           tablets the two stack. ── */}
+      {/* ── Today (turns 37, 41, 54). From 1024px the task has a column of its
+           own with the list or the Day map beside it (54a, 54c, 54e); on
+           phones and tablets the task and the list stack. ── */}
       <div ref={layoutRef} className={`today-layout${listShown ? " is-list-open" : ""}${dayMapColumn ? " has-day-map" : ""}`}>
       <div className="today-layout-main" inert={wallCovered ? "" : undefined} aria-hidden={wallCovered ? "true" : undefined}>
       <TodayWall
@@ -1778,6 +1781,15 @@ export default function TodayTab({
         <div className="tasks-list" data-testid="today-tasks-list" onKeyDown={onListKeyDown}>
           {!wallIsAsking && todayTasksAll.length === 0 && (
             <p className="today-list-empty">Nothing else on Today.</p>
+          )}
+          {/* A light day (57b answer 17): the one thing is all that is open. */}
+          {pinnedFocusTask && !isMVDMode && remainingTasks.length === 0 && (
+            <p className="today-list-empty">
+              One task today. Add another, or{" "}
+              {onOpenPlan
+                ? <button type="button" className="today-list-empty-link" onClick={onOpenPlan}>pull from This week ›</button>
+                : "pull from This week."}
+            </p>
           )}
           {todayTasksAll.length > 0 && todayTasksFiltered.length === 0 && isMVDMode && (
             <p className="today-list-empty">No must-dos yet. Open a task and turn on Must-do.</p>

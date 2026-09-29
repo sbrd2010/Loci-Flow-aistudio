@@ -564,11 +564,10 @@
   .wall-action { min-height: 44px; }
 }
 
-/* Laptop (41a): the title is 48px (brief 3.2), keyboard hints appear. */
+/* Laptop (41a): keyboard hints appear. */
 @media (min-width: 1024px) {
   .wall-goal { padding: 14px 18px; }
   .wall-goal-name { font-size: 0.96875rem; }
-  .wall-title { font-size: 3rem; line-height: 1.04; }
   .wall-primary { padding: 12px 18px; font-size: 0.96875rem; }
   .wall-action { padding: 10px 16px; }
   .wall-key { display: inline-block; }
@@ -615,8 +614,10 @@
   color: var(--text-soft, var(--text-secondary));
 }
 
-/* — Today's layout (41a): on a laptop the wall is a 420px column and the
-   list sits beside it while it is open. Phones and tablets stack. — */
+/* — Today's layout (41a, 54): from 1024px the task is a column of its own
+   — 420px beside the list (51a), the rest of the width beside the Day map
+   with the list hidden (54c) — and from 1600px the list shown has the Day
+   map as a third column (54e: 480 · list · 520). Phones and tablets stack. — */
 .today-layout {
   display: flex;
   flex-direction: column;
@@ -635,6 +636,12 @@
     align-items: start;
     gap: 36px;
   }
+  .today-layout.has-day-map:not(.is-list-open) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 460px;
+    align-items: stretch;
+    gap: 40px;
+  }
 }
 
 /* — the foot: links, then the peek (phones, tablets, laptop with the list
@@ -646,12 +653,12 @@
 }
 .wall-peek-wide { display: none; }
 
-/* Laptop, list hidden (51b): the task centred in one 420px column; the
-   title is 56px in a 560px measure, exactly 4/3 of the shown state (42px in
-   420px), so the lines break in the same places and the show/hide glide is a
-   pure zoom. Under it one centred row: "Show list · N · L" and a 44px "+". */
+/* Laptop, list hidden (54a, 54c): the goal, the kicker, the title, the step
+   and the buttons share one column and one left edge (the 51b bug); the task
+   block sits at most 120px under the goal, and the bottom bar — "Show list ·
+   N · L", "+ Add a task · N", then Rescue on the right — closes the column. */
 .wall-daymap,
-.wall-tip { display: none; }
+.wall-peek-add-label { display: none; }
 .wall-title { transform-origin: 0 0; }
 .wall-title.is-openable { cursor: pointer; }
 /* 52a: hovering the title that opens the sheet underlines it, 1px in --edge. */
@@ -662,26 +669,11 @@
 .wall-title:focus { outline: none; }
 
 @media (min-width: 1024px) {
-  .today-wall:not(.is-done):not(.is-empty) .wall-title {
-    font-size: 2.625rem;           /* 42px in 420px (51a) */
-    line-height: 1.04;
-  }
   .today-wall:not(.is-open):not(.is-done):not(.is-empty) {
-    align-items: center;
     min-height: calc(100dvh - 190px);
-    justify-content: center;
   }
-  .today-wall:not(.is-open):not(.is-done):not(.is-empty) > .wall-goal,
-  .today-wall:not(.is-open):not(.is-done):not(.is-empty) > .wall-anchor,
   .today-wall:not(.is-open):not(.is-done):not(.is-empty) .wall-hero {
-    width: 100%;
-    max-width: 420px;
-  }
-  .today-wall:not(.is-open):not(.is-done):not(.is-empty) .wall-title {
-    width: 560px;
-    max-width: calc(100vw - 96px);
-    margin-left: -70px;
-    font-size: 3.5rem;             /* 56px in 560px */
+    margin-top: clamp(24px, 10dvh, 120px);
   }
 
   .today-wall.is-open .wall-daymap {
@@ -704,18 +696,24 @@
     outline-offset: 2px;
   }
 
+  /* A Day map link is for when there is no Day map column beside the task. */
+  .today-layout.has-day-map .today-wall.is-open .wall-daymap { display: none; }
+
   .today-wall:not(.is-open) .wall-foot {
     flex-direction: row;
     flex-wrap: wrap;
-    justify-content: center;
+    justify-content: space-between;
     align-items: center;
-    gap: 12px;
+    gap: 12px 24px;
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
   }
-  /* Links sit on their own line under the controls. */
-  .today-wall:not(.is-open) .wall-foot > .wall-links {
-    order: 2;
-    flex-basis: 100%;
-    justify-content: center;
+  /* Rescue sits at the right end of the bar, quiet. */
+  .today-wall:not(.is-open) .wall-foot > .wall-links { order: 2; }
+  .today-wall:not(.is-open) .wall-foot .wall-link {
+    color: var(--ink-2);
+    text-decoration: none;
   }
   .today-wall:not(.is-open) .wall-peek-row { gap: 12px; }
   .today-wall:not(.is-open) .wall-peek {
@@ -735,43 +733,40 @@
     font-size: 0.90625rem;
     font-weight: 800;
   }
+  /* "+ Add a task · N" in words, not a round "+". */
   .today-wall:not(.is-open) .wall-peek-add {
-    position: relative;
-    color: var(--ink);
-    border-color: var(--control-edge);
+    position: static;
+    width: auto;
+    gap: 8px;
+    padding: 0 10px;
+    color: var(--accent);
+    border: 0;
+    border-radius: 8px;
   }
-  .wall-peek-add:hover { background: var(--panel); }
-  /* "Add a task · N" on hover and keyboard focus. */
-  .wall-peek-add:hover .wall-tip,
-  .wall-peek-add:focus-visible .wall-tip {
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 50%;
+  .today-wall:not(.is-open) .wall-peek-add-label {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 5px 8px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    white-space: nowrap;
-    color: var(--bg);
-    background: var(--ink);
-    border-radius: 4px;
-    transform: translateX(-50%);
-    pointer-events: none;
-    z-index: 2;
+    gap: 8px;
+    font-size: 0.90625rem;
+    font-weight: 800;
+    color: var(--ink);
   }
-  .wall-tip .wall-key { color: var(--bg); border-color: var(--ink-2); }
+  .wall-peek-add:hover { background: var(--panel); }
 }
 
-/* — Wide (50k–l): from 1600px the cap is 1760px and the extra width becomes a
-   third column, the Day map, while the list is open. The list never passes
-   720px (about 72 characters a row); past 1856px the margins just grow. — */
+/* — Wide (54a, 54e): from 1600px the cap is 1760px. The list shown is
+   task 480 · list · Day map 520 (the list is under 720px, about 72
+   characters a row, at the cap); the list hidden gives the Day map 620.
+   From 2200px the cap is 2240px (57b). — */
 @media (min-width: 1600px) {
   .screen-content.screen-content-today { padding-inline: max(48px, calc((100% - 1760px) / 2)); }
   .today-layout.is-list-open.has-day-map {
-    grid-template-columns: 420px minmax(0, 720px) minmax(0, 1fr);
+    grid-template-columns: 480px minmax(0, 1fr) 520px;
   }
+  .today-layout.has-day-map:not(.is-list-open) { grid-template-columns: minmax(0, 1fr) 620px; }
+}
+@media (min-width: 2200px) {
+  .screen-content.screen-content-today { padding-inline: max(48px, calc((100% - 2240px) / 2)); }
 }
 .today-daymap {
   display: flex;
@@ -883,18 +878,19 @@
 }
 
 /* — The title's scale (53, 57b): its size follows its length. Phone
-   40/34/28/26, tablet 52/44/36/32; laptop and wider follow with their
-   layouts. Four lines at most; the padding keeps descenders. — */
-@media (max-width: 1023px) {
-  .wall-title {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 4;
-    overflow: hidden;
-    padding-bottom: 0.12em;
-    line-height: 1.06;
-    letter-spacing: -0.035em;
-  }
+   40/34/28/26; the stage 52/44/36/32 (tablet, a laptop, the list shown);
+   wide 64/52/42/36 from 1600px with the list hidden, and one step up from
+   2200px (72/58/48/40; the list shown takes the wide sizes there). Four
+   lines at most, balanced; the padding keeps descenders. — */
+.wall-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  padding-bottom: 0.12em;
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
 }
 @media (max-width: 599px) {
   .wall-title[data-len="s"] { font-size: 2.5rem; }
@@ -902,11 +898,27 @@
   .wall-title[data-len="l"] { font-size: 1.75rem; }
   .wall-title[data-len="xl"] { font-size: 1.625rem; }
 }
-@media (min-width: 600px) and (max-width: 1023px) {
+@media (min-width: 600px) {
   .wall-title[data-len="s"] { font-size: 3.25rem; letter-spacing: -0.045em; }
   .wall-title[data-len="m"] { font-size: 2.75rem; }
   .wall-title[data-len="l"] { font-size: 2.25rem; }
   .wall-title[data-len="xl"] { font-size: 2rem; }
+}
+@media (min-width: 1600px) {
+  .today-layout:not(.is-list-open) .wall-title[data-len="s"] { font-size: 4rem; }
+  .today-layout:not(.is-list-open) .wall-title[data-len="m"] { font-size: 3.25rem; }
+  .today-layout:not(.is-list-open) .wall-title[data-len="l"] { font-size: 2.625rem; }
+  .today-layout:not(.is-list-open) .wall-title[data-len="xl"] { font-size: 2.25rem; }
+}
+@media (min-width: 2200px) {
+  .today-layout.is-list-open .wall-title[data-len="s"] { font-size: 4rem; }
+  .today-layout.is-list-open .wall-title[data-len="m"] { font-size: 3.25rem; }
+  .today-layout.is-list-open .wall-title[data-len="l"] { font-size: 2.625rem; }
+  .today-layout.is-list-open .wall-title[data-len="xl"] { font-size: 2.25rem; }
+  .today-layout:not(.is-list-open) .wall-title[data-len="s"] { font-size: 4.5rem; }
+  .today-layout:not(.is-list-open) .wall-title[data-len="m"] { font-size: 3.625rem; }
+  .today-layout:not(.is-list-open) .wall-title[data-len="l"] { font-size: 3rem; }
+  .today-layout:not(.is-list-open) .wall-title[data-len="xl"] { font-size: 2.5rem; }
 }
 
 /* — Phone (53f): the goal is a thin line, the kicker carries the estimate

@@ -160,6 +160,14 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
     const controlsBefore = [...root.querySelectorAll("[data-flip-controls]")].filter(visible);
     const entersBefore = [...root.querySelectorAll("[data-flip-enter]")].filter(visible);
     const heroBefore = root.querySelector(".wall-hero");
+    const titleBefore = root.querySelector('[data-flip="title"]');
+    const titleSizeBefore = titleBefore ? Number.parseFloat(getComputedStyle(titleBefore).fontSize) : 0;
+    // The Day map column (54): on a laptop it trades places with the list —
+    // it leaves as the list comes and comes back as it goes; from 1600px it
+    // stays through both.
+    const columnBefore = root.querySelector("[data-flip-column]");
+    const columnWasShown = visible(columnBefore);
+    const columnStays = next ? window.innerWidth >= 1600 : true;
     // The previous toggle's ghosts go; this toggle's are taken before the
     // layout changes, while they still look right, and fade out after it.
     const staleGhosts = ghosts.current;
@@ -167,9 +175,9 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
     if (next) controlsBefore.forEach(el => fadeOutGhost(el, 80, "linear"));
     else entersBefore.forEach(el => fadeOutGhost(el, 80, "linear"));
     if (mode === "rise") fadeOutGhost(heroBefore, 120, EXIT);
-    // Wide (≥1600): the Day map column leaves with the list; React unmounts
-    // it, so a copy of it fades out the way the list does.
-    if (!next) fadeOutGhost(root.querySelector("[data-flip-column]"), 120, EXIT, true);
+    // React unmounts a leaving column, so a copy of it fades out the way the
+    // list does.
+    if (columnWasShown && !columnStays) fadeOutGhost(columnBefore, 120, EXIT, true);
 
     settle(staleGhosts);
     flushSync(() => setOpen(next));
@@ -190,24 +198,27 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
         if (!b || !el || !a.width) continue;
         const dx = b.left - a.left;
         const dy = b.top - a.top;
-        const scale = key === "title" ? b.width / a.width : 1;
+        // The title zooms from its old size to its new one; its lines settle
+        // in the new layout.
+        const titleSize = key === "title" ? Number.parseFloat(getComputedStyle(el).fontSize) : 0;
+        const scale = key === "title" && titleSize && titleSizeBefore ? titleSizeBefore / titleSize : 1;
         if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(scale - 1) < 0.001) continue;
         play(el,
           [{ transform: `translate(${dx}px, ${dy}px) scale(${scale})` }, { transform: "none" }],
           next ? { duration: 280, easing: GLIDE } : { duration: 240, easing: GLIDE, delay: d(80) });
+      }
+      // A column that arrives rides in 30ms behind the list's timing.
+      const column = root.querySelector("[data-flip-column]");
+      if (!columnWasShown && visible(column)) {
+        play(column,
+          [{ opacity: 0, transform: "translateX(12px)" }, { opacity: 1, transform: "none" }],
+          { duration: 220, easing: ENTER, delay: d(90) });
       }
       if (next) {
         if (visible(list)) {
           play(list,
             [{ opacity: interrupted ? listOpacity : 0, transform: "translateX(12px)" }, { opacity: 1, transform: "none" }],
             { duration: 220, easing: ENTER, delay: d(60) });
-        }
-        // Wide (≥1600): the Day map column rides with the list, 30ms behind.
-        const column = root.querySelector("[data-flip-column]");
-        if (visible(column)) {
-          play(column,
-            [{ opacity: 0, transform: "translateX(12px)" }, { opacity: 1, transform: "none" }],
-            { duration: 220, easing: ENTER, delay: d(90) });
         }
         root.querySelectorAll("[data-flip-enter]").forEach(el => visible(el) && play(el,
           [{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: ENTER, delay: d(60) }));

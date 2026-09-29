@@ -1217,9 +1217,9 @@ test("Split a task: rows are locked while the AI works, and an answer outside tw
 });
 
 // Laptop, 1024px and up (Addendum X3; 35e/36c): edge to edge, content capped
-// at 1200px and centred; with the list hidden, the one task sits centred and
-// the foot carries "Show list" and the + (51b). From 1600px the
-// cap is 1760px with a Day map column (50k–l, today-wide.spec.js).
+// at 1200px and centred; with the list hidden, the task has its own column
+// with the Day map beside it (54c). From 1600px the cap is 1760px (54a, 54e,
+// today-wide.spec.js).
 test("laptop: no phone-card frame; content capped at 1200px, centred", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1080 });
   await page.goto("/");
@@ -1250,30 +1250,44 @@ test("wide: from 1600px the cap is 1760px, centred (50k)", async ({ page }) => {
   expect(Math.round(map.x + map.width)).toBe(1840);
 });
 
-test("laptop: with the list hidden, the task is centred and the foot shows Show list and + (51b)", async ({ page }) => {
+test("laptop: with the list hidden, the task and the Day map sit side by side on one left edge, with the bottom bar (54c)", async ({ page }) => {
   await enterLaptop(page);
-  const vw = page.viewportSize().width;
-  // Goal and buttons share one centred 420px column; the title is 4/3 of it.
-  const [band, start, done, split, title] = await Promise.all([
+  // The 51b bug: goal, kicker, title and buttons share one left edge.
+  const [band, anchor, kicker, title, start, done, split, map] = await Promise.all([
     page.locator(".wall-goal").boundingBox(),
+    page.locator(".wall-anchor").boundingBox(),
+    page.locator(".wall-kicker").boundingBox(),
+    page.locator(".wall-title").boundingBox(),
     page.locator(".wall-start").boundingBox(),
     page.getByRole("button", { name: /^Mark done/ }).boundingBox(),
     page.getByRole("button", { name: /^Split it/ }).boundingBox(),
-    page.locator(".wall-title").boundingBox(),
+    page.getByRole("complementary", { name: "Day map" }).boundingBox(),
   ]);
-  expect(Math.round(band.width)).toBe(420);
-  expect(Math.abs(band.x + band.width / 2 - vw / 2)).toBeLessThan(2);
-  expect(Math.round(start.width)).toBe(420);
+  for (const box of [kicker, title, start, done]) expect(Math.abs(box.x - band.x)).toBeLessThan(1);
+  expect(Math.round(start.width)).toBe(Math.round(band.width));
+  expect(Math.round(split.x + split.width)).toBe(Math.round(band.x + band.width));
   expect(Math.round(done.y)).toBe(Math.round(split.y));
-  expect(done.y).toBeGreaterThan(start.y);
-  expect(Math.round(title.width)).toBe(560);
-  expect(Math.abs(title.x + title.width / 2 - vw / 2)).toBeLessThan(2);
+  // The Day map column is beside the task, and the task block sits at most
+  // 120px under the goal.
+  expect(map.x).toBeGreaterThan(band.x + band.width);
+  expect(kicker.y - (anchor.y + anchor.height)).toBeLessThanOrEqual(121);
 
+  // The bottom bar: Show list and "+ Add a task" on the left, Rescue on the right.
+  const foot = page.locator(".wall-foot");
   const show = page.getByRole("button", { name: /^Show list · \d+/ });
+  const add = foot.getByRole("button", { name: "Add a task to Today" });
   await expect(show).toBeVisible();
-  await expect(page.locator(".wall-foot").getByRole("button", { name: "Add a task to Today" })).toBeVisible();
+  await expect(add).toHaveText(/Add a task/);
+  const [showBox, addBox, rescue] = await Promise.all([show.boundingBox(), add.boundingBox(),
+    foot.getByRole("button", { name: "Open Rescue" }).boundingBox()]);
+  expect(Math.round(addBox.y + addBox.height / 2)).toBe(Math.round(showBox.y + showBox.height / 2));
+  expect(addBox.x).toBeGreaterThan(showBox.x + showBox.width);
+  expect(Math.abs(rescue.x + rescue.width - (band.x + band.width))).toBeLessThan(1);
+
+  // L swaps the Day map column for the list (54c).
   await show.click();
   await expect(page.locator(".tasks-section")).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Day map" })).toHaveCount(0);
   // The toggle keeps focus: Show list → Hide list, and back.
   await expect(page.locator(".today-list-hide")).toBeFocused();
   await page.keyboard.press("Enter");
@@ -1320,7 +1334,9 @@ test("laptop: show/hide glides with transform and opacity, reverses mid-move and
   });
   expect(titleAnim.d).toBe(280);
   expect(titleAnim.e).toBe("cubic-bezier(0.2, 0, 0, 1)");
-  expect(titleAnim.from).toMatch(/scale\(1\.3/);
+  // Both laptop states take the stage scale, so the title glides without a
+  // zoom (from 1600px, where hiding the list takes the wide sizes, it zooms).
+  expect(titleAnim.from).toMatch(/^translate\(.+\) scale\(1\)$/);
   await page.waitForTimeout(120);
   await page.keyboard.press("l");
   await expect(page.locator(".tasks-section")).toBeHidden({ timeout: 2_000 });
@@ -1741,6 +1757,24 @@ test("mobile reliability: Start with the chooser open closes it; back from focus
   await expect(overlay).toHaveCount(0);
   await expect(page.locator(".wall-primary")).toContainText("Resume focus");
   await expect(page.getByRole("menu", { name: "How long" })).toHaveCount(0);
+});
+
+// 57b answer 17: a light day — the one thing is all that is open — says so
+// in the list, and offers This week in Plan.
+test("laptop: with only the one thing open, the list says so and offers This week", async ({ page }) => {
+  await enterLaptop(page);
+  await page.keyboard.press("l");
+  const list = page.getByTestId("today-tasks-list");
+  const open = list.locator("[data-testid='task-row']:not(.completed)");
+  await expect(list.locator(".today-list-empty")).toHaveCount(0);
+  while (await open.count()) {
+    await open.first().getByTestId("task-checkbox").click();
+    await expect(page.locator(".undo-toast")).toBeVisible();
+  }
+  const empty = list.locator(".today-list-empty");
+  await expect(empty).toHaveText("One task today. Add another, or pull from This week ›");
+  await empty.getByRole("button", { name: "pull from This week ›" }).click();
+  await expect(page.getByRole("banner").getByRole("button", { name: "Plan", exact: true })).toHaveAttribute("aria-current", "page");
 });
 
 // Codex review of #406: E opens a task to edit its title; a task opened
