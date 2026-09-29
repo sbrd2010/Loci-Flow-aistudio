@@ -154,6 +154,28 @@ describe("useFocusTimer", () => {
     expect(result.current.timerSecondsLeft).toBe(25 * 60);
   });
 
+  it("a session started while the timer runs counts down from its own block, not the old one's time", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+      vi.advanceTimersByTime(10 * 60 * 1000);
+      expect(result.current.timerSecondsLeft).toBe(15 * 60);
+
+      // The timer is still running, so isTimerRunning doesn't change and the
+      // ticking effect keeps its deadline: the new session must re-anchor it.
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+      vi.advanceTimersByTime(1000);
+      expect(result.current.timerSecondsLeft).toBe(25 * 60 - 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("leaves the running block alone when the task's estimate is edited mid-session", () => {
     const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 60 };
     const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
