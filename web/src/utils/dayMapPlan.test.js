@@ -63,6 +63,13 @@ describe("planDay", () => {
     expect(planDay([stop("a", 630, 25), stop("b", 970, 25)], 630, 340).overIndex).toBe(1);
   });
 
+  it("ends a stop split by a break where its last part ends", () => {
+    // 11:35 for 3h with a 40-minute lunch: it ends at 15:15, not 14:35.
+    const plan = planDay([{ ...stop("a", 695, 180), routeEndMinutes: 915 }], 695, 200);
+    expect(plan.planned).toBe(220);
+    expect(plan.runsPast).toMatchObject({ by: 20 });
+  });
+
   it("puts everything past the line when no focus time is left", () => {
     const plan = planDay([stop("a", 1000, 25)], 1000, 0);
     expect(plan.overIndex).toBe(0);
@@ -128,6 +135,13 @@ describe("moveToTomorrow / restoreSchedule", () => {
     const back = restoreSchedule(edited, before, 2);
     expect(back[1]).toMatchObject({ title: "B, renamed", dayMapDate: "2026-09-23", dayMapOrder: 1, dayMapStartMinutes: 1060, dayMapPeriod: "evening" });
     expect(back[2]).toMatchObject({ dayMapDate: "2026-09-23", dayMapOrder: 2, dayMapStartMinutes: 1155 });
+  });
+
+  it("a fixed time stays with today: moved, the task flows; Undo fixes it again", () => {
+    const fixed = tasks.map(t => t.uuid === "b" ? { ...t, dayMapFixedMinutes: 1060 } : t);
+    const { tasks: moved, before } = moveToTomorrow(fixed, ["b"], "2026-09-24", 1);
+    expect(moved[1]).not.toHaveProperty("dayMapFixedMinutes");
+    expect(restoreSchedule(moved, before, 2)[1]).toMatchObject({ dayMapFixedMinutes: 1060, dayMapStartMinutes: 1060 });
   });
 });
 

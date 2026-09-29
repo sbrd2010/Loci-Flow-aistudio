@@ -49,15 +49,16 @@ export function dayProgress(now, windows) {
 }
 
 // Where the day ends along the route, and what that means for each stop.
-// `route` is the reflowed route ({ dayMapStartMinutes, dayMapDurationMinutes }).
+// `route` is the laid-out route in time order ({ dayMapStartMinutes,
+// dayMapDurationMinutes }, and routeEndMinutes when a break splits a stop).
+const stopEnd = (t) => t.routeEndMinutes ?? Number(t.dayMapStartMinutes) + Number(t.dayMapDurationMinutes);
 export function planDay(route, startMinutes, dayLeft) {
   const dayEnd = startMinutes + dayLeft;
-  const last = route[route.length - 1];
-  const routeEnd = last ? Number(last.dayMapStartMinutes) + Number(last.dayMapDurationMinutes) : startMinutes;
+  const routeEnd = route.length ? Math.max(...route.map(stopEnd)) : startMinutes;
   const overIndex = route.findIndex(t => Number(t.dayMapStartMinutes) >= dayEnd);
   const fitting = overIndex === -1 ? route : route.slice(0, overIndex);
   const lastFitting = fitting[fitting.length - 1];
-  const lastFittingEnd = lastFitting ? Number(lastFitting.dayMapStartMinutes) + Number(lastFitting.dayMapDurationMinutes) : startMinutes;
+  const lastFittingEnd = lastFitting ? stopEnd(lastFitting) : startMinutes;
   return {
     dayEnd,
     planned: routeEnd - startMinutes,
@@ -80,7 +81,7 @@ export function nextDateStr(dateStr) {
 }
 
 // What a move to tomorrow touches, and so what its Undo puts back.
-const MOVE_FIELDS = ["dayMapDate", "dayMapPeriod", "dayMapStartMinutes", "dayMapDurationMinutes", "dayMapOrder", "deferredUntil", "orderIndex", "deferredFromOrder"];
+const MOVE_FIELDS = ["dayMapDate", "dayMapPeriod", "dayMapStartMinutes", "dayMapDurationMinutes", "dayMapOrder", "dayMapFixedMinutes", "deferredUntil", "orderIndex", "deferredFromOrder"];
 
 // Moves these tasks to tomorrow, in their current order. They keep the Today
 // horizon but leave today (deferredUntil, see deferral.js); tomorrow they head
@@ -102,7 +103,8 @@ export function moveToTomorrow(allTasks, ids, tomorrowStr, now = Date.now()) {
     const id = String(t.uuid || t.id);
     if (!order.has(id)) return t;
     before.push(t);
-    const { dayMapPeriod, dayMapStartMinutes, ...rest } = t; // eslint-disable-line no-unused-vars
+    // A fixed time is today's (58): tomorrow it flows from the route's start.
+    const { dayMapPeriod, dayMapStartMinutes, dayMapFixedMinutes, ...rest } = t; // eslint-disable-line no-unused-vars
     return {
       ...rest,
       dayMapDate: tomorrowStr,

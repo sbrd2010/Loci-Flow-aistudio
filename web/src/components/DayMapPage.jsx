@@ -25,13 +25,14 @@ import {
   applyReflow, currentDayMinutes, getEstimate, getTaskId,
   normalizePriority, reflowRoute, removeScheduleFields, roundToQuarter, routeIsContiguous, useDayRoute,
 } from "../hooks/useDayRoute";
+import { isFixedStop } from "../utils/dayMapRoute";
 import DayClockBar from "./DayClockBar";
 import LinkifyText from "./LinkifyText";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import TaskDetail from "./TaskDetail";
 import useTaskActions from "../hooks/useTaskActions";
 import { frontsFromConfig, frontsOnOffer } from "../utils/fronts";
-import { IconChevronLeft, IconPlus, IconX } from "./ui/icons";
+import { IconChevronLeft, IconLock, IconPlus, IconX } from "./ui/icons";
 import "../styles/dayMap.css";
 
 // Day map (50e–f, 52d–e). Today's tasks laid end to end from a start time,
@@ -43,18 +44,22 @@ import "../styles/dayMap.css";
 // it wait in Unscheduled — a card on the right (laptop), a bar that opens a
 // sheet (phone) — and "+" adds one to the end of the route.
 
-function RouteStop({ task, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus }) {
+// `row` is the stop as the route engine laid it out (utils/dayMapRoute): its
+// start and end, and whether it is fixed, late, pulled forward, or stops for
+// a break. A fixed stop keeps its time, so it is not dragged.
+function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus }) {
   const taskId = getTaskId(task);
   const {
     attributes, listeners, setActivatorNodeRef,
     setNodeRef, transform, transition, isDragging,
-  } = useSortable({ id: taskId, data: { taskId } });
+  } = useSortable({ id: taskId, data: { taskId }, disabled: row.fixed });
 
-  const duration = getEstimate(task);
-  const start = Number(task.dayMapStartMinutes ?? 0);
+  const { start, end } = row;
   const p = normalizePriority(task.priority);
   // Brief §6: each block reads "09:00 to 10:15, Acme CV".
-  const label = `${isNow ? "Now" : formatClock24(start)} to ${formatClock24(start + duration)}, ${task.title}, Priority ${p.slice(1)}`
+  const label = `${isNow || row.late ? "Now" : formatClock24(start)} to ${formatClock24(end)}, ${task.title}, Priority ${p.slice(1)}`
+    + (row.fixed ? ", fixed time" : "") + (row.pulledForward ? ", pulled forward" : "")
+    + (row.continues ? ", continues after the break" : "")
     + (isGoal ? ", goal task" : "") + (isOver ? ", after the day ends" : "");
 
   const style = {
@@ -68,7 +73,7 @@ function RouteStop({ task, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus }
     <li
       ref={setNodeRef}
       style={style}
-      className={`dm-stop${isNow ? " is-now" : ""}${isOver ? " is-over" : ""}${isDragging ? " is-dragging" : ""}${isOpen ? " is-open" : ""}`}
+      className={`dm-stop${isNow ? " is-now" : ""}${row.late ? " is-late" : ""}${isOver ? " is-over" : ""}${isDragging ? " is-dragging" : ""}${isOpen ? " is-open" : ""}`}
       data-task-uuid={taskId}
     >
       <div
@@ -90,12 +95,14 @@ function RouteStop({ task, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus }
           listeners?.onKeyDown?.(e);
         }}
       >
-        <span className="dm-time">{isNow ? "NOW" : formatClock24(start)}</span>
+        <span className="dm-time">{isNow ? "NOW" : row.late ? "now" : formatClock24(start)}</span>
         <span className="dm-title">
           <LinkifyText text={task.title} />
+          {row.fixed && <span className="dm-lock"><IconLock size={14} /></span>}
+          {row.pulledForward && <span className="dm-pulled">PULLED FORWARD</span>}
           {isGoal && <span className="task-tag is-goal">GOAL</span>}
         </span>
-        <span className="dm-dur">{formatSpan(duration)}</span>
+        <span className="dm-dur">{formatSpan(end - start)}</span>
       </div>
       {isNow && (
         <button type="button" className="dm-start" onClick={onStartFocus} onPointerDown={e => e.stopPropagation()}>
@@ -210,9 +217,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   }, []);
 
   const {
-    tasks, config: routeConfig, windows, todayStr, tomorrowStr, payloadRef,
+    tasks, config: routeConfig, windows, breaks, todayStr, tomorrowStr, payloadRef,
     activeTodayTasks, scheduledTasks, tomorrowTasks, unscheduledTasks,
-    anchorMinutes, plan, isGoal, sortableIds, latestTasks, applyAndSave,
+    anchorMinutes, rows, routeTasks, plan, isGoal, sortableIds, latestTasks, applyAndSave,
   } = useDayRoute({ payload, savePayload });
 
   // A drag ends in a click on the row it dropped; that click must not open it.
@@ -240,7 +247,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   };
 
   const removeFromRoute = (taskId) => {
-    const reflowed = reflowRoute(scheduledTasks.filter(t => getTaskId(t) !== taskId), anchorMinutes, todayStr);
+    const reflowed = reflowRoute(scheduledTasks.filter(t => getTaskId(t) !== taskId), anchorMinutes, todayStr, breaks);
     const p = payloadRef.current;
     const nextTasks = latestTasks().map(t => {
       if (getTaskId(t) === taskId) return removeScheduleFields(t);
@@ -309,7 +316,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const route = undo.kind === "clear"
       ? [...onRoute.filter(t => put.has(getTaskId(t))).sort(byOrder), ...onRoute.filter(t => !put.has(getTaskId(t))).sort(byOrder)]
       : [...onRoute].sort(byOrder);
-    savePayload({ ...payloadRef.current, tasks: applyReflow(restored, reflowRoute(route, anchorMinutes, todayStr)), timestamp: Date.now() });
+    savePayload({ ...payloadRef.current, tasks: applyReflow(restored, reflowRoute(route, anchorMinutes, todayStr, breaks)), timestamp: Date.now() });
     setUndo(null);
   };
 
@@ -353,24 +360,69 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const dayEndLabel = formatClock24(plan.dayEnd);
   const nowMins = currentDayMinutes(windows);
 
-  // The route (50f): the stops, the DAY ENDS line where it falls, then what
-  // won't fit today.
-  const fitting = isOver ? scheduledTasks.slice(0, plan.overIndex) : scheduledTasks;
+  // The route (50f): the rows as laid out — stops, breaks, free time — the
+  // DAY ENDS line where it falls, then what won't fit today.
+  const fitting = isOver ? routeTasks.slice(0, plan.overIndex) : routeTasks;
   const lastFitting = fitting[fitting.length - 1];
-  const free = lastFitting ? plan.dayEnd - (Number(lastFitting.dayMapStartMinutes) + getEstimate(lastFitting)) : 0;
+  const free = lastFitting ? plan.dayEnd - lastFitting.routeEndMinutes : 0;
   const wontFitMinutes = plan.wontFit.reduce((sum, t) => sum + getEstimate(t), 0);
   const dayEndText = `DAY ENDS ${dayEndLabel}`
     + (free > 0 ? ` · ${formatSpan(free)} FREE` : "")
     + (plan.runsPast ? ` · ${formatClock24(plan.runsPast.task.dayMapStartMinutes)} RUNS ${formatSpan(plan.runsPast.by)} PAST` : "");
-  const renderStop = (task, index) => {
+  const routeIndex = new Map(routeTasks.map((t, i) => [getTaskId(t), i]));
+  // NOW is the first stop, unless it is a fixed time already passed (that
+  // row says "now" in red instead).
+  const firstOnTime = rows.find(r => r.kind === "stop" && !r.late);
+  const rowIsOver = (r) => (r.kind === "stop"
+    ? plan.overIndex !== -1 && routeIndex.get(getTaskId(r.task)) >= plan.overIndex
+    : r.start >= plan.dayEnd);
+  const renderRow = (r) => {
+    if (r.kind === "break") {
+      return (
+        <li key={`break:${r.start}`} className="dm-break" aria-label={`${formatClock24(r.start)} to ${formatClock24(r.end)}, ${r.name}`}>
+          <span className="dm-time">{formatClock24(r.start)}</span>
+          <span className="dm-title">{r.name}</span>
+          <span className="dm-dur">{formatSpan(r.end - r.start)}</span>
+        </li>
+      );
+    }
+    if (r.kind === "free") {
+      return (
+        <li key={`free:${r.start}`} className="dm-free" aria-label={`${formatClock24(r.start)} to ${formatClock24(r.end)}, free`}>
+          <span className="dm-time">{formatClock24(r.start)}</span>
+          <span className="dm-title">free {formatSpan(r.end - r.start)}</span>
+          <span className="dm-dur" />
+        </li>
+      );
+    }
+    const { task } = r;
     const id = getTaskId(task);
-    const start = Number(task.dayMapStartMinutes ?? 0);
+    if (r.continued) {
+      // The rest of a stop a break split: it opens the same task.
+      return (
+        <li key={`${id}:continued`} className={`dm-stop is-continued${rowIsOver(r) ? " is-over" : ""}`}>
+          <div
+            className="dm-main"
+            role="button"
+            tabIndex={0}
+            aria-label={`${formatClock24(r.start)} to ${formatClock24(r.end)}, ${task.title}, continued after the break`}
+            onClick={() => setDetailId(id)}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailId(id); } }}
+          >
+            <span className="dm-time">{formatClock24(r.start)}</span>
+            <span className="dm-title">{task.title} · continued</span>
+            <span className="dm-dur">{formatSpan(r.end - r.start)}</span>
+          </div>
+        </li>
+      );
+    }
     return (
       <RouteStop
         key={id}
         task={task}
-        isNow={index === 0 && start <= nowMins + 15}
-        isOver={plan.overIndex !== -1 && index >= plan.overIndex}
+        row={r}
+        isNow={r === firstOnTime && r.start <= nowMins + 15}
+        isOver={rowIsOver(r)}
         isGoal={isGoal(task)}
         isOpen={detailId === id}
         onOpen={() => { if (!draggingRef.current) setDetailId(id); }}
@@ -390,9 +442,11 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const pending = pendingReflowRef.current;
     const fromSet = routeConfig.dayMapDate === todayStr && routeConfig.dayMapAnchorMinutes != null;
     const start = fromSet ? anchorMinutes : currentDayMinutes(windows);
-    const first = scheduledTasks[0]?.dayMapStartMinutes;
-    const headGap = !fromSet && first != null && Number(first) > roundToQuarter(start);
-    if (!pending && !headGap && routeIsContiguous(scheduledTasks)) return;
+    // A fixed stop keeps its own time: the head is the first stop that flows.
+    const flowing = scheduledTasks.filter(t => !isFixedStop(t) && t.dayMapStartMinutes != null);
+    const first = flowing.length ? Math.min(...flowing.map(t => Number(t.dayMapStartMinutes))) : null;
+    const headGap = !fromSet && first != null && first > roundToQuarter(start);
+    if (!pending && !headGap && routeIsContiguous(scheduledTasks, breaks)) return;
     pendingReflowRef.current = null;
     const prefer = pending?.prefer ?? null;
     const order = (t) => t.dayMapOrder ?? Infinity;
@@ -402,8 +456,14 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   }, [scheduledTasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The sheet on phones and tablets, the drawer from 1024px (as in Plan).
+  // Its place is its place on screen (routeTasks: time order), for "N OF M"
+  // and ↑/↓; the task itself is the stored one.
   const detailTask = detailId ? scheduledTasks.find(t => getTaskId(t) === detailId) : null;
-  const detailIndex = detailTask ? scheduledTasks.indexOf(detailTask) : -1;
+  const detailIndex = detailTask ? routeIndex.get(detailId) ?? -1 : -1;
+  const routeNeighbour = (i) => {
+    const t = routeTasks[i];
+    return t ? scheduledTasks.find(s => getTaskId(s) === getTaskId(t)) : undefined;
+  };
   // Done, parked, deleted, off the route or off Today: the sheet closes.
   useEffect(() => {
     if (detailId && !detailTask) setDetailId(null);
@@ -412,7 +472,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const closeDetail = () => { const back = detailId; setDetailId(null); if (back) focusStop(back); };
   // An action that takes the task off the route: focus goes to its neighbour.
   const leaving = (fn, arg = detailTask) => {
-    const next = scheduledTasks[detailIndex + 1] || scheduledTasks[detailIndex - 1];
+    const next = routeNeighbour(detailIndex + 1) || routeNeighbour(detailIndex - 1);
     fn(arg);
     if (next) focusStop(getTaskId(next));
   };
@@ -423,7 +483,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const el = e.target;
     if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
     const dir = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
-    const next = dir && scheduledTasks[detailIndex + dir];
+    const next = dir && routeNeighbour(detailIndex + dir);
     if (!next) return;
     e.preventDefault();
     setDetailId(getTaskId(next));
@@ -583,14 +643,14 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
               ) : (
                 <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
                   <ol className="dm-route" aria-label="Today's route">
-                    {fitting.map((t, i) => renderStop(t, i))}
+                    {rows.filter(r => !rowIsOver(r)).map(renderRow)}
                     <li className="dm-dayend" aria-label={`Day ends at ${dayEndLabel}`}>
                       <span className="dm-dayend-label">{dayEndText}</span>
                     </li>
                     {isOver && (
                       <li className="dm-wontfit">WON’T FIT TODAY · {formatSpan(wontFitMinutes)}</li>
                     )}
-                    {plan.wontFit.map((t, i) => renderStop(t, plan.overIndex + i))}
+                    {rows.filter(rowIsOver).map(renderRow)}
                   </ol>
                 </SortableContext>
               )}
