@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { breaksFromWindows, layoutRoute, layoutStarts, shouldReflowPastRoute } from "./dayMapRoute";
+import { breaksFromWindows, isEventTask, layoutRoute, layoutStarts, shouldReflowPastRoute } from "./dayMapRoute";
 
 describe("shouldReflowPastRoute", () => {
   it("returns true when the first scheduled task starts before the current anchor", () => {
@@ -180,5 +180,13 @@ describe("route timing (Q35, Q35a)", () => {
     const call = t("call", 30, { dayMapFixedMinutes: 870 });
     expect(lay([t("pharm", 15), call, t("hale", 25)], { from: 855 }))
       .toEqual([["pharm", 855, 870], ["call", 870, 900], ["hale", 905, 930]]);
+  });
+});
+
+describe("isEventTask (Q31, loopcheck of #430)", () => {
+  it("is something else only while it has its time", () => {
+    expect(isEventTask({ fixedKind: "event", dayMapFixedMinutes: 750 })).toBe(true);
+    expect(isEventTask({ fixedKind: "event" })).toBe(false);
+    expect(isEventTask({ dayMapFixedMinutes: 750 })).toBe(false);
   });
 });

@@ -37,14 +37,16 @@ export function withAddedBreaks(config, todayStr, items, now = Date.now()) {
   };
 }
 
-// What a break can't overlap, from the laid-out rows: fixed stops and the
-// other breaks, each { start, end, title }. `except` is the index of the
-// added break being changed, left out.
-export function busyFromRows(rows, except = null) {
-  return rows
-    .filter(r => (r.kind === "stop" && r.fixed) || (r.kind === "break" && (except == null || r.added !== except)))
-    .map(r => ({ start: r.start, end: r.end, title: r.kind === "stop" ? r.task.title : r.name }))
-    .sort((a, b) => a.start - b.start);
+// What a break can't overlap: the fixed stops (from the laid-out rows) and
+// every other break — all of `breaks`, shown or not (a lunch gap after the
+// last stop has no row, but a later stop would bring it back) — each
+// { start, end, title }. `except` is the index of the added break being
+// changed, left out.
+export function busyFromRows(rows, breaks = [], except = null) {
+  return [
+    ...rows.filter(r => r.kind === "stop" && r.fixed).map(r => ({ start: r.start, end: r.end, title: r.task.title })),
+    ...breaks.filter(b => except == null || b.added !== except).map(b => ({ start: b.start, end: b.end, title: b.name })),
+  ].sort((a, b) => a.start - b.start);
 }
 
 // A break at `at` for `lengthMin`, fitted around what's busy (Q36.2, Q36a):
@@ -70,7 +72,7 @@ export function fitBreak(at, lengthMin, busy, min = 5) {
 // Where a new break goes by default (Q36.1): now, shortened to fit before a
 // fixed stop (5 minutes at least). When even that won't do, the "Later…"
 // placement.
-export function defaultBreak(rows, now, busy = busyFromRows(rows)) {
+export function defaultBreak(rows, now, busy = busyFromRows(rows)) { // `now`: the route's start if later
   const fit = fitBreak(now, DEFAULT_BREAK_MIN, busy);
   if (fit.start === now) return fit;
   return fitBreak(nextFreeSlot(rows, now), DEFAULT_BREAK_MIN, busy);

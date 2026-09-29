@@ -158,7 +158,7 @@ export default function FixTimeSheet({
                     {[...new Set([...BREAK_LENGTHS, brk.minutes])].sort((a, b) => a - b).map(m => <option key={m} value={m}>{formatSpan(m)}</option>)}
                   </select>
                 </label>
-                {!breakItem && <button type="button" className="fx-page fx-later" onClick={() => setTime(laterAt)}>Later…</button>}
+                {!breakItem && <button type="button" className="fx-page fx-later" onClick={() => { setAt(laterAt); setTyped(null); setPage(0); }}>Later…</button>}
               </div>
             )}
             <div className="fx-at">

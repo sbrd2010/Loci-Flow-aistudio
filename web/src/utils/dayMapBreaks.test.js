@@ -48,7 +48,7 @@ describe("breaks you add (Q31)", () => {
     expect(rows.map(r => [r.kind, r.start])).toEqual([["break", hm("11:35")], ["stop", hm("11:50")], ["stop", hm("12:20")]]);
   });
 
-  it("shows even with nothing after it, and overlapping breaks show their time once", () => {
+  it("shows even with nothing after it, and keeps its row when it overlaps another break", () => {
     const breaks = [
       { start: hm("13:35"), end: hm("14:15"), name: "Break" },
       { start: hm("14:00"), end: hm("14:30"), name: "Break", added: 0 },
@@ -56,7 +56,8 @@ describe("breaks you add (Q31)", () => {
     ];
     const rows = layoutRoute([task("A", 60)], { from: hm("13:00"), breaks, durationOf });
     const shown = rows.filter(r => r.kind === "break").map(r => [r.start, r.end, r.added]);
-    expect(shown).toEqual([[hm("13:35"), hm("14:15"), undefined], [hm("14:15"), hm("14:30"), 0], [hm("16:00"), hm("16:15"), 1]]);
+    // One you added keeps its own row, to open (loopcheck of #430).
+    expect(shown).toEqual([[hm("13:35"), hm("14:15"), undefined], [hm("14:00"), hm("14:30"), 0], [hm("16:00"), hm("16:15"), 1]]);
     // A doesn't fit before the breaks: it goes after them, whole.
     expect(rows.filter(r => r.kind === "stop").map(r => [r.start, r.end])).toEqual([[hm("14:30"), hm("15:30")]]);
   });
@@ -83,10 +84,11 @@ describe("fitting a break around fixed stops (Q36.2, Q36a)", () => {
     expect(defaultBreak(route("11:38"), hm("11:35"))).toEqual({ start: hm("12:08"), lengthMin: 15, after: null, cut: null });
   });
 
-  it("leaves out the break being changed", () => {
-    const rows = [{ kind: "break", name: "Break", start: hm("10:00"), end: hm("10:15"), added: 0 }];
-    expect(busyFromRows(rows, 0)).toEqual([]);
-    expect(busyFromRows(rows)).toEqual([{ start: hm("10:00"), end: hm("10:15"), title: "Break" }]);
+  it("counts every break, shown or not, and leaves out the one being changed", () => {
+    // Lunch after the last stop has no row, but a new break still can't overlap it.
+    const breaks = [{ start: hm("13:35"), end: hm("14:15"), name: "Lunch" }, { start: hm("10:00"), end: hm("10:15"), name: "Break", added: 0 }];
+    expect(busyFromRows([], breaks, 0)).toEqual([{ start: hm("13:35"), end: hm("14:15"), title: "Lunch" }]);
+    expect(fitBreak(hm("13:30"), 15, busyFromRows([], breaks))).toEqual({ start: hm("13:30"), lengthMin: 5, after: null, cut: "Lunch" });
   });
 });
 

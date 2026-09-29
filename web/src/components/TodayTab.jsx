@@ -48,6 +48,7 @@ import { makeOneThing, undoOneThing } from "../utils/oneThing";
 import { confirmedMinimumDay } from "../utils/minimumDay";
 import { currentDayMinutes, oneThingToNow, restoreRoute } from "../hooks/useDayRoute";
 import { routeBreaks } from "../utils/dayMapBreaks";
+import { isEventTask } from "../utils/dayMapRoute";
 import { bringBack, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
 
@@ -708,7 +709,7 @@ export default function TodayTab({
   const minimumDayIds = new Set(confirmedMinimumDay(config, todayStr) || []);
   const handleMakeOneThing = (task) => {
     // Q31: something at a set time (a call) is never the one thing.
-    if (task.fixedKind === "event") return;
+    if (isEventTask(task)) return;
     const { tasks: pinned, previous } = makeOneThing(tasks, task.uuid);
     if (pinned === tasks) return;
     // On the Day map it moves to NOW: the route flows on from its end, fixed

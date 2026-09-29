@@ -28,6 +28,13 @@ export function isFixedStop(task) {
   return task?.dayMapFixedMinutes != null && Number.isFinite(Number(task.dayMapFixedMinutes));
 }
 
+// Q31: "Something else" — a call, a meeting — while it has its time. Never
+// the one thing or a focus session; unfixed, it is a task like any other
+// (loopcheck of #430), and fixed again, an event again.
+export function isEventTask(task) {
+  return task?.fixedKind === "event" && isFixedStop(task);
+}
+
 // Breaks are the gaps between focus windows (09:00–13:35 and 14:15–17:30
 // make 13:35–14:15 a break). With one window there are none.
 export function breaksFromWindows(windows, name = "Break") {
@@ -156,14 +163,15 @@ export function layoutRoute(stops, { from, breaks = [], now = -Infinity, duratio
   // end of the day's work — unless you added it (Q31): that one shows.
   // A fixed stop inside a break (a call over lunch) takes that time: the
   // break shows only around it (Codex review of #421). Breaks that overlap
-  // show their time once.
+  // show their time once — except one you added, which always keeps its
+  // own row, to open (loopcheck of #430).
   const lastEnd = Math.max(-Infinity, ...rows.filter(r => r.kind === "stop").map(r => r.end));
   const fixedRows = rows.filter(r => r.fixed).sort((a, b) => a.start - b.start);
   let shownTo = -Infinity;
   for (const b of allBreaks) {
     if (b.end <= from || (b.start >= lastEnd && b.added == null)) continue;
     const row = (start, end) => rows.push({ kind: "break", name: b.name, start, end, ...(b.added != null ? { added: b.added } : {}) });
-    let s = Math.max(b.start, shownTo);
+    let s = b.added != null ? b.start : Math.max(b.start, shownTo);
     shownTo = Math.max(shownTo, b.end);
     for (const f of fixedRows) {
       if (f.end <= s || f.start >= b.end) continue;
