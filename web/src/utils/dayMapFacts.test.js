@@ -48,6 +48,15 @@ describe("dayBar (Q33.2)", () => {
   });
 });
 
+describe("dayBar after the day end", () => {
+  it("runs on to now, so NOW and DAY ENDS each keep their place", () => {
+    const bar = dayBar({ windowStart: 540, now: 1140, dayEnd: 1050, finish: 1050 });
+    expect(bar.end).toBe(1140);
+    expect(bar.now).toBe(1);
+    expect(bar.dayEnd).toBeCloseTo(510 / 600);
+  });
+});
+
 describe("doneToday (59j, 57b answer 5)", () => {
   it("one row per session, oldest first, plus a task marked done without one", () => {
     const raw = {
