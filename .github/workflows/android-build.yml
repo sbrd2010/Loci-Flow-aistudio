@@ -31,9 +31,12 @@ on:
 
 # Without this, every new push to an open PR queues another full Android build
 # alongside any still-running one from a prior push, instead of replacing it.
+# Only a PR's builds replace each other: on main (and tags, and manual runs)
+# each merge's build queues and finishes, so two merges in a row don't leave
+# the newer commit without a build.
 concurrency:
   group: android-build-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
