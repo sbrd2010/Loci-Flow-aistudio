@@ -653,6 +653,10 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     // countdown either.
     setTimerMaxSeconds(initialPlannedSeconds);
     setTimerSecondsLeft(initialPlannedSeconds);
+    // A timer already running keeps running, so the ticking effect doesn't
+    // re-run to re-anchor: without this its next tick counts down from the
+    // previous session's deadline and snaps back to that session's time.
+    if (deadlineRef.current != null) deadlineRef.current = startedAt + initialPlannedSeconds * 1000;
     // A new session never inherits the previous one's 00:00 hold. Leaving it
     // set showed the finished session's prompt over a session that had just
     // started — and because the flag was already true, the bell ending THIS
