@@ -26,13 +26,10 @@ test("phone: the Day map keeps the bottom nav with Today current, and its own he
   await expect(nav.getByRole("button", { name: "Today" })).toHaveAttribute("aria-current", "page");
   await expect(page.locator(".shell-header")).toBeHidden();
 
-  // The clock: time left, and a bar of how much of the day has passed.
-  await expect(page.locator(".dm-dayclock-left")).toHaveText(/^\d+h\d{2}m left$/);
-  const bar = page.getByRole("progressbar", { name: "The day so far" });
-  const passed = Number(await bar.getAttribute("aria-valuenow"));
-  expect(passed).toBeGreaterThan(0);
-  expect(passed).toBeLessThan(100);
-  await expect(page.locator(".dm-dayclock-labels")).toContainText("11:35 NOW");
+  // 56c: the factual line, then the day bar with NOW on it.
+  await expect(page.locator(".dm-fact")).toHaveText("Nothing on the route.");
+  await expect(page.getByRole("img", { name: /^The day so far: it runs 07:00 to 02:00; now 11:35$/ })).toBeVisible();
+  await expect(page.locator(".dm-daybar-labels")).toContainText("11:35 NOW");
 
   // Today in the nav takes you back.
   await nav.getByRole("button", { name: "Today" }).click();
@@ -47,7 +44,7 @@ test("laptop: the app header stays with Today current; ‹ Today and Esc go back
   await expect(header.getByRole("button", { name: "Today", exact: true })).toHaveAttribute("aria-current", "page");
   const back = page.getByRole("button", { name: "Back to Today" });
   await expect(back).toContainText("Today");
-  await expect(page.locator(".dm-dayclock")).toContainText(/ends \d{2}:\d{2}/);
+  await expect(page.locator(".dm-fact")).toHaveText("Nothing on the route.");
 
   // Esc in the From picker is the picker's own; on the page it goes back.
   const from = page.locator(".dm-from-select");
@@ -76,9 +73,9 @@ test("the NOW label sits where the day's fill ends, even near the start", async 
   await page.locator("body").click({ position: { x: 5, y: 300 } });
   await page.keyboard.press("m");
   const geo = await page.evaluate(() => {
-    const bar = document.querySelector(".dm-dayclock-bar").getBoundingClientRect();
-    const fill = document.querySelector(".dm-dayclock-fill").getBoundingClientRect();
-    const now = document.querySelector(".dm-dayclock-now").getBoundingClientRect();
+    const bar = document.querySelector(".dm-daybar-track").getBoundingClientRect();
+    const fill = document.querySelector(".dm-daybar-done").getBoundingClientRect();
+    const now = document.querySelector(".dm-daybar-now").getBoundingClientRect();
     const frac = fill.width / bar.width;
     return { frac, fillEnd: fill.right, anchor: now.left + frac * now.width, nowLeft: now.left, nowRight: now.right, barLeft: bar.left, barRight: bar.right };
   });
@@ -88,7 +85,7 @@ test("the NOW label sits where the day's fill ends, even near the start", async 
   expect(Math.abs(geo.anchor - geo.fillEnd)).toBeLessThan(2);
   expect(geo.nowLeft).toBeGreaterThanOrEqual(geo.barLeft - 1);
   expect(geo.nowRight).toBeLessThanOrEqual(geo.barRight + 1);
-  await expect(page.locator(".dm-dayclock-labels span").first()).toHaveClass(/is-covered/);
+  await expect(page.locator(".dm-daybar-labels span").first()).toHaveClass(/is-covered/);
 });
 
 // Codex review of #409: the header is back on a laptop, so the Loci wordmark
@@ -100,4 +97,45 @@ test("laptop: the Loci wordmark leaves the Day map for Today", async ({ page }) 
   await page.getByRole("banner").getByRole("button", { name: "Loci" }).click();
   await expect(page.locator(".day-map-page")).toHaveCount(0);
   await expect(page.locator(".wall-title")).toBeVisible();
+});
+
+// 56a–c: what was done today sits folded above the route, oldest first. The
+// demo has no session ledger, so a task ticked done is its row ("marked
+// done", no duration), and the line leaves the done part out.
+test("a task marked done shows in the folded Done so far today, and the line says where the day stands", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await openDayMapByKey(page);
+  await page.getByRole("button", { name: "Auto-fill" }).click();
+  await expect(page.locator(".dm-fact")).toHaveText(/^On track: done by \d{2}:\d{2}\.$/);
+  // The one thing, at NOW, until its stop ends.
+  await expect(page.locator(".dm-stop.is-now .dm-one-thing")).toHaveText(/^THE ONE THING · UNTIL \d{2}:\d{2}$/);
+
+  const first = page.locator(".dm-stop .dm-main").first();
+  const title = (await page.locator(".dm-stop .dm-title").first().innerText()).trim();
+  await first.click();
+  await page.getByTestId("task-detail").getByRole("button", { name: `Mark done: ${title}` }).click();
+
+  const fold = page.getByRole("region", { name: "Done so far today" });
+  const toggle = fold.getByRole("button", { name: /^Done so far today · 1/ });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
+  await expect(fold.locator(".dm-done-row")).toHaveCount(1);
+  await expect(fold.locator(".dm-done-row")).toContainText(title);
+  await expect(fold.locator(".dm-done-row")).toContainText("MARKED DONE");
+});
+
+// Codex review of #428: with every task done, the page's empty state still
+// shows "Done so far today", where the day's sessions matter most.
+test("with every task done, Done so far today stays on the page", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await openDayMapByKey(page);
+  await page.getByRole("button", { name: "Auto-fill" }).click();
+  for (let i = 0; i < 3; i += 1) {
+    const title = (await page.locator(".dm-stop .dm-title").first().innerText()).split("\n")[0].trim();
+    await page.locator(".dm-stop .dm-main").first().click();
+    await page.getByTestId("task-detail").getByRole("button", { name: `Mark done: ${title}` }).click();
+    await expect(page.getByTestId("task-detail")).toHaveCount(0);
+  }
+  await expect(page.locator(".dm-empty")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Done so far today" }).getByRole("button", { name: /^Done so far today · 3/ })).toBeVisible();
 });

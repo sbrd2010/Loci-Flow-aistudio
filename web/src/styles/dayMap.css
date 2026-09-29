@@ -23,7 +23,7 @@
   grid-template-columns: auto 1fr auto;
   grid-template-areas:
     "back title date"
-    "clock clock clock";
+    "fact fact fact";
   align-items: center;
   column-gap: 4px;
   padding: 8px 0 14px;
@@ -57,8 +57,7 @@
   font-weight: 800;
   letter-spacing: -0.02em;
 }
-.dm-date,
-.dm-dayclock-date {
+.dm-date {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   font-weight: 700;
@@ -67,25 +66,18 @@
   color: var(--ink-2);
 }
 .dm-date { grid-area: date; }
-.dm-dayclock-date { display: none; }
 
-.dm-dayclock { grid-area: clock; margin-top: 12px; }
-.dm-dayclock-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
+/* The factual line (56a–c): one Lora sentence; the overrun in red. */
+.dm-fact {
+  grid-area: fact;
+  margin: 10px 0 0;
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--ink);
+  text-wrap: pretty;
 }
-.dm-dayclock-left { font-size: 1.125rem; font-weight: 800; }
-.dm-dayclock-ends { display: none; font-size: 0.875rem; color: var(--ink-2); }
-.dm-dayclock-plan {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--ink-2);
-}
-.dm-dayclock-plan.is-over { color: var(--coral-ink); }
+.dm-fact-alert { color: var(--coral); }
 .dm-dayclock-bar {
   position: relative;
   height: 6px;
@@ -121,10 +113,11 @@
 @media (min-width: 1024px) {
   .dm-head {
     grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+    grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
-      "back clock"
-      "title clock";
-    column-gap: 40px;
+      "back"
+      "title"
+      "fact";
     padding: 24px 0 20px;
     margin-bottom: 16px;
   }
@@ -133,9 +126,7 @@
   .dm-back-key { display: inline-flex; }
   .dm-heading { font-size: 2.25rem; }
   .dm-date { display: none; }
-  .dm-dayclock { align-self: center; margin-top: 0; }
-  .dm-dayclock-ends { display: inline; }
-  .dm-dayclock-date { display: inline; margin-left: auto; }
+  .dm-fact { font-size: 1.0625rem; }
 }
 
 /* ── Layout (50f, 52d–e): one column on a phone; from 1024px the route
@@ -143,9 +134,10 @@
 .dm-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "controls" "route" "side";
+  grid-template-areas: "bar" "controls" "route" "side";
   gap: 8px;
 }
+.dm-daybar { grid-area: bar; }
 .dm-controls { grid-area: controls; }
 .dm-route-wrap { grid-area: route; min-width: 0; }
 .dm-side { grid-area: side; }
@@ -212,10 +204,10 @@
 .dm-stop { border-bottom: 1px solid var(--line); background: var(--bg); }
 .dm-main {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) auto;
+  grid-template-columns: 52px 24px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: baseline;
-  min-height: 44px;
+  min-height: 46px;
   padding: 12px 0;
   cursor: pointer;
   touch-action: manipulation;
@@ -255,6 +247,36 @@
   border-radius: 6px;
 }
 .dm-stop.is-over .dm-time { color: var(--coral); }
+/* The rail (56a–c): one dot per row, and no blocks. A tick when done, solid
+   at NOW, hollow for later, a dash for a break; red past the day end. */
+.dm-rail { display: flex; justify-content: center; align-self: center; }
+.dm-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--edge);
+  border-radius: 50%;
+  background: var(--bg);
+}
+.dm-dot.is-now { width: 12px; height: 12px; border: 0; background: var(--accent); }
+.dm-dot.is-over { border-color: var(--coral); }
+.dm-dot.is-done { width: 16px; height: 16px; border: 0; color: var(--on-accent); background: var(--accent); }
+.dm-dash { width: 10px; height: 2px; background: var(--edge); }
+.dm-one-thing {
+  grid-column: 3 / -1;
+  margin-top: -8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
 .dm-stop.is-dragging { box-shadow: var(--shadow-md); }
 /* The route engine's rows (58): a fixed stop's lock, a stop pulled forward
    into the gap before one, a fixed time now has passed ("now" in red), the
@@ -272,7 +294,7 @@
 .dm-break,
 .dm-free {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) auto;
+  grid-template-columns: 52px 24px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: baseline;
   min-height: 44px;
@@ -502,9 +524,10 @@
   .dm-layout {
     grid-template-columns: minmax(0, 1fr) 420px;
     grid-template-areas:
+      "bar side"
       "controls side"
       "route side";
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto 1fr;
     column-gap: 48px;
     align-items: start;
   }
@@ -703,3 +726,74 @@
 @media (prefers-reduced-motion: reduce) {
   .dm-stop.is-flash { animation: none; }
 }
+
+/* ── The day bar (56a–c): done, planned, past the day end ── */
+.dm-daybar { margin: 4px 0 12px; }
+.dm-daybar-track {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  background: var(--panel);
+  border-radius: 4px;
+}
+.dm-daybar-track > span { position: absolute; top: 0; bottom: 0; }
+.dm-daybar-done { left: 0; background: color-mix(in srgb, var(--accent) 85%, transparent); }
+.dm-daybar-planned { background: color-mix(in srgb, var(--accent) 30%, var(--bg)); }
+.dm-daybar-past { background: repeating-linear-gradient(135deg, var(--coral) 0 1.5px, transparent 1.5px 5px); }
+.dm-daybar-labels {
+  position: relative;
+  height: 1.4em;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.dm-daybar-labels > span { position: absolute; top: 0; white-space: nowrap; }
+.dm-daybar-labels > span:first-child { left: 0; }
+.dm-daybar-now { color: var(--ink); }
+.dm-daybar-end.is-over { color: var(--coral); }
+.dm-daybar-labels .is-covered { visibility: hidden; }
+.dm-daybar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+.dm-daybar-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.dm-key { display: inline-block; width: 14px; height: 5px; border-radius: 3px; }
+.dm-key.is-done { background: color-mix(in srgb, var(--accent) 85%, transparent); }
+.dm-key.is-planned { background: color-mix(in srgb, var(--accent) 30%, var(--bg)); }
+.dm-key.is-past { background: repeating-linear-gradient(135deg, var(--coral) 0 1.5px, transparent 1.5px 4px); }
+
+/* ── Done so far today (56a–c): one row, folded; oldest first when open ── */
+.dm-done { border-bottom: 1px solid var(--line); }
+.dm-done-toggle,
+.dm-done-row {
+  display: grid;
+  grid-template-columns: 52px 24px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 0;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 0;
+}
+.dm-done-toggle { cursor: pointer; }
+.dm-done-toggle .dm-title { color: var(--ink-2); }
+.dm-done-toggle .dm-dur { display: inline-flex; align-items: center; gap: 6px; }
+.dm-done-toggle svg { transition: transform 150ms; }
+.dm-done-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.dm-done-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dm-done-list { max-height: 40vh; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.dm-done-row { border-top: 1px solid var(--line); }
+.dm-done-row .dm-title { color: var(--ink-2); }
+@media (prefers-reduced-motion: reduce) { .dm-done-toggle svg { transition: none; } }
