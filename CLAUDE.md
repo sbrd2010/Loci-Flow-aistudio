@@ -76,7 +76,14 @@ When the user types `loopcheck` (optionally with a PR number, e.g. "loopcheck PR
 
 This is intentionally **one agent spawn only** — not the heavier multi-agent `code-review` skill — to keep cost low for routine per-PR use on a metered plan. Recommended cadence: once per PR, right before merge.
 
-## 6. AI Provider Rate Limits (for live Coach verification)
+## 6. Codex review rounds — ask before round 3
+
+Codex (`chatgpt-codex-connector[bot]`) re-reviews every push, so fixing its findings can loop indefinitely and burn a limited budget.
+- Rounds 1 and 2 of Codex review on a PR: fix and reply as usual.
+- Round 3 and later: do NOT fix, reply to, or push for any Codex finding (P1 included) until Rohan explicitly approves. List the findings with a short assessment of each and ask first.
+- Count rounds per PR by Codex review submissions (each "Codex Review" on a new commit is one round).
+
+## 7. AI Provider Rate Limits (for live Coach verification)
 
 When live-verifying Coach changes against the real API (not mocked `fetch`), the configured keys are low-tier/free and rate-limit fast under rapid successive test calls:
 

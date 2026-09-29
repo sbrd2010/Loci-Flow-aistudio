@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { shouldReflowPastRoute } from "../utils/dayMapRoute";
+import { breaksFromWindows, isFixedStop, layoutRoute, layoutStarts, shouldReflowPastRoute } from "../utils/dayMapRoute";
 import { dayLeftFrom, nextDateStr, planDay } from "../utils/dayMapPlan";
 import { getFocusWindows, getLociNowMinutes } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
@@ -11,7 +11,6 @@ import { useLociDayStr } from "./useTodayStr";
 // ends along it. Only one of the two is ever mounted, so the route's times
 // are kept current (the reflow below) by whichever is on screen.
 
-export const TRANSITION_BUFFER = 5;
 export const DURATION_OPTIONS = [15, 25, 45, 60, 90, 120, 180, 240, 360];
 export const PRIORITY_RANK = { P1: 1, P2: 2, P3: 3, P4: 4 };
 export const PERIOD_LABELS = { morning: "Morning", afternoon: "Afternoon", evening: "Evening", night: "Night" };
@@ -48,18 +47,18 @@ export function sortByPriorityAndOrder(a, b) {
 }
 
 export function removeScheduleFields(task) {
-  const { dayMapDate, dayMapPeriod, dayMapStartMinutes, dayMapDurationMinutes, dayMapOrder, ...rest } = task; // eslint-disable-line no-unused-vars
+  const { dayMapDate, dayMapPeriod, dayMapStartMinutes, dayMapDurationMinutes, dayMapOrder, dayMapFixedMinutes, ...rest } = task; // eslint-disable-line no-unused-vars
   return { ...rest, lastUpdated: Date.now() };
 }
 
-// Single-pass reflow: assign sequential start times from the start through
-// the ordered queue. Period is derived from the start time, never stored alone.
-export function reflowRoute(orderedTasks, anchorMinutes, todayStr) {
-  let cursor = roundToQuarter(anchorMinutes);
+// Times the route from its start (utils/dayMapRoute: fixed stops, breaks,
+// buffers) and stores each stop's start; the order stays the user's. Period
+// is derived from the start time, never stored alone.
+export function reflowRoute(orderedTasks, anchorMinutes, todayStr, breaks = []) {
+  const starts = layoutStarts(layoutRoute(orderedTasks, { from: roundToQuarter(anchorMinutes), breaks, durationOf: getEstimate }));
   return orderedTasks.map((task, index) => {
     const duration = getEstimate(task);
-    const start = cursor;
-    cursor = start + duration + TRANSITION_BUFFER;
+    const start = starts.get(task);
     return {
       ...task,
       dayMapStartMinutes: start,
@@ -72,17 +71,18 @@ export function reflowRoute(orderedTasks, anchorMinutes, todayStr) {
   });
 }
 
-// Each stop starts where the one before it ends (plus the buffer). A write
-// from anywhere — Done on Today, the full editor, another device — can leave
-// a gap or an overlap; this is how the Day map sees it. Untimed stops are
-// the timing effect's to place, so they don't count here.
-export function routeIsContiguous(route) {
-  for (let i = 1; i < route.length; i += 1) {
-    const prev = route[i - 1], cur = route[i];
-    if (prev.dayMapStartMinutes == null || cur.dayMapStartMinutes == null) return true;
-    if (Number(prev.dayMapStartMinutes) + getEstimate(prev) + TRANSITION_BUFFER !== Number(cur.dayMapStartMinutes)) return false;
-  }
-  return true;
+// Each stop starts where the engine puts it, counting from where the route's
+// first flowing stop starts. A write from anywhere — Done on Today, the full
+// editor, another device — can leave a gap or an overlap; this is how the
+// Day map sees it. Untimed stops are the timing effect's to place, so they
+// don't count here.
+export function routeIsContiguous(route, breaks = []) {
+  if (route.some(t => t.dayMapStartMinutes == null)) return true;
+  const flowing = route.filter(t => !isFixedStop(t));
+  if (!flowing.length) return route.every(t => Number(t.dayMapStartMinutes) === Number(t.dayMapFixedMinutes));
+  const from = Math.min(...flowing.map(t => Number(t.dayMapStartMinutes)));
+  const starts = layoutStarts(layoutRoute(route, { from, breaks, durationOf: getEstimate }));
+  return route.every(t => starts.get(t) === Number(t.dayMapStartMinutes));
 }
 
 export function applyReflow(allTasks, reflowed) {
@@ -96,6 +96,7 @@ export function useDayRoute({ payload, savePayload }) {
   // The Loci day, not the calendar date: with a window past midnight, the
   // route and "tomorrow" both hold until that window ends.
   const windows = getFocusWindows(config);
+  const breaks = useMemo(() => breaksFromWindows(windows), [windows]);
   const todayStr = useLociDayStr(windows);
   const tomorrowStr = nextDateStr(todayStr);
 
@@ -135,27 +136,43 @@ export function useDayRoute({ payload, savePayload }) {
     if (config.dayMapDate === todayStr && config.dayMapAnchorMinutes != null) {
       return Math.max(now, Number(config.dayMapAnchorMinutes));
     }
-    if (scheduledTasks.length > 0 && scheduledTasks[0].dayMapStartMinutes != null) {
-      return Math.max(now, Number(scheduledTasks[0].dayMapStartMinutes));
-    }
+    // The earliest stop that flows: a fixed one keeps its own time, and a
+    // pulled-forward one can start before the first in the route's order.
+    const starts = scheduledTasks.filter(t => !isFixedStop(t) && t.dayMapStartMinutes != null).map(t => Number(t.dayMapStartMinutes));
+    if (starts.length > 0) return Math.max(now, Math.min(...starts));
     return now;
   }, [config.dayMapDate, config.dayMapAnchorMinutes, scheduledTasks, todayStr, windows]);
 
-  const plan = useMemo(() => {
-    const route = scheduledTasks.map(t => ({ ...t, dayMapDurationMinutes: getEstimate(t) }));
-    return planDay(route, roundToQuarter(anchorMinutes), dayLeftFrom(roundToQuarter(anchorMinutes), new Date(), windows));
-  }, [scheduledTasks, anchorMinutes, windows]);
+  // The route as laid out: its rows (stops, breaks, free time) in time order,
+  // and its stops in that order, each with where it starts and ends (a task
+  // split by a break ends after it).
+  const { rows, routeTasks } = useMemo(() => {
+    const laid = layoutRoute(scheduledTasks, {
+      from: roundToQuarter(anchorMinutes), breaks, now: currentDayMinutes(windows), durationOf: getEstimate,
+    });
+    const byTask = new Map();
+    for (const r of laid) {
+      if (r.kind !== "stop") continue;
+      const seen = byTask.get(r.task);
+      byTask.set(r.task, seen ? { ...seen, routeEndMinutes: r.end } : { ...r.task, dayMapStartMinutes: r.start, dayMapDurationMinutes: getEstimate(r.task), routeEndMinutes: r.end });
+    }
+    return { rows: laid, routeTasks: [...byTask.values()] };
+  }, [scheduledTasks, anchorMinutes, breaks, windows]);
+
+  const plan = useMemo(() => (
+    planDay(routeTasks, roundToQuarter(anchorMinutes), dayLeftFrom(roundToQuarter(anchorMinutes), new Date(), windows))
+  ), [routeTasks, anchorMinutes, windows]);
 
   // The same GOAL rule as Today's rows: the front the wall's kicker names.
   const goalFront = commitmentKickerFront(frontForCommitment(tasks.find(t => t.isNowFocus && !t.isDeleted && !t.isCompleted), frontsFromConfig(config)), config);
   const isGoal = (task) => !!goalFront && task.frontId === goalFront.id;
 
-  const sortableIds = scheduledTasks.map(getTaskId);
+  const sortableIds = routeTasks.map(getTaskId);
   const latestTasks = () => payloadRef.current?.tasks || [];
 
   // Reflow ordered tasks from the start and save everything in one write.
   const applyAndSave = (orderedScheduled, anchor, configPatch = null) => {
-    const reflowed = reflowRoute(orderedScheduled, anchor, todayStr);
+    const reflowed = reflowRoute(orderedScheduled, anchor, todayStr, breaks);
     const p = payloadRef.current;
     const update = { ...p, tasks: applyReflow(latestTasks(), reflowed), timestamp: Date.now() };
     if (configPatch) {
@@ -176,8 +193,8 @@ export function useDayRoute({ payload, savePayload }) {
   }, [scheduledTasks, anchorMinutes, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
-    tasks, config, windows, todayStr, tomorrowStr, payloadRef,
+    tasks, config, windows, breaks, todayStr, tomorrowStr, payloadRef,
     activeTodayTasks, scheduledTasks, tomorrowTasks, unscheduledTasks,
-    anchorMinutes, plan, isGoal, sortableIds, latestTasks, applyAndSave,
+    anchorMinutes, rows, routeTasks, plan, isGoal, sortableIds, latestTasks, applyAndSave,
   };
 }

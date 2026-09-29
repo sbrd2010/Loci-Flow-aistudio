@@ -255,6 +255,38 @@
 }
 .dm-stop.is-over .dm-time { color: var(--coral); }
 .dm-stop.is-dragging { box-shadow: var(--shadow-md); }
+/* The route engine's rows (58): a fixed stop's lock, a stop pulled forward
+   into the gap before one, a fixed time now has passed ("now" in red), the
+   rest of a stop a break split, the break itself, and free time. */
+.dm-lock { align-self: center; color: var(--ink-2); }
+.dm-pulled {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--ink-2);
+}
+.dm-stop.is-late .dm-time { color: var(--coral); }
+.dm-stop.is-continued .dm-title { font-weight: 600; color: var(--ink-2); }
+.dm-break,
+.dm-free {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: baseline;
+  min-height: 44px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.dm-break .dm-title { font-style: italic; font-weight: 600; }
+.dm-free .dm-title { font-weight: 400; color: var(--ink-2); }
+/* The same rows in Today's Day map column (its base rules: todayWall.css). */
+.tdm-stop.is-late .tdm-time { color: var(--coral); }
+.tdm-stop.is-break,
+.tdm-stop.is-free { cursor: default; }
+.tdm-stop.is-break .tdm-title { font-style: italic; }
+.tdm-stop.is-free .tdm-title { font-weight: 400; color: var(--ink-2); }
+.tdm-title .dm-lock { margin-left: 6px; vertical-align: -1px; }
 .dm-start {
   min-height: 44px;
   margin: 0 0 12px 64px;
