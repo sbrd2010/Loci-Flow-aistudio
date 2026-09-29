@@ -45,7 +45,7 @@ import { IconPlus } from "./ui/icons";
 import TaskDetail from "./TaskDetail";
 import DayMapColumn from "./DayMapColumn";
 import { makeOneThing, undoOneThing } from "../utils/oneThing";
-import { currentDayMinutes, oneThingToNow, restoreClearedRoute } from "../hooks/useDayRoute";
+import { currentDayMinutes, oneThingToNow, restoreRoute } from "../hooks/useDayRoute";
 import { breaksFromWindows } from "../utils/dayMapRoute";
 import { bringBack, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
@@ -908,7 +908,16 @@ export default function TodayTab({
       const restoredConfig = { ...config, lastUpdated: Date.now() };
       if (dayMapDate === undefined) delete restoredConfig.dayMapDate; else restoredConfig.dayMapDate = dayMapDate;
       if (dayMapAnchorMinutes === undefined) delete restoredConfig.dayMapAnchorMinutes; else restoredConfig.dayMapAnchorMinutes = dayMapAnchorMinutes;
-      savePayload({ ...payload, tasks: restoreSchedule(unpinned, undo.route.before), config: restoredConfig });
+      // Timed again from the start it had, or now if that has passed.
+      const now = currentDayMinutes(windows);
+      const anchorMinutes = dayMapDate === todayStr && dayMapAnchorMinutes != null ? Math.max(now, Number(dayMapAnchorMinutes)) : now;
+      savePayload({
+        ...payload,
+        tasks: restoreRoute(unpinned, undo.route.before, {
+          todayStr, anchorMinutes, breaks: breaksFromWindows(windows, (config.breakName || "").trim() || "Break"),
+        }),
+        config: restoredConfig,
+      });
       return;
     }
     if (kind === "route") {
@@ -916,7 +925,7 @@ export default function TodayTab({
       const now = currentDayMinutes(windows);
       const anchorMinutes = config.dayMapDate === todayStr && config.dayMapAnchorMinutes != null
         ? Math.max(now, Number(config.dayMapAnchorMinutes)) : now;
-      savePayload({ ...payload, tasks: restoreClearedRoute(tasks, undo.before, {
+      savePayload({ ...payload, tasks: restoreRoute(tasks, undo.before, {
         todayStr, anchorMinutes, breaks: breaksFromWindows(windows, (config.breakName || "").trim() || "Break"),
       }) });
       return;

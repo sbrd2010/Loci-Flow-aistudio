@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { oneThingToNow, restoreClearedRoute } from "./useDayRoute";
+import { oneThingToNow, restoreRoute } from "./useDayRoute";
 
 const DAY = "2026-09-29";
 const stop = (uuid, order, minutes, extra = {}) => ({
@@ -59,15 +59,32 @@ describe("the one thing before a fixed stop", () => {
 });
 
 // Codex review of #427: Clear route, add a task, Undo: one route, timed again.
-describe("restoreClearedRoute", () => {
+describe("restoreRoute", () => {
   it("puts the cleared stops back first and times the whole route again", () => {
     const cleared = [stop("a", 0, 30), stop("b", 1, 30)];
     const bare = ({ dayMapDate, dayMapOrder, dayMapStartMinutes, ...t }) => t; // eslint-disable-line no-unused-vars
     const now = [bare(cleared[0]), bare(cleared[1]), stop("n", 0, 20)];
-    const t = byId(restoreClearedRoute(now, cleared, { todayStr: DAY, anchorMinutes: 600 }));
+    const t = byId(restoreRoute(now, cleared, { todayStr: DAY, anchorMinutes: 600 }));
     expect([t.a.dayMapOrder, t.b.dayMapOrder, t.n.dayMapOrder]).toEqual([0, 1, 2]);
     const starts = [t.a.dayMapStartMinutes, t.b.dayMapStartMinutes, t.n.dayMapStartMinutes];
     expect(new Set(starts).size).toBe(3);
     expect(starts).toEqual([...starts].sort((x, y) => x - y));
+  });
+});
+
+// Codex review of #427: make a task the one thing, add another, then Undo:
+// the one thing leaves the route and what stays is timed again, no gap.
+describe("restoreRoute after a one-thing move", () => {
+  it("retimes a stop added in between, straight after the stops that come back", () => {
+    const route = [stop("a", 0, 30), stop("b", 1, 30)];
+    const loose = { uuid: "n", title: "n", horizonLevel: "today", timeEstimateMinutes: 60 };
+    const moved = oneThingToNow([...route, loose], "n", { todayStr: DAY, nowMinutes: 600 }).tasks;
+    const added = [...moved, stop("x", 3, 20, { dayMapStartMinutes: 800 })];
+    const before = [route[0], route[1], loose];
+    const t = byId(restoreRoute(added, before, { todayStr: DAY, anchorMinutes: 600 }));
+    expect(t.n.dayMapDate).toBeUndefined();
+    expect([t.a.dayMapOrder, t.b.dayMapOrder, t.x.dayMapOrder]).toEqual([0, 1, 2]);
+    expect(t.a.dayMapStartMinutes).toBe(600);
+    expect(t.x.dayMapStartMinutes).toBe(t.b.dayMapStartMinutes + 30 + 5);
   });
 });
