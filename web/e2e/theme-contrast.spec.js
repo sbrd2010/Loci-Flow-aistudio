@@ -93,7 +93,8 @@ for (const theme of THEMES) {
       [".wall-goal-name", "goal name"],
       [".wall-anchor-count", "anchor count"],
       [".wall-kicker", "TODAY, ONE THING"],
-      [".wall-first-step-label", "first step label"],
+      [".wall-kicker-meta", "kicker's estimate and step count"],
+      [".wall-first-step-label", "next step label"],
       [".wall-primary-figure", "timer on Start focus"],
       [".wall-peek-label", "peek label"],
     ]) {
@@ -107,7 +108,6 @@ for (const theme of THEMES) {
     for (const [loc, what] of [
       [page.locator(".today-list-count"), "list count"],
       [page.locator(".today-seg-opt[aria-pressed='false']"), "unselected segment"],
-      [page.locator(".today-energy-caption"), "Low energy caption"],
       [page.locator(".task-row-priority"), "row priority tag"],
       [page.locator(".today-list-link"), "Day map link"],
     ]) {

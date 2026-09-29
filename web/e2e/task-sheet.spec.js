@@ -164,7 +164,7 @@ test("a first step stored apart from the steps is step 1, and a change to anothe
   await openFromDetails(page);
   const before = await stepValues(page);
   const first = before[0];
-  await expect(page.locator(".wall-first-step")).toContainText(`First step — ${first}`);
+  await expect(page.locator(".wall-first-step")).toContainText(`Next step — ${first}`);
 
   // Tick the last step: the first one is still there, and still first.
   await sheet(page).locator(".detail-step-check").last().click();

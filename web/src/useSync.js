@@ -595,7 +595,6 @@ export function useSync(uid, email) {
               visitStreakCount: 1,
               lastVisitDate: todayStr,
               intentionMessage: "Start tiny. One action. Right now.",
-              isLowEnergyMode: false,
               isOnboardingCompleted: false,
               eveningGuardWindowActive: true,
               roadmapStyle: "compact",

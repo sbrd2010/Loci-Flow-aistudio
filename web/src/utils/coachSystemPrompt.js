@@ -40,7 +40,7 @@ function buildFullTaskPrompt(ctx) {
     profileContext, memoryContext, personaInstruction, taskContext, todaySnapshotContext,
     focusSessionContext, nowFocusContext, dayMapContext, remindersContext,
     anchorContext, checkinContext, pendingCheckinContext, deadlineContext, brainDumpContext,
-    velocityContext, lowEnergyContext, recentlyParkedContext, recentlyCompletedContext, categoryFilterContext, rescueHandoffContext,
+    velocityContext, recentlyParkedContext, recentlyCompletedContext, categoryFilterContext, rescueHandoffContext,
     isEarlyConversation, memorySectionEnabled, nowLabel, timeOfDay,
     todayActiveCount, streakCount, profileBlock, sessionSummaryContext, pendingSummaryContext,
   } = ctx;
@@ -161,7 +161,7 @@ CURRENT CAPPED TASK CONTEXT:
 You can see the visible task cards below. Some horizons may show "+X more", meaning more tasks exist but are not included in this prompt. Use exact visible task titles for action tags. If the user refers to a task that is not visible, ask for clarification or a fresh scan rather than guessing:
 ${todaySnapshotContext ? `${todaySnapshotContext}\n\n` : ""}${taskContext}
 
-${rescueHandoffContext ? `${rescueHandoffContext}\n` : ""}${focusSessionContext ? `${focusSessionContext}\n` : ""}${nowFocusContext ? `${nowFocusContext}\n` : ""}${dayMapContext ? `${dayMapContext}\n` : ""}${remindersContext ? `${remindersContext}\n` : ""}${anchorContext ? `${anchorContext}\n` : ""}${checkinContext ? `${checkinContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}${deadlineContext ? `${deadlineContext}\n` : ""}${brainDumpContext ? `${brainDumpContext}\n` : ""}${velocityContext ? `${velocityContext}\n` : ""}${lowEnergyContext ? `${lowEnergyContext}\n` : ""}${recentlyParkedContext ? `${recentlyParkedContext}\n` : ""}${recentlyCompletedContext ? `${recentlyCompletedContext}\n` : ""}${categoryFilterContext ? `${categoryFilterContext}\n` : ""}
+${rescueHandoffContext ? `${rescueHandoffContext}\n` : ""}${focusSessionContext ? `${focusSessionContext}\n` : ""}${nowFocusContext ? `${nowFocusContext}\n` : ""}${dayMapContext ? `${dayMapContext}\n` : ""}${remindersContext ? `${remindersContext}\n` : ""}${anchorContext ? `${anchorContext}\n` : ""}${checkinContext ? `${checkinContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}${deadlineContext ? `${deadlineContext}\n` : ""}${brainDumpContext ? `${brainDumpContext}\n` : ""}${velocityContext ? `${velocityContext}\n` : ""}${recentlyParkedContext ? `${recentlyParkedContext}\n` : ""}${recentlyCompletedContext ? `${recentlyCompletedContext}\n` : ""}${categoryFilterContext ? `${categoryFilterContext}\n` : ""}
 SESSION STATS:
 Current Time: ${nowLabel} (${timeOfDay})
 Streak: ${streakCount || 0}-day streak

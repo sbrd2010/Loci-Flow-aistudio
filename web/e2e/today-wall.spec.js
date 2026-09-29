@@ -36,7 +36,7 @@ test("mobile reliability: Today opens on the wall, with the list put away", asyn
 test("mobile reliability: the peek opens the list as a sheet, and it closes back to the wall", async ({ page }) => {
   await enterDemo(page);
 
-  await expect(page.locator(".wall-peek-label")).toContainText(/After that · \d+/);
+  await expect(page.locator(".wall-peek-label")).toContainText(/^Up next · /);
   await page.locator(".wall-peek").click();
 
   // 37b: the list rises as a sheet at half height, and the one thing stays
@@ -83,18 +83,32 @@ test("mobile reliability: Start focus starts a focus session on the commitment",
   await expect(overlay.getByRole("heading", { name: title })).toBeVisible();
 });
 
-test("mobile reliability: the goal band names the goal and its days, in gold", async ({ page }) => {
+// 53f: on a phone the goal is a thin line — the days join the gold kicker, a
+// 2px rule runs under the name, and there is no card. Addendum M: the demo
+// has a Key Deadline and no front, so it names the deadline, with its days
+// and no count (nothing countable).
+test("mobile reliability: the goal is a thin gold line on a phone, with its days", async ({ page }) => {
   await enterDemo(page);
-
-  // Addendum M: the demo has a Key Deadline and no front, so the band names
-  // the deadline, with its days and no count (nothing countable).
   const band = page.locator(".wall-goal");
   await expect(band).toBeVisible();
   await expect(band.locator(".wall-goal-name")).toHaveText("Project launch");
-  await expect(band.locator(".wall-goal-figures").first()).toHaveText(/^\d+ days$/);
-  // Gold is the goal and nothing else: the band is the gold band token.
-  const bg = await band.evaluate(el => getComputedStyle(el).backgroundColor);
-  expect(bg).toBe("rgb(241, 223, 178)");
+  await expect(band.locator(".wall-goal-kicker")).toHaveText(/^YOUR GOAL · \d+ DAYS$/);
+  await expect(band.locator(".wall-goal-count")).toHaveCount(0);
+  await expect(band.locator(".wall-goal-figures")).toBeHidden();
+  expect(await band.evaluate(el => getComputedStyle(el).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  const rule = await band.locator(".wall-goal-track").boundingBox();
+  expect(rule.height).toBe(2);
+});
+
+// Laptop and wider keep 51's look: the filled gold card, its figures on the
+// right (57b).
+test("laptop: the goal keeps its gold card and figures", async ({ page }) => {
+  await enterDemo(page);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const band = page.locator(".wall-goal");
+  await expect(band.locator(".wall-goal-figures")).toHaveText(/^\d+ days$/);
+  expect(await band.evaluate(el => getComputedStyle(el).backgroundColor)).toBe("rgb(241, 223, 178)");
+  await expect(band.locator(".wall-goal-days")).toBeHidden();
 });
 
 // 40a: one anchor, the day's own, and a tap shows the next.
@@ -124,24 +138,30 @@ async function enterDemoWithPeek(page) {
   await enterDemo(page);
 }
 
-test("mobile reliability: Low Energy's smaller start actually starts five minutes", async ({ page }) => {
-  await enterDemoWithPeek(page);
+// 53e: Start runs one block, and its chevron picks another length — 5
+// minutes replaces Low energy. The pick shows on Start and is what starts.
+test("mobile reliability: 5 minutes from the start chooser starts five minutes", async ({ page }) => {
+  await enterDemo(page);
+  await page.getByRole("button", { name: "How long" }).click();
+  const menu = page.getByRole("menu", { name: "How long" });
+  await expect(menu.getByRole("menuitemradio", { name: /^25 minutes/ })).toHaveAttribute("aria-checked", "true");
+  await menu.getByRole("menuitemradio", { name: /^5 minutes/ }).click();
+  await expect(menu).toHaveCount(0);
+  await expect(page.locator(".wall-primary-figure")).toHaveText("05:00");
 
-  await page.getByRole("switch", { name: "Low energy" }).click();
-  await page.locator(".today-list-hide").click();
-
-  const smaller = page.locator(".wall-action", { hasText: "Start small — 5 minutes" });
-  await expect(smaller).toBeVisible({ timeout: 8_000 });
-  await smaller.click();
-
-  // A focus session, at five minutes — not the task editor, and not the
-  // task's own 25-minute estimate.
+  await page.locator(".wall-primary").click();
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 8_000 });
-  // The five-minute session presents as one (528db2f) — and the figure is 5:00,
-  // not the task's own 25:00.
   await expect(overlay.getByText("FIVE MINUTES", { exact: false })).toBeVisible();
   await expect(overlay.locator(".focus-mode-time-digits")).toHaveText("5:00");
+});
+
+// No Low energy anywhere (53e): the chooser's 5 minutes replaced it.
+test("mobile reliability: there is no Low energy switch on Today or in Settings", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  await expect(page.getByRole("switch", { name: "Low energy" })).toHaveCount(0);
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByText("Low energy", { exact: true })).toHaveCount(0);
 });
 
 test("mobile reliability: the scattered door on the desk reaches screen 14", async ({ page }) => {
@@ -155,28 +175,89 @@ test("mobile reliability: the scattered door on the desk reaches screen 14", asy
   await expect(page.locator(".scattered")).toBeVisible({ timeout: 8_000 });
 });
 
-// A fix to a fix: the handler was corrected, but startFocusAndLog's
-// existing-session branch returned before applying the length — so with a
-// session already open the button still promised five minutes and resumed
-// twenty-five.
-test("mobile reliability: five minutes is honoured even with a session already open", async ({ page }) => {
-  await enterDemoWithPeek(page);
-
-  // Start the ordinary session, then back out of the overlay leaving it running.
+// A session already running on the task only resumes: Start names it and
+// offers no length, and Resume carries on the same countdown — it does not
+// start the remembered length over, which would abandon the open session.
+test("mobile reliability: a running session resumes from the wall, with no chooser", async ({ page }) => {
+  await enterDemo(page);
+  await page.getByRole("button", { name: "How long" }).click();
+  await page.getByRole("menu", { name: "How long" }).getByRole("menuitemradio", { name: /^5 minutes/ }).click();
   await page.locator(".wall-primary").click();
   const overlay = page.locator(".focus-mode-overlay");
+  const digits = overlay.locator(".focus-mode-time-digits");
   await expect(overlay).toBeVisible({ timeout: 10_000 });
-  await expect(overlay.locator(".focus-mode-time-digits")).toHaveText("25:00");
+  // Five seconds pass, so starting over would show.
+  await page.clock.setFixedTime(new Date("2024-06-15T10:00:05"));
+  await expect(digits).toHaveText("4:55");
   await overlay.locator(".focus-mode-exit-btn").click();
   await expect(overlay).toHaveCount(0);
 
-  await page.getByRole("switch", { name: "Low energy" }).click();
-  await page.locator(".today-list-hide").click();
-  await page.locator(".wall-action", { hasText: "Start small — 5 minutes" }).click();
-
+  await expect(page.locator(".wall-primary")).toContainText("Resume focus");
+  await expect(page.getByRole("button", { name: "How long" })).toHaveCount(0);
+  // Every countdown the overlay renders from here on: a new session would
+  // show 5:00, if only until the next tick.
+  await page.evaluate(() => {
+    window.__shown = [];
+    new MutationObserver(() => {
+      const d = document.querySelector(".focus-mode-time-digits");
+      if (d) window.__shown.push(d.textContent);
+    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+  });
+  await page.locator(".wall-primary").click();
   await expect(overlay).toBeVisible({ timeout: 8_000 });
-  await expect(overlay.locator(".focus-mode-time-digits")).toHaveText("5:00");
-  await expect(overlay.getByText(/\b25:00\b/)).toHaveCount(0);
+  await expect(digits).toHaveText("4:55");
+  await page.waitForTimeout(1_200);
+  expect(await page.evaluate(() => [...new Set(window.__shown)])).toEqual(["4:55"]);
+});
+
+// 53e on a laptop: ↓ on Start opens the chooser, 1–4 pick, the pick is
+// remembered, and a helper line says so when the task is longer than Start.
+test("laptop: ↓ opens the start chooser, 1–4 pick, the choice is remembered, and the helper line explains it", async ({ page }) => {
+  await enterDemo(page);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  // The one thing, estimated at 2h: longer than one block.
+  await page.locator(".wall-title").click();
+  const sheet = page.getByTestId("task-detail");
+  await sheet.getByRole("button", { name: /^Estimate/ }).click();
+  await sheet.getByRole("radio", { name: "2h" }).click();
+  await sheet.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.locator(".wall-start-helper")).toHaveText("The task is 2h. Start runs one 25-minute block; the chevron changes it.");
+
+  await page.locator(".wall-primary").focus();
+  await page.keyboard.press("ArrowDown");
+  const menu = page.getByRole("menu", { name: "How long" });
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("menuitemradio", { name: /^The whole task · 2h/ })).toBeVisible();
+  await page.keyboard.press("3");
+  await expect(menu).toHaveCount(0);
+  await expect(page.locator(".wall-primary-figure")).toHaveText("50:00");
+  await expect(page.locator(".wall-start-helper")).toHaveText("The task is 2h. Start runs 50 minutes; the chevron changes it.");
+
+  // Remembered: the chooser opens on the pick; the whole task leaves no helper.
+  await page.getByRole("button", { name: "How long" }).click();
+  await expect(menu.getByRole("menuitemradio", { name: /^50 minutes/ })).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("4");
+  await expect(page.locator(".wall-primary-figure")).toHaveText("2:00:00");
+  await expect(page.locator(".wall-start-helper")).toHaveCount(0);
+  // Esc closes without a pick.
+  await page.getByRole("button", { name: "How long" }).click();
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(page.locator(".wall-primary-figure")).toHaveText("2:00:00");
+});
+
+// 53e: the next step carries its own circle; ticking it moves the line on.
+test("mobile reliability: ticking the next step on the wall moves to the step after it", async ({ page }) => {
+  await enterDemo(page);
+  const check = page.locator(".wall-step-check");
+  await expect(check).toHaveAttribute("aria-checked", "false");
+  const name = await check.getAttribute("aria-label");
+  const first = name.replace("Mark step done: ", "");
+  await expect(page.locator(".wall-first-step-text")).toContainText(`Next step — ${first}`);
+  await check.click();
+  await expect(page.getByRole("checkbox", { name, exact: true })).toHaveCount(0);
+  await expect(page.locator(".wall-first-step-text")).toContainText("Next step — ");
+  await expect(page.locator(".wall-first-step-text")).not.toContainText(first);
 });
 
 // ── J2a / Addendum K1: the empty wall ─────────────────────────────────────
@@ -227,7 +308,7 @@ test("mobile reliability: typing on the empty wall creates and commits a task", 
   // L1: no front, but the demo has a Key Deadline set — so the goal band names
   // THAT, rather than suppressing a countdown the user already has.
   await expect(page.locator(".wall-goal-name")).toHaveText("Project launch");
-  await expect(page.locator(".wall-goal-figures").first()).toBeVisible();
+  await expect(page.locator(".wall-goal-days")).toBeVisible();
   // And no first step: concreteStep is OMITTED rather than set empty, so
   // normalizePayload does not substitute its "Do first tiny step" default.
   await expect(page.locator(".wall-first-step")).toHaveCount(0);
@@ -609,7 +690,7 @@ test("mobile reliability: dragging the grabber goes up to full and down to close
   await page.mouse.move(x, y2 + 320, { steps: 6 });
   await page.mouse.up();
   await expect(page.locator(".tasks-section")).toBeHidden();
-  await expect(page.locator(".wall-peek-label")).toContainText(/After that · \d+/);
+  await expect(page.locator(".wall-peek-label")).toContainText(/^Up next · /);
 });
 
 test("mobile reliability: Escape puts the sheet away", async ({ page }) => {
@@ -900,9 +981,11 @@ test("mobile reliability: pinning a longer task with the sheet open re-measures 
   await expect(page.getByTestId("task-detail")).toHaveCount(0);
   await expect(page.locator(".wall-title")).toHaveText(long);
   await expect(sheet).toBeVisible();
-  // The wall grew, so the sheet's half height shrinks to keep Start in view.
+  // The wall changed height (a different title, at its own size under the
+  // title scale, and no step line), so the sheet's half height is measured
+  // again to keep Start in view.
   await expect.poll(async () => parseInt(await sheet.evaluate(el => el.style.getPropertyValue("--sheet-half")), 10))
-    .toBeLessThan(halfBefore);
+    .not.toBe(halfBefore);
 });
 
 
@@ -1135,7 +1218,7 @@ test("Split a task: rows are locked while the AI works, and an answer outside tw
 
 // Laptop, 1024px and up (Addendum X3; 35e/36c): edge to edge, content capped
 // at 1200px and centred; with the list hidden, the one task sits centred and
-// the foot carries "Show list", the + and Low energy (51b). From 1600px the
+// the foot carries "Show list" and the + (51b). From 1600px the
 // cap is 1760px with a Day map column (50k–l, today-wide.spec.js).
 test("laptop: no phone-card frame; content capped at 1200px, centred", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1080 });
@@ -1167,13 +1250,13 @@ test("wide: from 1600px the cap is 1760px, centred (50k)", async ({ page }) => {
   expect(Math.round(map.x + map.width)).toBe(1840);
 });
 
-test("laptop: with the list hidden, the task is centred and the foot shows Show list, + and Low energy (51b)", async ({ page }) => {
+test("laptop: with the list hidden, the task is centred and the foot shows Show list and + (51b)", async ({ page }) => {
   await enterLaptop(page);
   const vw = page.viewportSize().width;
   // Goal and buttons share one centred 420px column; the title is 4/3 of it.
   const [band, start, done, split, title] = await Promise.all([
     page.locator(".wall-goal").boundingBox(),
-    page.locator(".wall-primary").boundingBox(),
+    page.locator(".wall-start").boundingBox(),
     page.getByRole("button", { name: /^Mark done/ }).boundingBox(),
     page.getByRole("button", { name: /^Split it/ }).boundingBox(),
     page.locator(".wall-title").boundingBox(),
@@ -1189,15 +1272,8 @@ test("laptop: with the list hidden, the task is centred and the foot shows Show 
   const show = page.getByRole("button", { name: /^Show list · \d+/ });
   await expect(show).toBeVisible();
   await expect(page.locator(".wall-foot").getByRole("button", { name: "Add a task to Today" })).toBeVisible();
-  // Low energy here and in the list are one setting.
-  const energy = page.locator(".wall-foot").getByRole("switch", { name: "Low energy" });
-  await expect(energy).toHaveAttribute("aria-checked", "false");
-  await energy.click();
-  await expect(energy).toHaveAttribute("aria-checked", "true");
   await show.click();
   await expect(page.locator(".tasks-section")).toBeVisible();
-  await expect(page.locator(".today-energy").getByRole("switch", { name: "Low energy" })).toHaveAttribute("aria-checked", "true");
-  await expect(page.locator(".wall-foot").getByRole("switch", { name: "Low energy" })).toBeHidden();
   // The toggle keeps focus: Show list → Hide list, and back.
   await expect(page.locator(".today-list-hide")).toBeFocused();
   await page.keyboard.press("Enter");
@@ -1284,7 +1360,7 @@ test("laptop: the leaving controls fade out, and hiding lets the task finish its
 
 // Codex review of #405. The header's five items need about 650px; a laptop
 // list under that (1024–1279) takes two tidy rows — title, count and Hide
-// list, then the filter and Low energy — never Hide list alone on a third.
+// list, then the filter — never Hide list alone on a third.
 test("laptop: the list header is one row when it fits, two tidy rows when it doesn't", async ({ page }) => {
   const tops = () => page.evaluate(() => Object.fromEntries(
     [".today-list-title", ".today-list-count", ".today-list-tools", ".today-list-head-end"].map(sel => {
@@ -1628,6 +1704,43 @@ test("laptop: the list is one tab stop, and Space on a row reorders it", async (
   await page.keyboard.press("Space");
   await expect(rows.nth(1).locator(".task-title-text")).toHaveText(titles[0]);
   await expect(rows.nth(0).locator(".task-title-text")).toHaveText(titles[1]);
+});
+
+// Codex review of #420: the peek's "Up next" is the list's first row, in
+// the list's own order — after a reorder too.
+test("phone: after a reorder, Up next names the list's new first task", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  const list = page.getByTestId("today-tasks-list");
+  const rows = list.locator("[data-testid='task-row']:not(.completed)");
+  const titles = (await rows.locator(".task-title-text").allInnerTexts()).map(t => t.trim());
+  const announced = (re) => page.waitForFunction((src) =>
+    [...document.querySelectorAll("[id^='DndLiveRegion']")].some(el => new RegExp(src).test(el.textContent)), re.source);
+  await rows.first().focus();
+  await page.keyboard.press("Space");
+  await announced(/Picked up|was moved over/);
+  await page.keyboard.press("ArrowDown");
+  await announced(/Draggable item (\S+) was moved over droppable area (?!\1\b)\S+/);
+  await page.keyboard.press("Space");
+  await expect(rows.nth(0).locator(".task-title-text")).toHaveText(titles[1]);
+
+  await page.locator(".today-list-hide").click();
+  await expect(page.locator(".wall-peek-label")).toHaveText(`Up next · ${titles[1]}`);
+});
+
+// Codex review of #420: a chooser left open when the session starts closes
+// with it; a running session offers no length.
+test("mobile reliability: Start with the chooser open closes it; back from focus, no menu", async ({ page }) => {
+  await enterDemo(page);
+  await page.getByRole("button", { name: "How long" }).click();
+  await expect(page.getByRole("menu", { name: "How long" })).toBeVisible();
+  await page.locator(".wall-primary").click();
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 10_000 });
+  // Leave with Esc: a click outside would close the menu on its own.
+  await page.keyboard.press("Escape");
+  await expect(overlay).toHaveCount(0);
+  await expect(page.locator(".wall-primary")).toContainText("Resume focus");
+  await expect(page.getByRole("menu", { name: "How long" })).toHaveCount(0);
 });
 
 // Codex review of #406: E opens a task to edit its title; a task opened

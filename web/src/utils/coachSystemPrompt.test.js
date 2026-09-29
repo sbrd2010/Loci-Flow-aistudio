@@ -23,7 +23,6 @@ function baseCtx() {
     deadlineContext: "",
     brainDumpContext: "",
     velocityContext: "",
-    lowEnergyContext: "",
     recentlyParkedContext: "",
     recentlyCompletedContext: "",
     rescueHandoffContext: "",

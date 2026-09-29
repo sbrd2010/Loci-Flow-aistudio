@@ -130,7 +130,6 @@ export function buildRescuePrompt({ reason, firstName = "friend", task = null, a
   const personaInstruction = buildPersonaInstruction(config, name);
   const profileContext = buildProfileContext(config);
   const memoryContext = includeMemory && isMemoryEnabled(config) ? buildLociMemoryContext(config.coachMemory) : "";
-  const lowEnergyContext = config.isLowEnergyMode ? `${name} has Low Energy Mode enabled in Loci right now.` : "";
   const entryLabel = ENTRY_POINT_LABELS[entryPoint] || ENTRY_POINT_LABELS.today;
 
   return `You are Loci's Rescue Coach inside Loci Focus. This is not ordinary chat: ${name} has explicitly opened Rescue Mode from ${entryLabel}.
@@ -159,7 +158,6 @@ RESCUE ACTIONS (hidden tags — use sparingly, only when it clearly matches the 
 CURRENT RESCUE CONTEXT:
 ${entryContext}
 ${taskList && task ? `VISIBLE TASK SNAPSHOT:\n${taskList}` : ""}
-${lowEnergyContext}
 ${profileContext ? `\n${profileContext}` : ""}
 ${memoryContext ? `\n${memoryContext}` : ""}
 

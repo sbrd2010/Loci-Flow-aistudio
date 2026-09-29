@@ -81,7 +81,6 @@ export function createDemoPayload() {
       reminderNagIntervalMinutes: 15,
       visitStreakCount: 5,
       lastVisitDate: todayStr,
-      isLowEnergyMode: false,
       isOnboardingCompleted: true,
       eveningGuardWindowActive: true,
       dayStartHour: 7,

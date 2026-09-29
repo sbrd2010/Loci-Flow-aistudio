@@ -15,7 +15,7 @@ import { safeUUID } from "../utils/uuid";
 import { taskSteps, stepsPatch, applyStepsPatch } from "../utils/taskSteps";
 import { buildToggleCompletedTasks, byPriorityThenOrder } from "../utils/taskOps";
 import { buildParkTaskTasks } from "../utils/coachActions";
-import { shouldStopFocusOnComplete, focusBlockSeconds } from "../utils/focusSession";
+import { shouldStopFocusOnComplete, focusBlockSeconds, chosenStartOption } from "../utils/focusSession";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
@@ -47,11 +47,6 @@ import DayMapColumn from "./DayMapColumn";
 import { makeOneThing, undoOneThing } from "../utils/oneThing";
 import { bringBack, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
-
-// Addendum A: on a Low Energy day the wall offers a smaller start instead of
-// "split it". Five minutes, the same length ScatteredFlow's "Just 5 minutes"
-// starts — not the task's own estimate.
-const LOW_ENERGY_SESSION_SECONDS = 5 * 60;
 
 const PencilIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -117,9 +112,19 @@ export default function TodayTab({
   // `pinPromise` (optional) is a still-in-flight pin write (e.g. Focus Now's
   // "pin then immediately start" button) — if given, ledger events wait for
   // it to confirm instead of logging for a pin that might not have landed.
-  // `options` is passed straight to startFocusSession — the wall's low-energy
-  // action uses it to start a genuine five-minute session rather than one at
-  // the task's own estimate.
+  // `options` is passed straight to startFocusSession — the wall's start
+  // chooser uses it for the length picked there (53e).
+  // The wall's Start (and Space): the length picked in its chooser (53e). A
+  // session already running on the task only resumes — a length would start
+  // a new one and abandon it.
+  const startWallFocus = (task) => {
+    if (activeTask?.uuid === task.uuid && focusSessionId && focusSessionTaskUuid === task.uuid) {
+      startFocusAndLog(task);
+      return;
+    }
+    const option = chosenStartOption(config.focusStartChoice, focusBlockSeconds(config) / 60, task.timeEstimateMinutes);
+    startFocusAndLog(task, null, { plannedSeconds: option.minutes * 60 });
+  };
   const startFocusAndLog = (task, pinPromise, options) => {
     // If this task already has an open session (e.g. the user backed out of
     // the full-screen overlay while the timer kept running, then taps Focus
@@ -1221,8 +1226,7 @@ export default function TodayTab({
       })
       .catch(() => {});
   }, [leftToday?.uuid]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Must-do is the list's one filter (Y4). Low energy changes how a task
-  // starts, not which tasks show: "Small starts drop to 5 min" (37b).
+  // Must-do is the list's one filter (Y4).
   const todayTasksFiltered = isMVDMode ? todayTasksAll.filter(t => t.isMVD) : todayTasksAll;
   // — values the wall's header and kicker read —
   // The kicker is the front name OR nothing. Never "Uncategorised": a task with
@@ -1583,10 +1587,10 @@ export default function TodayTab({
         else setPeekOpen(v => !v);
       } else if (key === " ") {
         e.preventDefault();
-        startFocusAndLog(pinnedFocusTask);
+        startWallFocus(pinnedFocusTask);
       } else if (key === "d") {
         handleToggleComplete(pinnedFocusTask);
-      } else if (key === "s" && !config.isLowEnergyMode) {
+      } else if (key === "s") {
         setSplitTask(pinnedFocusTask);
       }
     };
@@ -1609,19 +1613,20 @@ export default function TodayTab({
         goal={wallGoal}
         anchors={config.anchorsOnToday === "off" ? [] : anchors.filter(a => a && typeof a.text === "string" && a.text.trim())}
         focusMinutes={focusBlockSeconds(config) / 60}
+        startChoice={config.focusStartChoice}
+        onChooseStart={(choice) => saveConfigPatch({ focusStartChoice: choice })}
         peekOpen={peekOpen}
         onTogglePeek={() => (listMotionActive() ? toggleList(!peekOpen) : setPeekOpen(v => !v))}
         onAdd={onOpenAddTask}
         onOpenDayMap={onOpenDayMap}
         onOpenTask={() => pinnedFocusTask && setDetailUuid(pinnedFocusTask.uuid)}
         remainingCount={wallRemainingCount}
-        lowEnergy={!!config.isLowEnergyMode}
-        onToggleLowEnergy={() => saveConfigPatch({ isLowEnergyMode: !config.isLowEnergyMode })}
+        nextTitle={remainingTasks[0]?.title || null}
+        onStepDone={(stepId) => pinnedFocusTask && handleSubStepToggle(pinnedFocusTask, stepId)}
         timerLabel={wallLiveTimerLabel}
-        onStartFocus={() => pinnedFocusTask && startFocusAndLog(pinnedFocusTask)}
+        onStartFocus={() => pinnedFocusTask && startWallFocus(pinnedFocusTask)}
         onMarkDone={() => pinnedFocusTask && handleToggleComplete(pinnedFocusTask)}
         onSplit={() => pinnedFocusTask && setSplitTask(pinnedFocusTask)}
-        onStartSmall={() => pinnedFocusTask && startFocusAndLog(pinnedFocusTask, null, { plannedSeconds: LOW_ENERGY_SESSION_SECONDS })}
         doneTask={doneCommitment}
         doneMinutes={doneMinutes}
         proposal={wallProposal}
@@ -1733,9 +1738,9 @@ export default function TodayTab({
             </div>
           </>
         )}
-        {/* One header row on a laptop (51a): title, count, the filter, Low
-            energy, Hide list. Phones and tablets keep the tools on a second
-            line under it (37b). */}
+        {/* One header row on a laptop (51a): title, count, the filter, Hide
+            list. Phones and tablets keep the tools on a second line under it
+            (37b). */}
         <div className="today-list-top">
         <div className="today-list-head">
           <h2 className="today-list-title">After that</h2>
@@ -1758,7 +1763,7 @@ export default function TodayTab({
         </div>
 
         <div className="today-list-tools">
-          {/* Must-do is a filter on the list (Y4); Low energy is not. */}
+          {/* Must-do is a filter on the list (Y4). */}
           <div className="today-seg" role="group" aria-label="Show">
             <button type="button" className="today-seg-opt" aria-pressed={!isMVDMode} onClick={() => setIsMVDMode(false)}>
               All · {listAllCount}
@@ -1767,20 +1772,6 @@ export default function TodayTab({
               Must-do · {listMustCount}
             </button>
           </div>
-          <label className="today-energy">
-            <span className="today-energy-text">
-              <span className="today-energy-label">Low energy</span>
-              <span className="today-energy-caption">Small starts drop to 5 min</span>
-            </span>
-            <button
-              type="button"
-              role="switch"
-              className="today-energy-switch"
-              aria-checked={!!config.isLowEnergyMode}
-              aria-label="Low energy"
-              onClick={() => saveConfigPatch({ isLowEnergyMode: !config.isLowEnergyMode })}
-            />
-          </label>
         </div>
         </div>
 

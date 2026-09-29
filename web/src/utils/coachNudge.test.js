@@ -38,11 +38,6 @@ describe("getCoachNudge", () => {
     expect(getCoachNudge(payload, date)).toBeNull();
   });
 
-  it("returns null when Low Energy Mode is on", () => {
-    const payload = { tasks: [task({ isNowFocus: true })], config: { isLowEnergyMode: true } };
-    expect(getCoachNudge(payload, date)).toBeNull();
-  });
-
   it("returns null during the Evening Guard window", () => {
     const evening = new Date(2026, 5, 13, 21, 0); // 21:00
     const payload = { tasks: [task({ isNowFocus: true })], config: { eveningGuardWindowActive: true } };

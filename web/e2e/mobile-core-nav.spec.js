@@ -110,7 +110,6 @@ for (const viewport of PHONE_VIEWPORTS) {
       page.locator(".today-list-add"),
       page.getByRole("button", { name: /^All · \d+$/ }),
       page.getByRole("button", { name: /^Must-do · \d+$/ }),
-      page.getByRole("switch", { name: "Low energy" }),
     ];
     const boxes = [];
     for (const control of controls) {
@@ -128,13 +127,6 @@ for (const viewport of PHONE_VIEWPORTS) {
       }
     }
 
-    // The switch is the system size (51×31) inside the row.
-    const switchBox = boxes[4];
-    expect(Math.round(switchBox.width)).toBe(51);
-    expect(Math.round(switchBox.height)).toBe(31);
-
-    await expectNoHorizontalOverflow(page);
-    await page.getByRole("switch", { name: "Low energy" }).click();
     await expectNoHorizontalOverflow(page);
   });
 }
