@@ -85,6 +85,27 @@ test("a stop's sheet fixes its time, then shows Change time and Unfix; Unfix let
   await expect(page.locator(".undo-toast")).toContainText(`No fixed time: ${title}`);
 });
 
+// Codex review of #425: the WAS badges were about the fix, so Unfix clears them.
+test("Unfix clears the WAS badges of the stops the fix moved", async ({ page }) => {
+  await openDayMap(page);
+  const last = route(page).locator(".dm-stop").nth(2);
+  const title = (await last.locator(".dm-title").innerText()).trim();
+  await last.locator(".dm-main").click();
+  const sheet = page.getByTestId("task-detail");
+  await sheet.getByRole("button", { name: "Fix time" }).click();
+  const at = page.getByRole("dialog", { name: `Fix a time: ${title}` }).getByRole("textbox", { name: "At" });
+  await at.focus();
+  for (let i = 0; i < 6; i += 1) await page.keyboard.press("ArrowDown");
+  await expect(at).toHaveValue("12:15");
+  await page.keyboard.press("Enter");
+  await expect(route(page).getByText(/^WAS /)).not.toHaveCount(0);
+
+  await route(page).locator(".dm-stop", { hasText: title }).locator(".dm-main").click();
+  await sheet.getByRole("button", { name: "Unfix" }).click();
+  await expect(page.locator(".undo-toast")).toContainText(`No fixed time: ${title}`);
+  await expect(route(page).getByText(/^WAS /)).toHaveCount(0);
+});
+
 test("the fixed-time dialog keeps Tab inside and Escape closes it", async ({ page }) => {
   await openDayMap(page);
   await page.getByRole("button", { name: "Fixed time" }).click();

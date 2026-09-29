@@ -22,7 +22,7 @@ async function openDayMapAt(page, time, viewport = { width: 412, height: 892 }) 
 
 // How many wait in Unscheduled: the laptop's card, or the phone's bar.
 const unscheduled = (page) => page.locator(".dm-pool-count:visible").first();
-const planned = (page) => page.locator(".dm-dayclock-plan");
+const fact = (page) => page.locator(".dm-fact");
 
 // Makes the first stop 3h and the last 2h (from their sheets): 21:00–00:00,
 // 00:05–00:30, then 00:35–02:35, which ends past the 02:00 line (56a), so
@@ -41,8 +41,9 @@ async function overfill(page) {
 test("a route that fits: the day ends at the end of the focus window, with the time to spare", async ({ page }) => {
   await openDayMapAt(page, "2024-06-15T21:00:00");
   await expect(page.locator(".dm-dayend")).toHaveText(/^DAY ENDS 02:00 · \d+h(\d+m)? FREE$/);
-  await expect(planned(page)).not.toHaveClass(/is-over/);
-  await expect(page.locator(".dm-wontfit")).toHaveCount(0);
+  await expect(fact(page)).toHaveText(/^On track: done by \d{2}:\d{2}\.$/);
+  await expect(page.locator(".dm-daybar-past")).toHaveCount(0);
+  await expect(page.locator(".dm-stop.is-over")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Move \d+ to tomorrow/ })).toHaveCount(0);
 });
 
@@ -52,10 +53,11 @@ test("stops after the day end are marked, and Move N to tomorrow takes them off 
 
   const dayEnd = page.locator(".dm-dayend");
   await expect(dayEnd).toContainText("DAY ENDS 02:00");
-  await expect(page.locator(".dm-wontfit")).toHaveText("WON’T FIT TODAY · 2h");
   await expect(page.locator(".dm-stop.is-over")).toHaveCount(1);
-  await expect(planned(page)).toHaveText("5h35m planned · 35m over");
-  await expect(planned(page)).toHaveClass(/is-over/);
+  // 56a: the line says it in words, the overrun in red; the bar hatches it.
+  await expect(fact(page)).toHaveText("Keep this order and you finish at 02:35, 35 minutes past your day end.");
+  await expect(fact(page).locator(".dm-fact-alert")).toHaveText("35 minutes past your day end.");
+  await expect(page.locator(".dm-daybar-legend")).toContainText("past your day end 35m");
   // Screen readers hear where a stop sits against the day's end (brief §6).
   await expect(page.locator(".dm-stop.is-over .dm-main")).toHaveAttribute("aria-label", /after the day ends$/);
 
@@ -70,7 +72,7 @@ test("stops after the day end are marked, and Move N to tomorrow takes them off 
 
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
   await expect(page.locator(".dm-stop")).toHaveCount(3);
-  await expect(page.locator(".dm-wontfit")).toBeVisible();
+  await expect(page.locator(".dm-stop.is-over")).toHaveCount(1);
   await page.locator(".dm-back").click();
   // Three tasks: the one thing on the wall, two rows in the list.
   await expect(page.getByTestId("today-tasks-list").locator("[data-testid='task-row']")).toHaveCount(2);
