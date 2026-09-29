@@ -33,6 +33,28 @@ export function focusBlockSeconds(config = {}) {
   return (mins > 0 ? mins : DEFAULT_BLOCK_MINUTES) * 60;
 }
 
+// The start chooser (53e): Start runs one block unless another length is
+// picked — 5 minutes, one block (the Focus timer setting), 50 minutes, or the
+// whole task when it has an estimate. The choice is remembered (config
+// focusStartChoice: 5 | "block" | 50 | "whole"); keys 1–4 follow this order.
+export function startLengthOptions(blockMinutes, estimateMinutes) {
+  const options = [];
+  if (blockMinutes !== 5) options.push({ choice: 5, minutes: 5, label: "5 minutes", sub: "Just start." });
+  options.push({ choice: "block", minutes: blockMinutes, label: `${blockMinutes} minutes`, sub: "One block. Default." });
+  if (blockMinutes !== 50) options.push({ choice: 50, minutes: 50, label: "50 minutes" });
+  // The whole task only when it is estimated, and a length of its own.
+  const est = Number(estimateMinutes);
+  if (est > 0 && !options.some(o => o.minutes === est)) options.push({ choice: "whole", minutes: est, label: "The whole task" });
+  return options;
+}
+
+// The length Start runs now: the remembered choice if it is on offer for this
+// task (the whole task needs an estimate), otherwise one block.
+export function chosenStartOption(choice, blockMinutes, estimateMinutes) {
+  const options = startLengthOptions(blockMinutes, estimateMinutes);
+  return options.find(o => o.choice === choice) || options.find(o => o.choice === "block");
+}
+
 // 59j: a session is one sitting on one task. A pause of 15 minutes or less
 // keeps it; a longer one closes it, as does the Loci day ending.
 export const PAUSE_EXPIRY_MS = 15 * 60 * 1000;

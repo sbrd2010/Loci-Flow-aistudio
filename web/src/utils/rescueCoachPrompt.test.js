@@ -97,7 +97,7 @@ describe("rescueCoachPrompt", () => {
     expect(prompt).toContain("if this is still the right task");
   });
 
-  it("injects profile, memory, persona, and low-energy context", () => {
+  it("injects profile, memory and persona context", () => {
     const prompt = buildRescuePrompt({
       reason: "tired",
       firstName: "Rohan",
@@ -106,14 +106,12 @@ describe("rescueCoachPrompt", () => {
       config: {
         coachPersona: "direct",
         coachProfileNote: "Works best with very short starts.",
-        isLowEnergyMode: true,
         coachMemory: { pinnedFacts: [{ text: "Prefers morning writing." }], recentObservations: [] },
       },
     });
     expect(prompt).toContain("direct and no-nonsense");
     expect(prompt).toContain("Works best with very short starts");
     expect(prompt).toContain("Prefers morning writing");
-    expect(prompt).toContain("Low Energy Mode enabled");
   });
 
   it("can suppress memory context while still keeping the user-authored profile", () => {
@@ -214,10 +212,9 @@ describe("rescueCoachPrompt", () => {
           { uuid: "tiny", title: "Send short reply", horizonLevel: "today", timeEstimateMinutes: 5, concreteStep: "open inbox" },
           { uuid: "large", title: "Write full proposal", horizonLevel: "today", timeEstimateMinutes: 90 },
         ],
-        config: { isLowEnergyMode: true },
+        config: {},
       });
 
-      expect(prompt).toContain("Low Energy Mode enabled");
       expect(prompt).toContain("Validate that low-energy mode is real");
       expect(prompt).toContain("Prefer tasks with small time estimates or concrete first steps");
       expect(prompt).toContain("Send short reply");

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   shouldShowFloatingTimer, buildExtendedTimerState, shouldStopFocusOnComplete,
   shouldTriggerSessionComplete, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload,
-  buildResetFocusState, getTimerState, focusBlockSeconds, focusExpiryReason, focusOutcome, PAUSE_EXPIRY_MS,
+  buildResetFocusState, getTimerState, focusBlockSeconds, focusExpiryReason, focusOutcome, PAUSE_EXPIRY_MS, startLengthOptions, chosenStartOption,
 } from "./focusSession";
 
 describe("shouldShowFloatingTimer", () => {
@@ -279,5 +279,29 @@ describe("focusOutcome (59j)", () => {
     expect(focusOutcome("focus_abandoned", "day_ended")).toBe("expired");
     // A task marked done after its sitting expired was not done in it.
     expect(focusOutcome("focus_completed", "paused_too_long")).toBe("expired");
+  });
+});
+
+describe("start chooser (53e)", () => {
+  it("offers 5 minutes, one block, 50 minutes, and the whole task only when estimated", () => {
+    expect(startLengthOptions(25, null).map(o => o.minutes)).toEqual([5, 25, 50]);
+    expect(startLengthOptions(25, 180).map(o => o.choice)).toEqual([5, "block", 50, "whole"]);
+    expect(startLengthOptions(25, 180)[3].minutes).toBe(180);
+  });
+  it("offers the whole task only when it is a length of its own", () => {
+    expect(startLengthOptions(25, 25).map(o => o.choice)).toEqual([5, "block", 50]);
+    expect(startLengthOptions(25, 50).map(o => o.choice)).toEqual([5, "block", 50]);
+    expect(startLengthOptions(25, 15).map(o => o.choice)).toEqual([5, "block", 50, "whole"]);
+  });
+  it("shows a block of 5 or 50 once, as the block", () => {
+    expect(startLengthOptions(50, null).map(o => o.choice)).toEqual([5, "block"]);
+    expect(startLengthOptions(5, null).map(o => o.choice)).toEqual(["block", 50]);
+  });
+  it("runs the remembered choice when it is on offer, else one block", () => {
+    expect(chosenStartOption(5, 25, null).minutes).toBe(5);
+    expect(chosenStartOption("whole", 25, 90).minutes).toBe(90);
+    expect(chosenStartOption("whole", 25, null)).toMatchObject({ choice: "block", minutes: 25 });
+    expect(chosenStartOption(undefined, 25, 90)).toMatchObject({ choice: "block", minutes: 25 });
+    expect(chosenStartOption(50, 50, null)).toMatchObject({ choice: "block", minutes: 50 });
   });
 });

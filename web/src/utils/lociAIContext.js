@@ -332,13 +332,6 @@ export function buildLociRemindersContext(tasks = [], date = new Date()) {
   return ["REMINDERS DUE TODAY:", ...lines].join("\n");
 }
 
-// Low Energy Mode flag — tells the coach the user has self-identified as
-// low-capacity right now, so suggestions should stay small and low-pressure.
-export function buildLociLowEnergyContext(config = {}) {
-  if (!config.isLowEnergyMode) return "";
-  return "LOW ENERGY MODE: ON — keep suggestions small, simple, and low-pressure right now.";
-}
-
 // Deterministic check backing the PRIORITY QUESTIONS rule's category-mismatch
 // disclosure ("if none are visible, say so rather than picking an unrelated
 // task") — live testing showed the model doesn't reliably notice a category

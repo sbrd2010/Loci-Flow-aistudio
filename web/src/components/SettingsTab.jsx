@@ -110,7 +110,6 @@ export default function SettingsTab({ payload, saveSubPath, saveConfigPatch, las
       <Row title="Focus windows" sub={focusWindowsLine(config)} onClick={() => open("focusWindows")} />
       <Row title="Focus timer" value={`${Number(config.pomodoroDurationMinutes) || 25} min`} onClick={() => open("timer")} />
       <Row title="Reminder before" value={`${Number(config.reminderNagIntervalMinutes) || 15} min`} onClick={() => open("reminder")} />
-      <SwitchRow title="Low energy" sub="Small starts drop to 5 min; nudges pause" checked={!!config.isLowEnergyMode} onChange={v => saveConfigPatch({ isLowEnergyMode: v })} />
       <SwitchRow title="Evening guard" sub="No new tasks after 20:00" checked={!!config.eveningGuardWindowActive} onChange={v => saveConfigPatch({ eveningGuardWindowActive: v })} />
       <Row title="Anchors on Today" value={ANCHOR_MODES.find(m => m.value === (config.anchorsOnToday === "off" ? "off" : "line")).label} onClick={() => open("anchors")} />
     </Group>

@@ -22,7 +22,6 @@ function lociDay(payload, now) {
 export function getCoachNudge(payload = {}, now = new Date()) {
   const config = payload.config || {};
   if (config.coachNudgesEnabled === false) return null;
-  if (config.isLowEnergyMode) return null;
   if (config.eveningGuardWindowActive && now.getHours() >= 20) return null;
   if (config.coachNudgeClearedDate === lociDay(payload, now)) return null;
 

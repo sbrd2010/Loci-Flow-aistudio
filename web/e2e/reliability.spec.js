@@ -139,28 +139,6 @@ test("reliability: brain dump item survives tab switch and is browsable via Road
   await expect(dumpItem).toBeVisible({ timeout: 5_000 });
 });
 
-test("reliability: Low energy is a switch that changes how a task starts, not which tasks show", async ({ page }) => {
-  await enterDemo(page);
-
-  const tasksList = page.getByTestId("today-tasks-list");
-  const lowEnergy = page.getByRole("switch", { name: "Low energy" });
-  await expect(tasksList.getByText("25-minute deep work block")).toBeVisible({ timeout: 8_000 });
-  await expect(lowEnergy).toHaveAttribute("aria-checked", "false");
-
-  // 37b: "Small starts drop to 5 min". The list is not filtered (Y4: Must-do
-  // is the list's only filter), and the wall offers the smaller start.
-  await lowEnergy.click();
-  await expect(lowEnergy).toHaveAttribute("aria-checked", "true");
-  await expect(tasksList.getByText("25-minute deep work block")).toBeVisible();
-  await expect(tasksList.getByText("10-minute walk")).toBeVisible();
-  await expect(page.locator(".wall-action", { hasText: "Start small — 5 minutes" })).toBeVisible();
-  await expect(page.locator(".wall-action", { hasText: "Split it" })).toHaveCount(0);
-
-  await lowEnergy.click();
-  await expect(lowEnergy).toHaveAttribute("aria-checked", "false");
-  await expect(page.locator(".wall-action", { hasText: "Split it" })).toBeVisible();
-});
-
 test("reliability: All · Must-do filters the list to must-dos and back", async ({ page }) => {
   await enterDemo(page);
 

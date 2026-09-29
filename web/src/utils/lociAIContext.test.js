@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLociCoreInstruction, buildLociAnchorsContext, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociLowEnergyContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociTodaySnapshotContext, SNAPSHOT_MAX_OPEN, SNAPSHOT_MAX_DONE, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
+import { buildLociCoreInstruction, buildLociAnchorsContext, buildLociCheckinContext, buildLociTaskContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociTodaySnapshotContext, SNAPSHOT_MAX_OPEN, SNAPSHOT_MAX_DONE, buildLociCategoryFilterContext, getLocalDateString, isActiveLociTask } from "./lociAIContext";
 import { getFocusWindows } from "./focusWindows";
 
 describe("lociAIContext", () => {
@@ -435,17 +435,6 @@ describe("buildLociRemindersContext", () => {
     expect(buildLociRemindersContext([
       { title: "Done yesterday", isCompleted: true, reminderAt: new Date(2026, 5, 11, 9, 0).getTime() },
     ], TODAY)).toBe("");
-  });
-});
-
-describe("buildLociLowEnergyContext", () => {
-  it("returns an empty string when Low Energy Mode is off", () => {
-    expect(buildLociLowEnergyContext({})).toBe("");
-    expect(buildLociLowEnergyContext({ isLowEnergyMode: false })).toBe("");
-  });
-
-  it("flags Low Energy Mode when on", () => {
-    expect(buildLociLowEnergyContext({ isLowEnergyMode: true })).toContain("LOW ENERGY MODE: ON");
   });
 });
 

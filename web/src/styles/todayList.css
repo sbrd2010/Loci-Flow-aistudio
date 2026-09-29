@@ -103,28 +103,7 @@
   box-shadow: var(--shadow-sm);
 }
 
-/* Low energy: a system switch with its caption (37b; brief: 51×31). */
-.today-energy {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  /* Stays on the right when the toolbar wraps on a narrow phone. */
-  margin-left: auto;
-  cursor: pointer;
-}
-.today-energy-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-.today-energy-label {
-  font-size: 0.8125rem;
-  font-weight: 700;
-}
-.today-energy-caption {
-  font-size: 0.6875rem;
-  color: var(--ink-2);
-}
+/* A system switch (37b; brief: 51×31) — the task sheet's Must-do uses it. */
 .today-energy-switch {
   position: relative;
   flex-shrink: 0;
@@ -177,7 +156,7 @@
 }
 
 /* Laptop (51a): no "+ Add" in the header and no Day map link (it sits under
-   the task); title, count, the filter, Low energy and Hide list share one
+   the task); title, count, the filter and Hide list share one
    row. The list's last line adds to Today, pinned to the bottom of the card
    when the list runs past the screen. */
 .today-list-addbar { display: none; }
@@ -194,7 +173,7 @@
   }
   .today-list-head { display: contents; }
   /* Too narrow for one row (a 1024–1279 laptop): two rows on purpose —
-     title, count and Hide list, then the filter and Low energy — rather
+     title, count and Hide list, then the filter — rather
      than letting Hide list wrap onto a line of its own. */
   .today-list-title { order: 0; }
   .today-list-count { order: 1; }
@@ -213,8 +192,7 @@
   /* The Day map link moves under the task (51a) — only when there is one:
      the empty and done walls have no link of their own. */
   .today-list.is-sheet .today-list-link,
-  .today-list-add,
-  .today-energy-caption { display: none; }
+  .today-list-add { display: none; }
   .today-list .tasks-list { padding: 0 22px 8px; }
 
   .today-list-addbar {
