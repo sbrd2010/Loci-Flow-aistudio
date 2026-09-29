@@ -26,7 +26,7 @@ import {
   normalizePriority, reflowRoute, removeScheduleFields, routeIsContiguous, useDayRoute,
 } from "../hooks/useDayRoute";
 import { isFixedStop } from "../utils/dayMapRoute";
-import { addedBreaks, nextFreeSlot } from "../utils/dayMapBreaks";
+import { addedBreaks, busyFromRows, defaultBreak, nextFreeSlot } from "../utils/dayMapBreaks";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { safeUUID } from "../utils/uuid";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
@@ -164,7 +164,7 @@ function RouteDrop({ children }) {
   return <div ref={setNodeRef} className={`dm-route-wrap${isOver ? " is-drop" : ""}`}>{children}</div>;
 }
 
-export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onAddTask, onHelpChoose, dayClock, flushNow = () => {}, backLabel = "Today", uid, writeActivityEvents, focusTimer }) {
+export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onEndFocus, onAddTask, onHelpChoose, dayClock, flushNow = () => {}, backLabel = "Today", uid, writeActivityEvents, focusTimer }) {
   // A stop, opened (52): the task sheet, with Remove from route.
   const [detailId, setDetailId] = useState(null);
   // The route's own Undo: { message, before, at } — before is what to put back.
@@ -369,6 +369,10 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const before = addedBreaks(routeConfig, todayStr);
     const item = { kind: "break", start, lengthMin };
     setAddedBreaks(index == null ? [...before, item] : before.map((b, i) => (i === index ? item : b)));
+    // Q36a: a break now ends a focus session running, saved as it stands
+    // (until Focus 59's pause, when Resume starts a new one).
+    const nowMin = currentDayMinutes(windows);
+    if (start <= nowMin && nowMin < start + lengthMin && focusTimer?.focusSessionId) onEndFocus?.();
     setFixing(null);
     setUndo({ kind: "breaks", breaks: before, message: `Break ${formatClock24(start)}–${formatClock24(start + lengthMin)}${index == null ? " added" : ""}`, at: Date.now() });
   };
@@ -950,7 +954,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           stops={scheduledTasks}
           task={fixing.task}
           breakItem={fixing.breakItem}
-          breakAt={nextFreeSlot(rows, nowMins)}
+          breakDefault={defaultBreak(rows, nowMins)}
+          laterAt={nextFreeSlot(rows, nowMins)}
+          busy={busyFromRows(rows, fixing.breakItem ? fixing.breakItem.index : null)}
           onBreak={saveBreak}
           onRemoveBreak={removeBreak}
           from={anchorMinutes}

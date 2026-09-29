@@ -255,10 +255,12 @@ export function useDayRoute({ payload, savePayload }) {
   };
 
   // Q31: today's added breaks set to `items` ({ start, lengthMin }), and the
-  // route timed again around them, in one write.
+  // route timed again around them, in one write. The route's start is kept
+  // where it is: inferred from the first stop, a break now would move it to
+  // the break's end and hide the break.
   const setAddedBreaks = (items) => {
     const p = payloadRef.current;
-    const nextConfig = withAddedBreaks(p?.config || {}, todayStr, items);
+    const nextConfig = { ...withAddedBreaks(p?.config || {}, todayStr, items), dayMapDate: todayStr, dayMapAnchorMinutes: anchorMinutes };
     const reflowed = reflowRoute(scheduledTasks, anchorMinutes, todayStr, routeBreaks(windows, nextConfig, todayStr));
     savePayload({ ...p, tasks: applyReflow(latestTasks(), reflowed), config: nextConfig, timestamp: Date.now() });
   };

@@ -1876,7 +1876,7 @@ export default function TodayTab({
                             onOpen={openDetail}
                             onMakeOneThing={handleMakeOneThing}
                             isMin={minimumDayIds.has(String(task.uuid))}
-                            fixedAt={task.fixedKind === "event" && task.dayMapDate === todayStr ? task.dayMapFixedMinutes ?? null : null}
+                            fixedAt={task.dayMapDate === todayStr ? task.dayMapFixedMinutes ?? null : null}
                             tabStop={task.uuid === rovingUuid}
                             isTinted={task.uuid === tintUuid}
                             onSwipeDone={handleToggleComplete}

@@ -72,17 +72,26 @@ function afterBreaks(at, breaks) {
 // A task split by a break gives two stop rows (the first `continues`, the
 // second is `continued`).
 //
+// Breaks between focus windows split a task that reaches them (it continues
+// after). A break you added (`added` set) is a wall, like a fixed stop: a
+// task never crosses it but goes after it whole, and the time before it takes
+// a later stop that fits (Q36.2). No buffer after a break (Q35a).
+//
 // The rule (58): fixed stops never move. Flexible stops flow in order from
 // `from`. One that would overlap a fixed stop goes after it, order kept; the
 // gap before the fixed stop takes the earliest later stop that fits whole
 // (pulled forward), and what is left shows as free. If now has passed a fixed
 // stop's time, it is `late` and nothing is pushed.
 export function layoutRoute(stops, { from, breaks = [], now = -Infinity, durationOf }) {
-  const sortedBreaks = [...breaks].sort((a, b) => a.start - b.start);
-  const walls = stops
-    .filter(isFixedStop)
-    .map(task => ({ task, start: Number(task.dayMapFixedMinutes), minutes: durationOf(task) }))
-    .sort((a, b) => a.start - b.start);
+  const allBreaks = [...breaks].sort((a, b) => a.start - b.start);
+  const sortedBreaks = allBreaks.filter(b => b.added == null);
+  const walls = [
+    ...stops.filter(isFixedStop).map(task => ({ task, start: Number(task.dayMapFixedMinutes), minutes: durationOf(task) })),
+    ...allBreaks.filter(b => b.added != null).map(b => ({ start: b.start, minutes: b.end - b.start })),
+  ].sort((a, b) => a.start - b.start);
+  // The time a wall holds the route: a fixed stop and its buffer, a break
+  // to its end.
+  const wallEnd = (x) => (x.task ? afterTask(x.start + x.minutes) : x.start + x.minutes);
   const queue = stops.filter(t => !isFixedStop(t));
   const rows = [];
   let cursor = from;
@@ -94,7 +103,7 @@ export function layoutRoute(stops, { from, breaks = [], now = -Infinity, duratio
   // shorter stop takes its place (Codex review of #427).
   if (queue[0]?.isNowFocus) {
     const task = queue.shift();
-    const pauses = [...sortedBreaks, ...walls.map(x => ({ start: x.start, end: afterTask(x.start + x.minutes) }))]
+    const pauses = [...sortedBreaks, ...walls.map(x => ({ start: x.start, end: wallEnd(x) }))]
       .sort((a, b) => a.start - b.start);
     const parts = runThrough(afterBreaks(from, pauses), durationOf(task), pauses);
     parts.forEach((p, i) => rows.push({
@@ -107,9 +116,8 @@ export function layoutRoute(stops, { from, breaks = [], now = -Infinity, duratio
   while (queue.length || w < walls.length) {
     const wall = walls[w];
     if (wall && wall.start <= cursor) {
-      const end = wall.start + wall.minutes;
-      rows.push({ kind: "stop", task: wall.task, start: wall.start, end, fixed: true, late: now >= wall.start });
-      cursor = Math.max(cursor, afterTask(end));
+      if (wall.task) rows.push({ kind: "stop", task: wall.task, start: wall.start, end: wall.start + wall.minutes, fixed: true, late: now >= wall.start });
+      cursor = Math.max(cursor, wallEnd(wall));
       w += 1;
       continue;
     }
@@ -152,7 +160,7 @@ export function layoutRoute(stops, { from, breaks = [], now = -Infinity, duratio
   const lastEnd = Math.max(-Infinity, ...rows.filter(r => r.kind === "stop").map(r => r.end));
   const fixedRows = rows.filter(r => r.fixed).sort((a, b) => a.start - b.start);
   let shownTo = -Infinity;
-  for (const b of sortedBreaks) {
+  for (const b of allBreaks) {
     if (b.end <= from || (b.start >= lastEnd && b.added == null)) continue;
     const row = (start, end) => rows.push({ kind: "break", name: b.name, start, end, ...(b.added != null ? { added: b.added } : {}) });
     let s = Math.max(b.start, shownTo);

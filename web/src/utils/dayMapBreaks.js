@@ -37,7 +37,46 @@ export function withAddedBreaks(config, todayStr, items, now = Date.now()) {
   };
 }
 
-// Where a new break goes by default: the next free slot on the route from
+// What a break can't overlap, from the laid-out rows: fixed stops and the
+// other breaks, each { start, end, title }. `except` is the index of the
+// added break being changed, left out.
+export function busyFromRows(rows, except = null) {
+  return rows
+    .filter(r => (r.kind === "stop" && r.fixed) || (r.kind === "break" && (except == null || r.added !== except)))
+    .map(r => ({ start: r.start, end: r.end, title: r.kind === "stop" ? r.task.title : r.name }))
+    .sort((a, b) => a.start - b.start);
+}
+
+// A break at `at` for `lengthMin`, fitted around what's busy (Q36.2, Q36a):
+// starting inside a fixed stop, it starts when that ends ("Starts at 13:10 ·
+// after Call"); running into one, it ends when that starts ("Ends at 12:40 ·
+// Call"), down to `min` minutes — shorter than that, it goes after it.
+// Returns { start, lengthMin, after, cut } (after/cut: the busy thing's
+// title, or null).
+export function fitBreak(at, lengthMin, busy, min = 5) {
+  let start = at;
+  let after = null;
+  for (;;) {
+    const inside = busy.find(b => b.start <= start && start < b.end);
+    if (inside) { start = inside.end; after = inside.title; continue; }
+    const next = busy.find(b => b.start > start && b.start < start + lengthMin);
+    if (!next) return { start, lengthMin, after, cut: null };
+    if (next.start - start >= min) return { start, lengthMin: next.start - start, after, cut: next.title };
+    start = next.end;
+    after = next.title;
+  }
+}
+
+// Where a new break goes by default (Q36.1): now, shortened to fit before a
+// fixed stop (5 minutes at least). When even that won't do, the "Later…"
+// placement.
+export function defaultBreak(rows, now, busy = busyFromRows(rows)) {
+  const fit = fitBreak(now, DEFAULT_BREAK_MIN, busy);
+  if (fit.start === now) return fit;
+  return fitBreak(nextFreeSlot(rows, now), DEFAULT_BREAK_MIN, busy);
+}
+
+// "Later…" (Q36.1, its option a): the next free slot on the route from
 // now — the first free time, or the end of a stop, that `lengthMin` fits
 // without running into a fixed stop or another break. With nothing on the
 // route from now, now (to the next 5 minutes).

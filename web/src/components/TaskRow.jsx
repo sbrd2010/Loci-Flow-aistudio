@@ -218,7 +218,7 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
       <div className="task-middle">
         <div className="task-row-top">
           <span className="task-title-text"><LinkifyText text={title} /></span>
-          {/* Q31: something at a set time shows its lock and time. */}
+          {/* Q31, Q36.4: a task at a set time shows its lock and time. */}
           {fixedAt != null && !isCompleted && (
             <span className="task-row-fixed" aria-label={`Fixed at ${formatClock24(fixedAt)}`}><IconLock size={12} /> {formatClock24(fixedAt)}</span>
           )}
