@@ -22,6 +22,11 @@ describe("factualLine (Q33.3, Q34.2)", () => {
     expect(factualLine({ ...base, doneMinutes: null, finish: 630 }).text).toBe("On track: done by 11:35.");
   });
 
+  it("is all done when every task is ticked done, even with no focus minutes", () => {
+    expect(factualLine({ ...base, doneMinutes: 0, doneCount: 3, openTasks: 0, routeEmpty: true }).text).toBe("All done today.");
+    expect(factualLine({ ...base, doneMinutes: null, doneCount: 2, openTasks: 0, routeEmpty: true }).text).toBe("All done today.");
+  });
+
   it("leaves the done part out when the ledger can't be read", () => {
     expect(factualLine({ ...base, doneMinutes: null, finish: 1000 }).text).toBe("On track: done by 16:40.");
   });
