@@ -6,7 +6,7 @@ import TodayWall from "./TodayWall";
 import Momentum from "./Momentum";
 import { frontsFromConfig, frontsOnOffer, commitmentDaysLeft, commitmentKickerFront, frontForCommitment, frontProgress } from "../utils/fronts";
 import { useFocusLedger } from "../hooks/useFocusLedger";
-import { minutesForTaskOn, sessionsOnDay } from "../utils/focusLedger";
+import { minutesForTaskOn } from "../utils/focusLedger";
 import { buildMomentum } from "../utils/momentum";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import FocusModePage from "./FocusModePage";
@@ -21,7 +21,7 @@ import { celebrate } from "../utils/celebrations";
 import { track } from "../firebase";
 import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/reminders";
 import { getLociDayStr } from "../utils/dailyAnchors";
-import { formatMinutesToTime, getFocusWindows, mergeWindowSpans } from "../utils/focusWindows";
+import { getFocusWindows } from "../utils/focusWindows";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import {
   getValidCommittedTaskIds, committedTaskIdsForDay,
@@ -1204,19 +1204,6 @@ export default function TodayTab({
   // silently truncated. It undercounts at the edge rather than guessing.
   const { raw: ledgerRaw, status: ledgerStatus } = useFocusLedger(uid, 30, windows);
 
-  // "SESSION N" — which session of today this is.
-  //
-  // Two things it must not do. It must not add one to a session already in
-  // the ledger: the bell banks the open session, the live subscription picks
-  // it up, and an unconditional +1 would tick the same overlay from N to N+1
-  // at 00:00 without a new session having begun. And it must not answer at
-  // all from an unreadable ledger — useFocusLedger reports loading, refused
-  // and unavailable alike as raw: null, and treating that as "no sessions
-  // yet" asserts SESSION 1 to someone who may have done four. Zero here
-  // hides the label, which is the honest answer to "I don't know".
-  const focusSessionOrdinal = ledgerStatus === "ready"
-    ? sessionsOnDay(ledgerRaw, todayStr) + (sessionCompletePending ? 0 : 1)
-    : 0;
 
   // A task moved to tomorrow (deferral.js) is not today's until then.
   const todayTasksAll = tasks.filter((t) => isOnToday(t, todayStr) && !t.isDeleted && !t.isParked);
@@ -2038,14 +2025,14 @@ export default function TodayTab({
           onToggleStep={(stepId) => handleSubStepToggle(activeTask, stepId)}
           blockNumber={focusBlockNumber}
           clockMode={config.focusClock === "numbers" ? "numbers" : "ring"}
-          dayEndsLabel={(() => { const spans = mergeWindowSpans(windows); return spans.length ? formatMinutesToTime(Math.max(...spans.map(([, end]) => end))) : null; })()}
+          // Q37.2: the task's earlier sessions today; this one counts live.
+          taskMinutesToday={ledgerStatus === "ready" ? minutesForTaskOn(ledgerRaw, activeTask.uuid, todayStr, { exceptSessionId: focusSessionId }) : 0}
           keysOff={rescueActive}
           onKeepGoing={extendTimer}
           onAddTime={addTimeToSession}
           onStopHere={handleStopHere}
           startedAt={focusStartedAt}
           elapsedSeconds={focusElapsedSeconds}
-          sessionNumber={focusSessionOrdinal}
           onAddBrainDump={handleFocusBrainDump}
           onRescue={openRescueMode}
           pipOpen={pipOpen}

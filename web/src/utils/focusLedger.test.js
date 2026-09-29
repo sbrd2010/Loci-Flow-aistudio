@@ -10,7 +10,7 @@ import {
   formatMinutes,
   weekSummary,
   commonestStartHour,
-  sessionsOnDay,
+  minutesForTaskOn,
 } from "./focusLedger";
 
 const NOW = new Date(2026, 10, 4, 12, 0); // 4 Nov 2026, midday
@@ -270,37 +270,18 @@ describe("commonestStartHour", () => {
   });
 });
 
-// Screen 3's "SESSION N" kicker. The spec says "SESSION 3 OF 4"; there is no
-// "of 4" to show, so this counts what actually happened and the screen omits
-// the denominator rather than inventing one.
-describe("sessionsOnDay", () => {
-  const ev = (dateStr, secs, id) => ({
-    eventId: id, type: "focus_abandoned", lociDateString: dateStr,
-    taskId: "t1", focusElapsedSeconds: secs,
-  });
-  const raw = (...events) => {
-    const out = {};
-    for (const e of events) (out[e.lociDateString] ||= {})[e.eventId] = e;
-    return out;
-  };
 
-  it("counts the day's logged sessions", () => {
-    expect(sessionsOnDay(raw(ev("2026-07-10", 1500, "a"), ev("2026-07-10", 300, "b")), "2026-07-10")).toBe(2);
-  });
+// Focus 59a (Q37.2): "1H05M DONE" is every session on the task today; the
+// one still open is counted live, so it is left out of the ledger's part.
+describe("minutesForTaskOn", () => {
+  const raw = { "2026-07-10": {
+    a: { eventId: "a", type: "focus_abandoned", lociDateString: "2026-07-10", taskId: "t1", focusSessionId: "s1", focusElapsedSeconds: 1500 },
+    b: { eventId: "b", type: "focus_completed", lociDateString: "2026-07-10", taskId: "t1", focusSessionId: "s2", focusElapsedSeconds: 600 },
+    c: { eventId: "c", type: "focus_abandoned", lociDateString: "2026-07-10", taskId: "t2", focusSessionId: "s3", focusElapsedSeconds: 900 },
+  } };
 
-  it("counts only the day asked for", () => {
-    expect(sessionsOnDay(raw(ev("2026-07-10", 1500, "a"), ev("2026-07-11", 1500, "b")), "2026-07-10")).toBe(1);
-  });
-
-  it("does not let a mis-tap advance the number", () => {
-    // Under a minute rounds to zero and is not a session, the same threshold
-    // dailyTotals uses for a "move".
-    expect(sessionsOnDay(raw(ev("2026-07-10", 40, "a")), "2026-07-10")).toBe(0);
-  });
-
-  it("is zero for an empty or unreadable ledger", () => {
-    expect(sessionsOnDay(null, "2026-07-10")).toBe(0);
-    expect(sessionsOnDay(raw(), "2026-07-10")).toBe(0);
-    expect(sessionsOnDay(raw(ev("2026-07-10", 1500, "a")), null)).toBe(0);
+  it("sums the task's sessions that day, leaving out the open one if asked", () => {
+    expect(minutesForTaskOn(raw, "t1", "2026-07-10")).toBe(35);
+    expect(minutesForTaskOn(raw, "t1", "2026-07-10", { exceptSessionId: "s2" })).toBe(25);
   });
 });

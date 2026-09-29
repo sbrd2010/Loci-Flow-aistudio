@@ -76,10 +76,6 @@
 .focus-mode-dump-row { grid-area: dump; }
 
 .fm-stage-kicker {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 4px 16px;
   margin: 0 0 12px;
   font-family: var(--font-mono);
   font-size: 0.6875rem;
@@ -88,7 +84,6 @@
   text-transform: uppercase;
   color: var(--ink);
 }
-.fm-stage-figures { color: var(--ink-2); }
 
 /* The title by its length (53/57b): phone 40/34/28/26. */
 .focus-mode-task-title {
@@ -153,14 +148,22 @@
 
 .focus-mode-figures {
   margin: 12px 0 0;
+  text-align: center;
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ink-2);
 }
-/* The phone shows "OF 15:00 · ENDS 09:55" only (45b). */
+/* Q37.1: "OF 25:00", then "STARTED 09:41 · ENDS 10:06" under it; the phone
+   shows "ENDS 10:06" only (45b). */
+.fm-figures-of,
+.fm-figures-times { display: block; }
+.fm-figures-times { margin-top: 2px; }
 .focus-mode-started { display: none; }
+/* Q37.1e: from 900px the stage sits centred, never more than 120px below
+   the header: equal spacers above and below, the top one capped. */
+.fm-spacer { display: none; }
 
 /* 59g: while paused, a fresh block of a new length. */
 .fm-restart {
@@ -434,7 +437,7 @@
 
 /* The panel (≥1600): steps, sound, a stray thought. */
 .fm-panel {
-  align-self: center;
+  align-self: start;
   grid-area: panel;
   display: flex;
   flex-direction: column;
@@ -513,22 +516,28 @@
 }
 .fm-end-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
 
-/* Laptop (45l, 59a): the clock beside the stage, the keys shown; the stage
-   title 52/44/36/32. */
-@media (min-width: 1024px) {
+/* Laptop (45l, 59a), and from 900px (Q37.4): the clock beside the stage,
+   the keys shown; the stage title 52/44/36/32. 900–1023: the panel below
+   the stage. */
+@media (min-width: 900px) {
   .focus-mode-overlay { padding: 0 48px 40px; }
+  .fm-spacer { display: block; flex: 1 1 0; max-height: 120px; }
+  .focus-mode-overlay::after { content: ""; flex: 1 1 0; }
   .focus-mode-body {
-    /* Rows around the stage take the spare height, so the stage and its
-       actions sit together, centred against the clock. */
+    flex: 0 0 auto;
+    /* The stage keeps to the top (never more than 120px under the header,
+       Q37.1e); a last row takes any height the clock adds, so the stage and
+       its actions stay together. */
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: 1fr auto auto auto auto 1fr;
-    grid-template-areas: ". clock" "stage clock" "actions clock" "extras clock" "dump clock" ". clock";
+    grid-template-rows: auto auto auto auto auto 1fr;
+    grid-template-areas: "stage clock" "actions clock" "extras clock" "dump clock" "panel clock" ". clock";
     column-gap: 56px;
-    align-content: center;
+    align-items: start;
     max-width: 1280px;
     padding-top: 0;
   }
-  .focus-mode-timer-block { margin-top: 0; justify-content: center; }
+  .focus-mode-timer-block { margin-top: 0; align-self: center; }
+  .fm-panel.is-below { margin-top: 28px; padding-left: 0; border-left: 0; align-self: start; }
   .focus-mode-task-title { font-size: 3.25rem; }
   .focus-mode-task-title[data-len="m"] { font-size: 2.75rem; }
   .focus-mode-task-title[data-len="l"] { font-size: 2.25rem; }
@@ -561,13 +570,21 @@
   .fm-end-actions { flex-direction: row; flex-wrap: wrap; }
 }
 
+/* 900–1023 (Q37.4): the stage column is narrow — Mark done full width, the
+   rest under it, as on a phone. */
+@media (min-width: 900px) and (max-width: 1023px) {
+  .focus-mode-actions { flex-direction: column; }
+  .focus-mode-done-btn { flex: none; }
+  .focus-mode-controls .focus-mode-kbd { display: none; }
+}
+
 /* Wide (≥1600): stage, the 380 ring, a 440 panel; cap 1760; title
    64/52/42/36. */
 @media (min-width: 1600px) {
   .focus-mode-overlay.is-wide .focus-mode-body {
     grid-template-columns: minmax(0, 1fr) auto 440px;
-    grid-template-rows: 1fr auto auto 1fr;
-    grid-template-areas: ". clock panel" "stage clock panel" "actions clock panel" ". clock panel";
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas: "stage clock panel" "actions clock panel" ". clock panel";
     max-width: 1760px;
   }
   .focus-mode-task-title { font-size: 4rem; }

@@ -69,7 +69,9 @@ test("mobile reliability: progress is a ring around the digits, and it reports w
 
 test("mobile reliability: the session names its length and when it ends (45b)", async ({ page }) => {
   const overlay = await openSession(page);
-  await expect(overlay.locator(".focus-mode-figures")).toContainText(/^OF \d+:\d{2} · ENDS \d{2}:\d{2}/);
+  // Q37.1: "OF 25:00", then when it ends under it (the phone leaves STARTED out).
+  await expect(overlay.locator(".fm-figures-of")).toHaveText(/^OF \d+:\d{2}$/);
+  await expect(overlay.locator(".fm-figures-times")).toContainText(/ENDS \d{2}:\d{2}$/);
 });
 
 test("the block can be paused, resumed and given five more minutes, and the keys work", async ({ page }) => {

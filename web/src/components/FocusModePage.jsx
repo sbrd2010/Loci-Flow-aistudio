@@ -25,12 +25,13 @@ function spanLabel(minutes) {
   return m % 60 ? `${h}H${String(m % 60).padStart(2, "0")}M` : `${h}H`;
 }
 
-// The ring's size by screen width (59a–c): 248 on a phone, 380 wide, 460 at
-// 2200 and wider; in between it grows with the room it has.
+// The ring's size by screen width (59a–c, Q37.4): 248 on a phone, 280 on a
+// tablet held upright, 300 from 900px, 380 wide, 460 at 2200 and wider.
 function ringSize(width) {
   if (width >= 2200) return 460;
   if (width >= 1600) return 380;
   if (width >= 1024) return 320;
+  if (width >= 900) return 300;
   if (width >= 600) return 280;
   return 248;
 }
@@ -68,15 +69,13 @@ export default function FocusModePage({
   elapsedSeconds,
   blockNumber = 1,
   clockMode = "ring",
-  dayEndsLabel = null,
+  // Q37.2: minutes on this task today before this session (the ledger's);
+  // this session's are added live.
+  taskMinutesToday = 0,
   onAddBrainDump,
   onRescue,
   pipOpen,
   onOpenPiP,
-  // Which session of the day this is. The spec reads "SESSION 3 OF 4"; there
-  // is no "of 4" — the app has no daily session target, and inventing a
-  // denominator would print a number nothing in the app ever agreed to.
-  sessionNumber = 0,
   selectedTrack,
   volume,
   trackLoadState,
@@ -108,6 +107,9 @@ export default function FocusModePage({
     return () => window.removeEventListener("resize", onResize);
   }, []);
   const wide = width >= 1600;
+  // Q37.4: from 900px (a tablet on its side) to 1023 the panel sits below
+  // the stage; from 1600 beside it.
+  const panelBelow = width >= 900 && width < 1024;
 
   const submitDump = () => {
     if (!dumpText.trim()) return;
@@ -177,10 +179,13 @@ export default function FocusModePage({
   const kicker = isFiveMinute
     ? (isComplete ? "FIVE MINUTES · DONE" : "FIVE MINUTES · THAT'S ALL")
     : "FOCUS";
-  const stageKicker = `${task.isNowFocus ? "TODAY, ONE THING" : "FOCUS"} · BLOCK ${Math.max(1, blockNumber)} OF ${Math.round(maxSeconds / 60)} MIN`;
-  const stageFigures = [
+  // Q37.1–2: one line — what this is, the task's estimate, and what is done
+  // on it today (every session, this one included).
+  const doneToday = Math.max(0, Number(taskMinutesToday) || 0) + loggedMinutes;
+  const stageKicker = [
+    task.isNowFocus ? "TODAY, ONE THING" : "FOCUS",
     estimate > 0 ? `${spanLabel(estimate)} TASK` : null,
-    loggedMinutes >= 1 ? `${spanLabel(loggedMinutes)} DONE` : null,
+    doneToday >= 1 ? `${spanLabel(doneToday)} DONE` : null,
   ].filter(Boolean).join(" · ");
 
   const doneButton = (filled) => (
@@ -248,10 +253,8 @@ export default function FocusModePage({
       <header className="focus-mode-head">
         <p className="focus-mode-kicker">
           <span className="focus-mode-header-label">{kicker}</span>
-          {sessionNumber > 0 && (
-            <span className="focus-mode-session-count" aria-label={`Session ${sessionNumber} today`}> · SESSION {sessionNumber}</span>
-          )}
-          {dayEndsLabel && <span className="fm-head-meta"> · DAY ENDS {dayEndsLabel}</span>}
+          {/* Q37.1: "FOCUS · BLOCK 1" — no day or block end up here. */}
+          <span className="fm-head-meta"> · BLOCK {Math.max(1, blockNumber)}</span>
           <span className="sr-only"> · {stateLabel}</span>
         </p>
         <div className="fm-head-actions">
@@ -272,16 +275,15 @@ export default function FocusModePage({
           )}
         </div>
       </header>
+      {/* Q37.1e: the stage is centred, never more than 120px below the header. */}
+      <div className="fm-spacer" aria-hidden="true" />
 
       <main className="focus-mode-body" aria-label="Deep focus session">
         <section className="focus-mode-task-panel" aria-label="Focused task">
-          <p className="fm-stage-kicker">
-            <span>{stageKicker}</span>
-            {stageFigures && <span className="fm-stage-figures">{stageFigures}</span>}
-          </p>
+          <p className="fm-stage-kicker">{stageKicker}</p>
           <h1 className="focus-mode-task-title" data-len={titleLength(task.title)}><LinkifyText text={task.title} /></h1>
           {nextStep && (
-            <p className="focus-mode-concrete-step">Next step: <LinkifyText text={nextStep.text} /></p>
+            <p className="focus-mode-concrete-step">Next step — <LinkifyText text={nextStep.text} /></p>
           )}
         </section>
 
@@ -294,10 +296,15 @@ export default function FocusModePage({
             paused={!isRunning}
             valueText={`${mins} minutes ${secs} seconds left of ${blockLabel}`}
           />
+          {/* Q37.1: "OF 25:00", then "STARTED · ENDS" under it. */}
           <p className="focus-mode-figures">
-            <span>OF {blockLabel}</span>
-            {endsLabel && <span> · ENDS {endsLabel}</span>}
-            {startedLabel && <span className="focus-mode-started"> · STARTED {startedLabel}</span>}
+            <span className="fm-figures-of">OF {blockLabel}</span>
+            {(startedLabel || endsLabel) && (
+              <span className="fm-figures-times">
+                {startedLabel && <span className="focus-mode-started">STARTED {startedLabel}{endsLabel ? " · " : ""}</span>}
+                {endsLabel && <span>ENDS {endsLabel}</span>}
+              </span>
+            )}
           </p>
         </div>
 
@@ -357,8 +364,8 @@ export default function FocusModePage({
 
         {/* From 1600px the steps, sound and a place to park a thought sit in
             the panel; below it, sound and parking under the actions. */}
-        {!isComplete && (wide ? (
-          <aside className="fm-panel" aria-label="Steps, sound and a stray thought">
+        {!isComplete && (wide || panelBelow ? (
+          <aside className={`fm-panel${panelBelow ? " is-below" : ""}`} aria-label="Steps, sound and a stray thought">
             {steps.length > 0 && (
               <section className="fm-panel-section">
                 <h2 className="fm-panel-head">Steps <span>{stepIndex} OF {steps.length}</span></h2>
@@ -381,7 +388,7 @@ export default function FocusModePage({
             </section>
             {parkRow && (
               <section className="fm-panel-section">
-                <h2 className="fm-panel-head">Park a thought</h2>
+                <h2 className="fm-panel-head">Park a stray thought</h2>
                 {parkRow}
               </section>
             )}
