@@ -186,6 +186,9 @@ async function dayOverAt18(page, { unpin }) {
 
 test("the pinned task is never moved to tomorrow from here: it may have a session open", async ({ page }) => {
   await dayOverAt18(page, { unpin: false });
+  // The day ended with its window, 17:00, not when the page opened (Codex
+  // review of #428).
+  await expect(page.locator(".dm-fact")).toHaveText(/^Your day ended at 17:00\. 3 tasks left, /);
   await expect(page.locator(".dm-stop.is-over")).toHaveCount(3);
   await page.getByRole("button", { name: "Move 2 to tomorrow" }).click();
   await expect(page.locator(".dm-stop")).toHaveCount(1);
