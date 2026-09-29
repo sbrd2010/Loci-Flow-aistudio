@@ -13,6 +13,11 @@ describe("minimum day (56a–b, 57b answer 6)", () => {
     expect(suggestMinimumDay(ordered, isGoal)).toEqual(["pharm", "hale", "cv"]);
   });
 
+  it("never suggests something at a set time (Q36.3)", () => {
+    const call = task("call", { isMVD: true, fixedKind: "event", dayMapFixedMinutes: 750 });
+    expect(suggestMinimumDay([call, ...ordered], isGoal)).toEqual(["pharm", "hale", "cv"]);
+  });
+
   it("uses today's confirmed pick, in today's order, and only open tasks", () => {
     const config = confirmMinimumDay({}, DAY, ["dad", "gone", "cv"]);
     expect(minimumDay({ config, todayStr: DAY, ordered, isGoal })).toEqual({ state: "confirmed", ids: ["cv", "dad"] });

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { dayProgress, formatClock24, formatSpan } from "../utils/dayMapPlan";
 import { currentDayMinutes, getEstimate, getTaskId, useDayRoute } from "../hooks/useDayRoute";
+import { eventAsks } from "../utils/fixedTime";
 import DayClockBar from "./DayClockBar";
 import DayMapFrom from "./DayMapFrom";
 import { IconChevronDown, IconLock, IconPin, IconPlus } from "./ui/icons";
@@ -56,20 +57,25 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
     const isOver = rowIsOver(r);
     // The one thing, at NOW: until the end of its stop (a break splits it).
     const oneThing = isNow && task.isNowFocus && !r.continued;
+    // Q36.3: still open 5 minutes after it ended, it asks; opening it
+    // offers Done and Tomorrow.
+    const asks = eventAsks(r, nowMins);
+    const late = r.late && !asks;
     const until = oneThing ? routeTasks.find(t => getTaskId(t) === getTaskId(task))?.routeEndMinutes : null;
     return (
       <li key={`${getTaskId(task)}${r.continued ? `:continued:${r.start}` : ""}`}>
         <button
           type="button"
-          className={`tdm-stop${isNow ? " is-now" : ""}${oneThing ? " is-one-thing" : ""}${r.late ? " is-late" : ""}${isOver ? " is-over" : ""}`}
-          aria-label={`${isNow || r.late ? "Now" : formatClock24(r.start)} to ${formatClock24(r.end)}, ${task.title}`
-            + `${oneThing ? ", the one thing" : ""}${r.fixed ? ", fixed time" : ""}${r.continued ? ", continued after the break" : ""}${isOver ? ", after the day ends" : ""}`}
+          className={`tdm-stop${isNow ? " is-now" : ""}${oneThing ? " is-one-thing" : ""}${late ? " is-late" : ""}${isOver ? " is-over" : ""}`}
+          aria-label={`${isNow || late ? "Now" : formatClock24(r.start)} to ${formatClock24(r.end)}, ${task.title}`
+            + `${oneThing ? ", the one thing" : ""}${r.fixed ? ", fixed time" : ""}${r.continued ? ", continued after the break" : ""}${isOver ? ", after the day ends" : ""}${asks ? ", did it happen?" : ""}`}
           onClick={() => onOpenTask(task)}
         >
-          <span className="tdm-time">{isNow ? "NOW" : r.late ? "now" : formatClock24(r.start)}</span>
+          <span className="tdm-time">{isNow ? "NOW" : late ? "now" : formatClock24(r.start)}</span>
           <span className="tdm-title">
             {task.title}{r.continued ? " · continued" : ""}
             {r.fixed && <span className="dm-lock"><IconLock size={13} /></span>}
+            {asks && <span className="tdm-ask">Did it happen?</span>}
             {oneThing && (
               <span className="tdm-one-thing"><IconPin size={12} />THE ONE THING · UNTIL {formatClock24(until)}</span>
             )}

@@ -324,7 +324,8 @@ export default function TodayTab({
       // candidates to today's visible, active tasks (matching pinnedFocusTask's
       // own filtering), since a parked task or one from another horizon can't
       // be shown by Today's pinned-focus UI even if pinned.
-      const candidates = todayTasksAll.filter(t => !t.isCompleted);
+      // Q36.3: a call at a set time is never Rescue's one task.
+      const candidates = todayTasksAll.filter(t => !t.isCompleted && !isEventTask(t));
       const pinned = candidates.find(t => t.isNowFocus);
       setRescueTask(pinned || candidates[0] || null);
       setRescueEntryPoint("today");
@@ -444,6 +445,8 @@ export default function TodayTab({
   const handlePinTask = (task) => {
     const now = Date.now();
     const isPinning = !task.isNowFocus;
+    // Q36.3: something at a set time is never pinned (Codex review of #431).
+    if (isPinning && isEventTask(task)) return;
     const newFocusUuid = isPinning ? task.uuid : null;
     // Pinning/unpinning here clears isNowFocus on whichever task currently
     // holds it — end that task's open session first, or it's left orphaned
@@ -1512,7 +1515,8 @@ export default function TodayTab({
   const proposalDismissed = config.wallProposalDismissedDate === todayStr;
   const wallProposal = (doneCommitment && !proposalDismissed)
     ? todayTasksAll
-        .filter(t => !t.isCompleted && t.uuid !== doneCommitment.uuid)
+        // Q36.3: never proposes something at a set time (Codex review of #431).
+        .filter(t => !t.isCompleted && t.uuid !== doneCommitment.uuid && !isEventTask(t))
         .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))[0] || null
     : null;
 
@@ -1532,7 +1536,8 @@ export default function TodayTab({
 
   const setRescueTaskAsNowFocus = ({ close = false } = {}) => {
     if (close) setRescueActive(false);
-    if (!rescueTask) return;
+    // Q36.3: something at a set time is never the focus (Codex review of #431).
+    if (!rescueTask || isEventTask(rescueTask)) return;
     const now = Date.now();
     // Retargeting focus to rescueTask clears isNowFocus on whichever task
     // currently holds it — end that task's open session first, or it's left

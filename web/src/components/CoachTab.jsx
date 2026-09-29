@@ -3,6 +3,7 @@ import { track, auth } from "../firebase";
 import { callAI, describeAIError, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { getCoachNudge, resolveCoachNudge, buildCoachNudgeDeliveredConfig } from "../utils/coachNudge";
 import { buildLocalSafetyReply } from "../utils/crisisSafety";
+import { isEventTask } from "../utils/dayMapRoute";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
 import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociCategoryFilterContext, buildLociTodaySnapshotContext, getLocalDateString, isActiveLociTask } from "../utils/lociAIContext";
@@ -1306,6 +1307,10 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const current = tasksRef.current;
     const task = current.find(t => t.uuid === taskUuid && !t.isDeleted);
     if (!task) return;
+    // Q36.3: checked again on confirm, not only when the chip was drawn — a
+    // sync can fix the task's time while the dialog is open (Codex review
+    // of #431).
+    if ((action === 'focus' || action === 'focus+today') && isEventTask(task)) return;
     const now = Date.now();
     if (action === 'focus') {
       // Same retargeting gap as 'focus+today' below — end whichever task's
@@ -1628,7 +1633,9 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                 const task = taskChipsFor(m.actions);
                 if (!task) return null;
                 const phaseB = [];
-                if (isOnToday(task, lociDayNow()) && !task.isNowFocus)
+                // Q36.3: something at a set time is never the focus.
+                if (isEventTask(task)) { /* no focus chip */ }
+                else if (isOnToday(task, lociDayNow()) && !task.isNowFocus)
                   phaseB.push({ action: 'focus',       label: 'Set as Focus' });
                 else if (!isOnToday(task, lociDayNow()) && !task.isNowFocus)
                   phaseB.push({ action: 'focus+today', label: 'Move to Today & Focus' });
