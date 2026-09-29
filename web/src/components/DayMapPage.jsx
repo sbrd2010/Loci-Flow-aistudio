@@ -421,7 +421,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const done = doneToday(ledgerStatus === "ready" ? ledgerRaw : null, tasks, todayStr, windows);
   const doneMinutes = ledgerStatus === "ready" ? done.reduce((sum, r) => sum + r.minutes, 0) : null;
   const finish = routeTasks.length ? Math.max(...routeTasks.map(t => t.routeEndMinutes)) : null;
-  const leftStops = routeTasks.filter(t => !isFixedStop(t));
+  // Every stop still on the route counts as left, fixed ones too (Codex
+  // review of #428).
+  const leftStops = routeTasks;
   const fact = factualLine({
     doneMinutes,
     routeEmpty: !scheduledTasks.length,
@@ -645,6 +647,32 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Done so far today (56a–c): folded above the route, and kept when the
+  // last task is done, where the day's sessions matter most (Codex review
+  // of #428).
+  const doneFold = done.length > 0 && (
+    <section className="dm-done" aria-label="Done so far today">
+      <button type="button" className="dm-done-toggle" aria-expanded={doneOpen} onClick={() => setDoneOpen(o => !o)}>
+        <span className="dm-time" />
+        <span className="dm-rail" aria-hidden="true"><span className="dm-dot is-done"><IconCheck size={10} /></span></span>
+        <span className="dm-title">Done so far today · {done.length}</span>
+        <span className="dm-dur">{doneMinutes != null && doneMinutes > 0 ? formatSpan(doneMinutes).toUpperCase() : ""} <IconChevronDown size={16} /></span>
+      </button>
+      {doneOpen && (
+        <ol className="dm-done-list">
+          {done.map(r => (
+            <li key={`${r.kind}:${r.id}`} className="dm-done-row">
+              <span className="dm-time">{r.start == null ? "" : formatClock24(r.start)}</span>
+              <span className="dm-rail" aria-hidden="true"><span className="dm-dot is-done"><IconCheck size={10} /></span></span>
+              <span className="dm-title">{r.title}{r.kind === "marked" && <span className="dm-pulled">MARKED DONE</span>}</span>
+              <span className="dm-dur">{r.kind === "session" ? formatSpan(r.minutes) : ""}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+
   const undoText = actions.undo ? actions.undoText : undo ? undo.message : "";
   const onUndo = actions.undo ? undoAction : handleUndo;
   const toastAt = actions.undo?.at ?? undo?.at;
@@ -679,6 +707,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
             </>
           )}
           <button type="button" className="dm-btn-filled" onClick={onAddTask}>Add a Today task</button>
+          {doneFold}
           {/* A call or a meeting can be the first thing on an empty day. */}
           <button type="button" className="dm-text-btn" onClick={() => setFixing({})}>Fixed time</button>
         </section>
@@ -706,28 +735,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
             </div>
 
             <RouteDrop>
-              {done.length > 0 && (
-                <section className="dm-done" aria-label="Done so far today">
-                  <button type="button" className="dm-done-toggle" aria-expanded={doneOpen} onClick={() => setDoneOpen(o => !o)}>
-                    <span className="dm-time" />
-                    <span className="dm-rail" aria-hidden="true"><span className="dm-dot is-done"><IconCheck size={10} /></span></span>
-                    <span className="dm-title">Done so far today · {done.length}</span>
-                    <span className="dm-dur">{doneMinutes != null && doneMinutes > 0 ? formatSpan(doneMinutes).toUpperCase() : ""} <IconChevronDown size={16} /></span>
-                  </button>
-                  {doneOpen && (
-                    <ol className="dm-done-list">
-                      {done.map(r => (
-                        <li key={`${r.kind}:${r.id}`} className="dm-done-row">
-                          <span className="dm-time">{r.start == null ? "" : formatClock24(r.start)}</span>
-                          <span className="dm-rail" aria-hidden="true"><span className="dm-dot is-done"><IconCheck size={10} /></span></span>
-                          <span className="dm-title">{r.title}{r.kind === "marked" && <span className="dm-pulled">MARKED DONE</span>}</span>
-                          <span className="dm-dur">{r.kind === "session" ? formatSpan(r.minutes) : ""}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-                </section>
-              )}
+              {doneFold}
               {scheduledTasks.length === 0 ? (
                 <p className="dm-route-empty">Nothing on the route yet. Add a task from Unscheduled, or use Auto-fill.</p>
               ) : (

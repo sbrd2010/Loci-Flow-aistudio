@@ -123,3 +123,19 @@ test("a task marked done shows in the folded Done so far today, and the line say
   await expect(fold.locator(".dm-done-row")).toContainText(title);
   await expect(fold.locator(".dm-done-row")).toContainText("MARKED DONE");
 });
+
+// Codex review of #428: with every task done, the page's empty state still
+// shows "Done so far today", where the day's sessions matter most.
+test("with every task done, Done so far today stays on the page", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await openDayMapByKey(page);
+  await page.getByRole("button", { name: "Auto-fill" }).click();
+  for (let i = 0; i < 3; i += 1) {
+    const title = (await page.locator(".dm-stop .dm-title").first().innerText()).split("\n")[0].trim();
+    await page.locator(".dm-stop .dm-main").first().click();
+    await page.getByTestId("task-detail").getByRole("button", { name: `Mark done: ${title}` }).click();
+    await expect(page.getByTestId("task-detail")).toHaveCount(0);
+  }
+  await expect(page.locator(".dm-empty")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Done so far today" }).getByRole("button", { name: /^Done so far today · 3/ })).toBeVisible();
+});
