@@ -561,13 +561,16 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   // session that ran 10 minutes before the user changed the duration would
   // later report an elapsed time near 0, since endFocusSession only ever
   // sees the current (post-change) block's timerMaxSeconds/timerSecondsLeft.
+  // Returns whether the new length was set: not once a pause has run out
+  // (the session closes instead), so a caller never restarts it.
   const changeFocusDuration = (minutes) => {
-    if (pauseRanOut()) return;
+    if (pauseRanOut()) return false;
     bankBlock();
     setIsTimerRunning(false);
     const secs = minutes * 60;
     setTimerSecondsLeft(secs);
     setTimerMaxSeconds(secs);
+    return true;
   };
 
   // Add time to an in-progress session (e.g. the PiP "+5 min" button) without
@@ -810,6 +813,9 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     // per session and never changes within one, so it needs no re-render of
     // its own.
     focusStartedAt: focusStartedAtRef.current,
+    // Which block of the session is running (59a's "BLOCK 2 OF 25 MIN"):
+    // read from the ref each render, as focusStartedAt is.
+    focusBlockNumber: focusBlocksRef.current,
     // What screen 3's "+Nm LOGGED SO FAR" reports. Whole-session, not
     // current-block: after a "Keep Going" extension the earlier blocks live in
     // the accumulator, and a figure ignoring them tells the user they logged

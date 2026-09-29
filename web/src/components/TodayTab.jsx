@@ -6,7 +6,7 @@ import TodayWall from "./TodayWall";
 import Momentum from "./Momentum";
 import { frontsFromConfig, frontsOnOffer, commitmentDaysLeft, commitmentKickerFront, frontForCommitment, frontProgress } from "../utils/fronts";
 import { useFocusLedger } from "../hooks/useFocusLedger";
-import { minutesForTaskOn, sessionsOnDay } from "../utils/focusLedger";
+import { minutesForTaskOn } from "../utils/focusLedger";
 import { buildMomentum } from "../utils/momentum";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import FocusModePage from "./FocusModePage";
@@ -87,7 +87,7 @@ export default function TodayTab({
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
   pipOpen, handleOpenPiP, isAddTaskDialogOpen, startFocusSession, endFocusSession, focusSessionId, focusSessionTaskUuid, changeFocusDuration,
-  extendTimer, addTimeToSession, dismissSessionComplete, focusStartedAt, focusElapsedSeconds,
+  extendTimer, addTimeToSession, dismissSessionComplete, focusStartedAt, focusElapsedSeconds, focusBlockNumber,
   selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
   isSyncingFromCache = false,
   pendingCheckinSlot, setPendingCheckinSlot,
@@ -565,8 +565,10 @@ export default function TodayTab({
     savePayload({ ...payload, brainDump: [...(payload.brainDump || []), newItem] });
   };
 
-  const handleChangeFocusDuration = (minutes) => {
-    changeFocusDuration(minutes);
+  // 59g: "Restart with a new length" — a fresh block in the same session.
+  const handleRestartFocus = (minutes) => {
+    // A pause that ran out closes the session instead (59j): no restart.
+    if (changeFocusDuration(minutes)) setIsTimerRunning(true);
   };
 
   // K4's "Stop here". The minutes are already banked, so this is only a
@@ -591,6 +593,32 @@ export default function TodayTab({
     }
   };
 
+
+  // 59h: End session. The minutes are saved (Stop here); "Where did you
+  // stop?" becomes the task's next step, ahead of the steps still open; "End
+  // and move to tomorrow" moves it there, with Today's Undo.
+  const handleEndSession = ({ note = "", tomorrow = false } = {}) => {
+    const task = activeTask;
+    handleStopHere();
+    if (!task) return;
+    // At most 300 characters: the next step is stored as concreteStep, which
+    // the database caps there; longer, the whole write would be refused.
+    const step = note.trim().slice(0, 300);
+    if (!step && !tomorrow) return;
+    const now = Date.now();
+    let next = tasks;
+    if (step) {
+      const steps = taskSteps(task);
+      const at = steps.findIndex(st => !st.done);
+      const withNote = [...steps];
+      withNote.splice(at === -1 ? steps.length : at, 0, { id: safeUUID(), text: step, done: false });
+      next = tasks.map(t => (t.uuid === task.uuid ? applyStepsPatch(t, stepsPatch(t, withNote), now) : t));
+    }
+    let before = null;
+    if (tomorrow) ({ tasks: next, before } = moveToTomorrow(next, [String(task.uuid || task.id)], nextDateStr(todayStr)));
+    savePayload({ ...payload, tasks: next });
+    if (tomorrow) setUndo({ kind: "tomorrow", task, before, at: now });
+  };
 
   const handleToggleMVD = (task) => {
     savePayload({ ...payload, tasks: tasks.map(t => t.uuid === task.uuid ? { ...t, isMVD: !t.isMVD, lastUpdated: Date.now() } : t) });
@@ -1178,19 +1206,6 @@ export default function TodayTab({
   // silently truncated. It undercounts at the edge rather than guessing.
   const { raw: ledgerRaw, status: ledgerStatus } = useFocusLedger(uid, 30, windows);
 
-  // "SESSION N" — which session of today this is.
-  //
-  // Two things it must not do. It must not add one to a session already in
-  // the ledger: the bell banks the open session, the live subscription picks
-  // it up, and an unconditional +1 would tick the same overlay from N to N+1
-  // at 00:00 without a new session having begun. And it must not answer at
-  // all from an unreadable ledger — useFocusLedger reports loading, refused
-  // and unavailable alike as raw: null, and treating that as "no sessions
-  // yet" asserts SESSION 1 to someone who may have done four. Zero here
-  // hides the label, which is the honest answer to "I don't know".
-  const focusSessionOrdinal = ledgerStatus === "ready"
-    ? sessionsOnDay(ledgerRaw, todayStr) + (sessionCompletePending ? 0 : 1)
-    : 0;
 
   // A task moved to tomorrow (deferral.js) is not today's until then.
   const todayTasksAll = tasks.filter((t) => isOnToday(t, todayStr) && !t.isDeleted && !t.isParked);
@@ -2007,14 +2022,19 @@ export default function TodayTab({
           onPlayPause={() => setIsTimerRunning(r => !r)}
           onDone={() => { handleToggleComplete(activeTask); setIsFocusMode(false); }}
           onExit={() => setIsFocusMode(false)}
-          onChangeDuration={handleChangeFocusDuration}
+          onRestart={handleRestartFocus}
+          onEndSession={handleEndSession}
+          onToggleStep={(stepId) => handleSubStepToggle(activeTask, stepId)}
+          blockNumber={focusBlockNumber}
+          clockMode={config.focusClock === "numbers" ? "numbers" : "ring"}
+          // Q37.2: the task's earlier sessions today; this one counts live.
+          taskMinutesToday={ledgerStatus === "ready" ? minutesForTaskOn(ledgerRaw, activeTask.uuid, todayStr, { exceptSessionId: focusSessionId }) : 0}
           keysOff={rescueActive}
           onKeepGoing={extendTimer}
           onAddTime={addTimeToSession}
           onStopHere={handleStopHere}
           startedAt={focusStartedAt}
           elapsedSeconds={focusElapsedSeconds}
-          sessionNumber={focusSessionOrdinal}
           onAddBrainDump={handleFocusBrainDump}
           onRescue={openRescueMode}
           pipOpen={pipOpen}

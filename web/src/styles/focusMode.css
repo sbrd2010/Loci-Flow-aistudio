@@ -54,71 +54,133 @@
 .focus-mode-leave-word,
 .focus-mode-exit-btn .focus-mode-kbd { display: none; }
 
+/* 59a–c: one grid. Phone and tablet: the stage, the clock, the actions,
+   sound and parking, in a column. From 1024px the clock sits beside the
+   stage; from 1600px a panel on the right takes the steps, sound and park. */
 .focus-mode-body {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "stage" "clock" "actions" "extras" "dump";
+  align-content: start;
   flex: 1;
-  flex-direction: column;
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
-  padding-top: 8vh;
+  padding-top: 4vh;
 }
+.focus-mode-task-panel { grid-area: stage; }
+.focus-mode-timer-block { grid-area: clock; }
+.focus-mode-actions,
+.focus-mode-hold-actions { grid-area: actions; }
+.focus-mode-extras { grid-area: extras; }
+.focus-mode-dump-row { grid-area: dump; }
+
+.fm-stage-kicker {
+  margin: 0 0 12px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* The title by its length (53/57b): phone 40/34/28/26. */
 .focus-mode-task-title {
   margin: 0;
-  font-size: 2.25rem;
+  font-size: 2.5rem;
   font-weight: 800;
-  line-height: 1.12;
-  letter-spacing: -0.02em;
+  line-height: 1.06;
+  letter-spacing: -0.035em;
   overflow-wrap: anywhere;
+  text-wrap: balance;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
+.focus-mode-task-title[data-len="m"] { font-size: 2.125rem; }
+.focus-mode-task-title[data-len="l"] { font-size: 1.75rem; }
+.focus-mode-task-title[data-len="xl"] { font-size: 1.625rem; }
 .focus-mode-concrete-step {
-  margin: 18px 0 0;
-  font-family: var(--font-serif);
-  font-size: 1.0625rem;
-  line-height: 1.55;
+  margin: 14px 0 0;
+  font-size: 1rem;
+  line-height: 1.5;
   color: var(--ink-2);
 }
 
-.focus-mode-timer-block { margin-top: 36px; }
+.focus-mode-timer-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 28px;
+}
 .focus-mode-time-digits {
   display: block;
   font-family: var(--font-mono);
   font-size: 4rem;
   font-weight: 700;
   line-height: 1;
-  letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
-  color: var(--accent);
+  color: var(--ink);
 }
-.focus-mode-track {
-  height: 6px;
-  margin-top: 28px;
-  overflow: hidden;
-  background: var(--panel);
-  border-radius: 3px;
+/* Seconds small and light, until the last minute (59a). */
+.fm-secs { font-size: 0.58em; font-weight: 400; opacity: 0.72; }
+.focus-mode-time-digits.is-last-minute .fm-secs { font-size: 1em; font-weight: 700; opacity: 1; }
+
+/* The ring: --accent over --panel, --edge while paused. */
+.fm-ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
 }
-.focus-mode-track-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 3px;
-  transition: width 1s linear;
-}
+.fm-ring svg { position: absolute; inset: 0; }
+.fm-ring-track { stroke: var(--panel); }
+.fm-ring-arc { stroke: var(--accent); transition: stroke-dashoffset 1s linear; }
+.fm-ring.is-paused .fm-ring-arc { stroke: var(--edge); }
+.fm-ring .focus-mode-time-digits { position: relative; font-size: inherit; }
+
+/* Numbers (58a–b): the digits alone, large. */
+.fm-numbers { display: flex; flex-direction: column; align-items: center; }
+.fm-numbers.is-paused .focus-mode-time-digits { color: var(--ink-2); }
+.fm-numbers-caption { margin-top: 10px; font-size: 0.9375rem; color: var(--ink-2); }
+
 .focus-mode-figures {
-  margin: 10px 0 0;
+  margin: 12px 0 0;
+  text-align: center;
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ink-2);
 }
-/* The phone shows "OF 15:00 · ENDS 09:55" only (45b). */
+/* Q37.1: "OF 25:00", then "STARTED 09:41 · ENDS 10:06" under it; the phone
+   shows "ENDS 10:06" only (45b). */
+.fm-figures-of,
+.fm-figures-times { display: block; }
+.fm-figures-times { margin-top: 2px; }
 .focus-mode-started { display: none; }
+/* Q37.1e: from 900px the stage sits centred, never more than 120px below
+   the header: equal spacers above and below, the top one capped. */
+.fm-spacer { display: none; }
 
-.focus-mode-duration-row {
+/* 59g: while paused, a fresh block of a new length. */
+.fm-restart {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  margin-top: 20px;
+  margin-top: 4px;
+}
+.fm-restart-label {
+  flex-basis: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
 }
 .focus-mode-dur-btn {
   min-height: 44px;
@@ -131,11 +193,6 @@
   border: 1px solid var(--control-edge);
   border-radius: 22px;
   cursor: pointer;
-}
-.focus-mode-dur-btn.active {
-  color: var(--on-accent);
-  background: var(--accent);
-  border-color: var(--accent);
 }
 
 /* The actions sit at the bottom of a phone, under the thumb (45b). */
@@ -162,6 +219,17 @@
   border: 1px solid var(--accent-edge);
   border-radius: 6px;
   cursor: pointer;
+}
+.focus-mode-done-btn.is-quiet {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--control-edge);
+}
+.focus-mode-ctrl-btn.is-filled {
+  font-weight: 800;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent-edge);
 }
 .focus-mode-controls {
   display: grid;
@@ -348,13 +416,136 @@
   outline-offset: 2px;
 }
 
-/* Laptop (45l): centred column, the actions in one row, keys shown. */
-@media (min-width: 1024px) {
+/* The header's right side: Mini window (P) and Leave (Esc). */
+.fm-head-actions { display: flex; align-items: center; gap: 4px; }
+.fm-head-btn {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.fm-head-meta { color: var(--ink-2); }
+
+/* The panel (≥1600): steps, sound, a stray thought. */
+.fm-panel {
+  align-self: start;
+  grid-area: panel;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding-left: 32px;
+  border-left: 1px solid var(--line);
+}
+.fm-panel-head {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 10px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.fm-panel-head span { color: var(--ink-2); }
+.fm-panel .focus-mode-dump-row,
+.fm-panel .focus-mode-extras { margin-top: 0; }
+.fm-steps { margin: 0; padding: 0; list-style: none; }
+.fm-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 0;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.fm-step input { width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--accent); }
+.fm-step.is-done span:first-of-type { color: var(--ink-2); text-decoration: line-through; }
+.fm-step-now {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+
+/* 59h: End this session? */
+.fm-end-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(15, 31, 22, 0.45);
+}
+.fm-end {
+  width: 100%;
+  max-width: 480px;
+  padding: 24px;
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+}
+.fm-end-title { margin: 0; font-size: 1.375rem; font-weight: 800; }
+.fm-end-text { margin: 8px 0 18px; color: var(--ink-2); }
+.fm-end-field { display: flex; flex-direction: column; gap: 6px; font-size: 0.875rem; font-weight: 700; }
+.fm-end-optional { font-weight: 400; color: var(--ink-2); }
+.fm-end-field input {
+  min-height: 44px;
+  padding: 0 12px;
+  font: inherit;
+  font-weight: 400;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--control-edge);
+  border-radius: 6px;
+}
+.fm-end-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
+
+/* Laptop (45l, 59a), and from 900px (Q37.4): the clock beside the stage,
+   the keys shown; the stage title 52/44/36/32. 900–1023: the panel below
+   the stage. */
+@media (min-width: 900px) {
   .focus-mode-overlay { padding: 0 48px 40px; }
-  .focus-mode-body { justify-content: center; padding-top: 0; }
-  .focus-mode-task-title { font-size: 3rem; }
-  .focus-mode-time-digits { font-size: 5.5rem; }
+  .fm-spacer { display: block; flex: 1 1 0; max-height: 120px; }
+  .focus-mode-overlay::after { content: ""; flex: 1 1 0; }
+  .focus-mode-body {
+    flex: 0 0 auto;
+    /* The stage keeps to the top (never more than 120px under the header,
+       Q37.1e); a last row takes any height the clock adds, so the stage and
+       its actions stay together. */
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto auto auto 1fr;
+    grid-template-areas: "stage clock" "actions clock" "extras clock" "dump clock" "panel clock" ". clock";
+    column-gap: 56px;
+    align-items: start;
+    max-width: 1280px;
+    padding-top: 0;
+  }
+  .focus-mode-timer-block { margin-top: 0; align-self: center; }
+  .fm-panel.is-below { margin-top: 28px; padding-left: 0; border-left: 0; align-self: start; }
+  .focus-mode-task-title { font-size: 3.25rem; }
+  .focus-mode-task-title[data-len="m"] { font-size: 2.75rem; }
+  .focus-mode-task-title[data-len="l"] { font-size: 2.25rem; }
+  .focus-mode-task-title[data-len="xl"] { font-size: 2rem; }
+  .focus-mode-task-title[data-len="s"] { letter-spacing: -0.045em; }
+  .fm-numbers .focus-mode-time-digits { font-size: 6rem; }
   .focus-mode-started { display: inline; }
+  .fm-head-btn { display: inline-flex; }
   .focus-mode-leave-word,
   .focus-mode-exit-btn .focus-mode-kbd { display: inline; }
   .focus-mode-exit-btn svg { display: none; }
@@ -367,16 +558,56 @@
   .focus-mode-actions,
   .focus-mode-hold-actions {
     flex-direction: row;
+    flex-wrap: wrap;
     margin-top: 28px;
     padding-top: 0;
   }
   .focus-mode-done-btn { flex: 0 0 240px; }
   .focus-mode-controls { flex: 1; }
+  .fm-restart { flex-basis: 100%; }
   .focus-mode-hold-keep,
   .focus-mode-hold-stop { flex: 1; }
+  .fm-end-actions { flex-direction: row; flex-wrap: wrap; }
+}
+
+/* 900–1023 (Q37.4): the stage column is narrow — Mark done full width, the
+   rest under it, as on a phone. */
+@media (min-width: 900px) and (max-width: 1023px) {
+  .focus-mode-actions { flex-direction: column; }
+  .focus-mode-done-btn { flex: none; }
+  .focus-mode-controls .focus-mode-kbd { display: none; }
+}
+
+/* Wide (≥1600): stage, the 380 ring, a 440 panel; cap 1760; title
+   64/52/42/36. */
+@media (min-width: 1600px) {
+  .focus-mode-overlay.is-wide .focus-mode-body {
+    grid-template-columns: minmax(0, 1fr) auto 440px;
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas: "stage clock panel" "actions clock panel" ". clock panel";
+    max-width: 1760px;
+  }
+  .focus-mode-task-title { font-size: 4rem; }
+  .focus-mode-task-title[data-len="m"] { font-size: 3.25rem; }
+  .focus-mode-task-title[data-len="l"] { font-size: 2.625rem; }
+  .focus-mode-task-title[data-len="xl"] { font-size: 2.25rem; }
+  .fm-numbers .focus-mode-time-digits { font-size: 8.25rem; }
+}
+
+/* ≥2200: cap 2240, ring 460, panel 520, type one step up (72/58/48/40). */
+@media (min-width: 2200px) {
+  .focus-mode-overlay.is-wide .focus-mode-body {
+    grid-template-columns: minmax(0, 1fr) auto 520px;
+    max-width: 2240px;
+  }
+  .focus-mode-task-title { font-size: 4.5rem; }
+  .focus-mode-task-title[data-len="m"] { font-size: 3.625rem; }
+  .focus-mode-task-title[data-len="l"] { font-size: 3rem; }
+  .focus-mode-task-title[data-len="xl"] { font-size: 2.5rem; }
+  .fm-numbers .focus-mode-time-digits { font-size: 10.5rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .focus-mode-track-fill,
+  .fm-ring-arc,
   .focus-sounds-drawer { transition: none; }
 }
