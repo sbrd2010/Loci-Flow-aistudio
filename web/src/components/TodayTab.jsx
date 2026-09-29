@@ -45,7 +45,7 @@ import { IconPlus } from "./ui/icons";
 import TaskDetail from "./TaskDetail";
 import DayMapColumn from "./DayMapColumn";
 import { makeOneThing, undoOneThing } from "../utils/oneThing";
-import { currentDayMinutes, oneThingToNow } from "../hooks/useDayRoute";
+import { currentDayMinutes, oneThingToNow, restoreClearedRoute } from "../hooks/useDayRoute";
 import { breaksFromWindows } from "../utils/dayMapRoute";
 import { bringBack, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
@@ -911,7 +911,17 @@ export default function TodayTab({
       savePayload({ ...payload, tasks: restoreSchedule(unpinned, undo.route.before), config: restoredConfig });
       return;
     }
-    if (kind === "tomorrow" || kind === "bringback" || kind === "route") {
+    if (kind === "route") {
+      // From the route's start as it stands: From if set today, else now.
+      const now = currentDayMinutes(windows);
+      const anchorMinutes = config.dayMapDate === todayStr && config.dayMapAnchorMinutes != null
+        ? Math.max(now, Number(config.dayMapAnchorMinutes)) : now;
+      savePayload({ ...payload, tasks: restoreClearedRoute(tasks, undo.before, {
+        todayStr, anchorMinutes, breaks: breaksFromWindows(windows, (config.breakName || "").trim() || "Break"),
+      }) });
+      return;
+    }
+    if (kind === "tomorrow" || kind === "bringback") {
       savePayload({ ...payload, tasks: restoreSchedule(tasks, undo.before) });
       return;
     }
