@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { breaksFromWindows, isFixedStop, layoutRoute, layoutStarts, shouldReflowPastRoute } from "../utils/dayMapRoute";
-import { dayLeftFrom, nextDateStr, planDay } from "../utils/dayMapPlan";
+import { dayLeftFrom, nextDateStr, planDay, restoreSchedule } from "../utils/dayMapPlan";
 import { getFocusWindows, getLociNowMinutes } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
 import { commitmentKickerFront, frontForCommitment, frontsFromConfig } from "../utils/fronts";
@@ -90,6 +90,51 @@ export function applyReflow(allTasks, reflowed) {
   return allTasks.map(t => map.has(getTaskId(t)) ? map.get(getTaskId(t)) : t);
 }
 
+// On today's route: a Today task laid out for this Loci day (old-format tasks
+// with a period but no order included).
+export function isOnRoute(task, todayStr) {
+  return task.horizonLevel === "today" && !task.isDeleted && !task.isCompleted && !task.isParked
+    && task.dayMapDate === todayStr && !isDeferred(task, todayStr) && (task.dayMapOrder != null || !!task.dayMapPeriod);
+}
+
+function byRouteOrder(a, b) {
+  const oa = a.dayMapOrder ?? Infinity;
+  const ob = b.dayMapOrder ?? Infinity;
+  if (oa !== ob) return oa - ob;
+  return (a.dayMapStartMinutes ?? 0) - (b.dayMapStartMinutes ?? 0);
+}
+
+// Undo of a route change (Clear route, a one thing moved to NOW): the stops
+// come back first, in their old order, then anything added since; and the
+// whole route is timed again, so no two stops share an order or a start and
+// none is left with a stale time (as the Day map page's Undo; Codex reviews
+// of #427).
+export function restoreRoute(allTasks, before, { todayStr, anchorMinutes, breaks = [] }) {
+  const restored = restoreSchedule(allTasks, before);
+  const put = new Set(before.map(getTaskId));
+  const onRoute = restored.filter(t => isOnRoute(t, todayStr));
+  const route = [
+    ...onRoute.filter(t => put.has(getTaskId(t))).sort(byRouteOrder),
+    ...onRoute.filter(t => !put.has(getTaskId(t))).sort(byRouteOrder),
+  ];
+  return applyReflow(restored, reflowRoute(route, anchorMinutes, todayStr, breaks));
+}
+
+// The one thing sits at NOW (53–56): made the one thing, a task heads the
+// route from now and everything after it flows on from its end. Fixed stops
+// keep their times, and a fixed one thing stays where it is. The route never
+// builds itself, so with no route nothing moves. Returns null when nothing
+// moves, else the new list and the ids of the stops it retimed.
+export function oneThingToNow(allTasks, uuid, { todayStr, nowMinutes, breaks = [] }) {
+  const target = allTasks.find(t => getTaskId(t) === uuid);
+  if (!target || target.horizonLevel !== "today" || isFixedStop(target)) return null;
+  const route = allTasks.filter(t => isOnRoute(t, todayStr)).sort(byRouteOrder);
+  if (!route.length) return null;
+  const ordered = [target, ...route.filter(t => getTaskId(t) !== uuid)];
+  const tasks = applyReflow(allTasks, reflowRoute(ordered, nowMinutes, todayStr, breaks));
+  return { tasks, ids: ordered.map(getTaskId) };
+}
+
 export function useDayRoute({ payload, savePayload }) {
   const tasks = payload?.tasks || [];
   const config = payload?.config || {};
@@ -112,14 +157,7 @@ export function useDayRoute({ payload, savePayload }) {
 
   // Include old-format tasks (dayMapPeriod set but no dayMapOrder) for backward compat
   const scheduledTasks = useMemo(() => (
-    activeTodayTasks
-      .filter(t => t.dayMapDate === todayStr && !isDeferred(t, todayStr) && (t.dayMapOrder != null || !!t.dayMapPeriod))
-      .sort((a, b) => {
-        const oa = a.dayMapOrder ?? Infinity;
-        const ob = b.dayMapOrder ?? Infinity;
-        if (oa !== ob) return oa - ob;
-        return (a.dayMapStartMinutes ?? 0) - (b.dayMapStartMinutes ?? 0);
-      })
+    activeTodayTasks.filter(t => isOnRoute(t, todayStr)).sort(byRouteOrder)
   ), [activeTodayTasks, todayStr]);
 
   // Moved to tomorrow (deferral.js): not today's, but counted on the end line.
@@ -181,6 +219,40 @@ export function useDayRoute({ payload, savePayload }) {
     savePayload(update);
   };
 
+  // The route controls (52d–e), shared by the Day map page and Today's
+  // column: From, adding a task to the end, Auto-fill and Clear route.
+  const setAnchor = (minutes) => {
+    applyAndSave(scheduledTasks, minutes, { dayMapDate: todayStr, dayMapAnchorMinutes: minutes });
+  };
+
+  const addToRoute = (taskId) => {
+    const task = latestTasks().find(t => getTaskId(t) === taskId);
+    if (!task) return;
+    applyAndSave([...scheduledTasks, task], anchorMinutes);
+  };
+
+  // 52d: Auto-fill fills from Today's list order — what moved from
+  // yesterday first, then the list as it stands.
+  const autoFill = () => {
+    if (!unscheduledTasks.length) return;
+    const fromYesterday = (t) => t.deferredUntil === todayStr;
+    const inListOrder = [...unscheduledTasks].sort((a, b) => (fromYesterday(b) - fromYesterday(a)) || ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)));
+    applyAndSave([...scheduledTasks, ...inListOrder], anchorMinutes);
+  };
+
+  // 52: Clear route has Undo, no confirm. Returns the stops as they were, for
+  // that Undo, or null when there was no route.
+  const clearRoute = () => {
+    const before = latestTasks().filter(t => t.dayMapDate === todayStr);
+    if (!before.length) return null;
+    savePayload({
+      ...payloadRef.current,
+      tasks: latestTasks().map(t => t.dayMapDate === todayStr ? removeScheduleFields(t) : t),
+      timestamp: Date.now(),
+    });
+    return before;
+  };
+
   useEffect(() => {
     // Tasks moved here from yesterday ("Move N to tomorrow") arrive at the top
     // with no start time; they are timed from this route's start like the rest.
@@ -196,5 +268,6 @@ export function useDayRoute({ payload, savePayload }) {
     tasks, config, windows, breaks, todayStr, tomorrowStr, payloadRef,
     activeTodayTasks, scheduledTasks, tomorrowTasks, unscheduledTasks,
     anchorMinutes, rows, routeTasks, plan, isGoal, sortableIds, latestTasks, applyAndSave,
+    setAnchor, addToRoute, autoFill, clearRoute,
   };
 }

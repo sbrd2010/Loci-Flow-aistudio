@@ -878,6 +878,61 @@
   box-shadow: 0 2px 0 var(--accent-edge);
   cursor: pointer;
 }
+/* 54e: From · Auto-fill · Clear route above the clock, as on the page. */
+.tdm-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+}
+.tdm-controls .dm-from { margin-right: 0; }
+.tdm-controls-end { display: flex; gap: 20px; }
+/* The one thing, at NOW: its own line under the title. */
+.tdm-one-thing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+/* Unscheduled (54e): one row that opens in place. */
+.tdm-pool { border-bottom: 1px solid var(--line); }
+.tdm-pool-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 52px;
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+}
+.tdm-pool-toggle svg { transition: transform 150ms; }
+.tdm-pool-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.tdm-pool-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tdm-pool-name { font-size: 0.9375rem; font-weight: 800; }
+.tdm-pool-count { margin-left: 6px; font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700; color: var(--ink-2); }
+.tdm-pool-list { margin: 0; padding: 0 0 8px; list-style: none; }
+.tdm-pool-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 40px;
+  gap: 10px;
+  align-items: center;
+  min-height: 52px;
+  border-top: 1px solid var(--line);
+}
+.tdm-pool-title { font-size: 0.875rem; font-weight: 700; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .tdm-pool-toggle svg { transition: none; } }
 
 /* — The title's scale (53, 57b): its size follows its length. Phone
    40/34/28/26; the stage 52/44/36/32 (tablet, a laptop, the list shown);
