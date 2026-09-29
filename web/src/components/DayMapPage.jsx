@@ -428,12 +428,17 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const { raw: ledgerRaw, status: ledgerStatus } = useFocusLedger(uid, 1, windows);
   const done = doneToday(ledgerStatus === "ready" ? ledgerRaw : null, tasks, todayStr, windows);
   const doneMinutes = ledgerStatus === "ready" ? done.reduce((sum, r) => sum + r.minutes, 0) : null;
-  const finish = routeTasks.length ? Math.max(...routeTasks.map(t => t.routeEndMinutes)) : null;
+  // Where the route ends. A fixed stop whose time has passed but is still
+  // open ends its length from now, not at its stale time (Codex review of
+  // #428).
+  const stopRows = rows.filter(r => r.kind === "stop");
+  const finish = stopRows.length ? Math.max(...stopRows.map(r => (r.late ? nowMins + (r.end - r.start) : r.end))) : null;
   // Every stop still on the route counts as left, fixed ones too (Codex
   // review of #428).
   const leftStops = routeTasks;
   const fact = factualLine({
     doneMinutes,
+    doneCount: done.length,
     routeEmpty: !scheduledTasks.length,
     openTasks: activeTodayTasks.length - tomorrowTasks.length,
     finish: finish ?? nowMins,

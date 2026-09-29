@@ -41,9 +41,12 @@ function pastBy(minutes) {
 // while the ledger can't be read (loading, demo, a refused read): then the
 // done part is left out rather than claiming nothing was done.
 // Returns { text, alert, state }: `alert` is the part set in red.
-export function factualLine({ doneMinutes, routeEmpty, openTasks, finish, dayEnd, now, left }) {
-  if (openTasks === 0 && (doneMinutes || 0) > 0) {
-    return { state: "all-done", text: `All done: ${formatSpan(doneMinutes)} today.`, alert: "" };
+export function factualLine({ doneMinutes, doneCount = 0, routeEmpty, openTasks, finish, dayEnd, now, left }) {
+  // All done: nothing open, and something done today, with or without
+  // focus minutes (Codex review of #428).
+  if (openTasks === 0 && (doneCount > 0 || (doneMinutes || 0) > 0)) {
+    const text = (doneMinutes || 0) > 0 ? `All done: ${formatSpan(doneMinutes)} today.` : "All done today.";
+    return { state: "all-done", text, alert: "" };
   }
   if (routeEmpty) return { state: "empty", text: "Nothing on the route.", alert: "" };
   if (now >= dayEnd) {
