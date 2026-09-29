@@ -574,6 +574,11 @@ export function applyCoachActions(payload, actions, { lociDateStr, localDateStr,
       continue;
     }
     let resultTask = task;
+    // Q36.3: something at a set time (a call) is never the focus.
+    if ((action.type === "SET_NOW_FOCUS" || action.type === "START_FOCUS") && task.fixedKind === "event") {
+      results.push({ ...action, matched: false, eventBlocked: true, task });
+      continue;
+    }
     if (action.type === "SET_NOW_FOCUS" || action.type === "START_FOCUS") {
       nextPayload = { ...nextPayload, tasks: buildSetNowFocusTasks(nextPayload.tasks, task.uuid) };
       // A body-double session's "|<minutes>" duration is a one-off session
@@ -649,7 +654,8 @@ export function buildActionReplyText(cleanText, results = [], lastUserMessage = 
   }
 
   // Otherwise, we must construct the response purely from successLines and notes.
-  const notFound = results.filter(r => !r.matched && !r.blocked && r.type !== "ADD_TASK");
+  const notFound = results.filter(r => !r.matched && !r.blocked && !r.eventBlocked && r.type !== "ADD_TASK");
+  const eventBlocked = results.filter(r => r.eventBlocked);
   const addSkipped = results.filter(r => !r.matched && !r.blocked && r.type === "ADD_TASK" && !r.eveningGuardBlocked);
   const eveningGuardBlocked = results.filter(r => r.eveningGuardBlocked);
   const blocked = results.filter(r => r.blocked);
@@ -660,6 +666,9 @@ export function buildActionReplyText(cleanText, results = [], lastUserMessage = 
   }
   if (addSkipped.length > 0) {
     notes.push(`Looks like that's already on your list, so I didn't add a duplicate.`);
+  }
+  if (eventBlocked.length > 0) {
+    notes.push(`${eventBlocked.map(r => `"${r.task.title}"`).join(" and ")} is at a set time, so it isn't a focus session — I left your focus as it is.`);
   }
   if (eveningGuardBlocked.length > 0) {
     notes.push(`Evening Guard is active, so I didn't add that — feel free to add it again tomorrow.`);

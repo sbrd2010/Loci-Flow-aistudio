@@ -1628,7 +1628,9 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                 const task = taskChipsFor(m.actions);
                 if (!task) return null;
                 const phaseB = [];
-                if (isOnToday(task, lociDayNow()) && !task.isNowFocus)
+                // Q36.3: something at a set time is never the focus.
+                if (task.fixedKind === 'event') { /* no focus chip */ }
+                else if (isOnToday(task, lociDayNow()) && !task.isNowFocus)
                   phaseB.push({ action: 'focus',       label: 'Set as Focus' });
                 else if (!isOnToday(task, lociDayNow()) && !task.isNowFocus)
                   phaseB.push({ action: 'focus+today', label: 'Move to Today & Focus' });

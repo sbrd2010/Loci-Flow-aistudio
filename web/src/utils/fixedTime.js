@@ -76,3 +76,11 @@ export function describeFixMoves({ before, after }, task) {
     dayEnds: ends,
   };
 }
+
+// Q36.3, Q36a: something at a set time (a call — fixedKind "event") still
+// open 5 minutes after it ends asks "Did it happen?" (Done / Move) in place
+// of a red "now"; never while it runs.
+export const EVENT_ASK_AFTER = 5;
+export function eventAsks(row, now) {
+  return !!row?.fixed && row.task?.fixedKind === "event" && now >= row.end + EVENT_ASK_AFTER;
+}

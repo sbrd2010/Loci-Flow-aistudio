@@ -374,6 +374,11 @@ describe("pickThree (Feeling scattered, 45c)", () => {
     expect(pickThree([], {}, now)).toEqual([]);
   });
 
+  it("never offers something at a set time (Q36.3)", () => {
+    const tasks = [t("call", { priority: "P1", fixedKind: "event", dayMapFixedMinutes: 780 }), t("b")];
+    expect(pickThree(tasks, {}, now).map(p => p.uuid)).toEqual(["b"]);
+  });
+
   it("never offers a task moved to tomorrow", () => {
     const tasks = [t("a", { priority: "P1", deferredUntil: "2026-09-25" }), t("b")];
     expect(pickThree(tasks, {}, now).map(p => p.uuid)).toEqual(["b"]);

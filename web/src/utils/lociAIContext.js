@@ -77,9 +77,11 @@ export function buildLociTaskContext(allTasks = [], date = new Date(), windows =
     lines.push(`${HORIZON_LABELS[horizon]} (${horizonTasks.length}):`);
     horizonTasks.slice(0, cap).forEach(task => {
       const focus = task.isNowFocus ? " [NOW FOCUS]" : "";
+      // Q36.3: a call or meeting at a set time is never suggested as work.
+      const event = task.fixedKind === "event" ? ` [SET-TIME EVENT${task.dayMapFixedMinutes != null ? ` ${formatMinutesToTime(task.dayMapFixedMinutes)}` : ""}: not focus work, never suggest it]` : "";
       const estimate = task.timeEstimateMinutes ? ` (${task.timeEstimateMinutes}min)` : "";
       const category = ` {${task.category || "Personal"}}`;
-      lines.push(`  - [${task.priority || "P3"}]${focus} ${task.title}${estimate}${category}`);
+      lines.push(`  - [${task.priority || "P3"}]${focus}${event} ${task.title}${estimate}${category}`);
     });
     if (horizonTasks.length > cap) lines.push(`  ... +${horizonTasks.length - cap} more`);
   }

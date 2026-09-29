@@ -30,6 +30,13 @@ describe("lociAIContext", () => {
     expect(context).not.toContain("Done task");
   });
 
+  it("marks something at a set time as never to be suggested (Q36.3)", () => {
+    const context = buildLociTaskContext([
+      { title: "Call with the recruiter", horizonLevel: "today", priority: "P3", fixedKind: "event", dayMapFixedMinutes: 750 },
+    ]);
+    expect(context).toContain("[SET-TIME EVENT 12:30: not focus work, never suggest it] Call with the recruiter");
+  });
+
   it("tags each task line with its category when present, so the coach can filter by category", () => {
     const context = buildLociTaskContext([
       { title: "Update CV", horizonLevel: "today", priority: "P1", category: "Career" },

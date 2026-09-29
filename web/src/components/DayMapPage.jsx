@@ -26,6 +26,7 @@ import {
   normalizePriority, reflowRoute, removeScheduleFields, routeIsContiguous, useDayRoute,
 } from "../hooks/useDayRoute";
 import { isFixedStop } from "../utils/dayMapRoute";
+import { eventAsks } from "../utils/fixedTime";
 import { addedBreaks, busyFromRows, defaultBreak, nextFreeSlot } from "../utils/dayMapBreaks";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { safeUUID } from "../utils/uuid";
@@ -57,7 +58,7 @@ import "../styles/dayMap.css";
 // `row` is the stop as the route engine laid it out (utils/dayMapRoute): its
 // start and end, and whether it is fixed, late, pulled forward, or stops for
 // a break. A fixed stop keeps its time, so it is not dragged.
-function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus, until = null, min = null, was = null, flash = false }) {
+function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus, until = null, min = null, was = null, flash = false, asks = false, onDone, onMove }) {
   const taskId = getTaskId(task);
   const {
     attributes, listeners, setActivatorNodeRef,
@@ -67,10 +68,12 @@ function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFo
   const { start, end } = row;
   const p = normalizePriority(task.priority);
   // Brief §6: each block reads "09:00 to 10:15, Acme CV".
-  const label = `${isNow || row.late ? "Now" : formatClock24(start)} to ${formatClock24(end)}, ${task.title}, Priority ${p.slice(1)}`
+  const late = row.late && !asks;
+  const label = `${isNow || late ? "Now" : formatClock24(start)} to ${formatClock24(end)}, ${task.title}, Priority ${p.slice(1)}`
     + (row.fixed ? ", fixed time" : "") + (row.pulledForward ? ", pulled forward" : "")
     + (row.continues ? ", continues after the break" : "")
-    + (isGoal ? ", goal task" : "") + (min === "confirmed" ? ", minimum day" : "") + (isOver ? ", after the day ends" : "");
+    + (isGoal ? ", goal task" : "") + (min === "confirmed" ? ", minimum day" : "") + (isOver ? ", after the day ends" : "")
+    + (asks ? ", did it happen?" : "");
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -83,7 +86,7 @@ function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFo
     <li
       ref={setNodeRef}
       style={style}
-      className={`dm-stop${isNow ? " is-now" : ""}${row.late ? " is-late" : ""}${isOver ? " is-over" : ""}${isDragging ? " is-dragging" : ""}${isOpen ? " is-open" : ""}${flash ? " is-flash" : ""}`}
+      className={`dm-stop${isNow ? " is-now" : ""}${late ? " is-late" : ""}${asks ? " is-asking" : ""}${isOver ? " is-over" : ""}${isDragging ? " is-dragging" : ""}${isOpen ? " is-open" : ""}${flash ? " is-flash" : ""}`}
       data-task-uuid={taskId}
     >
       <div
@@ -105,7 +108,7 @@ function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFo
           listeners?.onKeyDown?.(e);
         }}
       >
-        <span className="dm-time">{isNow ? "NOW" : row.late ? "now" : formatClock24(start)}</span>
+        <span className="dm-time">{isNow ? "NOW" : late ? "now" : formatClock24(start)}</span>
         <span className="dm-rail" aria-hidden="true"><span className={`dm-dot${isNow ? " is-now" : ""}${isOver ? " is-over" : ""}`} /></span>
         <span className="dm-title">
           <LinkifyText text={task.title} />
@@ -122,6 +125,14 @@ function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFo
         {/* 56a: the one thing, at NOW, until the end of its stop. */}
         {until != null && <span className="dm-one-thing"><IconPin size={12} />THE ONE THING · UNTIL {formatClock24(until)}</span>}
       </div>
+      {/* Q36.3: still open 5 minutes after it ended, it asks. */}
+      {asks && (
+        <div className="dm-ask" role="group" aria-label={`Did it happen? ${task.title}`}>
+          <span className="dm-ask-text">Did it happen?</span>
+          <button type="button" className="dm-btn-outline" onClick={onDone} onPointerDown={e => e.stopPropagation()}>Done</button>
+          <button type="button" className="dm-btn-outline" onClick={onMove} onPointerDown={e => e.stopPropagation()}>Move</button>
+        </div>
+      )}
       {/* Q31: something at a set time (a call) is never a focus session. */}
       {isNow && task.fixedKind !== "event" && (
         <button type="button" className="dm-start" onClick={onStartFocus} onPointerDown={e => e.stopPropagation()}>
@@ -383,6 +394,15 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     setUndo({ kind: "breaks", breaks: before, message: "Break removed", at: Date.now() });
   };
 
+  // Q36a: "Did it happen?" → Move → Tomorrow: it goes to tomorrow's
+  // "Moved from yesterday", its fixed time cleared, with Undo.
+  const moveOneToTomorrow = (task) => {
+    const { tasks: nextTasks, before } = moveToTomorrow(latestTasks(), [getTaskId(task)], tomorrowStr);
+    savePayload({ ...payloadRef.current, tasks: nextTasks, timestamp: Date.now() });
+    setFixing(null);
+    setUndo({ message: `Moved to tomorrow: ${task.title}`, before, at: Date.now() });
+  };
+
   // Unfix: the stop flows with the route again, with Undo.
   const unfix = (taskId) => {
     const task = scheduledTasks.find(t => getTaskId(t) === taskId);
@@ -594,6 +614,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         isOpen={detailId === id}
         onOpen={() => { if (!draggingRef.current) setDetailId(id); }}
         onStartFocus={() => startFocus(id)}
+        asks={eventAsks(r, nowMins)}
+        onDone={() => act(actions.handleMarkDone)(task)}
+        onMove={() => setFixing({ task })}
         was={wasStarts?.get(id) ?? null}
         flash={flashId === id}
       />
@@ -959,6 +982,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           busy={busyFromRows(rows, fixing.breakItem ? fixing.breakItem.index : null)}
           onBreak={saveBreak}
           onRemoveBreak={removeBreak}
+          onTomorrow={fixing.task && eventAsks(rows.find(x => x.kind === "stop" && getTaskId(x.task) === getTaskId(fixing.task)), nowMins) ? () => moveOneToTomorrow(fixing.task) : undefined}
           from={anchorMinutes}
           breaks={breaks}
           nowMins={nowMins}
