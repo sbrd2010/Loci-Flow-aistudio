@@ -150,6 +150,8 @@ test("the minimum day: Change picks, Confirm makes it one line with MIN on the r
   await expect(page.locator(".dm-stop .task-tag.is-min.is-suggested")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Back to Today" }).click();
+  // At 1280 the list starts hidden (54c): show it.
+  await page.getByRole("button", { name: /^Show list/ }).click();
   const list = page.getByTestId("today-tasks-list");
   for (const title of picked) {
     await expect(list.locator("[data-testid='task-row']", { hasText: title }).getByLabel("Minimum day")).toBeVisible();

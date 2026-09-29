@@ -219,6 +219,8 @@ test("a stop moved off Today and back waits in Unscheduled, not in its old slot"
   await page.getByRole("button", { name: "Day map →" }).click();
 
   await expect.poll(() => titles(page)).toEqual([before[0], before[2]]);
+  // Unscheduled is a row, folded while the route has stops (57b answer 1).
+  await page.locator(".dm-pool-toggle").click();
   await expect(page.locator(".dm-pool .dm-pool-list")).toContainText(before[1]);
 });
 
