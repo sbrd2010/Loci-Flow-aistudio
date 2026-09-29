@@ -94,6 +94,13 @@ describe("layoutRoute", () => {
     expect(rows[rows.length - 1].end).toBe(hm("17:30"));
   });
 
+  it("a fixed stop inside a break takes that time; the break shows around it", () => {
+    const rows = layoutRoute([task("Call", 30, "13:45"), task("After", 25)], { from: hm("13:00"), breaks: lunch, durationOf });
+    const breaks = rows.filter(r => r.kind === "break").map(r => [clock(r.start), clock(r.end)]);
+    expect(breaks).toEqual([["13:35", "13:45"]]);
+    expect(read(rows)).toEqual(["13:00 After", "13:30 free 5m", "13:35 Lunch", "13:45 Call 🔒"]);
+  });
+
   it("starts after a break when the route's start falls inside it", () => {
     const rows = layoutRoute([task("A", 25)], { from: hm("13:50"), breaks: lunch, durationOf });
     expect(read(rows)).toEqual(["13:35 Lunch", "14:15 A"]);

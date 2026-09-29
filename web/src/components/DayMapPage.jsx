@@ -364,7 +364,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   // DAY ENDS line where it falls, then what won't fit today.
   const fitting = isOver ? routeTasks.slice(0, plan.overIndex) : routeTasks;
   const lastFitting = fitting[fitting.length - 1];
-  const free = lastFitting ? plan.dayEnd - lastFitting.routeEndMinutes : 0;
+  // Free from the later of the last stop's end and the route's start: a
+  // fixed stop the day has passed ends before now (Codex review of #421).
+  const free = lastFitting ? plan.dayEnd - Math.max(lastFitting.routeEndMinutes, plan.dayEnd - plan.dayLeft) : 0;
   const wontFitMinutes = plan.wontFit.reduce((sum, t) => sum + getEstimate(t), 0);
   const dayEndText = `DAY ENDS ${dayEndLabel}`
     + (free > 0 ? ` · ${formatSpan(free)} FREE` : "")

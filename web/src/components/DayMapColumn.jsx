@@ -17,7 +17,9 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
   const overIndex = plan.overIndex;
   const fitting = overIndex === -1 ? routeTasks : routeTasks.slice(0, overIndex);
   const lastFitting = fitting[fitting.length - 1];
-  const free = lastFitting ? plan.dayEnd - lastFitting.routeEndMinutes : 0;
+  // Free from the later of the last stop's end and the route's start: a
+  // fixed stop the day has passed ends before now (Codex review of #421).
+  const free = lastFitting ? plan.dayEnd - Math.max(lastFitting.routeEndMinutes, plan.dayEnd - plan.dayLeft) : 0;
   const wontFitMinutes = plan.wontFit.reduce((sum, t) => sum + getEstimate(t), 0);
   // The one thing is never moved from here: a session on it is Today's to end.
   const movable = plan.wontFit.filter(t => !t.isNowFocus);

@@ -126,9 +126,19 @@ export function layoutRoute(stops, { from, breaks = [], now = -Infinity, duratio
 
   // A break shows only between stops: one with nothing after it is just the
   // end of the day's work.
+  // A fixed stop inside a break (a call over lunch) takes that time: the
+  // break shows only around it (Codex review of #421).
   const lastEnd = Math.max(-Infinity, ...rows.filter(r => r.kind === "stop").map(r => r.end));
+  const fixedRows = rows.filter(r => r.fixed).sort((a, b) => a.start - b.start);
   for (const b of sortedBreaks) {
-    if (b.end > from && b.start < lastEnd) rows.push({ kind: "break", name: b.name, start: b.start, end: b.end });
+    if (b.end <= from || b.start >= lastEnd) continue;
+    let s = b.start;
+    for (const f of fixedRows) {
+      if (f.end <= s || f.start >= b.end) continue;
+      if (f.start > s) rows.push({ kind: "break", name: b.name, start: s, end: f.start });
+      s = Math.max(s, f.end);
+    }
+    if (s < b.end) rows.push({ kind: "break", name: b.name, start: s, end: b.end });
   }
   return rows.sort((a, b) => a.start - b.start);
 }
