@@ -123,6 +123,24 @@ test("2400: the content stops at 2240px, and the list-hidden title is one step u
   expect([shown[1], hidden]).toEqual(steps);
 });
 
+// Codex review of #422: at the 2240px cap the header keeps the content's
+// left edge, and the drawer takes the Day map column's place, clear of the list.
+test("2400: the header and the drawer follow the 2240px cap", async ({ page }) => {
+  await enterDemo(page, { width: 2400, height: 1200 });
+  const wall = await page.locator(".today-layout").boundingBox();
+  const brand = await page.getByRole("banner").getByRole("button", { name: "Loci" }).boundingBox();
+  expect(Math.abs(brand.x - wall.x)).toBeLessThan(2);
+  await autoFillRoute(page);
+  const columnBox = await column(page).boundingBox();
+  await column(page).getByRole("list", { name: "Today's route" }).getByRole("button").nth(1).click();
+  const drawer = page.locator(".task-detail.is-drawer");
+  await expect(drawer).toBeVisible();
+  const listBox = await page.locator("section.today-list").boundingBox();
+  const drawerBox = await drawer.boundingBox();
+  expect(drawerBox.x).toBeGreaterThanOrEqual(listBox.x + listBox.width);
+  expect(Math.round(drawerBox.x)).toBe(Math.round(columnBox.x));
+});
+
 test("won't fit: Move N to tomorrow moves the stops past the day's end, with Today's Undo", async ({ page }) => {
   // 01:00, an hour before the demo's day ends at 02:00: the third stop starts
   // at 02:00, so it won't fit.
@@ -150,16 +168,17 @@ test("a stop opens its task in a drawer in the map column's place, clear of the 
   await enterDemo(page, { width: 1680, height: 1000 });
   await autoFillRoute(page);
   const stop = column(page).getByRole("list", { name: "Today's route" }).getByRole("button").nth(1);
+  const columnBox = await column(page).boundingBox();
   await stop.click();
   const drawer = page.locator(".task-detail.is-drawer");
   await expect(drawer).toBeVisible();
-  // 52: the drawer takes the column's place and width (360–480).
+  // 52, 54e: the drawer takes the column's place and its 520px.
   await expect(column(page)).toBeHidden();
   const listBox = await page.locator("section.today-list").boundingBox();
   const drawerBox = await drawer.boundingBox();
   expect(drawerBox.x).toBeGreaterThanOrEqual(listBox.x + listBox.width);
-  expect(drawerBox.x + drawerBox.width).toBeLessThanOrEqual(1680 + 1);
-  expect(Math.round(drawerBox.width)).toBe(420);
+  expect(Math.round(drawerBox.x)).toBe(Math.round(columnBox.x));
+  expect(Math.round(drawerBox.width)).toBe(520);
 
   await page.keyboard.press("Escape");
   await expect(drawer).toHaveCount(0);
@@ -167,7 +186,7 @@ test("a stop opens its task in a drawer in the map column's place, clear of the 
   await expect(stop).toBeFocused();
 });
 
-test("1600: the drawer keeps 360px, clear of the list, its footer on one row", async ({ page }) => {
+test("1600: the drawer takes the column's 520px, clear of the list, its footer on one row", async ({ page }) => {
   await enterDemo(page, { width: 1600, height: 900 });
   await autoFillRoute(page);
   await column(page).getByRole("list", { name: "Today's route" }).getByRole("button").nth(1).click();
@@ -175,7 +194,7 @@ test("1600: the drawer keeps 360px, clear of the list, its footer on one row", a
   await expect(drawer).toBeVisible();
   const listBox = await page.locator("section.today-list").boundingBox();
   const drawerBox = await drawer.boundingBox();
-  expect(Math.round(drawerBox.width)).toBe(360);
+  expect(Math.round(drawerBox.width)).toBe(520);
   expect(drawerBox.x).toBeGreaterThanOrEqual(listBox.x + listBox.width);
   const actions = await drawer.locator(".detail-action").evaluateAll(els => els.map(el => el.getBoundingClientRect()).map(r => ({ top: r.top, right: r.right })));
   // 52b: three text buttons (Tomorrow · Park · Delete; Done is the circle).

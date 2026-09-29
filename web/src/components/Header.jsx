@@ -10,7 +10,7 @@ import "../styles/shell.css";
 export default function Header({ activeTab, onTabSelect, onGoHome, dayClock, onDayMap = false }) {
   const inSettings = activeTab === "settings";
   return (
-    <header className={`shell-header${inSettings ? " is-settings" : ""}${onDayMap ? " is-day-map" : ""}`}>
+    <header className={`shell-header${inSettings ? " is-settings" : ""}${onDayMap ? " is-day-map" : activeTab === "today" ? " is-today" : ""}`}>
       <button type="button" className="shell-wordmark" onClick={onGoHome}>Loci</button>
 
       <nav className="shell-tabs" aria-label="Main navigation">

@@ -401,17 +401,20 @@
   }
 }
 
-/* Wide Today (50b, 50k, 52): from 1600px the drawer replaces the Day map column
-   and takes its width, 360 to 480px, so it never covers the list. The column
-   starts at margin + 420 + 36 + 720 + 36; at 1600–1619 it is under 360px, and
-   the drawer keeps 360 by starting further left, still clear of the list. */
+/* Wide Today (52, 54e): from 1600px the drawer replaces the Day map column,
+   520px at the right edge of the content, so it never covers the list. The
+   content is capped at 1760px, and at 2240px from 2200px (Codex review of
+   #422). */
 @media (min-width: 1600px) {
   .screen-content-today .task-detail.is-drawer {
     --wide-margin: max(48px, calc((100vw - 1760px) / 2));
-    left: min(calc(var(--wide-margin) + 1212px), calc(100vw - 360px));
+    left: calc(100vw - var(--wide-margin) - 520px);
     right: auto;
-    width: clamp(360px, calc(100vw - var(--wide-margin) - 1212px), 480px);
+    width: 520px;
   }
+}
+@media (min-width: 2200px) {
+  .screen-content-today .task-detail.is-drawer { --wide-margin: max(48px, calc((100vw - 2240px) / 2)); }
 }
 /* Under 420px wide (1600–1679) the footer's buttons keep to one row and the
    title wraps: the key hints give way, the keys themselves still work. */

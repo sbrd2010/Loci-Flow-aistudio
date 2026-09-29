@@ -224,7 +224,11 @@
   .offline-banner-device { display: inline; }
 }
 
-/* From 1600px the cap is 1760px (50k–n). */
+/* From 1600px the cap is 1760px (50k–n); from 2200px Today's is 2240px
+   (57b), and its header keeps the content's left edge (Codex review of #422). */
 @media (min-width: 1600px) {
   .shell-header { padding: 0 max(48px, calc((100% - 1760px) / 2)); }
+}
+@media (min-width: 2200px) {
+  .shell-header.is-today { padding: 0 max(48px, calc((100% - 2240px) / 2)); }
 }
