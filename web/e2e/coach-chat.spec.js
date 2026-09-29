@@ -158,6 +158,10 @@ test("a casual message to the coach still carries the task just marked done", as
   await enterDemo(page);
 
   const title = (await page.locator(".wall-title").innerText()).trim();
+  // On a phone the half sheet covers the wall's Mark done (37b); put the list
+  // away first, as someone would. Clicking straight away only ever landed
+  // while the sheet was still sliding in.
+  await page.locator(".today-list-hide").click();
   await page.locator(".today-wall .wall-action", { hasText: "Mark done" }).click();
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
   // Not a task question — the kind of message that got no task list at all.
