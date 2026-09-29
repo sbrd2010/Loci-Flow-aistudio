@@ -96,7 +96,7 @@ export function useDayRoute({ payload, savePayload }) {
   // The Loci day, not the calendar date: with a window past midnight, the
   // route and "tomorrow" both hold until that window ends.
   const windows = getFocusWindows(config);
-  const breaks = useMemo(() => breaksFromWindows(windows), [windows]);
+  const breaks = useMemo(() => breaksFromWindows(windows, (config.breakName || "").trim() || "Break"), [windows, config.breakName]);
   const todayStr = useLociDayStr(windows);
   const tomorrowStr = nextDateStr(todayStr);
 

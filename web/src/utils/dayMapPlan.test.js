@@ -39,24 +39,27 @@ describe("dayLeftFrom", () => {
 });
 
 describe("planDay", () => {
-  it("fits when every stop starts before the day ends", () => {
+  it("fits when every stop ends by the day end", () => {
     const plan = planDay([stop("a", 630, 25), stop("b", 660, 25)], 630, 340);
     expect(plan.dayEnd).toBe(970);
     expect(plan.overIndex).toBe(-1);
     expect(plan.wontFit).toEqual([]);
     expect(plan.overBy).toBe(0);
     expect(plan.planned).toBe(55);
-    expect(plan.runsPast).toBeNull();
   });
 
-  it("splits the route at the day end, and names the stop that runs past it", () => {
+  // 56a: a stop that starts in time but runs past the line doesn't fit.
+  it("splits the route at the first stop that ends past the day end", () => {
     const route = [stop("a", 630, 25), stop("b", 875, 180), stop("c", 1060, 90), stop("d", 1155, 60)];
     const plan = planDay(route, 630, 340);
-    expect(plan.overIndex).toBe(2);
-    expect(plan.wontFit.map(t => t.uuid)).toEqual(["c", "d"]);
-    expect(plan.runsPast).toEqual({ task: route[1], by: 875 + 180 - 970 });
+    expect(plan.overIndex).toBe(1);
+    expect(plan.wontFit.map(t => t.uuid)).toEqual(["b", "c", "d"]);
     expect(plan.planned).toBe(1215 - 630);
     expect(plan.overBy).toBe(1215 - 970);
+  });
+
+  it("keeps a stop that ends exactly on the line", () => {
+    expect(planDay([stop("a", 630, 25), stop("b", 945, 25)], 630, 340).overIndex).toBe(-1);
   });
 
   it("counts a stop that starts exactly on the line as not fitting", () => {
@@ -67,7 +70,8 @@ describe("planDay", () => {
     // 11:35 for 3h with a 40-minute lunch: it ends at 15:15, not 14:35.
     const plan = planDay([{ ...stop("a", 695, 180), routeEndMinutes: 915 }], 695, 200);
     expect(plan.planned).toBe(220);
-    expect(plan.runsPast).toMatchObject({ by: 20 });
+    expect(plan.overIndex).toBe(0);
+    expect(planDay([{ ...stop("a", 695, 180), routeEndMinutes: 915 }], 695, 220).overIndex).toBe(-1);
   });
 
   it("puts everything past the line when no focus time is left", () => {

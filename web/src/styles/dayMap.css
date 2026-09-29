@@ -153,6 +153,7 @@
 /* ── From ⌄ · Auto-fill · Clear route: text, 44px ── */
 .dm-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px 16px;
   padding: 4px 0;
@@ -529,4 +530,176 @@
   .dm-pool-bar,
   .dm-pool-sheet,
   .dm-sheet-scrim { display: none; }
+}
+
+/* ── Fixed time (58c–e): a dialog on a laptop, a sheet on a phone. ── */
+.dm-stop.is-flash { animation: dm-flash 600ms ease-out; }
+@keyframes dm-flash {
+  from { background: var(--accent-tint); }
+  to { background: var(--bg); }
+}
+.fx-dialog {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 150;
+  max-height: 90dvh;
+  overflow-y: auto;
+  padding: 24px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface);
+  border-radius: 16px 16px 0 0;
+}
+.fx-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.fx-title { margin: 0; font-size: 1.375rem; font-weight: 800; line-height: 1.2; }
+.fx-sub { margin: 2px 0 0; font-size: 0.875rem; color: var(--ink-2); }
+.fx-group {
+  margin: 12px 0 4px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--ink-2);
+}
+.fx-list { margin: 0; padding: 0; list-style: none; }
+.fx-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 50px;
+  padding: 0 12px;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.fx-option:hover { background: var(--panel); }
+.fx-option-title { flex: 1; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
+.fx-option-meta { font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700; color: var(--ink-2); white-space: nowrap; }
+.fx-else {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  margin-top: 14px;
+  padding: 0 14px;
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 1.5px dashed var(--control-edge);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.fx-else-title { font-weight: 800; color: var(--ink); }
+.fx-else-hint { margin-left: auto; font-size: 0.8125rem; color: var(--ink-2); }
+.fx-fields { display: grid; grid-template-columns: minmax(0, 1fr) 110px; gap: 10px; margin-bottom: 14px; }
+.fx-field { display: flex; flex-direction: column; gap: 6px; }
+.fx-label { font-size: 0.8125rem; font-weight: 800; color: var(--ink-2); }
+.fx-input {
+  min-height: 46px;
+  padding: 0 12px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1.5px solid var(--control-edge);
+  border-radius: 6px;
+}
+.fx-at { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.fx-clock {
+  width: 5.5ch;
+  min-height: 44px;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-align: right;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-bottom: 1.5px dashed var(--control-edge);
+}
+.fx-chips { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.fx-chip {
+  min-height: 46px;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.fx-chip[aria-checked="true"] { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+.fx-pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; }
+.fx-page {
+  min-height: 44px;
+  padding: 0;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.fx-help { font-size: 0.8125rem; color: var(--ink-2); text-align: center; }
+.fx-moves { margin-top: 14px; padding: 12px 14px; background: var(--panel); border-radius: 8px; }
+.fx-moves-kicker { margin: 0 0 4px; font-family: var(--font-serif); font-style: italic; font-size: 0.8125rem; color: var(--ink-2); }
+.fx-moves-text { margin: 0; font-size: 0.9375rem; line-height: 1.5; }
+.fx-foot { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
+.fx-confirm {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 52px;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 0;
+  border-radius: 6px;
+  box-shadow: 0 2px 0 var(--accent-edge);
+  cursor: pointer;
+}
+.fx-confirm:disabled { opacity: 0.5; cursor: default; }
+.fx-back {
+  min-height: 44px;
+  padding: 0 12px;
+  font: inherit;
+  font-weight: 800;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.fx-option:focus-visible, .fx-else:focus-visible, .fx-chip:focus-visible, .fx-page:focus-visible,
+.fx-confirm:focus-visible, .fx-back:focus-visible, .fx-clock:focus-visible, .fx-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (min-width: 1024px) {
+  .fx-dialog {
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    width: 576px;
+    max-height: 85dvh;
+    padding: 28px;
+    border-radius: 12px;
+    transform: translate(-50%, -50%);
+  }
+  /* The laptop hides the pool sheet's scrim; the dialog keeps its own. */
+  .fx-scrim { display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dm-stop.is-flash { animation: none; }
 }
