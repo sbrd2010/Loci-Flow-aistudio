@@ -10,6 +10,7 @@ import { minutesForTaskOn } from "../utils/focusLedger";
 import { buildMomentum } from "../utils/momentum";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import FocusModePage from "./FocusModePage";
+import { chimesOn } from "../utils/chime";
 import RescueMode from "./RescueMode";
 import { safeUUID } from "../utils/uuid";
 import { taskSteps, stepsPatch, applyStepsPatch } from "../utils/taskSteps";
@@ -2035,7 +2036,10 @@ export default function TodayTab({
           // 59i: block end — another block of the usual length, or, with no
           // answer in 60 s, a pause on one.
           blockMinutes={focusBlockSeconds(config) / 60}
-          onBlockTimeout={() => { if (changeFocusDuration(focusBlockSeconds(config) / 60)) dismissSessionComplete(); }}
+          onBlockTimeout={(m) => { if (changeFocusDuration(m || focusBlockSeconds(config) / 60)) dismissSessionComplete(); }}
+          chimes={chimesOn(config)}
+          dayKey={todayStr}
+          onReestimate={(m) => savePayload({ ...payload, tasks: tasks.map(t => t.uuid === activeTask.uuid ? { ...t, timeEstimateMinutes: m, lastUpdated: Date.now() } : t) })}
           startedAt={focusStartedAt}
           elapsedSeconds={focusElapsedSeconds}
           onAddBrainDump={handleFocusBrainDump}
