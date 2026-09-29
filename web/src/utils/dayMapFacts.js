@@ -76,7 +76,9 @@ export function factualLine({ doneMinutes, doneCount = 0, routeEmpty, openTasks,
 // finish. Positions are shares of the bar (0–1).
 export function dayBar({ windowStart, firstSessionStart = null, now, dayEnd, finish }) {
   const start = Math.min(windowStart, firstSessionStart ?? windowStart, now);
-  const end = Math.max(dayEnd, finish ?? dayEnd);
+  // Now too: opened after the last window, the bar runs on to now rather
+  // than squeezing NOW onto the day end (Codex review of #429).
+  const end = Math.max(dayEnd, finish ?? dayEnd, now);
   const span = Math.max(1, end - start);
   const at = (m) => Math.min(1, Math.max(0, (m - start) / span));
   return {
