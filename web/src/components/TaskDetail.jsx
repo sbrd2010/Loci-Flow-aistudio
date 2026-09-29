@@ -537,7 +537,8 @@ export default function TaskDetail({
         </div>
       ) : (
       <div className="detail-foot">
-        {!task.isNowFocus && (
+        {/* Q31: something at a set time is never the one thing. */}
+        {!task.isNowFocus && task.fixedKind !== "event" && (
           <button type="button" className="detail-one" onClick={onMakeOneThing}>
             <IconPin size={18} /> Make this the one thing {kbd("P")}
           </button>

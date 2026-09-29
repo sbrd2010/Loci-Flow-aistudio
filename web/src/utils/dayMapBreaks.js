@@ -1,0 +1,57 @@
+import { breaksFromWindows } from "./dayMapRoute";
+
+// Breaks you add (Q31): "Fixed time → A break". A break lives only on
+// today's route — never in Today's list, never counted as work — and goes at
+// the end of the Loci day: config.dayMapBreaks = { date, items: [{ kind:
+// "break", start, lengthMin }] }. The route stops for it as it does for the
+// gap between focus windows, with no buffer and no rounding after it (Q35a).
+
+export const BREAK_LENGTHS = [5, 10, 15, 20, 30, 45, 60, 90];
+export const DEFAULT_BREAK_MIN = 15;
+
+const breakName = (config) => (config?.breakName || "").trim() || "Break";
+
+// Today's added breaks, as stored.
+export function addedBreaks(config, todayStr) {
+  const b = config?.dayMapBreaks;
+  if (!b || b.date !== todayStr || !Array.isArray(b.items)) return [];
+  return b.items.filter(x => Number.isFinite(Number(x?.start)) && Number(x?.lengthMin) > 0);
+}
+
+// Every break the route stops for today: the gaps between focus windows,
+// then the ones you added (`added` is the index in today's items).
+export function routeBreaks(windows, config, todayStr) {
+  const name = breakName(config);
+  return [
+    ...breaksFromWindows(windows, name),
+    ...addedBreaks(config, todayStr).map((x, i) => ({ start: Number(x.start), end: Number(x.start) + Number(x.lengthMin), name, added: i })),
+  ];
+}
+
+// The config with today's added breaks set to `items`.
+export function withAddedBreaks(config, todayStr, items, now = Date.now()) {
+  return {
+    ...config,
+    dayMapBreaks: { date: todayStr, items: items.map(x => ({ kind: "break", start: Number(x.start), lengthMin: Number(x.lengthMin) })) },
+    lastUpdated: now,
+  };
+}
+
+// Where a new break goes by default: the next free slot on the route from
+// now — the first free time, or the end of a stop, that `lengthMin` fits
+// without running into a fixed stop or another break. With nothing on the
+// route from now, now (to the next 5 minutes).
+export function nextFreeSlot(rows, now, lengthMin = DEFAULT_BREAK_MIN) {
+  const busy = rows.filter(r => r.kind === "break" || (r.kind === "stop" && r.fixed));
+  const clear = (t) => busy.every(r => r.end <= t || r.start >= t + lengthMin);
+  const covered = rows.some(r => r.kind !== "free" && r.start <= now && now < r.end);
+  const candidates = [
+    ...(covered ? [] : [Math.ceil(now / 5) * 5]),
+    ...rows.filter(r => r.kind === "free").map(r => r.start),
+    ...rows.filter(r => r.kind === "stop" && !r.continues).map(r => r.end),
+  ].filter(t => t >= now).sort((a, b) => a - b);
+  const slot = candidates.find(clear);
+  if (slot != null) return slot;
+  const lastEnd = Math.max(now, ...rows.map(r => r.end));
+  return Math.ceil(lastEnd / 5) * 5;
+}

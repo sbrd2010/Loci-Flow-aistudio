@@ -26,6 +26,7 @@ import {
   normalizePriority, reflowRoute, removeScheduleFields, routeIsContiguous, useDayRoute,
 } from "../hooks/useDayRoute";
 import { isFixedStop } from "../utils/dayMapRoute";
+import { addedBreaks, nextFreeSlot } from "../utils/dayMapBreaks";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { safeUUID } from "../utils/uuid";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
@@ -121,7 +122,8 @@ function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFo
         {/* 56a: the one thing, at NOW, until the end of its stop. */}
         {until != null && <span className="dm-one-thing"><IconPin size={12} />THE ONE THING · UNTIL {formatClock24(until)}</span>}
       </div>
-      {isNow && (
+      {/* Q31: something at a set time (a call) is never a focus session. */}
+      {isNow && task.fixedKind !== "event" && (
         <button type="button" className="dm-start" onClick={onStartFocus} onPointerDown={e => e.stopPropagation()}>
           Start focus
         </button>
@@ -184,7 +186,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const undo = routeUndo;
   // Fixed time (58c–e): the sheet, open on step 1 or on a stop; the stops it
   // moved and where they were (shown until you leave); the fixed row's flash.
-  const [fixing, setFixing] = useState(null); // { task? }
+  const [fixing, setFixing] = useState(null); // { task?, breakItem? }
   const [wasStarts, setWasStarts] = useState(null); // Map id → earlier start
   const [flashId, setFlashId] = useState(null);
   // A "Something else" stop's creation write, by task id: its Undo logs the
@@ -217,7 +219,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     tasks, config: routeConfig, windows, breaks, todayStr, tomorrowStr, payloadRef,
     activeTodayTasks, scheduledTasks, tomorrowTasks, unscheduledTasks,
     anchorMinutes, rows, routeTasks, plan, isGoal, sortableIds, latestTasks, applyAndSave,
-    setAnchor, addToRoute, autoFill, clearRoute: clearRouteTasks,
+    setAnchor, addToRoute, autoFill, clearRoute: clearRouteTasks, setAddedBreaks,
   } = useDayRoute({ payload, savePayload });
 
   // A drag ends in a click on the row it dropped; that click must not open it.
@@ -278,6 +280,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   // stops must not share an order or a start time with it.
   const handleUndo = () => {
     if (!undo) return;
+    if (undo.kind === "breaks") { setUndo(null); setAddedBreaks(undo.breaks); return; }
     const restored = restoreSchedule(latestTasks(), undo.before);
     const put = new Set(undo.before.map(getTaskId));
     const onRoute = restored.filter(t => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted && !t.isParked
@@ -320,6 +323,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         horizonLevel: "today", priority: "P3", category: "Personal", frontId: null,
         timeEstimateMinutes: target.minutes, deadlineTimestamp: null, reminderAt: null,
         isCompleted: false, isParked: false, isNowFocus: false,
+        // Q31: something at a set time — a lock and its time in Today's
+        // list, and never a focus session.
+        fixedKind: "event",
         orderIndex: all.filter(t => t.horizonLevel === "today" && !t.isDeleted).length,
         dateCompletedString: null, isDeleted: false, lastUpdated: Date.now(), subSteps: [],
       };
@@ -356,6 +362,21 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       message: `${task.title} fixed at ${formatClock24(at)} · ${was.size} ${was.size === 1 ? "stop" : "stops"} moved`,
       before, created: isNew ? id : null, createdTask: isNew ? task : null, at: Date.now(),
     });
+  };
+
+  // Q31: a break you add, or change (`index`), and Remove; each with Undo.
+  const saveBreak = (start, lengthMin, index) => {
+    const before = addedBreaks(routeConfig, todayStr);
+    const item = { kind: "break", start, lengthMin };
+    setAddedBreaks(index == null ? [...before, item] : before.map((b, i) => (i === index ? item : b)));
+    setFixing(null);
+    setUndo({ kind: "breaks", breaks: before, message: `Break ${formatClock24(start)}–${formatClock24(start + lengthMin)}${index == null ? " added" : ""}`, at: Date.now() });
+  };
+  const removeBreak = (index) => {
+    const before = addedBreaks(routeConfig, todayStr);
+    setAddedBreaks(before.filter((_, i) => i !== index));
+    setFixing(null);
+    setUndo({ kind: "breaks", breaks: before, message: "Break removed", at: Date.now() });
   };
 
   // Unfix: the stop flows with the route again, with Undo.
@@ -491,6 +512,28 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const NUMBER_WORDS = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
   const wontFitCount = plan.wontFit.length;
   const renderRow = (r) => {
+    if (r.kind === "break" && r.added != null) {
+      // A break you added opens its own sheet: Length, Time, Remove (Q31).
+      const item = addedBreaks(routeConfig, todayStr)[r.added];
+      const open = () => item && setFixing({ breakItem: { index: r.added, start: Number(item.start), lengthMin: Number(item.lengthMin) } });
+      return (
+        <li key={`break:${r.start}`} className="dm-break is-added">
+          <div
+            className="dm-main"
+            role="button"
+            tabIndex={0}
+            aria-label={`${formatClock24(r.start)} to ${formatClock24(r.end)}, ${r.name}`}
+            onClick={open}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
+          >
+            <span className="dm-time">{formatClock24(r.start)}</span>
+            <span className="dm-rail" aria-hidden="true"><span className="dm-dash" /></span>
+            <span className="dm-title">{r.name}</span>
+            <span className="dm-dur">{formatSpan(r.end - r.start)}</span>
+          </div>
+        </li>
+      );
+    }
     if (r.kind === "break") {
       return (
         <li key={`break:${r.start}`} className="dm-break" aria-label={`${formatClock24(r.start)} to ${formatClock24(r.end)}, ${r.name}`}>
@@ -906,6 +949,10 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           unscheduledTasks={unscheduledTasks}
           stops={scheduledTasks}
           task={fixing.task}
+          breakItem={fixing.breakItem}
+          breakAt={nextFreeSlot(rows, nowMins)}
+          onBreak={saveBreak}
+          onRemoveBreak={removeBreak}
           from={anchorMinutes}
           breaks={breaks}
           nowMins={nowMins}

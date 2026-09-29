@@ -59,14 +59,15 @@ function runThrough(start, minutes, breaks) {
 }
 
 function afterBreaks(at, breaks) {
-  for (const b of breaks) if (b.start <= at && at < b.end) return b.end;
+  // In start order, so a break that runs into another carries on to its end.
+  for (const b of breaks) if (b.start <= at && at < b.end) at = b.end;
   return at;
 }
 
 // Lays out today's route. `stops` is the route in its order; `durationOf`
 // gives a stop's minutes. Returns the rows in time order:
 //   { kind: "stop", task, start, end, fixed, late, pulledForward, continues, continued }
-//   { kind: "break", name, start, end }
+//   { kind: "break", name, start, end, added }  (added: a break you added, by index)
 //   { kind: "free", start, end }
 // A task split by a break gives two stop rows (the first `continues`, the
 // second is `continued`).
@@ -144,20 +145,24 @@ export function layoutRoute(stops, { from, breaks = [], now = -Infinity, duratio
   }
 
   // A break shows only between stops: one with nothing after it is just the
-  // end of the day's work.
+  // end of the day's work — unless you added it (Q31): that one shows.
   // A fixed stop inside a break (a call over lunch) takes that time: the
-  // break shows only around it (Codex review of #421).
+  // break shows only around it (Codex review of #421). Breaks that overlap
+  // show their time once.
   const lastEnd = Math.max(-Infinity, ...rows.filter(r => r.kind === "stop").map(r => r.end));
   const fixedRows = rows.filter(r => r.fixed).sort((a, b) => a.start - b.start);
+  let shownTo = -Infinity;
   for (const b of sortedBreaks) {
-    if (b.end <= from || b.start >= lastEnd) continue;
-    let s = b.start;
+    if (b.end <= from || (b.start >= lastEnd && b.added == null)) continue;
+    const row = (start, end) => rows.push({ kind: "break", name: b.name, start, end, ...(b.added != null ? { added: b.added } : {}) });
+    let s = Math.max(b.start, shownTo);
+    shownTo = Math.max(shownTo, b.end);
     for (const f of fixedRows) {
       if (f.end <= s || f.start >= b.end) continue;
-      if (f.start > s) rows.push({ kind: "break", name: b.name, start: s, end: f.start });
+      if (f.start > s) row(s, f.start);
       s = Math.max(s, f.end);
     }
-    if (s < b.end) rows.push({ kind: "break", name: b.name, start: s, end: b.end });
+    if (s < b.end) row(s, b.end);
   }
   return rows.sort((a, b) => a.start - b.start);
 }

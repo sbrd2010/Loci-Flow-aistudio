@@ -47,7 +47,7 @@ import DayMapColumn from "./DayMapColumn";
 import { makeOneThing, undoOneThing } from "../utils/oneThing";
 import { confirmedMinimumDay } from "../utils/minimumDay";
 import { currentDayMinutes, oneThingToNow, restoreRoute } from "../hooks/useDayRoute";
-import { breaksFromWindows } from "../utils/dayMapRoute";
+import { routeBreaks } from "../utils/dayMapBreaks";
 import { bringBack, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
 
@@ -707,13 +707,15 @@ export default function TodayTab({
   // carry MIN in the list, for today only.
   const minimumDayIds = new Set(confirmedMinimumDay(config, todayStr) || []);
   const handleMakeOneThing = (task) => {
+    // Q31: something at a set time (a call) is never the one thing.
+    if (task.fixedKind === "event") return;
     const { tasks: pinned, previous } = makeOneThing(tasks, task.uuid);
     if (pinned === tasks) return;
     // On the Day map it moves to NOW: the route flows on from its end, fixed
     // stops stay (53–56). Undo puts the stops and the route's start back.
     const nowMinutes = currentDayMinutes(windows);
     const moved = oneThingToNow(pinned, String(task.uuid), {
-      todayStr, nowMinutes, breaks: breaksFromWindows(windows, (config.breakName || "").trim() || "Break"),
+      todayStr, nowMinutes, breaks: routeBreaks(windows, config, todayStr),
     });
     const next = moved ? moved.tasks : pinned;
     const route = moved && {
@@ -918,7 +920,7 @@ export default function TodayTab({
       savePayload({
         ...payload,
         tasks: restoreRoute(unpinned, undo.route.before, {
-          todayStr, anchorMinutes, breaks: breaksFromWindows(windows, (config.breakName || "").trim() || "Break"),
+          todayStr, anchorMinutes, breaks: routeBreaks(windows, config, todayStr),
         }),
         config: restoredConfig,
       });
@@ -930,7 +932,7 @@ export default function TodayTab({
       const anchorMinutes = config.dayMapDate === todayStr && config.dayMapAnchorMinutes != null
         ? Math.max(now, Number(config.dayMapAnchorMinutes)) : now;
       savePayload({ ...payload, tasks: restoreRoute(tasks, undo.before, {
-        todayStr, anchorMinutes, breaks: breaksFromWindows(windows, (config.breakName || "").trim() || "Break"),
+        todayStr, anchorMinutes, breaks: routeBreaks(windows, config, todayStr),
       }) });
       return;
     }
@@ -1874,6 +1876,7 @@ export default function TodayTab({
                             onOpen={openDetail}
                             onMakeOneThing={handleMakeOneThing}
                             isMin={minimumDayIds.has(String(task.uuid))}
+                            fixedAt={task.fixedKind === "event" && task.dayMapDate === todayStr ? task.dayMapFixedMinutes ?? null : null}
                             tabStop={task.uuid === rovingUuid}
                             isTinted={task.uuid === tintUuid}
                             onSwipeDone={handleToggleComplete}

@@ -103,6 +103,19 @@
   text-decoration: line-through;
 }
 
+/* Q31: something at a set time — its lock and time beside the title. */
+.task-row-fixed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
 .task-row-tags {
   display: flex;
   gap: 6px;
