@@ -25,7 +25,7 @@ import {
   applyReflow, currentDayMinutes, getEstimate, getTaskId,
   normalizePriority, reflowRoute, removeScheduleFields, routeIsContiguous, useDayRoute,
 } from "../hooks/useDayRoute";
-import { isFixedStop } from "../utils/dayMapRoute";
+import { isEventTask, isFixedStop } from "../utils/dayMapRoute";
 import { eventAsks } from "../utils/fixedTime";
 import { addedBreaks, busyFromRows, defaultBreak, nextFreeSlot } from "../utils/dayMapBreaks";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
@@ -134,7 +134,7 @@ function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFo
         </div>
       )}
       {/* Q31: something at a set time (a call) is never a focus session. */}
-      {isNow && task.fixedKind !== "event" && (
+      {isNow && !isEventTask(task) && (
         <button type="button" className="dm-start" onClick={onStartFocus} onPointerDown={e => e.stopPropagation()}>
           Start focus
         </button>
@@ -291,7 +291,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   // stops must not share an order or a start time with it.
   const handleUndo = () => {
     if (!undo) return;
-    if (undo.kind === "breaks") { setUndo(null); setAddedBreaks(undo.breaks); return; }
+    // Breaks are one day's: past midnight, Undo has nothing to put back.
+    if (undo.kind === "breaks") { setUndo(null); if (undo.date === todayStr) setAddedBreaks(undo.breaks); return; }
     const restored = restoreSchedule(latestTasks(), undo.before);
     const put = new Set(undo.before.map(getTaskId));
     const onRoute = restored.filter(t => t.horizonLevel === "today" && !t.isDeleted && !t.isCompleted && !t.isParked
@@ -381,17 +382,19 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const item = { kind: "break", start, lengthMin };
     setAddedBreaks(index == null ? [...before, item] : before.map((b, i) => (i === index ? item : b)));
     // Q36a: a break now ends a focus session running, saved as it stands
-    // (until Focus 59's pause, when Resume starts a new one).
+    // (until Focus 59's pause, when Resume starts a new one). Changing a
+    // break that already covered now doesn't end one started during it.
     const nowMin = currentDayMinutes(windows);
-    if (start <= nowMin && nowMin < start + lengthMin && focusTimer?.focusSessionId) onEndFocus?.();
+    const covers = (b) => !!b && b.start <= nowMin && nowMin < b.start + b.lengthMin;
+    if (covers(item) && !covers(index == null ? null : before[index]) && focusTimer?.focusSessionId) onEndFocus?.();
     setFixing(null);
-    setUndo({ kind: "breaks", breaks: before, message: `Break ${formatClock24(start)}–${formatClock24(start + lengthMin)}${index == null ? " added" : ""}`, at: Date.now() });
+    setUndo({ kind: "breaks", date: todayStr, breaks: before, message: `Break ${formatClock24(start)}–${formatClock24(start + lengthMin)}${index == null ? " added" : ""}`, at: Date.now() });
   };
   const removeBreak = (index) => {
     const before = addedBreaks(routeConfig, todayStr);
     setAddedBreaks(before.filter((_, i) => i !== index));
     setFixing(null);
-    setUndo({ kind: "breaks", breaks: before, message: "Break removed", at: Date.now() });
+    setUndo({ kind: "breaks", date: todayStr, breaks: before, message: "Break removed", at: Date.now() });
   };
 
   // Q36a: "Did it happen?" → Move → Tomorrow: it goes to tomorrow's
@@ -541,7 +544,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       const item = addedBreaks(routeConfig, todayStr)[r.added];
       const open = () => item && setFixing({ breakItem: { index: r.added, start: Number(item.start), lengthMin: Number(item.lengthMin) } });
       return (
-        <li key={`break:${r.start}`} className="dm-break is-added">
+        <li key={`added:${r.added}:${r.start}`} className="dm-break is-added">
           <div
             className="dm-main"
             role="button"
@@ -721,7 +724,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   useEffect(() => {
     if (!poolOpen || unscheduledTasks.length > 0) return;
     setPoolOpen(false);
-    requestAnimationFrame(() => document.querySelector(".dm-route .dm-main")?.focus());
+    requestAnimationFrame(() => document.querySelector(".dm-route .dm-stop .dm-main")?.focus());
   }, [poolOpen, unscheduledTasks.length]);
   // The sheet is the phone's and tablet's: crossing into the laptop layout
   // (a tablet turned, a window widened) closes it rather than hiding it.
@@ -735,7 +738,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       const el = document.activeElement;
       const hadFocus = !el || el === document.body || !!el.closest(".dm-pool-sheet");
       setPoolOpen(false);
-      if (hadFocus) requestAnimationFrame(() => (document.querySelector(".dm-pool .dm-pool-add") || document.querySelector(".dm-route .dm-main"))?.focus());
+      if (hadFocus) requestAnimationFrame(() => (document.querySelector(".dm-pool .dm-pool-add") || document.querySelector(".dm-route .dm-stop .dm-main"))?.focus());
     };
     close();
     window.addEventListener("resize", close);
@@ -977,9 +980,11 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           stops={scheduledTasks}
           task={fixing.task}
           breakItem={fixing.breakItem}
-          breakDefault={defaultBreak(rows, nowMins)}
-          laterAt={nextFreeSlot(rows, nowMins)}
-          busy={busyFromRows(rows, fixing.breakItem ? fixing.breakItem.index : null)}
+          // From a later From, the route's start: a break before it would
+          // never show (loopcheck of #430).
+          breakDefault={defaultBreak(rows, Math.max(nowMins, anchorMinutes), busyFromRows(rows, breaks))}
+          laterAt={nextFreeSlot(rows, Math.max(nowMins, anchorMinutes))}
+          busy={busyFromRows(rows, breaks, fixing.breakItem ? fixing.breakItem.index : null)}
           onBreak={saveBreak}
           onRemoveBreak={removeBreak}
           onTomorrow={fixing.task && eventAsks(rows.find(x => x.kind === "stop" && getTaskId(x.task) === getTaskId(fixing.task)), nowMins) ? () => moveOneToTomorrow(fixing.task) : undefined}

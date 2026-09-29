@@ -20,6 +20,7 @@
 import { getFocusWindows, getLociDayStr, getRemainingFocusMinutes } from "./focusWindows";
 import { frontsFromConfig, parseDueDate } from "./fronts";
 import { isDeferred } from "./deferral";
+import { isEventTask } from "./dayMapRoute";
 
 const STALE_DAYS = 7;
 // Horizons further out than this week are not "due this horizon".
@@ -41,7 +42,7 @@ export function openTasks(tasks, now = new Date(), windows = getFocusWindows({})
   if (!Array.isArray(tasks)) return [];
   const day = getLociDayStr(now, windows);
   // Q36.3: something at a set time (a call) is never offered as work.
-  return tasks.filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked && !isDeferred(t, day) && t.fixedKind !== "event");
+  return tasks.filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked && !isDeferred(t, day) && !isEventTask(t));
 }
 
 // Focus minutes left today, measured the way the rest of the app measures them.

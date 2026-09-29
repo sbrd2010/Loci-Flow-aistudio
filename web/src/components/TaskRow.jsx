@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from "react";
 import { formatReminderLabel } from "../utils/reminders";
 import LinkifyText from "./LinkifyText";
 import { formatClock24 } from "../utils/dayMapPlan";
+import { isEventTask } from "../utils/dayMapRoute";
 import { IconLock } from "./ui/icons";
 import "../styles/taskRow.css";
 
@@ -293,7 +294,7 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
         )}
       </div>
 
-      {onMakeOneThing && !isCompleted && !isNowFocus && task.fixedKind !== "event" && (
+      {onMakeOneThing && !isCompleted && !isNowFocus && !isEventTask(task) && (
         <button
           type="button"
           className="task-row-pin"

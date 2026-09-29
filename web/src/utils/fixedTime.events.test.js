@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { eventAsks } from "./fixedTime";
 
 describe("Did it happen? (Q36.3, Q36a)", () => {
-  const row = (fixedKind) => ({ kind: "stop", fixed: true, start: 720, end: 750, task: { title: "Call", fixedKind } });
+  const row = (fixedKind) => ({ kind: "stop", fixed: true, start: 720, end: 750, task: { title: "Call", fixedKind, dayMapFixedMinutes: 720 } });
 
   it("asks 5 minutes after a call ends, never while it runs", () => {
     expect(eventAsks(row("event"), 735)).toBe(false);

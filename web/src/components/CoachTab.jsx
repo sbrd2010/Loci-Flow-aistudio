@@ -3,6 +3,7 @@ import { track, auth } from "../firebase";
 import { callAI, describeAIError, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { getCoachNudge, resolveCoachNudge, buildCoachNudgeDeliveredConfig } from "../utils/coachNudge";
 import { buildLocalSafetyReply } from "../utils/crisisSafety";
+import { isEventTask } from "../utils/dayMapRoute";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
 import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociCategoryFilterContext, buildLociTodaySnapshotContext, getLocalDateString, isActiveLociTask } from "../utils/lociAIContext";
@@ -1629,7 +1630,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                 if (!task) return null;
                 const phaseB = [];
                 // Q36.3: something at a set time is never the focus.
-                if (task.fixedKind === 'event') { /* no focus chip */ }
+                if (isEventTask(task)) { /* no focus chip */ }
                 else if (isOnToday(task, lociDayNow()) && !task.isNowFocus)
                   phaseB.push({ action: 'focus',       label: 'Set as Focus' });
                 else if (!isOnToday(task, lociDayNow()) && !task.isNowFocus)

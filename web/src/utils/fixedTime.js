@@ -1,4 +1,4 @@
-import { layoutRoute } from "./dayMapRoute";
+import { isEventTask, layoutRoute } from "./dayMapRoute";
 
 // Setting a fixed time (58c–e): the time picker's chips, a preview of the
 // route with the time fixed, and the "What moves" sentence that says so
@@ -82,5 +82,5 @@ export function describeFixMoves({ before, after }, task) {
 // of a red "now"; never while it runs.
 export const EVENT_ASK_AFTER = 5;
 export function eventAsks(row, now) {
-  return !!row?.fixed && row.task?.fixedKind === "event" && now >= row.end + EVENT_ASK_AFTER;
+  return !!row?.fixed && isEventTask(row.task) && now >= row.end + EVENT_ASK_AFTER;
 }

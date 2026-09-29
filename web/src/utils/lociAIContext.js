@@ -2,6 +2,7 @@ import { getValidCommittedTaskIds, REFLECTION_MOODS } from "./dailyCoachCheckins
 import { buildDeadlineProgressMirror } from "./deadlineProgressMirror";
 import { formatMinutesToTime, getFocusWindows, getLociDayStr } from "./focusWindows";
 import { isDeferred } from "./deferral";
+import { isEventTask } from "./dayMapRoute";
 
 // "tomorrow" is not a horizon: it is Today's tasks moved to tomorrow
 // (deferral.js), listed apart so the Coach neither loses them nor offers
@@ -78,7 +79,7 @@ export function buildLociTaskContext(allTasks = [], date = new Date(), windows =
     horizonTasks.slice(0, cap).forEach(task => {
       const focus = task.isNowFocus ? " [NOW FOCUS]" : "";
       // Q36.3: a call or meeting at a set time is never suggested as work.
-      const event = task.fixedKind === "event" ? ` [SET-TIME EVENT${task.dayMapFixedMinutes != null ? ` ${formatMinutesToTime(task.dayMapFixedMinutes)}` : ""}: not focus work, never suggest it]` : "";
+      const event = isEventTask(task) ? ` [SET-TIME EVENT ${formatMinutesToTime(task.dayMapFixedMinutes)}: not focus work, never suggest it]` : "";
       const estimate = task.timeEstimateMinutes ? ` (${task.timeEstimateMinutes}min)` : "";
       const category = ` {${task.category || "Personal"}}`;
       lines.push(`  - [${task.priority || "P3"}]${focus}${event} ${task.title}${estimate}${category}`);

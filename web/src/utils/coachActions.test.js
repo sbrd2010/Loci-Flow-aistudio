@@ -754,7 +754,7 @@ describe("applyCoachActions", () => {
 
   it("SET_NOW_FOCUS never pins something at a set time, and says why (Q36.3)", () => {
     const payload = {
-      tasks: [{ uuid: "1", title: "Call with the recruiter", fixedKind: "event", isNowFocus: false, isCompleted: false, isDeleted: false, isParked: false }],
+      tasks: [{ uuid: "1", title: "Call with the recruiter", fixedKind: "event", dayMapFixedMinutes: 750, isNowFocus: false, isCompleted: false, isDeleted: false, isParked: false }],
       config: {},
       contributions: [],
     };

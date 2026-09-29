@@ -45,7 +45,7 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
     if (r.kind !== "stop") {
       const title = r.kind === "break" ? r.name : `free ${formatSpan(r.end - r.start)}`;
       return (
-        <li key={`${r.kind}:${r.start}`} className={`tdm-stop is-${r.kind}`} aria-label={`${span}, ${r.kind === "break" ? r.name : "free"}`}>
+        <li key={`${r.kind}:${r.start}${r.added != null ? `:${r.added}` : ""}`} className={`tdm-stop is-${r.kind}`} aria-label={`${span}, ${r.kind === "break" ? r.name : "free"}`}>
           <span className="tdm-time">{formatClock24(r.start)}</span>
           <span className="tdm-title">{title}</span>
           <span className="tdm-dur">{r.kind === "break" ? formatSpan(r.end - r.start) : ""}</span>

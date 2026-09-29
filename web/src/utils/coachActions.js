@@ -25,6 +25,7 @@ import { isEveningGuardBlocked } from "./eveningGuard";
 import { isActiveLociTask } from "./lociAIContext";
 import { safeUUID } from "./uuid";
 import { normalizeForClassification } from "./coachContextMode";
+import { isEventTask } from "./dayMapRoute";
 
 const ACTION_TAG_RE = /\s*\[\[(SET_NOW_FOCUS|COMPLETE_TASK|ADD_TASK|PARK_TASK|START_FOCUS):\s*((?:[^\]]|\](?!\]))+?)\s*\]\]/gi;
 
@@ -575,7 +576,7 @@ export function applyCoachActions(payload, actions, { lociDateStr, localDateStr,
     }
     let resultTask = task;
     // Q36.3: something at a set time (a call) is never the focus.
-    if ((action.type === "SET_NOW_FOCUS" || action.type === "START_FOCUS") && task.fixedKind === "event") {
+    if ((action.type === "SET_NOW_FOCUS" || action.type === "START_FOCUS") && isEventTask(task)) {
       results.push({ ...action, matched: false, eventBlocked: true, task });
       continue;
     }
