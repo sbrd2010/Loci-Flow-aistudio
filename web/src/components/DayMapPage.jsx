@@ -432,6 +432,11 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   // open ends its length from now, not at its stale time (Codex review of
   // #428).
   const stopRows = rows.filter(r => r.kind === "stop");
+  // The day ends where the last focus window ends. Opened after it, the
+  // route starts at now and plan.dayEnd would be now too (Codex review of
+  // #428).
+  const windowEnds = mergeWindowSpans(windows).map(([, end]) => end);
+  const dayEnd = windowEnds.length ? Math.max(...windowEnds) : plan.dayEnd;
   const finish = stopRows.length ? Math.max(...stopRows.map(r => (r.late ? nowMins + (r.end - r.start) : r.end))) : null;
   // Every stop still on the route counts as left, fixed ones too (Codex
   // review of #428).
@@ -442,13 +447,17 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     routeEmpty: !scheduledTasks.length,
     openTasks: activeTodayTasks.length - tomorrowTasks.length,
     finish: finish ?? nowMins,
-    dayEnd: plan.dayEnd,
+    dayEnd,
     now: nowMins,
     left: { count: leftStops.length, minutes: leftStops.reduce((sum, t) => sum + getEstimate(t), 0) },
   });
   const windowStart = mergeWindowSpans(windows)[0]?.[0];
   const firstSession = done.find(r => r.kind === "session");
-  const bar = windowStart == null ? null : dayBar({ windowStart, firstSessionStart: firstSession?.start ?? null, now: nowMins, dayEnd: plan.dayEnd, finish });
+  const bar = windowStart == null ? null : dayBar({ windowStart, firstSessionStart: firstSession?.start ?? null, now: nowMins, dayEnd, finish });
+  // The bar's legend from the same finish as the line: a late fixed stop
+  // still open counts from now (Codex review of #428).
+  const barPlanned = finish == null ? plan.planned : Math.max(0, finish - Math.max(anchorMinutes, nowMins));
+  const barOverBy = finish == null ? 0 : Math.max(0, finish - dayEnd);
   const dayEndText = `DAY ENDS ${dayEndLabel}`
     + (free > 0 ? ` · ${formatSpan(free)} FREE` : "");
   const routeIndex = new Map(routeTasks.map((t, i) => [getTaskId(t), i]));
@@ -771,7 +780,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         >
           <div className="dm-layout">
             {bar && (
-              <DayBar bar={bar} now={nowMins} doneMinutes={doneMinutes} plannedMinutes={plan.planned} overBy={plan.overBy} />
+              <DayBar bar={bar} now={nowMins} doneMinutes={doneMinutes} plannedMinutes={barPlanned} overBy={barOverBy} />
             )}
             {/* 52d–e: From · Auto-fill · Clear route, as text, above the route. */}
             {!drawerViewport && controls}
