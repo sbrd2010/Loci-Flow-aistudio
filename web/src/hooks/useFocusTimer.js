@@ -3,11 +3,14 @@ import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotif
 import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete, focusBlockSeconds, focusExpiryReason } from "../utils/focusSession";
 import { getFocusWindows, getLociDayStr, lociDayEndsAt } from "../utils/focusWindows";
 import { safeUUID } from "../utils/uuid";
+import { clockParts, ringGeometry } from "../utils/focusClock";
 
 // Lifts the Focus timer state to the App level so it survives tab switches
 // (TodayTab unmounts when the user navigates to another tab) and can be
 // surfaced via a floating timer across pages.
-export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
+// `pipActionsRef` holds the mini window's Done and I'm stuck ({ onDone,
+// onStuck }), which belong to the app, not the timer.
+export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerSecondsLeft, setTimerSecondsLeft] = useState((config.pomodoroDurationMinutes || 25) * 60);
   const [timerMaxSeconds, setTimerMaxSeconds] = useState((config.pomodoroDurationMinutes || 25) * 60);
@@ -134,32 +137,34 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
     setPipOpen(false);
   };
 
-  const PIP_RING_CIRC = 2 * Math.PI * 52;
+  // The mini window (59b): Document Picture-in-Picture, 360 wide, in the
+  // app's own tokens (Dark when the app is Dark, Light otherwise; no cyan).
+  // A 132 ring with fitted digits, the title on one line, and Pause · +5 ·
+  // I'm stuck · Done (filled). Restart is gone; shuffle became I'm stuck.
+  const PIP_RING = 132;
 
   const updatePiPUI = (pipWin, seconds, maxSeconds, running, title) => {
     if (!pipWin) return;
     const doc = pipWin.document;
-    const timeEl = doc.getElementById("pt");
-    if (timeEl) {
-      const mins = Math.floor(seconds / 60);
-      const secs = String(seconds % 60).padStart(2, "0");
-      timeEl.textContent = `${mins}:${secs}`;
-      timeEl.className = running ? "" : "paused";
-    }
+    const { lead, seconds: ss, hours, lastMinute } = clockParts(seconds, maxSeconds);
+    const lEl = doc.getElementById("pt-lead");
+    if (lEl) lEl.textContent = `${lead}:`;
+    const sEl = doc.getElementById("pt-secs");
+    if (sEl) { sEl.textContent = ss; sEl.className = lastMinute ? "is-last" : ""; }
+    const tEl = doc.getElementById("pt");
+    if (tEl) tEl.style.fontSize = `${ringGeometry(PIP_RING, seconds, maxSeconds, hours).fontSize}px`;
     const labelEl = doc.getElementById("pl");
-    if (labelEl) {
-      labelEl.textContent = title;
-    }
+    if (labelEl) labelEl.textContent = title;
     const playBtn = doc.getElementById("pip-play");
-    if (playBtn) {
-      playBtn.textContent = running ? "⏸" : "▶";
+    if (playBtn) playBtn.textContent = running ? "Pause" : "Resume";
+    const g = ringGeometry(PIP_RING, seconds, maxSeconds, hours);
+    const arc = doc.getElementById("pr-fg");
+    if (arc) {
+      arc.setAttribute("stroke-dasharray", g.dash);
+      arc.setAttribute("stroke-dashoffset", String(g.offset));
+      arc.style.display = seconds > 0 ? "" : "none";
     }
-    const ratio = maxSeconds > 0 ? seconds / maxSeconds : 0;
-    const ringFg = doc.getElementById("pr-fg");
-    if (ringFg) {
-      ringFg.setAttribute("stroke-dashoffset", String(PIP_RING_CIRC * (1 - ratio)));
-    }
-    doc.body.style.setProperty("--ratio", String(ratio));
+    doc.body.className = running ? "" : "is-paused";
   };
 
   const handleOpenPiP = async () => {
@@ -172,145 +177,99 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
       return;
     }
     try {
-      const pipWin = await window.documentPictureInPicture.requestWindow({ width: 220, height: 210 });
+      const pipWin = await window.documentPictureInPicture.requestWindow({ width: 360, height: 320 });
       pipWinRef.current = pipWin;
       setPipOpen(true);
+      const doc = pipWin.document;
 
-      // Build PiP HTML content
-      const style = pipWin.document.createElement("style");
-      style.textContent = [
-        "* { box-sizing: border-box; margin: 0; padding: 0; }",
-        "body { background: #05090b; display: flex; flex-direction: column;",
-        "  align-items: center; justify-content: center; height: 100vh;",
-        "  font-family: system-ui, sans-serif; user-select: none; overflow: hidden; }",
-        // container-type:size lets #pt size itself in cqmin units relative to this box,
-        // so digits and ring shrink in lockstep at every size (not just at clamp endpoints).
-        "#ring-wrap { position: relative; width: clamp(90px, 55vmin, 130px);",
-        "  height: clamp(90px, 55vmin, 130px); container-type: size;",
-        "  display: flex; align-items: center; justify-content: center; }",
-        "#ring-wrap svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%;",
-        "  transform: rotate(-90deg); }",
-        "#pr-bg { fill: none; stroke: rgba(87,241,219,0.16); stroke-width: 5; }",
-        "#pr-fg { fill: none; stroke: #57f1db; stroke-width: 5; stroke-linecap: round;",
-        "  transition: stroke-dashoffset 0.3s linear; }",
-        // #pt needs position:relative so it paints above the absolutely-positioned
-        // ring svg (DOM order alone isn't enough once a sibling is positioned).
-        // line-height:1 avoids the browser default line-height clipping digits at tiny sizes.
-        "#pt { position: relative; font-family: 'Space Mono','Courier New',monospace;",
-        "  font-size: clamp(22px, 24.6cqmin, 32px); line-height: 1;",
-        "  font-weight: 700; color: #edf7f2; letter-spacing: -0.02em;",
-        "  font-variant-numeric: tabular-nums; transition: color 0.3s, text-shadow 0.3s;",
-        "  text-shadow: 0 0 clamp(3px, 8vmin, 16px) rgba(87,241,219,0.55); }",
-        "#pt.paused { color: rgba(237,247,242,0.35); text-shadow: none; }",
-        "#pl { font-size: 10px; color: rgba(196,223,210,0.65); margin-top: 5px;",
-        "  max-width: 200px; overflow: hidden; text-overflow: ellipsis;",
-        "  white-space: nowrap; text-align: center; }",
-        "#pip-btns { display: flex; gap: 8px; margin-top: 10px; }",
-        // Button size/font now scale continuously via clamp (coefficients chosen so the
-        // default 220x210 popup, vmin=210, still resolves to the previous fixed ceiling).
-        "#pip-play, #pip-reset, #pip-add5, #pip-shuffle { background: rgba(255,255,255,0.10);",
-        "  border: 1px solid rgba(255,255,255,0.18); color: #edf7f2;",
-        "  border-radius: 8px; font-size: clamp(11px, 8vmin, 16px);",
-        "  width: clamp(24px, 20vmin, 40px); height: clamp(20px, 16vmin, 32px);",
-        "  display: flex; align-items: center; justify-content: center;",
-        "  cursor: pointer; line-height: 1; flex-shrink: 0; }",
-        "#pip-add5 { font-size: 11px; font-weight: 700; }",
-        "#pip-play:active, #pip-reset:active, #pip-add5:active, #pip-shuffle:active { opacity: 0.6; }",
-        // Stage 2 — compact enter: window too small (width OR height) for a clean ring —
-        // hide it, scale up the digits, drop the label and secondary buttons immediately,
-        // and tie the background to time-remaining (cyan drains to near-black over the session).
-        "@media (max-width: 150px), (max-height: 140px) {",
-        "  body { background: linear-gradient(to right,",
-        "    #097a8c 0%, #097a8c calc(var(--ratio, 1) * 100%),",
-        "    #05090b calc(var(--ratio, 1) * 100%), #05090b 100%); }",
-        "  #ring-wrap { width: 100%; height: clamp(40px, 26vmin, 64px); }",
-        "  #ring-wrap svg { display: none; }",
-        "  #pt { font-size: clamp(32px, 22vmin, 56px); color: #f5fbfa;",
-        "    text-shadow: 0 0 4px rgba(0, 0, 0, 0.65); }",
-        "  #pl, #pip-add5, #pip-shuffle { display: none; }",
-        "  #pip-play, #pip-reset {",
-        "    background: rgba(5, 9, 11, 0.78); border: 1px solid rgba(255, 255, 255, 0.35); }",
-        "}",
-        // Stage 4 — extreme/height-constrained: only the timer digits should be visible.
-        // #ring-wrap itself must be re-sized here too, since stage 2's compact height
-        // (clamp(40px,26vmin,64px)) is too short to contain these larger digits without
-        // clipping them where they're centered inside #ring-wrap via flex.
-        "@media (max-height: 80px) {",
-        "  #pip-play, #pip-reset, #pip-btns { display: none; }",
-        "  #ring-wrap { width: 100%; height: 100vh; }",
-        "  #pt { font-size: clamp(40px, 60vmin, 90px); }",
-        "}",
-      ].join(" ");
-      pipWin.document.head.appendChild(style);
-
-      const ringWrap = pipWin.document.createElement("div");
-      ringWrap.id = "ring-wrap";
+      // The app's tokens as they are now: Dark or Light, whichever it shows.
+      const css = getComputedStyle(document.documentElement);
+      const token = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
+      const g = ringGeometry(PIP_RING, timerSecondsLeft, timerMaxSecondsRef.current);
+      const style = doc.createElement("style");
+      style.textContent = `
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+          --bg: ${token("--bg", "#F7F4EC")}; --surface: ${token("--surface", "#FFFDF8")};
+          --panel: ${token("--panel", "#EAEDE3")}; --line: ${token("--line", "#DCDFD5")};
+          --ink: ${token("--ink", "#0F1F16")}; --ink-2: ${token("--ink-2", "#3E5044")};
+          --edge: ${token("--edge", "#858B86")}; --accent: ${token("--accent", "#1F4D36")};
+          --accent-edge: ${token("--accent-edge", "#133524")}; --on-accent: ${token("--on-accent", "#FFFFFF")};
+          --control-edge: ${token("--control-edge", "#858B86")};
+        }
+        body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+          height: 100vh; padding: 16px; font-family: Manrope, system-ui, sans-serif; color: var(--ink);
+          background: var(--bg); user-select: none; overflow: hidden; }
+        #ring { position: relative; width: ${PIP_RING}px; height: ${PIP_RING}px; display: grid; place-items: center; flex: 0 0 auto; }
+        #ring svg { position: absolute; inset: 0; }
+        #pr-bg { fill: none; stroke: var(--panel); }
+        #pr-fg { fill: none; stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+        body.is-paused #pr-fg { stroke: var(--edge); }
+        #pt { position: relative; font-family: 'Space Mono', ui-monospace, monospace; font-weight: 700;
+          line-height: 1; font-variant-numeric: tabular-nums; color: var(--ink); }
+        #pt-secs { font-size: 0.58em; font-weight: 400; opacity: 0.72; }
+        #pt-secs.is-last { font-size: 1em; font-weight: 700; opacity: 1; }
+        #pl { max-width: 100%; overflow: hidden; font-size: 14px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+        #pip-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: 100%; }
+        #pip-btns button { min-height: 36px; padding: 0 6px; font: inherit; font-size: 12px; font-weight: 700;
+          color: var(--ink); background: var(--surface); border: 1px solid var(--control-edge); border-radius: 6px;
+          cursor: pointer; white-space: nowrap; }
+        #pip-btns #pip-done { color: var(--on-accent); background: var(--accent); border-color: var(--accent-edge); }
+        #pip-btns button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      `;
+      doc.head.appendChild(style);
 
       const svgNS = "http://www.w3.org/2000/svg";
-      const ringSvg = pipWin.document.createElementNS(svgNS, "svg");
-      ringSvg.setAttribute("viewBox", "0 0 120 120");
-
-      const ringBg = pipWin.document.createElementNS(svgNS, "circle");
-      ringBg.id = "pr-bg";
-      ringBg.setAttribute("cx", "60");
-      ringBg.setAttribute("cy", "60");
-      ringBg.setAttribute("r", "52");
-      ringSvg.appendChild(ringBg);
-
-      const ringFg = pipWin.document.createElementNS(svgNS, "circle");
-      ringFg.id = "pr-fg";
-      ringFg.setAttribute("cx", "60");
-      ringFg.setAttribute("cy", "60");
-      ringFg.setAttribute("r", "52");
-      ringFg.setAttribute("stroke-dasharray", String(PIP_RING_CIRC));
-      ringSvg.appendChild(ringFg);
-
-      ringWrap.appendChild(ringSvg);
-
-      const timeEl = pipWin.document.createElement("div");
+      const ring = doc.createElement("div");
+      ring.id = "ring";
+      const svg = doc.createElementNS(svgNS, "svg");
+      svg.setAttribute("width", String(PIP_RING));
+      svg.setAttribute("height", String(PIP_RING));
+      svg.setAttribute("viewBox", `0 0 ${PIP_RING} ${PIP_RING}`);
+      svg.setAttribute("aria-hidden", "true");
+      const mid = String(PIP_RING / 2);
+      for (const id of ["pr-bg", "pr-fg"]) {
+        const c = doc.createElementNS(svgNS, "circle");
+        c.id = id;
+        c.setAttribute("cx", mid);
+        c.setAttribute("cy", mid);
+        c.setAttribute("r", String(g.r));
+        c.setAttribute("stroke-width", String(g.stroke));
+        if (id === "pr-fg") c.setAttribute("transform", `rotate(-90 ${mid} ${mid})`);
+        svg.appendChild(c);
+      }
+      ring.appendChild(svg);
+      const timeEl = doc.createElement("div");
       timeEl.id = "pt";
-      ringWrap.appendChild(timeEl);
+      const leadEl = doc.createElement("span");
+      leadEl.id = "pt-lead";
+      const secsEl = doc.createElement("span");
+      secsEl.id = "pt-secs";
+      timeEl.append(leadEl, secsEl);
+      ring.appendChild(timeEl);
+      doc.body.appendChild(ring);
 
-      pipWin.document.body.appendChild(ringWrap);
-
-      const labelEl = pipWin.document.createElement("div");
+      const labelEl = doc.createElement("div");
       labelEl.id = "pl";
-      pipWin.document.body.appendChild(labelEl);
+      doc.body.appendChild(labelEl);
 
-      const btnsEl = pipWin.document.createElement("div");
+      const btnsEl = doc.createElement("div");
       btnsEl.id = "pip-btns";
-
-      const playBtn = pipWin.document.createElement("button");
-      playBtn.id = "pip-play";
-      playBtn.textContent = "▶";
-      playBtn.addEventListener("click", () => setIsTimerRunning(r => !r));
-
-      const resetBtn = pipWin.document.createElement("button");
-      resetBtn.id = "pip-reset";
-      resetBtn.textContent = "↺";
-      resetBtn.addEventListener("click", () => {
-        if (pauseRanOut()) return;
-        setIsTimerRunning(false);
-        setTimerSecondsLeft(timerMaxSecondsRef.current);
-      });
-
-      const add5Btn = pipWin.document.createElement("button");
-      add5Btn.id = "pip-add5";
-      add5Btn.textContent = "+5";
-      add5Btn.title = "Add 5 minutes";
-      add5Btn.addEventListener("click", () => addTimeToSession(5));
-
-      const shuffleBtn = pipWin.document.createElement("button");
-      shuffleBtn.id = "pip-shuffle";
-      shuffleBtn.textContent = "🔀";
-      shuffleBtn.title = "Shuffle track";
-      shuffleBtn.addEventListener("click", () => reshuffleTrackRef?.current?.());
-
-      btnsEl.appendChild(playBtn);
-      btnsEl.appendChild(resetBtn);
-      btnsEl.appendChild(add5Btn);
-      btnsEl.appendChild(shuffleBtn);
-      pipWin.document.body.appendChild(btnsEl);
+      const button = (id, text, onClick) => {
+        const b = doc.createElement("button");
+        b.id = id;
+        b.type = "button";
+        b.textContent = text;
+        b.addEventListener("click", onClick);
+        btnsEl.appendChild(b);
+      };
+      button("pip-play", "Pause", () => setIsTimerRunning(r => !r));
+      button("pip-add5", "+5", () => addTimeToSession(5));
+      // I'm stuck opens the main window on the focus page (its I'm stuck
+      // panel, 59d, arrives with 6c).
+      button("pip-stuck", "I’m stuck", () => { try { window.focus(); } catch (_) {} pipActionsRef?.current?.onStuck?.(); });
+      button("pip-done", "Done", () => pipActionsRef?.current?.onDone?.());
+      doc.body.appendChild(btnsEl);
 
       pipWin.addEventListener("pagehide", () => {
         pipWinRef.current = null;
