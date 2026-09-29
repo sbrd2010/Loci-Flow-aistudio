@@ -1271,6 +1271,11 @@ test("laptop: with the list hidden, the task and the Day map sit side by side on
   // 120px under the goal.
   expect(map.x).toBeGreaterThan(band.x + band.width);
   expect(kicker.y - (anchor.y + anchor.height)).toBeLessThanOrEqual(121);
+  // A tall screen too, where 10% of the height passes the cap.
+  await page.setViewportSize({ width: 1280, height: 1400 });
+  const [anchorTall, kickerTall] = await Promise.all([page.locator(".wall-anchor").boundingBox(), page.locator(".wall-kicker").boundingBox()]);
+  expect(kickerTall.y - (anchorTall.y + anchorTall.height)).toBeLessThanOrEqual(121);
+  await page.setViewportSize({ width: 1280, height: 800 });
 
   // The bottom bar: Show list and "+ Add a task" on the left, Rescue on the right.
   const foot = page.locator(".wall-foot");

@@ -672,8 +672,10 @@
   .today-wall:not(.is-open):not(.is-done):not(.is-empty) {
     min-height: calc(100dvh - 190px);
   }
+  /* The wall's 14px gap and the hero's 10px padding count too: the whole
+     space above the kicker stays at 120px or under (Codex review of #422). */
   .today-wall:not(.is-open):not(.is-done):not(.is-empty) .wall-hero {
-    margin-top: clamp(24px, 10dvh, 120px);
+    margin-top: clamp(0px, calc(10dvh - 24px), 96px);
   }
 
   .today-wall.is-open .wall-daymap {
