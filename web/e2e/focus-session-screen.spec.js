@@ -140,15 +140,70 @@ test("mobile reliability: Another 25m actually restarts the timer", async ({ pag
   await expect(overlay.getByRole("group", { name: "Block done" })).toHaveCount(0);
 });
 
-test("the 5-minute break counts down, then the next block starts on its own", async ({ page }) => {
+// Q38.1: the break counts down, then asks — "Break's over" — and the next
+// block is the last one's length, 5 minutes up or down.
+test("the 5-minute break counts down, then asks; Enter starts the next block", async ({ page }) => {
   const overlay = await openSession(page);
   await page.clock.runFor(BLOCK_OUT);
   await overlay.getByRole("button", { name: /^5-minute break, then continue/ }).click();
   await expect(overlay.getByRole("button", { name: "Skip the break" })).toBeVisible();
   await expect(overlay.locator(".focus-mode-time-digits")).toHaveText(/^[45]:\d{2}$/);
+  // The break is not part of the block (Codex review of #433).
+  await expect(overlay.locator(".fm-figures-of")).toHaveText("BREAK");
   await page.clock.runFor(5 * 60_000 + 2_000);
+  await expect(overlay.getByRole("heading", { name: "Break’s over" })).toBeVisible();
+  await expect(page).toHaveTitle("Break's over");
+  const start = overlay.getByRole("button", { name: /^Start block 2 · 25m/ });
+  await expect(start).toBeVisible();
+  await overlay.getByRole("button", { name: "5 minutes longer" }).click();
+  await expect(overlay.getByRole("button", { name: /^Start block 2 · 30m/ })).toBeVisible();
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press("Enter");
   await expect(overlay.getByLabel("Pause timer")).toBeVisible();
+  await expect(overlay.locator(".fm-figures-of")).toHaveText("OF 30:00");
   await expect(overlay.getByRole("group", { name: "Block done" })).toHaveCount(0);
+});
+
+test("Break's over, with no answer in 60 seconds, pauses on the next block", async ({ page }) => {
+  const overlay = await openSession(page);
+  await page.clock.runFor(BLOCK_OUT);
+  await overlay.getByRole("button", { name: /^5-minute break, then continue/ }).click();
+  await page.clock.runFor(5 * 60_000 + 2_000);
+  await expect(overlay.getByRole("heading", { name: "Break’s over" })).toBeVisible();
+  await page.clock.runFor(61_000);
+  await expect(overlay.getByRole("group", { name: "Block done" })).toHaveCount(0);
+  await expect(overlay.getByLabel("Resume timer")).toBeVisible();
+  await expect(overlay.locator(".focus-mode-time-digits")).toHaveText("25:00");
+});
+
+// Q38.2 / Q40.3: well over the estimate, a fact and one Re-estimate.
+test("well over the estimate: the fact, then Re-estimate above the time spent", async ({ page }) => {
+  // The estimate is set before the session starts.
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.clock.install({ time: new Date("2024-06-15T10:00:00") });
+  await page.goto("/");
+  await expect(page.getByTestId("demo-btn")).toBeVisible({ timeout: 25_000 });
+  await page.getByTestId("demo-btn").click();
+  await page.locator(".wall-title").click();
+  const sheet = page.getByTestId("task-detail");
+  await sheet.getByRole("button", { name: /^Estimate/ }).click();
+  await sheet.getByRole("radio", { name: "15m" }).click();
+  await sheet.getByRole("button", { name: "Close", exact: true }).click();
+  await page.locator(".today-wall .wall-primary").click();
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 5_000 });
+  await page.clock.runFor(BLOCK_OUT);
+  // 25m on a 15m task: half as much again, but only 10m past — no note.
+  await expect(overlay.locator(".fm-over-note")).toHaveCount(0);
+  await overlay.getByRole("button", { name: "Another 25m" }).click();
+  await page.clock.runFor(25 * 60_000 + 2_000);
+  await expect(overlay.locator(".fm-over-note")).toContainText("50m on this today, 35m past the 15m estimate.");
+  await overlay.getByRole("button", { name: "Re-estimate" }).click();
+  const row = overlay.getByRole("group", { name: "Re-estimate" });
+  await expect(row.getByRole("button")).toHaveText(["1h", "1h30m", "2h", "3h"]);
+  await row.getByRole("button", { name: "1h", exact: true }).click();
+  await expect(overlay.locator(".fm-over-note")).toHaveCount(0);
+  await expect(overlay.locator(".fm-stage-kicker")).toContainText("1H TASK");
 });
 
 test("with no answer in 60 seconds, block end pauses on a fresh block", async ({ page }) => {
