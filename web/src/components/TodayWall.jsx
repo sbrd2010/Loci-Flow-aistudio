@@ -56,15 +56,19 @@ function StartButton({ task, blockMinutes, startChoice, onChooseStart, onStartFo
   const options = startLengthOptions(blockMinutes, task.timeEstimateMinutes);
   const chosen = chosenStartOption(startChoice, blockMinutes, task.timeEstimateMinutes);
   const resuming = !!timerLabel;
+  // A session that starts (Start, Space) closes the chooser: a length only
+  // applies to a new start, never to a running session (Codex review of #420).
+  useEffect(() => { if (resuming) setOpen(false); }, [resuming]);
+  const menuOpen = open && !resuming;
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!menuOpen) return undefined;
     const first = wrapRef.current?.querySelector('.wall-start-option[aria-checked="true"]');
     first?.focus();
     const onDown = (e) => { if (!wrapRef.current?.contains(e.target)) setOpen(false); };
     document.addEventListener("pointerdown", onDown);
     return () => document.removeEventListener("pointerdown", onDown);
-  }, [open]);
+  }, [menuOpen]);
 
   const close = () => { setOpen(false); moreRef.current?.focus(); };
   const pick = (o) => { if (o.choice !== startChoice) onChooseStart?.(o.choice); close(); };
@@ -101,13 +105,13 @@ function StartButton({ task, blockMinutes, startChoice, onChooseStart, onStartFo
           className="wall-start-more"
           aria-label="How long"
           aria-haspopup="menu"
-          aria-expanded={open}
+          aria-expanded={menuOpen}
           onClick={() => setOpen(o => !o)}
         >
           <IconChevronDown size={20} />
         </button>
       )}
-      {open && (
+      {menuOpen && (
         <div className="wall-start-menu" role="menu" aria-label="How long" onKeyDown={onMenuKey}>
           {options.map((o, i) => (
             <button

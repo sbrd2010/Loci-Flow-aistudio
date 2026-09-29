@@ -1706,6 +1706,43 @@ test("laptop: the list is one tab stop, and Space on a row reorders it", async (
   await expect(rows.nth(0).locator(".task-title-text")).toHaveText(titles[1]);
 });
 
+// Codex review of #420: the peek's "Up next" is the list's first row, in
+// the list's own order — after a reorder too.
+test("phone: after a reorder, Up next names the list's new first task", async ({ page }) => {
+  await enterDemoWithPeek(page);
+  const list = page.getByTestId("today-tasks-list");
+  const rows = list.locator("[data-testid='task-row']:not(.completed)");
+  const titles = (await rows.locator(".task-title-text").allInnerTexts()).map(t => t.trim());
+  const announced = (re) => page.waitForFunction((src) =>
+    [...document.querySelectorAll("[id^='DndLiveRegion']")].some(el => new RegExp(src).test(el.textContent)), re.source);
+  await rows.first().focus();
+  await page.keyboard.press("Space");
+  await announced(/Picked up|was moved over/);
+  await page.keyboard.press("ArrowDown");
+  await announced(/Draggable item (\S+) was moved over droppable area (?!\1\b)\S+/);
+  await page.keyboard.press("Space");
+  await expect(rows.nth(0).locator(".task-title-text")).toHaveText(titles[1]);
+
+  await page.locator(".today-list-hide").click();
+  await expect(page.locator(".wall-peek-label")).toHaveText(`Up next · ${titles[1]}`);
+});
+
+// Codex review of #420: a chooser left open when the session starts closes
+// with it; a running session offers no length.
+test("mobile reliability: Start with the chooser open closes it; back from focus, no menu", async ({ page }) => {
+  await enterDemo(page);
+  await page.getByRole("button", { name: "How long" }).click();
+  await expect(page.getByRole("menu", { name: "How long" })).toBeVisible();
+  await page.locator(".wall-primary").click();
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 10_000 });
+  // Leave with Esc: a click outside would close the menu on its own.
+  await page.keyboard.press("Escape");
+  await expect(overlay).toHaveCount(0);
+  await expect(page.locator(".wall-primary")).toContainText("Resume focus");
+  await expect(page.getByRole("menu", { name: "How long" })).toHaveCount(0);
+});
+
 // Codex review of #406: E opens a task to edit its title; a task opened
 // after that, with Enter, opens as usual.
 test("laptop: E edits the title of that task only; the next one opens normally", async ({ page }) => {

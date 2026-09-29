@@ -1621,7 +1621,7 @@ export default function TodayTab({
         onOpenDayMap={onOpenDayMap}
         onOpenTask={() => pinnedFocusTask && setDetailUuid(pinnedFocusTask.uuid)}
         remainingCount={wallRemainingCount}
-        nextTitle={todayTasksAll.find(t => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid)?.title || null}
+        nextTitle={remainingTasks[0]?.title || null}
         onStepDone={(stepId) => pinnedFocusTask && handleSubStepToggle(pinnedFocusTask, stepId)}
         timerLabel={wallLiveTimerLabel}
         onStartFocus={() => pinnedFocusTask && startWallFocus(pinnedFocusTask)}
