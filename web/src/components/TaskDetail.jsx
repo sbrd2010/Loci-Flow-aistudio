@@ -49,7 +49,7 @@ export default function TaskDetail({
   onClose, onPatch, onToggleMVD, onSetSteps,
   onMakeOneThing, onDone, onTomorrow, onPark, onDelete, editTitleSignal = 0,
   isNow = false, onLetGo,
-  onShowAll, kicker = null, onMoveToToday, onTogglePin, onRemoveFromRoute,
+  onShowAll, kicker = null, onMoveToToday, onTogglePin, onRemoveFromRoute, onFixTime, onUnfix, fixedAt = null,
 }) {
   const [picker, setPicker] = useState(null);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -512,6 +512,14 @@ export default function TaskDetail({
 
       {isRoute ? (
         <div className="detail-foot">
+          {/* 58: a stop's time can be fixed from its sheet; a fixed one can
+              change its time or flow with the route again. */}
+          {onFixTime && (
+            <button type="button" className="detail-one" onClick={onFixTime}>
+              {fixedAt ? `Fixed at ${fixedAt} · Change time` : "Fix time"}
+            </button>
+          )}
+          {onUnfix && <button type="button" className="detail-one" onClick={onUnfix}>Unfix</button>}
           <button type="button" className="detail-one" onClick={onRemoveFromRoute}>Remove from route</button>
           <div className="detail-actions">
             <button type="button" className="detail-action" onClick={onPark}>Park</button>

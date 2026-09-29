@@ -29,7 +29,7 @@ test("laptop: the controls sit above the route as text, and Clear route has Undo
   const route = await page.locator(".dm-route-wrap").boundingBox();
   const box = await controls.boundingBox();
   expect(box.y + box.height).toBeLessThanOrEqual(route.y + 1);
-  await expect(controls.getByRole("button")).toHaveText(["Auto-fill", "Clear route"]);
+  await expect(controls.getByRole("button")).toHaveText(["Auto-fill", "Fixed time", "Clear route"]);
 
   await page.getByRole("button", { name: "Auto-fill" }).click();
   const before = await page.locator(".dm-stop .dm-main").evaluateAll(els => els.map(e => e.getAttribute("aria-label")));

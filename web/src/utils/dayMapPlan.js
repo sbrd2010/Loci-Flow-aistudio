@@ -55,21 +55,17 @@ const stopEnd = (t) => t.routeEndMinutes ?? Number(t.dayMapStartMinutes) + Numbe
 export function planDay(route, startMinutes, dayLeft) {
   const dayEnd = startMinutes + dayLeft;
   const routeEnd = route.length ? Math.max(...route.map(stopEnd)) : startMinutes;
-  const overIndex = route.findIndex(t => Number(t.dayMapStartMinutes) >= dayEnd);
-  const fitting = overIndex === -1 ? route : route.slice(0, overIndex);
-  const lastFitting = fitting[fitting.length - 1];
-  const lastFittingEnd = lastFitting ? stopEnd(lastFitting) : startMinutes;
+  // 56a: a stop that doesn't finish by the day end doesn't fit — Grove,
+  // 17:10–17:55, sits under a 17:30 line.
+  const overIndex = route.findIndex(t => stopEnd(t) > dayEnd);
   return {
     dayEnd,
     planned: routeEnd - startMinutes,
     dayLeft,
     overBy: Math.max(0, routeEnd - dayEnd),
-    // Index of the first stop that starts at or after the day end (-1: none).
+    // Index of the first stop that ends past the day end (-1: none).
     overIndex,
     wontFit: overIndex === -1 ? [] : route.slice(overIndex),
-    // The last stop that starts in time but runs past the line ("The 14:35
-    // CV runs 1h25m past"), or null.
-    runsPast: lastFitting && lastFittingEnd > dayEnd ? { task: lastFitting, by: lastFittingEnd - dayEnd } : null,
   };
 }
 

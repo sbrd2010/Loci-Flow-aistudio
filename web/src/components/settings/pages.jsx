@@ -95,6 +95,11 @@ export function FocusWindowsPage({ config, saveConfigPatch, onBack, backLabel })
     });
   };
   const change = (i, field, value) => save(rows.map((w, j) => j === i ? { ...w, [field]: value } : w));
+  // The time between two windows is a break on the Day map (57b answer 2),
+  // "Break" unless named here.
+  const [breakName, setBreakName, flushBreakName] = useAutosave(config.breakName || "", (v) => {
+    saveConfigPatch({ breakName: v.trim() || null });
+  });
 
   return (
     <SubPage
@@ -134,6 +139,14 @@ export function FocusWindowsPage({ config, saveConfigPatch, onBack, backLabel })
           <IconPlus size={18} /> Add a window
         </button>
       </div>
+
+      {rows.length > 1 && (
+        <label className="set-field">
+          <span className="set-label">Break name</span>
+          <input className="set-input" value={breakName} onChange={e => setBreakName(e.target.value)} onBlur={flushBreakName} placeholder="Break" aria-describedby="set-break-note" />
+          <span className="set-note" id="set-break-note">The time between your windows, as the Day map shows it.</span>
+        </label>
+      )}
 
       <dl className="set-facts">
         <div><dt>Total focus time</dt><dd>{formatSpan(summary.totalMinutes)}</dd></div>

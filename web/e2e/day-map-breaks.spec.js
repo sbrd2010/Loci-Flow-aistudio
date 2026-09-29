@@ -25,6 +25,9 @@ async function openDayMapWithLunch(page, viewport = { width: 412, height: 892 })
   await page.getByLabel("Focus window 2 start time").fill("14:15");
   await page.getByLabel("Focus window 2 end time").fill("17:30");
   await expect(page.locator(".set-facts")).toContainText("17:30");
+  // The gap is a break; this one is named.
+  await page.getByRole("textbox", { name: "Break name" }).fill("Lunch");
+  await page.getByRole("textbox", { name: "Break name" }).blur();
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
   await page.getByRole("button", { name: "Day map →" }).click();
   await page.getByRole("button", { name: "Auto-fill" }).click();
@@ -43,7 +46,7 @@ test("a task that runs into the break stops for it and continues after; the next
   await sheet.getByRole("button", { name: "Close", exact: true }).click();
 
   const route = page.getByRole("list", { name: "Today's route" });
-  await expect(route.locator(".dm-break")).toHaveAttribute("aria-label", "13:35 to 14:15, Break");
+  await expect(route.locator(".dm-break")).toHaveAttribute("aria-label", "13:35 to 14:15, Lunch");
   await expect(route.locator(".dm-break .dm-dur")).toHaveText("40m");
   await expect(route.locator(".dm-stop").first().locator(".dm-dur")).toHaveText("1h50m");
   const rest = route.locator(".dm-stop.is-continued");

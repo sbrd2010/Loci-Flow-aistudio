@@ -26,10 +26,13 @@ import {
   normalizePriority, reflowRoute, removeScheduleFields, roundToQuarter, routeIsContiguous, useDayRoute,
 } from "../hooks/useDayRoute";
 import { isFixedStop } from "../utils/dayMapRoute";
+import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
+import { safeUUID } from "../utils/uuid";
 import DayClockBar from "./DayClockBar";
 import LinkifyText from "./LinkifyText";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import TaskDetail from "./TaskDetail";
+import FixTimeSheet from "./FixTimeSheet";
 import useTaskActions from "../hooks/useTaskActions";
 import { frontsFromConfig, frontsOnOffer } from "../utils/fronts";
 import { IconChevronLeft, IconLock, IconPlus, IconX } from "./ui/icons";
@@ -47,7 +50,7 @@ import "../styles/dayMap.css";
 // `row` is the stop as the route engine laid it out (utils/dayMapRoute): its
 // start and end, and whether it is fixed, late, pulled forward, or stops for
 // a break. A fixed stop keeps its time, so it is not dragged.
-function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus }) {
+function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus, was = null, flash = false }) {
   const taskId = getTaskId(task);
   const {
     attributes, listeners, setActivatorNodeRef,
@@ -73,7 +76,7 @@ function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFo
     <li
       ref={setNodeRef}
       style={style}
-      className={`dm-stop${isNow ? " is-now" : ""}${row.late ? " is-late" : ""}${isOver ? " is-over" : ""}${isDragging ? " is-dragging" : ""}${isOpen ? " is-open" : ""}`}
+      className={`dm-stop${isNow ? " is-now" : ""}${row.late ? " is-late" : ""}${isOver ? " is-over" : ""}${isDragging ? " is-dragging" : ""}${isOpen ? " is-open" : ""}${flash ? " is-flash" : ""}`}
       data-task-uuid={taskId}
     >
       <div
@@ -100,6 +103,8 @@ function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFo
           <LinkifyText text={task.title} />
           {row.fixed && <span className="dm-lock"><IconLock size={14} /></span>}
           {row.pulledForward && <span className="dm-pulled">PULLED FORWARD</span>}
+          {/* 58e: a stop a fixed time moved says where it was, until you leave. */}
+          {was != null && <span className="dm-pulled">WAS {formatClock24(was)}</span>}
           {isGoal && <span className="task-tag is-goal">GOAL</span>}
         </span>
         <span className="dm-dur">{formatSpan(end - start)}</span>
@@ -203,6 +208,16 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     actions.handleUndo();
   };
   const undo = routeUndo;
+  // Fixed time (58c–e): the sheet, open on step 1 or on a stop; the stops it
+  // moved and where they were (shown until you leave); the fixed row's flash.
+  const [fixing, setFixing] = useState(null); // { task? }
+  const [wasStarts, setWasStarts] = useState(null); // Map id → earlier start
+  const [flashId, setFlashId] = useState(null);
+  useEffect(() => {
+    if (!flashId) return undefined;
+    const t = setTimeout(() => setFlashId(null), 600);
+    return () => clearTimeout(t);
+  }, [flashId]);
   // Phone (52d): Unscheduled is a bar that opens this sheet.
   const [poolOpen, setPoolOpen] = useState(false);
   const [dragTitle, setDragTitle] = useState(null);
@@ -316,8 +331,60 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const route = undo.kind === "clear"
       ? [...onRoute.filter(t => put.has(getTaskId(t))).sort(byOrder), ...onRoute.filter(t => !put.has(getTaskId(t))).sort(byOrder)]
       : [...onRoute].sort(byOrder);
-    savePayload({ ...payloadRef.current, tasks: applyReflow(restored, reflowRoute(route, anchorMinutes, todayStr, breaks)), timestamp: Date.now() });
+    // A stop made for a fixed time ("Something else") goes again.
+    const kept = undo.created ? restored.filter(t => getTaskId(t) !== undo.created) : restored;
+    savePayload({ ...payloadRef.current, tasks: applyReflow(kept, reflowRoute(route.filter(t => getTaskId(t) !== undo.created), anchorMinutes, todayStr, breaks)), timestamp: Date.now() });
     setUndo(null);
+    setWasStarts(null);
+  };
+
+  // Fixes `target` at `at` (58c–e). A task not on the route joins it; for
+  // something new, a Today task is made first. The route then flows around
+  // it, the stops it moved say where they were, and Undo puts it all back.
+  const fixTime = (target, at, isNew) => {
+    const p = payloadRef.current;
+    let all = latestTasks();
+    let task = target;
+    if (isNew) {
+      task = {
+        id: Date.now(), userId: p?.config?.userId || "", uuid: safeUUID(), title: target.title,
+        horizonLevel: "today", priority: "P3", category: "Personal", frontId: null,
+        timeEstimateMinutes: target.minutes, deadlineTimestamp: null, reminderAt: null,
+        isCompleted: false, isParked: false, isNowFocus: false,
+        orderIndex: all.filter(t => t.horizonLevel === "today" && !t.isDeleted).length,
+        dateCompletedString: null, isDeleted: false, lastUpdated: Date.now(), subSteps: [],
+      };
+      all = [...all, task];
+      writeActivityEvents?.(eventPatch(uid, buildTaskMutationEvent("task_created", task, { windows })));
+    }
+    const id = getTaskId(task);
+    const before = [...scheduledTasks, ...(scheduledTasks.some(t => getTaskId(t) === id) ? [] : [latestTasks().find(t => getTaskId(t) === id) || task])];
+    const fixed = { ...task, dayMapFixedMinutes: at };
+    const order = scheduledTasks.some(t => getTaskId(t) === id)
+      ? scheduledTasks.map(t => (getTaskId(t) === id ? fixed : t))
+      : [...scheduledTasks, fixed];
+    const reflowed = reflowRoute(order, anchorMinutes, todayStr, breaks);
+    const earlier = new Map(routeTasks.map(t => [getTaskId(t), Number(t.dayMapStartMinutes)]));
+    const was = new Map(reflowed
+      .filter(t => getTaskId(t) !== id && earlier.has(getTaskId(t)) && earlier.get(getTaskId(t)) !== t.dayMapStartMinutes)
+      .map(t => [getTaskId(t), earlier.get(getTaskId(t))]));
+    savePayload({ ...p, tasks: applyReflow(all, reflowed), config: { ...(p?.config || {}), dayMapDate: todayStr, dayMapAnchorMinutes: anchorMinutes, lastUpdated: Date.now() }, timestamp: Date.now() });
+    setFixing(null);
+    setWasStarts(was);
+    setFlashId(id);
+    setUndo({
+      message: `${task.title} fixed at ${formatClock24(at)} · ${was.size} ${was.size === 1 ? "stop" : "stops"} moved`,
+      before, created: isNew ? id : null, at: Date.now(),
+    });
+  };
+
+  // Unfix: the stop flows with the route again, with Undo.
+  const unfix = (taskId) => {
+    const task = scheduledTasks.find(t => getTaskId(t) === taskId);
+    if (!task) return;
+    const { dayMapFixedMinutes, ...flowing } = task; // eslint-disable-line no-unused-vars
+    applyAndSave(scheduledTasks.map(t => (getTaskId(t) === taskId ? flowing : t)), anchorMinutes);
+    setUndo({ message: `No fixed time: ${task.title}`, before: [...scheduledTasks], at: Date.now() });
   };
 
   const startFocus = (taskId) => {
@@ -349,10 +416,14 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       applyAndSave(next, anchorMinutes);
       return;
     }
-    const oldIndex = scheduledTasks.findIndex(t => getTaskId(t) === active.id);
-    const newIndex = scheduledTasks.findIndex(t => getTaskId(t) === over.id);
+    // The drop is read on the route as it shows (a stop pulled forward sits
+    // ahead of its place in the order), and that order is what is kept
+    // (Codex review of #421).
+    const shown = routeTasks.map(t => scheduledTasks.find(s => getTaskId(s) === getTaskId(t))).filter(Boolean);
+    const oldIndex = shown.findIndex(t => getTaskId(t) === active.id);
+    const newIndex = shown.findIndex(t => getTaskId(t) === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
-    applyAndSave(arrayMove([...scheduledTasks], oldIndex, newIndex), anchorMinutes);
+    applyAndSave(arrayMove(shown, oldIndex, newIndex), anchorMinutes);
   };
 
   const n = plan.wontFit.length;
@@ -369,8 +440,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const free = lastFitting ? plan.dayEnd - Math.max(lastFitting.routeEndMinutes, plan.dayEnd - plan.dayLeft) : 0;
   const wontFitMinutes = plan.wontFit.reduce((sum, t) => sum + getEstimate(t), 0);
   const dayEndText = `DAY ENDS ${dayEndLabel}`
-    + (free > 0 ? ` · ${formatSpan(free)} FREE` : "")
-    + (plan.runsPast ? ` · ${formatClock24(plan.runsPast.task.dayMapStartMinutes)} RUNS ${formatSpan(plan.runsPast.by)} PAST` : "");
+    + (free > 0 ? ` · ${formatSpan(free)} FREE` : "");
   const routeIndex = new Map(routeTasks.map((t, i) => [getTaskId(t), i]));
   // NOW is the first stop, unless it is a fixed time already passed (that
   // row says "now" in red instead).
@@ -429,6 +499,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         isOpen={detailId === id}
         onOpen={() => { if (!draggingRef.current) setDetailId(id); }}
         onStartFocus={() => startFocus(id)}
+        was={wasStarts?.get(id) ?? null}
+        flash={flashId === id}
       />
     );
   };
@@ -636,6 +708,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
             <div className="dm-controls">
               <StartControl anchorMinutes={anchorMinutes} onChangeAnchor={setAnchor} windows={windows} />
               <button type="button" className="dm-text-btn" onClick={autoFill} disabled={!unscheduledTasks.length}>Auto-fill</button>
+              <button type="button" className="dm-text-btn" onClick={() => setFixing({})}>Fixed time</button>
               <button type="button" className="dm-text-btn" onClick={clearRoute} disabled={!scheduledTasks.length}>Clear route</button>
             </div>
 
@@ -731,6 +804,22 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         </>
       )}
 
+      {fixing && (
+        <FixTimeSheet
+          routeTasks={routeTasks}
+          unscheduledTasks={unscheduledTasks}
+          stops={scheduledTasks}
+          task={fixing.task}
+          from={roundToQuarter(anchorMinutes)}
+          breaks={breaks}
+          nowMins={nowMins}
+          durationOf={getEstimate}
+          getTaskId={getTaskId}
+          onFix={fixTime}
+          onClose={() => setFixing(null)}
+        />
+      )}
+
       <UndoAnnouncer message={undoText} />
       {detailTask && !drawerViewport && <div className="task-detail-scrim" onClick={closeDetail} aria-hidden="true" />}
       {detailTask && (
@@ -753,6 +842,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
             onSetSteps={(steps, meta) => { if (meta?.removed) setRouteUndo(null); actions.handleSetSteps(detailTask, steps, meta); }}
             onDone={() => leaving(act(actions.handleMarkDone))}
             onRemoveFromRoute={() => leaving(removeFromRoute, detailId)}
+            fixedAt={isFixedStop(detailTask) ? formatClock24(detailTask.dayMapFixedMinutes) : null}
+            onFixTime={() => { const t = detailTask; setDetailId(null); setFixing({ task: t }); }}
+            onUnfix={isFixedStop(detailTask) ? () => unfix(detailId) : undefined}
             onPark={() => leaving(act(actions.handlePark))}
             onDelete={() => leaving(act(actions.handleDelete))}
           />
