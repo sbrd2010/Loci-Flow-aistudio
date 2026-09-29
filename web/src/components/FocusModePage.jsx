@@ -423,7 +423,9 @@ export default function FocusModePage({
             </p>
             <label className="fm-end-field">
               <span>Where did you stop? <span className="fm-end-optional">Optional</span></span>
-              <input autoFocus value={stopNote} onChange={e => setStopNote(e.target.value)} placeholder="It becomes the next step" />
+              {/* The next step is stored as concreteStep, which the database caps
+                  at 300 characters (Codex review of #432). */}
+              <input autoFocus maxLength={300} value={stopNote} onChange={e => setStopNote(e.target.value)} placeholder="It becomes the next step" />
             </label>
             <div className="fm-end-actions">
               <button type="button" className="focus-mode-done-btn" onClick={() => endSession(false)}>

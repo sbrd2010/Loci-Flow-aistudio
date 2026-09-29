@@ -601,7 +601,9 @@ export default function TodayTab({
     const task = activeTask;
     handleStopHere();
     if (!task) return;
-    const step = note.trim();
+    // At most 300 characters: the next step is stored as concreteStep, which
+    // the database caps there; longer, the whole write would be refused.
+    const step = note.trim().slice(0, 300);
     if (!step && !tomorrow) return;
     const now = Date.now();
     let next = tasks;
