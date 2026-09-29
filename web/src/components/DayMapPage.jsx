@@ -23,7 +23,7 @@ import { mergeWindowSpans } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
 import {
   applyReflow, currentDayMinutes, getEstimate, getTaskId,
-  normalizePriority, reflowRoute, removeScheduleFields, roundToQuarter, routeIsContiguous, useDayRoute,
+  normalizePriority, reflowRoute, removeScheduleFields, routeIsContiguous, useDayRoute,
 } from "../hooks/useDayRoute";
 import { isFixedStop } from "../utils/dayMapRoute";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
@@ -522,7 +522,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     // A fixed stop keeps its own time: the head is the first stop that flows.
     const flowing = scheduledTasks.filter(t => !isFixedStop(t) && t.dayMapStartMinutes != null);
     const first = flowing.length ? Math.min(...flowing.map(t => Number(t.dayMapStartMinutes))) : null;
-    const headGap = !fromSet && first != null && first > roundToQuarter(start);
+    const headGap = !fromSet && first != null && first > start;
     if (!pending && !headGap && routeIsContiguous(scheduledTasks, breaks)) return;
     pendingReflowRef.current = null;
     const prefer = pending?.prefer ?? null;
@@ -822,7 +822,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           unscheduledTasks={unscheduledTasks}
           stops={scheduledTasks}
           task={fixing.task}
-          from={roundToQuarter(anchorMinutes)}
+          from={anchorMinutes}
           breaks={breaks}
           nowMins={nowMins}
           dayStart={mergeWindowSpans(windows)[0]?.[0] ?? 0}
