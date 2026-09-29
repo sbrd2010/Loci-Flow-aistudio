@@ -154,6 +154,8 @@ test("the minimum day: Change picks, Confirm makes it one line with MIN on the r
   for (const title of picked) {
     await expect(list.locator("[data-testid='task-row']", { hasText: title }).getByLabel("Minimum day")).toBeVisible();
   }
+});
+
 // Codex review of #428: with every task done, the page's empty state still
 // shows "Done so far today", where the day's sessions matter most.
 test("with every task done, Done so far today stays on the page", async ({ page }) => {
