@@ -123,3 +123,35 @@ test("a task marked done shows in the folded Done so far today, and the line say
   await expect(fold.locator(".dm-done-row")).toContainText(title);
   await expect(fold.locator(".dm-done-row")).toContainText("MARKED DONE");
 });
+
+// 56a–b, 57b answer 6, Q33.1: Change picks up to three; Confirm makes them
+// the minimum day, one line in the right column, MIN on the Day map's rows
+// and on Today's list.
+test("the minimum day: Change picks, Confirm makes it one line with MIN on the rows", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  // Today's two list rows (the one thing is on the wall, not in the list).
+  const picked = (await page.getByTestId("today-tasks-list").locator("[data-testid='task-row'] .task-title-text").allInnerTexts()).map(t => t.trim());
+  expect(picked.length).toBe(2);
+  await openDayMapByKey(page);
+  await page.getByRole("button", { name: "Auto-fill" }).click();
+  const min = page.getByRole("region", { name: "Minimum day" });
+  await expect(min).toContainText("If today goes wrong, do these");
+
+  await min.getByRole("button", { name: "Change" }).click();
+  await expect(min.getByRole("checkbox")).toHaveCount(3);
+  for (const title of picked) await min.getByRole("checkbox", { name: title }).check();
+  await min.getByRole("button", { name: "Confirm" }).click();
+  // Listed in today's order on the route.
+  const onRoute = (await page.locator(".dm-stop .dm-title").allInnerTexts()).map(t => t.replace(/\s*MIN$/, "").trim());
+  picked.sort((a, b) => onRoute.findIndex(t => t.startsWith(a)) - onRoute.findIndex(t => t.startsWith(b)));
+
+  await expect(min.locator(".dm-min-line")).toContainText(`Minimum day · ${picked[0]}, ${picked[1]}`);
+  await expect(page.locator(".dm-stop .task-tag.is-min:not(.is-suggested)")).toHaveCount(2);
+  await expect(page.locator(".dm-stop .task-tag.is-min.is-suggested")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Back to Today" }).click();
+  const list = page.getByTestId("today-tasks-list");
+  for (const title of picked) {
+    await expect(list.locator("[data-testid='task-row']", { hasText: title }).getByLabel("Minimum day")).toBeVisible();
+  }
+});

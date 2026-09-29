@@ -56,7 +56,7 @@ export const ROADMAP_HORIZONS = [
 // MUST / GOAL tags. Tapping the row opens the task (50a–b); the list moves
 // keyboard focus between rows (one tab stop, ↑/↓). On a laptop a pin shows at
 // the row's right on hover or focus: "Make the one thing · P" (50d).
-export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, onSwipeDone, onSwipeTomorrow, onPutOnFront }) {
+export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, isMin = false, onSwipeDone, onSwipeTomorrow, onPutOnFront }) {
   const { title, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
 
   const hasActions = !isCompleted && !!onOpen;
@@ -216,11 +216,12 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
       <div className="task-middle">
         <div className="task-row-top">
           <span className="task-title-text"><LinkifyText text={title} /></span>
-          {!isCompleted && (isNowFocus || isMVD || isGoal) && (
+          {!isCompleted && (isNowFocus || isMVD || isGoal || isMin) && (
             <span className="task-row-tags">
               {isNowFocus && <span className="task-tag is-now" aria-label="Today's one thing">NOW</span>}
               {isMVD && <span className="task-tag is-must" aria-label="Must-do">MUST</span>}
               {isGoal && <span className="task-tag is-goal" aria-label="Goal task">GOAL</span>}
+              {isMin && <span className="task-tag is-min" aria-label="Minimum day">MIN</span>}
             </span>
           )}
         </div>
