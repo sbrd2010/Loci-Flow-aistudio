@@ -4,6 +4,8 @@
 // them. Confirmed, they carry MIN on Today's list and the Day map. It resets
 // daily: stored as config.minimumDay = { date, ids } for one Loci day only.
 
+import { isEventTask } from "./dayMapRoute";
+
 export const MINIMUM_DAY_SIZE = 3;
 
 const idOf = (t) => String(t.uuid || t.id);
@@ -17,7 +19,10 @@ export function confirmedMinimumDay(config, todayStr) {
 // The suggestion: `ordered` is today's open tasks in the order they come
 // (the route, then the rest of the list); `isGoal` says whether a task is on
 // the goal front.
+// Something at a set time (Q36.3) is never suggested as work (Codex review
+// of #431); it can still be picked by hand.
 export function suggestMinimumDay(ordered, isGoal) {
+  ordered = ordered.filter(t => !isEventTask(t));
   const must = ordered.filter(t => t.isMVD);
   const goal = ordered.filter(t => !t.isMVD && isGoal(t));
   return [...must, ...goal].slice(0, MINIMUM_DAY_SIZE).map(idOf);

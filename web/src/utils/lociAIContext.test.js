@@ -37,6 +37,13 @@ describe("lociAIContext", () => {
     expect(context).toContain("[SET-TIME EVENT 12:30: not focus work, never suggest it] Call with the recruiter");
   });
 
+  it("marks it in the Today snapshot the shortened Coach modes read too", () => {
+    const snap = buildLociTodaySnapshotContext([
+      { uuid: "c1", title: "Call with the recruiter", horizonLevel: "today", priority: "P3", fixedKind: "event", dayMapFixedMinutes: 750 },
+    ], { dayStr: "2026-09-29" });
+    expect(snap).toMatch(/\[open · SET-TIME EVENT 12:30, not focus work, never suggest it\] \[P3\] Call with the recruiter/);
+  });
+
   it("tags each task line with its category when present, so the coach can filter by category", () => {
     const context = buildLociTaskContext([
       { title: "Update CV", horizonLevel: "today", priority: "P1", category: "Career" },
