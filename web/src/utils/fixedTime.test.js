@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { breaksFromWindows } from "./dayMapRoute";
-import { defaultFixTime, describeFixMoves, previewFix, timeChips } from "./fixedTime";
+import { defaultFixTime, describeFixMoves, previewFix, timeChips, toLociMinutes } from "./fixedTime";
 
 const hm = (s) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
 const clock = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
@@ -15,6 +15,16 @@ describe("timeChips (58d)", () => {
   it("pages by three hours, earlier and later", () => {
     expect(timeChips(hm("14:30"), -1).map(clock)[0]).toBe("10:00");
     expect(timeChips(hm("14:30"), 1).map(clock)[0]).toBe("16:00");
+  });
+});
+
+describe("toLociMinutes", () => {
+  // A day from 07:00 with a window to 02:00.
+  it("keeps a time after midnight on the day's scale", () => {
+    expect(toLociMinutes(hm("00:30"), hm("07:00"))).toBe(1440 + 30);
+    expect(toLociMinutes(1440 + 30 + 5, hm("07:00"))).toBe(1440 + 35);
+    expect(toLociMinutes(hm("14:30"), hm("07:00"))).toBe(hm("14:30"));
+    expect(toLociMinutes(-5, hm("07:00"))).toBe(hm("23:55"));
   });
 });
 

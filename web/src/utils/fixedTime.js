@@ -14,6 +14,14 @@ export function timeChips(at, page = 0) {
   return Array.from({ length: 6 }, (_, i) => first + i * 30);
 }
 
+// A clock time (0–1439, however reached: a chip, ↑↓, typing) on the Loci
+// day's scale, which the route uses: past midnight in a window that runs on,
+// 00:30 is 1470 (Codex review of #425). `dayStart` is where the day begins.
+export function toLociMinutes(m, dayStart) {
+  const wall = ((Math.round(m) % 1440) + 1440) % 1440;
+  return wall < dayStart ? wall + 1440 : wall;
+}
+
 // The time a stop would be fixed at by default: where it sits now, or for
 // something new, the next 5 minutes from now.
 export function defaultFixTime(projectedStart, now) {

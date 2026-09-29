@@ -355,7 +355,6 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         dateCompletedString: null, isDeleted: false, lastUpdated: Date.now(), subSteps: [],
       };
       all = [...all, task];
-      writeActivityEvents?.(eventPatch(uid, buildTaskMutationEvent("task_created", task, { windows })));
     }
     const id = getTaskId(task);
     const before = [...scheduledTasks, ...(scheduledTasks.some(t => getTaskId(t) === id) ? [] : [latestTasks().find(t => getTaskId(t) === id) || task])];
@@ -368,7 +367,15 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const was = new Map(reflowed
       .filter(t => getTaskId(t) !== id && earlier.has(getTaskId(t)) && earlier.get(getTaskId(t)) !== t.dayMapStartMinutes)
       .map(t => [getTaskId(t), earlier.get(getTaskId(t))]));
-    savePayload({ ...p, tasks: applyReflow(all, reflowed), config: { ...(p?.config || {}), dayMapDate: todayStr, dayMapAnchorMinutes: anchorMinutes, lastUpdated: Date.now() }, timestamp: Date.now() });
+    const next = { ...p, tasks: applyReflow(all, reflowed), config: { ...(p?.config || {}), dayMapDate: todayStr, dayMapAnchorMinutes: anchorMinutes, lastUpdated: Date.now() }, timestamp: Date.now() };
+    // A new task is logged once its write has landed, as Add task does
+    // (Codex review of #425).
+    const written = typeof savePayloadAsync === "function"
+      ? savePayloadAsync(next)
+      : (savePayload(next), Promise.resolve());
+    if (isNew) {
+      written.then(() => writeActivityEvents?.(eventPatch(uid, buildTaskMutationEvent("task_created", task, { windows })))).catch(() => {});
+    }
     setFixing(null);
     setWasStarts(was);
     setFlashId(id);
@@ -691,6 +698,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
             </>
           )}
           <button type="button" className="dm-btn-filled" onClick={onAddTask}>Add a Today task</button>
+          {/* A call or a meeting can be the first thing on an empty day. */}
+          <button type="button" className="dm-text-btn" onClick={() => setFixing({})}>Fixed time</button>
         </section>
       ) : (
         <DndContext
@@ -813,6 +822,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           from={roundToQuarter(anchorMinutes)}
           breaks={breaks}
           nowMins={nowMins}
+          dayStart={mergeWindowSpans(windows)[0]?.[0] ?? 0}
           durationOf={getEstimate}
           getTaskId={getTaskId}
           onFix={fixTime}

@@ -96,3 +96,33 @@ test("the fixed-time dialog keeps Tab inside and Escape closes it", async ({ pag
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
 });
+
+// Codex review of #425: an empty day can take a fixed time too — a call can
+// be the first thing on it.
+test("an empty day offers Fixed time, and Something else puts the first stop on it", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.clock.setFixedTime(new Date("2024-06-15T11:35:00"));
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  // Empty Today: the demo's tasks go to Plan.
+  await page.locator("body").click({ position: { x: 5, y: 300 } });
+  await page.keyboard.press("l");
+  const list = page.getByTestId("today-tasks-list");
+  const rows = list.locator("[data-testid='task-row']");
+  while (await rows.count()) {
+    await rows.first().click();
+    await page.getByTestId("task-detail").getByRole("button", { name: "Delete" }).click();
+  }
+  await page.locator(".wall-title").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: "Delete" }).click();
+  await page.locator("body").click({ position: { x: 5, y: 300 } });
+  await page.keyboard.press("m");
+  await expect(page.getByRole("heading", { name: "Nothing on Today yet" })).toBeVisible();
+  await page.getByRole("button", { name: "Fixed time" }).click();
+  await page.getByRole("dialog", { name: "Fix a time" }).getByRole("button", { name: /Something else/ }).click();
+  await page.getByRole("textbox", { name: "What" }).fill("Call with the recruiter");
+  await page.getByRole("radio", { name: "12:30" }).click();
+  await page.getByRole("button", { name: "Fix at 12:30" }).click();
+  await expect(route(page).locator(".dm-stop", { hasText: "Call with the recruiter" }).locator(".dm-time")).toHaveText("12:30");
+});
