@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { minutesFromSeconds } from "../utils/focusLedger";
-import { getTimerState, extendMinutesForSession } from "../utils/focusSession";
+import { getTimerState } from "../utils/focusSession";
 import { BINAURAL_TRACK_ID } from "../utils/binauralBeat";
 import { SOUND_CATEGORIES, getCategoryKeyForTrack, getTrackTitle } from "../utils/soundLibrary";
 import { taskSteps } from "../utils/taskSteps";
@@ -16,6 +16,14 @@ const FIVE_MINUTES_SECONDS = 5 * 60;
 
 // "Restart with a new length" (59g): a fresh block in the same session.
 const RESTART_LENGTHS = [5, 25, 50];
+
+// Block end (59i): the break it offers first, and how long it waits for an
+// answer before it pauses — it never runs on silently.
+const BREAK_SECONDS = 5 * 60;
+const BLOCK_END_WAIT_MS = 60 * 1000;
+
+// "1:05" — the session so far, in hours and minutes.
+const hoursMinutes = (m) => `${Math.floor(m / 60)}:${String(Math.round(m) % 60).padStart(2, "0")}`;
 
 // "3H", "1H05M", "25M" — the kicker's figures.
 function spanLabel(minutes) {
@@ -41,7 +49,9 @@ function ringSize(width) {
 // on the right holds the steps, sound and a place to park a thought. Paused
 // (59g) it offers Resume, Mark done, End session and a fresh block of a new
 // length. End session (59h) asks first and can keep where you stopped as the
-// next step. At 0:00 the K4 hold stays until block end (59i) replaces it.
+// next step. At 0:00, block end (59i): a 5-minute break then the next block
+// (Enter), another block, +5, Mark done or End session; no answer in 60 s and
+// it pauses.
 export default function FocusModePage({
   task,
   secondsLeft,
@@ -52,13 +62,14 @@ export default function FocusModePage({
   onExit,
   // Another screen (Rescue) is open on top: its keys are its own.
   keysOff = false,
-  // The hold's two actions. Neither is the ordinary overlay exit: "Keep going"
-  // has to restart the timer AND clear the completion state, and "Stop here"
-  // has to end the session, not merely hide the screen it is on.
+  // 59i: a new block of `minutes` in the same session, running at once (it
+  // also clears the completion state).
   onKeepGoing,
+  // 59i: no answer at block end — pause on a fresh block of `blockMinutes`.
+  onBlockTimeout,
+  blockMinutes = 25,
   // +5 min on a running block (45b), not the hold's extension.
   onAddTime,
-  onStopHere,
   // 59g: a fresh block of `minutes` in the same session.
   onRestart,
   // 59h: { note, tomorrow } — the session ends; the note becomes the next
@@ -99,6 +110,15 @@ export default function FocusModePage({
   // 59h: the End session question, and its optional "Where did you stop?".
   const [ending, setEnding] = useState(false);
   const [stopNote, setStopNote] = useState("");
+  // 59i: the break after a block — when it ends (ms), and a tick to count it.
+  const [breakUntil, setBreakUntil] = useState(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const onKeepGoingRef = useRef(onKeepGoing);
+  onKeepGoingRef.current = onKeepGoing;
+  const onBlockTimeoutRef = useRef(onBlockTimeout);
+  onBlockTimeoutRef.current = onBlockTimeout;
+  const blockMinutesRef = useRef(blockMinutes);
+  blockMinutesRef.current = blockMinutes;
 
   const [width, setWidth] = useState(() => (typeof window !== "undefined" ? window.innerWidth : 1280));
   useEffect(() => {
@@ -132,7 +152,6 @@ export default function FocusModePage({
   const startedLabel = Number(startedAt) > 0
     ? new Date(Number(startedAt)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
     : null;
-  const holdExtendMinutes = extendMinutesForSession(maxSeconds);
   const blockLabel = `${Math.floor(maxSeconds / 60)}:${String(maxSeconds % 60).padStart(2, "0")}`;
   const endsLabel = isRunning && !isComplete
     ? new Date(Date.now() + secondsLeft * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
@@ -146,13 +165,35 @@ export default function FocusModePage({
   const estimate = Number(task.timeEstimateMinutes) || 0;
 
   const openEnd = () => { setStopNote(""); setEnding(true); };
+  const startBreak = () => { setBreakUntil(Date.now() + BREAK_SECONDS * 1000); setNowMs(Date.now()); };
+  const continueNow = () => { setBreakUntil(null); onKeepGoing?.(blockMinutes); };
+
+  // The break counts down, then the next block starts on its own.
+  useEffect(() => {
+    if (breakUntil == null) return undefined;
+    const id = setInterval(() => {
+      const t = Date.now();
+      setNowMs(t);
+      if (t >= breakUntil) { setBreakUntil(null); onKeepGoingRef.current?.(blockMinutesRef.current); }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [breakUntil]);
+  // Leaving block end any other way (Mark done, End, Another) ends the break.
+  useEffect(() => { if (!isComplete) setBreakUntil(null); }, [isComplete]);
+  // No answer in 60 s (not while the question or a break is open): pause.
+  useEffect(() => {
+    if (!isComplete || breakUntil != null || ending) return undefined;
+    const id = setTimeout(() => onBlockTimeoutRef.current?.(), BLOCK_END_WAIT_MS);
+    return () => clearTimeout(id);
+  }, [isComplete, breakUntil, ending]);
+  const breakLeft = breakUntil == null ? 0 : Math.max(0, Math.ceil((breakUntil - nowMs) / 1000));
   const endSession = (tomorrow) => { setEnding(false); onEndSession?.({ note: stopNote, tomorrow }); };
 
   // Keys (45l, 59a–h): Space pauses, D marks done, E asks to end, P opens the
   // mini window, Esc leaves. Not while typing, not while Rescue is open, and
   // Esc closes the sounds drawer or the question first. A held key fires once.
   const keysRef = useRef({});
-  keysRef.current = { isComplete, showSoundsDrawer, ending, onPlayPause, onDone, onExit, onOpenPiP, pipOpen, keysOff, openEnd, onEndSession };
+  keysRef.current = { isComplete, showSoundsDrawer, ending, onPlayPause, onDone, onExit, onOpenPiP, pipOpen, keysOff, openEnd, onEndSession, breaking: breakUntil != null, startBreak };
   useEffect(() => {
     const onKey = (e) => {
       const k = keysRef.current;
@@ -166,6 +207,8 @@ export default function FocusModePage({
         if (!k.isComplete) { e.preventDefault(); k.onExit?.(); }
         return;
       }
+      // 59i: at block end, Enter takes the break.
+      if (k.isComplete && e.key === "Enter" && !k.breaking && !(t && t.tagName === "BUTTON")) { e.preventDefault(); k.startBreak(); return; }
       if (k.isComplete || k.showSoundsDrawer) return;
       if (e.key === " " && !(t && (t.tagName === "BUTTON" || t.tagName === "A"))) { e.preventDefault(); k.onPlayPause?.(); }
       else if (e.key === "d" || e.key === "D") { e.preventDefault(); k.onDone?.(); }
@@ -288,14 +331,25 @@ export default function FocusModePage({
         </section>
 
         <div className="focus-mode-timer-block">
-          <FocusClock
-            mode={clockMode}
-            size={ringSize(width)}
-            secondsLeft={secondsLeft}
-            maxSeconds={maxSeconds}
-            paused={!isRunning}
-            valueText={`${mins} minutes ${secs} seconds left of ${blockLabel}`}
-          />
+          {breakUntil != null ? (
+            // 59i: the break, counted on the same clock.
+            <FocusClock
+              mode={clockMode}
+              size={ringSize(width)}
+              secondsLeft={breakLeft}
+              maxSeconds={BREAK_SECONDS}
+              valueText={`Break: ${Math.floor(breakLeft / 60)} minutes ${breakLeft % 60} seconds left`}
+            />
+          ) : (
+            <FocusClock
+              mode={clockMode}
+              size={ringSize(width)}
+              secondsLeft={secondsLeft}
+              maxSeconds={maxSeconds}
+              paused={!isRunning}
+              valueText={`${mins} minutes ${secs} seconds left of ${blockLabel}`}
+            />
+          )}
           {/* Q37.1: "OF 25:00", then "STARTED · ENDS" under it. */}
           <p className="focus-mode-figures">
             <span className="fm-figures-of">OF {blockLabel}</span>
@@ -308,16 +362,37 @@ export default function FocusModePage({
           </p>
         </div>
 
-        {/* K4's hold, at 00:00: two choices and nothing else. The timer is
-            frozen and the minutes are already in the ledger. */}
+        {/* 59i: block end. The block's minutes are already in the ledger;
+            the timer waits for an answer, and pauses after 60 s. */}
         {isComplete ? (
-          <div className="focus-mode-hold-actions" aria-label="Session complete">
-            <button type="button" className="focus-mode-hold-keep" onClick={() => onKeepGoing?.(holdExtendMinutes)}>
-              Keep going · +{holdExtendMinutes}m
-            </button>
-            <button type="button" className="focus-mode-hold-stop" onClick={onStopHere || onExit}>
-              Stop here{loggedMinutes >= 1 ? ` — log ${loggedMinutes}m` : ""}
-            </button>
+          <div className="focus-mode-hold-actions fm-block-end" role="group" aria-label="Block done">
+            <p className="fm-block-end-kicker">BLOCK {Math.max(1, blockNumber)} DONE · SESSION {hoursMinutes(loggedMinutes)}</p>
+            {breakUntil != null ? (
+              <>
+                <p className="fm-block-end-note">A break. Block {Math.max(1, blockNumber) + 1} starts when it ends.</p>
+                <button type="button" className="focus-mode-hold-keep" onClick={continueNow}>Skip the break</button>
+                <div className="focus-mode-controls">
+                  <button type="button" className="focus-mode-ctrl-btn" onClick={openEnd}>End session</button>
+                </div>
+              </>
+            ) : (
+              <>
+                {estimate > 0 && loggedMinutes >= estimate * 1.5 && loggedMinutes - estimate >= 15 && (
+                  <p className="fm-block-end-note">
+                    This session is {spanLabel(loggedMinutes - estimate).toLowerCase()} past the task’s {spanLabel(estimate).toLowerCase()} estimate. A short break may help.
+                  </p>
+                )}
+                <button type="button" className="focus-mode-hold-keep" onClick={startBreak}>
+                  5-minute break, then continue <kbd className="focus-mode-kbd">Enter</kbd>
+                </button>
+                <div className="focus-mode-controls">
+                  <button type="button" className="focus-mode-ctrl-btn" onClick={() => onKeepGoing?.(blockMinutes)}>Another {blockMinutes}m</button>
+                  <button type="button" className="focus-mode-ctrl-btn" onClick={() => onKeepGoing?.(5)}>+5 min</button>
+                  <button type="button" className="focus-mode-ctrl-btn" onClick={onDone}>Mark done</button>
+                  {onEndSession && <button type="button" className="focus-mode-ctrl-btn" onClick={openEnd}>End session</button>}
+                </div>
+              </>
+            )}
           </div>
         ) : paused ? (
           // 59g: Resume first; a fresh block of a new length only from here.

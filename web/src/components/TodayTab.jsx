@@ -2032,7 +2032,10 @@ export default function TodayTab({
           keysOff={rescueActive}
           onKeepGoing={extendTimer}
           onAddTime={addTimeToSession}
-          onStopHere={handleStopHere}
+          // 59i: block end — another block of the usual length, or, with no
+          // answer in 60 s, a pause on one.
+          blockMinutes={focusBlockSeconds(config) / 60}
+          onBlockTimeout={() => { if (changeFocusDuration(focusBlockSeconds(config) / 60)) dismissSessionComplete(); }}
           startedAt={focusStartedAt}
           elapsedSeconds={focusElapsedSeconds}
           onAddBrainDump={handleFocusBrainDump}
