@@ -178,6 +178,15 @@ export function TimerPage({ config, saveConfigPatch, onBack, backLabel }) {
       {/* 59a / 58a–b: how the focus session shows the time left. */}
       <h3 className="set-kicker">Clock</h3>
       <RadioList label="Clock" options={CLOCK_MODES} value={config.focusClock === "numbers" ? "numbers" : "ring"} onChange={(v) => saveConfigPatch({ focusClock: v })} />
+      {/* Q40.1: one soft chime when a block ends and when a break ends. */}
+      <div className="set-list">
+        <SwitchRow
+          title="Chimes"
+          sub="A soft chime when a block or a break ends. Sound Off doesn’t silence it."
+          checked={config.focusChimes !== false}
+          onChange={() => saveConfigPatch({ focusChimes: config.focusChimes === false })}
+        />
+      </div>
     </SubPage>
   );
 }

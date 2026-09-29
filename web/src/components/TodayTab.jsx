@@ -10,6 +10,7 @@ import { minutesForTaskOn } from "../utils/focusLedger";
 import { buildMomentum } from "../utils/momentum";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import FocusModePage from "./FocusModePage";
+import { chimesOn } from "../utils/chime";
 import RescueMode from "./RescueMode";
 import { safeUUID } from "../utils/uuid";
 import { endSessionTasks } from "../utils/focusEnd";
@@ -87,7 +88,7 @@ export default function TodayTab({
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
-  pipOpen, handleOpenPiP, isAddTaskDialogOpen, startFocusSession, endFocusSession, focusSessionId, focusSessionTaskUuid, changeFocusDuration,
+  pipOpen, handleOpenPiP, setPipNotice, isAddTaskDialogOpen, startFocusSession, endFocusSession, focusSessionId, focusSessionTaskUuid, changeFocusDuration,
   extendTimer, addTimeToSession, dismissSessionComplete, focusStartedAt, focusElapsedSeconds, focusBlockNumber,
   selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
   isSyncingFromCache = false,
@@ -592,6 +593,7 @@ export default function TodayTab({
         "focus_abandoned", ended.task, ended.focusSessionId, { ...ended, windows, now: Date.now() }
       )));
     }
+    return ended;
   };
 
 
@@ -599,8 +601,9 @@ export default function TodayTab({
   // stop?" becomes the task's next step, ahead of the steps still open; "End
   // and move to tomorrow" moves it there, with Today's Undo.
   const handleEndSession = ({ note = "", tomorrow = false } = {}) => {
-    const task = activeTask;
-    handleStopHere();
+    // The session's own task, not the pin now (Codex review of #434).
+    const ended = handleStopHere();
+    const task = ended?.task ? tasks.find(t => t.uuid === ended.task.uuid) || null : activeTask;
     if (!task) return;
     const now = Date.now();
     const result = endSessionTasks(tasks, task, { note, tomorrow, tomorrowStr: nextDateStr(todayStr), now });
@@ -2024,7 +2027,11 @@ export default function TodayTab({
           // 59i: block end — another block of the usual length, or, with no
           // answer in 60 s, a pause on one.
           blockMinutes={focusBlockSeconds(config) / 60}
-          onBlockTimeout={() => { if (changeFocusDuration(focusBlockSeconds(config) / 60)) dismissSessionComplete(); }}
+          onBlockTimeout={(m) => { if (changeFocusDuration(m || focusBlockSeconds(config) / 60)) dismissSessionComplete(); }}
+          chimes={chimesOn(config)}
+          onBreakOver={(on) => setPipNotice?.(on ? "Break’s over" : null)}
+          dayKey={todayStr}
+          onReestimate={(m) => savePayload({ ...payload, tasks: tasks.map(t => t.uuid === activeTask.uuid ? { ...t, timeEstimateMinutes: m, lastUpdated: Date.now() } : t) })}
           startedAt={focusStartedAt}
           elapsedSeconds={focusElapsedSeconds}
           onAddBrainDump={handleFocusBrainDump}

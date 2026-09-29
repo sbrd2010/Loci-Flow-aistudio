@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotifications";
+import { playChime, chimesOn } from "../utils/chime";
 import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete, focusBlockSeconds, focusExpiryReason } from "../utils/focusSession";
 import { getFocusWindows, getLociDayStr, lociDayEndsAt } from "../utils/focusWindows";
 import { safeUUID } from "../utils/uuid";
@@ -21,6 +22,8 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   
   // Document Picture-in-Picture (PiP) / Pop-out timer states and refs
   const [pipOpen, setPipOpen] = useState(false);
+  // Q38.1d: "Break's over" in the mini window, in place of the title.
+  const [pipNotice, setPipNotice] = useState(null);
   const pipWinRef = useRef(null);
   const timerMaxSecondsRef = useRef(timerMaxSeconds);
   useEffect(() => {
@@ -276,7 +279,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
         setPipOpen(false);
       });
 
-      updatePiPUI(pipWin, timerSecondsLeft, timerMaxSecondsRef.current, isTimerRunning, activeTask?.title || "Deep Focus");
+      updatePiPUI(pipWin, timerSecondsLeft, timerMaxSecondsRef.current, isTimerRunning, pipNotice || activeTask?.title || "Deep Focus");
     } catch (e) {
       console.error("Failed to open PiP:", e);
     }
@@ -285,9 +288,9 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   // Sync timer state changes to PiP window in real-time
   useEffect(() => {
     if (pipWinRef.current && pipOpen) {
-      updatePiPUI(pipWinRef.current, timerSecondsLeft, timerMaxSeconds, isTimerRunning, activeTask?.title || "Deep Focus");
+      updatePiPUI(pipWinRef.current, timerSecondsLeft, timerMaxSeconds, isTimerRunning, pipNotice || activeTask?.title || "Deep Focus");
     }
-  }, [timerSecondsLeft, timerMaxSeconds, isTimerRunning, activeTask?.title, pipOpen]);
+  }, [timerSecondsLeft, timerMaxSeconds, isTimerRunning, activeTask?.title, pipOpen, pipNotice]);
 
   // PiP safety close rules: close when session ends or no active task exists
   useEffect(() => {
@@ -432,6 +435,8 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
       // A bell ringing while they are on Coach, Plan or another app still
       // has to reach them, and that is what this call is for.
       if (!isFocusMode) notifyFocusComplete(activeTask?.title);
+      // Q40.1: the block-end chime, wherever you are (Settings → Chimes).
+      if (chimesOn(config)) playChime();
     }
   }, [timerSecondsLeft, isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -766,6 +771,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     addTimeToSession,
     pipOpen,
     handleOpenPiP,
+    setPipNotice,
     focusSessionId, startFocusSession, endFocusSession,
     // When the open session began — screen 3 prints it as "STARTED 09:41".
     // Read from the ref each render rather than held in state: it is set once
