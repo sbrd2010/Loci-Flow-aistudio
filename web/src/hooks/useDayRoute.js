@@ -104,11 +104,12 @@ function byRouteOrder(a, b) {
   return (a.dayMapStartMinutes ?? 0) - (b.dayMapStartMinutes ?? 0);
 }
 
-// Undo of Clear route: the stops come back first, in their old order, then
-// anything added since; and the whole route is timed again, so no two stops
-// share an order or a start (as the Day map page's Undo; Codex review of
-// #427).
-export function restoreClearedRoute(allTasks, before, { todayStr, anchorMinutes, breaks = [] }) {
+// Undo of a route change (Clear route, a one thing moved to NOW): the stops
+// come back first, in their old order, then anything added since; and the
+// whole route is timed again, so no two stops share an order or a start and
+// none is left with a stale time (as the Day map page's Undo; Codex reviews
+// of #427).
+export function restoreRoute(allTasks, before, { todayStr, anchorMinutes, breaks = [] }) {
   const restored = restoreSchedule(allTasks, before);
   const put = new Set(before.map(getTaskId));
   const onRoute = restored.filter(t => isOnRoute(t, todayStr));
