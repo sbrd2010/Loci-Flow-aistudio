@@ -1171,9 +1171,14 @@ export default function App() {
     : null;
   const finishClose = ({ choices, firstThing, note, summary }) => {
     const before = payloadRef.current;
-    savePayload(applyClose(before, { day: planDay, choices, firstThing, note, summary }));
-    setCloseUndo({ before, at: Date.now() });
+    const next = applyClose(before, { day: planDay, choices, firstThing, note, summary });
+    // Drops are meant: named, or three at once trip the save's drop guard
+    // and nothing is written (useSync, isTaskCountDropSuspicious).
+    const dropped = (next.tasks || []).filter(t => t.isDeleted && !(before.tasks || []).find(b => b.uuid === t.uuid)?.isDeleted).map(t => t.uuid);
     setCloseDayOpen(false);
+    savePayloadAsync(next, { expectedRemovals: dropped })
+      .then(() => setCloseUndo({ before, at: Date.now() }))
+      .catch(() => setCloseDayOpen(true));
   };
   const closedFirst = dayClosed ? (payload?.tasks || []).find(t => String(t.uuid) === String(payload?.config?.dayClose?.firstThing) && !t.isDeleted && !t.isCompleted) : null;
   const dayClosedState = dayClosed ? {
