@@ -1198,7 +1198,7 @@ export default function App() {
       .then(() => setCloseUndo({ before, after: next, day, at: Date.now() }))
       // A failed write leaves the close applied locally: put it back first,
       // then reopen the sheet with what was chosen.
-      .catch(() => { savePayload(undoClose(payloadRef.current, before, day, next)); setCloseDraft({ choices, firstThing, note }); setCloseDayOpen(true); });
+      .catch(() => { savePayload(undoClose(payloadRef.current, before, day, next)); setCloseDraft({ day, choices, firstThing, note }); setCloseDayOpen(true); });
   };
   const closedFirst = dayClosed ? (payload?.tasks || []).find(t => String(t.uuid) === String(payload?.config?.dayClose?.firstThing) && !t.isDeleted && !t.isCompleted) : null;
   const dayClosedState = dayClosed ? {
@@ -1627,7 +1627,7 @@ export default function App() {
           day={planDay}
           uid={activityUid}
           windows={planWindows}
-          draft={closeDraft}
+          draft={closeDraft?.day === planDay ? closeDraft : null}
           onClose={finishClose}
           onCancel={() => { setCloseDayOpen(false); setCloseDraft(null); }}
         />

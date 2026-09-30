@@ -71,6 +71,19 @@ describe("Close the day (55d–e, Q47)", () => {
     expect(by.r.horizonLevel).toBe("week");
   });
 
+  it("Undo doesn't bring back the old one thing when another was made the one thing since", () => {
+    const before = { tasks, config: {} };
+    const after = applyClose(before, { day: DAY }, 9);
+    // "b" was the one thing; since the close, "wk" was made the one thing.
+    const now = { ...after, tasks: after.tasks.map(x => (x.uuid === "wk" ? { ...x, isNowFocus: true, lastUpdated: 12 } : x)) };
+    const back = undoClose(now, before, DAY, after);
+    expect(back.tasks.filter(x => x.isNowFocus).map(x => x.uuid)).toEqual(["wk"]);
+    expect(back.tasks.find(x => x.uuid === "b").deferredUntil).toBeUndefined();
+    // Nothing pinned since: the old pin comes back, with or without `after`.
+    expect(undoClose(after, before, DAY, after).tasks.filter(x => x.isNowFocus).map(x => x.uuid)).toEqual(["b"]);
+    expect(undoClose(now, before, DAY).tasks.filter(x => x.isNowFocus).map(x => x.uuid)).toEqual(["wk"]);
+  });
+
   it("Reopen: open again, what was moved stays moved (47.3)", () => {
     const closed = applyClose({ tasks, config: {} }, { day: DAY }, 1);
     const reopened = reopenDay(closed.config, 2);
