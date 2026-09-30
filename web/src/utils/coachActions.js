@@ -440,7 +440,7 @@ export function buildSetNowFocusTasks(tasks, taskUuid, now = Date.now()) {
 // MindBoxTab's Bad Day Reset per-task patch.
 export function buildParkTaskTasks(tasks, taskUuid, now = Date.now()) {
   return tasks.map(t =>
-    t.uuid === taskUuid ? { ...t, isParked: true, isNowFocus: false, lastUpdated: now } : t
+    t.uuid === taskUuid ? { ...t, isParked: true, parkedAt: now, isNowFocus: false, lastUpdated: now } : t
   );
 }
 

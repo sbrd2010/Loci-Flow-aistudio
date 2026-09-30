@@ -28,7 +28,6 @@ import {
 import { buildRescueHandoffContext, shouldClearRescueHandoff } from "../utils/rescueHandoff";
 import { safeCopyToClipboard } from "../utils/clipboard";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
-import LinkifyText from "./LinkifyText";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
@@ -1432,15 +1431,9 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
   const [briefingResult, setBriefingResult] = useState("");
   const coachSectionOpenKey = (section) => `loci_coach_${section}_open_${auth?.currentUser?.uid || "signed-out"}`;
   const [briefOpen, setBriefOpen] = useState(() => localStorage.getItem(coachSectionOpenKey("brief")) === "1");
-  const [parkedOpen, setParkedOpen] = useState(() => localStorage.getItem(coachSectionOpenKey("parked")) === "1");
   const toggleBriefOpen = () => setBriefOpen(o => {
     const next = !o;
     localStorage.setItem(coachSectionOpenKey("brief"), next ? "1" : "0");
-    return next;
-  });
-  const toggleParkedOpen = () => setParkedOpen(o => {
-    const next = !o;
-    localStorage.setItem(coachSectionOpenKey("parked"), next ? "1" : "0");
     return next;
   });
 
@@ -1531,7 +1524,6 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
   };
 
   // -- Render ----------------------------------------------------------------
-  const parkedTasks = tasks.filter(t => t.isParked && !t.isDeleted && !t.isCompleted);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -1837,62 +1829,6 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
         </>
         )}
       </section>
-
-      {/* 3 -- Parked Archive */}
-      {parkedTasks.length > 0 && (
-        <section className="card">
-          <h2 style={{ margin: 0 }}>
-            <button type="button" onClick={toggleParkedOpen} aria-expanded={parkedOpen} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: parkedOpen ? "4px" : 0 }}>
-              <div>
-                <span style={{ display: "block", fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
-                  📦 Parked Tasks ({parkedTasks.length})
-                </span>
-                {!parkedOpen && (
-                  <div style={{ fontSize: "12px", fontWeight: "400", color: "var(--text-secondary)", marginTop: "2px" }}>
-                    Tap to restore parked tasks
-                  </div>
-                )}
-              </div>
-              <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: parkedOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginInlineStart: "8px" }}>▼</span>
-            </button>
-          </h2>
-
-          {parkedOpen && (
-          <>
-          <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "8px", marginBottom: "12px" }}>
-            Tasks parked by Bad Day Reset. Tap to restore them to your active list.
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {parkedTasks.map(task => (
-              <div key={task.uuid} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", gap: "10px" }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
-                    <span className={`priority-badge ${task.priority.toLowerCase()}`} style={{ fontSize: "10px", padding: "2px 6px", flexShrink: 0 }}>
-                      {task.priority}
-                    </span>
-                    <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      <LinkifyText text={task.title} />
-                    </span>
-                  </div>
-                </div>
-                <button className="btn" style={{ flexShrink: 0, padding: "6px 12px", fontSize: "11px", background: "var(--success)" }}
-                  onClick={() => {
-                    const event = buildTaskMutationEvent("task_unparked", task, { windows });
-                    savePayloadAsync({ ...payload, tasks: tasks.map(t =>
-                      t.uuid === task.uuid ? { ...t, isParked: false, lastUpdated: Date.now() } : t
-                    )})
-                      .then(() => writeActivityEvents(eventPatch(uid, event)))
-                      .catch(() => {});
-                  }}>
-                  Restore ↑
-                </button>
-              </div>
-            ))}
-          </div>
-          </>
-          )}
-        </section>
-      )}
     </div>
   );
 }

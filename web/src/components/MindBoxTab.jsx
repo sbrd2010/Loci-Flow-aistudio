@@ -277,7 +277,7 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
       : null;
     savePayloadAsync({ ...payload, tasks: tasks.map(t => (
       t.uuid === rescueTask.uuid
-        ? { ...t, isParked: true, isNowFocus: false, lastUpdated: now }
+        ? { ...t, isParked: true, parkedAt: now, isNowFocus: false, lastUpdated: now }
         : t
     )) })
       .then(() => {
@@ -320,7 +320,7 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
           // in TodayTab/RoadmapTab for why these can diverge.
           events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
         }
-        savePayloadAsync({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, isNowFocus: false, lastUpdated: Date.now() } : t) })
+        savePayloadAsync({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, parkedAt: Date.now(), isNowFocus: false, lastUpdated: Date.now() } : t) })
           .then(() => writeActivityEvents(eventsPatch(uid, events)))
           .catch(() => {});
         setConfirmDialog(null);
