@@ -97,3 +97,40 @@ describe("taskHorizonId", () => {
     expect(taskHorizonId({ horizonLevel: "gone" }, hs)).toBeNull();
   });
 });
+
+describe("calendar kinds (Q45)", () => {
+  const twoWeeks = { id: "h2w", name: "Sprint", kind: "weeks", count: 2, startDate: "2026-09-30" };
+  const twoMonths = { id: "h2m", name: "Autumn", kind: "months", count: 2, startDate: "2026-09-30" };
+  const year = { id: "hy", name: "This year", kind: "year", startDate: "2026-09-30" };
+
+  it("Weeks run from a Monday, N at a time", () => {
+    // Added on Wed 30 Sep: the grid starts Mon 28 Sep.
+    expect(currentPeriod(twoWeeks, "2026-09-30")).toEqual({ start: "2026-09-28", end: "2026-10-11" });
+    expect(currentPeriod(twoWeeks, "2026-10-12")).toEqual({ start: "2026-10-12", end: "2026-10-25" });
+  });
+
+  it("Months run from the 1st, N at a time, across the year", () => {
+    expect(currentPeriod(twoMonths, "2026-09-30")).toEqual({ start: "2026-09-01", end: "2026-10-31" });
+    expect(currentPeriod(twoMonths, "2026-11-01")).toEqual({ start: "2026-11-01", end: "2026-12-31" });
+    expect(currentPeriod(twoMonths, "2027-01-01")).toEqual({ start: "2027-01-01", end: "2027-02-28" });
+  });
+
+  it("Year is 1 Jan to 31 Dec", () => {
+    expect(currentPeriod(year, "2026-09-30")).toEqual({ start: "2026-01-01", end: "2026-12-31" });
+    expect(currentPeriod(year, "2027-01-01")).toEqual({ start: "2027-01-01", end: "2027-12-31" });
+  });
+
+  it("a moved end date holds, then the next period lines back up with the calendar (Q44.4, Q45)", () => {
+    const moved = { ...twoWeeks, endDate: "2026-10-07" };
+    expect(currentPeriod(moved, "2026-10-05")).toEqual({ start: "2026-09-28", end: "2026-10-07" });
+    // The rest of that grid period, then the grid again.
+    expect(currentPeriod(moved, "2026-10-08")).toEqual({ start: "2026-10-08", end: "2026-10-11" });
+    expect(currentPeriod(moved, "2026-10-12")).toEqual({ start: "2026-10-12", end: "2026-10-25" });
+  });
+
+  it("slot into the ladder by end date", () => {
+    const hs = horizonsFromConfig({ horizons: { h2w: twoWeeks, hy: year } }, "2026-09-30");
+    // On 30 Sep This month and This quarter end that day; the sprint ends 11 Oct.
+    expect(hs.map(h => h.id)).toEqual(["week", "month", "quarter", "h2w", "hy", "halfyear"]);
+  });
+});
