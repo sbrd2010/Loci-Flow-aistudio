@@ -6,7 +6,7 @@ import { clockParts, ringGeometry } from "../utils/focusClock";
 // clockwise, `--edge` while paused; the digits inside. Settings → Focus timer
 // → Clock can make it Numbers (58a–b): the digits alone, large, with "Left in
 // this block." under them.
-export default function FocusClock({ mode = "ring", size, secondsLeft, maxSeconds, paused = false, valueText }) {
+export default function FocusClock({ mode = "ring", size, secondsLeft, maxSeconds, paused = false, valueText, caption = "Left in this block." }) {
   const { lead, seconds, hours, lastMinute } = clockParts(secondsLeft, maxSeconds);
   const digits = (
     <span className={`focus-mode-time-digits${lastMinute ? " is-last-minute" : ""}`} aria-hidden="true">
@@ -26,7 +26,7 @@ export default function FocusClock({ mode = "ring", size, secondsLeft, maxSecond
     return (
       <div className={`fm-numbers${paused ? " is-paused" : ""}`} {...progress}>
         {digits}
-        <span className="fm-numbers-caption">Left in this block.</span>
+        <span className="fm-numbers-caption">{caption}</span>
       </div>
     );
   }

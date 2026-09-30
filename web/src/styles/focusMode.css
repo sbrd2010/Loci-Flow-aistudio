@@ -611,3 +611,45 @@
   .fm-ring-arc,
   .focus-sounds-drawer { transition: none; }
 }
+
+/* 59i: block end — "BLOCK n DONE · SESSION h:mm", a note when the session is
+   well over the estimate, the break first, then the rest. */
+.fm-block-end-kicker,
+.fm-block-end-note { flex-basis: 100%; margin: 0; }
+.fm-block-end-kicker {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+}
+.fm-block-end-note { font-size: 0.9375rem; line-height: 1.5; color: var(--ink-2); }
+@media (min-width: 900px) {
+  .fm-block-end .focus-mode-hold-keep { flex: 0 0 auto; padding: 0 20px; }
+  .fm-block-end .focus-mode-controls { flex: 1 1 100%; }
+}
+
+/* Q38.1: Break's over. Q38.2: the over-estimate note and Re-estimate. */
+.fm-break-over { flex-basis: 100%; margin: 0; font-size: 1.5rem; font-weight: 800; color: var(--ink); }
+.fm-over-note { flex-basis: 100%; display: flex; flex-direction: column; gap: 8px; }
+.fm-link {
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.fm-custom-estimate {
+  width: 7.5em;
+  min-height: 44px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--control-edge);
+  border-radius: 22px;
+}

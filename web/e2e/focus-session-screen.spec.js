@@ -109,65 +109,118 @@ test("mobile reliability: no ordinal is claimed when the ledger cannot be read",
   await expect(overlay.locator(".focus-mode-session-count")).toHaveCount(0);
 });
 
-test("mobile reliability: reaching 00:00 holds, with two choices and no modal", async ({ page }) => {
-  const overlay = await openSession(page);
+// 59i: block end. At 0:00 the screen asks what next — the break first — and
+// nothing covers it. (Run to just past 25:00: at 26:00 the 60-second wait
+// has already paused it.)
+const BLOCK_OUT = 25 * 60_000 + 5_000;
 
-  // Run the block out. D3: no auto-close — the screen used to shut itself
-  // three seconds later, taking both of the hold's choices with it.
-  await page.clock.runFor(26 * 60_000);
+test("mobile reliability: reaching 00:00 shows block end, with its choices and no modal", async ({ page }) => {
+  const overlay = await openSession(page);
+  await page.clock.runFor(BLOCK_OUT);
 
   await expect(overlay).toBeVisible();
   await expect(overlay.locator(".focus-mode-time-digits")).toHaveText("0:00");
-  await expect(overlay.getByRole("button", { name: /Keep going · \+\d+m/ })).toBeVisible();
-  await expect(overlay.getByRole("button", { name: /Stop here/ })).toBeVisible();
-
-  // The global completion dialog must not cover them.
+  const end = overlay.getByRole("group", { name: "Block done" });
+  await expect(end.locator(".fm-block-end-kicker")).toHaveText("BLOCK 1 DONE · SESSION 0:25");
+  await expect(end.getByRole("button")).toHaveText([/^5-minute break, then continue/, "Another 25m", "+5 min", "Mark done", "End session"]);
+  // Leaving without an answer isn't one of them.
+  await expect(overlay.getByRole("button", { name: "Leave focus" })).toHaveCount(0);
+  // The global completion dialog must not cover it.
   await expect(page.locator(".confirm-dialog, .modal-backdrop")).toHaveCount(0);
 });
 
-// The two specs below CLICK the buttons rather than asserting they exist.
-// Both of these actions shipped broken behind a spec that only checked
-// visibility: "Keep going" was wired to addTimeToSession, which returns
-// immediately while a completion is pending, and "Stop here" was wired to the
-// ordinary overlay exit, which left the session open and handed the user
-// straight to the global modal. Presence is not behaviour.
-
-test("mobile reliability: the hold offers two ways out, not a third broken one", async ({ page }) => {
+// The specs below CLICK the buttons rather than asserting they exist:
+// presence is not behaviour.
+test("mobile reliability: Another 25m actually restarts the timer", async ({ page }) => {
   const overlay = await openSession(page);
-  await expect(overlay.getByRole("button", { name: "Leave focus" })).toBeVisible();
-
-  await page.clock.runFor(26 * 60_000);
-
-  // The header Exit called the plain overlay-exit, which left the session
-  // open and summoned the global modal — the same bug "Stop here" had, via
-  // the other button in the same header. "Stop here" is the way out now.
-  await expect(overlay.getByRole("button", { name: "Leave focus" })).toHaveCount(0);
-  await expect(overlay.getByRole("button", { name: /Stop here/ })).toBeVisible();
-});
-
-test("mobile reliability: Keep going actually restarts the timer", async ({ page }) => {
-  const overlay = await openSession(page);
-  await page.clock.runFor(26 * 60_000);
-  await expect(overlay.locator(".focus-mode-time-digits")).toHaveText("0:00");
-
-  await overlay.getByRole("button", { name: /Keep going · \+\d+m/ }).click();
-
-  // A running countdown on a fresh block, not a frozen 0:00.
+  await page.clock.runFor(BLOCK_OUT);
+  await overlay.getByRole("button", { name: "Another 25m" }).click();
   await expect(overlay.locator(".focus-mode-time-digits")).not.toHaveText("0:00");
   await expect(overlay.getByLabel("Pause timer")).toBeVisible();
-  // And the hold is gone, because the session is no longer complete.
-  await expect(overlay.getByRole("button", { name: /Stop here/ })).toHaveCount(0);
+  await expect(overlay.getByRole("group", { name: "Block done" })).toHaveCount(0);
 });
 
-test("mobile reliability: Stop here ends the session without handing over to a modal", async ({ page }) => {
+// Q38.1: the break counts down, then asks — "Break's over" — and the next
+// block is the last one's length, 5 minutes up or down.
+test("the 5-minute break counts down, then asks; Enter starts the next block", async ({ page }) => {
   const overlay = await openSession(page);
-  await page.clock.runFor(26 * 60_000);
+  await page.clock.runFor(BLOCK_OUT);
+  await overlay.getByRole("button", { name: /^5-minute break, then continue/ }).click();
+  await expect(overlay.getByRole("button", { name: "Skip the break" })).toBeVisible();
+  await expect(overlay.locator(".focus-mode-time-digits")).toHaveText(/^[45]:\d{2}$/);
+  // The break is not part of the block (Codex review of #433).
+  await expect(overlay.locator(".fm-figures-of")).toHaveText("BREAK");
+  await page.clock.runFor(5 * 60_000 + 2_000);
+  await expect(overlay.getByRole("heading", { name: "Break’s over" })).toBeVisible();
+  await expect(page).toHaveTitle("Break's over");
+  const start = overlay.getByRole("button", { name: /^Start block 2 · 25m/ });
+  await expect(start).toBeVisible();
+  await overlay.getByRole("button", { name: "5 minutes longer" }).click();
+  await expect(overlay.getByRole("button", { name: /^Start block 2 · 30m/ })).toBeVisible();
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press("Enter");
+  await expect(overlay.getByLabel("Pause timer")).toBeVisible();
+  await expect(overlay.locator(".fm-figures-of")).toHaveText("OF 30:00");
+  await expect(overlay.getByRole("group", { name: "Block done" })).toHaveCount(0);
+});
 
-  await overlay.getByRole("button", { name: /Stop here/ }).click();
+test("Break's over, with no answer in 60 seconds, pauses on the next block", async ({ page }) => {
+  const overlay = await openSession(page);
+  await page.clock.runFor(BLOCK_OUT);
+  await overlay.getByRole("button", { name: /^5-minute break, then continue/ }).click();
+  await page.clock.runFor(5 * 60_000 + 2_000);
+  await expect(overlay.getByRole("heading", { name: "Break’s over" })).toBeVisible();
+  await page.clock.runFor(61_000);
+  await expect(overlay.getByRole("group", { name: "Block done" })).toHaveCount(0);
+  await expect(overlay.getByLabel("Resume timer")).toBeVisible();
+  await expect(overlay.locator(".focus-mode-time-digits")).toHaveText("25:00");
+});
 
+// Q38.2 / Q40.3: well over the estimate, a fact and one Re-estimate.
+test("well over the estimate: the fact, then Re-estimate above the time spent", async ({ page }) => {
+  // The estimate is set before the session starts.
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.clock.install({ time: new Date("2024-06-15T10:00:00") });
+  await page.goto("/");
+  await expect(page.getByTestId("demo-btn")).toBeVisible({ timeout: 25_000 });
+  await page.getByTestId("demo-btn").click();
+  await page.locator(".wall-title").click();
+  const sheet = page.getByTestId("task-detail");
+  await sheet.getByRole("button", { name: /^Estimate/ }).click();
+  await sheet.getByRole("radio", { name: "15m" }).click();
+  await sheet.getByRole("button", { name: "Close", exact: true }).click();
+  await page.locator(".today-wall .wall-primary").click();
+  const overlay = page.locator(".focus-mode-overlay");
+  await expect(overlay).toBeVisible({ timeout: 5_000 });
+  await page.clock.runFor(BLOCK_OUT);
+  // 25m on a 15m task: half as much again, but only 10m past — no note.
+  await expect(overlay.locator(".fm-over-note")).toHaveCount(0);
+  await overlay.getByRole("button", { name: "Another 25m" }).click();
+  await page.clock.runFor(25 * 60_000 + 2_000);
+  await expect(overlay.locator(".fm-over-note")).toContainText("50m on this today, 35m past the 15m estimate.");
+  await overlay.getByRole("button", { name: "Re-estimate" }).click();
+  const row = overlay.getByRole("group", { name: "Re-estimate" });
+  await expect(row.getByRole("button")).toHaveText(["1h", "1h30m", "2h", "3h"]);
+  await row.getByRole("button", { name: "1h", exact: true }).click();
+  await expect(overlay.locator(".fm-over-note")).toHaveCount(0);
+  await expect(overlay.locator(".fm-stage-kicker")).toContainText("1H TASK");
+});
+
+test("with no answer in 60 seconds, block end pauses on a fresh block", async ({ page }) => {
+  const overlay = await openSession(page);
+  await page.clock.runFor(BLOCK_OUT);
+  await page.clock.runFor(61_000);
+  await expect(overlay.getByRole("group", { name: "Block done" })).toHaveCount(0);
+  await expect(overlay.getByLabel("Resume timer")).toBeVisible();
+  await expect(overlay.locator(".focus-mode-time-digits")).toHaveText("25:00");
+});
+
+test("mobile reliability: End session at block end asks, then ends it without a modal", async ({ page }) => {
+  const overlay = await openSession(page);
+  await page.clock.runFor(BLOCK_OUT);
+  await overlay.getByRole("group", { name: "Block done" }).getByRole("button", { name: "End session" }).click();
+  await page.getByRole("dialog", { name: "End this session?" }).getByRole("button", { name: /^End session/ }).click();
   await expect(overlay).toHaveCount(0);
-  // The whole point of the inline hold: leaving it must not summon the
-  // dialog it replaced.
   await expect(page.locator(".confirm-dialog, .modal-backdrop")).toHaveCount(0);
   await expect(page.getByText(/Focus block complete/i)).toHaveCount(0);
 });
