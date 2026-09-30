@@ -52,16 +52,26 @@ test("Switch to the next task: it becomes the one thing, and this one heads Toda
   await expect(rows.nth(0).locator(".task-title-text")).toHaveText(title);
 });
 
-test("Talk it through with Coach: the task and its step wait in Coach's box; the session stays paused", async ({ page }) => {
+test("Talk it through with Coach: a removable chip, Coach waits, the session stays paused", async ({ page }) => {
   const overlay = await openSession(page);
   const title = (await overlay.getByRole("heading", { level: 1 }).innerText()).trim();
   const sheet = await openStuck(page, overlay);
   await sheet.getByRole("button", { name: "Talk it through with Coach" }).click();
   await expect(overlay).toHaveCount(0);
-  await expect(page.locator(".chat-input-row textarea")).toHaveValue(new RegExp(`^I'm stuck on "${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+  // Q39.1: the chip, not a message typed for you; Coach doesn't speak first.
+  await expect(page.locator(".coach-stuck-chip")).toContainText(`Stuck on: ${title}`);
+  const box = page.locator(".chat-input-row textarea");
+  await expect(box).toHaveValue("");
+  await expect(box).toHaveAttribute("placeholder", "What's in the way?");
   const bar = page.getByRole("region", { name: "Focus session" });
-  await expect(bar).toBeVisible();
   await expect(bar.getByRole("button", { name: "Resume focus timer" })).toBeVisible();
+  await page.getByRole("button", { name: "Remove the stuck task" }).click();
+  await expect(page.locator(".coach-stuck-chip")).toHaveCount(0);
+  // "← Back to focus" returns, still paused.
+  await page.getByRole("button", { name: "← Back to focus" }).click();
+  const back = page.locator(".focus-mode-overlay");
+  await expect(back).toBeVisible();
+  await expect(back.getByTestId("timer-play-pause")).toContainText("Resume");
 });
 
 test("Park a stray thought: Enter parks it and counts it for this session", async ({ page }) => {

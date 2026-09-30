@@ -577,19 +577,70 @@ export default function TodayTab({
     if (!activeTask) return;
     savePayload({ ...payload, tasks: withNextStep(tasks, activeTask, text) });
   };
-  // Split: the sheet opens on Today; splitting ends the session (handleSplit).
+  // Split (Q39.2): the sheet opens over Today; after it, focus is back, on
+  // piece 1 (handleSplit). Closed without splitting, focus is back as it was.
+  const splitFromStuckRef = useRef(false);
   const handleStuckSplit = () => {
     if (!activeTask) return;
+    splitFromStuckRef.current = true;
     setIsFocusMode(false);
     setSplitTask(activeTask);
   };
-  // Talk it through: the session stays paused (the focus bar shows on
-  // Coach); the task and its next step wait in Coach's box, to send or edit.
+  const closeSplitSheet = () => {
+    setSplitTask(null);
+    if (splitFromStuckRef.current) { splitFromStuckRef.current = false; setIsFocusMode(true); }
+  };
+
+  // Q39.2: piece 1 waits, not started, with Start ready. For 5 s the old
+  // session is held, paused — Undo brings back the task and that same
+  // sitting. Start, or the 5 s running out, saves it to the original task.
+  const [splitFresh, setSplitFresh] = useState(null); // { pieceUuid, n, heldSessionId, original, created, until }
+  const releaseHeldSession = (heldId) => {
+    if (!heldId || focusSessionIdRef.current !== heldId) return;
+    const ended = endFocusSession("user_abandoned");
+    if (ended?.task) {
+      writeActivityEvents(eventPatch(uid, buildFocusTerminalEvent(
+        "focus_abandoned", ended.task, ended.focusSessionId, { ...ended, windows, now: Date.now() }
+      )));
+    }
+  };
+  useEffect(() => {
+    const held = splitFresh?.heldSessionId;
+    if (!held) return undefined;
+    const id = setTimeout(() => {
+      releaseHeldSession(held);
+      setSplitFresh(f => (f && f.heldSessionId === held ? { ...f, heldSessionId: null } : f));
+    }, Math.max(0, splitFresh.until - Date.now()));
+    return () => clearTimeout(id);
+  }, [splitFresh?.heldSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const startSplitPiece = () => {
+    const piece = tasks.find(t => t.uuid === splitFresh?.pieceUuid && !t.isDeleted);
+    setSplitFresh(null);
+    // A held session is closed by the new one, saved to its own task.
+    if (piece) startFocusAndLog(piece);
+  };
+  const undoStuckSplit = () => {
+    const f = splitFresh;
+    if (!f?.heldSessionId || focusSessionIdRef.current !== f.heldSessionId) return;
+    setSplitFresh(null);
+    const now = Date.now();
+    const made = tasks.filter(t => f.created.includes(t.uuid) && !t.isDeleted);
+    const events = [
+      buildTaskMutationEvent("task_restored", f.original, { windows, now }),
+      ...made.map(t => buildTaskMutationEvent("task_deleted", t, { windows, now })),
+    ];
+    savePayloadAsync({ ...payload, tasks: undoSplit(tasks, f.original, f.created, now) }, { expectedRemovals: f.created })
+      .then(() => writeActivityEvents(eventsPatch(uid, events)))
+      .catch(() => {});
+  };
+  // Talk it through (Q39.1): the session stays paused (the focus bar shows
+  // on Coach); the task and its next step go as a chip, sent with the first
+  // message.
   const handleStuckCoach = () => {
     if (!activeTask) return;
-    const step = taskSteps(activeTask).find(st => !st.done && st.text)?.text;
+    const step = taskSteps(activeTask).find(st => !st.done && st.text)?.text || "";
     setIsFocusMode(false);
-    onOpenCoach?.(`I'm stuck on "${activeTask.title}".${step ? ` The next step is "${step}".` : ""} Can we talk it through?`);
+    onOpenCoach?.({ stuck: { title: activeTask.title, step } });
   };
 
   // 59g: "Restart with a new length" — a fresh block in the same session.
@@ -679,9 +730,26 @@ export default function TodayTab({
   // moves to the first. Undo (5s) brings the original back and removes them.
   const handleSplit = (steps) => {
     const original = tasks.find(t => t.uuid === splitTask?.uuid && !t.isDeleted);
+    const fromStuck = splitFromStuckRef.current;
+    splitFromStuckRef.current = false;
     setSplitTask(null);
-    if (!original || steps.length < 2) return;
+    if (!original || steps.length < 2) { if (fromStuck) setIsFocusMode(true); return; }
     const actionAt = Date.now();
+    // Q39.2: from I'm stuck, the session is held (not ended) and focus comes
+    // back on piece 1; Undo lives on the focus page.
+    if (fromStuck && original.isNowFocus && focusSessionId && focusSessionTaskUuid === original.uuid) {
+      const { tasks: nextTasks, created } = buildSplit(tasks, original, steps, { now: actionAt, makeId: safeUUID });
+      const events = [
+        buildTaskMutationEvent("task_deleted", original, { windows, now: actionAt }),
+        ...created.map(t => buildTaskMutationEvent("task_created", t, { windows, now: actionAt })),
+      ];
+      setSplitFresh({ pieceUuid: created[0].uuid, n: created.length, heldSessionId: focusSessionId, original, created: created.map(t => t.uuid), until: actionAt + 5000 });
+      setIsFocusMode(true);
+      savePayloadAsync({ ...payload, tasks: nextTasks })
+        .then(() => writeActivityEvents(eventsPatch(uid, events)))
+        .catch(() => {});
+      return;
+    }
     let endedFocusSession = null;
     if (original.isNowFocus) {
       endedFocusSession = endFocusSession("user_abandoned");
@@ -2040,25 +2108,30 @@ export default function TodayTab({
       )}
 
       {/* ── Full-Screen Focus Mode Overlay */}
-      {isFocusMode && activeTask && (
+      {isFocusMode && activeTask && (() => {
+        // Q39.2: piece 1 of a split, not started — Start begins its session.
+        const fresh = splitFresh && splitFresh.pieceUuid === activeTask.uuid ? splitFresh : null;
+        const block = focusBlockSeconds(config);
+        return (
         <FocusModePage
           task={activeTask}
-          secondsLeft={timerSecondsLeft}
-          maxSeconds={timerMaxSeconds}
-          isRunning={isTimerRunning}
-          onPlayPause={() => setIsTimerRunning(r => !r)}
+          secondsLeft={fresh ? block : timerSecondsLeft}
+          maxSeconds={fresh ? block : timerMaxSeconds}
+          isRunning={fresh ? false : isTimerRunning}
+          onPlayPause={fresh ? startSplitPiece : () => setIsTimerRunning(r => !r)}
+          splitNote={fresh ? { n: fresh.n, onUndo: fresh.heldSessionId ? undoStuckSplit : null } : null}
           onDone={() => { handleToggleComplete(activeTask); setIsFocusMode(false); }}
           onExit={() => setIsFocusMode(false)}
           onRestart={handleRestartFocus}
-          onEndSession={handleEndSession}
+          onEndSession={fresh ? null : handleEndSession}
           onToggleStep={(stepId) => handleSubStepToggle(activeTask, stepId)}
-          blockNumber={focusBlockNumber}
+          blockNumber={fresh ? 1 : focusBlockNumber}
           clockMode={config.focusClock === "numbers" ? "numbers" : "ring"}
           // Q37.2: the task's earlier sessions today; this one counts live.
           taskMinutesToday={ledgerStatus === "ready" ? minutesForTaskOn(ledgerRaw, activeTask.uuid, todayStr, { exceptSessionId: focusSessionId }) : 0}
           keysOff={rescueActive}
           onKeepGoing={extendTimer}
-          onAddTime={addTimeToSession}
+          onAddTime={fresh ? null : addTimeToSession}
           // 59i: block end — another block of the usual length, or, with no
           // answer in 60 s, a pause on one.
           blockMinutes={focusBlockSeconds(config) / 60}
@@ -2067,8 +2140,8 @@ export default function TodayTab({
           onBreakOver={(on) => setPipNotice?.(on ? "Break’s over" : null)}
           dayKey={todayStr}
           onReestimate={(m) => savePayload({ ...payload, tasks: tasks.map(t => t.uuid === activeTask.uuid ? { ...t, timeEstimateMinutes: m, lastUpdated: Date.now() } : t) })}
-          startedAt={focusStartedAt}
-          elapsedSeconds={focusElapsedSeconds}
+          startedAt={fresh ? null : focusStartedAt}
+          elapsedSeconds={fresh ? 0 : focusElapsedSeconds}
           onAddBrainDump={handleFocusBrainDump}
           parkedCount={parked.sessionId === focusSessionId ? parked.n : 0}
           onSmallerStep={handleSmallerStep}
@@ -2088,7 +2161,8 @@ export default function TodayTab({
           reshuffleTrack={reshuffleTrack}
           changeVolume={changeVolume}
         />
-      )}
+        );
+      })()}
 
       {/* ── Put on a front (the swipe's Front, and the row menu) */}
       {frontPickerTask && (() => {
@@ -2188,7 +2262,7 @@ export default function TodayTab({
       )}
 
       {splitTask && (
-        <SplitTaskSheet task={splitTask} onClose={() => setSplitTask(null)} onSplit={handleSplit} />
+        <SplitTaskSheet task={splitTask} onClose={closeSplitSheet} onSplit={handleSplit} />
       )}
       {/* Rescue Mode — triggered by the Rescue chip or Deep Focus's Stuck? button */}
       {rescueActive && (

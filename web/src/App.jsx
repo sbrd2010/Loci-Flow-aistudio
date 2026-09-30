@@ -602,6 +602,8 @@ export default function App() {
   // tab switches — CoachTab unmounts when activeTab !== "coach". In-memory
   // only, cleared by CoachTab once the message actually sends.
   const [coachChatDraft, setCoachChatDraft] = useState("");
+  // Q39.1: I'm stuck → Coach: "Stuck on: {task} · next step: {step}".
+  const [coachStuck, setCoachStuck] = useState(null);
   // The mini window's I'm stuck: the focus page opens on 59d.
   const [stuckPending, setStuckPending] = useState(false);
 
@@ -1326,8 +1328,8 @@ export default function App() {
             onOpenDayMap={openDayMap}
             onOpenMindBox={openMindBox}
             onOpenPlan={() => handleTabSelect("roadmap")}
-            // 59d: Talk it through arrives with its message in the box.
-            onOpenCoach={(draft) => { if (typeof draft === "string") setCoachChatDraft(draft); setActiveTab("coach"); }}
+            // 59d / Q39.1: Talk it through arrives with its chip.
+            onOpenCoach={(opts) => { if (opts?.stuck) setCoachStuck(opts.stuck); setActiveTab("coach"); }}
             stuckPending={stuckPending}
             onStuckShown={() => setStuckPending(false)}
             onScattered={() => openScattered("today")}
@@ -1424,7 +1426,7 @@ export default function App() {
           </div>
         )}
         {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onOpenRoadmapInbox={openRoadmapInbox} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} uid={activityUid} writeActivityEvents={writeActivityEvents} focusTimer={focusTimer} />}
-        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} />}
+        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} stuck={coachStuck} onClearStuck={() => setCoachStuck(null)} onBackToFocus={focusTimer.focusSessionActive && focusTimer.activeTask ? handleReturnToFocus : null} />}
         {activeTab === "settings" && (
           <SettingsTab
             payload={payload}

@@ -104,6 +104,8 @@ export default function FocusModePage({
   // this session's are added live.
   taskMinutesToday = 0,
   onAddBrainDump,
+  // Q39.2: piece 1 of a split from I'm stuck, not started: { n, onUndo }.
+  splitNote = null,
   // "N parked this session".
   parkedCount = 0,
   // 59d, I'm stuck: a smaller next step (text); Split; Switch to the next
@@ -432,7 +434,10 @@ export default function FocusModePage({
 
       <main className="focus-mode-body" aria-label="Deep focus session">
         <section className="focus-mode-task-panel" aria-label="Focused task">
-          <p className="fm-stage-kicker">{stageKicker}</p>
+          <p className="fm-stage-kicker">
+            {splitNote ? `SPLIT INTO ${splitNote.n} · PIECE 1 OF ${splitNote.n}` : stageKicker}
+            {splitNote?.onUndo && <> <button type="button" className="fm-link" onClick={splitNote.onUndo}>Undo</button></>}
+          </p>
           <h1 className="focus-mode-task-title" data-len={titleLength(task.title)}><LinkifyText text={task.title} /></h1>
           {nextStep && (
             <p className="focus-mode-concrete-step">Next step — <LinkifyText text={nextStep.text} /></p>

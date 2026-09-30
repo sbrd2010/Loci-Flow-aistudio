@@ -395,3 +395,39 @@
   max-height: none;
   overflow-y: auto;
 }
+
+/* Q39.1: I'm stuck → Coach. "← Back to focus", and the removable chip. */
+.coach-stuck-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.coach-back-focus {
+  padding: 0;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.coach-stuck-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 4px 4px 12px;
+  font-size: 0.8125rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--control-edge);
+  border-radius: 16px;
+}
+.coach-stuck-remove {
+  min-width: 28px;
+  min-height: 28px;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
