@@ -14,6 +14,7 @@ import { makeOneThing } from "./oneThing";
 import { horizonsFromConfig } from "./horizons";
 import { buildReflectionSave } from "./dailyCoachCheckins";
 import { isEventTask } from "./dayMapRoute";
+import { endLeftReviewMarks } from "./normalizePayload";
 
 export const CLOSE_LOG_DAYS = 30;
 const key = (t) => String(t?.uuid || t?.id || "");
@@ -43,6 +44,12 @@ export const doneTodayCount = (tasks = [], day) =>
   tasks.filter(t => t.isCompleted && !t.isDeleted && t.dateCompletedString === day).length;
 
 export const isDayClosed = (config = {}, day) => config.dayClose?.day === day && !config.dayClose?.reopened;
+
+// Q48.2: before the day's start time there is nothing to close yet, so the
+// Day map's button is hidden. Minutes are the Loci day's: an overnight
+// window's early hours still count as the day before, so it stays.
+export const closeDayOffered = (nowMin, dayStartMin) =>
+  !Number.isFinite(nowMin) || !Number.isFinite(dayStartMin) || nowMin >= dayStartMin;
 
 // "Day ends 17:30 · Close the day": from 30 minutes before the last focus
 // window ends (55 answer 10). `nowMin` and the end are minutes of the day
@@ -92,7 +99,9 @@ export function applyClose(payload, { day, choices = {}, firstThing = null, note
   // an earlier same-day reflection is kept when no line is written.
   const same = config.dailyReflectionDate === day;
   nextConfig = buildReflectionSave(nextConfig, clean ? { mood: null, note: clean } : { mood: same ? config.dailyReflectionMood : null, note: same ? config.dailyReflectionNote || "" : "" }, day, now);
-  return { ...payload, tasks, config: nextConfig };
+  // The marks of reviews end here, not only when saved, so Undo (which puts
+  // back what the close changed) brings them back too (Q48.1).
+  return { ...payload, tasks: endLeftReviewMarks(tasks), config: nextConfig };
 }
 
 const REFLECTION_KEYS = ["dailyReflectionDate", "dailyReflectionMood", "dailyReflectionNote", "dailyReflectionCompletedAt", "dailyReflectionSnoozeUntil"];

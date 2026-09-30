@@ -39,6 +39,7 @@ import DayMapFrom from "./DayMapFrom";
 import LinkifyText from "./LinkifyText";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import DidItHappen from "./DidItHappen";
+import { closeDayOffered } from "../utils/closeDay";
 import TaskDetail from "./TaskDetail";
 import FixTimeSheet from "./FixTimeSheet";
 import useTaskActions from "../hooks/useTaskActions";
@@ -836,7 +837,10 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         <h1 className="dm-heading">Day map</h1>
         {dayClock && <span className="dm-date">{dayClock.date}</span>}
         {/* 55d–e: always in the header (a text button on a phone). */}
-        {onCloseDay && <button type="button" className="dm-close-day" onClick={onCloseDay}>Close the day</button>}
+        {/* Q48.2: not before the day has started. */}
+        {onCloseDay && closeDayOffered(nowMins, mergeWindowSpans(windows)[0]?.[0] ?? 0) && (
+          <button type="button" className="dm-close-day" onClick={onCloseDay}>Close the day</button>
+        )}
         {/* 56a–c: one sentence, recomputed on every change; never a quote. */}
         <p className="dm-fact">{fact.text}{fact.alert && <span className="dm-fact-alert">{fact.alert}</span>}</p>
       </div>

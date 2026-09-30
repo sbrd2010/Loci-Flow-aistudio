@@ -43,3 +43,36 @@ test("the week ends: the review opens, each leftover gets a place, and Undo puts
   await page.locator(".undo-toast").getByRole("button", { name: /Undo/ }).click();
   await expect(page.getByRole("button", { name: /^The week to 16 Jun ended · \d+ left · Review$/ })).toBeVisible();
 });
+
+// Q48.1: leaving Today ends the review's mark; undoing that brings it back.
+test("a task the review sent to Today keeps its tag through Delete → Undo", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.clock.install({ time: new Date("2024-06-15T10:00:00") }); // Sat
+  await page.goto("/");
+  await expect(page.getByTestId("demo-btn")).toBeVisible({ timeout: 25_000 });
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Plan", exact: true }).click();
+  await openRung(page, "week");
+  const title = (await page.locator(".plan-open .plan-row-title").first().innerText()).trim();
+
+  await page.clock.fastForward("48:00:00");
+  const review = page.getByRole("dialog", { name: "The week to 16 Jun ended" });
+  await review.getByRole("radiogroup", { name: `Where ${title} goes` }).getByRole("radio", { name: "Today" }).click();
+  await review.getByRole("button", { name: "Done" }).click();
+  await expect(review).toHaveCount(0);
+
+  // The review's own 10 s Undo goes first, so the Delete's is the one showing.
+  await page.clock.fastForward("00:11");
+  await expect(page.locator(".undo-toast")).toHaveCount(0);
+  await nav.getByRole("button", { name: "Today", exact: true }).click();
+  const row = page.getByTestId("today-tasks-list").locator("[data-task-uuid]", { hasText: title });
+  await expect(row.locator(".task-tag.is-from")).toHaveText("FROM WEEK TO 16 JUN");
+  await page.getByRole("button", { name: /^Show list/ }).click();
+  await row.getByText(title, { exact: true }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Delete/ }).click();
+  await expect(row).toHaveCount(0);
+  await page.locator(".undo-toast").getByRole("button", { name: /Undo/ }).click();
+  await expect(row.locator(".task-tag.is-from")).toHaveText("FROM WEEK TO 16 JUN");
+});
