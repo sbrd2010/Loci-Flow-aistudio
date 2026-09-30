@@ -337,6 +337,9 @@ export default function TodayWall({
     };
     return (
       <section className="today-wall is-empty">
+        {/* The goal band and the anchor stay with nothing committed too: a
+            Key Deadline you set always shows (L1). */}
+        {top}
         <div className="wall-empty">
           <div className="wall-kicker">TODAY, ONE THING</div>
           <h2 className="wall-empty-title">Nothing committed yet.</h2>
