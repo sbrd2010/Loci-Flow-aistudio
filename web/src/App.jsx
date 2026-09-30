@@ -37,6 +37,7 @@ import { useLociDayStr, useTodayStr } from "./hooks/useTodayStr";
 import HorizonReview from "./components/HorizonReview";
 import UndoToast, { UndoAnnouncer } from "./components/ui/UndoToast";
 import { applyReview, detectReviews, pendingReviews, undoReviewOrSort } from "./utils/horizonReview";
+import { endLeftReviewMarks } from "./utils/normalizePayload";
 import CloseTheDay from "./components/CloseTheDay";
 import { applyClose, closeLineDue, isDayClosed, leftovers, pinFirstThing, reopenDay, undoClose } from "./utils/closeDay";
 import { makeOneThing } from "./utils/oneThing";
@@ -142,7 +143,8 @@ export default function App() {
   };
 
   const saveDemoPayload = (updated) => {
-    setDemoPayload({ ...updated, timestamp: Date.now() });
+    // Demo saves skip normalizePayload; the review mark's rule still holds (Q48.1).
+    setDemoPayload({ ...updated, ...(Array.isArray(updated.tasks) ? { tasks: endLeftReviewMarks(updated.tasks) } : {}), timestamp: Date.now() });
   };
 
   const saveDemoSubPath = (subPath, value) => {

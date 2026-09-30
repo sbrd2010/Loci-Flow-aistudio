@@ -51,3 +51,17 @@ test("close the day from the Day map, then reopen it", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /^Day closed/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Close the day" })).toHaveCount(0); // the line waits for 30 min before the end
 });
+
+// Q48.2: before the day has started there is nothing to close — the demo's
+// day runs 07:00 to 02:00, so at 05:00 the button isn't there.
+test("the Day map doesn't offer Close the day before the day starts", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/");
+  await page.clock.setFixedTime(new Date("2024-06-15T05:00:00"));
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  await page.locator("body").click({ position: { x: 5, y: 300 } });
+  await page.keyboard.press("m");
+  await expect(page.getByRole("heading", { name: "Day map" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Close the day" })).toHaveCount(0);
+});
