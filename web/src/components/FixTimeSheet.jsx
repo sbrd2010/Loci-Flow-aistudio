@@ -65,7 +65,7 @@ export default function FixTimeSheet({
   // none are added at or after 8 PM while it is on; fixing a task's time is not.
   const blocked = !!draft && newBlocked;
   const confirm = () => {
-    if (brk) { onBreak(fitted.start, fitted.lengthMin, breakItem ? breakItem.index : null); return; }
+    if (brk) { onBreak(fitted.start, fitted.lengthMin, breakItem ? breakItem.id : null); return; }
     if (draft && (!draft.title.trim() || blocked)) return;
     onFix(task || { title: draft.title.trim(), minutes: draft.minutes }, at, !task);
   };
@@ -193,13 +193,13 @@ export default function FixTimeSheet({
               <span className="fx-help" id="fx-at-help">Tap the time to type it · ↑↓ = 5 min</span>
               <button type="button" className="fx-page" onClick={() => setPage(p => p + 1)}>→ Later</button>
             </div>
-            {fitted && (fitted.after || fitted.cut) && (
-              <p className="fx-help fx-fit" aria-live="polite">
-                {fitted.after && <>Starts at {toClock(fitted.start)} · after {fitted.after}</>}
-                {fitted.after && fitted.cut && <br />}
-                {fitted.cut && <>Ends at {toClock(fitted.start + fitted.lengthMin)} · {fitted.cut}</>}
-              </p>
-            )}
+            {/* The live line stays mounted, empty or not: a region that
+                appears with its text already in it is often not read (10b). */}
+            <p className="fx-help fx-fit" aria-live="polite">
+              {fitted?.after && <>Starts at {toClock(fitted.start)} · after {fitted.after}</>}
+              {fitted?.after && fitted?.cut && <br />}
+              {fitted?.cut && <>Ends at {toClock(fitted.start + fitted.lengthMin)} · {fitted.cut}</>}
+            </p>
             {moves && (
               <div className="fx-moves" aria-live="polite">
                 <p className="fx-moves-kicker">What moves</p>
@@ -216,7 +216,7 @@ export default function FixTimeSheet({
               <button type="button" className="fx-confirm" onClick={confirm} disabled={!!draft && (!draft.title.trim() || blocked)}>
                 {brk ? (breakItem ? `Save · ${toClock(fitted.start)}` : `Add break at ${toClock(fitted.start)}`) : <><IconLock size={16} /> Fix at {toClock(at)}</>}
               </button>
-              {breakItem && <button type="button" className="fx-back" onClick={() => onRemoveBreak(breakItem.index)}>Remove</button>}
+              {breakItem && <button type="button" className="fx-back" onClick={() => onRemoveBreak(breakItem.id)}>Remove</button>}
               {task && onTomorrow && <button type="button" className="fx-back" onClick={onTomorrow}>Tomorrow</button>}
               <button type="button" className="fx-back" onClick={back}>{breakItem ? "Cancel" : "Back"}</button>
             </div>

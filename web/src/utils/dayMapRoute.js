@@ -74,7 +74,7 @@ function afterBreaks(at, breaks) {
 // Lays out today's route. `stops` is the route in its order; `durationOf`
 // gives a stop's minutes. Returns the rows in time order:
 //   { kind: "stop", task, start, end, fixed, late, pulledForward, continues, continued }
-//   { kind: "break", name, start, end, added }  (added: a break you added, by index)
+//   { kind: "break", name, start, end, added }  (added: a break you added, by id)
 //   { kind: "free", start, end }
 // A task split by a break gives two stop rows (the first `continues`, the
 // second is `continued`).

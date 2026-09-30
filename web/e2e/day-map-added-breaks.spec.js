@@ -42,6 +42,8 @@ test("A break starts now; the one thing continues after it; its row opens Length
   await sheet.getByRole("button", { name: "Save · 11:35" }).click();
   await expect(brk.getByRole("button", { name: "11:35 to 12:05, Break" })).toBeVisible();
   expect(await times(page)).toEqual(["12:05", "12:35", "13:05"]);
+  // The sheet hands focus back to the break's row (10b).
+  await expect(brk.getByRole("button")).toBeFocused();
 
   await brk.getByRole("button").click();
   await page.getByRole("dialog", { name: "Break" }).getByRole("button", { name: "Remove" }).click();

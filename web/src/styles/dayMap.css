@@ -680,6 +680,7 @@
 /* Q36: a break's own sheet — Later…, and where it fits around a fixed stop. */
 .fx-later { align-self: end; }
 .fx-fit { text-align: left; margin: 10px 0 0; }
+.fx-fit:empty { margin: 0; }
 .fx-moves { margin-top: 14px; padding: 12px 14px; background: var(--panel); border-radius: 8px; }
 .fx-moves-kicker { margin: 0 0 4px; font-family: var(--font-serif); font-style: italic; font-size: 0.8125rem; color: var(--ink-2); }
 .fx-moves-text { margin: 0; font-size: 0.9375rem; line-height: 1.5; }

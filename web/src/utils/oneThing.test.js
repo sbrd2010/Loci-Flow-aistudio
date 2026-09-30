@@ -64,3 +64,12 @@ describe("undoOneThing", () => {
     expect(undoOneThing(moved, "verant", previous)).toBe(moved);
   });
 });
+
+// 10b: a call at a set time is never the one thing, whoever asks (Q36.3).
+import { makeOneThing as pin } from "./oneThing";
+it("makeOneThing refuses a set-time call", () => {
+  const tasks = [{ uuid: "call", horizonLevel: "today", fixedKind: "event", dayMapFixedMinutes: 600, dayMapStartMinutes: 600, dayMapDate: "2026-09-30" }];
+  const { tasks: next, previous } = pin(tasks, "call");
+  expect(next).toBe(tasks);
+  expect(previous).toBe(null);
+});
