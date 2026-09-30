@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotifications";
-import { playChime, chimesOn } from "../utils/chime";
+import { armChime, playChime, chimesOn } from "../utils/chime";
 import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete, focusBlockSeconds, focusExpiryReason } from "../utils/focusSession";
 import { getFocusWindows, getLociDayStr, lociDayEndsAt } from "../utils/focusWindows";
 import { safeUUID } from "../utils/uuid";
@@ -521,6 +521,9 @@ export function useFocusTimer(tasks, config, uid, reshuffleTrackRef) {
   }, []);
 
 
+
+  // Q40.1: the chime's audio is unlocked by the first tap or key.
+  useEffect(() => { armChime(); }, []);
 
   // Request notification permission when focus overlay opens (already a user interaction)
   useEffect(() => {
