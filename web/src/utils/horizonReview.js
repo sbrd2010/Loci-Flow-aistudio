@@ -108,7 +108,7 @@ export function applyReview(payload, review, choices, day, now = Date.now()) {
   const next = tasks.map(t => {
     if (!review.tasks.some(x => x.uuid === t.uuid)) return t;
     const c = choices[t.uuid] || "keep";
-    if (c === "drop") { counts.dropped++; return { ...t, isDeleted: true, deletedAt: now, lastUpdated: now }; }
+    if (c === "drop") { counts.dropped++; return { ...t, isDeleted: true, deletedAt: now, isNowFocus: false, lastUpdated: now }; }
     if (c === "today") {
       counts.today++;
       return { ...t, horizonLevel: "today", orderIndex: place.get(t.uuid), reviewFrom: { label: `FROM ${review.from}`, day }, lastUpdated: now };
@@ -137,7 +137,7 @@ export function applySort(payload, choices, now = Date.now()) {
     tasks: tasks.map(t => {
       const to = choices[t.uuid];
       if (!to || t.horizonLevel !== "office") return t;
-      if (to === "drop") return { ...t, isDeleted: true, deletedAt: now, lastUpdated: now };
+      if (to === "drop") return { ...t, isDeleted: true, deletedAt: now, isNowFocus: false, lastUpdated: now };
       return { ...t, horizonLevel: to, orderIndex: nextOrder(to), lastUpdated: now };
     }),
   };

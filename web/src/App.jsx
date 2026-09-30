@@ -1146,9 +1146,14 @@ export default function App() {
   const openReview = () => setReviewOpen(true);
   const finishReview = (review, choices) => {
     const before = payloadRef.current;
-    savePayload(applyReview(before, review, choices, planDay));
-    setReviewUndo({ before, uuids: review.tasks.map(t => t.uuid), id: review.id, text: `Reviewed: ${review.title}`, at: Date.now() });
+    // Drops are named for the sync's drop guard (three at once would write
+    // nothing); a dropped task a session runs on ends that session first.
+    const drops = review.tasks.filter(t => choices[t.uuid] === "drop").map(t => t.uuid);
+    if (focusTimer.focusSessionActive && drops.includes(focusTimer.activeTask?.uuid)) handleEndFocusSession();
     if (reviews.length <= 1) setReviewOpen(false);
+    savePayloadAsync(applyReview(before, review, choices, planDay), { expectedRemovals: drops })
+      .then(() => setReviewUndo({ before, uuids: review.tasks.map(t => t.uuid), id: review.id, text: `Reviewed: ${review.title}`, at: Date.now() }))
+      .catch(() => {});
   };
   const reviewLine = reviews[0] && !reviewOpen
     ? { text: `${reviews[0].title} · ${reviews[0].tasks.length} left`, onOpen: openReview }

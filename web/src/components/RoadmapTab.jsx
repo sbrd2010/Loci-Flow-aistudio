@@ -890,9 +890,12 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
           onClose={() => setSorting(false)}
           onDone={choices => {
             const before = payloadRef.current;
-            savePayload(applySort(before, choices));
-            setSortUndo({ before, uuids: Object.keys(choices), at: Date.now() });
+            // Drops named for the sync's drop guard (three at once would write nothing).
+            const drops = Object.keys(choices).filter(uuid => choices[uuid] === "drop");
             setSorting(false);
+            savePayloadAsync(applySort(before, choices), { expectedRemovals: drops })
+              .then(() => setSortUndo({ before, uuids: Object.keys(choices), at: Date.now() }))
+              .catch(() => {});
           }}
         />
       )}
