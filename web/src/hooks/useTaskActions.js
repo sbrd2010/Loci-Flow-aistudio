@@ -193,9 +193,11 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
     // task has become the one thing since (as Today's Undo does).
     const refocus = undo.wasFocus && !latestTasks().some(t => t.isNowFocus && t.uuid !== task.uuid && !t.isDeleted && !t.isCompleted)
       ? { isNowFocus: true } : {};
-    if (kind === "delete" && current.isDeleted) put({ isDeleted: false, deletedAt: null }, "task_restored");
+    // Leaving Today ends a review's mark (Q48.1); undoing that brings it back.
+    const mark = task.reviewFrom ? { reviewFrom: task.reviewFrom } : {};
+    if (kind === "delete" && current.isDeleted) put({ isDeleted: false, deletedAt: null, ...mark }, "task_restored");
     else if (kind === "park" && current.isParked) put({ isParked: false, ...refocus });
-    else if (kind === "horizon" && current.horizonLevel === undo.to) put({ horizonLevel: task.horizonLevel, orderIndex: task.orderIndex }, "task_moved");
+    else if (kind === "horizon" && current.horizonLevel === undo.to) put({ horizonLevel: task.horizonLevel, orderIndex: task.orderIndex, ...mark }, "task_moved");
     else if (kind === "today" && current.horizonLevel === "today") put({ horizonLevel: task.horizonLevel, orderIndex: task.orderIndex, deferredUntil: task.deferredUntil ?? null }, "task_moved");
     else if (kind === "step") {
       // Back where it was; steps added since stay where they are.

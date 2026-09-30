@@ -936,6 +936,8 @@ export default function TodayTab({
   };
   const undoText = undo ? undoMessage(undo) : "";
 
+  // Leaving Today ends a review's mark (Q48.1); undoing that brings it back.
+  const reviewMark = (t) => (t.reviewFrom ? { reviewFrom: t.reviewFrom } : {});
   const handleUndo = () => {
     if (!undo) return;
     const { kind, task, wasPinned } = undo;
@@ -952,7 +954,7 @@ export default function TodayTab({
     }
     if (kind === "delete") {
       const event = buildTaskMutationEvent("task_restored", task, { windows });
-      savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: false, deletedAt: null, lastUpdated: Date.now() } : t) })
+      savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: false, deletedAt: null, ...reviewMark(task), lastUpdated: Date.now() } : t) })
         .then(() => writeActivityEvents(eventPatch(uid, event)))
         .catch(() => {});
       return;
@@ -969,6 +971,7 @@ export default function TodayTab({
         ...t,
         horizonLevel: task.horizonLevel,
         orderIndex: task.orderIndex,
+        ...reviewMark(task),
         ...(wasPinned && !otherPinned ? { isNowFocus: true } : {}),
         lastUpdated: now,
       } : t) })
