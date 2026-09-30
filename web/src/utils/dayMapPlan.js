@@ -100,7 +100,7 @@ export function moveToTomorrow(allTasks, ids, tomorrowStr, now = Date.now()) {
     if (!order.has(id)) return t;
     before.push(t);
     // A fixed time is today's (58): tomorrow it flows from the route's start.
-    const { dayMapPeriod, dayMapStartMinutes, dayMapFixedMinutes, ...rest } = t; // eslint-disable-line no-unused-vars
+    const { dayMapPeriod, dayMapStartMinutes, dayMapFixedMinutes, ...rest } = t;
     return {
       ...rest,
       dayMapDate: tomorrowStr,
@@ -123,7 +123,7 @@ export function bringBack(allTasks, id, now = Date.now()) {
   const tasks = allTasks.map(t => {
     if (String(t.uuid || t.id) !== id || !t.deferredUntil) return t;
     before.push(t);
-    const { deferredUntil, deferredFromOrder, dayMapDate, dayMapOrder, ...rest } = t; // eslint-disable-line no-unused-vars
+    const { deferredUntil, deferredFromOrder, dayMapDate, dayMapOrder, ...rest } = t;
     return {
       ...rest,
       ...(Number.isFinite(deferredFromOrder) ? { orderIndex: deferredFromOrder } : {}),

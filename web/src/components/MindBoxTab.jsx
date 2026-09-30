@@ -9,7 +9,7 @@ import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTa
 import { submitOnEnter } from "../utils/formEvents";
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
-import { buildTaskMutationEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
+import { buildTaskMutationEvent, buildFocusTerminalEvent, eventsPatch } from "../utils/activityLog";
 import { isOnToday } from "../utils/deferral";
 import { isEventTask } from "../utils/dayMapRoute";
 

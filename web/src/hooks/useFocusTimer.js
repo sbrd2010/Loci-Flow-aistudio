@@ -26,7 +26,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   const [focusSessionActive, setFocusSessionActive] = useState(false);
   const [sessionCompletePending, setSessionCompletePending] = useState(false);
   const [showExtendPicker, setShowExtendPicker] = useState(false);
-  
+
   // Document Picture-in-Picture (PiP) / Pop-out timer states and refs
   const [pipOpen, setPipOpen] = useState(false);
   // Q38.1d: "Break's over" in the mini window, in place of the title.
@@ -499,7 +499,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     } else {
       document.title = "Loci";
     }
-  }, [timerSecondsLeft, isTimerRunning, isFocusMode, activeTask?.title, breakOver]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [timerSecondsLeft, isTimerRunning, isFocusMode, activeTask?.title, breakOver]);
 
   // Restore title on unmount (e.g. user signs out while timer is running)
   useEffect(() => () => {
