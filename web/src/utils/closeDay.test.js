@@ -56,6 +56,19 @@ describe("Close the day (55d–e, Q47)", () => {
     expect(undoClose(kept, { tasks, config: earlier }, DAY).config).toMatchObject({ ...earlier, dailyReflectionCompletedAt: null });
   });
 
+  it("Undo keeps a change made since the close, and undoes the day that was closed", () => {
+    const before = { tasks, config: {} };
+    const after = applyClose(before, { day: DAY }, 9);
+    // "a" was completed on another device after the close.
+    const now = { ...after, tasks: after.tasks.map(x => (x.uuid === "a" ? { ...x, isCompleted: true, lastUpdated: 12 } : x)) };
+    // Undo lands after midnight: the day passed is the one closed, not the new one.
+    const back = undoClose(now, before, DAY, after);
+    const by = Object.fromEntries(back.tasks.map(x => [x.uuid, x]));
+    expect(by.a).toMatchObject({ isCompleted: true, lastUpdated: 12 });
+    expect(by.b.deferredUntil).toBeUndefined();
+    expect(by.r.horizonLevel).toBe("today");
+  });
+
   it("Reopen: open again, what was moved stays moved (47.3)", () => {
     const closed = applyClose({ tasks, config: {} }, { day: DAY }, 1);
     const reopened = reopenDay(closed.config, 2);

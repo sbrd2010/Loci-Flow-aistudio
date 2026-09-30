@@ -13,21 +13,25 @@ import { useFocusLedger } from "../hooks/useFocusLedger";
 const OPTIONS = [{ to: "tomorrow", label: "Tomorrow" }, { to: "plan", label: "Plan" }, { to: "drop", label: "Drop" }];
 const key = (t) => String(t.uuid || t.id);
 
-export default function CloseTheDay({ payload, day, uid, windows, onClose, onCancel }) {
+export default function CloseTheDay({ payload, day, uid, windows, draft = null, onClose, onCancel }) {
   const tasks = payload.tasks || [];
   const config = payload.config || {};
   // Today's focus time, from the sessions (59j), when the ledger answers.
   const { raw, status } = useFocusLedger(uid, 1, windows);
   const focusMin = status === "ready" ? doneToday(raw, tasks, day, windows).reduce((sum, r) => sum + r.minutes, 0) : null;
   const left = leftovers(tasks, day);
-  const [choices, setChoices] = useState(() => Object.fromEntries(left.map(t => [key(t), defaultChoice(t)])));
+  // `draft`: what was chosen before a save that failed, so nothing is lost.
+  const [choices, setChoices] = useState(() => draft?.choices || {});
+  // A task that reaches Today while the sheet is open shows with its default.
+  const pick = (t) => choices[key(t)] || defaultChoice(t);
   // The one thing, if it goes to tomorrow, is tomorrow's first thing too.
   const [first, setFirst] = useState(() => {
+    if (draft) return draft.firstThing;
     const pinned = left.find(t => t.isNowFocus && defaultChoice(t) === "tomorrow");
     return pinned ? key(pinned) : null;
   });
-  const [lineOpen, setLineOpen] = useState(false);
-  const [note, setNote] = useState("");
+  const [lineOpen, setLineOpen] = useState(!!draft?.note);
+  const [note, setNote] = useState(draft?.note || "");
   const titleRef = useRef(null);
   useEffect(() => { titleRef.current?.focus(); }, []);
   useEffect(() => {
@@ -39,10 +43,10 @@ export default function CloseTheDay({ payload, day, uid, windows, onClose, onCan
   const done = doneTodayCount(tasks, day);
   const minIds = confirmedMinimumDay(config, day);
   const minDone = minIds ? minIds.filter(id => tasks.some(t => key(t) === id && t.isCompleted)).length : 0;
-  const tomorrowBound = left.filter(t => choices[key(t)] === "tomorrow");
+  const tomorrowBound = left.filter(t => pick(t) === "tomorrow");
   const firstThing = first && tomorrowBound.some(t => key(t) === first) ? first : null;
   const close = () => onClose({
-    choices, firstThing, note: lineOpen ? note : "",
+    choices: Object.fromEntries(left.map(t => [key(t), pick(t)])), firstThing, note: lineOpen ? note : "",
     summary: { focusMin, minimum: minIds ? { done: minDone, total: minIds.length } : null },
   });
 
@@ -73,7 +77,7 @@ export default function CloseTheDay({ payload, day, uid, windows, onClose, onCan
                   <span className="eh-place-title">{t.title}</span>
                   <span className="eh-seg" role="radiogroup" aria-label={`Where ${t.title} goes`}>
                     {OPTIONS.map(o => (
-                      <button key={o.to} type="button" role="radio" className="eh-seg-opt" aria-checked={choices[key(t)] === o.to}
+                      <button key={o.to} type="button" role="radio" className="eh-seg-opt" aria-checked={pick(t) === o.to}
                         onClick={() => setChoices(c => ({ ...c, [key(t)]: o.to }))}>
                         {o.label}
                       </button>

@@ -98,12 +98,16 @@ export function applyClose(payload, { day, choices = {}, firstThing = null, note
 const REFLECTION_KEYS = ["dailyReflectionDate", "dailyReflectionMood", "dailyReflectionNote", "dailyReflectionCompletedAt", "dailyReflectionSnoozeUntil"];
 
 // Undo within 10 s: the tasks, the reflection and the day as they were.
-export function undoClose(payload, before, day) {
+// `day` is the day that was closed; given `after` (the payload the close
+// saved), a task changed since (say, on another device) keeps that change.
+export function undoClose(payload, before, day, after = null) {
   const was = new Map(leftovers(before.tasks || [], day).map(t => [key(t), t]));
+  const closedAt = after ? new Map((after.tasks || []).map(t => [key(t), t.lastUpdated])) : null;
+  const untouched = (t) => !closedAt || t.lastUpdated === closedAt.get(key(t));
   return {
     ...payload,
     config: { ...payload.config, ...Object.fromEntries(REFLECTION_KEYS.map(k => [k, before.config?.[k] ?? null])), dayClose: before.config?.dayClose ?? null, dayCloseLog: before.config?.dayCloseLog ?? [] },
-    tasks: (payload.tasks || []).map(t => (was.has(key(t)) ? { ...was.get(key(t)), lastUpdated: Date.now() } : t)),
+    tasks: (payload.tasks || []).map(t => (was.has(key(t)) && untouched(t) ? { ...was.get(key(t)), lastUpdated: Date.now() } : t)),
   };
 }
 
