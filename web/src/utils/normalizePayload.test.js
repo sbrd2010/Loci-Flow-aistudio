@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules, applyEditsSince } from "./normalizePayload";
+import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules, applyEditsSince, endLeftReviewMarks } from "./normalizePayload";
 
 describe("normalizePayload", () => {
   it("fills missing brainDump with []", () => {
@@ -1206,5 +1206,29 @@ describe("normalizePayload — config.fronts", () => {
     });
     expect(out.tasks[0].frontId).toBe("f2");
     expect(out.tasks[0].waitingOn).toBe("Chris");
+  });
+});
+
+describe("the review mark ends when the task leaves Today (Q48.1)", () => {
+  const from = { label: "FROM SEPTEMBER", day: "2026-10-01", horizon: "month" };
+  const t = (extra = {}) => ({ uuid: "a", title: "A", horizonLevel: "today", reviewFrom: from, ...extra });
+
+  it("stays while the task is on Today, carried or not", () => {
+    expect(endLeftReviewMarks([t()])[0].reviewFrom).toEqual(from);
+    expect(endLeftReviewMarks([t({ deferredUntil: "2026-10-01" })])[0].reviewFrom).toEqual(from);
+    expect(endLeftReviewMarks([t({ isCompleted: true })])[0].reviewFrom).toEqual(from);
+  });
+
+  it("ends on another horizon, a later day, or dropped — on every save", () => {
+    for (const gone of [{ horizonLevel: "month" }, { deferredUntil: "2026-10-02" }, { isDeleted: true }]) {
+      expect("reviewFrom" in endLeftReviewMarks([t(gone)])[0]).toBe(false);
+      expect("reviewFrom" in normalizePayload({ tasks: [t(gone)] }).tasks[0]).toBe(false);
+    }
+  });
+
+  it("back on Today later, it has no mark", () => {
+    const moved = endLeftReviewMarks([t({ deferredUntil: "2026-10-02" })])[0];
+    const back = endLeftReviewMarks([{ ...moved, deferredUntil: null }])[0];
+    expect(back.reviewFrom).toBeUndefined();
   });
 });

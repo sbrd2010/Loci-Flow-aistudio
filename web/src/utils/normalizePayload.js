@@ -83,6 +83,21 @@ export function sanitizeTaskForRules(task, index = 0, fallbackUserId = "", now =
   return repaired;
 }
 
+// Q48.1: the mark a horizon review leaves on a task it sent to Today
+// ("FROM SEPTEMBER") ends as soon as the task leaves Today by any route:
+// another horizon, a later day, dropped. Back on Today later, it's a task
+// like any other. Every save passes through here, so no route is missed.
+export function endLeftReviewMarks(tasks) {
+  return arrayOrEmpty(tasks).map(t => {
+    const from = t?.reviewFrom;
+    if (!from) return t;
+    const left = t.isDeleted || t.horizonLevel !== "today" || (t.deferredUntil && t.deferredUntil > from.day);
+    if (!left) return t;
+    const { reviewFrom, ...rest } = t; // eslint-disable-line no-unused-vars
+    return rest;
+  });
+}
+
 export function sanitizeTasksForRules(tasks, fallbackUserId = "", now = Date.now()) {
   return arrayOrEmpty(tasks).map((task, index) => sanitizeTaskForRules(task, index, fallbackUserId, now));
 }
@@ -171,7 +186,7 @@ export function normalizePayload(raw) {
   const fallbackUserId = sanitizeString(raw.userId, 200, sanitizeString(config.userId, 200, ""));
   return {
     ...raw,
-    tasks: sanitizeTasksForRules(raw.tasks, fallbackUserId),
+    tasks: sanitizeTasksForRules(endLeftReviewMarks(raw.tasks), fallbackUserId),
     config,
     contributions: arrayOrEmpty(raw.contributions),
     brainDump,
