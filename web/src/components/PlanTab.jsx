@@ -6,6 +6,7 @@ import {
   normalizeFronts,
   sortFronts,
   frontNextMove,
+  frontProgress,
   tasksForFront,
   parseDueDate,
   frontDaysLeft,
@@ -58,8 +59,9 @@ function frontDueLine(front, now) {
 // deadline when it has one.
 function FrontCard({ front, tasks, isGoal, now, isOpen = false, onOpen }) {
   const nextMove = frontNextMove(front, tasks);
-  const { open, done } = frontCounts(tasks, front.id);
-  const total = open + done;
+  const { open } = frontCounts(tasks, front.id);
+  // done / total counts every live task on it, parked ones too (Codex review of #442).
+  const { done, total } = frontProgress(tasks, front.id);
   const due = frontDueLine(front, now);
   return (
     <button

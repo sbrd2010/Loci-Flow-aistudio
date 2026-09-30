@@ -62,3 +62,16 @@ it("Work · older Sort: each to a horizon at the bottom of its list, or Drop", (
   expect(after.tasks.find(x => x.uuid === "o1")).toMatchObject({ horizonLevel: "week", orderIndex: 1 });
   expect(after.tasks.find(x => x.uuid === "o2")).toMatchObject({ isDeleted: true, deletedAt: 3 });
 });
+
+// Codex review of #447: a review still waiting takes in what was left the
+// next time too.
+it("a waiting review across another period end adds the new leftovers", () => {
+  const first = [t("a", "week")];
+  const noted = detectReviews({}, first, "2026-09-30");
+  const once = detectReviews({ horizonReviews: noted }, first, "2026-10-05");
+  expect(once.week.pending.uuids).toEqual(["a"]);
+  const later = [t("a", "week", { isCompleted: true }), t("b", "week")];
+  const twice = detectReviews({ horizonReviews: once }, later, "2026-10-12");
+  expect(twice.week.pending).toMatchObject({ periods: 2, uuids: ["a", "b"] });
+  expect(pendingReviews({ horizonReviews: twice }, later, "2026-10-12")[0].tasks.map(x => x.uuid)).toEqual(["b"]);
+});

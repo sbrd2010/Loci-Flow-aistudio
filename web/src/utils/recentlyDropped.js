@@ -22,17 +22,20 @@ export function droppedLine(task, now = Date.now()) {
   return `Dropped ${when} · ${left} ${left === 1 ? "day" : "days"} left`;
 }
 
-// Back where it was — or This week when its horizon is gone or hidden, so a
-// restored task is never out of sight.
+// Back where it was — or This week when its horizon is gone or hidden, or
+// the first horizon shown if This week is hidden too, so a restored task is
+// never out of sight (Codex review of #445).
 export function restoreDropped(payload, uuid, day, now = Date.now()) {
-  const shown = new Set([TODAY_ID, WORK_OLDER_ID, ...horizonsFromConfig(payload.config || {}, day).filter(h => !h.hidden).map(h => h.id)]);
+  const visible = horizonsFromConfig(payload.config || {}, day).filter(h => !h.hidden).map(h => h.id);
+  const shown = new Set([TODAY_ID, WORK_OLDER_ID, ...visible]);
+  const fallback = visible.includes("week") ? "week" : visible[0] || TODAY_ID;
   const tasks = payload.tasks || [];
   const place = (id) => tasks.filter(t => t.horizonLevel === id && !t.isDeleted && !t.isCompleted).length;
   return {
     ...payload,
     tasks: tasks.map(t => {
       if (t.uuid !== uuid || !t.isDeleted) return t;
-      const horizonLevel = shown.has(t.horizonLevel) ? t.horizonLevel : "week";
+      const horizonLevel = shown.has(t.horizonLevel) ? t.horizonLevel : fallback;
       return { ...t, isDeleted: false, deletedAt: null, isNowFocus: false, horizonLevel, orderIndex: place(horizonLevel), lastUpdated: now };
     }),
   };

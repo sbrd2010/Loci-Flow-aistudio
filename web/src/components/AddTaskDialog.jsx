@@ -169,7 +169,8 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       // A value with no chip of its own shows under Other, so it is never
       // chosen without being seen.
       if ([15,25,45,60,120,240,360].includes(est)) { setEstimateMinutes(est); setEstimatePicked(true); setOtherOpen(![15, 30, 60, 120].includes(est)); }
-      if (["today","week","month","quarter","halfyear","office"].includes(aiSuggestion.horizonLevel)) setHorizonLevel(aiSuggestion.horizonLevel);
+      // Only a horizon the chips offer: a hidden one would hide the task (Codex review of #443).
+      if (horizons.some(h => h.key === aiSuggestion.horizonLevel)) setHorizonLevel(aiSuggestion.horizonLevel);
       if (aiSuggestion.subSteps.length > 0 && subSteps.length === 0) {
         const now = Date.now();
         setSubSteps(aiSuggestion.subSteps.map((s, i) => ({ id: `ai-ss-${i}-${now}`, text: s.text, done: false })));

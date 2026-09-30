@@ -952,7 +952,7 @@ export default function TodayTab({
     }
     if (kind === "delete") {
       const event = buildTaskMutationEvent("task_restored", task, { windows });
-      savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: false, lastUpdated: Date.now() } : t) })
+      savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: false, deletedAt: null, lastUpdated: Date.now() } : t) })
         .then(() => writeActivityEvents(eventPatch(uid, event)))
         .catch(() => {});
       return;
