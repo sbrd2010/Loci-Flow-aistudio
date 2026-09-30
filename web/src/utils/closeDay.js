@@ -88,16 +88,21 @@ export function applyClose(payload, { day, choices = {}, firstThing = null, note
   const log = [...(Array.isArray(config.dayCloseLog) ? config.dayCloseLog : []).filter(e => e?.day !== day), entry].slice(-CLOSE_LOG_DAYS);
   let nextConfig = { ...config, dayClose: { day, at: now, firstThing: firstThing || null, reopened: false }, dayCloseLog: log, lastUpdated: now };
   // 47.2: the line takes the evening reflection's place, with no mood.
-  if (clean) nextConfig = buildReflectionSave(nextConfig, { mood: null, note: clean }, day, now);
+  // Closing counts as reflecting even with no line, so the evening nudge stops;
+  // an earlier same-day reflection is kept when no line is written.
+  const same = config.dailyReflectionDate === day;
+  nextConfig = buildReflectionSave(nextConfig, clean ? { mood: null, note: clean } : { mood: same ? config.dailyReflectionMood : null, note: same ? config.dailyReflectionNote || "" : "" }, day, now);
   return { ...payload, tasks, config: nextConfig };
 }
 
-// Undo within 10 s: the tasks as they were and the day open again.
+const REFLECTION_KEYS = ["dailyReflectionDate", "dailyReflectionMood", "dailyReflectionNote", "dailyReflectionCompletedAt", "dailyReflectionSnoozeUntil"];
+
+// Undo within 10 s: the tasks, the reflection and the day as they were.
 export function undoClose(payload, before, day) {
   const was = new Map(leftovers(before.tasks || [], day).map(t => [key(t), t]));
   return {
     ...payload,
-    config: { ...payload.config, dayClose: before.config?.dayClose ?? null, dayCloseLog: before.config?.dayCloseLog ?? [] },
+    config: { ...payload.config, ...Object.fromEntries(REFLECTION_KEYS.map(k => [k, before.config?.[k] ?? null])), dayClose: before.config?.dayClose ?? null, dayCloseLog: before.config?.dayCloseLog ?? [] },
     tasks: (payload.tasks || []).map(t => (was.has(key(t)) ? { ...was.get(key(t)), lastUpdated: Date.now() } : t)),
   };
 }

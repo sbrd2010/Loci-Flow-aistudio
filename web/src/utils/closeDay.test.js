@@ -43,6 +43,17 @@ describe("Close the day (55d–e, Q47)", () => {
     const back = undoClose(after, before, DAY);
     expect(leftovers(back.tasks, DAY).map(x => x.uuid)).toEqual(["b", "a", "r"]);
     expect(isDayClosed(back.config, DAY)).toBe(false);
+    // …and the line is gone from Coach's reflection too.
+    expect(back.config).toMatchObject({ dailyReflectionDate: null, dailyReflectionNote: null, dailyReflectionCompletedAt: null });
+  });
+
+  it("closing with no line still counts as the evening reflection; an earlier one is kept", () => {
+    const bare = applyClose({ tasks, config: {} }, { day: DAY }, 5);
+    expect(bare.config).toMatchObject({ dailyReflectionDate: DAY, dailyReflectionNote: "", dailyReflectionCompletedAt: 5 });
+    const earlier = { dailyReflectionDate: DAY, dailyReflectionMood: "ok", dailyReflectionNote: "Earlier" };
+    const kept = applyClose({ tasks, config: earlier }, { day: DAY }, 6);
+    expect(kept.config).toMatchObject({ dailyReflectionMood: "ok", dailyReflectionNote: "Earlier", dailyReflectionCompletedAt: 6 });
+    expect(undoClose(kept, { tasks, config: earlier }, DAY).config).toMatchObject({ ...earlier, dailyReflectionCompletedAt: null });
   });
 
   it("Reopen: open again, what was moved stays moved (47.3)", () => {
