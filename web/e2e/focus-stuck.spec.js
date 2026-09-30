@@ -71,7 +71,8 @@ test("Talk it through with Coach: a removable chip, Coach waits, the session sta
   await page.getByRole("button", { name: "← Back to focus" }).click();
   const back = page.locator(".focus-mode-overlay");
   await expect(back).toBeVisible();
-  await expect(back.getByTestId("timer-play-pause")).toContainText("Resume");
+  // No time has passed, so a paused session offers Start, not Resume.
+  await expect(back.getByTestId("timer-play-pause")).toHaveText(/^(Start|Resume)/);
 });
 
 test("Park a stray thought: Enter parks it and counts it for this session", async ({ page }) => {

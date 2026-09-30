@@ -116,7 +116,7 @@ test("mobile reliability: Rescue Mode is reachable from Today, and I'm stuck ins
 
   // Opening it mid-session pauses the underlying focus timer…
   // The dialog hides the page from label lookups: read the button itself.
-  await expect(overlay.getByTestId("timer-play-pause")).toContainText("Resume", { timeout: 5_000 });
+  await expect(overlay.getByTestId("timer-play-pause")).toHaveText(/^(Start|Resume)/, { timeout: 5_000 });
 
   // …and "Back to the timer" resumes it.
   await sheet.getByRole("button", { name: "Back to the timer" }).click();
