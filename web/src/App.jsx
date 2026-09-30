@@ -990,7 +990,10 @@ export default function App() {
   }, [deadlineMoveState, syncUnconfirmed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFocusSessionDone = () => {
-    const task = focusTimer.activeTask;
+    // The session's own task, not the pin now: a pin moved mid-session must
+    // not be the one completed (Codex review of #436).
+    const sessionUuid = focusTimer.focusSessionTaskUuid;
+    const task = (sessionUuid && (payload?.tasks || []).find(t => t.uuid === sessionUuid && !t.isDeleted)) || focusTimer.activeTask;
     focusTimer.dismissSessionComplete();
     if (!task) return;
     celebrate();
@@ -1456,6 +1459,9 @@ export default function App() {
         hasActiveTask: !!focusTimer.activeTask,
         isFocusMode: focusTimer.isFocusMode,
         sessionCompletePending: focusTimer.sessionCompletePending,
+        // Today's wall shows the session only when its task is the day's
+        // one thing (TodayTab's wallSessionLive).
+        todayShowsSession: !!commitmentPinnedUuid && commitmentPinnedUuid === focusTimer.focusSessionTaskUuid,
       }) && (
         <FocusBar
           task={focusTimer.activeTask}

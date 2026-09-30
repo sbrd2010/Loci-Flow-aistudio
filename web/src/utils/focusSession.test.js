@@ -17,6 +17,11 @@ describe("shouldShowFloatingTimer", () => {
     expect(shouldShowFloatingTimer({ ...base, activeTab: "today", isFocusMode: true })).toBe(false);
   });
 
+  it("shows on Today when Today's wall can't show the session (Codex review of #434)", () => {
+    expect(shouldShowFloatingTimer({ ...base, activeTab: "today", todayShowsSession: false })).toBe(true);
+    expect(shouldShowFloatingTimer({ ...base, activeTab: "today", todayShowsSession: false, isFocusMode: true })).toBe(false);
+  });
+
   it("shows on the Day map page (59e)", () => {
     expect(shouldShowFloatingTimer({ ...base, activeTab: "daymap" })).toBe(true);
   });

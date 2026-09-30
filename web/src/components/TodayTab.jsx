@@ -2139,7 +2139,7 @@ export default function TodayTab({
           // 59i: block end — another block of the usual length, or, with no
           // answer in 60 s, a pause on one.
           blockMinutes={focusBlockSeconds(config) / 60}
-          onBlockTimeout={(m) => { if (changeFocusDuration(m || focusBlockSeconds(config) / 60)) dismissSessionComplete(); }}
+          onBlockTimeout={(m) => { if (changeFocusDuration(m || focusBlockSeconds(config) / 60, { staged: true })) dismissSessionComplete(); }}
           chimes={chimesOn(config)}
           onBreakOver={(on) => setPipNotice?.(on ? "Break’s over" : null)}
           dayKey={todayStr}

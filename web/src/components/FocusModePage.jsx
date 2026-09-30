@@ -207,7 +207,10 @@ export default function FocusModePage({
   const openEnd = () => setEnding(true);
   const startBreak = () => { setBreakUntil(Date.now() + BREAK_SECONDS * 1000); setNowMs(Date.now()); };
   // Q38.1c: the next block is as long as the one just finished.
-  const lastLen = Math.min(NEXT_MAX, Math.max(NEXT_MIN, Math.round(maxSeconds / 60)));
+  // Not capped: a longer "Whole task" block is offered again as it was, and
+  // +5 stops at 180 or that length, whichever is more (Codex review of #433).
+  const lastLen = Math.max(NEXT_MIN, Math.round(maxSeconds / 60));
+  const nextMax = Math.max(NEXT_MAX, lastLen);
   const [nextLen, setNextLen] = useState(lastLen);
   const [breakOver, setBreakOver] = useState(false);
   const startNext = () => { setBreakUntil(null); setBreakOver(false); onKeepGoing?.(nextLen); };
@@ -339,7 +342,8 @@ export default function FocusModePage({
     const minutes = Math.round(Number(m));
     if (!(minutes > 0)) return;
     onReestimate?.(minutes);
-    writeSeen(markNoteSeen(readSeen(), task.uuid, dayKey, minutes));
+    // Not marked seen for the new estimate: the note comes back once that is
+    // passed too (Q40.2; Codex review of #434).
     setNoteBlock(null);
     setReestimating(false);
     setCustomEstimate("");
@@ -544,7 +548,7 @@ export default function FocusModePage({
                 </button>
                 <div className="focus-mode-controls">
                   <button type="button" className="focus-mode-ctrl-btn" aria-label="5 minutes shorter" disabled={nextLen <= NEXT_MIN} onClick={() => setNextLen(m => Math.max(NEXT_MIN, m - 5))}>−5</button>
-                  <button type="button" className="focus-mode-ctrl-btn" aria-label="5 minutes longer" disabled={nextLen >= NEXT_MAX} onClick={() => setNextLen(m => Math.min(NEXT_MAX, m + 5))}>+5</button>
+                  <button type="button" className="focus-mode-ctrl-btn" aria-label="5 minutes longer" disabled={nextLen >= nextMax} onClick={() => setNextLen(m => Math.min(nextMax, m + 5))}>+5</button>
                   {onEndSession && (
                     <button type="button" className="focus-mode-ctrl-btn" onClick={openEnd}>
                       End session <kbd className="focus-mode-kbd">E</kbd>

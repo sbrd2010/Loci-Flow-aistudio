@@ -2,11 +2,14 @@ import { buildToggleCompletedTasks } from "./taskOps";
 import { getFocusWindows, getLociDayStr } from "./focusWindows";
 
 // Whether the focus bar (59e) shows: while a session runs, off the focus
-// page — on Plan, Mind Box, Coach and the Day map page. Never on Today (its
-// wall says "Back to focus", 59f, and the focus page opens there), nor while
-// a block's end is waiting for an answer.
-export function shouldShowFloatingTimer({ activeTab, focusSessionActive, hasActiveTask, sessionCompletePending }) {
-  if (activeTab === "today") return false;
+// page — on Plan, Mind Box, Coach and the Day map page. Not on Today while
+// its wall shows this session ("Back to focus", 59f); when the wall can't —
+// the session's task isn't Today's one thing — the bar stays, or nothing
+// would reach the session (Codex review of #434). Never on the focus page,
+// nor while a block's end is waiting for an answer.
+export function shouldShowFloatingTimer({ activeTab, focusSessionActive, hasActiveTask, isFocusMode, sessionCompletePending, todayShowsSession = true }) {
+  if (isFocusMode) return false;
+  if (activeTab === "today" && todayShowsSession) return false;
   if (sessionCompletePending) return false;
   if (!focusSessionActive || !hasActiveTask) return false;
   return true;
