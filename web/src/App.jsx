@@ -683,7 +683,9 @@ export default function App() {
         const reopenSeconds = Number(pendingFocusOptionsRef.current?.plannedSeconds);
         if (reopenSeconds > 0) focusTimer.changeFocusDuration?.(reopenSeconds / 60);
         focusTimer.setIsFocusMode(true);
-        focusTimer.setIsTimerRunning(true);
+        // At block end with no length chosen, this opens the block-end screen;
+        // it must not run the finished block on from 0:00 (loopcheck of #439).
+        if (reopenSeconds > 0 || !focusTimer.sessionCompletePending) focusTimer.setIsTimerRunning(true);
         pendingFocusPinPromiseRef.current = null;
         pendingFocusOptionsRef.current = null;
         setPendingFocusOpen(false);

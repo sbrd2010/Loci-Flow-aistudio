@@ -55,7 +55,9 @@ export default function FocusBar({
       const t = e.target;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
       if (e.key === "f" || e.key === "F") { e.preventDefault(); keysRef.current.onBack?.(); return; }
-      if (e.key === "Enter" && !(t && (t.tagName === "BUTTON" || t.tagName === "A"))) {
+      // Only when nothing has focus: Enter on a control, a field or an open
+      // dialog is that control's own (loopcheck of #439).
+      if (e.key === "Enter" && (!t || t === document.body || t === document.documentElement)) {
         const k = keysRef.current;
         if (k.phase === "done") { e.preventDefault(); k.onStartBreak?.(); }
         else if (k.phase === "over") { e.preventDefault(); k.onStartNext?.(); }

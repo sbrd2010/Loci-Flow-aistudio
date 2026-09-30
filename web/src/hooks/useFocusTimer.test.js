@@ -154,6 +154,36 @@ describe("useFocusTimer", () => {
     expect(result.current.timerSecondsLeft).toBe(25 * 60);
   });
 
+  // Loopcheck of #439: running the timer again leaves block end, so its 60 s
+  // wait can't bank the finished block a second time.
+  it("a block started at block end leaves it: the 60 s wait doesn't bank twice", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+      vi.advanceTimersByTime(25 * 60 * 1000 + 1000);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.sessionCompletePending).toBe(true);
+      // A length chosen on the way back in: resize, then run.
+      result.current.changeFocusDuration(5);
+      rerender([[task], {}, "u1"]);
+      result.current.setIsTimerRunning(true);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.sessionCompletePending).toBe(false);
+      vi.advanceTimersByTime(61 * 1000);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.isTimerRunning).toBe(true);
+      const ended = result.current.endFocusSession("user_abandoned");
+      expect(ended.focusBlocks).toBe(2);
+      expect(Math.round(ended.focusElapsedSeconds / 60)).toBe(26);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // 59i (Codex review of #433): the block block end's 60 s wait sets up,
   // paused, counts only once it runs.
   it("does not count a block set up paused until it runs", () => {

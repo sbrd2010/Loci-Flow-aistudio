@@ -551,14 +551,29 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   // No answer in 60 s (not during a break, nor while a question is open):
   // pause on a fresh block — after a break, the one it offered. The block is
   // staged, so no minutes and no block are counted until it runs (Q38.1b).
+  // It calls the latest changeFocusDuration (a stale one would bank the
+  // finished block again), and does nothing if block end has been left in
+  // the meantime (loopcheck of #439).
+  const changeFocusDurationRef = useRef(null);
   useEffect(() => {
     if (!sessionCompletePending || breakUntil != null || blockEndHeld) return undefined;
     const id = setTimeout(() => {
+      if (!sessionCompletePendingRef.current) return;
       const minutes = breakOver ? nextLen : focusBlockSeconds(config) / 60;
-      if (changeFocusDuration(minutes, { staged: true })) setSessionCompletePending(false);
+      if (changeFocusDurationRef.current?.(minutes, { staged: true })) setSessionCompletePending(false);
     }, BLOCK_END_WAIT_MS);
     return () => clearTimeout(id);
   }, [sessionCompletePending, breakUntil, blockEndHeld, breakOver, nextLen]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Block end is left the moment the timer runs again, however it was
+  // started (a length chosen on the way back in, say) — so its break and its
+  // 60 s wait can't act on the block that follows.
+  useEffect(() => {
+    if (isTimerRunning && sessionCompletePendingRef.current) setSessionCompletePending(false);
+  }, [isTimerRunning]);
+  // …and when the session ends, by any path (P2-1 of the loopcheck of #439).
+  useEffect(() => {
+    if (!focusSessionId && sessionCompletePendingRef.current) setSessionCompletePending(false);
+  }, [focusSessionId]);
   // Q38.1d: the mini window says so.
   useEffect(() => { setPipNotice(breakOver ? "Break’s over" : null); }, [breakOver]);
   const blockEndPhase = !sessionCompletePending ? null : breakUntil != null ? "break" : breakOver ? "over" : "done";
@@ -611,6 +626,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   // sees the current (post-change) block's timerMaxSeconds/timerSecondsLeft.
   // Returns whether the new length was set: not once a pause has run out
   // (the session closes instead), so a caller never restarts it.
+  changeFocusDurationRef.current = (...args) => changeFocusDuration(...args);
   const changeFocusDuration = (minutes, { staged = false } = {}) => {
     if (pauseRanOut()) return false;
     bankBlock({ staged });
