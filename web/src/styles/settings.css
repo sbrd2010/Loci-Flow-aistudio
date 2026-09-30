@@ -228,6 +228,12 @@
 }
 .set-danger-link { align-self: flex-start; padding: 0 4px; }
 .set-text-danger { flex-shrink: 0; }
+/* Recently dropped's Restore: the same text button, in the accent. */
+.set-text-action {
+  flex-shrink: 0; align-self: center; min-height: 44px; padding: 0 8px;
+  font: inherit; font-size: 0.9375rem; font-weight: 800; color: var(--accent); background: none; border: 0; cursor: pointer;
+}
+.set-text-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* — fields — */
 .set-field { display: flex; flex-direction: column; gap: 8px; }

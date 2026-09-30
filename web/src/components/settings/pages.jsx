@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { droppedLine, recentlyDropped } from "../../utils/recentlyDropped";
 import { COACH_PERSONAS, normalizeCoachPersona } from "../../utils/coachPersona";
 import { COACH_PROFILE_NOTE_MAX_LENGTH } from "../../utils/coachProfile";
 import { MEMORY_ENTRY_MAX_LENGTH, clearAllMemory, editMemoryEntry, isMemoryEnabled, removePinnedFact, removeRecentObservation } from "../../utils/coachMemory";
@@ -588,9 +589,10 @@ export function NotificationsPage({ permission, onRequest, onBack }) {
 }
 
 // ── Data (44h) ─────────────────────────────────────────────────────────────
-export function DataPage({ payload, email, lastSyncLabel, onSyncNow, onResetTracking, onBack }) {
+export function DataPage({ payload, email, lastSyncLabel, onSyncNow, onResetTracking, onRestore, onBack }) {
   const [exportError, setExportError] = useState("");
   const active = (payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).length;
+  const dropped = recentlyDropped(payload.tasks || []);
   const run = (fn) => { setExportError(""); try { fn(); } catch { setExportError("Export failed. Your tasks were not changed."); } };
   return (
     <SubPage title="Data" onBack={onBack}>
@@ -605,6 +607,20 @@ export function DataPage({ payload, email, lastSyncLabel, onSyncNow, onResetTrac
         <Row title="Download CSV" sub="Opens in Excel or Sheets" onClick={() => run(() => exportTasksAsCsv(payload.tasks || []))} />
       </Group>
       {exportError && <p className="set-window-hint" role="alert">{exportError}</p>}
+      {/* 57b answers 11, 24: what you Drop or Delete waits here 30 days. */}
+      <Group label="Recently dropped" note="Kept 30 days. Restore puts a task back where it was.">
+        {dropped.length === 0 ? (
+          <div className="set-row is-static"><span className="set-row-sub">Nothing dropped in the last 30 days.</span></div>
+        ) : dropped.map(t => (
+          <div key={t.uuid} className="set-row is-static">
+            <span className="set-row-text">
+              <span className="set-row-title">{t.title}</span>
+              <span className="set-row-sub">{droppedLine(t)}</span>
+            </span>
+            <button type="button" className="set-text-action" aria-label={`Restore ${t.title}`} onClick={() => onRestore?.(t.uuid)}>Restore</button>
+          </div>
+        ))}
+      </Group>
       <Group label="Reset">
         <div className="set-row is-static">
           <span className="set-row-text">

@@ -719,7 +719,7 @@ export default function TodayTab({
       setIsFocusMode(false);
       setFocusSessionActive(false);
     }
-    savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t) })
+    savePayloadAsync({ ...payload, tasks: tasks.map((t) => t.uuid === task.uuid ? { ...t, isDeleted: true, deletedAt: Date.now(), lastUpdated: Date.now() } : t) })
       .then(() => {
         const events = [event];
         if (endedFocusSession) {
