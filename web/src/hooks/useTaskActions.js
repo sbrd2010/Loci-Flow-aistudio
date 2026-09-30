@@ -59,8 +59,9 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
   };
 
   // A horizon change from the sheet's picker. To Today it leaves Plan, so it
-  // goes the way Move to Today does, with Undo.
-  const handleChangeHorizon = (task, horizon) => {
+  // goes the way Move to Today does, with Undo. A drop on a rung (57c) says
+  // "Moved to {horizon}" with Undo too (toName).
+  const handleChangeHorizon = (task, horizon, toName = null) => {
     if (horizon === "today") { handleMoveToToday(task); return; }
     const event = buildTaskMutationEvent("task_moved", task, {
       fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: horizon }, windows,
@@ -84,6 +85,7 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
         writeActivityEvents(eventsPatch(uid, events));
       })
       .catch(() => {});
+    if (toName) setUndo({ kind: "horizon", task, to: horizon, toName, at: now });
   };
 
   const handleTogglePin = (task) => patchTask(task.uuid, { isHorizonPinned: !task.isHorizonPinned });
@@ -193,6 +195,7 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
       ? { isNowFocus: true } : {};
     if (kind === "delete" && current.isDeleted) put({ isDeleted: false }, "task_restored");
     else if (kind === "park" && current.isParked) put({ isParked: false, ...refocus });
+    else if (kind === "horizon" && current.horizonLevel === undo.to) put({ horizonLevel: task.horizonLevel, orderIndex: task.orderIndex }, "task_moved");
     else if (kind === "today" && current.horizonLevel === "today") put({ horizonLevel: task.horizonLevel, orderIndex: task.orderIndex, deferredUntil: task.deferredUntil ?? null }, "task_moved");
     else if (kind === "step") {
       // Back where it was; steps added since stay where they are.
@@ -210,7 +213,9 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
     }
   };
   const UNDO_LABELS = { done: "Marked done", delete: "Deleted", park: "Parked", today: "Moved to Today" };
-  const undoText = !undo ? "" : undo.kind === "step" ? `Step removed: ${undo.step.text}` : `${UNDO_LABELS[undo.kind]}: ${undo.task.title}`;
+  const undoText = !undo ? "" : undo.kind === "step" ? `Step removed: ${undo.step.text}`
+    : undo.kind === "horizon" ? `Moved to ${undo.toName}: ${undo.task.title}`
+    : `${UNDO_LABELS[undo.kind]}: ${undo.task.title}`;
 
 
   return {

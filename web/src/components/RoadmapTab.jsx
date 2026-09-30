@@ -6,7 +6,7 @@ import { sanitizeTaskField, CATEGORY_ICONS, byPriorityThenOrder } from "../utils
 import { getFocusWindows } from "../utils/focusWindows";
 import { useLociDayStr } from "../hooks/useTodayStr";
 import { horizonsFromConfig, WORK_OLDER_ID } from "../utils/horizons";
-import { dayLabel, doneTasks, isOpenPlanTask, ladderRungs, listTasks, openingRung, runwayLabelsShown, runwayTicks, workOlderCount } from "../utils/planLadder";
+import { dayLabel, doneTasks, horizonChoices, isOpenPlanTask, ladderRungs, listTasks, openingRung, runwayLabelsShown, runwayTicks, workOlderCount } from "../utils/planLadder";
 import { buildTaskMutationEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import useTaskActions from "../hooks/useTaskActions";
 import {
@@ -43,7 +43,7 @@ function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, fr
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0 : 1,
+        opacity: isDragging ? 0.35 : 1, // 57c: its place fades
         position: "relative",
       }}
     >
@@ -128,7 +128,17 @@ function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, fr
 }
 
 // fullColTasks: the whole horizon when colTasks is a front's share of it.
-function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks, payload, savePayload, onTaskClick, onDone, isGoal = () => false, frontNameOf = () => null, openUuid = null }) {
+// 57c: a row dropped on a rung moves there. The rungs sit outside this
+// list's drag context, so the rung under the pointer is looked up where the
+// drag is (mouse or touch; the keyboard moves with the sheet's picker).
+function rungUnderPointer({ activatorEvent, delta }) {
+  const p = activatorEvent?.touches?.[0] || activatorEvent?.changedTouches?.[0] || activatorEvent;
+  if (!p || typeof p.clientX !== "number" || typeof document.elementsFromPoint !== "function") return null;
+  const hit = document.elementsFromPoint(p.clientX + delta.x, p.clientY + delta.y).find(el => el.closest?.(".plan-rung[data-drop]"));
+  return hit ? hit.closest(".plan-rung").dataset.horizon : null;
+}
+
+function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks, payload, savePayload, onTaskClick, onDone, isGoal = () => false, frontNameOf = () => null, openUuid = null, onRungHover, onDropOnRung }) {
   const interactionStyle = payload?.config?.taskRowInteractionStyle === "dragAnywhere" ? "dragAnywhere" : "classic";
   const [activeId, setActiveId] = useState(null);
   const getKey = (t) => t.uuid || String(t.id);
@@ -140,8 +150,17 @@ function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks,
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const handleDragEnd = ({ active, over }) => {
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
     setActiveId(null);
+    const rung = onDropOnRung ? rungUnderPointer(event) : null;
+    if (rung) {
+      onRungHover?.(null);
+      const task = colTasks.find(t => getKey(t) === active.id);
+      if (task) onDropOnRung(task, rung);
+      return;
+    }
+    onRungHover?.(null);
     if (!over || active.id === over.id) return;
     const oldIdx = colTasks.findIndex(t => getKey(t) === active.id);
     const newIdx = colTasks.findIndex(t => getKey(t) === over.id);
@@ -176,8 +195,9 @@ function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks,
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragStart={({ active }) => setActiveId(active.id)}
+      onDragMove={onDropOnRung ? (e) => onRungHover?.(rungUnderPointer(e)) : undefined}
       onDragEnd={handleDragEnd}
-      onDragCancel={() => setActiveId(null)}
+      onDragCancel={() => { setActiveId(null); onRungHover?.(null); }}
     >
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         {colTasks.map(task => (
@@ -202,7 +222,7 @@ function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks,
             borderRadius: "10px",
             padding: "10px 12px",
             boxShadow: "0 8px 24px rgba(0,0,0,0.22)",
-            transform: "rotate(0.8deg) scale(1.02)",
+            transform: "rotate(-1.2deg) scale(1.02)",
             opacity: 0.95,
             fontSize: "13px",
             fontWeight: "700",
@@ -276,6 +296,9 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
   }, []);
   const [phoneList, setPhoneList] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
+  // 57c: the rung a dragged row is over. Not on a phone, where the list
+  // hides the ladder: there the sheet's picker moves a task (43.1).
+  const [dropRung, setDropRung] = useState(null);
   // ≥1600 a rung closes a front's page shown in the list's place (57b.25).
   const pickRung = (id) => { setRung(id); writeRung(id); setPhoneList(true); setDoneOpen(false); onCloseFront?.(); };
 
@@ -701,7 +724,8 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
                   key={r.id}
                   type="button"
                   data-horizon={r.id}
-                  className={`plan-rung${r.id === selected && !frontOpen ? " is-open" : ""}${r.red ? " is-red" : ""}${r.dotted ? " is-dotted" : ""}`}
+                  data-drop={!narrow && r.id !== selected ? "" : undefined}
+                  className={`plan-rung${r.id === selected && !frontOpen ? " is-open" : ""}${r.red ? " is-red" : ""}${r.dotted ? " is-dotted" : ""}${dropRung === r.id ? " is-drop" : ""}`}
                   aria-current={r.id === selected && !frontOpen ? "true" : undefined}
                   onClick={() => pickRung(r.id)}
                 >
@@ -714,6 +738,7 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
                   </span>
                   <span className="plan-rung-bar"><span style={{ width: `${Math.round(r.elapsed * 100)}%` }} /></span>
                   <IconChevronRight size={18} className="plan-rung-chevron" aria-hidden="true" />
+                  {dropRung === r.id && <span className="plan-rung-drop">Drop to move here</span>}
                 </button>
               ))}
               {/* 57: the old Work horizon, until each task has a horizon. */}
@@ -764,6 +789,11 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
                 isGoal={isGoal}
                 frontNameOf={frontNameOf}
                 openUuid={detailUuid}
+                onRungHover={setDropRung}
+                onDropOnRung={(task, id) => {
+                  const to = rungs.find(x => x.id === id);
+                  if (to && task.horizonLevel !== id) handleChangeHorizon(task, id, to.name);
+                }}
               />
               {(() => {
                 const done = selectedRung ? doneTasks(tasks, selected, selectedRung.period) : [];
@@ -807,6 +837,7 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
             task={detailTask}
             variant={drawerViewport ? "drawer" : "sheet"}
             kicker={`${detailCol.label.toUpperCase()} · ${detailIndex + 1} OF ${detailCol.tasks.length}`}
+            horizonChoices={horizonChoices(config, lociDay)}
             isGoal={isGoal(detailTask)}
             fronts={frontsOnOffer(fronts, detailTask.frontId)}
             onClose={closeDetail}

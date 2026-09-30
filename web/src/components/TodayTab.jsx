@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { horizonChoices } from "../utils/planLadder";
 import TaskRow, { ROADMAP_HORIZONS } from "./TaskRow";
 import SplitTaskSheet from "./SplitTaskSheet";
 import { buildSplit, undoSplit } from "../utils/splitTask";
@@ -947,7 +948,8 @@ export default function TodayTab({
     if (u.kind === "route") return "Route cleared";
     const title = u.task.title;
     if (u.kind === "move") {
-      const label = u.to === "week" ? "This week" : (ROADMAP_HORIZONS.find(h => h.key === u.to)?.label || u.to);
+      // Its name as Plan shows it: renamed and custom horizons too.
+      const label = horizonChoices(config, todayStr).find(c => c.id === u.to)?.name || ROADMAP_HORIZONS.find(h => h.key === u.to)?.label || u.to;
       return `Moved to ${label}: ${title}`;
     }
     if (u.kind === "split") return `Split into ${u.created.length} tasks: ${title}`;
@@ -2244,6 +2246,7 @@ export default function TodayTab({
           <TaskDetail
             key={detailTask.uuid}
             task={detailTask}
+            horizonChoices={horizonChoices(config, todayStr)}
             index={detailIndex}
             isNow={detailIsNow}
             total={remainingTasks.length}

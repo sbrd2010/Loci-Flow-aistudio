@@ -4,7 +4,8 @@ import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { safeUUID } from "../utils/uuid";
 import { scheduleReminder, formatReminderLabel } from "../utils/reminders";
 import { notifPermissionState, requestNotifPermission as nativeRequestPermission } from "../utils/nativeNotifs";
-import { getFocusWindows } from "../utils/focusWindows";
+import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
+import { BUILT_IN_HORIZONS, horizonsFromConfig } from "../utils/horizons";
 import { frontsFromConfig, sortFronts } from "../utils/fronts";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { IconCheck, IconChevronRight, IconPencil, IconX } from "./ui/icons";
@@ -182,14 +183,20 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
   // the data; they are offered only to a task that already has them, so
   // editing it never silently changes them — or when the AI suggests P4, so
   // the chosen priority is always one you can see.
+  // 57b answer 26: the built-ins, then custom horizons (the row scrolls).
+  // A renamed built-in shows its name; a hidden one only if it is the one
+  // opened from.
+  const SHORT = { week: "Week", month: "Month", quarter: "Quarter", halfyear: "6 mo" };
+  const planHorizons = horizonsFromConfig(payload.config || {}, getLociDayStr(new Date(), windows));
+  const defaultName = (id) => BUILT_IN_HORIZONS.find(b => b.id === id)?.name;
+  const shown = planHorizons.filter(h => !h.hidden || h.id === defaultHorizon);
   const horizons = [
     { key: "today", label: "Today" },
-    { key: "week", label: "Week" },
-    { key: "month", label: "Month" },
-    { key: "quarter", label: "Quarter" },
-    { key: "halfyear", label: "6 mo" },
+    ...shown.filter(h => SHORT[h.id]).map(h => ({ key: h.id, label: h.name === defaultName(h.id) ? SHORT[h.id] : h.name })),
+    ...shown.filter(h => !SHORT[h.id]).map(h => ({ key: h.id, label: h.name })),
     ...(defaultHorizon === "office" ? [{ key: "office", label: "Work" }] : []),
   ];
+  const hasCustoms = shown.some(h => !SHORT[h.id]);
   const priorities = ["P1", "P2", "P3", ...(priority === "P4" ? ["P4"] : [])];
   const categories = ["Career", "Health", "Work", "Personal"];
   const parsedSubStepDraft = parseManualSubSteps(subStepDraft);
@@ -283,7 +290,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
   // Where + was tapped sets the horizon (45a): one tinted line says so, and
   // the Horizon + Priority block wears a 2px ring for about 1.5s on open.
-  const HORIZON_NAMES = { today: "Today", week: "This week", month: "This month", quarter: "This quarter", halfyear: "6 months", office: "Work" };
+  const HORIZON_NAMES = { today: "Today", office: "Work", ...Object.fromEntries(planHorizons.map(h => [h.id, h.name])) };
   const horizonName = HORIZON_NAMES[horizonLevel] || "Today";
   const [ringOn, setRingOn] = useState(true);
   useEffect(() => {
@@ -372,7 +379,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
           <div className={`add-block${ringOn ? " is-ringed" : ""}`}>
             <div className="add-field" role="group" aria-labelledby="add-horizon-label">
               <span id="add-horizon-label" className="add-label">Horizon</span>
-              <div className="add-chips">
+              <div className={`add-chips${hasCustoms ? " is-scroll" : ""}`}>
                 {horizons.map((h) => (
                   <button key={h.key} type="button" className={chip(horizonLevel === h.key)} aria-pressed={horizonLevel === h.key} onClick={() => setHorizonLevel(h.key)}>
                     {h.label}

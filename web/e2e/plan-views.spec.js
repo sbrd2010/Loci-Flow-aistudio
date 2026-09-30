@@ -197,3 +197,31 @@ test("Horizons ≥1600: the Fronts column; a front's page opens in place of the 
   await page.getByRole("button", { name: "Back to Fronts" }).click();
   await expect(page.locator(".plan-open")).toBeVisible();
 });
+
+// 57c: drag a row onto a rung — a dashed ring and "Drop to move here", then
+// "Moved to …" with Undo.
+test("Horizons: a row dragged onto a rung moves there, with Undo", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await enterDemo(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  const list = page.locator(".plan-open");
+  const row = list.locator(".plan-row").first();
+  const title = (await row.locator(".plan-row-title").innerText()).trim();
+  await row.hover();
+  const grip = await row.locator(".plan-row-grip").boundingBox();
+  const rung = page.locator(".plan-rung[data-horizon='month']");
+  const target = await rung.boundingBox();
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x + 20, grip.y + 20, { steps: 5 });
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 12 });
+  await expect(rung).toHaveClass(/is-drop/);
+  await expect(rung).toContainText("Drop to move here");
+  await page.mouse.up();
+
+  await expect(list.getByText(title, { exact: true })).toHaveCount(0);
+  await expect(page.locator(".undo-toast")).toContainText(`Moved to This month: ${title}`);
+  await page.locator(".undo-toast").getByRole("button", { name: /Undo/ }).click();
+  await expect(list.getByText(title, { exact: true })).toBeVisible();
+});

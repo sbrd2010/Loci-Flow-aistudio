@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { horizonsFromConfig } from "./horizons";
-import { dayLabel, doneTasks, ladderRungs, listTasks, openingRung, runwayLabelsShown, runwayTicks, workOlderCount } from "./planLadder";
+import { dayLabel, doneTasks, horizonChoices, ladderRungs, listTasks, openingRung, runwayLabelsShown, runwayTicks, workOlderCount } from "./planLadder";
 
 const day = "2026-09-28"; // Mon, the 57 sample date
 const hs = horizonsFromConfig({}, day);
@@ -96,4 +96,20 @@ describe("which rung Plan opens on (42.1)", () => {
 it("dayLabel: SUN 4 OCT, with the year when it isn't this one", () => {
   expect(dayLabel("2026-10-04", day)).toBe("SUN 4 OCT");
   expect(dayLabel("2027-03-31", day)).toBe("WED 31 MAR 2027");
+});
+
+describe("the horizon picker (57h)", () => {
+  const config = { horizons: {
+    month: { hidden: true },
+    two: { id: "two", name: "2 weeks", kind: "weeks", count: 2, startDate: "2026-09-28" },
+  } };
+  const choices = horizonChoices(config, day);
+  it("Today, then the visible horizons in Plan's order, customs included; no Work", () => {
+    expect(choices.map(c => c.id)).toEqual(["today", "week", "quarter", "two", "halfyear"]);
+  });
+  it("each with its end date, red at ≤3 days; 6 months reads TO …", () => {
+    expect(choices.find(c => c.id === "quarter")).toMatchObject({ date: "WED 30 SEP", red: true });
+    expect(choices.find(c => c.id === "halfyear").date).toBe("TO 31 MAR 2027");
+    expect(choices[0].date).toBe(null);
+  });
 });
