@@ -82,5 +82,9 @@ test("Today's Day map column asks too: Done with Undo (Q47.5)", async ({ page })
   await expect(line).toBeVisible();
   await line.getByRole("button", { name: "Move" }).click();
   await page.getByRole("menuitem", { name: "Pick a time…" }).click();
-  await expect(page.getByRole("dialog", { name: "Fix a time: Call with the recruiter" })).toBeVisible();
+  const sheet = page.getByRole("dialog", { name: "Fix a time: Call with the recruiter" });
+  // It starts from now, not the missed 11:00, and offers Tomorrow.
+  await expect(sheet).toContainText("A new time today, or tomorrow.");
+  await sheet.getByRole("button", { name: "Tomorrow" }).click();
+  await expect(column.getByText("Call with the recruiter")).toHaveCount(0);
 });

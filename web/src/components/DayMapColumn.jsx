@@ -201,6 +201,9 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
           durationOf={getEstimate}
           getTaskId={getTaskId}
           onFix={fixAt}
+          // A missed call: the sheet starts from now and offers Tomorrow, as
+          // the Day map's does (Codex review of #453).
+          onTomorrow={() => { onMoveToTomorrow([getTaskId(picking)]); setPicking(null); }}
           onClose={() => setPicking(null)}
         />
       )}
