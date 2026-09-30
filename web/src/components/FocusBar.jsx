@@ -24,6 +24,9 @@ export default function FocusBar({
   const [ending, setEnding] = useState(false);
   const [more, setMore] = useState(false);
   const pressRef = useRef(null);
+  // A long press opens the menu; the tap its release makes (on Pause, say)
+  // is swallowed, or opening the menu would also pause (Codex review of #437).
+  const longPressedRef = useRef(false);
 
   // F goes back to focus, from anywhere the bar shows (not while typing).
   const keysRef = useRef({});
@@ -41,8 +44,18 @@ export default function FocusBar({
 
   if (!task) return null;
 
-  const startPress = () => { clearTimeout(pressRef.current); pressRef.current = setTimeout(() => setMore(true), LONG_PRESS_MS); };
+  const startPress = () => {
+    longPressedRef.current = false;
+    clearTimeout(pressRef.current);
+    pressRef.current = setTimeout(() => { longPressedRef.current = true; setMore(true); }, LONG_PRESS_MS);
+  };
   const endPress = () => clearTimeout(pressRef.current);
+  const swallowAfterLongPress = (e) => {
+    if (!longPressedRef.current) return;
+    longPressedRef.current = false;
+    e.preventDefault();
+    e.stopPropagation();
+  };
   const blockLabel = clock(maxSeconds);
 
   return (
@@ -54,6 +67,7 @@ export default function FocusBar({
         onPointerDown={startPress}
         onPointerUp={endPress}
         onPointerLeave={endPress}
+        onClickCapture={swallowAfterLongPress}
         onContextMenu={e => { e.preventDefault(); setMore(true); }}
       >
         <MiniRing secondsLeft={secondsLeft} maxSeconds={maxSeconds} paused={!isRunning} />

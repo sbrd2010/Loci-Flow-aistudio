@@ -154,6 +154,36 @@ describe("useFocusTimer", () => {
     expect(result.current.timerSecondsLeft).toBe(25 * 60);
   });
 
+  // 59i (Codex review of #433): the block block end's 60 s wait sets up,
+  // paused, counts only once it runs.
+  it("does not count a block set up paused until it runs", () => {
+    const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+    const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+    result.current.startFocusSession(task, { enterFocusMode: false });
+    rerender([[task], {}, "u1"]);
+    result.current.setTimerSecondsLeft(0);
+    rerender([[task], {}, "u1"]);
+    result.current.changeFocusDuration(25, { staged: true });
+    rerender([[task], {}, "u1"]);
+    expect(result.current.focusBlockNumber).toBe(2);
+    const ended = result.current.endFocusSession("user_abandoned");
+    expect(ended.focusBlocks).toBe(1);
+  });
+
+  it("counts a block set up paused once it runs", () => {
+    const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+    const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+    result.current.startFocusSession(task, { enterFocusMode: false });
+    rerender([[task], {}, "u1"]);
+    result.current.setTimerSecondsLeft(0);
+    rerender([[task], {}, "u1"]);
+    result.current.changeFocusDuration(25, { staged: true });
+    rerender([[task], {}, "u1"]);
+    result.current.setIsTimerRunning(true);
+    rerender([[task], {}, "u1"]);
+    expect(result.current.endFocusSession("user_abandoned").focusBlocks).toBe(2);
+  });
+
   // Q39.2 (Codex review of #436): a split from I'm stuck moves the pin while
   // the session is held — its block's time must survive the move.
   it("keeps the block's time when the pin moves with keepTimerOnTaskChange", () => {

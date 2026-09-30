@@ -87,6 +87,9 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   // counting — null while the timer runs — which is what a pause of more than
   // 15 minutes is measured from. All three live and die with focusSessionIdRef.
   const focusBlocksRef = useRef(0);
+  // A block set up paused by block end's 60 s wait (59i) is counted only once
+  // it runs — never, if the session ends first (Codex review of #433).
+  const stagedBlockRef = useRef(false);
   const focusExtensionsRef = useRef(0);
   const focusPausedAtRef = useRef(null);
   // The Loci day the open session began in, and when that day ends — fixed at
@@ -319,6 +322,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     focusSessionAccumulatedPlannedRef.current = 0;
     focusLedgerEntryRef.current = null;
     focusBlocksRef.current = 0;
+    stagedBlockRef.current = false;
     focusExtensionsRef.current = 0;
     focusPausedAtRef.current = null;
     focusStartDayRef.current = null;
@@ -459,6 +463,10 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   // from the moment the timer starts running until the session is explicitly ended.
   useEffect(() => {
     if (isTimerRunning) setFocusSessionActive(true);
+    if (isTimerRunning && stagedBlockRef.current) {
+      stagedBlockRef.current = false;
+      focusBlocksRef.current += 1;
+    }
   }, [isTimerRunning]);
 
   // Tab title: countdown while running, paused label in overlay, restore otherwise
@@ -498,12 +506,15 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   // A new block in the same session: bank the one it replaces. It counts as a
   // block of its own (59j) only if it held any focus — replacing a block
   // before it ran (a length picked on the way in) is still the first block.
-  const bankBlock = () => {
+  const bankBlock = ({ staged = false } = {}) => {
     if (!focusSessionIdRef.current) return;
     const elapsed = Math.max(0, timerMaxSeconds - timerSecondsLeft);
     focusSessionAccumulatedElapsedRef.current += elapsed;
     focusSessionAccumulatedPlannedRef.current += timerMaxSeconds;
-    if (elapsed > 0) focusBlocksRef.current += 1;
+    if (elapsed > 0) {
+      if (staged) stagedBlockRef.current = true;
+      else focusBlocksRef.current += 1;
+    }
   };
 
   // Restart the timer for the same task with a fresh duration ("Keep going" extension)
@@ -530,9 +541,9 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   // sees the current (post-change) block's timerMaxSeconds/timerSecondsLeft.
   // Returns whether the new length was set: not once a pause has run out
   // (the session closes instead), so a caller never restarts it.
-  const changeFocusDuration = (minutes) => {
+  const changeFocusDuration = (minutes, { staged = false } = {}) => {
     if (pauseRanOut()) return false;
-    bankBlock();
+    bankBlock({ staged });
     setIsTimerRunning(false);
     const secs = minutes * 60;
     setTimerSecondsLeft(secs);
@@ -605,6 +616,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     focusSessionAccumulatedPlannedRef.current = 0;
     focusLedgerEntryRef.current = null;
     focusBlocksRef.current = 1;
+    stagedBlockRef.current = false;
     focusExtensionsRef.current = 0;
     focusPausedAtRef.current = null;
     const windows = getFocusWindows(config);
@@ -752,6 +764,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     focusSessionAccumulatedPlannedRef.current = 0;
     focusLedgerEntryRef.current = null;
     focusBlocksRef.current = 0;
+    stagedBlockRef.current = false;
     focusExtensionsRef.current = 0;
     focusPausedAtRef.current = null;
     focusStartDayRef.current = null;
@@ -787,7 +800,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     focusStartedAt: focusStartedAtRef.current,
     // Which block of the session is running (59a's "BLOCK 2 OF 25 MIN"):
     // read from the ref each render, as focusStartedAt is.
-    focusBlockNumber: focusBlocksRef.current,
+    focusBlockNumber: focusBlocksRef.current + (stagedBlockRef.current ? 1 : 0),
     // What screen 3's "+Nm LOGGED SO FAR" reports. Whole-session, not
     // current-block: after a "Keep Going" extension the earlier blocks live in
     // the accumulator, and a figure ignoring them tells the user they logged
