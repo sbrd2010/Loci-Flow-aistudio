@@ -628,6 +628,8 @@
   color: var(--ink-2, var(--text-secondary));
 }
 @media (min-width: 1600px) {
+  /* The page itself widens to the 1760 cap, as Today's does. */
+  .screen-content.screen-content-plan { padding-inline: max(48px, calc((100% - 1760px) / 2)); }
   .plan-head,
   .plan-horizons-view { max-width: 1760px; }
   .plan-seg { display: none; }

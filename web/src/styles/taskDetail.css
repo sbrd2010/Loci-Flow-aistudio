@@ -508,3 +508,27 @@
   border-radius: 6px;
 }
 .detail-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Plan (57, Q46): the drawer never covers the open list.
+   1024–1599: it opens on the left over the ladder, as wide as the ladder
+   column reaches (the page's margin, Plan's 48, the ladder's 320, and 16 of
+   the 36 gap), so the list stays whole and doesn't move.
+   From 1600: it takes the Fronts column's place (380, inside Plan's 48 at
+   the right of the 1760 cap), as it takes the Day map column's on Today. */
+@media (min-width: 1024px) and (max-width: 1599px) {
+  .plan-horizons-view .task-detail.is-drawer {
+    left: 0;
+    right: auto;
+    width: calc(max(48px, (100vw - 1200px) / 2) + 384px);
+    border-left: 0;
+    border-right: 1px solid var(--line);
+    box-shadow: 12px 0 30px rgba(15, 31, 22, 0.08);
+  }
+}
+@media (min-width: 1600px) {
+  .plan-horizons-view .task-detail.is-drawer {
+    left: calc(100vw - max(48px, (100vw - 1760px) / 2) - 428px);
+    right: auto;
+    width: 380px;
+  }
+}
