@@ -100,7 +100,7 @@ export function applyHorizonDelete(payload, id, choices, now = Date.now()) {
     tasks: tasks.map(t => {
       const to = choices[t.uuid];
       if (t.horizonLevel !== id || !to) return t;
-      if (to === "drop") return { ...t, isDeleted: true, isNowFocus: false, lastUpdated: now };
+      if (to === "drop") return { ...t, isDeleted: true, deletedAt: now, isNowFocus: false, lastUpdated: now };
       return { ...t, horizonLevel: to, orderIndex: nextOrder(to), lastUpdated: now };
     }),
   };

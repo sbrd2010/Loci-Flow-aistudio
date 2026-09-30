@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
+import EditHorizons from "./EditHorizons";
+import { restoreDropped } from "../utils/recentlyDropped";
+import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import ConfirmDialog from "./ConfirmDialog";
 import PrivacyPolicy from "./PrivacyPolicy";
 import { db, auth } from "../firebase";
@@ -59,8 +62,10 @@ function shortDeadline(dateStr) {
   return new Date(y, m - 1, d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-export default function SettingsTab({ payload, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut, theme, onThemeChange, email, flushNow }) {
+export default function SettingsTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut, theme, onThemeChange, email, flushNow }) {
   const config = payload.config || {};
+  const lociDay = getLociDayStr(new Date(), getFocusWindows(config));
+  const [editHorizons, setEditHorizons] = useState(false);
   const wide = useWide();
   // Phones: null is the root list. Wide: a section id, or a day page.
   const [page, setPage] = useState(null);
@@ -111,6 +116,8 @@ export default function SettingsTab({ payload, saveSubPath, saveConfigPatch, las
       <Row title="Focus timer" value={`${Number(config.pomodoroDurationMinutes) || 25} min`} onClick={() => open("timer")} />
       <Row title="Reminder before" value={`${Number(config.reminderNagIntervalMinutes) || 15} min`} onClick={() => open("reminder")} />
       <SwitchRow title="Evening guard" sub="No new tasks after 20:00" checked={!!config.eveningGuardWindowActive} onChange={v => saveConfigPatch({ eveningGuardWindowActive: v })} />
+      {/* 57g: Edit horizons, from Settings as from Plan's header. */}
+      <Row title="Edit horizons" sub="Rename, hide or add a horizon" onClick={() => setEditHorizons(true)} />
       <Row title="Anchors on Today" value={ANCHOR_MODES.find(m => m.value === (config.anchorsOnToday === "off" ? "off" : "line")).label} onClick={() => open("anchors")} />
     </Group>
   );
@@ -168,7 +175,8 @@ export default function SettingsTab({ payload, saveSubPath, saveConfigPatch, las
     ai: () => <AiProviderPage onBack={back} />,
     notifications: () => <NotificationsPage permission={permission} onRequest={requestPermission} onBack={back} />,
     data: () => (
-      <DataPage payload={payload} email={email} lastSyncLabel={syncLabel} onSyncNow={flushNow} onResetTracking={resetTracking} onBack={back} />
+      <DataPage payload={payload} email={email} lastSyncLabel={syncLabel} onSyncNow={flushNow} onResetTracking={resetTracking} onBack={back}
+        onRestore={uuid => savePayload?.(restoreDropped(payload, uuid, lociDay))} />
     ),
     // Wide-only sections: the groups themselves, as a page.
     day: () => <SubPage title="The day">{dayGroup}</SubPage>,
@@ -181,6 +189,9 @@ export default function SettingsTab({ payload, saveSubPath, saveConfigPatch, las
       {confirm && <ConfirmDialog {...confirm} />}
       {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
       {showBug && <BugReport onClose={() => setShowBug(false)} />}
+      {editHorizons && (
+        <EditHorizons payload={payload} day={lociDay} saveConfigPatch={saveConfigPatch} savePayload={savePayload} savePayloadAsync={savePayloadAsync} onClose={() => setEditHorizons(false)} />
+      )}
     </>
   );
 

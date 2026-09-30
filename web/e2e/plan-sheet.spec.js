@@ -193,3 +193,32 @@ test("Drag anywhere: Enter on a Plan row opens its sheet; Space picks it up", as
   await page.keyboard.press("Escape");
   await expect(sheet(page)).toHaveCount(0);
 });
+
+// 57b answers 11, 24: a deleted task waits 30 days in Settings → Data →
+// Recently dropped, and Restore puts it back. Settings opens Edit horizons
+// too (57g).
+test("Delete, then Restore from Settings → Data → Recently dropped; Settings opens Edit horizons", async ({ page }) => {
+  await enterDemo(page);
+  const row = horizon(page, "This week").locator(".plan-row").first();
+  const title = (await row.locator(".plan-row-title").innerText()).trim();
+  await row.click();
+  await sheet(page).locator(".detail-foot").getByRole("button", { name: "Delete" }).click();
+  await expect(horizon(page, "This week").getByText(title, { exact: true })).toHaveCount(0);
+
+  const main = page.getByRole("navigation", { name: "Main navigation" });
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Data", exact: true }).first().click();
+  const dropped = page.getByRole("region", { name: "Recently dropped" });
+  await expect(dropped.getByText(title, { exact: true })).toBeVisible();
+  await expect(dropped.getByText("Dropped today · 30 days left")).toBeVisible();
+  await dropped.getByRole("button", { name: `Restore ${title}` }).click();
+  await expect(dropped.getByText(title, { exact: true })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "The day", exact: true }).first().click();
+  await page.getByRole("button", { name: /^Edit horizons/ }).click();
+  await expect(page.getByRole("dialog", { name: "Edit horizons" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await main.getByRole("button", { name: "Plan", exact: true }).click();
+  await expect(horizon(page, "This week").getByText(title, { exact: true })).toBeVisible();
+});

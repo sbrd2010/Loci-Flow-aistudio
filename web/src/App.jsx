@@ -1461,6 +1461,7 @@ export default function App() {
           <SettingsTab
             payload={payload}
             savePayload={savePayload}
+            savePayloadAsync={savePayloadAsync}
             saveSubPath={saveSubPath}
             saveConfigPatch={saveConfigPatch}
             lastSyncedAt={lastSyncedAt}
