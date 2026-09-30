@@ -1919,3 +1919,19 @@ test("a moved-from-yesterday task can't be dragged across the Today heading (50i
   await expect(list.locator(".today-list-group")).toHaveCount(0);
   await expect(rows.first().locator(".task-title-text")).toHaveText(last);
 });
+
+// Q49: the Key Deadline's Target is the band's third line, with nothing
+// committed too; the band opens Key deadline, where the preview shows it.
+test("the goal band shows the Target and opens Key deadline", async ({ page }) => {
+  await emptyTheWall(page);
+  const band = page.locator(".today-wall .wall-goal");
+  await expect(band.locator(".wall-goal-target")).toHaveText("Target · Finish one launch task today");
+  await band.click();
+  await expect(page.getByRole("heading", { name: "Key deadline" })).toBeVisible();
+  const preview = page.getByLabel("Preview of the goal band");
+  await expect(preview).toContainText("Project launch");
+  await expect(preview).toContainText("TARGET · Finish one launch task today");
+  // Cleared, the line goes.
+  await page.getByLabel("Target").fill("");
+  await expect(preview).not.toContainText("TARGET");
+});

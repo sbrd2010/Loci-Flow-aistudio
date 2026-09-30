@@ -171,11 +171,20 @@ function goalFigures(goal) {
   return parts.join(" · ");
 }
 
-function GoalBand({ goal }) {
+// Q49: tapping the band opens Settings → Key deadline, where it is set.
+function GoalBand({ goal, onOpen }) {
   const hasCount = goal.total > 0;
   const figures = goalFigures(goal);
+  const label = `Your goal: ${goal.name}${figures ? `, ${figures}` : ""}${goal.target ? `. Target: ${goal.target}` : ""}`;
+  const open = onOpen ? {
+    role: "button",
+    tabIndex: 0,
+    "aria-label": `${label}. Open Key deadline`,
+    onClick: onOpen,
+    onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } },
+  } : { role: "group", "aria-label": label };
   return (
-    <div className="wall-goal" data-flip="goal" role="group" aria-label={`Your goal: ${goal.name}${figures ? `, ${figures}` : ""}`}>
+    <div className={`wall-goal${onOpen ? " is-link" : ""}`} data-flip="goal" {...open}>
       <div className="wall-goal-head">
         <span className="wall-goal-kicker">
           YOUR GOAL
@@ -189,6 +198,10 @@ function GoalBand({ goal }) {
         {hasCount && <span className="wall-goal-count">{goal.done} OF {goal.total}</span>}
       </div>
       <div className="wall-goal-name">{goal.name}</div>
+      {/* Q49: the least you'll do each day toward it. */}
+      {goal.target && (
+        <div className="wall-goal-target"><span className="wall-goal-target-label">Target ·</span> {goal.target}</div>
+      )}
       <span className={`wall-goal-track${hasCount ? "" : " is-rule"}`} aria-hidden="true">
         {hasCount && <span className="wall-goal-fill" style={{ width: `${Math.round((goal.done / goal.total) * 100)}%` }} />}
       </span>
@@ -226,6 +239,7 @@ function AnchorLine({ anchors }) {
 export default function TodayWall({
   task,
   goal = null,
+  onOpenGoal = null,
   anchors = [],
   focusMinutes = 25,
   startChoice,
@@ -265,7 +279,7 @@ export default function TodayWall({
 
   const top = (
     <>
-      {goal && <GoalBand goal={goal} />}
+      {goal && <GoalBand goal={goal} onOpen={onOpenGoal} />}
       {anchors.length > 0 && <AnchorLine anchors={anchors} />}
     </>
   );

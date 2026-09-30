@@ -64,6 +64,26 @@
   color: var(--ink);
   overflow-wrap: anywhere;
 }
+/* Q49: "Target · 3 job apply + PRINCE2": the label in the kicker's voice,
+   the text at body size, muted, one line. */
+.wall-goal-target {
+  overflow: hidden;
+  font-size: 0.9375rem;
+  line-height: 1.35;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wall-goal-target-label {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold-label);
+}
+.wall-goal.is-link { cursor: pointer; }
+.wall-goal.is-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .wall-goal-track {
   display: flex;
   height: 4px;

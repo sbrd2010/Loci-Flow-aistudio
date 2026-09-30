@@ -62,6 +62,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("today");
   const [pendingCheckinSlot, setPendingCheckinSlot] = useState(null);
   const [mindBoxInitialPanel, setMindBoxInitialPanel] = useState(null);
+  // Settings opened at a page (Q49: the goal band opens Key deadline); the
+  // gear opens its list.
+  const [settingsInitialPage, setSettingsInitialPage] = useState(null);
   const [showAddTask, setShowAddTask] = useState(false);
   const [preselectedHorizon, setPreselectedHorizon] = useState("today");
   // Where + was tapped ("Today", "Plan · Quarter"), for Add task's note (45a).
@@ -1041,6 +1044,7 @@ export default function App() {
     // Leaving the Day map by a tab saves its pending edits, as its Back does.
     if (activeTab === "daymap") flushNow();
     if (tab === "mindbox") setMindBoxInitialPanel(null);
+    if (tab === "settings") setSettingsInitialPage(null);
     if (tab === "roadmap") { setRoadmapView("horizons"); setPlanFocusInbox(false); setPlanFrontId(null); }
     setActiveTab(tab);
   };
@@ -1447,6 +1451,7 @@ export default function App() {
         )}
         {activeTab === "today" && (
           <TodayTab
+            onOpenKeyDeadline={() => { handleTabSelect("settings"); setSettingsInitialPage("goal"); }}
             reviewLine={reviewLine}
             closeLine={closeLine}
             onOpenCloseDay={dayClosed ? null : () => setCloseDayOpen(true)}
@@ -1563,6 +1568,7 @@ export default function App() {
         {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} stuck={coachStuck} onClearStuck={() => setCoachStuck(null)} onBackToFocus={focusTimer.focusSessionActive && focusTimer.activeTask ? handleReturnToFocus : null} />}
         {activeTab === "settings" && (
           <SettingsTab
+            initialPage={settingsInitialPage}
             payload={payload}
             savePayload={savePayload}
             savePayloadAsync={savePayloadAsync}

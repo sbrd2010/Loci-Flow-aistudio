@@ -63,7 +63,7 @@ function shortDeadline(dateStr) {
   return new Date(y, m - 1, d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-export default function SettingsTab({ payload, savePayload, savePayloadAsync, uid, writeActivityEvents, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut, theme, onThemeChange, email, flushNow }) {
+export default function SettingsTab({ initialPage = null, payload, savePayload, savePayloadAsync, uid, writeActivityEvents, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut, theme, onThemeChange, email, flushNow }) {
   const config = payload.config || {};
   const lociDay = getLociDayStr(new Date(), getFocusWindows(config));
   const [editHorizons, setEditHorizons] = useState(false);
@@ -79,7 +79,7 @@ export default function SettingsTab({ payload, savePayload, savePayloadAsync, ui
   };
   const wide = useWide();
   // Phones: null is the root list. Wide: a section id, or a day page.
-  const [page, setPage] = useState(null);
+  const [page, setPage] = useState(initialPage);
   const [confirm, setConfirm] = useState(null);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showBug, setShowBug] = useState(false);
@@ -249,7 +249,7 @@ export default function SettingsTab({ payload, savePayload, savePayloadAsync, ui
           title="Key deadline"
           sub={config.deadlineLabel || config.deadlineDate
             ? [config.deadlineLabel, shortDeadline(config.deadlineDate)].filter(Boolean).join(" · ")
-            : config.deadlineAction ? `Daily minimum · ${config.deadlineAction}`
+            : config.deadlineAction ? `Target · ${config.deadlineAction}`
               : config.deadlineStartDate ? `Started · ${shortDeadline(config.deadlineStartDate)}` : "Not set"}
           onClick={() => open("goal")}
         />
