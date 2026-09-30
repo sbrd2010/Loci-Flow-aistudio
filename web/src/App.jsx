@@ -38,7 +38,7 @@ import HorizonReview from "./components/HorizonReview";
 import UndoToast, { UndoAnnouncer } from "./components/ui/UndoToast";
 import { applyReview, detectReviews, pendingReviews, undoReviewOrSort } from "./utils/horizonReview";
 import CloseTheDay from "./components/CloseTheDay";
-import { applyClose, closeLineDue, isDayClosed, pinFirstThing, reopenDay, undoClose } from "./utils/closeDay";
+import { applyClose, closeLineDue, isDayClosed, leftovers, pinFirstThing, reopenDay, undoClose } from "./utils/closeDay";
 import { makeOneThing } from "./utils/oneThing";
 import { shouldShowFloatingTimer, buildFocusCompletionPayload, EXPIRY_REASONS } from "./utils/focusSession";
 import { celebrate } from "./utils/celebrations";
@@ -1164,11 +1164,16 @@ export default function App() {
   const [closeDayOpen, setCloseDayOpen] = useState(false);
   const [closeUndo, setCloseUndo] = useState(null);
   const dayClosed = isDayClosed(payload?.config || {}, planDay);
+  // The day can turn on a laptop waking from sleep, before the reconnect
+  // delivers: pin only from data the server sent after the day turned, or a
+  // stale copy of the task (say, done on the phone since) would win the merge.
+  const dayTurnedAtRef = useRef(Date.now());
+  useEffect(() => { dayTurnedAtRef.current = Date.now(); }, [planDay]);
   useEffect(() => {
-    if (!payload?.config || (!demoMode && isSyncingFromCache)) return;
-    const next = pinFirstThing(payload, planDay);
+    if (!payload?.config || (!demoMode && (isSyncingFromCache || !(lastSyncedAt > dayTurnedAtRef.current)))) return;
+    const next = pinFirstThing(payloadRef.current, planDay);
     if (next) savePayload(next);
-  }, [planDay, payload?.config?.dayClose, isSyncingFromCache]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [planDay, payload?.config?.dayClose, isSyncingFromCache, lastSyncedAt]); // eslint-disable-line react-hooks/exhaustive-deps
   const planWindows = getFocusWindows(payload?.config || {});
   const dayEndMin = getOverallSpan(planWindows).endMin;
   const closeLine = closeLineDue(getLociNowMinutes(new Date(), planWindows), dayEndMin, dayClosed)
@@ -1180,6 +1185,8 @@ export default function App() {
     // Drops are meant: named, or three at once trip the save's drop guard
     // and nothing is written (useSync, isTaskCountDropSuspicious).
     const dropped = (next.tasks || []).filter(t => t.isDeleted && !(before.tasks || []).find(b => b.uuid === t.uuid)?.isDeleted).map(t => t.uuid);
+    // Every leftover leaves Today, so a session running on one ends first.
+    if (focusTimer.focusSessionActive && leftovers(before.tasks || [], planDay).some(t => String(t.uuid) === String(focusTimer.activeTask?.uuid))) handleEndFocusSession();
     setCloseDayOpen(false);
     savePayloadAsync(next, { expectedRemovals: dropped })
       .then(() => setCloseUndo({ before, at: Date.now() }))

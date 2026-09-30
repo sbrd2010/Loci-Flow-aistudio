@@ -1637,7 +1637,7 @@ export default function TodayTab({
   });
 
   const wallKeysBlocked = isFocusMode || isAddTaskDialogOpen || (!!detailUuid && !drawerViewport)
-    || rescueActive || !!frontPickerTask || !!splitTask;
+    || rescueActive || !!frontPickerTask || !!splitTask || (!!dayClosed && !focusSessionActive);
   useEffect(() => {
     if (wallKeysBlocked) return undefined;
     const onKey = (e) => {
