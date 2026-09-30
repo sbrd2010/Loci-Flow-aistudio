@@ -225,3 +225,38 @@ test("Horizons: a row dragged onto a rung moves there, with Undo", async ({ page
   await page.locator(".undo-toast").getByRole("button", { name: /Undo/ }).click();
   await expect(list.getByText(title, { exact: true })).toBeVisible();
 });
+
+// 57g: Edit horizons — rename, hide, add one (Q45) and delete it, with Undo.
+test("Edit horizons: rename, hide, add a 2-week horizon, delete it with Undo", async ({ page }) => {
+  await enterDemo(page);
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  await page.getByRole("button", { name: "Edit horizons" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit horizons" });
+  await expect(dialog.getByText("MON – SUN · REVIEW EACH MONDAY")).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Rename This week" }).click();
+  await dialog.getByLabel("Name of This week").fill("Sprint");
+  await dialog.getByLabel("Name of This week").press("Enter");
+  await expect(page.locator(".plan-rung[data-horizon='week'] .plan-rung-name")).toHaveText("Sprint");
+
+  await dialog.getByRole("button", { name: "Hide This quarter" }).click();
+  await expect(page.locator(".plan-rung[data-horizon='quarter']")).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Show This quarter" })).toBeVisible();
+
+  await dialog.getByRole("radio", { name: "2 weeks" }).click();
+  await expect(dialog.getByText("When it ends, you review it and it repeats for another 2 weeks.")).toBeVisible();
+  await dialog.getByRole("button", { name: "Add horizon" }).click();
+  await expect(page.locator(".plan-rung", { hasText: "2 weeks" })).toHaveCount(1);
+  await expect(dialog.getByText(/^ENDS 23 JUN · REPEATS EVERY 2 WEEKS$/)).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Edit 2 weeks" }).click();
+  await dialog.getByRole("button", { name: "Delete horizon" }).click();
+  await expect(dialog.getByText("It holds no open tasks.")).toBeVisible();
+  await dialog.getByRole("button", { name: "Delete horizon" }).click();
+  await expect(page.locator(".plan-rung", { hasText: "2 weeks" })).toHaveCount(0);
+  await dialog.locator(".undo-toast").getByRole("button", { name: /Undo/ }).click();
+  await expect(page.locator(".plan-rung", { hasText: "2 weeks" })).toHaveCount(1);
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+});
