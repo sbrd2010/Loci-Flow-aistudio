@@ -598,6 +598,11 @@ export default function TodayTab({
   const releaseHeldSession = (heldId) => {
     if (!heldId || focusSessionIdRef.current !== heldId) return;
     const ended = endFocusSession("user_abandoned");
+    // Ended as every other path ends one: no session left for the bar to
+    // offer, whose Resume would run a timer with nothing recording it
+    // (Codex review of #436). Piece 1 still waits on the focus page.
+    setIsTimerRunning(false);
+    setFocusSessionActive(false);
     if (ended?.task) {
       writeActivityEvents(eventPatch(uid, buildFocusTerminalEvent(
         "focus_abandoned", ended.task, ended.focusSessionId, { ...ended, windows, now: Date.now() }
