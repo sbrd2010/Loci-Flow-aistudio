@@ -266,7 +266,8 @@ function Runway({ rungs, day, phone }) {
           <span className="plan-runway-tick" style={{ left: `${t.at * 100}%` }} />
           {shown.has(t.end) && (
             <span className={`plan-runway-label${t.furthest ? " is-far" : ""}`} style={t.furthest ? undefined : { left: `${t.at * 100}%` }}>
-              {t.furthest ? dayLabel(t.end, day).replace(/^[A-Z]{3} /, "") : t.label}
+              {/* The furthest shows its date — unless horizons share it, which keep "SEP · Q3" (Codex review of #441). */}
+              {t.furthest && !t.label.includes(" · ") ? dayLabel(t.end, day).replace(/^[A-Z]{3} /, "") : t.label}
             </span>
           )}
         </React.Fragment>
@@ -315,12 +316,10 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
 
   // 45h: the four horizons, always shown. Work (the older horizon) is shown
   // only while it holds tasks, so none of them is lost from view.
+  // A front's page: every visible horizon, yours too (Codex review of #443),
+  // then Work · older while it holds tasks (52), with no +.
   const columns = [
-    { key: "week",     label: "This week" },
-    { key: "month",    label: "This month" },
-    { key: "quarter",  label: "This quarter" },
-    { key: "halfyear", label: "6 months" },
-    // 52: Work stays only while it holds tasks, "older", with no +.
+    ...rungs.map(r => ({ key: r.id, label: r.name })),
     { key: "office",   label: "Work · older", onlyWithTasks: true, noAdd: true },
   ];
 

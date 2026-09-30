@@ -40,7 +40,9 @@ export function detectReviews(config = {}, tasks = [], day) {
     for (let d = addDays(rec.through, 1); daysBetween(d, prevEnd) >= 0 && periods < 1000; periods++) {
       d = addDays(currentPeriod(h, d).end, 1);
     }
-    const uuids = rec.pending?.uuids || tasks.filter(t => t.horizonLevel === h.id && isOpen(t)).map(t => t.uuid);
+    // A review still waiting takes in what was left this time too (Codex review of #447).
+    const openNow = tasks.filter(t => t.horizonLevel === h.id && isOpen(t)).map(t => t.uuid);
+    const uuids = [...new Set([...(rec.pending?.uuids || []), ...openNow])];
     next[h.id] = uuids.length
       ? { ...rec, through: prevEnd, pending: { end: prevEnd, periods: (rec.pending?.periods || 0) + periods, uuids } }
       : { ...rec, through: prevEnd, pending: null };

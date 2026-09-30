@@ -73,8 +73,10 @@ export function moveSentence(h, endDate, day) {
 // Q44.3: deleting a horizon the user added. Its open tasks each need a
 // place: the next larger visible horizon (default), Today, or Drop.
 export function deleteTargets(config, id, day) {
-  const all = horizonsFromConfig(config, day).filter(h => !h.hidden);
-  const gone = all.find(h => h.id === id);
+  // The one going may be hidden; where its tasks go must be shown (Codex review of #444).
+  const every = horizonsFromConfig(config, day);
+  const all = every.filter(h => !h.hidden);
+  const gone = every.find(h => h.id === id);
   const end = gone ? currentPeriod(gone, day).end : null;
   const larger = all
     .filter(h => h.id !== id && end && currentPeriod(h, day).end > end)

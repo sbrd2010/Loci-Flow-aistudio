@@ -1140,12 +1140,15 @@ export default function App() {
     [payload?.config, payload?.tasks, planDay],
   );
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [reviewShown, setReviewShown] = useState(false);
+  // Which batch of reviews opened on its own: a new one opens once too, even
+  // in a tab left open (Codex review of #447).
+  const [reviewShown, setReviewShown] = useState("");
+  const reviewKey = reviews.map(r => `${r.id}:${r.end}`).join("|");
   const [reviewUndo, setReviewUndo] = useState(null);
   const busyFocusing = focusTimer.focusSessionActive || focusTimer.isFocusMode;
   useEffect(() => {
-    if (reviews.length && !reviewShown && !busyFocusing && !showAddTask) { setReviewOpen(true); setReviewShown(true); }
-  }, [reviews.length, reviewShown, busyFocusing, showAddTask]);
+    if (reviewKey && reviewKey !== reviewShown && !busyFocusing && !showAddTask) { setReviewOpen(true); setReviewShown(reviewKey); }
+  }, [reviewKey, reviewShown, busyFocusing, showAddTask]);
   const openReview = () => setReviewOpen(true);
   const finishReview = (review, choices) => {
     const before = payloadRef.current;
@@ -1553,6 +1556,8 @@ export default function App() {
             payload={payload}
             savePayload={savePayload}
             savePayloadAsync={savePayloadAsync}
+            uid={activityUid}
+            writeActivityEvents={writeActivityEvents}
             saveSubPath={saveSubPath}
             saveConfigPatch={saveConfigPatch}
             lastSyncedAt={lastSyncedAt}

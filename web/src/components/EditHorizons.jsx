@@ -155,7 +155,9 @@ export default function EditHorizons({ payload, day, saveConfigPatch, savePayloa
             Save
           </button>
           <button type="button" className="eh-btn" onClick={() => setEditing(null)}>Cancel</button>
-          <button type="button" className="eh-btn is-danger eh-delete" onClick={() => startDelete(editing.id)}>Delete horizon</button>
+          {/* Plan keeps one rung: the last one shown can't go (Codex review of #444). */}
+          <button type="button" className="eh-btn is-danger eh-delete" disabled={!horizons.find(x => x.id === editing.id)?.hidden && visible <= 1}
+            onClick={() => startDelete(editing.id)}>Delete horizon</button>
         </div>
       </section>
     );

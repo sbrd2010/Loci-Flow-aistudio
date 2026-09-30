@@ -71,3 +71,10 @@ describe("deleting a horizon you added (Q44.3)", () => {
     expect(applyHorizonDelete({ tasks, config }, "week", {})).toEqual({ tasks, config });
   });
 });
+
+// Codex review of #444: a hidden horizon being deleted still sends its tasks
+// to the next larger shown one.
+it("deleting a hidden custom horizon: tasks still default to the next larger shown", () => {
+  const two = { ...makeHorizon({ preset: "2w", name: "2 weeks" }, "2026-09-28", "two"), hidden: true };
+  expect(deleteTargets({ horizons: { two } }, "two", "2026-09-28")).toEqual({ defaultTo: "halfyear", largerName: "6 months" });
+});

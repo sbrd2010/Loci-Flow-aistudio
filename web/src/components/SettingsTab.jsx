@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import EditHorizons from "./EditHorizons";
 import { restoreDropped } from "../utils/recentlyDropped";
+import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import ConfirmDialog from "./ConfirmDialog";
 import PrivacyPolicy from "./PrivacyPolicy";
@@ -62,10 +63,19 @@ function shortDeadline(dateStr) {
   return new Date(y, m - 1, d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-export default function SettingsTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut, theme, onThemeChange, email, flushNow }) {
+export default function SettingsTab({ payload, savePayload, savePayloadAsync, uid, writeActivityEvents, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut, theme, onThemeChange, email, flushNow }) {
   const config = payload.config || {};
   const lociDay = getLociDayStr(new Date(), getFocusWindows(config));
   const [editHorizons, setEditHorizons] = useState(false);
+  // Restore from Recently dropped, recorded as Undo's restore is (Codex review of #445).
+  const restore = (uuid) => {
+    const task = (payload.tasks || []).find(t => t.uuid === uuid);
+    const next = restoreDropped(payload, uuid, lociDay);
+    const saved = savePayloadAsync ? savePayloadAsync(next) : Promise.resolve(savePayload?.(next));
+    saved.then(() => {
+      if (task && uid && writeActivityEvents) writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_restored", task, { windows: getFocusWindows(config) })));
+    }).catch(() => {});
+  };
   const wide = useWide();
   // Phones: null is the root list. Wide: a section id, or a day page.
   const [page, setPage] = useState(null);
@@ -176,7 +186,7 @@ export default function SettingsTab({ payload, savePayload, savePayloadAsync, sa
     notifications: () => <NotificationsPage permission={permission} onRequest={requestPermission} onBack={back} />,
     data: () => (
       <DataPage payload={payload} email={email} lastSyncLabel={syncLabel} onSyncNow={flushNow} onResetTracking={resetTracking} onBack={back}
-        onRestore={uuid => savePayload?.(restoreDropped(payload, uuid, lociDay))} />
+        onRestore={restore} />
     ),
     // Wide-only sections: the groups themselves, as a page.
     day: () => <SubPage title="The day">{dayGroup}</SubPage>,

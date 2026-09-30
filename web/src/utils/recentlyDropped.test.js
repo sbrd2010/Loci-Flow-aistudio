@@ -26,3 +26,10 @@ describe("Recently dropped", () => {
     expect(q.tasks.find(t => t.uuid === "new").horizonLevel).toBe("week");
   });
 });
+
+// Codex review of #445: This week hidden too → the first horizon shown.
+it("Restore falls back to a shown horizon when This week is hidden", () => {
+  const tasks = [{ uuid: "x", isDeleted: true, deletedAt: 1, horizonLevel: "gone" }];
+  const p = restoreDropped({ tasks, config: { horizons: { week: { hidden: true } } } }, "x", "2026-09-30", 2);
+  expect(p.tasks[0].horizonLevel).toBe("month");
+});
