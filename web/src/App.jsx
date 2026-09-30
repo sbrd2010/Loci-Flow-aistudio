@@ -1140,14 +1140,16 @@ export default function App() {
     [payload?.config, payload?.tasks, planDay],
   );
   const [reviewOpen, setReviewOpen] = useState(false);
-  // Which batch of reviews opened on its own: a new one opens once too, even
-  // in a tab left open (Codex review of #447).
-  const [reviewShown, setReviewShown] = useState("");
+  // Which reviews have opened on its own: a newly ended period opens once too,
+  // even in a tab left open (Codex review of #447); one leaving the list
+  // doesn't reopen the rest after Later (Codex review of #451).
+  const [reviewShown, setReviewShown] = useState([]);
   const reviewKey = reviews.map(r => `${r.id}:${r.end}`).join("|");
   const [reviewUndo, setReviewUndo] = useState(null);
   const busyFocusing = focusTimer.focusSessionActive || focusTimer.isFocusMode;
   useEffect(() => {
-    if (reviewKey && reviewKey !== reviewShown && !busyFocusing && !showAddTask) { setReviewOpen(true); setReviewShown(reviewKey); }
+    const keys = reviewKey ? reviewKey.split("|") : [];
+    if (keys.some(k => !reviewShown.includes(k)) && !busyFocusing && !showAddTask) { setReviewOpen(true); setReviewShown([...new Set([...reviewShown, ...keys])]); }
   }, [reviewKey, reviewShown, busyFocusing, showAddTask]);
   const openReview = () => setReviewOpen(true);
   const finishReview = (review, choices) => {

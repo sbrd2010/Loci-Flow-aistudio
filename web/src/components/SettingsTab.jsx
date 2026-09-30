@@ -69,8 +69,9 @@ export default function SettingsTab({ payload, savePayload, savePayloadAsync, ui
   const [editHorizons, setEditHorizons] = useState(false);
   // Restore from Recently dropped, recorded as Undo's restore is (Codex review of #445).
   const restore = (uuid) => {
-    const task = (payload.tasks || []).find(t => t.uuid === uuid);
     const next = restoreDropped(payload, uuid, lociDay);
+    // Logged where it landed: its old horizon may be gone (Codex review of #451).
+    const task = (next.tasks || []).find(t => t.uuid === uuid);
     const saved = savePayloadAsync ? savePayloadAsync(next) : Promise.resolve(savePayload?.(next));
     saved.then(() => {
       if (task && uid && writeActivityEvents) writeActivityEvents(eventPatch(uid, buildTaskMutationEvent("task_restored", task, { windows: getFocusWindows(config) })));
