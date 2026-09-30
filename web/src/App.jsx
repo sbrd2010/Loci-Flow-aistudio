@@ -1149,9 +1149,14 @@ export default function App() {
   const openReview = () => setReviewOpen(true);
   const finishReview = (review, choices) => {
     const before = payloadRef.current;
-    savePayload(applyReview(before, review, choices, planDay));
-    setReviewUndo({ before, uuids: review.tasks.map(t => t.uuid), id: review.id, text: `Reviewed: ${review.title}`, at: Date.now() });
+    // Drops are named for the sync's drop guard (three at once would write
+    // nothing); a dropped task a session runs on ends that session first.
+    const drops = review.tasks.filter(t => choices[t.uuid] === "drop").map(t => t.uuid);
+    if (focusTimer.focusSessionActive && drops.includes(focusTimer.activeTask?.uuid)) handleEndFocusSession();
     if (reviews.length <= 1) setReviewOpen(false);
+    savePayloadAsync(applyReview(before, review, choices, planDay), { expectedRemovals: drops })
+      .then(() => setReviewUndo({ before, uuids: review.tasks.map(t => t.uuid), id: review.id, text: `Reviewed: ${review.title}`, at: Date.now() }))
+      .catch(() => {});
   };
   // Close the day (55d–e, Q47): from the Day map's header, or Today's line
   // from 30 minutes before the day ends. Undo 10 s. The next day, the first
@@ -1485,6 +1490,9 @@ export default function App() {
             day={getLociDayStr(new Date(), getFocusWindows(payload.config || {}))}
             saveConfigPatch={saveConfigPatch}
             savePayload={savePayload}
+            savePayloadAsync={savePayloadAsync}
+            focusedUuid={focusTimer.focusSessionActive ? focusTimer.activeTask?.uuid : null}
+            onEndFocus={handleEndFocusSession}
             onClose={() => setEditHorizonsOpen(false)}
           />
         )}
@@ -1544,6 +1552,7 @@ export default function App() {
           <SettingsTab
             payload={payload}
             savePayload={savePayload}
+            savePayloadAsync={savePayloadAsync}
             saveSubPath={saveSubPath}
             saveConfigPatch={saveConfigPatch}
             lastSyncedAt={lastSyncedAt}
