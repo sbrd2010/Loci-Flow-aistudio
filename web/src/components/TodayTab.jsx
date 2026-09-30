@@ -85,6 +85,8 @@ function SortableTaskItem({ id, children }) {
 
 export default function TodayTab({
   payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenPlan, onOpenCoach, onScattered, onOpenAddTask,
+  // 57f: "September ended · 2 left · Review" until the review is done.
+  reviewLine = null,
   // The mini window's I'm stuck (59b → 59d).
   stuckPending = false, onStuckShown,
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft,
@@ -1785,6 +1787,12 @@ export default function TodayTab({
 
   return (
     <>
+      {/* 57f: a review waiting — one line above the day until it's done. */}
+      {reviewLine && (
+        <button type="button" className="today-review-line" onClick={reviewLine.onOpen}>
+          {reviewLine.text} · <span className="today-review-go">Review</span>
+        </button>
+      )}
       {/* ── Today (turns 37, 41, 54). From 1024px the task has a column of its
            own with the list or the Day map beside it (54a, 54c, 54e); on
            phones and tablets the task and the list stack. ── */}
@@ -2008,6 +2016,7 @@ export default function TodayTab({
                             onOpen={openDetail}
                             onMakeOneThing={handleMakeOneThing}
                             isMin={minimumDayIds.has(String(task.uuid))}
+                            fromTag={task.reviewFrom?.day === todayStr ? task.reviewFrom.label : null}
                             fixedAt={task.dayMapDate === todayStr ? task.dayMapFixedMinutes ?? null : null}
                             tabStop={task.uuid === rovingUuid}
                             isTinted={task.uuid === tintUuid}

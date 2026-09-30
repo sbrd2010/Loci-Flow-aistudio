@@ -6,6 +6,8 @@ import { sanitizeTaskField, CATEGORY_ICONS, byPriorityThenOrder } from "../utils
 import { getFocusWindows } from "../utils/focusWindows";
 import { useLociDayStr } from "../hooks/useTodayStr";
 import { horizonsFromConfig, WORK_OLDER_ID } from "../utils/horizons";
+import { leftoverTags, pendingReviews, applySort, undoReviewOrSort } from "../utils/horizonReview";
+import HorizonReview from "./HorizonReview";
 import { dayLabel, doneTasks, horizonChoices, isOpenPlanTask, ladderRungs, listTasks, openingRung, runwayLabelsShown, runwayTicks, workOlderCount } from "../utils/planLadder";
 import { buildTaskMutationEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import useTaskActions from "../hooks/useTaskActions";
@@ -29,7 +31,7 @@ import { commitmentKickerFront, frontForCommitment, frontsFromConfig, frontsOnOf
 // (the front truncates first). The row opens the task. Drag: by the grip on
 // a laptop (shown on hover and focus), by a long press on touch, or by the
 // whole row in Drag anywhere mode.
-function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, frontName = null, interactionStyle = "classic", isOpen = false }) {
+function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, frontName = null, fromTag = null, interactionStyle = "classic", isOpen = false }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   const isDragAnywhere = interactionStyle === "dragAnywhere";
   const estimate = Number(task.timeEstimateMinutes) > 0 ? formatEstimate(task.timeEstimateMinutes) : null;
@@ -109,6 +111,8 @@ function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, fr
             {isGoal && <span className="task-tag is-goal">GOAL</span>}
             <span className="plan-row-figures">{figures}</span>
             {frontName && <span className="plan-row-figures plan-row-front">· {frontName}</span>}
+            {/* 57b.21: a leftover waiting for its review wears its period. */}
+            {fromTag && <span className="task-tag plan-row-from">{fromTag}</span>}
           </span>
         </span>
         {isDragAnywhere && (
@@ -138,7 +142,7 @@ function rungUnderPointer({ activatorEvent, delta }) {
   return hit ? hit.closest(".plan-rung").dataset.horizon : null;
 }
 
-function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks, payload, savePayload, onTaskClick, onDone, isGoal = () => false, frontNameOf = () => null, openUuid = null, onRungHover, onDropOnRung }) {
+function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks, payload, savePayload, onTaskClick, onDone, isGoal = () => false, frontNameOf = () => null, leftTags = null, openUuid = null, onRungHover, onDropOnRung }) {
   const interactionStyle = payload?.config?.taskRowInteractionStyle === "dragAnywhere" ? "dragAnywhere" : "classic";
   const [activeId, setActiveId] = useState(null);
   const getKey = (t) => t.uuid || String(t.id);
@@ -209,6 +213,7 @@ function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks,
             onDone={onDone}
             isGoal={isGoal(task)}
             frontName={frontNameOf(task)}
+            fromTag={leftTags?.get(task.uuid) || null}
             interactionStyle={interactionStyle}
             isOpen={task.uuid === openUuid}
           />
@@ -275,7 +280,7 @@ const RUNG_KEY = "loci_plan_rung";
 const readRung = () => { try { return localStorage.getItem(RUNG_KEY); } catch { return null; } };
 const writeRung = (id) => { try { localStorage.setItem(RUNG_KEY, id); } catch { /* private mode */ } };
 
-export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, focusInbox = false, uid, writeActivityEvents, focusTimer = {}, frontId = null, frontsColumn = null, frontOpen = false, onCloseFront }) {
+export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, focusInbox = false, uid, writeActivityEvents, focusTimer = {}, frontId = null, frontsColumn = null, frontOpen = false, onCloseFront, onOpenReview }) {
   const { tasks = [], config = {} } = payload;
   const windows = getFocusWindows(config);
 
@@ -284,6 +289,12 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
   const lociDay = useLociDayStr(windows);
   const rungs = ladderRungs(tasks, horizonsFromConfig(config, lociDay), lociDay);
   const olderCount = workOlderCount(tasks);
+  // 57f: leftovers waiting for review — a note on their rung, a tag on
+  // their rows (57b.21).
+  const reviews = frontId ? [] : pendingReviews(config, tasks, lociDay);
+  const leftTags = leftoverTags(reviews);
+  const [sorting, setSorting] = useState(false);
+  const [sortUndo, setSortUndo] = useState(null);
   const [rung, setRung] = useState(() => readRung());
   const selected = rung === WORK_OLDER_ID && olderCount > 0 ? WORK_OLDER_ID : openingRung(rungs, rung === WORK_OLDER_ID ? null : rung);
   const selectedRung = rungs.find(r => r.id === selected) || null;
@@ -737,6 +748,10 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
                     {r.dotted ? `TO ${dayLabel(r.period.end, lociDay).replace(/^[A-Z]{3} /, "")}` : `ENDS ${dayLabel(r.period.end, lociDay)} · ${r.daysLeft} ${r.daysLeft === 1 ? "DAY" : "DAYS"}`}
                   </span>
                   <span className="plan-rung-bar"><span style={{ width: `${Math.round(r.elapsed * 100)}%` }} /></span>
+                  {(() => {
+                    const rv = reviews.find(x => x.id === r.id);
+                    return rv && <span className="plan-rung-review">{rv.tasks.length} FROM {rv.from} · REVIEW</span>;
+                  })()}
                   <IconChevronRight size={18} className="plan-rung-chevron" aria-hidden="true" />
                   {dropRung === r.id && <span className="plan-rung-drop">Drop to move here</span>}
                 </button>
@@ -777,6 +792,18 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
                   {` · ${shownColumns[0].tasks.length} ${shownColumns[0].tasks.length === 1 ? "TASK" : "TASKS"}`}
                 </p>
               )}
+              {(() => {
+                const rv = reviews.find(x => x.id === selected);
+                return rv && onOpenReview && (
+                  <button type="button" className="plan-open-review" onClick={onOpenReview}>
+                    {rv.tasks.length} from {rv.from.charAt(0) + rv.from.slice(1).toLowerCase()} · Review
+                  </button>
+                );
+              })()}
+              {/* 57: Work · older — Sort gives each a horizon, once (57b.27). */}
+              {selected === WORK_OLDER_ID && shownColumns[0].tasks.length > 0 && (
+                <button type="button" className="plan-open-review" onClick={() => setSorting(true)}>Sort</button>
+              )}
               <SortableRoadmapList
                 colKey={shownColumns[0].key}
                 colTasks={shownColumns[0].tasks}
@@ -788,6 +815,7 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
                 onDone={handleMarkDone}
                 isGoal={isGoal}
                 frontNameOf={frontNameOf}
+                leftTags={leftTags}
                 openUuid={detailUuid}
                 onRungHover={setDropRung}
                 onDropOnRung={(task, id) => {
@@ -856,6 +884,27 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
 
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
 
+      {sorting && (
+        <HorizonReview
+          sort={{ tasks: listTasks(tasks, WORK_OLDER_ID), horizons: rungs.map(x => ({ id: x.id, name: x.name })) }}
+          onClose={() => setSorting(false)}
+          onDone={choices => {
+            const before = payloadRef.current;
+            // Drops named for the sync's drop guard (three at once would write nothing).
+            const drops = Object.keys(choices).filter(uuid => choices[uuid] === "drop");
+            setSorting(false);
+            savePayloadAsync(applySort(before, choices), { expectedRemovals: drops })
+              .then(() => setSortUndo({ before, uuids: Object.keys(choices), at: Date.now() }))
+              .catch(() => {});
+          }}
+        />
+      )}
+      <UndoAnnouncer message={sortUndo ? "Sorted Work · older" : ""} />
+      {sortUndo && (
+        <UndoToast key={sortUndo.at} ms={10000} message="Sorted Work · older"
+          onUndo={() => { savePayload(undoReviewOrSort(payloadRef.current, sortUndo.before, sortUndo.uuids)); setSortUndo(null); }}
+          onClose={() => setSortUndo(null)} />
+      )}
       <UndoAnnouncer message={undoText} />
       {undo && <UndoToast key={undo.at} message={undoText} onUndo={handleUndo} onClose={() => setUndo(null)} />}
     </div>
