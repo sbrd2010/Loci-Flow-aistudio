@@ -62,7 +62,7 @@ function shortDeadline(dateStr) {
   return new Date(y, m - 1, d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-export default function SettingsTab({ payload, savePayload, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut, theme, onThemeChange, email, flushNow }) {
+export default function SettingsTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut, theme, onThemeChange, email, flushNow }) {
   const config = payload.config || {};
   const lociDay = getLociDayStr(new Date(), getFocusWindows(config));
   const [editHorizons, setEditHorizons] = useState(false);
@@ -190,7 +190,7 @@ export default function SettingsTab({ payload, savePayload, saveSubPath, saveCon
       {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
       {showBug && <BugReport onClose={() => setShowBug(false)} />}
       {editHorizons && (
-        <EditHorizons payload={payload} day={lociDay} saveConfigPatch={saveConfigPatch} savePayload={savePayload} onClose={() => setEditHorizons(false)} />
+        <EditHorizons payload={payload} day={lociDay} saveConfigPatch={saveConfigPatch} savePayload={savePayload} savePayloadAsync={savePayloadAsync} onClose={() => setEditHorizons(false)} />
       )}
     </>
   );

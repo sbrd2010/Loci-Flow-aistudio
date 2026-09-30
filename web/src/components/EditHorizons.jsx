@@ -15,7 +15,11 @@ import {
 // A hidden horizon keeps its tasks, off Plan (Q44.3).
 const isBuiltIn = (id) => BUILT_IN_HORIZONS.some(b => b.id === id);
 
-export default function EditHorizons({ payload, day, saveConfigPatch, savePayload, onClose }) {
+// savePayloadAsync takes { expectedRemovals }: three or more drops in one
+// save trip the sync's drop guard otherwise, and nothing is written.
+// focusedUuid/onEndFocus: dropping the task a session is running on ends
+// that session first, recorded, as deleting it does (Codex review of #444).
+export default function EditHorizons({ payload, day, saveConfigPatch, savePayload, savePayloadAsync, focusedUuid = null, onEndFocus, onClose }) {
   const config = payload.config || {};
   const saved = config.horizons && typeof config.horizons === "object" ? config.horizons : {};
   const horizons = horizonsFromConfig(config, day);
@@ -81,9 +85,13 @@ export default function EditHorizons({ payload, day, saveConfigPatch, savePayloa
   const confirmDelete = () => {
     const before = payloadRef.current;
     const h = horizons.find(x => x.id === deleting.id);
-    savePayload(applyHorizonDelete(before, deleting.id, deleting.choices));
-    setUndo({ id: deleting.id, name: h?.name || "", before, at: Date.now() });
+    const drops = Object.keys(deleting.choices).filter(uuid => deleting.choices[uuid] === "drop");
+    if (focusedUuid && drops.includes(String(focusedUuid))) onEndFocus?.();
+    const next = applyHorizonDelete(before, deleting.id, deleting.choices);
+    const id = deleting.id;
     setDeleting(null); setEditing(null);
+    const saved = savePayloadAsync ? savePayloadAsync(next, { expectedRemovals: drops }) : Promise.resolve(savePayload(next));
+    saved.then(() => setUndo({ id, name: h?.name || "", before, at: Date.now() })).catch(() => {});
   };
   const handleUndo = () => {
     if (!undo) return;
