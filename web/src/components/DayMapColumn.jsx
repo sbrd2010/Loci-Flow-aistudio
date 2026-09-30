@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { dayProgress, formatClock24, formatSpan } from "../utils/dayMapPlan";
 import { currentDayMinutes, getEstimate, getTaskId, useDayRoute } from "../hooks/useDayRoute";
 import { eventAsks } from "../utils/fixedTime";
-import { nextFreeSlot } from "../utils/dayMapBreaks";
+import { laterTodaySlot } from "../utils/dayMapBreaks";
 import { mergeWindowSpans } from "../utils/focusWindows";
 import DayClockBar from "./DayClockBar";
 import DayMapFrom from "./DayMapFrom";
@@ -47,8 +47,7 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
   // before the day ends) or Pick a time…: a set time today, the route
   // reflowed around it, as the Day map's own sheet does.
   const laterFor = (task) => {
-    const at = nextFreeSlot(rows, Math.max(nowMins, anchorMinutes), getEstimate(task));
-    return at + getEstimate(task) <= plan.dayEnd ? at : null;
+    return laterTodaySlot(rows, breaks, Math.max(nowMins, anchorMinutes), getEstimate(task), plan.dayEnd);
   };
   const fixAt = (task, at) => {
     applyAndSave(scheduledTasks.map(t => (getTaskId(t) === getTaskId(task) ? { ...t, dayMapFixedMinutes: at } : t)), anchorMinutes);

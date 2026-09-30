@@ -28,7 +28,7 @@ import {
 } from "../hooks/useDayRoute";
 import { isEventTask, isFixedStop } from "../utils/dayMapRoute";
 import { eventAsks } from "../utils/fixedTime";
-import { addedBreaks, busyFromRows, defaultBreak, newBreakId, nextFreeSlot } from "../utils/dayMapBreaks";
+import { addedBreaks, busyFromRows, defaultBreak, laterTodaySlot, newBreakId, nextFreeSlot } from "../utils/dayMapBreaks";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { safeUUID } from "../utils/uuid";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
@@ -408,8 +408,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   // Q47.5: "Did it happen?" → Move → Later today: the next free slot it
   // fits before the day ends, if there is one.
   const laterFor = (task) => {
-    const at = nextFreeSlot(rows, Math.max(nowMins, anchorMinutes), getEstimate(task));
-    return at + getEstimate(task) <= plan.dayEnd ? at : null;
+    return laterTodaySlot(rows, breaks, Math.max(nowMins, anchorMinutes), getEstimate(task), plan.dayEnd);
   };
 
   // Q36a: "Did it happen?" → Move → Tomorrow: it goes to tomorrow's
