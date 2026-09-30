@@ -134,3 +134,24 @@ describe("calendar kinds (Q45)", () => {
     expect(hs.map(h => h.id)).toEqual(["week", "month", "quarter", "h2w", "hy", "halfyear"]);
   });
 });
+
+// Codex review of #440: a moved period keeps its own start.
+describe("a moved period keeps its start", () => {
+  it("a 2-week period moved across the next grid boundary", () => {
+    const h = { id: "s", kind: "weeks", count: 2, startDate: "2026-09-28", periodStart: "2026-09-28", endDate: "2026-10-20" };
+    expect(currentPeriod(h, "2026-10-05")).toEqual({ start: "2026-09-28", end: "2026-10-20" });
+    expect(currentPeriod(h, "2026-10-19")).toEqual({ start: "2026-09-28", end: "2026-10-20" });
+    // Then the rest of that grid period, and the grid again.
+    expect(currentPeriod(h, "2026-10-21")).toEqual({ start: "2026-10-21", end: "2026-10-25" });
+    expect(currentPeriod(h, "2026-10-26")).toEqual({ start: "2026-10-26", end: "2026-11-08" });
+  });
+
+  it("a later custom cycle, moved, starts where that cycle began", () => {
+    const h = { id: "c", kind: "custom", lengthDays: 30, startDate: "2026-09-01", periodStart: "2026-10-31", endDate: "2026-11-20" };
+    expect(currentPeriod(h, "2026-11-01")).toEqual({ start: "2026-10-31", end: "2026-11-20" });
+    // Earlier cycles are untouched…
+    expect(currentPeriod(h, "2026-10-05")).toEqual({ start: "2026-10-01", end: "2026-10-30" });
+    // …and after it the length carries on from the new end.
+    expect(currentPeriod(h, "2026-11-21")).toEqual({ start: "2026-11-21", end: "2026-12-20" });
+  });
+});

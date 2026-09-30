@@ -11,9 +11,10 @@
 //   { kind: "months", count, startDate }  — N months, from the 1st
 //   { kind: "year", startDate }           — 1 Jan to 31 Dec
 //   { kind: "custom", lengthDays, startDate } — N days from the day added
-// each with { id, name, hidden } and an optional endDate: the current
-// period's end moved by hand (Q44.4). After it, the kind and length are
-// unchanged and the next period lines back up with the calendar.
+// each with { id, name, hidden } and, when a period's end was moved by hand
+// (Q44.4), endDate (the new end) and periodStart (where that period began).
+// After it, the kind and length are unchanged and the next period lines
+// back up with the calendar.
 // Dates are Loci-day strings (YYYY-MM-DD); callers pass today's.
 
 export const TODAY_ID = "today";
@@ -58,11 +59,17 @@ export function currentPeriod(horizon, day) {
     case "custom": {
       // Until its end date, the period set; after it, it repeats with the
       // same length (Q44.4: a new end date changes this period only).
+      // Days before a moved period are in the unmoved cycles.
+      if (horizon.periodStart && daysBetween(horizon.periodStart, day) < 0) {
+        return currentPeriod({ ...horizon, endDate: null, periodStart: null }, day);
+      }
       const len = Math.max(1, Number(horizon.lengthDays) || 1);
       let end = horizon.endDate || addDays(horizon.startDate, len - 1);
       const setEnd = end;
       if (daysBetween(end, day) > 0) end = addDays(end, Math.ceil(daysBetween(end, day) / len) * len);
-      const start = end === setEnd && horizon.startDate ? horizon.startDate : addDays(end, 1 - len);
+      // The moved period starts where it began (Codex review of #440), not
+      // at the horizon's first day.
+      const start = end === setEnd ? (horizon.periodStart || horizon.startDate) : addDays(end, 1 - len);
       return { start, end };
     }
     case "weeks":
@@ -103,9 +110,11 @@ function gridPeriod(horizon, day) {
 function calendarPeriod(horizon, day) {
   const moved = horizon.endDate;
   if (!moved) return gridPeriod(horizon, day);
-  if (daysBetween(moved, day) <= 0) {
-    return { start: gridPeriod(horizon, moved).start, end: moved };
-  }
+  // The moved period keeps its own start, even when the new end crosses into
+  // the next grid period (Codex review of #440); days before it are the grid's.
+  const from = horizon.periodStart || gridPeriod(horizon, moved).start;
+  if (daysBetween(from, day) < 0) return gridPeriod(horizon, day);
+  if (daysBetween(moved, day) <= 0) return { start: from, end: moved };
   const after = addDays(moved, 1);
   const firstAfter = gridPeriod(horizon, after);
   if (daysBetween(firstAfter.end, day) <= 0) return { start: after, end: firstAfter.end };
