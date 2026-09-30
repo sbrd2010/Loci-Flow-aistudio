@@ -607,3 +607,33 @@
 @media (min-width: 600px) { .plan-ladder-grid { grid-template-columns: 280px minmax(0, 1fr); } }
 @media (min-width: 1024px) { .plan-ladder-grid { grid-template-columns: 320px minmax(0, 1fr); gap: 36px; } }
 @media (min-width: 1600px) { .plan-ladder-grid { grid-template-columns: 340px minmax(0, 1fr); } }
+
+/* ── ≥1600 (57a): ladder 340 · open list · Fronts 380, cap 1760; both views
+   show, so the switch is hidden. A front's page takes the list's place
+   (57b.25), with its card tinted in the column. ── */
+.plan-tab.is-wide { display: contents; }
+.plan-fronts-col { min-width: 0; }
+.plan-fronts-col-title { margin: 0 0 12px; font-size: 0.96875rem; font-weight: 800; }
+.plan-fronts-col-count {
+  font-family: var(--font-mono); font-size: 0.65625rem; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--ink-2, var(--text-secondary));
+}
+.plan-front.is-open { background: var(--accent-tint, var(--bg-secondary)); border-color: var(--accent); }
+.plan-front-progress { display: flex; align-items: center; gap: 10px; }
+.plan-front-bar { flex: 1; height: 2px; background: var(--line, var(--border)); }
+.plan-front-bar > span { display: block; height: 100%; background: var(--accent); }
+.plan-front-tally,
+.plan-front-due {
+  font-family: var(--font-mono); font-size: 0.65625rem; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--ink-2, var(--text-secondary));
+}
+@media (min-width: 1600px) {
+  .plan-head,
+  .plan-horizons-view { max-width: 1760px; }
+  .plan-seg { display: none; }
+  .plan-ladder-grid.has-fronts { grid-template-columns: 340px minmax(0, 1fr) 380px; }
+  .plan-ladder-grid.has-fronts > .plan-ladder { grid-column: 1; grid-row: 1; }
+  .plan-ladder-grid.has-fronts .plan-open,
+  .plan-ladder-grid.has-fronts .plan-fp { grid-column: 2; grid-row: 1; max-width: none; margin: 0; }
+  .plan-ladder-grid.has-fronts .plan-fronts-col { grid-column: 3; grid-row: 1; }
+}

@@ -53,14 +53,20 @@ function frontDueLine(front, now) {
   return `DUE ${date} · ${left}`;
 }
 
-function FrontCard({ front, tasks, isGoal, onOpen }) {
+// 57b answer 25: the tab (45i) and the column (57a) show the same card —
+// "N OPEN", its next move, a 2px progress line with "done / total", and its
+// deadline when it has one.
+function FrontCard({ front, tasks, isGoal, now, isOpen = false, onOpen }) {
   const nextMove = frontNextMove(front, tasks);
-  const { open } = frontCounts(tasks, front.id);
+  const { open, done } = frontCounts(tasks, front.id);
+  const total = open + done;
+  const due = frontDueLine(front, now);
   return (
     <button
       type="button"
-      className={`plan-front${front.parked ? " is-parked" : ""}`}
+      className={`plan-front${front.parked ? " is-parked" : ""}${isOpen ? " is-open" : ""}`}
       data-front-id={front.id}
+      aria-current={isOpen ? "true" : undefined}
       onClick={() => onOpen(front)}
     >
       <span className="plan-front-head">
@@ -78,6 +84,11 @@ function FrontCard({ front, tasks, isGoal, onOpen }) {
         )}
         <IconChevronRight size={18} aria-hidden="true" />
       </span>
+      <span className="plan-front-progress">
+        <span className="plan-front-bar"><span style={{ width: `${total ? Math.round((done / total) * 100) : 0}%` }} /></span>
+        <span className="plan-front-tally">{done} / {total}</span>
+      </span>
+      {due && <span className="plan-front-due">{due}</span>}
     </button>
   );
 }
@@ -162,7 +173,9 @@ function FrontPage({ front, tasks, lociDay, isGoal, now, onBack, onPark, onClose
   );
 }
 
-export default function PlanTab({ payload = {}, saveConfigPatch, openFrontId = null, onOpenFront, onAddToFront, renderFrontTasks }) {
+// wide (57a, ≥1600): Plan's third column beside the ladder, and a front's
+// page in place of the open list; the ladder places both (display: contents).
+export default function PlanTab({ payload = {}, saveConfigPatch, openFrontId = null, onOpenFront, onAddToFront, renderFrontTasks, wide = false }) {
   const { tasks = [], config = {} } = payload;
   const [adding, setAdding] = useState(false);
   const [draftName, setDraftName] = useState("");
@@ -278,28 +291,22 @@ export default function PlanTab({ payload = {}, saveConfigPatch, openFrontId = n
     </>
   );
 
-  if (openFront) {
-    return (
-      <div className="plan-tab is-front-page">
-        <FrontPage
-          front={openFront}
-          tasks={tasks}
-          lociDay={lociDay}
-          isGoal={isGoal(openFront)}
-          now={now}
-          onBack={() => backToList(openFront.id)}
-          onPark={parkFront}
-          onClose={closeFront}
-          onAdd={onAddToFront}
-          renderTasks={renderFrontTasks}
-        />
-        {toast}
-      </div>
-    );
-  }
-
-  return (
-    <div className="plan-tab">
+  const frontPage = openFront && (
+    <FrontPage
+      front={openFront}
+      tasks={tasks}
+      lociDay={lociDay}
+      isGoal={isGoal(openFront)}
+      now={now}
+      onBack={() => backToList(openFront.id)}
+      onPark={parkFront}
+      onClose={closeFront}
+      onAdd={onAddToFront}
+      renderTasks={renderFrontTasks}
+    />
+  );
+  const frontsList = (
+    <>
       {fronts.length === 0 ? (
         <p className="plan-empty">
           Nothing is running yet. A front is one piece of work with its own deadline —
@@ -308,7 +315,7 @@ export default function PlanTab({ payload = {}, saveConfigPatch, openFrontId = n
       ) : (
         <div className="plan-fronts">
           {fronts.map(front => (
-            <FrontCard key={front.id} front={front} tasks={tasks} isGoal={isGoal(front)} onOpen={f => onOpenFront?.(f.id)} />
+            <FrontCard key={front.id} front={front} tasks={tasks} isGoal={isGoal(front)} now={now} isOpen={wide && front.id === openFrontId} onOpen={f => onOpenFront?.(f.id)} />
           ))}
         </div>
       )}
@@ -356,7 +363,37 @@ export default function PlanTab({ payload = {}, saveConfigPatch, openFrontId = n
           That is {FRONT_LIMIT} fronts — the most Loci holds. Close one to make room.
         </p>
       )}
+    </>
+  );
 
+  if (wide) {
+    const active = fronts.filter(f => !f.parked).length;
+    return (
+      <div className="plan-tab is-wide">
+        {frontPage}
+        <aside className="plan-fronts-col" aria-labelledby="plan-fronts-col-title">
+          <h2 className="plan-fronts-col-title" id="plan-fronts-col-title">
+            Fronts <span className="plan-fronts-col-count">· {active} ACTIVE</span>
+          </h2>
+          {frontsList}
+        </aside>
+        {toast}
+      </div>
+    );
+  }
+
+  if (openFront) {
+    return (
+      <div className="plan-tab is-front-page">
+        {frontPage}
+        {toast}
+      </div>
+    );
+  }
+
+  return (
+    <div className="plan-tab">
+      {frontsList}
       {toast}
     </div>
   );
