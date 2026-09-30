@@ -17,8 +17,11 @@
   background: var(--ink);
   border-radius: 10px;
   box-shadow: var(--shadow-md);
-  transform: translateX(-50%);
+  /* Older toasts step up one height (and a gap) per newer one below. */
+  transform: translateX(-50%) translateY(calc(var(--undo-stack, 0) * (-100% - 8px)));
+  transition: transform 150ms ease-out;
 }
+@media (prefers-reduced-motion: reduce) { .undo-toast { transition: none; } }
 .undo-toast-text {
   min-width: 0;
   overflow: hidden;

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { IconUndo } from "./icons";
 import "../../styles/undoToast.css";
 
@@ -10,8 +10,28 @@ import "../../styles/undoToast.css";
 // keeps an always-present one (UndoAnnouncer) and changes its text.
 const UNDO_MS = 5000;
 
+// Several can be up at once (a review's Undo, then a Delete's on Today):
+// the newest sits at the bottom and older ones step up above it, each still
+// its own to Undo and on its own clock, never one covering another.
+let stack = [];
+const listeners = new Set();
+const setStack = (next) => { stack = next; listeners.forEach(l => l()); };
+const subscribe = (l) => { listeners.add(l); return () => listeners.delete(l); };
+function useStackPlace() {
+  const id = useRef(null);
+  if (!id.current) id.current = {};
+  useEffect(() => {
+    const me = id.current;
+    setStack([me, ...stack]);
+    return () => setStack(stack.filter(x => x !== me));
+  }, []);
+  const all = useSyncExternalStore(subscribe, () => stack);
+  return Math.max(0, all.indexOf(id.current));
+}
+
 // ms: how long it stays (Drop asks for 10 s, 57b.11).
 export default function UndoToast({ message, onUndo, onClose, ms = UNDO_MS }) {
+  const place = useStackPlace();
   // Held while the pointer is over it OR focus is inside it — tracked apart,
   // so leaving with the mouse can't restart the clock under a focused Undo.
   const [hovered, setHovered] = useState(false);
@@ -34,6 +54,7 @@ export default function UndoToast({ message, onUndo, onClose, ms = UNDO_MS }) {
   return (
     <div
       className="undo-toast"
+      style={place ? { "--undo-stack": place } : undefined}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onFocus={() => setFocused(true)}
