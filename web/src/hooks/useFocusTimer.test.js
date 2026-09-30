@@ -154,6 +154,29 @@ describe("useFocusTimer", () => {
     expect(result.current.timerSecondsLeft).toBe(25 * 60);
   });
 
+  // Codex review of #439: a Resume at 0:00 (the mini window's, say) is not a
+  // new block — block end stays, with its break and its 60 s wait.
+  it("a Resume at 0:00 leaves block end in place", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+      const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+      result.current.startFocusSession(task, { enterFocusMode: false });
+      rerender([[task], {}, "u1"]);
+      vi.advanceTimersByTime(25 * 60 * 1000 + 1000);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.blockEnd.phase).toBe("done");
+      result.current.setIsTimerRunning(true);
+      rerender([[task], {}, "u1"]);
+      rerender([[task], {}, "u1"]);
+      expect(result.current.sessionCompletePending).toBe(true);
+      expect(result.current.blockEnd.phase).toBe("done");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // Loopcheck of #439: running the timer again leaves block end, so its 60 s
   // wait can't bank the finished block a second time.
   it("a block started at block end leaves it: the 60 s wait doesn't bank twice", () => {

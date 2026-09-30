@@ -283,7 +283,9 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
         b.addEventListener("click", onClick);
         btnsEl.appendChild(b);
       };
-      button("pip-play", "Pause", () => setIsTimerRunning(r => !r));
+      // At block end there is nothing to resume: the block-end choices are
+      // the main window's (Codex review of #439).
+      button("pip-play", "Pause", () => { if (!sessionCompletePendingRef.current) setIsTimerRunning(r => !r); });
       button("pip-add5", "+5", () => addTimeToSession(5));
       // I'm stuck opens the main window on the focus page (its I'm stuck
       // panel, 59d, arrives with 6c).
@@ -568,8 +570,10 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   // started (a length chosen on the way back in, say) — so its break and its
   // 60 s wait can't act on the block that follows.
   useEffect(() => {
-    if (isTimerRunning && sessionCompletePendingRef.current) setSessionCompletePending(false);
-  }, [isTimerRunning]);
+    // Only a block with time on it: a Resume at 0:00 isn't a new block, and
+    // must not wipe block end (Codex review of #439).
+    if (isTimerRunning && timerSecondsLeft > 0 && sessionCompletePendingRef.current) setSessionCompletePending(false);
+  }, [isTimerRunning]); // eslint-disable-line react-hooks/exhaustive-deps
   // …and when the session ends, by any path (P2-1 of the loopcheck of #439).
   useEffect(() => {
     if (!focusSessionId && sessionCompletePendingRef.current) setSessionCompletePending(false);
