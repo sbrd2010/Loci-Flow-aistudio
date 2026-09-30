@@ -206,8 +206,7 @@ test("suggestions that arrive after the drawer moved to another task are dropped
   await sheet(page).getByRole("button", { name: "Suggest steps" }).click();
   await expect(sheet(page).getByRole("button", { name: "Suggesting…" })).toBeVisible();
   const second = (await rows.nth(1).locator(".plan-row-title").innerText()).trim();
-  // The drawer sits over the list's right side (57b): take the row by its left.
-  await rows.nth(1).click({ position: { x: 60, y: 20 } });
+  await rows.nth(1).click();
   await expect(sheet(page)).toHaveAttribute("aria-label", `Task: ${second}`);
   release();
   await page.waitForTimeout(500);

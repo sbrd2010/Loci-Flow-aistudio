@@ -260,3 +260,27 @@ test("Edit horizons: rename, hide, add a 2-week horizon, delete it with Undo", a
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
 });
+
+// Q46: the drawer never covers the open list — over the ladder on a laptop,
+// in the Fronts column's place from 1600.
+for (const [width, cover] of [[1100, ".plan-ladder"], [1280, ".plan-ladder"], [1700, ".plan-fronts-col"]]) {
+  test(`Horizons at ${width}: the task drawer leaves the open list whole (Q46)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await enterDemo(page);
+    await page.setViewportSize({ width, height: 900 });
+    await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+    const list = page.locator(".plan-open");
+    const listBox = await list.boundingBox();
+    const coverBox = await page.locator(cover).boundingBox();
+    await list.locator(".plan-row").first().click();
+    const drawer = await page.getByTestId("task-detail").boundingBox();
+    const overlap = Math.min(drawer.x + drawer.width, listBox.x + listBox.width) - Math.max(drawer.x, listBox.x);
+    expect(overlap).toBeLessThanOrEqual(0);
+    // It sits over what it replaces.
+    expect(drawer.x).toBeLessThanOrEqual(coverBox.x + 1);
+    // The list didn't move, and its next row takes a plain click.
+    expect((await list.boundingBox()).x).toBe(listBox.x);
+    await list.locator(".plan-row").nth(1).click();
+    await expect(page.getByTestId("task-detail")).toContainText((await list.locator(".plan-row-title").nth(1).innerText()).trim());
+  });
+}
