@@ -463,6 +463,12 @@
 }
 /* Room under the route for the bar and the action above the nav. */
 .day-map-page:has(.dm-side) { padding-bottom: 200px; }
+/* With a session on, the focus bar (59e) sits above the nav: the action
+   stack goes above the bar, never under it (Codex review of #434). */
+@media (max-width: 1023px) {
+  body:has(.focus-bar) .dm-side { bottom: calc(var(--dm-nav-h, 64px) + 80px + env(safe-area-inset-bottom, 0px)); }
+  body:has(.focus-bar) .day-map-page:has(.dm-side) { padding-bottom: 280px; }
+}
 .dm-pool-bar { border-top: 0; }
 
 /* The phone's sheet of Unscheduled tasks. */
