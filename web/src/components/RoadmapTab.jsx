@@ -4,6 +4,9 @@ import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI, hasAIKey, extractJsonArray } from "../utils/aiCall";
 import { sanitizeTaskField, CATEGORY_ICONS, byPriorityThenOrder } from "../utils/taskOps";
 import { getFocusWindows } from "../utils/focusWindows";
+import { useLociDayStr } from "../hooks/useTodayStr";
+import { horizonsFromConfig, WORK_OLDER_ID } from "../utils/horizons";
+import { dayLabel, doneTasks, isOpenPlanTask, ladderRungs, listTasks, openingRung, runwayLabelsShown, runwayTicks, workOlderCount } from "../utils/planLadder";
 import { buildTaskMutationEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import useTaskActions from "../hooks/useTaskActions";
 import {
@@ -18,7 +21,7 @@ import { CSS } from "@dnd-kit/utilities";
 import LinkifyText from "./LinkifyText";
 import TaskDetail, { formatEstimate } from "./TaskDetail";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
-import { IconPin, IconPlus } from "./ui/icons";
+import { IconChevronLeft, IconChevronRight, IconPin, IconPlus } from "./ui/icons";
 import { commitmentKickerFront, frontForCommitment, frontsFromConfig, frontsOnOffer } from "../utils/fronts";
 
 // A horizon row (45h, 52h): the circle marks it done; the title; then a pin
@@ -215,9 +218,65 @@ function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks,
 
 // frontId: a front's page (52f–g) — only that front's open tasks, in the
 // horizons that hold any, with no per-horizon + and no Inbox.
+// Plan 57: the runway — a line from today to the furthest horizon's end, a
+// dot at today, a tick at each end; labels where they fit (42.3, 57b.30).
+function Runway({ rungs, day, phone }) {
+  const ref = useRef(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const measure = () => setWidth(ref.current?.offsetWidth || 0);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+  const ticks = runwayTicks(rungs, day);
+  const shown = runwayLabelsShown(ticks, width, phone);
+  return (
+    <div className="plan-runway" ref={ref} aria-hidden="true">
+      <span className="plan-runway-line" />
+      <span className="plan-runway-dot" />
+      <span className="plan-runway-label is-today">TODAY</span>
+      {ticks.map(t => (
+        <React.Fragment key={t.end}>
+          <span className="plan-runway-tick" style={{ left: `${t.at * 100}%` }} />
+          {shown.has(t.end) && (
+            <span className={`plan-runway-label${t.furthest ? " is-far" : ""}`} style={t.furthest ? undefined : { left: `${t.at * 100}%` }}>
+              {t.furthest ? dayLabel(t.end, day).replace(/^[A-Z]{3} /, "") : t.label}
+            </span>
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+// 42.1: the rung Plan opens on is remembered on this device.
+const RUNG_KEY = "loci_plan_rung";
+const readRung = () => { try { return localStorage.getItem(RUNG_KEY); } catch { return null; } };
+const writeRung = (id) => { try { localStorage.setItem(RUNG_KEY, id); } catch { /* private mode */ } };
+
 export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, focusInbox = false, uid, writeActivityEvents, focusTimer = {}, frontId = null }) {
   const { tasks = [], config = {} } = payload;
   const windows = getFocusWindows(config);
+
+  // Plan 57 (7b): the ladder — a rung per horizon, the open one's list beside
+  // it. A front's page (frontId) keeps its horizon sections.
+  const lociDay = useLociDayStr(windows);
+  const rungs = ladderRungs(tasks, horizonsFromConfig(config, lociDay), lociDay);
+  const olderCount = workOlderCount(tasks);
+  const [rung, setRung] = useState(() => readRung());
+  const selected = rung === WORK_OLDER_ID && olderCount > 0 ? WORK_OLDER_ID : openingRung(rungs, rung === WORK_OLDER_ID ? null : rung);
+  const selectedRung = rungs.find(r => r.id === selected) || null;
+  // A phone (57d–e): the ladder is the page; a rung pushes its list.
+  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 600);
+  useEffect(() => {
+    const update = () => setNarrow(window.innerWidth < 600);
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  const [phoneList, setPhoneList] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
+  const pickRung = (id) => { setRung(id); writeRung(id); setPhoneList(true); setDoneOpen(false); };
 
   // 45h: the four horizons, always shown. Work (the older horizon) is shown
   // only while it holds tasks, so none of them is lost from view.
@@ -539,20 +598,36 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
     </section>
   );
 
-  const shownColumns = columns
-    .map(col => {
-      const all = tasks.filter(t => t.horizonLevel === col.key && isVisibleRoadmapTask(t)).sort(byPriorityThenOrder);
-      return { ...col, allTasks: all, tasks: frontId ? all.filter(t => t.frontId === frontId) : all };
-    })
-    .filter(col => !(col.onlyWithTasks || frontId) || col.tasks.length > 0);
+  const shownColumns = frontId
+    ? columns
+      .map(col => {
+        const all = tasks.filter(t => t.horizonLevel === col.key && isVisibleRoadmapTask(t)).sort(byPriorityThenOrder);
+        return { ...col, allTasks: all, tasks: all.filter(t => t.frontId === frontId) };
+      })
+      .filter(col => col.tasks.length > 0)
+    // The ladder shows one list: the open rung's, pinned first then your
+    // order (42.4).
+    : [{
+      key: selected,
+      label: selected === WORK_OLDER_ID ? "Work · older" : selectedRung?.name || "",
+      noAdd: selected === WORK_OLDER_ID,
+      allTasks: listTasks(tasks, selected),
+      tasks: listTasks(tasks, selected),
+    }];
   const detailCol = detailUuid ? shownColumns.find(col => col.tasks.some(t => t.uuid === detailUuid)) : null;
   const detailTask = detailCol ? detailCol.tasks.find(t => t.uuid === detailUuid) : null;
   const detailIndex = detailTask ? detailCol.tasks.indexOf(detailTask) : -1;
-  // Done, moved to Today, parked or deleted: it left Plan, so the sheet closes.
+  // Moved to another horizon: the ladder opens that rung, so the sheet
+  // follows it. Done, moved to Today, parked or deleted: it left Plan, so
+  // the sheet closes.
+  const movedTo = !frontId && detailUuid && !detailTask
+    ? tasks.find(t => t.uuid === detailUuid && isOpenPlanTask(t) && (t.horizonLevel === WORK_OLDER_ID || rungs.some(r => r.id === t.horizonLevel)))?.horizonLevel
+    : null;
   useEffect(() => {
+    if (movedTo) { setRung(movedTo); writeRung(movedTo); return; }
     if (detailUuid && !detailTask) setDetailUuid(null);
-  }, [detailUuid, detailTask]);
-  const focusRow = (uuid) => requestAnimationFrame(() => document.querySelector(`.plan-horizons [data-task-uuid="${uuid}"]`)?.focus());
+  }, [detailUuid, detailTask, movedTo]);
+  const focusRow = (uuid) => requestAnimationFrame(() => document.querySelector(`.roadmap-container [data-task-uuid="${uuid}"]`)?.focus());
   const closeDetail = () => { const back = detailUuid; setDetailUuid(null); if (back) focusRow(back); };
   // An action that takes the task out of Plan: focus goes to its neighbour
   // in the horizon, as on Today.
@@ -580,6 +655,7 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
   return (
     <div className={`roadmap-container ${frontId ? "plan-front-tasks" : "plan-horizons-view"}`}>
       {frontId && shownColumns.length === 0 && <p className="plan-empty">Nothing open on this front.</p>}
+      {frontId ? (
       <div className="plan-horizons">
         {shownColumns.map(col => {
           const colTasks = col.tasks;
@@ -612,6 +688,106 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
           );
         })}
       </div>
+      ) : (
+        <>
+          <Runway rungs={rungs} day={lociDay} phone={narrow} />
+          <div className={`plan-ladder-grid${narrow ? " is-phone" : ""}${narrow && phoneList ? " is-list" : ""}`}>
+            {/* 57a–e: a rung per horizon — name and open count, its end and
+                days left, the bar of the period gone (red at ≤3 days left). */}
+            <nav className="plan-ladder" aria-label="Horizons">
+              {rungs.map(r => (
+                <button
+                  key={r.id}
+                  type="button"
+                  data-horizon={r.id}
+                  className={`plan-rung${r.id === selected ? " is-open" : ""}${r.red ? " is-red" : ""}${r.dotted ? " is-dotted" : ""}`}
+                  aria-current={r.id === selected ? "true" : undefined}
+                  onClick={() => pickRung(r.id)}
+                >
+                  <span className="plan-rung-top">
+                    <span className="plan-rung-name">{r.name}</span>
+                    <span className="plan-rung-count">{r.count}</span>
+                  </span>
+                  <span className="plan-rung-date">
+                    {r.dotted ? `TO ${dayLabel(r.period.end, lociDay).replace(/^[A-Z]{3} /, "")}` : `ENDS ${dayLabel(r.period.end, lociDay)} · ${r.daysLeft} ${r.daysLeft === 1 ? "DAY" : "DAYS"}`}
+                  </span>
+                  <span className="plan-rung-bar"><span style={{ width: `${Math.round(r.elapsed * 100)}%` }} /></span>
+                  <IconChevronRight size={18} className="plan-rung-chevron" aria-hidden="true" />
+                </button>
+              ))}
+              {/* 57: the old Work horizon, until each task has a horizon. */}
+              {olderCount > 0 && (
+                <button
+                  type="button"
+                  data-horizon={WORK_OLDER_ID}
+                  className={`plan-rung plan-rung-older${selected === WORK_OLDER_ID ? " is-open" : ""}`}
+                  aria-current={selected === WORK_OLDER_ID ? "true" : undefined}
+                  onClick={() => pickRung(WORK_OLDER_ID)}
+                >
+                  <span className="plan-rung-top">
+                    <span className="plan-rung-name">Work · older</span>
+                    <span className="plan-rung-count">{olderCount}</span>
+                  </span>
+                  <span className="plan-rung-date">Give each a horizon, once.</span>
+                  <IconChevronRight size={18} className="plan-rung-chevron" aria-hidden="true" />
+                </button>
+              )}
+            </nav>
+
+            {/* The open rung's list (57): name, its range, days and tasks;
+                rows; a "Done · N" fold (42.2); "+ Add to …" at the foot. */}
+            <section className="plan-open" aria-labelledby={`plan-h-${selected}`}>
+              {narrow && (
+                <button type="button" className="plan-open-back" onClick={() => setPhoneList(false)}>
+                  <IconChevronLeft size={18} aria-hidden="true" /> Plan
+                </button>
+              )}
+              <h2 className="plan-open-title" id={`plan-h-${selected}`}>{shownColumns[0].label}</h2>
+              {selectedRung && selected !== WORK_OLDER_ID && (
+                <p className="plan-open-meta">
+                  {dayLabel(selectedRung.period.start, lociDay).replace(/^[A-Z]{3} /, "")} – {dayLabel(selectedRung.period.end, lociDay).replace(/^[A-Z]{3} /, "")}
+                  {!selectedRung.dotted && ` · ${selectedRung.daysLeft} ${selectedRung.daysLeft === 1 ? "DAY" : "DAYS"} LEFT`}
+                  {` · ${shownColumns[0].tasks.length} ${shownColumns[0].tasks.length === 1 ? "TASK" : "TASKS"}`}
+                </p>
+              )}
+              <SortableRoadmapList
+                colKey={shownColumns[0].key}
+                colTasks={shownColumns[0].tasks}
+                fullColTasks={shownColumns[0].allTasks}
+                tasks={tasks}
+                payload={payload}
+                savePayload={savePayload}
+                onTaskClick={openTask}
+                onDone={handleMarkDone}
+                isGoal={isGoal}
+                frontNameOf={frontNameOf}
+                openUuid={detailUuid}
+              />
+              {(() => {
+                const done = selectedRung ? doneTasks(tasks, selected, selectedRung.period) : [];
+                if (!done.length) return null;
+                return (
+                  <div className="plan-done">
+                    <button type="button" className="plan-done-toggle" aria-expanded={doneOpen} onClick={() => setDoneOpen(o => !o)}>
+                      Done · {done.length}
+                    </button>
+                    {doneOpen && (
+                      <ul className="plan-done-list">
+                        {done.map(t => <li key={t.uuid} className="plan-done-row">{t.title}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })()}
+              {!shownColumns[0].noAdd && (
+                <button type="button" className="plan-open-add" onClick={() => onOpenAddTask(selected)}>
+                  <IconPlus size={18} aria-hidden="true" /> Add to {shownColumns[0].label}
+                </button>
+              )}
+            </section>
+          </div>
+        </>
+      )}
       {/* Mind Box's notes wait below the horizons (45h has none on top). */}
       {!frontId && inbox}
 

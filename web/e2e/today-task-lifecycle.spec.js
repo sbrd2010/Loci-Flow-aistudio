@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openRung } from "./helpers/plan.js";
 
 // Today task lifecycle smoke tests run in demo mode so they do not mutate Firebase data.
 // They protect the daily execution loop: add, edit, focus, complete, undo, delete, undo.
@@ -276,6 +277,7 @@ test("mobile reliability: editing the wall's task off Today clears its focus/pin
   const nav = page.getByRole("navigation", { name: "Main navigation" });
   await nav.getByRole("button", { name: "Plan", exact: true }).click();
   await page.getByRole("tab", { name: "Horizons" }).click();
+  await openRung(page, "week");
   await page.locator(".roadmap-task-card", { hasText: title }).first().click();
   await page.getByRole("button", { name: /Move to Today/i }).click();
   await nav.getByRole("button", { name: "Today", exact: true }).click();

@@ -209,7 +209,7 @@ test("13. Brain dump long-note gate — move as-is lands in horizon", async ({ p
   await expect(dumpItem).not.toBeVisible({ timeout: 5_000 });
 
   // It lands in This week, shown with the other horizons.
-  const week = page.locator(".plan-horizon", { has: page.getByRole("heading", { name: /^This week/ }) });
+  const week = page.locator(".plan-open", { has: page.getByRole("heading", { name: /^This week/ }) });
   await expect(week.getByText(longItemText)).toBeVisible({ timeout: 5_000 });
 });
 

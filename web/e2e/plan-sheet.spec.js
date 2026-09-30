@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openRung } from "./helpers/plan.js";
 
 // Plan rows and the task sheet (52h): meta is priority · estimate · front,
 // a pinned row carries a pin, the grip shows on hover or focus, and a row
@@ -13,10 +14,11 @@ async function enterDemo(page, viewport = { width: 1280, height: 800 }) {
   await page.getByTestId("demo-btn").click();
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  await expect(page.locator(".plan-horizons")).toBeVisible();
+  await expect(page.locator(".plan-ladder")).toBeVisible();
 }
 
-const horizon = (page, name) => page.locator(".plan-horizon", { has: page.getByRole("heading", { name: new RegExp(`^${name}`) }) });
+// The open rung's list (57): This week unless another rung is opened.
+const horizon = (page, name) => page.locator(".plan-open", { has: page.getByRole("heading", { name: new RegExp(`^${name}`) }) });
 const sheet = (page) => page.getByTestId("task-detail");
 
 // Steps are edited in place (52), so their text is the fields' values.
@@ -174,6 +176,7 @@ test("Drag anywhere: Enter on a Plan row opens its sheet; Space picks it up", as
   await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
   await page.getByRole("switch", { name: "Drag anywhere" }).click();
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  await openRung(page, "week");
   const rows = horizon(page, "This week").locator(".plan-row");
   await rows.nth(1).focus();
   await page.keyboard.press("Enter");

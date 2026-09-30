@@ -67,7 +67,7 @@ for (const viewport of MOBILE_VIEWPORTS) {
     // So does a front's page (52f), with its title and Park / Close bar.
     await openTab(page, "Plan");
     await expect(page.getByRole("heading", { name: "Plan", level: 1 })).toBeVisible({ timeout: 8_000 });
-    await expect(page.locator(".plan-horizons")).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator(".plan-ladder")).toBeVisible({ timeout: 8_000 });
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole("tab", { name: "Fronts" }).click();

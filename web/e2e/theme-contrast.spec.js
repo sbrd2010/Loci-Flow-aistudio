@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openRung } from "./helpers/plan.js";
 import { paintedBackdrop, contrastRatio, parseRgb } from "./helpers/pixels.js";
 import { THEME_CHOICES } from "../src/utils/theme.js";
 
@@ -142,9 +143,11 @@ for (const theme of THEMES) {
     await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
     await expect(page.getByRole("tab", { name: "Horizons" })).toHaveAttribute("aria-selected", "true");
     await assertLegible(page.getByRole("tab", { name: "Fronts" }), "unselected Plan view", theme);
+    await assertLegible(page.locator(".plan-rung-count").first(), "rung count", theme);
+    // A phone opens on the ladder (57d); the rung pushes its list.
+    await openRung(page, "week");
     await assertLegible(page.locator(".plan-row-figures").first(), "horizon row figures", theme);
-    await assertLegible(page.locator(".plan-horizon-count").first(), "horizon count", theme);
-    expect(await visibleHitHeight(page.getByRole("button", { name: "Add a task to This week" })),
+    expect(await visibleHitHeight(page.getByRole("button", { name: "Add to This week" })),
       `horizon + hit area on ${theme}`).toBeGreaterThanOrEqual(MIN_TOUCH_PX);
   });
 }
