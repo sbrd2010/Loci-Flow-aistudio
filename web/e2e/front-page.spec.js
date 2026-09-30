@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openRung } from "./helpers/plan.js";
 
 // A front's own page (52f–g), opened from its card in Plan's Fronts (45i):
 // its open tasks by horizon, Add to this front, and Park / Close with Undo.
@@ -30,7 +31,8 @@ async function frontWith(page, name, horizons, dueAt = "2024-07-03") {
   const titles = [];
   for (const h of horizons) {
     await page.getByRole("tab", { name: "Horizons" }).click();
-    const row = page.locator(".plan-horizon", { has: page.locator(`#plan-h-${h}`) })
+    await openRung(page, h);
+    const row = page.locator(".plan-open", { has: page.locator(`#plan-h-${h}`) })
       .locator(".plan-row").filter({ hasNot: page.locator(".plan-row-front") }).first();
     titles.push((await row.locator(".plan-row-title").innerText()).trim());
     await row.click();
@@ -199,7 +201,7 @@ test("a task moved to Today leaves the rows but still counts: the figures say it
 // so the horizon's tasks on no front keep their places around it.
 test("a drag on a front's page keeps the horizon's other tasks in place", async ({ page }) => {
   await enterDemo(page, 1280, 800);
-  const week = () => page.locator(".plan-horizon", { has: page.locator("#plan-h-week") }).locator(".plan-row-title");
+  const week = () => page.locator(".plan-open", { has: page.locator("#plan-h-week") }).locator(".plan-row-title");
   const [w1, w2, w3] = (await week().allInnerTexts()).map(t => t.trim());
   // One priority for all three, so their order is theirs alone.
   for (const t of [w1, w2, w3]) {

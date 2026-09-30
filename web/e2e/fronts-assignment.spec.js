@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openRung } from "./helpers/plan.js";
 
 // Fronts are only real once a task can be put on one. A front's next move and
 // its progress are DERIVED from the tasks assigned to it, so assignment is the
@@ -46,7 +47,8 @@ const card = (page, name) => page.locator(".plan-front", { has: page.locator(".p
 // closes the sheet, and returns the task's title.
 async function putFirstWeekTaskOn(page, frontName) {
   await page.getByRole("tab", { name: "Horizons" }).click();
-  const row = page.locator(".plan-horizon", { has: page.locator("#plan-h-week") }).locator(".plan-row").first();
+  await openRung(page, "week");
+  const row = page.locator(".plan-open", { has: page.locator("#plan-h-week") }).locator(".plan-row").first();
   const title = (await row.locator(".plan-row-title").innerText()).trim();
   await row.click();
   const sheet = page.getByTestId("task-detail");
@@ -62,6 +64,7 @@ async function putFirstWeekTaskOn(page, frontName) {
 // The front a task is on, as its sheet in Horizons shows it.
 async function frontOfTask(page, title) {
   await page.getByRole("tab", { name: "Horizons" }).click();
+  await openRung(page, "week");
   await page.locator(".plan-row", { hasText: title }).first().click();
   const sheet = page.getByTestId("task-detail");
   const value = (await sheet.getByRole("button", { name: /^Front/ }).locator(".detail-value").innerText()).trim();
@@ -117,6 +120,7 @@ test("mobile reliability: the sheet's Front picker offers exactly the fronts the
   expect(names.length).toBeGreaterThanOrEqual(2);
 
   await page.getByRole("tab", { name: "Horizons" }).click();
+  await openRung(page, "week");
   await page.locator(".plan-row").first().click();
   const sheet = page.getByTestId("task-detail");
   await sheet.getByRole("button", { name: /^Front/ }).click();

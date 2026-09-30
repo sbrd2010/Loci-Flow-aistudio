@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openRung } from "./helpers/plan.js";
 
 // Roadmap reliability smoke tests run in demo mode so they do not mutate Firebase data.
 // These protect horizon task flows before v0.1 is shared with 5-10 testers.
@@ -24,6 +25,8 @@ async function openRoadmap(page) {
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
   await page.getByRole("tab", { name: "Horizons" }).click();
   await expect(page.getByRole("heading", { name: "Plan", level: 1 })).toBeVisible({ timeout: 8_000 });
+  // A phone opens on the ladder (57d); a rung pushes its list.
+  await openRung(page, "week");
 }
 
 function roadmapCard(page, title) {
@@ -36,7 +39,7 @@ async function expectNoHorizontalOverflow(page) {
       document.documentElement.scrollWidth,
       document.body?.scrollWidth || 0,
     ];
-    document.querySelectorAll(".app-container, .screen-content, .roadmap-container, .plan-horizons").forEach((el) => {
+    document.querySelectorAll(".app-container, .screen-content, .roadmap-container, .plan-ladder-grid").forEach((el) => {
       measured.push(el.scrollWidth);
     });
     return {
@@ -55,7 +58,7 @@ test("reliability: roadmap task can be added, edited, and moved to Today", async
   const originalTitle = "Roadmap lifecycle seed task";
   const editedTitle = "Ready for Today smoke task";
 
-  await page.getByRole("button", { name: "Add a task to This week" }).click();
+  await page.getByRole("button", { name: "Add to This week" }).click();
   await expect(page.locator(".add-card")).toBeVisible({ timeout: 5_000 });
   await page.getByTestId("add-task-title").fill(originalTitle);
   await page.getByTestId("add-task-submit").click();
@@ -93,7 +96,7 @@ test("reliability: manual sub-steps added on a roadmap task are visible in its s
   await openRoadmap(page);
 
   const title = "Roadmap checklist visibility seed task";
-  await page.getByRole("button", { name: "Add a task to This week" }).click();
+  await page.getByRole("button", { name: "Add to This week" }).click();
   await expect(page.locator(".add-card")).toBeVisible({ timeout: 5_000 });
   await page.getByTestId("add-task-title").fill(title);
   await page.getByRole("button", { name: /More details/i }).click();

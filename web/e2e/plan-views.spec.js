@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openRung } from "./helpers/plan.js";
 
 // Plan (45h–j): Horizons | Fronts, the horizons as sections — one column on
 // a phone, two on a tablet, four on a laptop — and the Day map reached from
@@ -23,7 +24,8 @@ test("Plan opens on Horizons, switches to Fronts, and has no Day map door", asyn
   const horizons = page.getByRole("tab", { name: "Horizons" });
   const fronts = page.getByRole("tab", { name: "Fronts" });
   await expect(horizons).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("heading", { name: /^This week/ })).toBeVisible();
+  // A phone opens on the ladder (57d).
+  await expect(page.locator(".plan-rung", { hasText: "This week" })).toBeVisible();
   await expect(page.getByRole("button", { name: /day map/i })).toHaveCount(0);
 
   await fronts.click();
@@ -43,16 +45,36 @@ test("Plan opens on Horizons, switches to Fronts, and has no Day map door", asyn
   await expect(page.getByRole("button", { name: "Day map →" })).toBeVisible();
 });
 
-test("Horizons: one column on a phone, two on a tablet, four on a laptop (45h–j)", async ({ page }) => {
+test("Horizons: on a phone a rung pushes its list; wider, the ladder sits beside it (57)", async ({ page }) => {
   await enterDemo(page);
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  const columns = async () => page.locator(".plan-horizon").evaluateAll(els =>
-    new Set(els.slice(0, 4).map(el => Math.round(el.getBoundingClientRect().left))).size);
-  await expect.poll(columns).toBe(1);
+  const ladder = page.locator(".plan-ladder");
+  const list = page.locator(".plan-open");
+  await expect(page.locator(".plan-rung")).toHaveCount(4);
+  await expect(page.locator(".plan-rung[aria-current='true']")).toHaveAttribute("data-horizon", "week");
+  await expect(ladder).toBeVisible();
+  await expect(list).toBeHidden();
+  await page.locator(".plan-rung[data-horizon='quarter']").click();
+  await expect(ladder).toBeHidden();
+  await expect(list.getByRole("heading", { name: "This quarter" })).toBeVisible();
+  await list.getByRole("button", { name: "Plan" }).click();
+  await expect(ladder).toBeVisible();
+
+  // Plan opens on the rung last opened on this device (42.1).
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Today", exact: true }).click();
+  await nav.getByRole("button", { name: "Plan", exact: true }).click();
+  await expect(page.locator(".plan-rung[aria-current='true']")).toHaveAttribute("data-horizon", "quarter");
+
+  const side = async () => {
+    const l = await ladder.boundingBox();
+    const o = await list.boundingBox();
+    return !!(l && o) && o.x > l.x + 200;
+  };
   await page.setViewportSize({ width: 900, height: 1200 });
-  await expect.poll(columns).toBe(2);
+  await expect.poll(side).toBe(true);
   await page.setViewportSize({ width: 1280, height: 800 });
-  await expect.poll(columns).toBe(4);
+  await expect.poll(side).toBe(true);
 });
 
 // 50f, 52e: Day map rows are time · task · how long, and the Unscheduled
@@ -75,8 +97,9 @@ test("Day Map draws no priority tags, and its lengths share one colour", async (
 test("Horizons: each horizon's + and each row's circle are 44px targets", async ({ page }) => {
   await enterDemo(page);
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  for (const name of ["This week", "This month", "This quarter", "6 months"]) {
-    const box = await page.getByRole("button", { name: `Add a task to ${name}` }).boundingBox();
+  for (const [id, name] of [["week", "This week"], ["month", "This month"], ["quarter", "This quarter"], ["halfyear", "6 months"]]) {
+    await openRung(page, id);
+    const box = await page.getByRole("button", { name: `Add to ${name}` }).boundingBox();
     expect(Math.round(box.width), name).toBeGreaterThanOrEqual(44);
     expect(Math.round(box.height), name).toBeGreaterThanOrEqual(44);
   }
@@ -85,22 +108,27 @@ test("Horizons: each horizon's + and each row's circle are 44px targets", async 
   expect(Math.round(circle.height)).toBeGreaterThanOrEqual(44);
 
   // + opens Add task on that horizon (45a).
-  await page.getByRole("button", { name: "Add a task to This quarter" }).click();
+  await openRung(page, "quarter");
+  await page.getByRole("button", { name: "Add to This quarter" }).click();
   await expect(page.getByTestId("add-task-submit")).toHaveText("Add to This quarter");
 });
 
 test("Horizons: the circle marks a task done; Work shows only when it holds tasks", async ({ page }) => {
   await enterDemo(page);
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  const week = page.locator(".plan-horizon", { has: page.getByRole("heading", { name: /^This week/ }) });
+  await openRung(page, "week");
+  const week = page.locator(".plan-open", { has: page.getByRole("heading", { name: /^This week/ }) });
   const rows = week.locator(".plan-row");
   const before = await rows.count();
   const title = (await rows.first().locator(".plan-row-title").innerText()).trim();
   await rows.first().getByRole("button", { name: `Mark done: ${title}` }).click();
   await expect(rows).toHaveCount(before - 1);
-  await expect(week.getByRole("heading", { name: /^This week/ })).toContainText(String(before - 1));
-  // The demo has no Work tasks, so there is no Work section to scroll past.
-  await expect(page.getByRole("heading", { name: /^Work/ })).toHaveCount(0);
+  await expect(page.locator(".plan-rung[data-horizon='week'] .plan-rung-count")).toHaveText(String(before - 1));
+  // It waits in the list's Done fold (42.2).
+  await week.getByRole("button", { name: /^Done · / }).click();
+  await expect(week.locator(".plan-done-row", { hasText: title })).toBeVisible();
+  // The demo has no Work tasks, so there is no Work · older rung.
+  await expect(page.locator(".plan-rung-older")).toHaveCount(0);
 });
 
 test("Mind Box's notes link lands on Plan's Inbox", async ({ page }) => {
@@ -119,7 +147,8 @@ test("Horizons in Drag anywhere mode: Space and Enter on the circle mark the tas
   await page.getByRole("switch", { name: "Drag anywhere" }).click();
   await expect(page.getByRole("switch", { name: "Drag anywhere" })).toHaveAttribute("aria-checked", "true");
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  const week = page.locator(".plan-horizon", { has: page.getByRole("heading", { name: /^This week/ }) });
+  await openRung(page, "week");
+  const week = page.locator(".plan-open", { has: page.getByRole("heading", { name: /^This week/ }) });
   const rows = week.locator(".plan-row");
   const before = await rows.count();
   for (const key of ["Space", "Enter"]) {

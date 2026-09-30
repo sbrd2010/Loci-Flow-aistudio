@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openRung } from "./helpers/plan.js";
 
 // Add task (45a phone sheet, 45k laptop dialog). Demo mode: nothing reaches
 // Firebase. The horizon defaults to where + was tapped, and the sheet says so.
@@ -44,7 +45,8 @@ test("opened from Plan: the note names the column it came from", async ({ page }
   await enterDemo(page);
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
   await page.getByRole("tab", { name: "Horizons" }).click();
-  await page.getByRole("button", { name: "Add a task to This week" }).click();
+  await openRung(page, "week");
+  await page.getByRole("button", { name: "Add to This week" }).click();
   const dialog = page.getByRole("dialog", { name: "New task" });
   await expect(dialog.locator(".add-note")).toContainText(/because you opened it from Plan · /);
   const pressed = (await dialog.locator(".add-block [aria-pressed='true']").first().innerText()).trim();
