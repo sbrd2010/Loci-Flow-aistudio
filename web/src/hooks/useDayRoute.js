@@ -71,6 +71,22 @@ export function reflowRoute(orderedTasks, anchorMinutes, todayStr, breaks = []) 
   });
 }
 
+// With no From set the route starts now: a first flowing stop later than
+// where timing from now would put it is a gap (the stop before it went).
+// "Where timing would put it", not "now": during a break the head can only
+// start when the break ends, and comparing with now kept re-timing a route
+// that was already right (10b, #430 loopcheck).
+export function hasHeadGap(route, startMinutes, todayStr, breaks = []) {
+  const flowing = route.filter(t => !isFixedStop(t) && t.dayMapStartMinutes != null);
+  if (!flowing.length) return false;
+  const first = Math.min(...flowing.map(t => Number(t.dayMapStartMinutes)));
+  const order = (t) => t.dayMapOrder ?? Infinity;
+  const timed = reflowRoute([...route].sort((a, b) => order(a) - order(b)), startMinutes, todayStr, breaks)
+    .filter(t => !isFixedStop(t) && t.dayMapStartMinutes != null);
+  if (!timed.length) return false;
+  return first > Math.min(...timed.map(t => Number(t.dayMapStartMinutes)));
+}
+
 // Each stop starts where the engine puts it, counting from where the route's
 // first flowing stop starts. A write from anywhere — Done on Today, the full
 // editor, another device — can leave a gap or an overlap; this is how the

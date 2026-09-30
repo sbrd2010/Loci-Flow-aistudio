@@ -23,7 +23,7 @@ import { mergeWindowSpans } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
 import {
   applyReflow, currentDayMinutes, getEstimate, getTaskId,
-  normalizePriority, reflowRoute, removeScheduleFields, routeIsContiguous, useDayRoute,
+  hasHeadGap, normalizePriority, reflowRoute, removeScheduleFields, routeIsContiguous, useDayRoute,
 } from "../hooks/useDayRoute";
 import { isEventTask, isFixedStop } from "../utils/dayMapRoute";
 import { eventAsks } from "../utils/fixedTime";
@@ -376,6 +376,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     });
   };
 
+  // Focus goes back to a break's row when its sheet closes (10b).
+  const focusBreak = (at) => requestAnimationFrame(() => document.querySelector(`.dm-break [data-break-index="${at}"]`)?.focus());
   // Q31: a break you add, or change (`index`), and Remove; each with Undo.
   const saveBreak = (start, lengthMin, index) => {
     const before = addedBreaks(routeConfig, todayStr);
@@ -388,6 +390,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const covers = (b) => !!b && b.start <= nowMin && nowMin < b.start + b.lengthMin;
     if (covers(item) && !covers(index == null ? null : before[index]) && focusTimer?.focusSessionId) onEndFocus?.();
     setFixing(null);
+    if (index != null) focusBreak(index);
     setUndo({ kind: "breaks", date: todayStr, breaks: before, message: `Break ${formatClock24(start)}–${formatClock24(start + lengthMin)}${index == null ? " added" : ""}`, at: Date.now() });
   };
   const removeBreak = (index) => {
@@ -549,6 +552,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
             className="dm-main"
             role="button"
             tabIndex={0}
+            data-break-index={r.added}
             aria-label={`${formatClock24(r.start)} to ${formatClock24(r.end)}, ${r.name}`}
             onClick={open}
             onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
@@ -638,9 +642,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const fromSet = routeConfig.dayMapDate === todayStr && routeConfig.dayMapAnchorMinutes != null;
     const start = fromSet ? anchorMinutes : currentDayMinutes(windows);
     // A fixed stop keeps its own time: the head is the first stop that flows.
-    const flowing = scheduledTasks.filter(t => !isFixedStop(t) && t.dayMapStartMinutes != null);
-    const first = flowing.length ? Math.min(...flowing.map(t => Number(t.dayMapStartMinutes))) : null;
-    const headGap = !fromSet && first != null && first > start;
+    const headGap = !fromSet && hasHeadGap(scheduledTasks, start, todayStr, breaks);
     if (!pending && !headGap && routeIsContiguous(scheduledTasks, breaks)) return;
     pendingReflowRef.current = null;
     const prefer = pending?.prefer ?? null;
@@ -996,7 +998,13 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           durationOf={getEstimate}
           getTaskId={getTaskId}
           onFix={fixTime}
-          onClose={() => setFixing(null)}
+          onClose={() => {
+            // Back to the break row it came from (10b); a task's sheet
+            // hands focus back its own way.
+            const at = fixing?.breakItem?.index;
+            setFixing(null);
+            if (at != null) focusBreak(at);
+          }}
           newBlocked={isEveningGuardBlocked(routeConfig)}
         />
       )}
