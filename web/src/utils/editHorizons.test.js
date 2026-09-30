@@ -59,6 +59,9 @@ describe("deleting a horizon you added (Q44.3)", () => {
     expect(after.tasks.find(t => t.uuid === "a")).toMatchObject({ horizonLevel: "halfyear", orderIndex: 1 });
     expect(after.tasks.find(t => t.uuid === "b").horizonLevel).toBe("today");
     expect(after.tasks.find(t => t.uuid === "c").isDeleted).toBe(true);
+    // Codex review of #444: a dropped task is no longer the one thing.
+    const focused = applyHorizonDelete({ tasks: [{ uuid: "f", horizonLevel: "two", isNowFocus: true }], config }, "two", { f: "drop" }, 5);
+    expect(focused.tasks[0]).toMatchObject({ isDeleted: true, isNowFocus: false });
     const back = undoHorizonDelete(after, before, "two");
     expect(back.config.horizons.two).toEqual(two);
     expect(back.tasks.filter(t => t.horizonLevel === "two").map(t => t.uuid)).toEqual(["a", "b", "c"]);

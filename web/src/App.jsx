@@ -1438,6 +1438,9 @@ export default function App() {
             day={getLociDayStr(new Date(), getFocusWindows(payload.config || {}))}
             saveConfigPatch={saveConfigPatch}
             savePayload={savePayload}
+            savePayloadAsync={savePayloadAsync}
+            focusedUuid={focusTimer.focusSessionActive ? focusTimer.activeTask?.uuid : null}
+            onEndFocus={handleEndFocusSession}
             onClose={() => setEditHorizonsOpen(false)}
           />
         )}
@@ -1497,6 +1500,7 @@ export default function App() {
           <SettingsTab
             payload={payload}
             savePayload={savePayload}
+            savePayloadAsync={savePayloadAsync}
             saveSubPath={saveSubPath}
             saveConfigPatch={saveConfigPatch}
             lastSyncedAt={lastSyncedAt}
