@@ -82,6 +82,8 @@ export default function FocusModePage({
   blockMinutes = 25,
   // Q40.1: the break-end chime (Settings → Focus timer → Chimes).
   chimes = true,
+  // Q38.1d: the mini window says "Break's over" too.
+  onBreakOver,
   // Q40.3: Re-estimate, in minutes. And today's Loci day, for Q40.2.
   onReestimate,
   dayKey = "",
@@ -185,6 +187,8 @@ export default function FocusModePage({
   const startNext = () => { setBreakUntil(null); setBreakOver(false); onKeepGoing?.(nextLen); };
   const chimesRef = useRef(chimes);
   chimesRef.current = chimes;
+  const onBreakOverRef = useRef(onBreakOver);
+  onBreakOverRef.current = onBreakOver;
 
   // The break counts down, then asks (Q38.1a): "Break's over", with a chime.
   useEffect(() => {
@@ -218,7 +222,8 @@ export default function FocusModePage({
     if (!breakOver) return undefined;
     const before = document.title;
     document.title = "Break's over";
-    return () => { document.title = before; };
+    onBreakOverRef.current?.(true);
+    return () => { document.title = before; onBreakOverRef.current?.(false); };
   }, [breakOver]);
   const breakLeft = breakUntil == null ? 0 : Math.max(0, Math.ceil((breakUntil - nowMs) / 1000));
   const endSession = ({ note, tomorrow }) => { setEnding(false); onEndSession?.({ note, tomorrow }); };

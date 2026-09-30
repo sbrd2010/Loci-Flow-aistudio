@@ -88,7 +88,7 @@ export default function TodayTab({
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
-  pipOpen, handleOpenPiP, isAddTaskDialogOpen, startFocusSession, endFocusSession, focusSessionId, focusSessionTaskUuid, changeFocusDuration,
+  pipOpen, handleOpenPiP, setPipNotice, isAddTaskDialogOpen, startFocusSession, endFocusSession, focusSessionId, focusSessionTaskUuid, changeFocusDuration,
   extendTimer, addTimeToSession, dismissSessionComplete, focusStartedAt, focusElapsedSeconds, focusBlockNumber,
   selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
   isSyncingFromCache = false,
@@ -2029,6 +2029,7 @@ export default function TodayTab({
           blockMinutes={focusBlockSeconds(config) / 60}
           onBlockTimeout={(m) => { if (changeFocusDuration(m || focusBlockSeconds(config) / 60)) dismissSessionComplete(); }}
           chimes={chimesOn(config)}
+          onBreakOver={(on) => setPipNotice?.(on ? "Break’s over" : null)}
           dayKey={todayStr}
           onReestimate={(m) => savePayload({ ...payload, tasks: tasks.map(t => t.uuid === activeTask.uuid ? { ...t, timeEstimateMinutes: m, lastUpdated: Date.now() } : t) })}
           startedAt={focusStartedAt}

@@ -581,11 +581,11 @@ export default function App() {
 
   // Focus timer state lives here (not in TodayTab) so it survives tab switches
   // and can be surfaced via the floating timer across pages.
-  // reshuffleTrackRef bridges useFocusAudio's reshuffleTrack into the timer
-  // hook's PiP popup: useFocusAudio needs focusTimer.isTimerRunning, so it's
-  // constructed after useFocusTimer and isn't available yet at this point.
-  const reshuffleTrackRef = useRef(() => {});
-  const focusTimer = useFocusTimer(payload?.tasks || [], payload?.config || {}, user?.uid || null, reshuffleTrackRef);
+  // pipActionsRef carries the mini window's Done and I'm stuck (59b) into
+  // the timer hook, which builds that window; they are set below, once the
+  // handlers they call exist.
+  const pipActionsRef = useRef({});
+  const focusTimer = useFocusTimer(payload?.tasks || [], payload?.config || {}, user?.uid || null, pipActionsRef);
   // Live (non-stale) read of focusTimer for effect/promise callbacks that
   // run after an async wait (e.g. the pendingFocusOpen effect's pinPromise
   // handlers below) — those closures capture `focusTimer` from whichever
@@ -597,9 +597,6 @@ export default function App() {
   // Focus Sounds audio also lives here so ambient sound keeps playing across
   // tab switches and after exiting the Deep Focus overlay.
   const focusAudio = useFocusAudio(focusTimer.isTimerRunning, payload?.config || {}, saveConfigPatch);
-  useEffect(() => {
-    reshuffleTrackRef.current = focusAudio.reshuffleTrack;
-  }); // no deps - reshuffleTrack is a fresh closure every render, always resync
 
   // Unsent Coach chat draft also lives here (not in CoachTab) so it survives
   // tab switches — CoachTab unmounts when activeTab !== "coach". In-memory
@@ -1001,6 +998,15 @@ export default function App() {
       .catch(() => {});
     focusTimer.setIsFocusMode(false);
     focusTimer.setFocusSessionActive(false);
+  };
+
+  // 59b: the mini window's Done completes the task (as Finish task does);
+  // I'm stuck brings the main window back to the focus page.
+  // Done stops the timer itself (Codex review of #435): the completion's
+  // save could fail, and the countdown must not run on after the session.
+  pipActionsRef.current = {
+    onDone: () => { focusTimer.setIsTimerRunning(false); handleFocusSessionDone(); },
+    onStuck: handleReturnToFocus,
   };
 
   // Global Focus completion prompt: "Keep going" — opens the duration picker
