@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 export default function MentorTab({ payload, savePayload, saveSubPath }) {
-  const { tasks = [], config = {} } = payload;
+  const { config = {} } = payload;
 
   // Hybrid API key resolution
   const DEFAULT_GEMINI_KEY = ""; // Baked-in fallback key placeholder

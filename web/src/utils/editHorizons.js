@@ -7,7 +7,6 @@ import { dayLabel } from "./planLadder";
 export const HORIZON_NAME_MAX = 40;
 const isBuiltIn = (id) => BUILT_IN_HORIZONS.some(b => b.id === id);
 const short = (s, day) => dayLabel(s, day).replace(/^[A-Z]{3} /, "");
-const addDays = (s, n) => { const [y, m, d] = s.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); };
 
 // The mono rule under each name (57g).
 export function horizonRule(h, day) {

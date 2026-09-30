@@ -352,7 +352,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
 
     const deliver = (text, voiced) => {
       const withReply = [...chatHistoryRef.current, { text, isUser: false }];
-      const { history: savedWithReply, trimmed, removedCount } =
+      const { history: savedWithReply, removedCount } =
         trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, configRef.current.coachSessionSummary);
       saveSubPath("chatHistory", savedWithReply);
       // The 40-cap can trim old messages off the front even on this
@@ -1075,7 +1075,6 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
 
         if (!matchedFromActionTag) {
           const activeTasks = currentTasks.filter(isActiveLociTask);
-          const lowerReply = cleanText.toLowerCase();
           const matchedTasks = [];
  
            // Collect and normalize titles of excluded tasks (added, completed, parked in this turn)
