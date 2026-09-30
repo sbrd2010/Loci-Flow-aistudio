@@ -7,6 +7,7 @@ import {
   formatMinutesLeft,
   narrowDown,
   pickThree,
+  setTimeLeft,
 } from "./narrowDown";
 
 const NOW = new Date(2026, 10, 4, 9, 41); // 4 Nov 2026, 09:41 local
@@ -382,5 +383,19 @@ describe("pickThree (Feeling scattered, 45c)", () => {
   it("never offers a task moved to tomorrow", () => {
     const tasks = [t("a", { priority: "P1", deferredUntil: "2026-09-25" }), t("b")];
     expect(pickThree(tasks, {}, now).map(p => p.uuid)).toEqual(["b"]);
+  });
+});
+
+describe("setTimeLeft (Q47.6)", () => {
+  const W = getFocusWindows({});
+  const at = (m, over = {}) => ({ uuid: `e${m}`, title: `Call ${m}`, horizonLevel: "today", fixedKind: "event", dayMapFixedMinutes: m, dayMapDate: "2026-11-04", ...over });
+  it("names the next set-time thing still to come", () => {
+    // 09:41: the 09:00 call has passed; 15:00 comes before 16:00.
+    expect(setTimeLeft([at(540), at(960), at(900)], NOW, W)).toEqual({ next: { title: "Call 900", at: 900 } });
+  });
+  it("says so with none still to come, and is null with none at all", () => {
+    expect(setTimeLeft([at(540)], NOW, W)).toEqual({ next: null });
+    expect(setTimeLeft([at(900, { isCompleted: true }), at(960, { dayMapDate: "2026-11-03" })], NOW, W)).toBe(null);
+    expect(setTimeLeft([task()], NOW, W)).toBe(null);
   });
 });

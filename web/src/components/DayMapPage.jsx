@@ -28,7 +28,7 @@ import {
 } from "../hooks/useDayRoute";
 import { isEventTask, isFixedStop } from "../utils/dayMapRoute";
 import { eventAsks } from "../utils/fixedTime";
-import { addedBreaks, busyFromRows, defaultBreak, newBreakId, nextFreeSlot } from "../utils/dayMapBreaks";
+import { addedBreaks, busyFromRows, defaultBreak, laterTodaySlot, newBreakId, nextFreeSlot } from "../utils/dayMapBreaks";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { safeUUID } from "../utils/uuid";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
@@ -38,6 +38,7 @@ import { confirmMinimumDay, minimumDay } from "../utils/minimumDay";
 import DayMapFrom from "./DayMapFrom";
 import LinkifyText from "./LinkifyText";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
+import DidItHappen from "./DidItHappen";
 import TaskDetail from "./TaskDetail";
 import FixTimeSheet from "./FixTimeSheet";
 import useTaskActions from "../hooks/useTaskActions";
@@ -59,7 +60,7 @@ import "../styles/dayMap.css";
 // `row` is the stop as the route engine laid it out (utils/dayMapRoute): its
 // start and end, and whether it is fixed, late, pulled forward, or stops for
 // a break. A fixed stop keeps its time, so it is not dragged.
-function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus, until = null, min = null, was = null, flash = false, asks = false, onDone, onMove }) {
+function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus, until = null, min = null, was = null, flash = false, asks = null }) {
   const taskId = getTaskId(task);
   const {
     attributes, listeners, setActivatorNodeRef,
@@ -126,14 +127,8 @@ function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFo
         {/* 56a: the one thing, at NOW, until the end of its stop. */}
         {until != null && <span className="dm-one-thing"><IconPin size={12} />THE ONE THING · UNTIL {formatClock24(until)}</span>}
       </div>
-      {/* Q36.3: still open 5 minutes after it ended, it asks. */}
-      {asks && (
-        <div className="dm-ask" role="group" aria-label={`Did it happen? ${task.title}`}>
-          <span className="dm-ask-text">Did it happen?</span>
-          <button type="button" className="dm-btn-outline" onClick={onDone} onPointerDown={e => e.stopPropagation()}>Done</button>
-          <button type="button" className="dm-btn-outline" onClick={onMove} onPointerDown={e => e.stopPropagation()}>Move</button>
-        </div>
-      )}
+      {/* Q36.3: still open 5 minutes after it ended, it asks (Q47.5). */}
+      {asks && <DidItHappen title={task.title} {...asks} />}
       {/* Q31: something at a set time (a call) is never a focus session. */}
       {isNow && !isEventTask(task) && (
         <button type="button" className="dm-start" onClick={onStartFocus} onPointerDown={e => e.stopPropagation()}>
@@ -410,6 +405,12 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     setUndo({ kind: "breaks", date: todayStr, breaks: before, message: "Break removed", at: Date.now() });
   };
 
+  // Q47.5: "Did it happen?" → Move → Later today: the next free slot it
+  // fits before the day ends, if there is one.
+  const laterFor = (task) => {
+    return laterTodaySlot(rows, breaks, Math.max(nowMins, anchorMinutes), getEstimate(task), plan.dayEnd);
+  };
+
   // Q36a: "Did it happen?" → Move → Tomorrow: it goes to tomorrow's
   // "Moved from yesterday", its fixed time cleared, with Undo.
   const moveOneToTomorrow = (task) => {
@@ -631,9 +632,13 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         isOpen={detailId === id}
         onOpen={() => { if (!draggingRef.current) setDetailId(id); }}
         onStartFocus={() => startFocus(id)}
-        asks={eventAsks(r, nowMins)}
-        onDone={() => act(actions.handleMarkDone)(task)}
-        onMove={() => setFixing({ task })}
+        asks={eventAsks(r, nowMins) ? {
+          laterAt: laterFor(task),
+          onDone: () => act(actions.handleMarkDone)(task),
+          onLater: (at) => fixTime(task, at, false),
+          onTomorrow: () => moveOneToTomorrow(task),
+          onPickTime: () => setFixing({ task }),
+        } : null}
         was={wasStarts?.get(id) ?? null}
         flash={flashId === id}
       />

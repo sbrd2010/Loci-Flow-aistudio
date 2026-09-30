@@ -101,3 +101,16 @@ export function nextFreeSlot(rows, now, lengthMin = DEFAULT_BREAK_MIN) {
   const lastEnd = Math.max(now, ...rows.map(r => r.end));
   return Math.ceil(lastEnd / 5) * 5;
 }
+
+// Q47.5, "Did it happen?" → Move → Later today: the next free slot a task of
+// `lengthMin` fits before the day ends, or null. Every break counts, and its
+// end is a place to start — including a gap between focus windows the route
+// leaves out because nothing comes after it (Codex review of #453).
+export function laterTodaySlot(rows, breaks, from, lengthMin, dayEnd) {
+  const all = [...rows, ...breaks.flatMap(b => [
+    { kind: "break", start: b.start, end: b.end },
+    { kind: "free", start: b.end, end: b.end },
+  ])];
+  const at = nextFreeSlot(all, from, lengthMin);
+  return at + lengthMin <= dayEnd ? at : null;
+}

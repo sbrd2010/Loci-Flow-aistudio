@@ -2,8 +2,12 @@ import React, { useState } from "react";
 import { dayProgress, formatClock24, formatSpan } from "../utils/dayMapPlan";
 import { currentDayMinutes, getEstimate, getTaskId, useDayRoute } from "../hooks/useDayRoute";
 import { eventAsks } from "../utils/fixedTime";
+import { laterTodaySlot } from "../utils/dayMapBreaks";
+import { mergeWindowSpans } from "../utils/focusWindows";
 import DayClockBar from "./DayClockBar";
 import DayMapFrom from "./DayMapFrom";
+import DidItHappen from "./DidItHappen";
+import FixTimeSheet from "./FixTimeSheet";
 import { IconChevronDown, IconLock, IconPin, IconPlus } from "./ui/icons";
 import "../styles/dayMap.css";
 
@@ -12,12 +16,13 @@ import "../styles/dayMap.css";
 // with the one thing at NOW and the DAY ENDS line where it falls, "Move N to
 // tomorrow", and Unscheduled. A stop opens that task; the heading opens the
 // Day map page. Clear route's Undo is Today's (onRouteCleared).
-export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpenTask, onMoveToTomorrow, onRouteCleared, covered = false }) {
+export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpenTask, onDone, onMoveToTomorrow, onRouteCleared, covered = false }) {
   const {
     windows, scheduledTasks, unscheduledTasks, anchorMinutes, rows, routeTasks, plan,
-    setAnchor, addToRoute, autoFill, clearRoute,
+    setAnchor, addToRoute, autoFill, clearRoute, applyAndSave, breaks,
   } = useDayRoute({ payload, savePayload });
   const [poolOpen, setPoolOpen] = useState(false);
+  const [picking, setPicking] = useState(null); // "Did it happen?" → Pick a time…
 
   const progress = dayProgress(new Date(), windows);
   const nowMins = currentDayMinutes(windows);
@@ -38,6 +43,18 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
     : rows.findIndex(r => r.kind === "stop" && routeIndex.get(getTaskId(r.task)) >= overIndex);
   const rowIsOver = (r) => rows.indexOf(r) >= cut;
 
+  // Q47.5: "Did it happen?" → Move → Later today (the next free slot it fits
+  // before the day ends) or Pick a time…: a set time today, the route
+  // reflowed around it, as the Day map's own sheet does.
+  const laterFor = (task) => {
+    return laterTodaySlot(rows, breaks, Math.max(nowMins, anchorMinutes), getEstimate(task), plan.dayEnd);
+  };
+  const fixAt = (task, at) => {
+    applyAndSave(scheduledTasks.map(t => (getTaskId(t) === getTaskId(task) ? { ...t, dayMapFixedMinutes: at } : t)), anchorMinutes);
+    setPicking(null);
+  };
+  const spans = mergeWindowSpans(windows);
+
   // The rows as the Day map lays them out (utils/dayMapRoute): stops, the
   // rest of one a break split, the break, free time before a fixed stop.
   const row = (r) => {
@@ -57,8 +74,7 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
     const isOver = rowIsOver(r);
     // The one thing, at NOW: until the end of its stop (a break splits it).
     const oneThing = isNow && task.isNowFocus && !r.continued;
-    // Q36.3: still open 5 minutes after it ended, it asks; opening it
-    // offers Done and Tomorrow.
+    // Q36.3: still open 5 minutes after it ended, it asks (Q47.5).
     const asks = eventAsks(r, nowMins);
     const late = r.late && !asks;
     const until = oneThing ? routeTasks.find(t => getTaskId(t) === getTaskId(task))?.routeEndMinutes : null;
@@ -75,13 +91,22 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
           <span className="tdm-title">
             {task.title}{r.continued ? " · continued" : ""}
             {r.fixed && <span className="dm-lock"><IconLock size={13} /></span>}
-            {asks && <span className="tdm-ask">Did it happen?</span>}
             {oneThing && (
               <span className="tdm-one-thing"><IconPin size={12} />THE ONE THING · UNTIL {formatClock24(until)}</span>
             )}
           </span>
           <span className="tdm-dur">{formatSpan(r.end - r.start)}</span>
         </button>
+        {asks && (
+          <DidItHappen
+            title={task.title}
+            laterAt={laterFor(task)}
+            onDone={() => onDone(task)}
+            onLater={(at) => fixAt(task, at)}
+            onTomorrow={() => onMoveToTomorrow([getTaskId(task)])}
+            onPickTime={() => setPicking(task)}
+          />
+        )}
       </li>
     );
   };
@@ -161,6 +186,23 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
             </ul>
           )}
         </section>
+      )}
+      {picking && (
+        <FixTimeSheet
+          routeTasks={routeTasks}
+          unscheduledTasks={unscheduledTasks}
+          stops={scheduledTasks}
+          task={picking}
+          from={anchorMinutes}
+          breaks={breaks}
+          nowMins={nowMins}
+          dayStart={spans[0]?.[0] ?? 0}
+          dayEnd={Math.max(0, ...spans.map(([, end]) => end))}
+          durationOf={getEstimate}
+          getTaskId={getTaskId}
+          onFix={fixAt}
+          onClose={() => setPicking(null)}
+        />
       )}
     </aside>
   );

@@ -877,19 +877,88 @@
 .dm-pool-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .dm-pool-toggle svg { transition: none; } }
 
-/* Q36.3: a call still open 5 minutes after it ended asks. */
-.dm-ask {
+/* Q36.3 / Q47.5 (frame 60): a call still open 5 minutes after it ended
+   asks on a second line: Done (outlined) and Move (text), 32px on a laptop
+   and 44px on a phone. Move's choices open under the row; on a phone, a
+   small bottom sheet. */
+.dih {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin: 0 0 12px 64px;
+  gap: 6px 12px;
+  margin: -4px 0 12px 64px;
 }
-.dm-ask-text { font-size: 0.875rem; font-weight: 700; color: var(--ink); }
-.tdm-ask {
-  display: block;
-  margin-top: 4px;
-  font-size: 0.75rem;
+.dih-text { font-family: var(--font-serif); font-style: italic; font-size: 0.84375rem; color: var(--ink); }
+.dih-actions { display: flex; gap: 6px; margin-left: auto; }
+.dih-done, .dih-move {
+  min-height: 32px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 0.8125rem;
   font-weight: 700;
+  color: var(--accent);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.dih-done { border-color: var(--accent); }
+.dih-move[aria-expanded="true"] { background: var(--accent-soft); }
+.dih-done:focus-visible, .dih-move:focus-visible, .dih-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dih-scrim { position: fixed; inset: 0; z-index: 40; }
+.dih-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  margin-top: 6px;
+  padding: 4px 0;
+  background: var(--surface, var(--bg));
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(15, 31, 22, 0.1);
+}
+.dih-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 40px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-align: left;
   color: var(--ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.dih-item.is-pick { border-top: 1px solid var(--line); }
+.dih-meta { font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-2); }
+.dih-meta.is-note { font-family: inherit; font-style: italic; font-weight: 500; }
+@media (max-width: 1023px) {
+  .dih-done, .dih-move { min-height: 44px; font-size: 0.875rem; }
+}
+@media (max-width: 599px) {
+  .dih { margin-left: 0; }
+  .dih-actions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; margin-left: 0; }
+  /* Above the bottom nav, as the Unscheduled sheet is. */
+  .dih-scrim { z-index: 149; background: var(--scrim); }
+  .dih-menu {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 150;
+    margin: 0;
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+    border-radius: 12px 12px 0 0;
+  }
+  .dih-item { min-height: 52px; padding: 0 20px; font-size: 0.9375rem; }
 }

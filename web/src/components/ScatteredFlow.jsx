@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { pickThree } from "../utils/narrowDown";
+import { pickThree, setTimeLeft } from "../utils/narrowDown";
+import { getFocusWindows } from "../utils/focusWindows";
+import { formatClock24 } from "../utils/dayMapPlan";
 import { commitmentKickerFront, frontForCommitment, frontsFromConfig } from "../utils/fronts";
 import { IconChevronLeft, IconChevronRight } from "./ui/icons";
 import "../styles/scattered.css";
@@ -65,6 +67,7 @@ export default function ScatteredFlow({
     return i > 0 ? [suggested[i], ...suggested.filter((_, j) => j !== i)] : suggested;
   }, [suggested, firstId]);
   const first = picks[0] || null;
+  const setTime = first ? null : setTimeLeft(tasks, now, getFocusWindows(config));
 
   const goalFront = commitmentKickerFront(frontForCommitment(tasks.find(t => t.isNowFocus && !t.isDeleted && !t.isCompleted), frontsFromConfig(config)), config);
   const isGoal = (t) => !!goalFront && t.frontId === goalFront.id;
@@ -128,7 +131,14 @@ export default function ScatteredFlow({
         </>
       ) : (
         <>
-          <p className="scattered-lede">Nothing is open. That's not a gap to fill — it's where the rest of this app is trying to get you.</p>
+          {setTime ? (
+            <>
+              <p className="scattered-lede">Only set-time things left.</p>
+              {setTime.next && <p className="scattered-next">Next: {setTime.next.title} at {formatClock24(setTime.next.at % 1440)}</p>}
+            </>
+          ) : (
+            <p className="scattered-lede">Nothing is open. That's not a gap to fill — it's where the rest of this app is trying to get you.</p>
+          )}
           {onOpenMindBox && (
             <div className="scattered-actions">
               <button type="button" className="scattered-secondary" onClick={onOpenMindBox}>

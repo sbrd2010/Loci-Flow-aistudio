@@ -1996,6 +1996,7 @@ export default function TodayTab({
           savePayload={savePayload}
           onOpenDayMap={onOpenDayMap}
           onOpenTask={openFromDayMap}
+          onDone={(task) => handleToggleComplete(task)}
           onMoveToTomorrow={handleMoveManyToTomorrow}
           onRouteCleared={(before) => setUndo({ kind: "route", before, at: Date.now() })}
           covered={!!detailTask}

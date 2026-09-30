@@ -17,7 +17,7 @@
 //     always land on one task, and a reduction that eliminates everything is
 //     not a reduction — it is a dead end shown to someone already overwhelmed.
 
-import { getFocusWindows, getLociDayStr, getRemainingFocusMinutes } from "./focusWindows";
+import { getFocusWindows, getLociDayStr, getLociNowMinutes, getRemainingFocusMinutes } from "./focusWindows";
 import { frontsFromConfig, parseDueDate } from "./fronts";
 import { isDeferred } from "./deferral";
 import { isEventTask } from "./dayMapRoute";
@@ -43,6 +43,21 @@ export function openTasks(tasks, now = new Date(), windows = getFocusWindows({})
   const day = getLociDayStr(now, windows);
   // Q36.3: something at a set time (a call) is never offered as work.
   return tasks.filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked && !isDeferred(t, day) && !isEventTask(t));
+}
+
+// Q47.6: with nothing open but set-time things (calls, meetings), Help me
+// choose says so, and names the next one still to come today, if any.
+export function setTimeLeft(tasks, now = new Date(), windows = getFocusWindows({})) {
+  if (!Array.isArray(tasks)) return null;
+  const day = getLociDayStr(now, windows);
+  const events = tasks.filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked && !isDeferred(t, day)
+    && isEventTask(t) && (!t.dayMapDate || t.dayMapDate === day));
+  if (!events.length) return null;
+  const nowMin = getLociNowMinutes(now, windows);
+  const next = events
+    .filter(t => Number(t.dayMapFixedMinutes) >= nowMin)
+    .sort((a, b) => Number(a.dayMapFixedMinutes) - Number(b.dayMapFixedMinutes))[0];
+  return { next: next ? { title: next.title, at: Number(next.dayMapFixedMinutes) } : null };
 }
 
 // Focus minutes left today, measured the way the rest of the app measures them.

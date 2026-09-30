@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addedBreaks, busyFromRows, defaultBreak, fitBreak, nextFreeSlot, routeBreaks, withAddedBreaks } from "./dayMapBreaks";
+import { addedBreaks, busyFromRows, defaultBreak, fitBreak, laterTodaySlot, nextFreeSlot, routeBreaks, withAddedBreaks } from "./dayMapBreaks";
 import { layoutRoute } from "./dayMapRoute";
 
 const DAY = "2026-09-29";
@@ -49,6 +49,17 @@ describe("breaks you add (Q31)", () => {
       ["break", "Break", hm("10:00"), false],
       ["stop", "B", hm("10:15"), false],
     ]);
+  });
+
+  it("a long task with nothing shorter to take the time before it: that time is free, no split, no flag (Q47.7)", () => {
+    const breaks = [{ start: hm("10:00"), end: hm("10:15"), name: "Break", added: "b1" }];
+    const rows = layoutRoute([task("Long", 120)], { from: hm("09:00"), breaks, durationOf });
+    expect(rows.map(r => [r.kind, r.start, r.end])).toEqual([
+      ["free", hm("09:00"), hm("10:00")],
+      ["break", hm("10:00"), hm("10:15")],
+      ["stop", hm("10:15"), hm("12:15")],
+    ]);
+    expect(rows.some(r => r.continued || r.continues)).toBe(false);
   });
 
   it("splits only the one thing already underway, which continues after it", () => {
@@ -117,5 +128,23 @@ describe("nextFreeSlot", () => {
     // A ends 10:00, the call is at 10:10: 15 minutes don't fit; after the call they do.
     const rows = rowsOf([task("A", 60), task("Call", 30, "10:10")]);
     expect(nextFreeSlot(rows, hm("09:10"))).toBe(hm("10:40"));
+  });
+});
+
+describe("Later today (Q47.5)", () => {
+  // Windows 09:00–12:00 and 13:00–17:00; a missed 30-minute call is the
+  // only stop, so the route doesn't show lunch (nothing comes after it).
+  const lunch = [{ start: hm("12:00"), end: hm("13:00"), name: "Break" }];
+  const call = { ...task("Call", 30, "11:00"), fixedKind: "event" };
+  const rows = layoutRoute([call], { from: hm("09:00"), breaks: lunch, durationOf });
+
+  it("is never inside a break the route doesn't show (Codex review of #453)", () => {
+    expect(rows.some(r => r.kind === "break")).toBe(false);
+    expect(laterTodaySlot(rows, lunch, hm("12:15"), 30, hm("17:00"))).toBe(hm("13:00"));
+  });
+
+  it("is now when now is free, and null when it wouldn't end before the day does", () => {
+    expect(laterTodaySlot(rows, lunch, hm("11:40"), 15, hm("17:00"))).toBe(hm("11:40"));
+    expect(laterTodaySlot(rows, lunch, hm("16:50"), 30, hm("17:00"))).toBe(null);
   });
 });
