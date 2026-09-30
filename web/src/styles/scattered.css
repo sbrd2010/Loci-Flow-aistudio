@@ -43,6 +43,13 @@
   line-height: 1.55;
   color: var(--ink-2);
 }
+/* Q47.6: one quiet line, the next set-time thing. */
+.scattered-next {
+  margin: 6px 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
 .scattered-picks {
   display: flex;
   flex-direction: column;

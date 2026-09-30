@@ -51,6 +51,17 @@ describe("breaks you add (Q31)", () => {
     ]);
   });
 
+  it("a long task with nothing shorter to take the time before it: that time is free, no split, no flag (Q47.7)", () => {
+    const breaks = [{ start: hm("10:00"), end: hm("10:15"), name: "Break", added: "b1" }];
+    const rows = layoutRoute([task("Long", 120)], { from: hm("09:00"), breaks, durationOf });
+    expect(rows.map(r => [r.kind, r.start, r.end])).toEqual([
+      ["free", hm("09:00"), hm("10:00")],
+      ["break", hm("10:00"), hm("10:15")],
+      ["stop", hm("10:15"), hm("12:15")],
+    ]);
+    expect(rows.some(r => r.continued || r.continues)).toBe(false);
+  });
+
   it("splits only the one thing already underway, which continues after it", () => {
     const breaks = [{ start: hm("11:35"), end: hm("11:50"), name: "Break", added: 0 }];
     const one = { ...task("One", 25), isNowFocus: true };
