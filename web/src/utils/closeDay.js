@@ -98,12 +98,32 @@ export function applyClose(payload, { day, choices = {}, firstThing = null, note
 const REFLECTION_KEYS = ["dailyReflectionDate", "dailyReflectionMood", "dailyReflectionNote", "dailyReflectionCompletedAt", "dailyReflectionSnoozeUntil"];
 
 // Undo within 10 s: the tasks, the reflection and the day as they were.
-export function undoClose(payload, before, day) {
+// `day` is the day that was closed. Given `after` (the payload the close
+// saved), only what the close changed goes back, and only where nothing has
+// changed it since (say, on another device): a rename made meanwhile stays.
+export function undoClose(payload, before, day, after = null) {
   const was = new Map(leftovers(before.tasks || [], day).map(t => [key(t), t]));
+  const closed = after ? new Map((after.tasks || []).map(t => [key(t), t])) : null;
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  // A task made the one thing since the close keeps it; the old pin isn't restored.
+  const pinnedSince = (payload.tasks || []).some(t => t.isNowFocus && open(t)
+    && (!was.has(key(t)) || (closed && !same(t.isNowFocus, closed.get(key(t))?.isNowFocus))));
+  const restore = (t) => {
+    const old = was.get(key(t));
+    const mid = closed?.get(key(t));
+    if (!mid) return { ...old, ...(old.isNowFocus && pinnedSince ? { isNowFocus: false } : {}), lastUpdated: Date.now() };
+    const out = { ...t };
+    for (const k of new Set([...Object.keys(old), ...Object.keys(mid)])) {
+      if (k === "lastUpdated" || same(old[k], mid[k]) || !same(t[k], mid[k])) continue;
+      if (k === "isNowFocus" && old[k] && pinnedSince) continue;
+      if (old[k] === undefined) delete out[k]; else out[k] = old[k];
+    }
+    return { ...out, lastUpdated: Date.now() };
+  };
   return {
     ...payload,
     config: { ...payload.config, ...Object.fromEntries(REFLECTION_KEYS.map(k => [k, before.config?.[k] ?? null])), dayClose: before.config?.dayClose ?? null, dayCloseLog: before.config?.dayCloseLog ?? [] },
-    tasks: (payload.tasks || []).map(t => (was.has(key(t)) ? { ...was.get(key(t)), lastUpdated: Date.now() } : t)),
+    tasks: (payload.tasks || []).map(t => (was.has(key(t)) ? restore(t) : t)),
   };
 }
 

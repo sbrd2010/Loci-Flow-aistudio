@@ -56,6 +56,34 @@ describe("Close the day (55d–e, Q47)", () => {
     expect(undoClose(kept, { tasks, config: earlier }, DAY).config).toMatchObject({ ...earlier, dailyReflectionCompletedAt: null });
   });
 
+  it("Undo puts back what the close changed and keeps what changed since, for the day that was closed", () => {
+    const before = { tasks, config: {} };
+    const after = applyClose(before, { day: DAY, choices: { b: "drop" } }, 9);
+    // Since the close, "a" was renamed on another device and "r" sent to the Week.
+    const now = { ...after, tasks: after.tasks.map(x => (x.uuid === "a" ? { ...x, title: "a2", lastUpdated: 12 } : x.uuid === "r" ? { ...x, horizonLevel: "week", lastUpdated: 12 } : x)) };
+    // Undo lands after midnight: the day passed is the one closed, not the new one.
+    const back = undoClose(now, before, DAY, after);
+    const by = Object.fromEntries(back.tasks.map(x => [x.uuid, x]));
+    expect(by.a).toMatchObject({ title: "a2", horizonLevel: "today", orderIndex: 1 });
+    expect(by.a.deferredUntil).toBeUndefined();
+    expect(by.b.isNowFocus).toBe(true);
+    expect("isDeleted" in by.b || "deletedAt" in by.b).toBe(false);
+    expect(by.r.horizonLevel).toBe("week");
+  });
+
+  it("Undo doesn't bring back the old one thing when another was made the one thing since", () => {
+    const before = { tasks, config: {} };
+    const after = applyClose(before, { day: DAY }, 9);
+    // "b" was the one thing; since the close, "wk" was made the one thing.
+    const now = { ...after, tasks: after.tasks.map(x => (x.uuid === "wk" ? { ...x, isNowFocus: true, lastUpdated: 12 } : x)) };
+    const back = undoClose(now, before, DAY, after);
+    expect(back.tasks.filter(x => x.isNowFocus).map(x => x.uuid)).toEqual(["wk"]);
+    expect(back.tasks.find(x => x.uuid === "b").deferredUntil).toBeUndefined();
+    // Nothing pinned since: the old pin comes back, with or without `after`.
+    expect(undoClose(after, before, DAY, after).tasks.filter(x => x.isNowFocus).map(x => x.uuid)).toEqual(["b"]);
+    expect(undoClose(now, before, DAY).tasks.filter(x => x.isNowFocus).map(x => x.uuid)).toEqual(["wk"]);
+  });
+
   it("Reopen: open again, what was moved stays moved (47.3)", () => {
     const closed = applyClose({ tasks, config: {} }, { day: DAY }, 1);
     const reopened = reopenDay(closed.config, 2);

@@ -1184,19 +1184,23 @@ export default function App() {
   const closeLine = closeLineDue(getLociNowMinutes(new Date(), planWindows), dayEndMin, dayClosed)
     ? { text: `Day ends ${formatClock24(dayEndMin % 1440)}`, onOpen: () => setCloseDayOpen(true) }
     : null;
+  const [closeDraft, setCloseDraft] = useState(null);
   const finishClose = ({ choices, firstThing, note, summary }) => {
     const before = payloadRef.current;
-    const next = applyClose(before, { day: planDay, choices, firstThing, note, summary });
+    const day = planDay;
+    const next = applyClose(before, { day, choices, firstThing, note, summary });
     // Drops are meant: named, or three at once trip the save's drop guard
     // and nothing is written (useSync, isTaskCountDropSuspicious).
     const dropped = (next.tasks || []).filter(t => t.isDeleted && !(before.tasks || []).find(b => b.uuid === t.uuid)?.isDeleted).map(t => t.uuid);
     // Every leftover leaves Today, so a session running on one ends first.
     if (focusTimer.focusSessionActive && leftovers(before.tasks || [], planDay).some(t => String(t.uuid) === String(focusTimer.activeTask?.uuid))) handleEndFocusSession();
     setCloseDayOpen(false);
+    setCloseDraft(null);
     savePayloadAsync(next, { expectedRemovals: dropped })
-      .then(() => setCloseUndo({ before, at: Date.now() }))
-      // A failed write leaves the close applied locally: put it back first.
-      .catch(() => { savePayload(undoClose(payloadRef.current, before, planDay)); setCloseDayOpen(true); });
+      .then(() => setCloseUndo({ before, after: next, day, at: Date.now() }))
+      // A failed write leaves the close applied locally: put it back first,
+      // then reopen the sheet with what was chosen.
+      .catch(() => { savePayload(undoClose(payloadRef.current, before, day, next)); setCloseDraft({ day, choices, firstThing, note }); setCloseDayOpen(true); });
   };
   const closedFirst = dayClosed ? (payload?.tasks || []).find(t => String(t.uuid) === String(payload?.config?.dayClose?.firstThing) && !t.isDeleted && !t.isCompleted) : null;
   const dayClosedState = dayClosed ? {
@@ -1625,8 +1629,9 @@ export default function App() {
           day={planDay}
           uid={activityUid}
           windows={planWindows}
+          draft={closeDraft?.day === planDay ? closeDraft : null}
           onClose={finishClose}
-          onCancel={() => setCloseDayOpen(false)}
+          onCancel={() => { setCloseDayOpen(false); setCloseDraft(null); }}
         />
       )}
       <UndoAnnouncer message={closeUndo ? "Day closed" : ""} />
@@ -1635,7 +1640,7 @@ export default function App() {
           key={closeUndo.at}
           ms={10000}
           message="Day closed"
-          onUndo={() => { savePayload(undoClose(payloadRef.current, closeUndo.before, planDay)); setCloseUndo(null); }}
+          onUndo={() => { savePayload(undoClose(payloadRef.current, closeUndo.before, closeUndo.day, closeUndo.after)); setCloseUndo(null); }}
           onClose={() => setCloseUndo(null)}
         />
       )}
