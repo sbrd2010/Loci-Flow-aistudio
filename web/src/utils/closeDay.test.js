@@ -56,17 +56,19 @@ describe("Close the day (55d–e, Q47)", () => {
     expect(undoClose(kept, { tasks, config: earlier }, DAY).config).toMatchObject({ ...earlier, dailyReflectionCompletedAt: null });
   });
 
-  it("Undo keeps a change made since the close, and undoes the day that was closed", () => {
+  it("Undo puts back what the close changed and keeps what changed since, for the day that was closed", () => {
     const before = { tasks, config: {} };
-    const after = applyClose(before, { day: DAY }, 9);
-    // "a" was completed on another device after the close.
-    const now = { ...after, tasks: after.tasks.map(x => (x.uuid === "a" ? { ...x, isCompleted: true, lastUpdated: 12 } : x)) };
+    const after = applyClose(before, { day: DAY, choices: { b: "drop" } }, 9);
+    // Since the close, "a" was renamed on another device and "r" sent to the Week.
+    const now = { ...after, tasks: after.tasks.map(x => (x.uuid === "a" ? { ...x, title: "a2", lastUpdated: 12 } : x.uuid === "r" ? { ...x, horizonLevel: "week", lastUpdated: 12 } : x)) };
     // Undo lands after midnight: the day passed is the one closed, not the new one.
     const back = undoClose(now, before, DAY, after);
     const by = Object.fromEntries(back.tasks.map(x => [x.uuid, x]));
-    expect(by.a).toMatchObject({ isCompleted: true, lastUpdated: 12 });
-    expect(by.b.deferredUntil).toBeUndefined();
-    expect(by.r.horizonLevel).toBe("today");
+    expect(by.a).toMatchObject({ title: "a2", horizonLevel: "today", orderIndex: 1 });
+    expect(by.a.deferredUntil).toBeUndefined();
+    expect(by.b.isNowFocus).toBe(true);
+    expect("isDeleted" in by.b || "deletedAt" in by.b).toBe(false);
+    expect(by.r.horizonLevel).toBe("week");
   });
 
   it("Reopen: open again, what was moved stays moved (47.3)", () => {
