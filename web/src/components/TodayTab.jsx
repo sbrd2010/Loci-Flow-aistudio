@@ -5,7 +5,7 @@ import SplitTaskSheet from "./SplitTaskSheet";
 import { buildSplit, undoSplit } from "../utils/splitTask";
 import TodayWall from "./TodayWall";
 import Momentum from "./Momentum";
-import { frontsFromConfig, frontsOnOffer, commitmentDaysLeft, commitmentKickerFront, frontForCommitment, frontProgress } from "../utils/fronts";
+import { LEGACY_DEADLINE_FRONT_ID, frontsFromConfig, frontsOnOffer, commitmentDaysLeft, commitmentKickerFront, frontForCommitment, frontProgress } from "../utils/fronts";
 import { useFocusLedger } from "../hooks/useFocusLedger";
 import { minutesForTaskOn } from "../utils/focusLedger";
 import { buildMomentum } from "../utils/momentum";
@@ -86,6 +86,8 @@ export default function TodayTab({
   reviewLine = null,
   // 55d–e, Q47: "Day ends 17:30 · Close the day"; and the closed day.
   closeLine = null, dayClosed = null, onOpenCloseDay = null,
+  // Q49: the goal band opens Settings → Key deadline.
+  onOpenKeyDeadline = null,
   // The mini window's I'm stuck (59b → 59d).
   stuckPending = false, onStuckShown,
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft,
@@ -1333,8 +1335,13 @@ export default function TodayTab({
   const wallDaysLeft = commitmentDaysLeft(wallKickerFront, new Date());
   // The goal band (Addendum M): the same front, with its done/total when it
   // has tasks on it. With no front and no Key Deadline there is no band.
+  // Q49: its Target ("3 job apply + PRINCE2") is the Key Deadline's own, so
+  // it shows only when the band is the Key Deadline, not another front.
   const wallGoal = wallKickerFront
-    ? { name: wallKickerFront.name, daysLeft: wallDaysLeft, ...frontProgress(tasks, wallKickerFront.id) }
+    ? {
+      name: wallKickerFront.name, daysLeft: wallDaysLeft, ...frontProgress(tasks, wallKickerFront.id),
+      target: wallKickerFront.id === LEGACY_DEADLINE_FRONT_ID ? wallKickerFront.nextMove || null : null,
+    }
     : null;
   // A session left running behind the overlay is REOPENED by the wall, not
   // restarted (see startFocusAndLog) — so the chip has to name the time that
@@ -1723,6 +1730,7 @@ export default function TodayTab({
       <TodayWall
         task={pinnedFocusTask}
         goal={wallGoal}
+        onOpenGoal={onOpenKeyDeadline}
         anchors={config.anchorsOnToday === "off" ? [] : anchors.filter(a => a && typeof a.text === "string" && a.text.trim())}
         focusMinutes={focusBlockSeconds(config) / 60}
         startChoice={config.focusStartChoice}

@@ -245,15 +245,24 @@ export function KeyDeadlinePage({ config, saveConfigPatch, onBack }) {
           <input type="date" className="set-input" value={config.deadlineDate || ""} onChange={e => saveConfigPatch({ deadlineDate: e.target.value })} />
         </label>
       </div>
+      {/* Q49: "Target", as the band says it; "minimum" is the Day map's. */}
       <label className="set-field">
-        <span className="set-label">Daily minimum</span>
-        <input className="set-input" value={daily} onChange={e => setDaily(e.target.value)} onBlur={flushDaily} placeholder="e.g. One section, 45 minutes" />
+        <span className="set-label">Target</span>
+        <input className="set-input" value={daily} onChange={e => setDaily(e.target.value)} onBlur={flushDaily} placeholder="e.g. 3 job apply + PRINCE2" aria-describedby="set-target-note" />
+        <span className="set-note" id="set-target-note">The least you'll do each day toward this goal.</span>
       </label>
+      {/* The band's three lines, before you leave (Q49). */}
       <div className="set-preview" aria-label="Preview of the goal band">
-        <span className="set-preview-kicker">PREVIEW</span>
-        <span className="set-preview-figures">
-          {left == null ? "Set a deadline" : left >= 0 ? `${left} ${left === 1 ? "day" : "days"} left` : `${-left} ${left === -1 ? "day" : "days"} past`}
-        </span>
+        <div className="set-preview-head">
+          <span className="set-preview-kicker">PREVIEW</span>
+          <span className="set-preview-figures">
+            {left == null ? "Set a deadline" : left >= 0 ? `${left} ${left === 1 ? "day" : "days"} left` : `${-left} ${left === -1 ? "day" : "days"} past`}
+          </span>
+        </div>
+        {goal.trim() && <div className="set-preview-name">{goal.trim()}</div>}
+        {goal.trim() && daily.trim() && (
+          <div className="set-preview-target"><span className="set-preview-kicker">TARGET ·</span> {daily.trim()}</div>
+        )}
       </div>
       {hasGoal && (
         <button
