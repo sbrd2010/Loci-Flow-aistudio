@@ -285,7 +285,7 @@ Current Time: ${nowLabel} (${timeOfDay})`;
 
 function buildCompactTaskPrompt(ctx) {
   const {
-    lociCoreInstruction, mentorName, firstName, challengeLabel,
+    lociCoreInstruction, firstName,
     profileContext, memoryContext, memorySectionEnabled, personaInstruction,
     nowFocusContext, lastCoachPlan, nowLabel, currentFocusTitle, pendingCheckinContext, rescueHandoffContext,
     sessionSummaryContext, pendingSummaryContext, recentlyCompletedContext, todaySnapshotContext,

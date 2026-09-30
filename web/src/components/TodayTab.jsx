@@ -187,8 +187,6 @@ export default function TodayTab({
       });
   };
 
-  const [headerExpanded, setHeaderExpanded] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
   const [rescueActive, setRescueActive] = useState(false);
   const [rescueTask, setRescueTask] = useState(null);
   const [rescueEntryPoint, setRescueEntryPoint] = useState("today");
@@ -322,14 +320,6 @@ export default function TodayTab({
   // ── Daily Anchors derived state ────────────────────────────────────────────
   const anchors = config.dailyAnchors || [];
   const anchorTodayStr = todayStr;
-
-  useEffect(() => {
-    const container = document.querySelector('.screen-content');
-    if (!container) return;
-    const onScroll = () => setIsScrolled(container.scrollTop > 15);
-    container.addEventListener('scroll', onScroll, { passive: true });
-    return () => container.removeEventListener('scroll', onScroll);
-  }, []);
 
   const [breakdownLoadingUuid, setBreakdownLoadingUuid] = useState(null);
   const [breakdownErrorUuid, setBreakdownErrorUuid] = useState(null);
@@ -1535,10 +1525,6 @@ export default function TodayTab({
   // is the screen this redesign exists to remove.
   const wallIsAsking = !pinnedFocusTask && !doneCommitment;
 
-  const progressRatio = timerMaxSeconds > 0 ? timerSecondsLeft / timerMaxSeconds : 0;
-  const strokeDashoffset = 439.8 * (1 - progressRatio);
-  const formatTimerMinutes = Math.floor(timerSecondsLeft / 60);
-  const formatTimerSeconds = String(timerSecondsLeft % 60).padStart(2, "0");
 
 
   const setRescueTaskAsNowFocus = ({ close = false } = {}) => {

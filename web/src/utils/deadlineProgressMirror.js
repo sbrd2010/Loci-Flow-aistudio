@@ -9,13 +9,6 @@ function cloneHistory(history) {
   return history && typeof history === "object" && !Array.isArray(history) ? history : {};
 }
 
-function addDays(date, days) {
-  const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
 function weekdayLabel(date) {
   return date.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 2);
 }

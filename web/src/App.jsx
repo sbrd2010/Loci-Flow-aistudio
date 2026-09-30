@@ -170,10 +170,6 @@ export default function App() {
     saveDemoPayload(updated);
     return Promise.resolve();
   };
-  const saveDemoSubPathAsync = (subPath, value) => {
-    saveDemoSubPath(subPath, value);
-    return Promise.resolve();
-  };
   const saveDemoSubPathsAsync = (patch) => {
     saveDemoSubPaths(patch);
     return Promise.resolve();
@@ -393,7 +389,7 @@ export default function App() {
   const {
     payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning: rtdbSyncWarning,
     savePayload: rtdbSave, savePayloadAsync: rtdbSaveAsync,
-    saveSubPath: rtdbSaveSub, saveSubPathAsync: rtdbSaveSubAsync,
+    saveSubPath: rtdbSaveSub,
     saveSubPaths: rtdbSaveSubs, saveSubPathsAsync: rtdbSaveSubsAsync,
     saveConfigPatch: rtdbSaveConfigPatch,
     writeActivityEvents: rtdbWriteActivityEvents, writeActivityEventIfNewer: rtdbWriteActivityEventIfNewer,
@@ -405,7 +401,6 @@ export default function App() {
   const savePayload = demoMode ? saveDemoPayload : rtdbSave;
   const savePayloadAsync = demoMode ? saveDemoPayloadAsync : rtdbSaveAsync;
   const saveSubPath = demoMode ? saveDemoSubPath : rtdbSaveSub;
-  const saveSubPathAsync = demoMode ? saveDemoSubPathAsync : rtdbSaveSubAsync;
   const saveSubPaths = demoMode ? saveDemoSubPaths : rtdbSaveSubs;
   const saveSubPathsAsync = demoMode ? saveDemoSubPathsAsync : rtdbSaveSubsAsync;
   const saveConfigPatch = demoMode ? saveDemoConfigPatch : rtdbSaveConfigPatch;

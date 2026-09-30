@@ -113,7 +113,8 @@ export function applyReview(payload, review, choices, day, now = Date.now()) {
     if (c === "drop") { counts.dropped++; return { ...t, isDeleted: true, deletedAt: now, isNowFocus: false, lastUpdated: now }; }
     if (c === "today") {
       counts.today++;
-      return { ...t, horizonLevel: "today", orderIndex: place.get(t.uuid), reviewFrom: { label: `FROM ${review.from}`, day, horizon: review.id }, lastUpdated: now };
+      // Today means today: a later day it was put off to no longer holds it back.
+      return { ...t, horizonLevel: "today", orderIndex: place.get(t.uuid), deferredUntil: null, reviewFrom: { label: `FROM ${review.from}`, day, horizon: review.id }, lastUpdated: now };
     }
     counts.kept++;
     return t;

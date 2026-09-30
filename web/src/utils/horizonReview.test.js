@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isOnToday } from "./deferral";
 import { applyReview, applySort, detectReviews, leftoverTags, pendingReviews, undoReviewOrSort } from "./horizonReview";
 
 const t = (uuid, horizonLevel, extra = {}) => ({ uuid, horizonLevel, title: uuid, ...extra });
@@ -53,6 +54,16 @@ describe("the horizon review (57f)", () => {
     expect(back.tasks.find(x => x.uuid === "m2").horizonLevel).toBe("month");
     expect(back.tasks.find(x => x.uuid === "m3").isDeleted).toBeUndefined();
     expect(pendingReviews(back.config, back.tasks, "2026-10-01")).toHaveLength(1);
+  });
+
+  it("Today means today: a task put off to a later day is on Today now", () => {
+    const all = [t("m1", "month", { deferredUntil: "2026-10-09" })];
+    const noted = detectReviews({}, all, "2026-09-30");
+    const config = { horizonReviews: detectReviews({ horizonReviews: noted }, all, "2026-10-01") };
+    const [review] = pendingReviews(config, all, "2026-10-01");
+    const after = applyReview({ tasks: all, config }, review, { m1: "today" }, "2026-10-01", 7);
+    expect(after.tasks[0]).toMatchObject({ horizonLevel: "today", deferredUntil: null });
+    expect(isOnToday(after.tasks[0], "2026-10-01")).toBe(true);
   });
 });
 
