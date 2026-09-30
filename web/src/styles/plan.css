@@ -726,3 +726,20 @@
 .eh-place { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-bottom: 1px solid var(--line, var(--border)); }
 .eh-place-title { font-weight: 700; overflow-wrap: anywhere; }
 .eh-seg { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* 57f: leftovers waiting for review — the rung's note, the list's button,
+   the row's period tag; Today's line (57b.21). */
+.plan-rung-review {
+  font-family: var(--font-mono); font-size: 0.65625rem; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--accent);
+}
+.plan-open-review,
+.today-review-line {
+  align-self: flex-start; min-height: 44px; margin: 0 0 8px; padding: 0 12px;
+  font: inherit; font-size: 0.875rem; font-weight: 700; color: var(--ink, var(--text-primary));
+  background: var(--accent-tint, var(--bg-secondary)); border: 0; border-radius: var(--radius-sm, 8px); cursor: pointer;
+}
+.today-review-go, .plan-open-review { color: var(--accent); }
+.plan-open-review:focus-visible, .today-review-line:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.plan-row-from, .task-tag.is-from { font-family: var(--font-mono); font-size: 0.625rem; letter-spacing: 0.06em; }
+.rv-pick { margin: 0; }

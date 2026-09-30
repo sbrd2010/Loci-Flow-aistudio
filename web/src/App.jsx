@@ -33,7 +33,10 @@ import { endSessionTasks } from "./utils/focusEnd";
 import { minutesFromSeconds } from "./utils/focusLedger";
 import { nextDateStr } from "./utils/dayMapPlan";
 import { useFocusTimer } from "./hooks/useFocusTimer";
-import { useTodayStr } from "./hooks/useTodayStr";
+import { useLociDayStr, useTodayStr } from "./hooks/useTodayStr";
+import HorizonReview from "./components/HorizonReview";
+import UndoToast, { UndoAnnouncer } from "./components/ui/UndoToast";
+import { applyReview, detectReviews, pendingReviews, undoReviewOrSort } from "./utils/horizonReview";
 import { shouldShowFloatingTimer, buildFocusCompletionPayload, EXPIRY_REASONS } from "./utils/focusSession";
 import { celebrate } from "./utils/celebrations";
 import { submitOnEnter } from "./utils/formEvents";
@@ -1117,6 +1120,40 @@ export default function App() {
     ),
   };
 
+  // Plan 57f: the horizon review. When a period ends its open tasks wait
+  // for a review — opened once on its own (never over a focus session,
+  // Q44.1), then from Today's line or Plan until done. Undo 10 s (57b.11).
+  const planDay = useLociDayStr(getFocusWindows(payload?.config || {}));
+  useEffect(() => {
+    // Not from a stale cache (a real account's data is still arriving).
+    if (!payload?.config || (!demoMode && isSyncingFromCache)) return;
+    const next = detectReviews(payload.config, payload.tasks || [], planDay);
+    if (next) saveConfigPatch({ horizonReviews: next });
+    // Every config change (the data arriving included); a no-op unless a
+    // horizon is new or a period has ended.
+  }, [planDay, payload?.config, isSyncingFromCache]); // eslint-disable-line react-hooks/exhaustive-deps
+  const reviews = useMemo(
+    () => pendingReviews(payload?.config || {}, payload?.tasks || [], planDay),
+    [payload?.config, payload?.tasks, planDay],
+  );
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewShown, setReviewShown] = useState(false);
+  const [reviewUndo, setReviewUndo] = useState(null);
+  const busyFocusing = focusTimer.focusSessionActive || focusTimer.isFocusMode;
+  useEffect(() => {
+    if (reviews.length && !reviewShown && !busyFocusing && !showAddTask) { setReviewOpen(true); setReviewShown(true); }
+  }, [reviews.length, reviewShown, busyFocusing, showAddTask]);
+  const openReview = () => setReviewOpen(true);
+  const finishReview = (review, choices) => {
+    const before = payloadRef.current;
+    savePayload(applyReview(before, review, choices, planDay));
+    setReviewUndo({ before, uuids: review.tasks.map(t => t.uuid), id: review.id, text: `Reviewed: ${review.title}`, at: Date.now() });
+    if (reviews.length <= 1) setReviewOpen(false);
+  };
+  const reviewLine = reviews[0] && !reviewOpen
+    ? { text: `${reviews[0].title} · ${reviews[0].tasks.length} left`, onOpen: openReview }
+    : null;
+
 
   // ── Loading spinner ────────────────────────────────────────────────────────
   if (!demoMode && authLoading) {
@@ -1349,6 +1386,7 @@ export default function App() {
         )}
         {activeTab === "today" && (
           <TodayTab
+            reviewLine={reviewLine}
             payload={payload}
             savePayload={savePayload}
             savePayloadAsync={savePayloadAsync}
@@ -1448,6 +1486,7 @@ export default function App() {
             focusTimer={focusTimer}
             frontsColumn={planWide ? <PlanTab {...planTabProps} wide /> : null}
             frontOpen={planWide && !!planFrontId}
+            onOpenReview={openReview}
             onCloseFront={() => setPlanFrontId(null)}
           />
           </div>
@@ -1509,6 +1548,24 @@ export default function App() {
       <BottomNav activeTab={activeTab === "daymap" ? "today" : activeTab} onTabSelect={handleTabSelect} />
 
       {/* Add / Edit Task Dialog */}
+      {reviewOpen && reviews[0] && (
+        <HorizonReview
+          key={reviews[0].id}
+          review={reviews[0]}
+          onDone={choices => finishReview(reviews[0], choices)}
+          onClose={() => setReviewOpen(false)}
+        />
+      )}
+      <UndoAnnouncer message={reviewUndo?.text || ""} />
+      {reviewUndo && (
+        <UndoToast
+          key={reviewUndo.at}
+          ms={10000}
+          message={reviewUndo.text}
+          onUndo={() => { savePayload(undoReviewOrSort(payloadRef.current, reviewUndo.before, reviewUndo.uuids, reviewUndo.id)); setReviewUndo(null); }}
+          onClose={() => setReviewUndo(null)}
+        />
+      )}
       {showAddTask && (
         <AddTaskDialog
           email={demoMode ? "demo@loci.app" : user?.email}

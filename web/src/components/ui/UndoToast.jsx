@@ -10,13 +10,14 @@ import "../../styles/undoToast.css";
 // keeps an always-present one (UndoAnnouncer) and changes its text.
 const UNDO_MS = 5000;
 
-export default function UndoToast({ message, onUndo, onClose }) {
+// ms: how long it stays (Drop asks for 10 s, 57b.11).
+export default function UndoToast({ message, onUndo, onClose, ms = UNDO_MS }) {
   // Held while the pointer is over it OR focus is inside it — tracked apart,
   // so leaving with the mouse can't restart the clock under a focused Undo.
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const held = hovered || focused;
-  const leftRef = useRef(UNDO_MS);
+  const leftRef = useRef(ms);
   const [barKey, setBarKey] = useState(0);
 
   useEffect(() => {
@@ -48,7 +49,7 @@ export default function UndoToast({ message, onUndo, onClose }) {
           key={barKey}
           className="undo-toast-bar"
           aria-hidden="true"
-          style={{ animationDuration: `${leftRef.current}ms`, width: `${(leftRef.current / UNDO_MS) * 100}%` }}
+          style={{ animationDuration: `${leftRef.current}ms`, width: `${(leftRef.current / ms) * 100}%` }}
         />
       )}
     </div>

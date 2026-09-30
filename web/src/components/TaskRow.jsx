@@ -59,7 +59,7 @@ export const ROADMAP_HORIZONS = [
 // MUST / GOAL tags. Tapping the row opens the task (50a–b); the list moves
 // keyboard focus between rows (one tab stop, ↑/↓). On a laptop a pin shows at
 // the row's right on hover or focus: "Make the one thing · P" (50d).
-export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, isMin = false, fixedAt = null, onSwipeDone, onSwipeTomorrow, onPutOnFront }) {
+export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, isMin = false, fixedAt = null, fromTag = null, onSwipeDone, onSwipeTomorrow, onPutOnFront }) {
   const { title, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
 
   const hasActions = !isCompleted && !!onOpen;
@@ -223,12 +223,14 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
           {fixedAt != null && !isCompleted && (
             <span className="task-row-fixed" aria-label={`Fixed at ${formatClock24(fixedAt)}`}><IconLock size={12} /> {formatClock24(fixedAt)}</span>
           )}
-          {!isCompleted && (isNowFocus || isMVD || isGoal || isMin) && (
+          {!isCompleted && (isNowFocus || isMVD || isGoal || isMin || fromTag) && (
             <span className="task-row-tags">
               {isNowFocus && <span className="task-tag is-now" aria-label="Today's one thing">NOW</span>}
               {isMVD && <span className="task-tag is-must" aria-label="Must-do">MUST</span>}
               {isGoal && <span className="task-tag is-goal" aria-label="Goal task">GOAL</span>}
               {isMin && <span className="task-tag is-min" aria-label="Minimum day">MIN</span>}
+              {/* Q44.5: moved here by a horizon review, for the day. */}
+              {fromTag && <span className="task-tag is-from">{fromTag}</span>}
             </span>
           )}
         </div>
