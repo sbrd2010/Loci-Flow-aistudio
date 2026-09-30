@@ -9,19 +9,29 @@ const durationOf = (t) => t.minutes;
 const task = (title, minutes, fixedAt) => ({ title, minutes, ...(fixedAt ? { dayMapFixedMinutes: hm(fixedAt) } : {}) });
 
 describe("breaks you add (Q31)", () => {
-  it("are stored for today as { kind, start, lengthMin } and reset the next day", () => {
-    const config = withAddedBreaks({}, DAY, [{ start: hm("10:30"), lengthMin: 15 }], 1);
-    expect(config.dayMapBreaks).toEqual({ date: DAY, items: [{ kind: "break", start: hm("10:30"), lengthMin: 15 }] });
+  it("are stored for today as { id, kind, start, lengthMin } and reset the next day", () => {
+    const config = withAddedBreaks({}, DAY, [{ id: "b1", start: hm("10:30"), lengthMin: 15 }], 1);
+    expect(config.dayMapBreaks).toEqual({ date: DAY, items: [{ id: "b1", kind: "break", start: hm("10:30"), lengthMin: 15 }] });
+    // A break without one gets an id when it's saved.
+    expect(withAddedBreaks({}, DAY, [{ start: 600, lengthMin: 15 }]).dayMapBreaks.items[0].id).toMatch(/^b/);
     expect(addedBreaks(config, DAY)).toHaveLength(1);
     expect(addedBreaks(config, "2026-09-30")).toEqual([]);
   });
 
   it("join the gaps between focus windows as breaks the route stops for", () => {
-    const config = { breakName: "Tea", ...withAddedBreaks({}, DAY, [{ start: hm("10:30"), lengthMin: 15 }]) };
+    const config = { breakName: "Tea", ...withAddedBreaks({}, DAY, [{ id: "b1", start: hm("10:30"), lengthMin: 15 }]) };
     expect(routeBreaks(windows, config, DAY)).toEqual([
       { start: hm("13:35"), end: hm("14:15"), name: "Tea" },
-      { start: hm("10:30"), end: hm("10:45"), name: "Tea", added: 0 },
+      { start: hm("10:30"), end: hm("10:45"), name: "Tea", added: "b1" },
     ]);
+  });
+
+  // 10b: a break is named by its id. One saved before ids gets a steady id
+  // from its time, so it stays the same break from render to render.
+  it("a break saved before ids gets one from its time; the same each read", () => {
+    const old = { dayMapBreaks: { date: DAY, items: [{ kind: "break", start: 600, lengthMin: 15 }] } };
+    expect(addedBreaks(old, DAY)[0].id).toBe("b600-15");
+    expect(addedBreaks(old, DAY)[0].id).toBe(addedBreaks(old, DAY)[0].id);
   });
 
   it("the next task starts right when the break ends: no buffer, no rounding (Q35a)", () => {
