@@ -88,3 +88,21 @@ describe("restoreRoute after a one-thing move", () => {
     expect(t.x.dayMapStartMinutes).toBe(t.b.dayMapStartMinutes + 30 + 5);
   });
 });
+
+// 10b (#430 loopcheck): during a break, now is inside it and the head can
+// only start when it ends — that is no gap, or the route re-times forever.
+import { hasHeadGap } from "./useDayRoute";
+describe("hasHeadGap", () => {
+  const lunch = [{ start: 815, end: 855, name: "Lunch" }]; // 13:35–14:15
+  it("no gap when now is in a break and the head starts at the break's end", () => {
+    const route = [stop("a", 0, 30, { dayMapStartMinutes: 855 }), stop("b", 1, 30, { dayMapStartMinutes: 885 })];
+    expect(hasHeadGap(route, 820, DAY, lunch)).toBe(false);
+  });
+  it("a head later than timing from now would put it is a gap", () => {
+    const route = [stop("a", 0, 30, { dayMapStartMinutes: 960 })];
+    expect(hasHeadGap(route, 900, DAY, lunch)).toBe(true);
+  });
+  it("no flowing stops, no gap", () => {
+    expect(hasHeadGap([], 900, DAY, lunch)).toBe(false);
+  });
+});

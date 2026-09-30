@@ -2,10 +2,14 @@
 // task that was pinned goes back to the top of "After that" with its steps.
 // Returns the new list and what Undo needs: the previous one thing as it was.
 
+import { isEventTask } from "./dayMapRoute";
+
 const key = t => String(t?.uuid || t?.id || "");
 
 export function makeOneThing(allTasks, uuid, now = Date.now()) {
-  const target = allTasks.find(t => key(t) === uuid && !t.isDeleted && !t.isCompleted);
+  // A call at a set time is never the one thing (Q36.3): every caller checks,
+  // and so does this, for the next one that doesn't (10b).
+  const target = allTasks.find(t => key(t) === uuid && !t.isDeleted && !t.isCompleted && !isEventTask(t));
   if (!target) return { tasks: allTasks, previous: null };
   const previous = allTasks.find(t => t.isNowFocus && !t.isDeleted && !t.isCompleted && key(t) !== uuid) || null;
   // Above every open Today task, so it heads the list whatever its priority.
