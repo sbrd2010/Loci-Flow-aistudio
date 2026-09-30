@@ -40,7 +40,7 @@ export default function TodayTabWithDeadlineHistory(props) {
     config.deadlineDailyDoneDate,
     config.deadlineMoveLastCheckedDate,
     config.deadlineMoveTrackingStartDate
-  ]); // eslint-disable-line react-hooks/exhaustive-deps
+  ]);
 
   const savePayloadWithDeadlineHistory = useCallback((nextPayload) => {
     if (!nextPayload?.config) {

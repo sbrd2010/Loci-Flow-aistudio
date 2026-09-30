@@ -63,7 +63,7 @@ const MEDICAL_LABEL_PATTERN = /\b(adhd|autis(?:m|tic)|asperger'?s?|bipolar|ocd|p
 function cleanMemoryText(text) {
   // Collapse newlines/control chars so a memory entry can't break out of its
   // bullet line and inject extra "lines" into the system prompt.
-  const trimmed = String(text || "").replace(/[\s\x00-\x1f\x7f]+/g, " ").trim().slice(0, MEMORY_ENTRY_MAX_LENGTH);
+  const trimmed = String(text || "").replace(/[\s\x00-\x1f\x7f]+/g, " ").trim().slice(0, MEMORY_ENTRY_MAX_LENGTH); // eslint-disable-line no-control-regex -- control characters are stripped on purpose
   // Reject content containing "[[" — legitimate facts/notes don't naturally
   // contain this sequence, but a REMEMBER/NOTE tag whose own content has a
   // nested [[...]] tag can leave a dangling "[[OTHERTAG:..." fragment after
@@ -117,7 +117,7 @@ export function removeRecentObservation(coachMemory = {}, index) {
 export function editMemoryEntry(coachMemory = {}, kind, index, text, expected = null) {
   const key = kind === "fact" ? "pinnedFacts" : "recentObservations";
   const list = coachMemory[key] || [];
-  const normalized = String(text || "").replace(/[\s\x00-\x1f\x7f]+/g, " ").trim();
+  const normalized = String(text || "").replace(/[\s\x00-\x1f\x7f]+/g, " ").trim(); // eslint-disable-line no-control-regex -- control characters are stripped on purpose
   if (normalized.length > MEMORY_ENTRY_MAX_LENGTH) return { coachMemory, ok: false, reason: "too-long" };
   const cleaned = cleanMemoryText(normalized);
   if (!cleaned) return { coachMemory, ok: false, reason: "invalid" };
@@ -160,7 +160,7 @@ export function isResurrectedMemoryEntry(before = {}, after = {}, text) {
 // model can retract a fact/note by copying it (verbatim or a close
 // paraphrase) from the memory shown in its own prompt.
 function normalizeMemoryText(text) {
-  return String(text || "").toLowerCase().replace(/[\s\x00-\x1f\x7f]+/g, " ").trim().replace(/[.,!?;:]+$/, "");
+  return String(text || "").toLowerCase().replace(/[\s\x00-\x1f\x7f]+/g, " ").trim().replace(/[.,!?;:]+$/, ""); // eslint-disable-line no-control-regex -- control characters are stripped on purpose
 }
 
 export function forgetFromMemory(coachMemory = {}, text) {

@@ -62,7 +62,7 @@ describe("the one thing before a fixed stop", () => {
 describe("restoreRoute", () => {
   it("puts the cleared stops back first and times the whole route again", () => {
     const cleared = [stop("a", 0, 30), stop("b", 1, 30)];
-    const bare = ({ dayMapDate, dayMapOrder, dayMapStartMinutes, ...t }) => t; // eslint-disable-line no-unused-vars
+    const bare = ({ dayMapDate, dayMapOrder, dayMapStartMinutes, ...t }) => t;
     const now = [bare(cleared[0]), bare(cleared[1]), stop("n", 0, 20)];
     const t = byId(restoreRoute(now, cleared, { todayStr: DAY, anchorMinutes: 600 }));
     expect([t.a.dayMapOrder, t.b.dayMapOrder, t.n.dayMapOrder]).toEqual([0, 1, 2]);

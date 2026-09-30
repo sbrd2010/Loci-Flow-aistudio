@@ -58,7 +58,7 @@ export function parseSessionSummaryTag(text = "") {
   const match = SESSION_SUMMARY_TAG_RE.exec(text);
   if (match) {
     const cleanText = text.replace(SESSION_SUMMARY_TAG_RE, "").trim();
-    const cleaned = match[1].replace(/[\s\x00-\x1f\x7f]+/g, " ").trim();
+    const cleaned = match[1].replace(/[\s\x00-\x1f\x7f]+/g, " ").trim(); // eslint-disable-line no-control-regex -- control characters are stripped on purpose
     // Rejected outright rather than silently sliced to SESSION_SUMMARY_MAX_CHARS:
     // slicing would still report success (summary: non-null), so CoachTab.jsx
     // advances the cursor past the just-expiring batch even though the

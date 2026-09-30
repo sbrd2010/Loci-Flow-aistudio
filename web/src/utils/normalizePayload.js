@@ -93,7 +93,7 @@ export function endLeftReviewMarks(tasks) {
     if (!from) return t;
     const left = t.isDeleted || t.horizonLevel !== "today" || (t.deferredUntil && t.deferredUntil > from.day);
     if (!left) return t;
-    const { reviewFrom, ...rest } = t; // eslint-disable-line no-unused-vars
+    const { reviewFrom, ...rest } = t;
     return rest;
   });
 }

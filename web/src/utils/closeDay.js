@@ -83,7 +83,7 @@ export function applyClose(payload, { day, choices = {}, firstThing = null, note
     const id = key(t);
     if (plans.has(id)) {
       counts.planned++;
-      const { dayMapDate, dayMapPeriod, dayMapStartMinutes, dayMapDurationMinutes, dayMapOrder, dayMapFixedMinutes, ...rest } = t; // eslint-disable-line no-unused-vars
+      const { dayMapDate, dayMapPeriod, dayMapStartMinutes, dayMapDurationMinutes, dayMapOrder, dayMapFixedMinutes, ...rest } = t;
       return { ...rest, horizonLevel: plans.get(id), orderIndex: nextOrder(plans.get(id)), isNowFocus: false, deferredUntil: null, lastUpdated: now };
     }
     if (drops.has(id)) { counts.dropped++; return { ...t, isDeleted: true, deletedAt: now, isNowFocus: false, lastUpdated: now }; }

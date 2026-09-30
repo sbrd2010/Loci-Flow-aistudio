@@ -47,7 +47,7 @@ export function sortByPriorityAndOrder(a, b) {
 }
 
 export function removeScheduleFields(task) {
-  const { dayMapDate, dayMapPeriod, dayMapStartMinutes, dayMapDurationMinutes, dayMapOrder, dayMapFixedMinutes, ...rest } = task; // eslint-disable-line no-unused-vars
+  const { dayMapDate, dayMapPeriod, dayMapStartMinutes, dayMapDurationMinutes, dayMapOrder, dayMapFixedMinutes, ...rest } = task;
   return { ...rest, lastUpdated: Date.now() };
 }
 

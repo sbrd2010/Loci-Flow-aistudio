@@ -24,7 +24,7 @@ const GAIN_SCALE = 0.25;
 export function createBinauralBeatNode(initialVolume = 0.5) {
   const AudioCtx = typeof AudioContext !== "undefined"
     ? AudioContext
-    : (typeof webkitAudioContext !== "undefined" ? webkitAudioContext : undefined);
+    : globalThis.webkitAudioContext;
   if (!AudioCtx) return null;
 
   const ctx = new AudioCtx();

@@ -425,7 +425,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const unfix = (taskId) => {
     const task = scheduledTasks.find(t => getTaskId(t) === taskId);
     if (!task) return;
-    const { dayMapFixedMinutes, ...flowing } = task; // eslint-disable-line no-unused-vars
+    const { dayMapFixedMinutes, ...flowing } = task;
     applyAndSave(scheduledTasks.map(t => (getTaskId(t) === taskId ? flowing : t)), anchorMinutes);
     // The WAS badges were about the fix; with it gone they'd point nowhere
     // (Codex review of #425).

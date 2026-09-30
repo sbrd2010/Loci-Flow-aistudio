@@ -119,7 +119,7 @@ export function useAutosave(saved, commit, delay = 600) {
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
     if (editing.current) { editing.current = false; commitRef.current(latest.current); }
   };
-  useEffect(() => () => flush(), []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => flush(), []);
 
   const change = (v) => {
     editing.current = true;

@@ -43,7 +43,6 @@ import { applyClose, closeLineDue, isDayClosed, leftovers, pinFirstThing, reopen
 import { makeOneThing } from "./utils/oneThing";
 import { shouldShowFloatingTimer, buildFocusCompletionPayload, EXPIRY_REASONS } from "./utils/focusSession";
 import { celebrate } from "./utils/celebrations";
-import { submitOnEnter } from "./utils/formEvents";
 import { migrateStoredTheme, resolveTheme, watchColorScheme } from "./utils/theme";
 import { buildDayClock } from "./utils/dayClock";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch, activityEventPath } from "./utils/activityLog";
@@ -577,7 +576,7 @@ export default function App() {
       }
     });
     return unsubscribe;
-  }, [demoMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [demoMode]);
 
   // Track session duration when the user closes or navigates away
   useEffect(() => {
