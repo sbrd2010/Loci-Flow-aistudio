@@ -1430,7 +1430,7 @@ export default function App() {
             payload={payload}
             savePayload={savePayload}
             savePayloadAsync={savePayloadAsync}
-            onOpenAddTask={(h) => openAddTask(h, `Plan · ${PLAN_COLUMN_NAMES[h] || h}`)}
+            onOpenAddTask={(h) => openAddTask(h, `Plan · ${String(payload.config?.horizons?.[h]?.name || "").trim() || PLAN_COLUMN_NAMES[h] || h}`)}
             focusInbox={planFocusInbox}
             uid={activityUid}
             writeActivityEvents={writeActivityEvents}

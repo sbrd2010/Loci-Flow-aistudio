@@ -51,6 +51,7 @@ export default function TaskDetail({
   onMakeOneThing, onDone, onTomorrow, onPark, onDelete, editTitleSignal = 0,
   isNow = false, onLetGo,
   onShowAll, kicker = null, onMoveToToday, onTogglePin, onRemoveFromRoute, onFixTime, onUnfix, fixedAt = null,
+  horizonChoices = null,
 }) {
   const [picker, setPicker] = useState(null);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -96,7 +97,14 @@ export default function TaskDetail({
   const steps = taskSteps(task);
   const doneSteps = steps.filter(s => s.done).length;
   const front = fronts.find(f => f.id === task.frontId) || null;
-  const horizon = HORIZONS.find(h => h.key === task.horizonLevel) || HORIZONS[0];
+  // 57h: with horizonChoices, the picker is Today and every visible horizon,
+  // customs too, each with its end date. Work · older is shown only as the
+  // value of a task already there, never offered.
+  const choices = horizonChoices
+    ? [...horizonChoices.map(c => ({ key: c.id, label: c.name, date: c.date, red: c.red })),
+      ...(task.horizonLevel === "office" ? [{ key: "office", label: "Work · older" }] : [])]
+    : HORIZONS.filter(h => h.key !== "office" || task.horizonLevel === "office");
+  const horizon = choices.find(h => h.key === task.horizonLevel) || HORIZONS.find(h => h.key === task.horizonLevel) || HORIZONS[0];
   const isDrawer = variant === "drawer";
   const togglePicker = name => setPicker(p => (p === name ? null : name));
 
@@ -328,10 +336,13 @@ export default function TaskDetail({
           </button>
           {picker === "horizon" && (
             <div className="detail-options" role="radiogroup" aria-label="Horizon">
-              {HORIZONS.filter(h => h.key !== "office" || task.horizonLevel === "office").map(h => (
+              {choices.map(h => (
                 <button key={h.key} type="button" role="radio" aria-checked={h.key === task.horizonLevel} className="detail-option"
                   onClick={() => { setPicker(null); if (h.key !== task.horizonLevel) onPatch({ horizonLevel: h.key }); }}>
                   {h.label}
+                  {h.date && " "}
+                  {h.date && <span className={`detail-option-date${h.red ? " is-red" : ""}`}>{h.date}</span>}
+                  {horizonChoices && h.key === task.horizonLevel && <IconCheck size={16} className="detail-option-check" aria-hidden="true" />}
                 </button>
               ))}
             </div>

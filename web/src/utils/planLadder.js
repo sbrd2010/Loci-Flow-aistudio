@@ -1,6 +1,6 @@
 // Plan 57, 7b: what the ladder, the runway and the open list show. Pure, so
 // the page only draws it.
-import { currentPeriod, daysBetween, WORK_OLDER_ID } from "./horizons";
+import { currentPeriod, daysBetween, horizonsFromConfig, TODAY_ID, WORK_OLDER_ID } from "./horizons";
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -111,4 +111,20 @@ export function runwayLabelsShown(ticks, widthPx, phone = false) {
 export function openingRung(rungs, remembered) {
   if (remembered && (remembered === WORK_OLDER_ID || rungs.some(r => r.id === remembered))) return remembered;
   return rungs.some(r => r.id === "week") ? "week" : rungs[0]?.id || null;
+}
+
+// 57h: the horizon picker — Today, then every visible horizon with its end
+// date (red at ≤3 days left; 6 months has no end, so "TO 31 MAR"). Work ·
+// older is never offered.
+export function horizonChoices(config, day) {
+  const visible = horizonsFromConfig(config, day).filter(h => !h.hidden);
+  return [
+    { id: TODAY_ID, name: "Today", date: null, red: false },
+    ...ladderRungs([], visible, day).map(r => ({
+      id: r.id,
+      name: r.name,
+      date: r.dotted ? `TO ${dayLabel(r.period.end, day).replace(/^[A-Z]{3} /, "")}` : dayLabel(r.period.end, day),
+      red: r.red,
+    })),
+  ];
 }

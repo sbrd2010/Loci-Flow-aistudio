@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { horizonChoices } from "../utils/planLadder";
 import {
   DndContext,
   DragOverlay,
@@ -1009,6 +1010,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
             key={detailTask.uuid || detailId}
             // Its estimate is the stop's duration, as the route times it.
             task={{ ...detailTask, timeEstimateMinutes: getEstimate(detailTask) }}
+            horizonChoices={horizonChoices(routeConfig, todayStr)}
             variant={drawerViewport ? "drawer" : "sheet"}
             kicker={`DAY MAP · ${detailIndex + 1} OF ${scheduledTasks.length}`}
             isGoal={isGoal(detailTask)}

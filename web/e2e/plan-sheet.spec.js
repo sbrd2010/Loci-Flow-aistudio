@@ -141,7 +141,10 @@ test("the Horizon picker moves the task and the sheet follows it", async ({ page
   const title = (await horizon(page, "This week").locator(".plan-row-title").first().innerText()).trim();
   await horizon(page, "This week").locator(".plan-row").first().click();
   await sheet(page).getByRole("button", { name: /^Horizon/ }).click();
-  await sheet(page).getByRole("radio", { name: "Month", exact: true }).click();
+  // 57h: each horizon with its end date, a check on the current one.
+  await expect(sheet(page).getByRole("radio", { name: /^This week/ })).toHaveAttribute("aria-checked", "true");
+  await expect(sheet(page).getByRole("radio", { name: /^Work/ })).toHaveCount(0);
+  await sheet(page).getByRole("radio", { name: /^This month [A-Z]{3} \d+ [A-Z]{3}$/ }).click();
   await expect(horizon(page, "This month").getByText(title, { exact: true })).toBeVisible();
   await expect(sheet(page).locator(".detail-kicker").first()).toHaveText(/^THIS MONTH · \d+ OF \d+$/);
 });

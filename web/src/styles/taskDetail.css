@@ -214,6 +214,15 @@
 }
 .detail-option:hover { background: var(--panel); }
 .detail-option[aria-checked="true"] { font-weight: 800; background: var(--accent-tint); }
+/* 57h: the horizon picker's end dates (mono, red at ≤3 days) and a check. */
+.detail-option:has(.detail-option-date, .detail-option-check) { display: flex; align-items: center; gap: 10px; }
+.detail-option-date {
+  margin-left: auto; font-family: var(--font-mono); font-size: 0.6875rem; font-weight: 400; letter-spacing: 0.04em;
+  color: var(--ink-2, var(--text-secondary));
+}
+.detail-option-date.is-red { color: var(--coral-ink, var(--danger)); }
+.detail-option-check { flex-shrink: 0; margin-left: auto; color: var(--accent); }
+.detail-option-date + .detail-option-check { margin-left: 0; }
 .detail-chip {
   min-height: 44px;
   padding: 0 16px;

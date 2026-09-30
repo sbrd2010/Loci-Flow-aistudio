@@ -265,7 +265,7 @@ test("mobile reliability: editing the wall's task off Today clears its focus/pin
   await page.locator(".wall-title").click();
   const detail = page.getByTestId("task-detail");
   await detail.getByRole("button", { name: /^Horizon/ }).click();
-  await detail.getByRole("radio", { name: "This Week", exact: true }).click();
+  await detail.getByRole("radio", { name: /^This week/ }).click();
 
   // The task leaving Today must also clear isNowFocus — otherwise it stays
   // the app's globally "active" focused task (orphaned timer/session) even

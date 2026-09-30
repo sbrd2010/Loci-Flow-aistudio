@@ -252,7 +252,7 @@ test("the one thing moved off Today from its stop's sheet ends its session and l
   const before = await titles(page);
   await page.locator(".dm-stop .dm-main", { hasText: wallTitle }).click();
   await sheet(page).getByRole("button", { name: /^Horizon/ }).click();
-  await sheet(page).getByRole("radio", { name: "This Week", exact: true }).click();
+  await sheet(page).getByRole("radio", { name: /^This week/ }).click();
 
   await expect.poll(() => titles(page)).toEqual(before.filter(t => t !== wallTitle));
   // The next stop moved up into the freed start.
