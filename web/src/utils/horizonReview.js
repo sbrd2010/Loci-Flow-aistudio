@@ -111,7 +111,7 @@ export function applyReview(payload, review, choices, day, now = Date.now()) {
     if (c === "drop") { counts.dropped++; return { ...t, isDeleted: true, deletedAt: now, isNowFocus: false, lastUpdated: now }; }
     if (c === "today") {
       counts.today++;
-      return { ...t, horizonLevel: "today", orderIndex: place.get(t.uuid), reviewFrom: { label: `FROM ${review.from}`, day }, lastUpdated: now };
+      return { ...t, horizonLevel: "today", orderIndex: place.get(t.uuid), reviewFrom: { label: `FROM ${review.from}`, day, horizon: review.id }, lastUpdated: now };
     }
     counts.kept++;
     return t;

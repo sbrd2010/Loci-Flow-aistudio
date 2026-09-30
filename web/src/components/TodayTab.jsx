@@ -25,10 +25,7 @@ import { scheduleReminder, cancelReminder, formatReminderLabel } from "../utils/
 import { getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
-import {
-  getValidCommittedTaskIds, committedTaskIdsForDay,
-  shouldShowReflection, buildEndOfDaySummary, buildReflectionSave, buildReflectionSnooze, REFLECTION_MOODS,
-} from "../utils/dailyCoachCheckins";
+import { committedTaskIdsForDay, shouldShowReflection } from "../utils/dailyCoachCheckins";
 import "../styles/focusNow.css";
 import "../styles/todayList.css";
 import "../styles/todaySheet.css";
@@ -87,6 +84,8 @@ export default function TodayTab({
   payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenPlan, onOpenCoach, onScattered, onOpenAddTask,
   // 57f: "September ended · 2 left · Review" until the review is done.
   reviewLine = null,
+  // 55d–e, Q47: "Day ends 17:30 · Close the day"; and the closed day.
+  closeLine = null, dayClosed = null, onOpenCloseDay = null,
   // The mini window's I'm stuck (59b → 59d).
   stuckPending = false, onStuckShown,
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft,
@@ -285,33 +284,6 @@ export default function TodayTab({
   useEffect(() => {
     try { localStorage.setItem("loci_today_peek_open", peekOpen ? "1" : "0"); } catch { /* private mode */ }
   }, [peekOpen]);
-
-  // The one surviving scheduled prompt: "reflection" (Day Close). Addendum B
-  // deleted the morning commitment and the midday progress check outright.
-  const [dailyCheckinSlot, setDailyCheckinSlot] = useState(null);
-  const [showDailyCheckin, setShowDailyCheckin] = useState(false);
-  const [reflectionMood, setReflectionMood] = useState(null);
-  const [reflectionNote, setReflectionNote] = useState("");
-
-  const dailyCheckinCardStyle = {
-    background: "var(--accent-light)",
-    border: "1px solid var(--accent)",
-    borderRadius: "var(--radius-sm)",
-    padding: "12px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-  };
-
-  const dailyCheckinDismissStyle = {
-    background: "none",
-    border: "none",
-    color: "var(--text-muted)",
-    fontSize: "14px",
-    cursor: "pointer",
-    padding: "0 2px",
-    lineHeight: 1,
-  };
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -1101,79 +1073,14 @@ export default function TodayTab({
     };
   }, []);
 
-  // ── Day Close auto-show — the one scheduled interruption, at day's end ──
+  // 55d–e: Close the day replaces the evening reflection (Addendum B: no
+  // prompt opens on its own). Today's line and the Day map's button open it;
+  // a tapped evening notification does too, while it's still due.
   useEffect(() => {
-    if (isFocusMode || sessionCompletePending || isAddTaskDialogOpen || showDailyCheckin || rescueActive) return;
-    const now = new Date();
-    // Addendum B: the morning commitment and the midday progress check are
-    // gone, and so is the morning ritual popup — "an app that interrupts an
-    // overwhelmed person to ask how they are is part of the problem". Day Close
-    // is the one surviving prompt, and it becomes the Evening Review; until
-    // that screen exists it stays here rather than leaving a gap.
-    const dueSlots = {
-      reflection: shouldShowReflection(now, windows, config, anchorTodayStr),
-    };
-    // A tapped check-in notification names a slot — honour it if still due.
-    let slot = null;
-    if (pendingCheckinSlot && dueSlots[pendingCheckinSlot]) {
-      slot = pendingCheckinSlot;
-    } else if (dueSlots.reflection) {
-      slot = "reflection";
-    }
-    if (!slot) {
-      // Consumed (or no longer due) — don't let it keep overriding priority order.
-      if (pendingCheckinSlot) setPendingCheckinSlot(null);
-      return;
-    }
-    setDailyCheckinSlot(slot);
-    if (slot === "reflection") { setReflectionMood(null); setReflectionNote(""); }
-    // Clear pendingCheckinSlot only once the modal actually opens — clearing it now
-    // would change a dependency of this effect, canceling this timer (via cleanup)
-    // and re-running with the override gone before it ever fires.
-    const timer = setTimeout(() => {
-      setShowDailyCheckin(true);
-      if (pendingCheckinSlot) setPendingCheckinSlot(null);
-    }, 2500);
-    return () => clearTimeout(timer);
-  }, [
-    anchorTodayStr, isFocusMode, sessionCompletePending, isAddTaskDialogOpen,
-    showDailyCheckin, rescueActive, pendingCheckinSlot, config.anchorsSnoozeUntil,
-    visibilityTick,
-    config.dailyCommitmentDate, config.dailyCommitmentSkippedDate, config.dailyCommitmentSnoozeUntil, config.dailyCommitmentTaskIds,
-    config.dailyMiddayCheckDate, config.dailyMiddayCheckSnoozeUntil, config.dailyReflectionDate, config.dailyReflectionSnoozeUntil, config.dailyCheckinsEnabled,
-  ]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Daily Coach Check-in handlers ──────────────────────────────────────────
-  const closeDailyCheckin = () => {
-    setDailyCheckinSlot(null);
-    setShowDailyCheckin(false);
-  };
-
-  // Day Close (end-of-day reflection)
-  const finishReflection = () => {
-    saveConfigPatch((latestConfig) => buildReflectionSave(latestConfig, { mood: reflectionMood, note: reflectionNote }, anchorTodayStr));
-    closeDailyCheckin();
-  };
-
-  const handleReflectionSnooze = () => {
-    saveConfigPatch((latestConfig) => buildReflectionSnooze(latestConfig));
-    closeDailyCheckin();
-  };
-
-  const handleReflectionBreakdown = (task) => {
-    finishReflection();
-    handleBreakdown(task);
-  };
-
-  const handleReflectionCleanSlate = () => {
-    finishReflection();
-    onOpenMindBox?.();
-  };
-
-  const handleReflectionTalkToCoach = () => {
-    finishReflection();
-    onOpenCoach?.();
-  };
+    if (pendingCheckinSlot !== "reflection") return;
+    setPendingCheckinSlot(null);
+    if (shouldShowReflection(new Date(), windows, config, anchorTodayStr)) onOpenCloseDay?.();
+  }, [pendingCheckinSlot, visibilityTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The proactive nudge no longer appears here. J3: "It never appears
   // unprompted on Today. The same logic renders as the first line of the Coach
@@ -1722,7 +1629,7 @@ export default function TodayTab({
       // where the key came from, not by state: closing that layer re-renders
       // before this listener runs, so its state already reads "closed".
       if (e.target?.closest?.('[role="dialog"], .modal-card, [data-testid="task-options-menu"]')) return;
-      if (isFocusMode || splitTask || isAddTaskDialogOpen || rescueActive || showDailyCheckin || frontPickerTask) return;
+      if (isFocusMode || splitTask || isAddTaskDialogOpen || rescueActive || frontPickerTask) return;
       closeSheet();
     };
     window.addEventListener("keydown", onEsc);
@@ -1730,7 +1637,7 @@ export default function TodayTab({
   });
 
   const wallKeysBlocked = isFocusMode || isAddTaskDialogOpen || (!!detailUuid && !drawerViewport)
-    || rescueActive || showDailyCheckin || !!frontPickerTask || !!splitTask;
+    || rescueActive || !!frontPickerTask || !!splitTask || (!!dayClosed && !focusSessionActive);
   useEffect(() => {
     if (wallKeysBlocked) return undefined;
     const onKey = (e) => {
@@ -1785,6 +1692,8 @@ export default function TodayTab({
   // — and as a third column with the list shown from 1600px (54e).
   const dayMapColumn = (wideViewport && listShown) || (drawerViewport && !listShown);
 
+  const closedView = !!dayClosed && !isFocusMode && !focusSessionActive;
+  const doneTodayTasks = closedView ? tasks.filter(t => t.isCompleted && !t.isDeleted && t.dateCompletedString === todayStr) : [];
   return (
     <>
       {/* 57f: a review waiting — one line above the day until it's done. */}
@@ -1793,10 +1702,34 @@ export default function TodayTab({
           {reviewLine.text} · <span className="today-review-go">Review</span>
         </button>
       )}
+      {closeLine && !dayClosed && (
+        <button type="button" className="today-review-line" onClick={closeLine.onOpen}>
+          {closeLine.text} · <span className="today-review-go">Close the day</span>
+        </button>
+      )}
       {/* ── Today (turns 37, 41, 54). From 1024px the task has a column of its
            own with the list or the Day map beside it (54a, 54c, 54e); on
            phones and tablets the task and the list stack. ── */}
-      <div ref={layoutRef} className={`today-layout${listShown ? " is-list-open" : ""}${dayMapColumn ? " has-day-map" : ""}`}>
+      {/* 47.3: a closed day shows only this, the two actions and what got
+          done — until a session runs (Start anyway), or it's reopened. */}
+      {closedView && (
+        <section className="today-closed" aria-labelledby="today-closed-title">
+          <h2 className="today-closed-title" id="today-closed-title">
+            Day closed.{dayClosed.firstTitle ? ` Tomorrow starts with ${dayClosed.firstTitle}.` : ""}
+          </h2>
+          <div className="today-closed-actions">
+            {dayClosed.onStartAnyway && <button type="button" className="eh-btn" onClick={dayClosed.onStartAnyway}>Start anyway</button>}
+            <button type="button" className="eh-btn" onClick={dayClosed.onReopen}>Reopen the day</button>
+          </div>
+          {doneTodayTasks.length > 0 && (
+            <details className="today-closed-done">
+              <summary>Done today · {doneTodayTasks.length}</summary>
+              <ul>{doneTodayTasks.map(t => <li key={t.uuid}>{t.title}</li>)}</ul>
+            </details>
+          )}
+        </section>
+      )}
+      <div ref={layoutRef} style={closedView ? { display: "none" } : undefined} className={`today-layout${listShown ? " is-list-open" : ""}${dayMapColumn ? " has-day-map" : ""}`}>
       <div className="today-layout-main" inert={wallCovered ? "" : undefined} aria-hidden={wallCovered ? "true" : undefined}>
       <TodayWall
         task={pinnedFocusTask}
@@ -1834,61 +1767,6 @@ export default function TodayTab({
         onScattered={onScattered}
         onRescue={openRescueMode}
       />
-
-      {/* ── Day Close (end-of-day reflection) ─────────────────────── */}
-      {showDailyCheckin && dailyCheckinSlot === "reflection" && (() => {
-        const summary = buildEndOfDaySummary(tasks, config, anchorTodayStr);
-        const committedIds = config.dailyCommitmentDate === anchorTodayStr ? getValidCommittedTaskIds(tasks, config.dailyCommitmentTaskIds, anchorTodayStr) : [];
-        const breakdownTask = committedIds.map(id => todayTasksAll.find(t => t.uuid === id)).find(t => t && !t.isCompleted)
-          || todayTasksAll.find(t => !t.isCompleted) || null;
-        return (
-          <div data-testid="daily-checkin-card" style={dailyCheckinCardStyle}>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button type="button" aria-label="Dismiss daily check-in" style={dailyCheckinDismissStyle} onClick={handleReflectionSnooze}>✕</button>
-            </div>
-              <div className="morning-ritual-header">
-                <div className="morning-ritual-title">{summary.title}</div>
-                <div className="morning-ritual-line">{summary.verdict}</div>
-              </div>
-              <div className="morning-ritual-nudge">
-                {summary.committedTotal > 0 ? `Commitment: ${summary.committedDone} of ${summary.committedTotal} done. ` : ""}
-                {`Completed today: ${summary.totalCompletedToday}.`}
-                {summary.hasKeyDeadline ? (summary.deadlineMoveDone ? " Key deadline move: done." : " Key deadline move: not yet.") : ""}
-              </div>
-              <div className="morning-ritual-nudge">How does today feel?</div>
-              <div className="anchor-chips morning-ritual-chips">
-                {REFLECTION_MOODS.map(m => (
-                  <button
-                    key={m.key}
-                    className={`anchor-chip${reflectionMood === m.key ? " anchor-chip--checked" : ""}`}
-                    onClick={() => setReflectionMood(m.key)}
-                  >
-                    {reflectionMood === m.key ? "✓ " : ""}{m.label}
-                  </button>
-                ))}
-              </div>
-              <textarea
-                className="daily-checkin-note"
-                placeholder="One sentence for tomorrow (optional)"
-                value={reflectionNote}
-                maxLength={280}
-                onChange={e => setReflectionNote(e.target.value)}
-              />
-              <div className="morning-ritual-actions">
-                <button className="morning-ritual-btn-primary" onClick={finishReflection}>Done</button>
-                {breakdownTask && (
-                  <div className="morning-ritual-actions-row">
-                    <button className="morning-ritual-btn-ghost" onClick={() => handleReflectionBreakdown(breakdownTask)}>Break one task down</button>
-                  </div>
-                )}
-                <div className="morning-ritual-actions-row">
-                  <button className="morning-ritual-btn-ghost" onClick={handleReflectionCleanSlate}>Clean Slate</button>
-                  <button className="morning-ritual-btn-ghost" onClick={handleReflectionTalkToCoach}>Talk to Coach</button>
-                </div>
-              </div>
-          </div>
-        );
-      })()}
 
       </div>
 

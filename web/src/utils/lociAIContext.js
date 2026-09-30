@@ -1,4 +1,5 @@
 import { getValidCommittedTaskIds, REFLECTION_MOODS } from "./dailyCoachCheckins";
+import { horizonsFromConfig } from "./horizons";
 import { buildDeadlineProgressMirror } from "./deadlineProgressMirror";
 import { formatMinutesToTime, getFocusWindows, getLociDayStr } from "./focusWindows";
 import { isDeferred } from "./deferral";
@@ -181,6 +182,29 @@ export function buildLociCheckinContext(config = {}, tasks = [], todayStr) {
 
 // Subtasks of the Now Focus task — lets the coach reference the concrete
 // steps the user already broke this task into, without re-deriving them.
+// 55d–e, 57b.29: Coach reads the last days closed (Close the day) and the
+// recent horizon reviews — data only, for its replies; no view of its own.
+export function buildLociClosingContext(config = {}, todayStr, now = Date.now()) {
+  const lines = [];
+  const log = Array.isArray(config.dayCloseLog) ? config.dayCloseLog.slice(-3) : [];
+  for (const e of log) {
+    if (!e?.day) continue;
+    const focus = Number(e.focusMin) > 0 ? `, ${Math.floor(e.focusMin / 60)}h${String(e.focusMin % 60).padStart(2, "0")}m focus` : "";
+    const min = e.minimum ? `, minimum day ${e.minimum.done} of ${e.minimum.total}` : "";
+    const note = sanitizeReflectionNoteForContext(e.note);
+    lines.push(`- Closed ${e.day}: ${e.done} done${focus}${min}; ${e.tomorrow} to tomorrow, ${e.planned} back to Plan, ${e.dropped} dropped.${note ? ` Their line: '${note}'.` : ""}`);
+  }
+  const names = new Map(horizonsFromConfig(config, todayStr).map(h => [h.id, h.name]));
+  const reviews = config.horizonReviews && typeof config.horizonReviews === "object" ? config.horizonReviews : {};
+  for (const [id, r] of Object.entries(reviews)) {
+    const last = r?.last;
+    if (!last?.at || now - last.at > 14 * 86400000) continue;
+    lines.push(`- ${names.get(id) || id} review (period to ${last.end}): ${last.kept} kept, ${last.today} to Today, ${last.dropped} dropped.`);
+  }
+  if (!lines.length) return "";
+  return ["Recent days closed and horizon reviews:", ...lines, "Use this to notice patterns, such as what keeps moving. Never judge."].join("\n");
+}
+
 export function buildLociNowFocusContext(tasks = []) {
   const nowFocus = (tasks || []).find(t => isActiveLociTask(t) && t.isNowFocus);
   if (!nowFocus || !Array.isArray(nowFocus.subSteps) || nowFocus.subSteps.length === 0) return "";
