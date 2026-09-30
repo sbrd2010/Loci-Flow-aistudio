@@ -34,13 +34,53 @@ test("a call that ended asks Did it happen?, and Done takes it off the route", a
   await expect(page.locator(".dm-stop", { hasText: "Call with the recruiter" })).toHaveCount(0);
 });
 
-test("Move opens the time picker with Tomorrow, which moves it off today", async ({ page }) => {
+test("Move offers Later today, Tomorrow and Pick a time; Tomorrow moves it off today (Q47.5)", async ({ page }) => {
   await openDayMapWithPastCall(page);
   await ask(page).getByRole("button", { name: "Move" }).click();
-  const sheet = page.getByRole("dialog", { name: "Fix a time: Call with the recruiter" });
-  await expect(sheet).toContainText("A new time today, or tomorrow.");
-  await sheet.getByRole("button", { name: "Tomorrow" }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const menu = page.getByRole("menu", { name: "Move Call with the recruiter" });
+  await expect(menu.getByRole("menuitem")).toHaveText([/^Later today\d\d:\d\d$/, "Tomorrowtime cleared", "Pick a time…"]);
+  // Esc closes it, back on Move.
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(ask(page).getByRole("button", { name: "Move" })).toBeFocused();
+  await ask(page).getByRole("button", { name: "Move" }).click();
+  await menu.getByRole("menuitem", { name: /Tomorrow/ }).click();
   await expect(page.locator(".dm-stop", { hasText: "Call with the recruiter" })).toHaveCount(0);
   await expect(page.locator(".undo-toast")).toContainText("Moved to tomorrow: Call with the recruiter");
+});
+
+test("Later today sets it at the next free slot; Pick a time opens the time sheet", async ({ page }) => {
+  await openDayMapWithPastCall(page);
+  await ask(page).getByRole("button", { name: "Move" }).click();
+  const later = page.getByRole("menuitem", { name: /Later today/ });
+  const at = (await later.locator(".dih-meta").innerText()).trim();
+  await later.click();
+  const row = page.locator(".dm-stop", { hasText: "Call with the recruiter" });
+  await expect(row.locator(".dm-time")).toHaveText(at);
+  await expect(ask(page)).toHaveCount(0);
+
+  // Once it has ended again, Pick a time… opens the sheet on it.
+  await page.clock.setFixedTime(new Date(`2024-06-15T${at}:00`).getTime() + 40 * 60_000);
+  await page.keyboard.press("Escape");
+  await page.locator("body").click({ position: { x: 5, y: 300 } });
+  await page.keyboard.press("m");
+  await ask(page).getByRole("button", { name: "Move" }).click();
+  await page.getByRole("menuitem", { name: "Pick a time…" }).click();
+  await expect(page.getByRole("dialog", { name: "Fix a time: Call with the recruiter" })).toBeVisible();
+});
+
+test("Today's Day map column asks too: Done with Undo (Q47.5)", async ({ page }) => {
+  await openDayMapWithPastCall(page);
+  await page.setViewportSize({ width: 1700, height: 900 });
+  await page.keyboard.press("Escape");
+  const column = page.getByRole("complementary", { name: "Day map" });
+  const line = column.getByRole("group", { name: "Did it happen? Call with the recruiter" });
+  await expect(line).toBeVisible();
+  await line.getByRole("button", { name: "Done" }).click();
+  await expect(column.getByText("Call with the recruiter")).toHaveCount(0);
+  await page.locator(".undo-toast").getByRole("button", { name: /Undo/ }).click();
+  await expect(line).toBeVisible();
+  await line.getByRole("button", { name: "Move" }).click();
+  await page.getByRole("menuitem", { name: "Pick a time…" }).click();
+  await expect(page.getByRole("dialog", { name: "Fix a time: Call with the recruiter" })).toBeVisible();
 });
