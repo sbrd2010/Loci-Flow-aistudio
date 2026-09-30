@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyClose, closeLineDue, defaultChoice, isDayClosed, leftovers, pinFirstThing, reopenDay, undoClose } from "./closeDay";
+import { applyClose, closeDayOffered, closeLineDue, defaultChoice, isDayClosed, leftovers, pinFirstThing, reopenDay, undoClose } from "./closeDay";
 
 const DAY = "2026-09-30";
 const TOMORROW = "2026-10-01";
@@ -39,10 +39,16 @@ describe("Close the day (55d–e, Q47)", () => {
     expect(isDayClosed(after.config, DAY)).toBe(true);
     expect(leftovers(after.tasks, DAY)).toEqual([]);
 
+    // The review's mark ends as "r" goes back to its horizon (Q48.1)…
+    expect("reviewFrom" in by.r).toBe(false);
+
     // Undo within 10 s: all back, the day open.
     const back = undoClose(after, before, DAY);
     expect(leftovers(back.tasks, DAY).map(x => x.uuid)).toEqual(["b", "a", "r"]);
     expect(isDayClosed(back.config, DAY)).toBe(false);
+    // …and comes back with it, field by field too.
+    expect(back.tasks.find(x => x.uuid === "r").reviewFrom).toEqual(tasks[2].reviewFrom);
+    expect(undoClose(after, before, DAY, after).tasks.find(x => x.uuid === "r").reviewFrom).toEqual(tasks[2].reviewFrom);
     // …and the line is gone from Coach's reflection too.
     expect(back.config).toMatchObject({ dailyReflectionDate: null, dailyReflectionNote: null, dailyReflectionCompletedAt: null });
   });
@@ -82,6 +88,12 @@ describe("Close the day (55d–e, Q47)", () => {
     // Nothing pinned since: the old pin comes back, with or without `after`.
     expect(undoClose(after, before, DAY, after).tasks.filter(x => x.isNowFocus).map(x => x.uuid)).toEqual(["b"]);
     expect(undoClose(now, before, DAY).tasks.filter(x => x.isNowFocus).map(x => x.uuid)).toEqual(["wk"]);
+  });
+
+  it("the Day map offers Close the day only once the day has started (Q48.2)", () => {
+    expect(closeDayOffered(30, 540)).toBe(false); // 00:30, the day starts at 09:00
+    expect(closeDayOffered(540, 540)).toBe(true);
+    expect(closeDayOffered(1440 + 60, 960)).toBe(true); // 01:00 in a 16:00–03:00 window's tail
   });
 
   it("Reopen: open again, what was moved stays moved (47.3)", () => {
