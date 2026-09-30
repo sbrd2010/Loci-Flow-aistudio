@@ -655,3 +655,8 @@
   border: 1px solid var(--control-edge);
   border-radius: 22px;
 }
+
+/* 59c: the quick Sound row. */
+.fm-sound-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fm-sound-chip { min-height: 36px; padding: 0 12px; }
+.fm-sound-chip.is-on { color: var(--on-accent); background: var(--accent); border-color: var(--accent-edge); }

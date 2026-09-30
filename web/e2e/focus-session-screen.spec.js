@@ -296,3 +296,23 @@ test("with I'm stuck open, D is not the session's and Esc goes back to the timer
   await expect(overlay.getByRole("heading", { level: 1 })).toHaveText(title);
   await expect(overlay.getByLabel("Pause timer")).toBeVisible();
 });
+
+// 59c: the quick Sound row — Off · Rain · the last one used — and every
+// sound still under "All sounds…".
+test("the quick Sound row picks Rain and Off, and remembers the last sound used", async ({ page }) => {
+  const overlay = await openSession(page);
+  const row = overlay.getByRole("group", { name: "Sound" });
+  await expect(row.getByRole("button", { name: "Off" })).toHaveAttribute("aria-pressed", "true");
+  await overlay.getByRole("button", { name: "Open sounds menu" }).click();
+  const drawer = page.locator(".focus-sounds-drawer");
+  await expect(drawer.locator(".sound-tile")).toHaveCount(8);
+  await drawer.getByRole("button", { name: /Jazz Lounge/ }).click();
+  await drawer.getByRole("button", { name: "Close sounds menu" }).click();
+  await expect(row.getByRole("button", { name: "Jazz Lounge" })).toHaveAttribute("aria-pressed", "true");
+  await row.getByRole("button", { name: /Rain/ }).click();
+  await expect(row.getByRole("button", { name: /Rain/ })).toHaveAttribute("aria-pressed", "true");
+  // The last one used before Rain stays offered.
+  await expect(row.getByRole("button", { name: "Jazz Lounge" })).toBeVisible();
+  await row.getByRole("button", { name: "Off" }).click();
+  await expect(row.getByRole("button", { name: "Off" })).toHaveAttribute("aria-pressed", "true");
+});
