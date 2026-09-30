@@ -176,7 +176,7 @@ function RouteDrop({ children }) {
   return <div ref={setNodeRef} className={`dm-route-wrap${isOver ? " is-drop" : ""}`}>{children}</div>;
 }
 
-export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onEndFocus, onAddTask, onHelpChoose, dayClock, flushNow = () => {}, backLabel = "Today", uid, writeActivityEvents, focusTimer }) {
+export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onEndFocus, onAddTask, onHelpChoose, onCloseDay, dayClock, flushNow = () => {}, backLabel = "Today", uid, writeActivityEvents, focusTimer }) {
   // A stop, opened (52): the task sheet, with Remove from route.
   const [detailId, setDetailId] = useState(null);
   // The route's own Undo: { message, before, at } — before is what to put back.
@@ -819,6 +819,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         </button>
         <h1 className="dm-heading">Day map</h1>
         {dayClock && <span className="dm-date">{dayClock.date}</span>}
+        {/* 55d–e: always in the header (a text button on a phone). */}
+        {onCloseDay && <button type="button" className="dm-close-day" onClick={onCloseDay}>Close the day</button>}
         {/* 56a–c: one sentence, recomputed on every change; never a quote. */}
         <p className="dm-fact">{fact.text}{fact.alert && <span className="dm-fact-alert">{fact.alert}</span>}</p>
       </div>

@@ -896,3 +896,22 @@ describe("buildLociTodaySnapshotContext (every Coach request)", () => {
     expect(out).toContain(`FOCUS SESSION: paused on #${ids[1]}`);
   });
 });
+
+// 55d–e, 57b.29: Coach reads the days closed and the horizon reviews.
+import { buildLociClosingContext } from "./lociAIContext";
+describe("buildLociClosingContext", () => {
+  const now = Date.UTC(2026, 9, 1);
+  it("the last days closed and recent reviews, one line each", () => {
+    const config = {
+      dayCloseLog: [{ day: "2026-09-30", done: 4, focusMin: 245, tomorrow: 3, planned: 1, dropped: 0, minimum: { done: 2, total: 3 }, note: "Good *day*" }],
+      horizonReviews: { month: { last: { end: "2026-09-30", kept: 2, today: 1, dropped: 1, at: now - 1000 } }, week: { last: { end: "2026-08-30", kept: 1, today: 0, dropped: 0, at: now - 40 * 86400000 } } },
+    };
+    const text = buildLociClosingContext(config, "2026-10-01", now);
+    expect(text).toContain("- Closed 2026-09-30: 4 done, 4h05m focus, minimum day 2 of 3; 3 to tomorrow, 1 back to Plan, 0 dropped. Their line: 'Good day'.");
+    expect(text).toContain("- This month review (period to 2026-09-30): 2 kept, 1 to Today, 1 dropped.");
+    expect(text).not.toContain("This week review"); // older than 14 days
+  });
+  it("nothing to say, nothing sent", () => {
+    expect(buildLociClosingContext({}, "2026-10-01", now)).toBe("");
+  });
+});

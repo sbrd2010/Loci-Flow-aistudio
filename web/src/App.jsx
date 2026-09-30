@@ -5,7 +5,7 @@ import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDa
 import { isNativeApp, refreshNativePermission, addNativeNotificationClickListener, NATIVE_PERMISSION_GRANTED_EVENT } from "./utils/nativeNotifs";
 import { signInWithGoogleNative } from "./utils/nativeAuth";
 import { isCheckinDue, buildCheckinResumeMessage, isDuplicateCheckinResume } from "./utils/coachCheckin";
-import { getFocusWindows, getLociDayStr } from "./utils/focusWindows";
+import { getFocusWindows, getLociDayStr, getLociNowMinutes, getOverallSpan } from "./utils/focusWindows";
 import { buildWallCommitmentSave } from "./utils/dailyCoachCheckins";
 import { deriveCommitmentDeadlineMove } from "./utils/deadlineCountdown";
 import { createDemoPayload } from "./utils/demoData";
@@ -31,12 +31,15 @@ import DayMapPage from "./components/DayMapPage";
 import FocusBar from "./components/FocusBar";
 import { endSessionTasks } from "./utils/focusEnd";
 import { minutesFromSeconds } from "./utils/focusLedger";
-import { nextDateStr } from "./utils/dayMapPlan";
+import { formatClock24, nextDateStr } from "./utils/dayMapPlan";
 import { useFocusTimer } from "./hooks/useFocusTimer";
 import { useLociDayStr, useTodayStr } from "./hooks/useTodayStr";
 import HorizonReview from "./components/HorizonReview";
 import UndoToast, { UndoAnnouncer } from "./components/ui/UndoToast";
 import { applyReview, detectReviews, pendingReviews, undoReviewOrSort } from "./utils/horizonReview";
+import CloseTheDay from "./components/CloseTheDay";
+import { applyClose, closeLineDue, isDayClosed, pinFirstThing, reopenDay, undoClose } from "./utils/closeDay";
+import { makeOneThing } from "./utils/oneThing";
 import { shouldShowFloatingTimer, buildFocusCompletionPayload, EXPIRY_REASONS } from "./utils/focusSession";
 import { celebrate } from "./utils/celebrations";
 import { submitOnEnter } from "./utils/formEvents";
@@ -1150,6 +1153,41 @@ export default function App() {
     setReviewUndo({ before, uuids: review.tasks.map(t => t.uuid), id: review.id, text: `Reviewed: ${review.title}`, at: Date.now() });
     if (reviews.length <= 1) setReviewOpen(false);
   };
+  // Close the day (55d–e, Q47): from the Day map's header, or Today's line
+  // from 30 minutes before the day ends. Undo 10 s. The next day, the first
+  // thing noted becomes the one thing.
+  const [closeDayOpen, setCloseDayOpen] = useState(false);
+  const [closeUndo, setCloseUndo] = useState(null);
+  const dayClosed = isDayClosed(payload?.config || {}, planDay);
+  useEffect(() => {
+    if (!payload?.config || (!demoMode && isSyncingFromCache)) return;
+    const next = pinFirstThing(payload, planDay);
+    if (next) savePayload(next);
+  }, [planDay, payload?.config?.dayClose, isSyncingFromCache]); // eslint-disable-line react-hooks/exhaustive-deps
+  const planWindows = getFocusWindows(payload?.config || {});
+  const dayEndMin = getOverallSpan(planWindows).endMin;
+  const closeLine = closeLineDue(getLociNowMinutes(new Date(), planWindows), dayEndMin, dayClosed)
+    ? { text: `Day ends ${formatClock24(dayEndMin % 1440)}`, onOpen: () => setCloseDayOpen(true) }
+    : null;
+  const finishClose = ({ choices, firstThing, note, summary }) => {
+    const before = payloadRef.current;
+    savePayload(applyClose(before, { day: planDay, choices, firstThing, note, summary }));
+    setCloseUndo({ before, at: Date.now() });
+    setCloseDayOpen(false);
+  };
+  const closedFirst = dayClosed ? (payload?.tasks || []).find(t => String(t.uuid) === String(payload?.config?.dayClose?.firstThing) && !t.isDeleted && !t.isCompleted) : null;
+  const dayClosedState = dayClosed ? {
+    firstTitle: closedFirst?.title || null,
+    onReopen: () => saveConfigPatch(prev => reopenDay(prev)),
+    // 47.3: focus on the named task without reopening; the day stays closed.
+    onStartAnyway: closedFirst ? () => {
+      const current = payloadRef.current;
+      pendingFocusPinPromiseRef.current = savePayloadAsync({ ...current, tasks: makeOneThing(current.tasks || [], String(closedFirst.uuid)).tasks });
+      setPendingFocusOpen(true);
+      goToday();
+    } : null,
+  } : null;
+
   const reviewLine = reviews[0] && !reviewOpen
     ? { text: `${reviews[0].title} · ${reviews[0].tasks.length} left`, onOpen: openReview }
     : null;
@@ -1387,6 +1425,9 @@ export default function App() {
         {activeTab === "today" && (
           <TodayTab
             reviewLine={reviewLine}
+            closeLine={closeLine}
+            onOpenCloseDay={dayClosed ? null : () => setCloseDayOpen(true)}
+            dayClosed={dayClosedState}
             payload={payload}
             savePayload={savePayload}
             savePayloadAsync={savePayloadAsync}
@@ -1422,6 +1463,7 @@ export default function App() {
             onEndFocus={handleEndFocusSession}
             onAddTask={() => openAddTask("today", "Day map")}
             onHelpChoose={() => openScattered("daymap")}
+            onCloseDay={dayClosed ? null : () => setCloseDayOpen(true)}
             uid={activityUid}
             writeActivityEvents={writeActivityEvents}
             focusTimer={focusTimer}
@@ -1548,6 +1590,26 @@ export default function App() {
       <BottomNav activeTab={activeTab === "daymap" ? "today" : activeTab} onTabSelect={handleTabSelect} />
 
       {/* Add / Edit Task Dialog */}
+      {closeDayOpen && (
+        <CloseTheDay
+          payload={payload}
+          day={planDay}
+          uid={activityUid}
+          windows={planWindows}
+          onClose={finishClose}
+          onCancel={() => setCloseDayOpen(false)}
+        />
+      )}
+      <UndoAnnouncer message={closeUndo ? "Day closed" : ""} />
+      {closeUndo && (
+        <UndoToast
+          key={closeUndo.at}
+          ms={10000}
+          message="Day closed"
+          onUndo={() => { savePayload(undoClose(payloadRef.current, closeUndo.before, planDay)); setCloseUndo(null); }}
+          onClose={() => setCloseUndo(null)}
+        />
+      )}
       {reviewOpen && reviews[0] && (
         <HorizonReview
           key={reviews[0].id}
