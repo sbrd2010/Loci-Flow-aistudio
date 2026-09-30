@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildFocusTerminalEvent, eventPatch } from "./activityLog";
 import { dailyTotals, flattenFocusEvents, minutesForTaskOn } from "./focusLedger";
-import { extendMinutesForSession, MAX_EXTEND_MINUTES } from "./focusSession";
 import { getFocusWindows } from "./focusWindows";
 
 // K4's 00:00 hold writes a ledger entry at the bell while the session stays
@@ -177,30 +176,5 @@ describe("K4 — the 00:00 hold amends its entry instead of writing a second one
     expect(a.eventId).toBeTruthy();
     expect(a.eventId).not.toBe(b.eventId);
     expect(a.lociDateString).toBe("2026-07-10");
-  });
-});
-
-describe("K4 — the extension scales to the session", () => {
-  it.each([
-    [5 * 60, 5],
-    [10 * 60, 10],
-    [25 * 60, 20],
-    [50 * 60, 20],
-  ])("a %ss block offers +%sm", (seconds, expected) => {
-    expect(extendMinutesForSession(seconds)).toBe(expected);
-  });
-
-  it("never offers more than the cap", () => {
-    expect(extendMinutesForSession(9 * 3600)).toBe(MAX_EXTEND_MINUTES);
-  });
-
-  it("a sub-minute block is not answered with the cap", () => {
-    // The five-minute case in reverse: offering +20m here is the same
-    // argument with the user, just from the other end.
-    expect(extendMinutesForSession(20)).toBe(1);
-  });
-
-  it("falls back to the cap only when there is no figure to scale to", () => {
-    expect(extendMinutesForSession(undefined)).toBe(MAX_EXTEND_MINUTES);
   });
 });

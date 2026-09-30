@@ -6,11 +6,10 @@ import { getFocusWindows, getLociDayStr } from "./focusWindows";
 // its wall shows this session ("Back to focus", 59f); when the wall can't —
 // the session's task isn't Today's one thing — the bar stays, or nothing
 // would reach the session (Codex review of #434). Never on the focus page,
-// nor while a block's end is waiting for an answer.
-export function shouldShowFloatingTimer({ activeTab, focusSessionActive, hasActiveTask, isFocusMode, sessionCompletePending, todayShowsSession = true }) {
+// and it stays through block end, which it shows itself (Q41).
+export function shouldShowFloatingTimer({ activeTab, focusSessionActive, hasActiveTask, isFocusMode, todayShowsSession = true }) {
   if (isFocusMode) return false;
   if (activeTab === "today" && todayShowsSession) return false;
-  if (sessionCompletePending) return false;
   if (!focusSessionActive || !hasActiveTask) return false;
   return true;
 }
@@ -118,35 +117,6 @@ export function shouldStopFocusOnComplete(task, isCompleting) {
 // fires even while the user is on Roadmap/MindBox/Coach/Settings.
 export function shouldTriggerSessionComplete({ isTimerRunning, timerSecondsLeft }) {
   return !!(isTimerRunning && timerSecondsLeft === 0);
-}
-
-// K4: the extension the app offers at the 00:00 hold is "the same length as
-// the session just run, capped at 20m" — 5m → 5, 10m → 10, 25m → 20, 50m →
-// 20. A fixed +20m is the app arguing with a choice the user just made
-// deliberately: someone who picked five minutes is not asking for twenty.
-// This governs only what the app proposes on the user's behalf; a duration
-// they pick themselves is their call and is not clamped here.
-export const MAX_EXTEND_MINUTES = 20;
-export function extendMinutesForSession(plannedSeconds) {
-  const mins = Math.round(Number(plannedSeconds) / 60);
-  if (!Number.isFinite(mins)) return MAX_EXTEND_MINUTES;
-  // Floor of 1, not of MAX: a sub-minute block offering +20m is the same
-  // argument this rule exists to stop, just in the other direction.
-  return Math.min(MAX_EXTEND_MINUTES, Math.max(1, mins));
-}
-
-// Whether the global Focus completion prompt ("Finish task" / "Keep
-// going") should be shown. Independent of activeTab so it appears on any page
-// — EXCEPT the Focus session itself, which now carries K4's hold inline.
-//
-// Addendum D delta 3: "Running out of time is never a failure event — no
-// sound, no modal, no auto-close." A modal over the screen whose whole job is
-// to hold still at 00:00 is the failure event it rules out, and it would sit
-// on top of the two buttons that screen already offers. Everywhere else the
-// prompt stays: a bell that rings while the user is on Coach or Plan still
-// has to tell them something.
-export function shouldShowFocusCompletionPrompt({ sessionCompletePending, hasActiveTask, isFocusMode = false }) {
-  return !!(sessionCompletePending && hasActiveTask && !isFocusMode);
 }
 
 // Build the updated payload for completing the focused task from the global

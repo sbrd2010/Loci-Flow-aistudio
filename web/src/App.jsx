@@ -31,10 +31,9 @@ import FocusBar from "./components/FocusBar";
 import { endSessionTasks } from "./utils/focusEnd";
 import { minutesFromSeconds } from "./utils/focusLedger";
 import { nextDateStr } from "./utils/dayMapPlan";
-import ConfirmDialog from "./components/ConfirmDialog";
 import { useFocusTimer } from "./hooks/useFocusTimer";
 import { useTodayStr } from "./hooks/useTodayStr";
-import { shouldShowFloatingTimer, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload, extendMinutesForSession, EXPIRY_REASONS } from "./utils/focusSession";
+import { shouldShowFloatingTimer, buildFocusCompletionPayload, EXPIRY_REASONS } from "./utils/focusSession";
 import { celebrate } from "./utils/celebrations";
 import { submitOnEnter } from "./utils/formEvents";
 import { migrateStoredTheme, resolveTheme, watchColorScheme } from "./utils/theme";
@@ -45,7 +44,6 @@ import { isOnToday } from "./utils/deferral";
 // Plan's column names, as Add task's note says them ("from Plan · Quarter").
 const PLAN_COLUMN_NAMES = { today: "Today", week: "Week", month: "Month", quarter: "Quarter", halfyear: "6 months", office: "Work" };
 
-const EXTEND_DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
 
 function toLocalDateStr(date) {
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
@@ -685,7 +683,9 @@ export default function App() {
         const reopenSeconds = Number(pendingFocusOptionsRef.current?.plannedSeconds);
         if (reopenSeconds > 0) focusTimer.changeFocusDuration?.(reopenSeconds / 60);
         focusTimer.setIsFocusMode(true);
-        focusTimer.setIsTimerRunning(true);
+        // At block end with no length chosen, this opens the block-end screen;
+        // it must not run the finished block on from 0:00 (loopcheck of #439).
+        if (reopenSeconds > 0 || !focusTimer.sessionCompletePending) focusTimer.setIsTimerRunning(true);
         pendingFocusPinPromiseRef.current = null;
         pendingFocusOptionsRef.current = null;
         setPendingFocusOpen(false);
@@ -1020,12 +1020,6 @@ export default function App() {
     onStuck: () => { handleReturnToFocus(); setStuckPending(true); },
   };
 
-  // Global Focus completion prompt: "Keep going" — opens the duration picker
-  // so the same task's timer can be restarted from any tab.
-  const handleFocusSessionKeepGoing = () => {
-    focusTimer.dismissSessionComplete();
-    focusTimer.setShowExtendPicker(true);
-  };
 
   const handleTabSelect = (tab) => {
     const dwellSec = Math.round((Date.now() - tabStartRef.current) / 1000);
@@ -1458,7 +1452,6 @@ export default function App() {
         focusSessionActive: focusTimer.focusSessionActive,
         hasActiveTask: !!focusTimer.activeTask,
         isFocusMode: focusTimer.isFocusMode,
-        sessionCompletePending: focusTimer.sessionCompletePending,
         // Today's wall shows the session only when its task is the day's
         // one thing (TodayTab's wallSessionLive).
         todayShowsSession: !!commitmentPinnedUuid && commitmentPinnedUuid === focusTimer.focusSessionTaskUuid,
@@ -1474,57 +1467,17 @@ export default function App() {
           onEnd={handleEndFromBar}
           pipOpen={focusTimer.pipOpen}
           onOpenPiP={focusTimer.handleOpenPiP}
+          blockEnd={focusTimer.blockEnd}
+          blockNumber={focusTimer.focusBlockNumber}
+          onStartBreak={focusTimer.startBreak}
+          onStartNext={() => focusTimer.startNextBlock()}
+          onHoldBlockEnd={focusTimer.setBlockEndHeld}
         />
       )}
 
-      {/* Global Focus session-complete prompt — fires when the timer reaches
-          0:00 even if TodayTab is unmounted (user on another tab) */}
-      {shouldShowFocusCompletionPrompt({
-        sessionCompletePending: focusTimer.sessionCompletePending,
-        hasActiveTask: !!focusTimer.activeTask,
-        isFocusMode: focusTimer.isFocusMode,
-      }) && (
-        <ConfirmDialog
-          message={`Focus block complete!\n\nYou've completed your deep focus block for:\n"${focusTimer.activeTask.title}"\n\nWould you like to mark this task as finished, or keep going?`}
-          confirmLabel="Finish task"
-          cancelLabel="Keep going"
-          onConfirm={handleFocusSessionDone}
-          onCancel={handleFocusSessionKeepGoing}
-        />
-      )}
-
-      {/* Keep Going: pick a fresh focus block for the same task — also global
-          so it works from any tab */}
-      {focusTimer.showExtendPicker && focusTimer.activeTask && (
-        <div
-          className="focus-now-backdrop"
-          onClick={() => focusTimer.extendTimer(extendMinutesForSession(focusTimer.timerMaxSeconds))}
-        >
-          <div className="focus-now-sheet" role="dialog" aria-modal="true" aria-label="Keep going" onClick={e => e.stopPropagation()}>
-            <div className="focus-now-sheet-header">
-              <span className="focus-now-sheet-title">Keep going on "{focusTimer.activeTask.title}"</span>
-            </div>
-            <div className="focus-now-sheet-body" style={{ padding: "4px 16px 16px" }}>
-              <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", margin: "0 0 12px" }}>
-                Pick your next focus block. The timer restarts on this same task.
-              </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                {EXTEND_DURATION_OPTIONS.map((mins) => (
-                  <button
-                    key={mins}
-                    type="button"
-                    className="btn"
-                    style={{ flex: "1 0 calc(33.33% - 8px)", fontSize: "13px", padding: "10px 8px" }}
-                    onClick={() => focusTimer.extendTimer(mins)}
-                  >
-                    {mins}m
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Q41: no global "Finish task / Keep going" prompt at 0:00 — block end
+          shows on the focus page, the focus bar and Today's row, and pauses
+          itself after 60 s with no answer (useFocusTimer). */}
 
       {/* Bottom Nav — hidden on Day Map (full-screen page) */}
       <BottomNav activeTab={activeTab === "daymap" ? "today" : activeTab} onTabSelect={handleTabSelect} />

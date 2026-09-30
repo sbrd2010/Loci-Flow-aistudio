@@ -281,9 +281,9 @@ test("a task on this front moved to tomorrow counts as TOMORROW, not ON TODAY", 
   await expect(page.locator(".plan-fp-stats")).toHaveText(/^2 OPEN · 1 TOMORROW · 0 DONE/);
 });
 
-// Codex review of #414: the focus prompt that pops up over any screen is a
-// modal too, so Esc under it does not leave the front's page.
-test("laptop: Esc with the focus-complete prompt up does not leave the front's page", async ({ page }) => {
+// Q41: a block that ends off the focus page shows its end on the focus bar,
+// with no prompt over the page: BLOCK 1 DONE, the break, Break's over.
+test("laptop: a block ending on a front's page shows block end on the bar, with no prompt", async ({ page }) => {
   await page.addInitScript(() => {
     try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
   });
@@ -304,11 +304,17 @@ test("laptop: Esc with the focus-complete prompt up does not leave the front's p
   await page.locator(".plan-front").first().click();
   await expect(back(page)).toBeVisible();
 
-  await page.clock.runFor(26 * 60_000);
-  const prompt = page.getByRole("dialog").filter({ hasText: "Focus block complete" });
-  await expect(prompt).toBeVisible();
-  await page.keyboard.press("Escape");
+  await page.clock.runFor(25 * 60_000 + 5_000);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const bar = page.getByRole("region", { name: "Focus session" });
+  await expect(bar).toContainText("BLOCK 1 DONE");
   await expect(back(page)).toBeVisible();
+  await bar.getByRole("button", { name: /Take a break/ }).click();
+  await expect(bar).toContainText("BREAK");
+  await page.clock.runFor(5 * 60_000 + 2_000);
+  await expect(bar).toContainText("BREAK’S OVER");
+  await bar.getByRole("button", { name: /Start block 2/ }).click();
+  await expect(bar.getByRole("button", { name: "Pause focus timer" })).toBeVisible();
 });
 
 // Codex review of #414: with a window past midnight the Loci day moves on
