@@ -286,7 +286,9 @@
   display: flex;
   gap: 8px;
   margin-top: 4px;
+  flex-wrap: wrap;
 }
+.fm-parked { flex-basis: 100%; margin: 0; font-size: 0.8125rem; color: var(--ink-2); }
 .focus-mode-dump-input {
   flex: 1;
   min-width: 0;

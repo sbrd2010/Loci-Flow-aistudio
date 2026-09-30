@@ -91,7 +91,7 @@ function getLastFullTaskTime(userId) {
   return raw ? Number(raw) : 0;
 }
 
-export default function CoachTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveSubPaths, saveSubPathsAsync, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {}, uid, writeActivityEvents }) {
+export default function CoachTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveSubPaths, saveSubPathsAsync, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {}, uid, writeActivityEvents, stuck = null, onClearStuck, onBackToFocus }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
   const windows = getFocusWindows(config);
   // "Today" is the Loci day: a task moved to tomorrow stays off it until the
@@ -671,6 +671,11 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     // Rescue session started while this reply was in flight would have saved
     // a different summary that must not be clobbered.
     const rescueHandoffSummaryUsedAt = rescueHandoffContext ? (config.rescueHandoffSummary?.createdAt ?? null) : null;
+    // Q39.1: the I'm stuck chip goes with this message, then it's spent.
+    const stuckContext = stuck
+      ? `STUCK IN A FOCUS SESSION: the user opened Coach from "I'm stuck" on "${stuck.title}"${stuck.step ? `, next step "${stuck.step}"` : ""}. The session is paused. This message is about what's in the way.`
+      : "";
+    if (stuck) onClearStuck?.();
 
     const userMessageCount = savedHistory.filter(m => m.isUser).length;
     const isEarlyConversation = userMessageCount <= 1;
@@ -702,7 +707,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       recentlyParkedContext,
       recentlyCompletedContext,
       categoryFilterContext,
-      rescueHandoffContext,
+      rescueHandoffContext: [rescueHandoffContext, stuckContext].filter(Boolean).join("\n"),
       isEarlyConversation,
       nowLabel,
       timeOfDay,
@@ -1669,6 +1674,19 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
           <div ref={chatBottomRef} />
         </div>
 
+        {(stuck || onBackToFocus) && (
+          <div className="coach-stuck-row">
+            {onBackToFocus && (
+              <button type="button" className="coach-back-focus" onClick={onBackToFocus}>← Back to focus</button>
+            )}
+            {stuck && (
+              <span className="coach-stuck-chip">
+                Stuck on: {stuck.title}{stuck.step ? ` · next step: ${stuck.step}` : ""}
+                <button type="button" className="coach-stuck-remove" onClick={() => onClearStuck?.()} aria-label="Remove the stuck task">×</button>
+              </span>
+            )}
+          </div>
+        )}
         <form ref={chatFormRef} onSubmit={handleSendChat} className="chat-input-row" style={{ marginTop: "8px" }}>
           <textarea ref={chatInputRef} className="text-input" rows={3} value={chatInput}
             onChange={e => setChatInput(e.target.value)}
@@ -1678,7 +1696,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                 e.currentTarget.form?.requestSubmit();
               }
             }}
-            placeholder={`Ask ${config.mentorName || "your mentor"}… (Shift+Enter for a new line)`}
+            placeholder={stuck ? "What's in the way?" : `Ask ${config.mentorName || "your mentor"}… (Shift+Enter for a new line)`}
             disabled={chatLoading}
             style={{ background: "var(--accent-ring)", border: "1.5px solid var(--accent-light)" }} />
           {chatLoading

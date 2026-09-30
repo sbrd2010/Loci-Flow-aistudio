@@ -775,6 +775,10 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     pipOpen,
     handleOpenPiP,
     setPipNotice,
+    // Q39.2: the pin is about to move while this session is held open (a
+    // split from I'm stuck, or its Undo) — keep the block's numbers, or its
+    // elapsed time would be reset to a full block (Codex review of #436).
+    keepTimerOnTaskChange: (on = true) => { skipNextDurationSyncRef.current = on; },
     focusSessionId, startFocusSession, endFocusSession,
     // When the open session began — screen 3 prints it as "STARTED 09:41".
     // Read from the ref each render rather than held in state: it is set once

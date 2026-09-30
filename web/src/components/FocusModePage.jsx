@@ -9,6 +9,7 @@ import { playChime } from "../utils/chime";
 import { titleLength } from "./TodayWall";
 import FocusClock from "./FocusClock";
 import EndSessionDialog from "./EndSessionDialog";
+import StuckSheet from "./StuckSheet";
 import LinkifyText from "./LinkifyText";
 import { IconCheck, IconX } from "./ui/icons";
 import "../styles/focusMode.css";
@@ -62,7 +63,7 @@ function ringSize(width) {
 // length. End session (59h) asks first and can keep where you stopped as the
 // next step. At 0:00, block end (59i): a 5-minute break then the next block
 // (Enter), another block, +5, Mark done or End session; no answer in 60 s and
-// it pauses.
+// it pauses. I'm stuck (59d) pauses and offers four ways forward.
 export default function FocusModePage({
   task,
   secondsLeft,
@@ -103,7 +104,20 @@ export default function FocusModePage({
   // this session's are added live.
   taskMinutesToday = 0,
   onAddBrainDump,
-  onRescue,
+  // Q39.2: piece 1 of a split from I'm stuck, not started: { n, onUndo }.
+  splitNote = null,
+  // "N parked this session".
+  parkedCount = 0,
+  // 59d, I'm stuck: a smaller next step (text); Split; Switch to the next
+  // task (null when there is none); Talk it through with Coach.
+  onSmallerStep,
+  onSplit,
+  onSwitchNext,
+  nextTitle,
+  onTalkToCoach,
+  // The mini window's I'm stuck: open 59d on arrival, then say so.
+  openStuck = false,
+  onStuckShown,
   pipOpen,
   onOpenPiP,
   selectedTrack,
@@ -128,6 +142,9 @@ export default function FocusModePage({
   const [showSoundsDrawer, setShowSoundsDrawer] = useState(false);
   // 59h: the End session question.
   const [ending, setEnding] = useState(false);
+  // 59d: I'm stuck, and whether the timer ran when it opened.
+  const [stuck, setStuck] = useState(false);
+  const stuckWasRunningRef = useRef(false);
   // 59i: the break after a block — when it ends (ms), and a tick to count it.
   const [breakUntil, setBreakUntil] = useState(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -228,16 +245,39 @@ export default function FocusModePage({
   const breakLeft = breakUntil == null ? 0 : Math.max(0, Math.ceil((breakUntil - nowMs) / 1000));
   const endSession = ({ note, tomorrow }) => { setEnding(false); onEndSession?.({ note, tomorrow }); };
 
+  // 59d: opening pauses the timer; "Back to the timer" resumes it if it ran.
+  const openStuckSheet = () => {
+    stuckWasRunningRef.current = isRunning;
+    if (isRunning) onPlayPause?.();
+    setStuck(true);
+  };
+  const backToTimer = () => {
+    setStuck(false);
+    if (stuckWasRunningRef.current && !isRunning) onPlayPause?.();
+    stuckWasRunningRef.current = false;
+  };
+  const openStuckRef = useRef(openStuckSheet);
+  openStuckRef.current = openStuckSheet;
+  useEffect(() => {
+    if (!openStuck) return;
+    if (!isComplete) openStuckRef.current();
+    onStuckShown?.();
+  }, [openStuck]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Keys (45l, 59a–h): Space pauses, D marks done, E asks to end, P opens the
   // mini window, Esc leaves. Not while typing, not while Rescue is open, and
   // Esc closes the sounds drawer or the question first. A held key fires once.
   const keysRef = useRef({});
-  keysRef.current = { isComplete, showSoundsDrawer, ending, onPlayPause, onDone, onExit, onOpenPiP, pipOpen, keysOff, openEnd, onEndSession, breaking: breakUntil != null, startBreak, breakOver, startNext };
+  keysRef.current = { isComplete, showSoundsDrawer, ending, stuck, backToTimer, onPlayPause, onDone, onExit, onOpenPiP, pipOpen, keysOff, openEnd, onEndSession, breaking: breakUntil != null, startBreak, breakOver, startNext };
   useEffect(() => {
     const onKey = (e) => {
       const k = keysRef.current;
       if (k.keysOff || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       if (k.ending) return; // the question has its own keys
+      if (k.stuck) {
+        if (e.key === "Escape") { e.preventDefault(); k.backToTimer(); }
+        return;
+      }
       if (e.key === "Escape" && k.showSoundsDrawer) { setShowSoundsDrawer(false); return; }
       const t = e.target;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
@@ -356,6 +396,7 @@ export default function FocusModePage({
       >
         {dumpSaved ? "Saved" : "Save"}
       </button>
+      {parkedCount > 0 && <p className="fm-parked" aria-live="polite">{parkedCount} parked this session</p>}
     </div>
   );
 
@@ -393,7 +434,10 @@ export default function FocusModePage({
 
       <main className="focus-mode-body" aria-label="Deep focus session">
         <section className="focus-mode-task-panel" aria-label="Focused task">
-          <p className="fm-stage-kicker">{stageKicker}</p>
+          <p className="fm-stage-kicker">
+            {splitNote ? `SPLIT INTO ${splitNote.n} · PIECE 1 OF ${splitNote.n}` : stageKicker}
+            {splitNote?.onUndo && <> <button type="button" className="fm-link" onClick={splitNote.onUndo}>Undo</button></>}
+          </p>
           <h1 className="focus-mode-task-title" data-len={titleLength(task.title)}><LinkifyText text={task.title} /></h1>
           {nextStep && (
             <p className="focus-mode-concrete-step">Next step — <LinkifyText text={nextStep.text} /></p>
@@ -555,11 +599,9 @@ export default function FocusModePage({
                   +5 min
                 </button>
               )}
-              {onRescue && (
-                <button type="button" className="focus-mode-ctrl-btn focus-mode-rescue-btn" onClick={onRescue}>
-                  I&apos;m stuck
-                </button>
-              )}
+              <button type="button" className="focus-mode-ctrl-btn" onClick={openStuckSheet}>
+                I&apos;m stuck
+              </button>
             </div>
           </div>
         )}
@@ -607,6 +649,18 @@ export default function FocusModePage({
           stays open, or goes to tomorrow. */}
       {ending && (
         <EndSessionDialog minutes={loggedMinutes} onEnd={endSession} onClose={() => setEnding(false)} />
+      )}
+
+      {stuck && (
+        <StuckSheet
+          step={nextStep?.text}
+          onSmaller={(text) => { onSmallerStep?.(text); backToTimer(); }}
+          onSplit={onSplit && (() => { setStuck(false); onSplit(); })}
+          onSwitch={onSwitchNext && (() => { setStuck(false); onSwitchNext(); })}
+          nextTitle={nextTitle}
+          onCoach={onTalkToCoach && (() => { setStuck(false); onTalkToCoach(); })}
+          onBack={backToTimer}
+        />
       )}
 
       {showSoundsDrawer && (

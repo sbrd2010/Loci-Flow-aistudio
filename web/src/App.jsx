@@ -602,11 +602,19 @@ export default function App() {
   // tab switches — CoachTab unmounts when activeTab !== "coach". In-memory
   // only, cleared by CoachTab once the message actually sends.
   const [coachChatDraft, setCoachChatDraft] = useState("");
+  // Q39.1: I'm stuck → Coach: "Stuck on: {task} · next step: {step}".
+  const [coachStuck, setCoachStuck] = useState(null);
+  // The mini window's I'm stuck: the focus page opens on 59d.
+  const [stuckPending, setStuckPending] = useState(false);
 
   // Clear the draft on sign-out/switch-account so one user's unsent text
   // never leaks into another user's session.
+  // The I'm stuck chip and a pending I'm stuck carry a task's title and
+  // step, so they go too (Codex review of #436).
   useEffect(() => {
     setCoachChatDraft("");
+    setCoachStuck(null);
+    setStuckPending(false);
   }, [user?.uid]);
 
   // Fire a push notification if the app is backgrounded/closed when a daily
@@ -1006,7 +1014,7 @@ export default function App() {
   // save could fail, and the countdown must not run on after the session.
   pipActionsRef.current = {
     onDone: () => { focusTimer.setIsTimerRunning(false); handleFocusSessionDone(); },
-    onStuck: handleReturnToFocus,
+    onStuck: () => { handleReturnToFocus(); setStuckPending(true); },
   };
 
   // Global Focus completion prompt: "Keep going" — opens the duration picker
@@ -1324,7 +1332,10 @@ export default function App() {
             onOpenDayMap={openDayMap}
             onOpenMindBox={openMindBox}
             onOpenPlan={() => handleTabSelect("roadmap")}
-            onOpenCoach={() => setActiveTab("coach")}
+            // 59d / Q39.1: Talk it through arrives with its chip.
+            onOpenCoach={(opts) => { if (opts?.stuck) setCoachStuck(opts.stuck); setActiveTab("coach"); }}
+            stuckPending={stuckPending}
+            onStuckShown={() => setStuckPending(false)}
             onScattered={() => openScattered("today")}
             isAddTaskDialogOpen={showAddTask}
             pendingCheckinSlot={pendingCheckinSlot}
@@ -1419,7 +1430,7 @@ export default function App() {
           </div>
         )}
         {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onOpenRoadmapInbox={openRoadmapInbox} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} uid={activityUid} writeActivityEvents={writeActivityEvents} focusTimer={focusTimer} />}
-        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} />}
+        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} stuck={coachStuck} onClearStuck={() => setCoachStuck(null)} onBackToFocus={focusTimer.focusSessionActive && focusTimer.activeTask ? handleReturnToFocus : null} />}
         {activeTab === "settings" && (
           <SettingsTab
             payload={payload}

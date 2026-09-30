@@ -154,6 +154,24 @@ describe("useFocusTimer", () => {
     expect(result.current.timerSecondsLeft).toBe(25 * 60);
   });
 
+  // Q39.2 (Codex review of #436): a split from I'm stuck moves the pin while
+  // the session is held — its block's time must survive the move.
+  it("keeps the block's time when the pin moves with keepTimerOnTaskChange", () => {
+    const taskA = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+    const { result, rerender } = renderHook(useFocusTimer, [[taskA], {}, "u1"]);
+    result.current.startFocusSession(taskA, { enterFocusMode: false });
+    rerender([[taskA], {}, "u1"]);
+    result.current.setIsTimerRunning(false);
+    result.current.setTimerSecondsLeft(10 * 60);
+    rerender([[taskA], {}, "u1"]);
+
+    result.current.keepTimerOnTaskChange(true);
+    const piece = { uuid: "p1", isNowFocus: true, isDeleted: false, isCompleted: false };
+    rerender([[{ ...taskA, isNowFocus: false, isDeleted: true }, piece], {}, "u1"]);
+    expect(result.current.timerSecondsLeft).toBe(10 * 60);
+    expect(result.current.focusSessionTaskUuid).toBe("a");
+  });
+
   it("a session started while the timer runs counts down from its own block, not the old one's time", () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
