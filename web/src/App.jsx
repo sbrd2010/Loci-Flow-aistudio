@@ -19,6 +19,7 @@ import TodayTab from "./components/TodayTab";
 import RoadmapTab from "./components/RoadmapTab";
 import PlanTab from "./components/PlanTab";
 import PlanHeader from "./components/PlanHeader";
+import EditHorizons from "./components/EditHorizons";
 import ScatteredFlow from "./components/ScatteredFlow";
 import MindBoxTab from "./components/MindBoxTab";
 import CoachTab from "./components/CoachTab";
@@ -79,6 +80,7 @@ export default function App() {
     return () => window.removeEventListener("resize", update);
   }, []);
   const planView = planWide && roadmapView === "plan" ? "horizons" : roadmapView;
+  const [editHorizonsOpen, setEditHorizonsOpen] = useState(false);
   const [planFocusInbox, setPlanFocusInbox] = useState(false);
   // Feeling scattered has three doors (Today, Day map, Plan); its back link
   // returns through the one it came in by.
@@ -1390,7 +1392,19 @@ export default function App() {
           />
         )}
         {activeTab === "roadmap" && (planView === "horizons" || (planView === "plan" && !planFrontId)) && (
-          <PlanHeader view={planView} onChange={v => { setPlanFrontId(null); setRoadmapView(v); }} />
+          <PlanHeader view={planView} onChange={v => { setPlanFrontId(null); setRoadmapView(v); }} onEditHorizons={() => setEditHorizonsOpen(true)} />
+        )}
+        {activeTab === "roadmap" && editHorizonsOpen && (
+          <EditHorizons
+            payload={payload}
+            day={getLociDayStr(new Date(), getFocusWindows(payload.config || {}))}
+            saveConfigPatch={saveConfigPatch}
+            savePayload={savePayload}
+            savePayloadAsync={savePayloadAsync}
+            focusedUuid={focusTimer.focusSessionActive ? focusTimer.activeTask?.uuid : null}
+            onEndFocus={handleEndFocusSession}
+            onClose={() => setEditHorizonsOpen(false)}
+          />
         )}
         {activeTab === "roadmap" && planView === "plan" && (
           <div role={planFrontId ? undefined : "tabpanel"} aria-labelledby={planFrontId ? undefined : "plan-tab-plan"}>

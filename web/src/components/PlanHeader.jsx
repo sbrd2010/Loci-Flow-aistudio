@@ -8,7 +8,7 @@ const VIEWS = [
   { id: "plan", label: "Fronts" },
 ];
 
-export default function PlanHeader({ view, onChange }) {
+export default function PlanHeader({ view, onChange, onEditHorizons }) {
   const onKeyDown = (e) => {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     e.preventDefault();
@@ -19,6 +19,10 @@ export default function PlanHeader({ view, onChange }) {
   return (
     <header className="plan-head">
       <h1 className="plan-head-title">Plan</h1>
+      {/* 57g: Edit horizons, beside the title on Horizons. */}
+      {view === "horizons" && onEditHorizons && (
+        <button type="button" className="plan-head-edit" onClick={onEditHorizons}>Edit horizons</button>
+      )}
       <div className="plan-seg" role="tablist" aria-label="Plan views" onKeyDown={onKeyDown}>
         {VIEWS.map(v => (
           <button
