@@ -17,6 +17,7 @@ import "../styles/focusMode.css";
 const PIP_SUPPORTED = "documentPictureInPicture" in window;
 
 const FIVE_MINUTES_SECONDS = 5 * 60;
+const LAST_SOUND_KEY = "loci_last_focus_sound";
 
 // "Restart with a new length" (59g): a fresh block in the same session.
 const RESTART_LENGTHS = [5, 25, 50];
@@ -135,6 +136,14 @@ export default function FocusModePage({
   const isFiveMinute = maxSeconds === FIVE_MINUTES_SECONDS;
 
   const activeSoundKey = selectedTrack ? (getCategoryKeyForTrack(selectedTrack) || selectedTrack) : "none";
+  // The last sound played other than Rain, for the quick row (this device
+  // only) — Off and Rain have chips of their own.
+  const [lastSound, setLastSound] = useState(() => { try { return localStorage.getItem(LAST_SOUND_KEY); } catch { return null; } });
+  useEffect(() => {
+    if (activeSoundKey === "none" || activeSoundKey === "rain" || activeSoundKey === lastSound) return;
+    setLastSound(activeSoundKey);
+    try { localStorage.setItem(LAST_SOUND_KEY, activeSoundKey); } catch { /* private mode */ }
+  }, [activeSoundKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [dumpText, setDumpText] = useState("");
   const [dumpSaved, setDumpSaved] = useState(false);
@@ -366,15 +375,38 @@ export default function FocusModePage({
     </button>
   );
 
+  // Sound (59c): a quick row — Off · Rain · the last one used — and "All
+  // sounds…", the full library, every sound kept.
+  const quickSounds = [
+    { key: "none", label: "Off" },
+    { key: "rain", label: SOUND_CATEGORIES.rain.title },
+    lastSound && lastSound !== "none" && lastSound !== "rain"
+      ? { key: lastSound, label: lastSound === BINAURAL_TRACK_ID ? "Binaural 40Hz" : (SOUND_CATEGORIES[lastSound]?.title || "") }
+      : null,
+  ].filter(q => q && q.label);
+  const pickSound = (key) => (SOUND_CATEGORIES[key] ? selectCategory(key) : selectTrack(key));
   const soundsButton = (
-    <button
-      type="button"
-      className={`focus-mode-extra-link focus-mode-sounds-btn${showSoundsDrawer ? " active" : ""}`}
-      onClick={() => setShowSoundsDrawer(prev => !prev)}
-      aria-label="Open sounds menu"
-    >
-      Sound{selectedTrack ? ` · ${activeSoundKey === BINAURAL_TRACK_ID ? "Binaural" : (SOUND_CATEGORIES[activeSoundKey]?.title || "On")}` : " · Off"}
-    </button>
+    <div className="fm-sound-row" role="group" aria-label="Sound">
+      {quickSounds.map(q => (
+        <button
+          key={q.key}
+          type="button"
+          className={`focus-mode-dur-btn fm-sound-chip${activeSoundKey === q.key ? " is-on" : ""}`}
+          aria-pressed={activeSoundKey === q.key}
+          onClick={() => pickSound(q.key)}
+        >
+          {q.label}
+        </button>
+      ))}
+      <button
+        type="button"
+        className={`focus-mode-extra-link focus-mode-sounds-btn${showSoundsDrawer ? " active" : ""}`}
+        onClick={() => setShowSoundsDrawer(prev => !prev)}
+        aria-label="Open sounds menu"
+      >
+        All sounds…
+      </button>
+    </div>
   );
   const parkRow = onAddBrainDump && (
     <div className="focus-mode-dump-row">
