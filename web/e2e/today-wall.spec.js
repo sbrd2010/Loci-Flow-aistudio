@@ -295,6 +295,9 @@ test("mobile reliability: typing on the empty wall creates and commits a task", 
 
   // 37f: the field is the whole form; Enter commits.
   await expect(page.locator(".wall-empty-title")).toHaveText("Nothing committed yet.");
+  // Nothing committed, but the Key Deadline's band and the anchor stay (L1).
+  await expect(page.locator(".today-wall.is-empty .wall-goal-name")).toHaveText("Project launch");
+  await expect(page.locator(".today-wall.is-empty .wall-anchor")).toBeVisible();
   await page.locator(".wall-commit-field").fill("Write the membrane paper intro");
   await page.locator(".wall-commit-field").press("Enter");
 
