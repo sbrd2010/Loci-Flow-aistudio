@@ -609,8 +609,12 @@ export default function App() {
 
   // Clear the draft on sign-out/switch-account so one user's unsent text
   // never leaks into another user's session.
+  // The I'm stuck chip and a pending I'm stuck carry a task's title and
+  // step, so they go too (Codex review of #436).
   useEffect(() => {
     setCoachChatDraft("");
+    setCoachStuck(null);
+    setStuckPending(false);
   }, [user?.uid]);
 
   // Fire a push notification if the app is backgrounded/closed when a daily
