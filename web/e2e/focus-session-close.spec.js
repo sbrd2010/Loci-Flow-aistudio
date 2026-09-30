@@ -51,7 +51,7 @@ test("a pause of 15 minutes keeps the session; a longer one closes it", async ({
   await expect(overlay).toHaveCount(0);
   // Nothing is left to resume: the wall offers a fresh start.
   await expect(page.locator(".wall-primary")).toContainText("Start focus");
-  await expect(page.getByRole("button", { name: /^Return to Focus/ })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Focus session" })).toHaveCount(0);
 });
 
 // Codex review of #419: Resume pressed after the limit but before the minute

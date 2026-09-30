@@ -192,7 +192,7 @@ test("mobile reliability: a running session resumes from the wall, with no choos
   await overlay.locator(".focus-mode-exit-btn").click();
   await expect(overlay).toHaveCount(0);
 
-  await expect(page.locator(".wall-primary")).toContainText("Resume focus");
+  await expect(page.locator(".wall-primary")).toContainText("Back to focus");
   await expect(page.getByRole("button", { name: "How long" })).toHaveCount(0);
   // Every countdown the overlay renders from here on: a new session would
   // show 5:00, if only until the next tick.
@@ -1005,33 +1005,26 @@ test("mobile reliability: on a short phone the half sheet shows the NOW card, so
 });
 
 
-test("mobile reliability: with a session left running, the sheet says Resume and makes room for the timer", async ({ page }) => {
+// 59e–f: with a session left running, Today shows no focus bar — the wall
+// says "Back to focus" with Pause and Mark done — and the sheet says Resume.
+test("mobile reliability: with a session left running, Today says Back to focus and the sheet says Resume", async ({ page }) => {
   await enterDemo(page);
-  // Start, then leave the overlay with the session still open.
   await page.locator(".wall-primary").click();
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 10_000 });
   await overlay.locator(".focus-mode-exit-btn").click();
   await expect(overlay).toHaveCount(0);
-  await expect(page.locator(".floating-focus-timer")).toBeVisible();
+  await expect(page.locator(".focus-bar")).toHaveCount(0);
+  await expect(page.locator(".wall-primary")).toContainText("Back to focus");
+  await expect(page.locator(".wall-actions").getByRole("button", { name: "Pause" })).toBeVisible();
+  await expect(page.locator(".wall-actions").getByRole("button", { name: /^Split it/ })).toHaveCount(0);
 
-  // The floating timer pill sits over the peek (as before this change), so
-  // open the list from the keyboard.
   await page.locator(".wall-peek").focus();
   await page.keyboard.press("Enter");
   await expect(page.locator(".tasks-section")).toBeVisible();
   await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
   await page.getByRole("button", { name: "Expand the list" }).click();
   await expect(page.locator(".today-sheet-now").getByRole("button", { name: "Resume" })).toBeVisible();
-
-  // Scrolled to its end, the last row clears the floating timer.
-  const sheet = page.locator(".tasks-section");
-  await expect(sheet).toHaveClass(/has-floating-timer/);
-  await sheet.evaluate(el => { el.scrollTop = el.scrollHeight; });
-  const lastRow = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']").last();
-  const rowBox = await lastRow.boundingBox();
-  const timerBox = await page.locator(".floating-focus-timer").boundingBox();
-  expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(timerBox.y + 1);
 });
 
 // The sheet's Escape stands down while the front picker sits over it: one
@@ -1564,11 +1557,11 @@ test("Tomorrow on the one thing ends its running session (50b)", async ({ page }
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 8_000 });
   await overlay.locator(".focus-mode-exit-btn").click();
-  await expect(page.locator(".wall-primary")).toContainText("Resume focus");
+  await expect(page.locator(".wall-primary")).toContainText("Back to focus");
 
   await page.locator(".wall-title").click();
   await page.getByTestId("task-detail").getByRole("button", { name: /^Tomorrow/ }).click();
-  await expect(page.locator(".floating-focus-timer")).toHaveCount(0);
+  await expect(page.locator(".focus-bar")).toHaveCount(0);
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.locator(".wall-title")).toHaveText(title, { timeout: 8_000 });
   await expect(page.locator(".wall-primary")).toContainText("Start focus");
@@ -1760,7 +1753,7 @@ test("mobile reliability: Start with the chooser open closes it; back from focus
   // Leave with Esc: a click outside would close the menu on its own.
   await page.keyboard.press("Escape");
   await expect(overlay).toHaveCount(0);
-  await expect(page.locator(".wall-primary")).toContainText("Resume focus");
+  await expect(page.locator(".wall-primary")).toContainText("Back to focus");
   await expect(page.getByRole("menu", { name: "How long" })).toHaveCount(0);
 });
 

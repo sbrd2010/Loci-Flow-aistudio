@@ -12,17 +12,13 @@ describe("shouldShowFloatingTimer", () => {
     expect(shouldShowFloatingTimer(base)).toBe(true);
   });
 
-  it("shows the floating timer on Today when the dark Focus overlay is closed", () => {
-    expect(shouldShowFloatingTimer({ ...base, activeTab: "today", isFocusMode: false })).toBe(true);
-  });
-
-  it("hides the floating timer on Today while the dark Focus overlay is open", () => {
+  it("never shows on Today, focus page open or not (59e–f)", () => {
+    expect(shouldShowFloatingTimer({ ...base, activeTab: "today", isFocusMode: false })).toBe(false);
     expect(shouldShowFloatingTimer({ ...base, activeTab: "today", isFocusMode: true })).toBe(false);
   });
 
-  it("hides the floating timer on Day Map regardless of session state", () => {
-    expect(shouldShowFloatingTimer({ ...base, activeTab: "daymap" })).toBe(false);
-    expect(shouldShowFloatingTimer({ ...base, activeTab: "daymap", isFocusMode: true })).toBe(false);
+  it("shows on the Day map page (59e)", () => {
+    expect(shouldShowFloatingTimer({ ...base, activeTab: "daymap" })).toBe(true);
   });
 
   it("hides the floating timer once the session has ended", () => {

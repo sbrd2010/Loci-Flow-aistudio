@@ -1035,3 +1035,8 @@
     color: var(--ink-2);
   }
 }
+
+/* 59f: the small ring on "Back to focus", in the button's own colour. */
+.wall-primary .fm-mini-ring { flex: 0 0 auto; }
+.wall-primary .fm-mini-ring .fm-ring-track { stroke: rgba(255, 255, 255, 0.3); }
+.wall-primary .fm-mini-ring .fm-ring-arc { stroke: var(--on-accent); }

@@ -4,6 +4,7 @@ import { taskSteps } from "../utils/taskSteps";
 import { startLengthOptions, chosenStartOption } from "../utils/focusSession";
 import { formatEstimate } from "./TaskDetail";
 import { IconPin, IconPlus, IconChevronDown, IconCheck } from "./ui/icons";
+import { MiniRing } from "./FocusClock";
 import "../styles/todayWall.css";
 
 // Today's wall (turns 37, 40, 41, 49): the goal band, one anchor line, then the
@@ -49,7 +50,7 @@ function StartHelper({ task, blockMinutes, startChoice }) {
 // Start, and beside it the chevron that picks its length (53e): 5 minutes,
 // one block, 50 minutes, the whole task. ↓ on Start opens it too; 1–4 pick;
 // the choice is remembered. A running session only resumes — no chooser.
-function StartButton({ task, blockMinutes, startChoice, onChooseStart, onStartFocus, timerLabel }) {
+function StartButton({ task, blockMinutes, startChoice, onChooseStart, onStartFocus, timerLabel, live = null }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
   const moreRef = useRef(null);
@@ -94,7 +95,10 @@ function StartButton({ task, blockMinutes, startChoice, onChooseStart, onStartFo
         onClick={onStartFocus}
         onKeyDown={resuming ? undefined : (e) => { if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); } }}
       >
-        <span>{resuming ? "Resume focus" : "Start focus"}</span>
+        {/* 59f: a session running on it reads "Back to focus 18:42", with a
+            small ring. */}
+        {resuming && live && <MiniRing size={22} secondsLeft={live.secondsLeft} maxSeconds={live.maxSeconds} paused={!live.running} />}
+        <span>{resuming ? "Back to focus" : "Start focus"}</span>
         <span className="wall-primary-figure">{timerLabel || startFigure(chosen.minutes)}</span>
         <kbd className="wall-key is-on-fill" aria-hidden="true">Space</kbd>
       </button>
@@ -208,6 +212,9 @@ export default function TodayWall({
   startChoice,
   onChooseStart,
   timerLabel = null,
+  // 59f: the running session — { secondsLeft, maxSeconds, running,
+  // onPauseResume } — for the ring and the Pause beside Mark done.
+  live = null,
   peekOpen,
   onTogglePeek,
   onAdd,
@@ -416,17 +423,26 @@ export default function TodayWall({
           onChooseStart={onChooseStart}
           onStartFocus={onStartFocus}
           timerLabel={timerLabel}
+          live={live}
         />
 
         {!timerLabel && <StartHelper task={task} blockMinutes={focusMinutes} startChoice={startChoice} />}
 
         <div className="wall-actions" data-flip="actions">
+          {/* 59f: with a session running, Pause (or Resume) and Mark done. */}
+          {timerLabel && live && (
+            <button type="button" className="wall-action" onClick={live.onPauseResume}>
+              {live.running ? "Pause" : "Resume"}
+            </button>
+          )}
           <button type="button" className="wall-action" onClick={onMarkDone}>
             Mark done <kbd className="wall-key" aria-hidden="true">D</kbd>
           </button>
-          <button type="button" className="wall-action" onClick={onSplit}>
-            Split it <kbd className="wall-key" aria-hidden="true">S</kbd>
-          </button>
+          {!(timerLabel && live) && (
+            <button type="button" className="wall-action" onClick={onSplit}>
+              Split it <kbd className="wall-key" aria-hidden="true">S</kbd>
+            </button>
+          )}
         </div>
 
         {/* Laptop, list shown (51a): the Day map link sits under the task. */}
