@@ -90,7 +90,7 @@ export default function TodayTab({
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
-  pipOpen, handleOpenPiP, setPipNotice, isAddTaskDialogOpen, startFocusSession, endFocusSession, focusSessionId, focusSessionTaskUuid, changeFocusDuration,
+  pipOpen, handleOpenPiP, setPipNotice, keepTimerOnTaskChange, isAddTaskDialogOpen, startFocusSession, endFocusSession, focusSessionId, focusSessionTaskUuid, changeFocusDuration,
   extendTimer, addTimeToSession, dismissSessionComplete, focusStartedAt, focusElapsedSeconds, focusBlockNumber,
   selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
   isSyncingFromCache = false,
@@ -629,9 +629,11 @@ export default function TodayTab({
       buildTaskMutationEvent("task_restored", f.original, { windows, now }),
       ...made.map(t => buildTaskMutationEvent("task_deleted", t, { windows, now })),
     ];
+    // The pin moves back to the original, whose session this is: keep its time.
+    keepTimerOnTaskChange?.(true);
     savePayloadAsync({ ...payload, tasks: undoSplit(tasks, f.original, f.created, now) }, { expectedRemovals: f.created })
       .then(() => writeActivityEvents(eventsPatch(uid, events)))
-      .catch(() => {});
+      .catch(() => keepTimerOnTaskChange?.(false));
   };
   // Talk it through (Q39.1): the session stays paused (the focus bar shows
   // on Coach); the task and its next step go as a chip, sent with the first
@@ -745,9 +747,11 @@ export default function TodayTab({
       ];
       setSplitFresh({ pieceUuid: created[0].uuid, n: created.length, heldSessionId: focusSessionId, original, created: created.map(t => t.uuid), until: actionAt + 5000 });
       setIsFocusMode(true);
+      // The pin moves to piece 1 while the session is held: keep its time.
+      keepTimerOnTaskChange?.(true);
       savePayloadAsync({ ...payload, tasks: nextTasks })
         .then(() => writeActivityEvents(eventsPatch(uid, events)))
-        .catch(() => {});
+        .catch(() => keepTimerOnTaskChange?.(false));
       return;
     }
     let endedFocusSession = null;
