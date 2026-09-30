@@ -2,8 +2,10 @@ import { breaksFromWindows } from "./dayMapRoute";
 
 // Breaks you add (Q31): "Fixed time → A break". A break lives only on
 // today's route — never in Today's list, never counted as work — and goes at
-// the end of the Loci day: config.dayMapBreaks = { date, items: [{ kind:
-// "break", start, lengthMin }] }. The route stops for it as it does for the
+// the end of the Loci day: config.dayMapBreaks = { date, items: [{ id, kind:
+// "break", start, lengthMin }] }. A break is named by its id, not its place
+// in the list, so two devices changing breaks at once change the right one
+// (10b); one saved before ids has one made from its time until it's saved. The route stops for it as it does for the
 // gap between focus windows, with no buffer and no rounding after it (Q35a).
 
 export const BREAK_LENGTHS = [5, 10, 15, 20, 30, 45, 60, 90];
@@ -11,20 +13,23 @@ export const DEFAULT_BREAK_MIN = 15;
 
 const breakName = (config) => (config?.breakName || "").trim() || "Break";
 
-// Today's added breaks, as stored.
+// Today's added breaks, as stored, each with its id.
 export function addedBreaks(config, todayStr) {
   const b = config?.dayMapBreaks;
   if (!b || b.date !== todayStr || !Array.isArray(b.items)) return [];
-  return b.items.filter(x => Number.isFinite(Number(x?.start)) && Number(x?.lengthMin) > 0);
+  return b.items
+    .filter(x => Number.isFinite(Number(x?.start)) && Number(x?.lengthMin) > 0)
+    .map(x => (x.id ? x : { ...x, id: `b${Number(x.start)}-${Number(x.lengthMin)}` }));
 }
+export const newBreakId = () => `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 // Every break the route stops for today: the gaps between focus windows,
-// then the ones you added (`added` is the index in today's items).
+// then the ones you added (`added` is the break's id).
 export function routeBreaks(windows, config, todayStr) {
   const name = breakName(config);
   return [
     ...breaksFromWindows(windows, name),
-    ...addedBreaks(config, todayStr).map((x, i) => ({ start: Number(x.start), end: Number(x.start) + Number(x.lengthMin), name, added: i })),
+    ...addedBreaks(config, todayStr).map(x => ({ start: Number(x.start), end: Number(x.start) + Number(x.lengthMin), name, added: x.id })),
   ];
 }
 
@@ -32,7 +37,7 @@ export function routeBreaks(windows, config, todayStr) {
 export function withAddedBreaks(config, todayStr, items, now = Date.now()) {
   return {
     ...config,
-    dayMapBreaks: { date: todayStr, items: items.map(x => ({ kind: "break", start: Number(x.start), lengthMin: Number(x.lengthMin) })) },
+    dayMapBreaks: { date: todayStr, items: items.map(x => ({ id: x.id || newBreakId(), kind: "break", start: Number(x.start), lengthMin: Number(x.lengthMin) })) },
     lastUpdated: now,
   };
 }
@@ -40,7 +45,7 @@ export function withAddedBreaks(config, todayStr, items, now = Date.now()) {
 // What a break can't overlap: the fixed stops (from the laid-out rows) and
 // every other break — all of `breaks`, shown or not (a lunch gap after the
 // last stop has no row, but a later stop would bring it back) — each
-// { start, end, title }. `except` is the index of the added break being
+// { start, end, title }. `except` is the id of the added break being
 // changed, left out.
 export function busyFromRows(rows, breaks = [], except = null) {
   return [

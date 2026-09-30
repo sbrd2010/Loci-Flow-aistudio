@@ -27,7 +27,7 @@ import {
 } from "../hooks/useDayRoute";
 import { isEventTask, isFixedStop } from "../utils/dayMapRoute";
 import { eventAsks } from "../utils/fixedTime";
-import { addedBreaks, busyFromRows, defaultBreak, nextFreeSlot } from "../utils/dayMapBreaks";
+import { addedBreaks, busyFromRows, defaultBreak, newBreakId, nextFreeSlot } from "../utils/dayMapBreaks";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { safeUUID } from "../utils/uuid";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
@@ -376,26 +376,35 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     });
   };
 
-  // Focus goes back to a break's row when its sheet closes (10b).
-  const focusBreak = (at) => requestAnimationFrame(() => document.querySelector(`.dm-break [data-break-index="${at}"]`)?.focus());
-  // Q31: a break you add, or change (`index`), and Remove; each with Undo.
-  const saveBreak = (start, lengthMin, index) => {
+  // Focus goes back to a break's row when its sheet closes (10b): once the
+  // sheet is gone and the row is drawn, so the row can take it.
+  const [refocusBreak, setRefocusBreak] = useState(null);
+  const focusBreak = (id) => setRefocusBreak(String(id));
+  useEffect(() => {
+    if (refocusBreak == null || fixing) return;
+    // window.CSS: this file's CSS is dnd-kit's.
+    document.querySelector(`.dm-break [data-break-id="${window.CSS.escape(refocusBreak)}"]`)?.focus();
+    setRefocusBreak(null);
+  }, [refocusBreak, fixing]);
+  // Q31: a break you add, or change (its `id`), and Remove; each with Undo.
+  const saveBreak = (start, lengthMin, id) => {
     const before = addedBreaks(routeConfig, todayStr);
-    const item = { kind: "break", start, lengthMin };
-    setAddedBreaks(index == null ? [...before, item] : before.map((b, i) => (i === index ? item : b)));
+    const was = id == null ? null : before.find(b => b.id === id) || null;
+    const item = { id: id ?? newBreakId(), kind: "break", start, lengthMin };
+    setAddedBreaks(id == null ? [...before, item] : before.map(b => (b.id === id ? item : b)));
     // Q36a: a break now ends a focus session running, saved as it stands
     // (until Focus 59's pause, when Resume starts a new one). Changing a
     // break that already covered now doesn't end one started during it.
     const nowMin = currentDayMinutes(windows);
     const covers = (b) => !!b && b.start <= nowMin && nowMin < b.start + b.lengthMin;
-    if (covers(item) && !covers(index == null ? null : before[index]) && focusTimer?.focusSessionId) onEndFocus?.();
+    if (covers(item) && !covers(was) && focusTimer?.focusSessionId) onEndFocus?.();
     setFixing(null);
-    if (index != null) focusBreak(index);
-    setUndo({ kind: "breaks", date: todayStr, breaks: before, message: `Break ${formatClock24(start)}–${formatClock24(start + lengthMin)}${index == null ? " added" : ""}`, at: Date.now() });
+    if (id != null) focusBreak(id);
+    setUndo({ kind: "breaks", date: todayStr, breaks: before, message: `Break ${formatClock24(start)}–${formatClock24(start + lengthMin)}${id == null ? " added" : ""}`, at: Date.now() });
   };
-  const removeBreak = (index) => {
+  const removeBreak = (id) => {
     const before = addedBreaks(routeConfig, todayStr);
-    setAddedBreaks(before.filter((_, i) => i !== index));
+    setAddedBreaks(before.filter(b => b.id !== id));
     setFixing(null);
     setUndo({ kind: "breaks", date: todayStr, breaks: before, message: "Break removed", at: Date.now() });
   };
@@ -544,15 +553,15 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const renderRow = (r) => {
     if (r.kind === "break" && r.added != null) {
       // A break you added opens its own sheet: Length, Time, Remove (Q31).
-      const item = addedBreaks(routeConfig, todayStr)[r.added];
-      const open = () => item && setFixing({ breakItem: { index: r.added, start: Number(item.start), lengthMin: Number(item.lengthMin) } });
+      const item = addedBreaks(routeConfig, todayStr).find(b => b.id === r.added);
+      const open = () => item && setFixing({ breakItem: { id: item.id, start: Number(item.start), lengthMin: Number(item.lengthMin) } });
       return (
         <li key={`added:${r.added}:${r.start}`} className="dm-break is-added">
           <div
             className="dm-main"
             role="button"
             tabIndex={0}
-            data-break-index={r.added}
+            data-break-id={r.added}
             aria-label={`${formatClock24(r.start)} to ${formatClock24(r.end)}, ${r.name}`}
             onClick={open}
             onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
@@ -986,7 +995,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           // never show (loopcheck of #430).
           breakDefault={defaultBreak(rows, Math.max(nowMins, anchorMinutes), busyFromRows(rows, breaks))}
           laterAt={nextFreeSlot(rows, Math.max(nowMins, anchorMinutes))}
-          busy={busyFromRows(rows, breaks, fixing.breakItem ? fixing.breakItem.index : null)}
+          busy={busyFromRows(rows, breaks, fixing.breakItem ? fixing.breakItem.id : null)}
           onBreak={saveBreak}
           onRemoveBreak={removeBreak}
           onTomorrow={fixing.task && eventAsks(rows.find(x => x.kind === "stop" && getTaskId(x.task) === getTaskId(fixing.task)), nowMins) ? () => moveOneToTomorrow(fixing.task) : undefined}
@@ -1001,7 +1010,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           onClose={() => {
             // Back to the break row it came from (10b); a task's sheet
             // hands focus back its own way.
-            const at = fixing?.breakItem?.index;
+            const at = fixing?.breakItem?.id;
             setFixing(null);
             if (at != null) focusBreak(at);
           }}

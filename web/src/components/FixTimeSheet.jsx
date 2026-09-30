@@ -65,7 +65,7 @@ export default function FixTimeSheet({
   // none are added at or after 8 PM while it is on; fixing a task's time is not.
   const blocked = !!draft && newBlocked;
   const confirm = () => {
-    if (brk) { onBreak(fitted.start, fitted.lengthMin, breakItem ? breakItem.index : null); return; }
+    if (brk) { onBreak(fitted.start, fitted.lengthMin, breakItem ? breakItem.id : null); return; }
     if (draft && (!draft.title.trim() || blocked)) return;
     onFix(task || { title: draft.title.trim(), minutes: draft.minutes }, at, !task);
   };
@@ -216,7 +216,7 @@ export default function FixTimeSheet({
               <button type="button" className="fx-confirm" onClick={confirm} disabled={!!draft && (!draft.title.trim() || blocked)}>
                 {brk ? (breakItem ? `Save · ${toClock(fitted.start)}` : `Add break at ${toClock(fitted.start)}`) : <><IconLock size={16} /> Fix at {toClock(at)}</>}
               </button>
-              {breakItem && <button type="button" className="fx-back" onClick={() => onRemoveBreak(breakItem.index)}>Remove</button>}
+              {breakItem && <button type="button" className="fx-back" onClick={() => onRemoveBreak(breakItem.id)}>Remove</button>}
               {task && onTomorrow && <button type="button" className="fx-back" onClick={onTomorrow}>Tomorrow</button>}
               <button type="button" className="fx-back" onClick={back}>{breakItem ? "Cancel" : "Back"}</button>
             </div>
