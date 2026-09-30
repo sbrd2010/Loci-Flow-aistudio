@@ -5,7 +5,6 @@ import { BINAURAL_TRACK_ID } from "../utils/binauralBeat";
 import { SOUND_CATEGORIES, getCategoryKeyForTrack, getTrackTitle } from "../utils/soundLibrary";
 import { taskSteps } from "../utils/taskSteps";
 import { isWellOver, markNoteSeen, noteDue, reestimateChoices } from "../utils/blockEnd";
-import { playChime } from "../utils/chime";
 import { titleLength } from "./TodayWall";
 import FocusClock from "./FocusClock";
 import EndSessionDialog from "./EndSessionDialog";
@@ -22,13 +21,6 @@ const LAST_SOUND_KEY = "loci_last_focus_sound";
 // "Restart with a new length" (59g): a fresh block in the same session.
 const RESTART_LENGTHS = [5, 25, 50];
 
-// Block end (59i): the break it offers first, and how long it waits for an
-// answer before it pauses — it never runs on silently.
-const BREAK_SECONDS = 5 * 60;
-const BLOCK_END_WAIT_MS = 60 * 1000;
-// Break's over (Q38.1c): the next block, 5 minutes up or down.
-const NEXT_MIN = 5;
-const NEXT_MAX = 180;
 // The over-estimate note, once per task per day on this device (Q40.2).
 const NOTE_SEEN_KEY = "loci_over_estimate_note";
 const readSeen = () => { try { return JSON.parse(localStorage.getItem(NOTE_SEEN_KEY) || "{}") || {}; } catch { return {}; } };
@@ -78,14 +70,15 @@ export default function FocusModePage({
   // 59i: a new block of `minutes` in the same session, running at once (it
   // also clears the completion state).
   onKeepGoing,
-  // 59i: no answer at block end — pause on a fresh block of `minutes` (the
-  // usual length when not given).
-  onBlockTimeout,
   blockMinutes = 25,
-  // Q40.1: the break-end chime (Settings → Focus timer → Chimes).
-  chimes = true,
-  // Q38.1d: the mini window says "Break's over" too.
-  onBreakOver,
+  // Block end, shared with the bar and Today (Q41; useFocusTimer): phase
+  // "done" | "break" | "over", the break's seconds left, the next block.
+  blockEnd = null,
+  onStartBreak,
+  onStartNext,
+  onSetNextLen,
+  // A question is open over block end: its 60 s wait holds.
+  onHoldBlockEnd,
   // Q40.3: Re-estimate, in minutes. And today's Loci day, for Q40.2.
   onReestimate,
   dayKey = "",
@@ -154,11 +147,6 @@ export default function FocusModePage({
   // 59d: I'm stuck, and whether the timer ran when it opened.
   const [stuck, setStuck] = useState(false);
   const stuckWasRunningRef = useRef(false);
-  // 59i: the break after a block — when it ends (ms), and a tick to count it.
-  const [breakUntil, setBreakUntil] = useState(null);
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  const onBlockTimeoutRef = useRef(onBlockTimeout);
-  onBlockTimeoutRef.current = onBlockTimeout;
 
   const [width, setWidth] = useState(() => (typeof window !== "undefined" ? window.innerWidth : 1280));
   useEffect(() => {
@@ -205,56 +193,24 @@ export default function FocusModePage({
   const estimate = Number(task.timeEstimateMinutes) || 0;
 
   const openEnd = () => setEnding(true);
-  const startBreak = () => { setBreakUntil(Date.now() + BREAK_SECONDS * 1000); setNowMs(Date.now()); };
-  // Q38.1c: the next block is as long as the one just finished.
-  // Not capped: a longer "Whole task" block is offered again as it was, and
-  // +5 stops at 180 or that length, whichever is more (Codex review of #433).
-  const lastLen = Math.max(NEXT_MIN, Math.round(maxSeconds / 60));
-  const nextMax = Math.max(NEXT_MAX, lastLen);
-  const [nextLen, setNextLen] = useState(lastLen);
-  const [breakOver, setBreakOver] = useState(false);
-  const startNext = () => { setBreakUntil(null); setBreakOver(false); onKeepGoing?.(nextLen); };
-  const chimesRef = useRef(chimes);
-  chimesRef.current = chimes;
-  const onBreakOverRef = useRef(onBreakOver);
-  onBreakOverRef.current = onBreakOver;
-
-  // The break counts down, then asks (Q38.1a): "Break's over", with a chime.
+  // Block end is the timer's (Q41): the same state on the bar and Today.
+  const breaking = blockEnd?.phase === "break";
+  const breakOver = blockEnd?.phase === "over";
+  const breakLeft = blockEnd?.breakLeft || 0;
+  const breakSeconds = blockEnd?.breakSeconds || 300;
+  const nextLen = blockEnd?.nextLen || blockMinutes;
+  const nextMin = blockEnd?.nextMin || 5;
+  const nextMax = blockEnd?.nextMax || 180;
+  const startBreak = () => onStartBreak?.();
+  const startNext = () => onStartNext?.();
+  const setNextLen = (fn) => onSetNextLen?.(fn);
+  // The End session question holds block end's 60 s wait while it's open.
+  const onHoldRef = useRef(onHoldBlockEnd);
+  onHoldRef.current = onHoldBlockEnd;
   useEffect(() => {
-    if (breakUntil == null) return undefined;
-    const id = setInterval(() => {
-      const t = Date.now();
-      setNowMs(t);
-      if (t >= breakUntil) {
-        setBreakUntil(null);
-        setBreakOver(true);
-        if (chimesRef.current) playChime();
-      }
-    }, 1000);
-    return () => clearInterval(id);
-  }, [breakUntil]);
-  // Leaving block end any other way (Mark done, End, Another) ends the break.
-  useEffect(() => {
-    if (isComplete) { setNextLen(lastLen); return; }
-    setBreakUntil(null);
-    setBreakOver(false);
-  }, [isComplete]); // eslint-disable-line react-hooks/exhaustive-deps
-  // No answer in 60 s (not while the question or a break is open): pause —
-  // after a break, on the block it offered; no minutes are counted (Q38.1b).
-  useEffect(() => {
-    if (!isComplete || breakUntil != null || ending) return undefined;
-    const id = setTimeout(() => onBlockTimeoutRef.current?.(breakOver ? nextLen : undefined), BLOCK_END_WAIT_MS);
-    return () => clearTimeout(id);
-  }, [isComplete, breakUntil, ending, breakOver, nextLen]);
-  // Q38.1d: the tab says so too.
-  useEffect(() => {
-    if (!breakOver) return undefined;
-    const before = document.title;
-    document.title = "Break's over";
-    onBreakOverRef.current?.(true);
-    return () => { document.title = before; onBreakOverRef.current?.(false); };
-  }, [breakOver]);
-  const breakLeft = breakUntil == null ? 0 : Math.max(0, Math.ceil((breakUntil - nowMs) / 1000));
+    onHoldRef.current?.(ending);
+    return () => { if (ending) onHoldRef.current?.(false); };
+  }, [ending]);
   const endSession = ({ note, tomorrow }) => { setEnding(false); onEndSession?.({ note, tomorrow }); };
 
   // 59d: opening pauses the timer; "Back to the timer" resumes it if it ran.
@@ -280,7 +236,7 @@ export default function FocusModePage({
   // mini window, Esc leaves. Not while typing, not while Rescue is open, and
   // Esc closes the sounds drawer or the question first. A held key fires once.
   const keysRef = useRef({});
-  keysRef.current = { isComplete, showSoundsDrawer, ending, stuck, backToTimer, onPlayPause, onDone, onExit, onOpenPiP, pipOpen, keysOff, openEnd, onEndSession, breaking: breakUntil != null, startBreak, breakOver, startNext };
+  keysRef.current = { isComplete, showSoundsDrawer, ending, stuck, backToTimer, onPlayPause, onDone, onExit, onOpenPiP, pipOpen, keysOff, openEnd, onEndSession, breaking: breaking, startBreak, breakOver, startNext };
   useEffect(() => {
     const onKey = (e) => {
       const k = keysRef.current;
@@ -328,7 +284,7 @@ export default function FocusModePage({
   const [noteBlock, setNoteBlock] = useState(null);
   const [reestimating, setReestimating] = useState(false);
   const [customEstimate, setCustomEstimate] = useState("");
-  const atBlockEnd = isComplete && breakUntil == null && !breakOver;
+  const atBlockEnd = isComplete && !breaking && !breakOver;
   const noteWanted = atBlockEnd && isWellOver(estimate, doneToday);
   useEffect(() => {
     if (!noteWanted || noteBlock === blockNumber) return;
@@ -481,13 +437,13 @@ export default function FocusModePage({
         </section>
 
         <div className="focus-mode-timer-block">
-          {breakUntil != null ? (
+          {breaking ? (
             // 59i: the break, counted on the same clock.
             <FocusClock
               mode={clockMode}
               size={ringSize(width)}
               secondsLeft={breakLeft}
-              maxSeconds={BREAK_SECONDS}
+              maxSeconds={breakSeconds}
               caption="Left in this break."
               valueText={`Break: ${Math.floor(breakLeft / 60)} minutes ${breakLeft % 60} seconds left`}
             />
@@ -515,7 +471,7 @@ export default function FocusModePage({
           {/* Q37.1: "OF 25:00", then "STARTED · ENDS" under it. */}
           <p className="focus-mode-figures">
             {/* The break isn't part of the block (Codex review of #433). */}
-            <span className="fm-figures-of">{breakUntil != null ? "BREAK" : breakOver ? "BREAK'S OVER" : `OF ${blockLabel}`}</span>
+            <span className="fm-figures-of">{breaking ? "BREAK" : breakOver ? "BREAK'S OVER" : `OF ${blockLabel}`}</span>
             {(startedLabel || endsLabel) && (
               <span className="fm-figures-times">
                 {startedLabel && <span className="focus-mode-started">STARTED {startedLabel}{endsLabel ? " · " : ""}</span>}
@@ -530,7 +486,7 @@ export default function FocusModePage({
         {isComplete ? (
           <div className="focus-mode-hold-actions fm-block-end" role="group" aria-label="Block done">
             <p className="fm-block-end-kicker">BLOCK {Math.max(1, blockNumber)} DONE · SESSION {hoursMinutes(loggedMinutes)}</p>
-            {breakUntil != null ? (
+            {breaking ? (
               <>
                 <p className="fm-block-end-note">A 5-minute break. Block {Math.max(1, blockNumber) + 1} waits for you after it.</p>
                 <button type="button" className="focus-mode-hold-keep" onClick={startNext}>Skip the break</button>
@@ -547,8 +503,8 @@ export default function FocusModePage({
                   Start block {Math.max(1, blockNumber) + 1} · {nextLen}m <kbd className="focus-mode-kbd">Enter</kbd>
                 </button>
                 <div className="focus-mode-controls">
-                  <button type="button" className="focus-mode-ctrl-btn" aria-label="5 minutes shorter" disabled={nextLen <= NEXT_MIN} onClick={() => setNextLen(m => Math.max(NEXT_MIN, m - 5))}>−5</button>
-                  <button type="button" className="focus-mode-ctrl-btn" aria-label="5 minutes longer" disabled={nextLen >= nextMax} onClick={() => setNextLen(m => Math.min(nextMax, m + 5))}>+5</button>
+                  <button type="button" className="focus-mode-ctrl-btn" aria-label="5 minutes shorter" disabled={nextLen <= nextMin} onClick={() => setNextLen(m => m - 5)}>−5</button>
+                  <button type="button" className="focus-mode-ctrl-btn" aria-label="5 minutes longer" disabled={nextLen >= nextMax} onClick={() => setNextLen(m => m + 5)}>+5</button>
                   {onEndSession && (
                     <button type="button" className="focus-mode-ctrl-btn" onClick={openEnd}>
                       End session <kbd className="focus-mode-kbd">E</kbd>

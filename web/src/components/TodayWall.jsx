@@ -50,6 +50,25 @@ function StartHelper({ task, blockMinutes, startChoice }) {
 // Start, and beside it the chevron that picks its length (53e): 5 minutes,
 // one block, 50 minutes, the whole task. ↓ on Start opens it too; 1–4 pick;
 // the choice is remembered. A running session only resumes — no chooser.
+// Q41: at block end the row's ring is full, then counts the break; its
+// figure reads BLOCK n DONE, BREAK 4:12, then BREAK'S OVER.
+function liveRing(live) {
+  const phase = live.blockEnd?.phase;
+  if (phase === "break") return { secondsLeft: live.blockEnd.breakLeft, maxSeconds: live.blockEnd.breakSeconds, paused: false };
+  if (phase) return { secondsLeft: 1, maxSeconds: 1, paused: false };
+  return { secondsLeft: live.secondsLeft, maxSeconds: live.maxSeconds, paused: !live.running };
+}
+function liveFigure(live) {
+  const phase = live.blockEnd?.phase;
+  if (phase === "done") return `BLOCK ${Math.max(1, live.blockNumber || 1)} DONE`;
+  if (phase === "break") {
+    const s = Math.max(0, live.blockEnd.breakLeft);
+    return `BREAK ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }
+  if (phase === "over") return "BREAK’S OVER";
+  return null;
+}
+
 function StartButton({ task, blockMinutes, startChoice, onChooseStart, onStartFocus, timerLabel, live = null }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
@@ -97,9 +116,9 @@ function StartButton({ task, blockMinutes, startChoice, onChooseStart, onStartFo
       >
         {/* 59f: a session running on it reads "Back to focus 18:42", with a
             small ring. */}
-        {resuming && live && <MiniRing size={22} secondsLeft={live.secondsLeft} maxSeconds={live.maxSeconds} paused={!live.running} />}
+        {resuming && live && <MiniRing size={22} {...liveRing(live)} />}
         <span>{resuming ? "Back to focus" : "Start focus"}</span>
-        <span className="wall-primary-figure">{timerLabel || startFigure(chosen.minutes)}</span>
+        <span className="wall-primary-figure">{(resuming && live && liveFigure(live)) || timerLabel || startFigure(chosen.minutes)}</span>
         <kbd className="wall-key is-on-fill" aria-hidden="true">Space</kbd>
       </button>
       {!resuming && (
@@ -429,8 +448,15 @@ export default function TodayWall({
         {!timerLabel && <StartHelper task={task} blockMinutes={focusMinutes} startChoice={startChoice} />}
 
         <div className="wall-actions" data-flip="actions">
-          {/* 59f: with a session running, Pause (or Resume) and Mark done. */}
-          {timerLabel && live && (
+          {/* 59f: with a session running, Pause (or Resume) and Mark done. At
+              block end (Q41): Take a break, then Start block n+1. */}
+          {timerLabel && live && live.blockEnd?.phase === "done" && (
+            <button type="button" className="wall-action" onClick={live.onStartBreak}>Take a break</button>
+          )}
+          {timerLabel && live && live.blockEnd?.phase === "over" && (
+            <button type="button" className="wall-action" onClick={live.onStartNext}>Start block {Math.max(1, live.blockNumber || 1) + 1}</button>
+          )}
+          {timerLabel && live && !live.blockEnd?.phase && (
             <button type="button" className="wall-action" onClick={live.onPauseResume}>
               {live.running ? "Pause" : "Resume"}
             </button>

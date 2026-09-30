@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   shouldShowFloatingTimer, buildExtendedTimerState, shouldStopFocusOnComplete,
-  shouldTriggerSessionComplete, shouldShowFocusCompletionPrompt, buildFocusCompletionPayload,
+  shouldTriggerSessionComplete, buildFocusCompletionPayload,
   buildResetFocusState, getTimerState, focusBlockSeconds, focusExpiryReason, focusOutcome, PAUSE_EXPIRY_MS, startLengthOptions, chosenStartOption,
 } from "./focusSession";
 
@@ -34,8 +34,8 @@ describe("shouldShowFloatingTimer", () => {
     expect(shouldShowFloatingTimer({ ...base, hasActiveTask: false })).toBe(false);
   });
 
-  it("hides the floating timer when a focus session completion prompt is pending", () => {
-    expect(shouldShowFloatingTimer({ ...base, sessionCompletePending: true })).toBe(false);
+  it("stays at block end, off the focus page: the bar shows block end (Q41)", () => {
+    expect(shouldShowFloatingTimer({ ...base, sessionCompletePending: true })).toBe(true);
   });
 });
 
@@ -110,27 +110,6 @@ describe("shouldTriggerSessionComplete", () => {
 
   it("does not trigger for a paused timer sitting at 0:00", () => {
     expect(shouldTriggerSessionComplete({ isTimerRunning: false, timerSecondsLeft: 0 })).toBe(false);
-  });
-});
-
-describe("shouldShowFocusCompletionPrompt", () => {
-  it("shows the prompt when a session is pending and a task is active", () => {
-    expect(shouldShowFocusCompletionPrompt({ sessionCompletePending: true, hasActiveTask: true })).toBe(true);
-  });
-
-  it("hides the prompt when no session is pending", () => {
-    expect(shouldShowFocusCompletionPrompt({ sessionCompletePending: false, hasActiveTask: true })).toBe(false);
-  });
-
-  it("hides the prompt when there is no active task", () => {
-    expect(shouldShowFocusCompletionPrompt({ sessionCompletePending: true, hasActiveTask: false })).toBe(false);
-  });
-
-  it("does not depend on which tab is active, so it shows the same on any tab", () => {
-    // The prompt is rendered at the App level and takes no activeTab — the same
-    // pending/active-task state always yields the same result.
-    const state = { sessionCompletePending: true, hasActiveTask: true };
-    expect(shouldShowFocusCompletionPrompt(state)).toBe(shouldShowFocusCompletionPrompt(state));
   });
 });
 
@@ -215,26 +194,6 @@ describe("buildResetFocusState", () => {
   it("falls back to 25 minutes for an invalid (zero or negative) configured duration", () => {
     expect(buildResetFocusState({ pomodoroDurationMinutes: 0 })).toMatchObject({ timerSecondsLeft: 1500 });
     expect(buildResetFocusState({ pomodoroDurationMinutes: -10 })).toMatchObject({ timerSecondsLeft: 1500 });
-  });
-});
-
-// Addendum D delta 3: at 00:00 there is no modal. Screen 3 carries K4's hold
-// inline — a frozen timer and two buttons — and a dialog over it would both
-// contradict "never a failure event" and cover the choices it offers.
-describe("shouldShowFocusCompletionPrompt — not over the Focus session", () => {
-  it("shows on every other screen, as before", () => {
-    expect(shouldShowFocusCompletionPrompt({ sessionCompletePending: true, hasActiveTask: true })).toBe(true);
-  });
-
-  it("is suppressed inside focus mode, where the hold is already on screen", () => {
-    expect(shouldShowFocusCompletionPrompt({
-      sessionCompletePending: true, hasActiveTask: true, isFocusMode: true,
-    })).toBe(false);
-  });
-
-  it("still needs a pending bell and a task, focus mode or not", () => {
-    expect(shouldShowFocusCompletionPrompt({ sessionCompletePending: false, hasActiveTask: true })).toBe(false);
-    expect(shouldShowFocusCompletionPrompt({ sessionCompletePending: true, hasActiveTask: false })).toBe(false);
   });
 });
 

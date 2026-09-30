@@ -126,3 +126,11 @@
 @media (min-width: 1024px) {
   .focus-bar { bottom: 24px; }
 }
+
+/* Q41: at block end the bar's one action is Take a break, then Start block
+   n+1 — "Break" / "Start" on a phone. */
+.fb-short { display: none; }
+@media (max-width: 599px) {
+  .fb-long { display: none; }
+  .fb-short { display: inline; }
+}

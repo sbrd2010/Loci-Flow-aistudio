@@ -10,7 +10,6 @@ import { minutesForTaskOn } from "../utils/focusLedger";
 import { buildMomentum } from "../utils/momentum";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import FocusModePage from "./FocusModePage";
-import { chimesOn } from "../utils/chime";
 import RescueMode from "./RescueMode";
 import { safeUUID } from "../utils/uuid";
 import { endSessionTasks, switchToNextTasks, withNextStep } from "../utils/focusEnd";
@@ -90,7 +89,7 @@ export default function TodayTab({
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft,
   timerMaxSeconds, setTimerMaxSeconds, isFocusMode, setIsFocusMode,
   focusSessionActive, setFocusSessionActive, sessionCompletePending,
-  pipOpen, handleOpenPiP, setPipNotice, keepTimerOnTaskChange, isAddTaskDialogOpen, startFocusSession, endFocusSession, focusSessionId, focusSessionTaskUuid, changeFocusDuration,
+  pipOpen, handleOpenPiP, keepTimerOnTaskChange, blockEnd, startBreak, startNextBlock, setNextLen, setBlockEndHeld, isAddTaskDialogOpen, startFocusSession, endFocusSession, focusSessionId, focusSessionTaskUuid, changeFocusDuration,
   extendTimer, addTimeToSession, dismissSessionComplete, focusStartedAt, focusElapsedSeconds, focusBlockNumber,
   selectedTrack, volume, trackLoadState, selectTrack, selectCategory, reshuffleTrack, changeVolume,
   isSyncingFromCache = false,
@@ -147,7 +146,9 @@ export default function TodayTab({
     if (activeTask?.uuid === task.uuid && focusSessionId && focusSessionTaskUuid === task.uuid
         && !(Number(options?.plannedSeconds) > 0)) {
       setIsFocusMode(true);
-      setIsTimerRunning(true);
+      // At block end (Q41) this opens the block-end screen; it must not run
+      // a finished block on from 0:00.
+      if (!sessionCompletePending) setIsTimerRunning(true);
       return;
     }
     const session = startFocusSession(task, options);
@@ -1803,7 +1804,11 @@ export default function TodayTab({
         nextTitle={remainingTasks[0]?.title || null}
         onStepDone={(stepId) => pinnedFocusTask && handleSubStepToggle(pinnedFocusTask, stepId)}
         timerLabel={wallLiveTimerLabel}
-        live={wallSessionLive ? { secondsLeft: timerSecondsLeft, maxSeconds: timerMaxSeconds, running: isTimerRunning, onPauseResume: () => setIsTimerRunning(r => !r) } : null}
+        live={wallSessionLive ? {
+          secondsLeft: timerSecondsLeft, maxSeconds: timerMaxSeconds, running: isTimerRunning, onPauseResume: () => setIsTimerRunning(r => !r),
+          // Q41: block end in place — done, the break, Break's over.
+          blockEnd, blockNumber: focusBlockNumber, onStartBreak: startBreak, onStartNext: () => startNextBlock(),
+        } : null}
         onStartFocus={() => pinnedFocusTask && startWallFocus(pinnedFocusTask)}
         onMarkDone={() => pinnedFocusTask && handleToggleComplete(pinnedFocusTask)}
         onSplit={() => pinnedFocusTask && setSplitTask(pinnedFocusTask)}
@@ -2141,12 +2146,14 @@ export default function TodayTab({
           keysOff={rescueActive}
           onKeepGoing={extendTimer}
           onAddTime={fresh ? null : addTimeToSession}
-          // 59i: block end — another block of the usual length, or, with no
-          // answer in 60 s, a pause on one.
+          // 59i: block end — "Another" is a block of the usual length; the
+          // break, Break's over and the 60 s wait are the timer's (Q41).
           blockMinutes={focusBlockSeconds(config) / 60}
-          onBlockTimeout={(m) => { if (changeFocusDuration(m || focusBlockSeconds(config) / 60, { staged: true })) dismissSessionComplete(); }}
-          chimes={chimesOn(config)}
-          onBreakOver={(on) => setPipNotice?.(on ? "Break’s over" : null)}
+          blockEnd={blockEnd}
+          onStartBreak={startBreak}
+          onStartNext={startNextBlock}
+          onSetNextLen={setNextLen}
+          onHoldBlockEnd={setBlockEndHeld}
           dayKey={todayStr}
           onReestimate={(m) => savePayload({ ...payload, tasks: tasks.map(t => t.uuid === activeTask.uuid ? { ...t, timeEstimateMinutes: m, lastUpdated: Date.now() } : t) })}
           startedAt={fresh ? null : focusStartedAt}

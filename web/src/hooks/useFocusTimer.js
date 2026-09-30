@@ -1,10 +1,17 @@
 import { useState, useEffect, useRef } from "react";
 import { requestNotifPermission, notifyFocusComplete } from "../utils/focusNotifications";
 import { armChime, playChime, chimesOn } from "../utils/chime";
-import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete, focusBlockSeconds, focusExpiryReason } from "../utils/focusSession";
+import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete, focusBlockSeconds, focusExpiryReason, DEFAULT_BLOCK_MINUTES } from "../utils/focusSession";
 import { getFocusWindows, getLociDayStr, lociDayEndsAt } from "../utils/focusWindows";
 import { safeUUID } from "../utils/uuid";
 import { clockParts, ringGeometry } from "../utils/focusClock";
+
+// Block end (59i): the break it offers, how long it waits for an answer
+// before it pauses, and the next block's bounds (Q38.1c).
+const BREAK_SECONDS = 5 * 60;
+const BLOCK_END_WAIT_MS = 60 * 1000;
+const NEXT_MIN = 5;
+const NEXT_MAX = 180;
 
 // Lifts the Focus timer state to the App level so it survives tab switches
 // (TodayTab unmounts when the user navigates to another tab) and can be
@@ -24,6 +31,13 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   const [pipOpen, setPipOpen] = useState(false);
   // Q38.1d: "Break's over" in the mini window, in place of the title.
   const [pipNotice, setPipNotice] = useState(null);
+  // Block end, shared (Q41) — see "Block end" below.
+  const [breakUntil, setBreakUntil] = useState(null);
+  const [breakOver, setBreakOver] = useState(false);
+  const [nextLen, setNextLenState] = useState(DEFAULT_BLOCK_MINUTES);
+  const [breakNow, setBreakNow] = useState(() => Date.now());
+  // A question open over block end (End session…): the 60 s wait holds.
+  const [blockEndHeld, setBlockEndHeld] = useState(false);
   const pipWinRef = useRef(null);
   const timerMaxSecondsRef = useRef(timerMaxSeconds);
   useEffect(() => {
@@ -474,14 +488,16 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     const taskLabel = activeTask?.title || "Deep Focus";
     const mins = Math.floor(timerSecondsLeft / 60);
     const secs = String(timerSecondsLeft % 60).padStart(2, "0");
-    if (isTimerRunning && timerSecondsLeft > 0) {
+    if (breakOver) {
+      document.title = "Break's over";
+    } else if (isTimerRunning && timerSecondsLeft > 0) {
       document.title = `${mins}:${secs} · ${taskLabel}`;
     } else if (isFocusMode && !isTimerRunning && timerSecondsLeft > 0) {
       document.title = `Paused · ${mins}:${secs} · Loci`;
     } else {
       document.title = "Loci";
     }
-  }, [timerSecondsLeft, isTimerRunning, isFocusMode, activeTask?.title]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [timerSecondsLeft, isTimerRunning, isFocusMode, activeTask?.title, breakOver]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Restore title on unmount (e.g. user signs out while timer is running)
   useEffect(() => () => {
@@ -493,6 +509,60 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
 
   // Q40.1: the chime's audio is unlocked by the first tap or key.
   useEffect(() => { armChime(); }, []);
+
+  // Block end (59i, Q38, Q41): done → a 5-minute break → "Break's over".
+  // Kept here, not on the focus page, so every place that shows the session
+  // — the focus page, the focus bar, Today's "Back to focus" row and the
+  // mini window — shows the same state, and the 60 s wait runs wherever you
+  // are.
+  const lastLen = Math.max(NEXT_MIN, Math.round(timerMaxSeconds / 60));
+  const nextMax = Math.max(NEXT_MAX, lastLen);
+  // A new block end offers the length of the block just finished (Q38.1c).
+  useEffect(() => {
+    if (sessionCompletePending) { setNextLenState(lastLen); return; }
+    setBreakUntil(null);
+    setBreakOver(false);
+  }, [sessionCompletePending]); // eslint-disable-line react-hooks/exhaustive-deps
+  const startBreak = () => {
+    if (!sessionCompletePendingRef.current) return;
+    setBreakNow(Date.now());
+    setBreakUntil(Date.now() + BREAK_SECONDS * 1000);
+  };
+  const startNextBlock = (minutes) => {
+    setBreakUntil(null);
+    setBreakOver(false);
+    extendTimer(minutes || nextLen);
+  };
+  const setNextLen = (fn) => setNextLenState(m => Math.min(nextMax, Math.max(NEXT_MIN, typeof fn === "function" ? fn(m) : fn)));
+  // The break counts down; at its end it asks, with a chime (Q38.1a, d).
+  useEffect(() => {
+    if (breakUntil == null) return undefined;
+    const id = setInterval(() => {
+      const t = Date.now();
+      setBreakNow(t);
+      if (t >= breakUntil) {
+        setBreakUntil(null);
+        setBreakOver(true);
+        if (chimesOn(config)) playChime();
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [breakUntil]); // eslint-disable-line react-hooks/exhaustive-deps
+  // No answer in 60 s (not during a break, nor while a question is open):
+  // pause on a fresh block — after a break, the one it offered. The block is
+  // staged, so no minutes and no block are counted until it runs (Q38.1b).
+  useEffect(() => {
+    if (!sessionCompletePending || breakUntil != null || blockEndHeld) return undefined;
+    const id = setTimeout(() => {
+      const minutes = breakOver ? nextLen : focusBlockSeconds(config) / 60;
+      if (changeFocusDuration(minutes, { staged: true })) setSessionCompletePending(false);
+    }, BLOCK_END_WAIT_MS);
+    return () => clearTimeout(id);
+  }, [sessionCompletePending, breakUntil, blockEndHeld, breakOver, nextLen]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Q38.1d: the mini window says so.
+  useEffect(() => { setPipNotice(breakOver ? "Break’s over" : null); }, [breakOver]);
+  const blockEndPhase = !sessionCompletePending ? null : breakUntil != null ? "break" : breakOver ? "over" : "done";
+  const breakLeft = breakUntil == null ? 0 : Math.max(0, Math.ceil((breakUntil - breakNow) / 1000));
 
   // Request notification permission when focus overlay opens (already a user interaction)
   useEffect(() => {
@@ -788,6 +858,10 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     pipOpen,
     handleOpenPiP,
     setPipNotice,
+    // Block end, shared (Q41): { phase: "done" | "break" | "over" | null,
+    // breakLeft, breakSeconds, nextLen, nextMin, nextMax }.
+    blockEnd: { phase: blockEndPhase, breakLeft, breakSeconds: BREAK_SECONDS, nextLen, nextMin: NEXT_MIN, nextMax },
+    startBreak, startNextBlock, setNextLen, setBlockEndHeld,
     // Q39.2: the pin is about to move while this session is held open (a
     // split from I'm stuck, or its Undo) — keep the block's numbers, or its
     // elapsed time would be reset to a full block (Codex review of #436).
