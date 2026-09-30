@@ -70,6 +70,15 @@ export default function App() {
   const [roadmapView, setRoadmapView] = useState("horizons");
   // The front whose page (52f–g) is open in Plan's Fronts; null is the list.
   const [planFrontId, setPlanFrontId] = useState(null);
+  // ≥1600 (57a): Horizons and Fronts show together, so there is no switch
+  // and Fronts' view is Horizons with the Fronts column.
+  const [planWide, setPlanWide] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1600);
+  useEffect(() => {
+    const update = () => setPlanWide(window.innerWidth >= 1600);
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  const planView = planWide && roadmapView === "plan" ? "horizons" : roadmapView;
   const [planFocusInbox, setPlanFocusInbox] = useState(false);
   // Feeling scattered has three doors (Today, Day map, Plan); its back link
   // returns through the one it came in by.
@@ -1086,6 +1095,26 @@ export default function App() {
     setShowAddTask(true);
   };
 
+  // Plan's Fronts: the tab (45i), or the column beside the ladder ≥1600 (57a).
+  const planTabProps = {
+    payload,
+    saveConfigPatch,
+    openFrontId: planFrontId,
+    onOpenFront: setPlanFrontId,
+    onAddToFront: front => openAddTask("week", `Plan · ${front.name}`, front.id),
+    renderFrontTasks: front => (
+      <RoadmapTab
+        frontId={front.id}
+        payload={payload}
+        savePayload={savePayload}
+        savePayloadAsync={savePayloadAsync}
+        uid={activityUid}
+        writeActivityEvents={writeActivityEvents}
+        focusTimer={focusTimer}
+      />
+    ),
+  };
+
 
   // ── Loading spinner ────────────────────────────────────────────────────────
   if (!demoMode && authLoading) {
@@ -1360,29 +1389,12 @@ export default function App() {
             flushNow={flushNow}
           />
         )}
-        {activeTab === "roadmap" && (roadmapView === "horizons" || (roadmapView === "plan" && !planFrontId)) && (
-          <PlanHeader view={roadmapView} onChange={v => { setPlanFrontId(null); setRoadmapView(v); }} />
+        {activeTab === "roadmap" && (planView === "horizons" || (planView === "plan" && !planFrontId)) && (
+          <PlanHeader view={planView} onChange={v => { setPlanFrontId(null); setRoadmapView(v); }} />
         )}
-        {activeTab === "roadmap" && roadmapView === "plan" && (
+        {activeTab === "roadmap" && planView === "plan" && (
           <div role={planFrontId ? undefined : "tabpanel"} aria-labelledby={planFrontId ? undefined : "plan-tab-plan"}>
-            <PlanTab
-              payload={payload}
-              saveConfigPatch={saveConfigPatch}
-              openFrontId={planFrontId}
-              onOpenFront={setPlanFrontId}
-              onAddToFront={front => openAddTask("week", `Plan · ${front.name}`, front.id)}
-              renderFrontTasks={front => (
-                <RoadmapTab
-                  frontId={front.id}
-                  payload={payload}
-                  savePayload={savePayload}
-                  savePayloadAsync={savePayloadAsync}
-                  uid={activityUid}
-                  writeActivityEvents={writeActivityEvents}
-                  focusTimer={focusTimer}
-                />
-              )}
-            />
+            <PlanTab {...planTabProps} />
           </div>
         )}
         {activeTab === "roadmap" && roadmapView === "scattered" && (
@@ -1412,7 +1424,7 @@ export default function App() {
             }}
           />
         )}
-        {activeTab === "roadmap" && roadmapView === "horizons" && (
+        {activeTab === "roadmap" && planView === "horizons" && (
           <div role="tabpanel" aria-labelledby="plan-tab-horizons">
           <RoadmapTab
             payload={payload}
@@ -1423,6 +1435,9 @@ export default function App() {
             uid={activityUid}
             writeActivityEvents={writeActivityEvents}
             focusTimer={focusTimer}
+            frontsColumn={planWide ? <PlanTab {...planTabProps} wide /> : null}
+            frontOpen={planWide && !!planFrontId}
+            onCloseFront={() => setPlanFrontId(null)}
           />
           </div>
         )}

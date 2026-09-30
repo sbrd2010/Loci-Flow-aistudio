@@ -159,3 +159,41 @@ test("Horizons in Drag anywhere mode: Space and Enter on the circle mark the tas
   }
   await expect(rows).toHaveCount(before - 2);
 });
+
+// 57a, 57b.25: from 1600 the Fronts column sits beside the ladder and the
+// switch is hidden; a front's page opens in the list's place, its card
+// tinted, and a rung or Back brings the list back.
+test("Horizons ≥1600: the Fronts column; a front's page opens in place of the list", async ({ page }) => {
+  await page.setViewportSize({ width: 1700, height: 1000 });
+  await enterDemo(page);
+  await page.setViewportSize({ width: 1700, height: 1000 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  const column = page.locator(".plan-fronts-col");
+  await expect(column.getByRole("heading", { name: /^Fronts · \d+ ACTIVE$/ })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Fronts" })).toBeHidden();
+
+  await column.getByRole("button", { name: "New front" }).click();
+  await page.locator("#plan-new-name").fill("Thesis");
+  await page.getByRole("button", { name: "Add the front" }).click();
+  const card = column.locator(".plan-front", { hasText: "Thesis" });
+  await expect(card.locator(".plan-front-tally")).toHaveText("0 / 0");
+
+  await card.click();
+  await expect(page.getByRole("heading", { name: "Thesis", level: 2 })).toBeVisible();
+  await expect(page.locator(".plan-open")).toHaveCount(0);
+  await expect(card).toHaveClass(/is-open/);
+  await expect(page.locator(".plan-ladder")).toBeVisible();
+  const list = await page.locator(".plan-fp").boundingBox();
+  const col = await column.boundingBox();
+  expect(list.x + list.width).toBeLessThanOrEqual(col.x);
+
+  // A rung brings its list back.
+  await page.locator(".plan-rung[data-horizon='month']").click();
+  await expect(page.locator(".plan-open").getByRole("heading", { name: "This month" })).toBeVisible();
+  await expect(card).not.toHaveClass(/is-open/);
+
+  // So does Back.
+  await card.click();
+  await page.getByRole("button", { name: "Back to Fronts" }).click();
+  await expect(page.locator(".plan-open")).toBeVisible();
+});

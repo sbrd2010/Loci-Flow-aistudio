@@ -255,7 +255,7 @@ const RUNG_KEY = "loci_plan_rung";
 const readRung = () => { try { return localStorage.getItem(RUNG_KEY); } catch { return null; } };
 const writeRung = (id) => { try { localStorage.setItem(RUNG_KEY, id); } catch { /* private mode */ } };
 
-export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, focusInbox = false, uid, writeActivityEvents, focusTimer = {}, frontId = null }) {
+export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, focusInbox = false, uid, writeActivityEvents, focusTimer = {}, frontId = null, frontsColumn = null, frontOpen = false, onCloseFront }) {
   const { tasks = [], config = {} } = payload;
   const windows = getFocusWindows(config);
 
@@ -276,7 +276,8 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
   }, []);
   const [phoneList, setPhoneList] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
-  const pickRung = (id) => { setRung(id); writeRung(id); setPhoneList(true); setDoneOpen(false); };
+  // ≥1600 a rung closes a front's page shown in the list's place (57b.25).
+  const pickRung = (id) => { setRung(id); writeRung(id); setPhoneList(true); setDoneOpen(false); onCloseFront?.(); };
 
   // 45h: the four horizons, always shown. Work (the older horizon) is shown
   // only while it holds tasks, so none of them is lost from view.
@@ -691,7 +692,7 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
       ) : (
         <>
           <Runway rungs={rungs} day={lociDay} phone={narrow} />
-          <div className={`plan-ladder-grid${narrow ? " is-phone" : ""}${narrow && phoneList ? " is-list" : ""}`}>
+          <div className={`plan-ladder-grid${narrow ? " is-phone" : ""}${narrow && phoneList ? " is-list" : ""}${frontsColumn ? " has-fronts" : ""}`}>
             {/* 57a–e: a rung per horizon — name and open count, its end and
                 days left, the bar of the period gone (red at ≤3 days left). */}
             <nav className="plan-ladder" aria-label="Horizons">
@@ -700,8 +701,8 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
                   key={r.id}
                   type="button"
                   data-horizon={r.id}
-                  className={`plan-rung${r.id === selected ? " is-open" : ""}${r.red ? " is-red" : ""}${r.dotted ? " is-dotted" : ""}`}
-                  aria-current={r.id === selected ? "true" : undefined}
+                  className={`plan-rung${r.id === selected && !frontOpen ? " is-open" : ""}${r.red ? " is-red" : ""}${r.dotted ? " is-dotted" : ""}`}
+                  aria-current={r.id === selected && !frontOpen ? "true" : undefined}
                   onClick={() => pickRung(r.id)}
                 >
                   <span className="plan-rung-top">
@@ -736,6 +737,7 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
 
             {/* The open rung's list (57): name, its range, days and tasks;
                 rows; a "Done · N" fold (42.2); "+ Add to …" at the foot. */}
+            {!frontOpen && (
             <section className="plan-open" aria-labelledby={`plan-h-${selected}`}>
               {narrow && (
                 <button type="button" className="plan-open-back" onClick={() => setPhoneList(false)}>
@@ -785,6 +787,10 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
                 </button>
               )}
             </section>
+            )}
+            {/* ≥1600 (57a): the Fronts column; a front's page takes the
+                list's place (57b.25). */}
+            {frontsColumn}
           </div>
         </>
       )}
