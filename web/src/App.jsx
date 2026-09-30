@@ -1183,7 +1183,8 @@ export default function App() {
     setCloseDayOpen(false);
     savePayloadAsync(next, { expectedRemovals: dropped })
       .then(() => setCloseUndo({ before, at: Date.now() }))
-      .catch(() => setCloseDayOpen(true));
+      // A failed write leaves the close applied locally: put it back first.
+      .catch(() => { savePayload(undoClose(payloadRef.current, before, planDay)); setCloseDayOpen(true); });
   };
   const closedFirst = dayClosed ? (payload?.tasks || []).find(t => String(t.uuid) === String(payload?.config?.dayClose?.firstThing) && !t.isDeleted && !t.isCompleted) : null;
   const dayClosedState = dayClosed ? {
