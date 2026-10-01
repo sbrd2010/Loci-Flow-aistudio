@@ -220,6 +220,62 @@ test("Coach Chat: empty state, starters, kicker and New conversation", async ({ 
   await expect(page.locator(".coach-composer-input")).toHaveCount(0);
 });
 
+// Q50: Coach never changes data by itself. A reply's action is a button; a
+// tap applies it ("✓ Marked done · task") with Undo, and "Not needed" clears it.
+test("Coach actions: a reply offers Mark done; the tap applies it, Undo puts it back", async ({ page }) => {
+  const task = "10-minute walk between tasks to reset your focus";
+  await page.route("https://api.groq.com/**", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ choices: [{ message: { content: `Nice. Want me to mark it done?\n[[COMPLETE_TASK:${task}]]` } }] }),
+  }));
+  await page.addInitScript(() => {
+    window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key");
+  });
+  await enterDemo(page, { width: 1600, height: 900 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  await page.locator(".coach-composer-input").fill(`I finished the ${task}`);
+  await page.getByRole("button", { name: "Send" }).click();
+
+  const reply = page.locator(".coach-msg.is-coach").last();
+  await expect(reply).toContainText("Want me to mark it done?");
+  await expect(reply).not.toContainText("Marked");
+  await reply.getByRole("button", { name: "Mark done" }).click();
+  await expect(reply.locator(".coach-action-done")).toContainText(`✓ Marked done · ${task}`);
+  await reply.getByRole("button", { name: "Undo" }).click();
+  await expect(reply.getByRole("button", { name: "Mark done" })).toBeVisible();
+
+  await reply.getByRole("button", { name: "Not needed" }).click();
+  await expect(reply.getByRole("button", { name: "Mark done" })).toHaveCount(0);
+});
+
+test("Coach actions: the tap really marks the task done on Today", async ({ page }) => {
+  const task = "10-minute walk between tasks to reset your focus";
+  await page.route("https://api.groq.com/**", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ choices: [{ message: { content: `Want me to mark it done?\n[[COMPLETE_TASK:${task}]]` } }] }),
+  }));
+  await page.addInitScript(() => {
+    window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key");
+  });
+  await enterDemo(page);
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Coach", exact: true }).click();
+  await page.locator(".coach-composer-input").fill(`I finished the ${task}`);
+  await page.getByRole("button", { name: "Send" }).click();
+  const reply = page.locator(".coach-msg.is-coach").last();
+  await expect(reply.getByRole("button", { name: "Mark done" })).toBeVisible();
+  // Before the tap, nothing has changed on Today.
+  await nav.getByRole("button", { name: "Today", exact: true }).click();
+  await expect(page.locator(".completed-section-title")).toHaveCount(0);
+  await nav.getByRole("button", { name: "Coach", exact: true }).click();
+  await page.locator(".coach-msg.is-coach").last().getByRole("button", { name: "Mark done" }).click();
+  await nav.getByRole("button", { name: "Today", exact: true }).click();
+  await expect(page.locator(".completed-section-title")).toBeVisible();
+  await expect(page.getByTestId("today-tasks-list")).toContainText(task);
+});
+
 // 62h: the newest message sits at the bottom, so opening Chat starts there,
 // not at the oldest message.
 test("Coach Chat opens at the newest message", async ({ page }) => {
