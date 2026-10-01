@@ -1569,8 +1569,15 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
       col.style.setProperty("--coach-chrome", `${Math.round(rect.top + window.scrollY + below)}px`);
     };
     fit();
+    // 62h: the newest message sits at the bottom; opening Chat starts there.
+    const win = col.querySelector(".chat-window");
+    if (win) win.scrollTop = win.scrollHeight;
     window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
+    // Something appearing above the column (the offline banner) moves it
+    // without a window resize; the page's size changes, so re-fit then.
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(fit) : null;
+    ro?.observe(document.body);
+    return () => { window.removeEventListener("resize", fit); ro?.disconnect(); };
   }, [coachTab]);
 
   return (
@@ -1579,9 +1586,15 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
 
       {/* Q51: Coach is two tabs, Chat (first) and Review. */}
       <div className="coach-tabs">
-        <div className="coach-tabs-list" role="tablist" aria-label="Coach">
-          <button type="button" role="tab" id="coach-tab-chat" aria-controls="coach-panel-chat" aria-selected={coachTab === "chat"} className="coach-tab" onClick={() => setCoachTab("chat")}>Chat</button>
-          <button type="button" role="tab" id="coach-tab-review" aria-controls="coach-panel-review" aria-selected={coachTab === "review"} className="coach-tab" onClick={() => setCoachTab("review")}>Review</button>
+        <div className="coach-tabs-list" role="tablist" aria-label="Coach" onKeyDown={e => {
+          if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+          e.preventDefault();
+          const next = coachTab === "chat" ? "review" : "chat";
+          setCoachTab(next);
+          document.getElementById(`coach-tab-${next}`)?.focus();
+        }}>
+          <button type="button" role="tab" id="coach-tab-chat" aria-controls="coach-panel-chat" aria-selected={coachTab === "chat"} tabIndex={coachTab === "chat" ? 0 : -1} className="coach-tab" onClick={() => setCoachTab("chat")}>Chat</button>
+          <button type="button" role="tab" id="coach-tab-review" aria-controls="coach-panel-review" aria-selected={coachTab === "review"} tabIndex={coachTab === "review" ? 0 : -1} className="coach-tab" onClick={() => setCoachTab("review")}>Review</button>
         </div>
         {coachTab === "chat" && (
           <span className="coach-tabs-end">

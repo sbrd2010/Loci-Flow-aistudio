@@ -219,3 +219,28 @@ test("Coach Chat: empty state, starters, kicker and New conversation", async ({ 
   await expect(page.getByRole("tab", { name: "Review", selected: true })).toBeVisible();
   await expect(page.locator(".coach-composer-input")).toHaveCount(0);
 });
+
+// 62h: the newest message sits at the bottom, so opening Chat starts there,
+// not at the oldest message.
+test("Coach Chat opens at the newest message", async ({ page }) => {
+  await page.route("https://api.groq.com/**", (route) => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: JSON.stringify({ choices: [{ message: { content: "A reply.\n\n".repeat(12) } }] }),
+  }));
+  await page.addInitScript(() => window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"));
+  await enterDemo(page, { width: 1440, height: 800 });
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Coach", exact: true }).click();
+  for (const text of ["one", "two", "three"]) {
+    await page.locator(".coach-composer-input").fill(`Message ${text}`);
+    await page.getByRole("button", { name: "Send" }).click();
+    await expect(page.locator(".coach-msg.is-you").last()).toContainText(`Message ${text}`);
+    await expect(page.locator(".coach-composer-input")).toBeEnabled({ timeout: 8_000 });
+  }
+  await nav.getByRole("button", { name: "Today", exact: true }).click();
+  await nav.getByRole("button", { name: "Coach", exact: true }).click();
+  const win = page.locator(".coach-chat-col .chat-window");
+  await expect.poll(() => win.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThan(4);
+  const overflow = await win.evaluate(el => el.scrollHeight - el.clientHeight);
+  expect(overflow).toBeGreaterThan(0);
+});
