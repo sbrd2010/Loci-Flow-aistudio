@@ -1551,6 +1551,8 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
   const handleStarter = (text, send) => {
     if (!send) { setChatInput(text); chatInputRef.current?.focus(); return; }
     if (chatLoading) return;
+    // The starter replaces any draft, so nothing stale is left to send later.
+    setChatInput("");
     chipTextRef.current = text;
     chatFormRef.current?.requestSubmit();
   };
