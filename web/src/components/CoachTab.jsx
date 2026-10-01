@@ -1766,7 +1766,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
           </form>
           <div className="coach-composer-hints">
             <span className="coach-hint-keys">Enter sends · Shift+Enter new line</span>
-            <span>Coach sees: today’s list, plan, focus time</span>
+            <span>Coach sees: your lists, focus time, Mind Box and what it remembers</span>
           </div>
         </div>
       </section>
