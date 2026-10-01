@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildLociTodaySnapshotContext } from "./lociAIContext";
-import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, buildParkTaskTasks, applyCoachActions, matchesUserIntent, buildActionReplyText, inferTaskMetadata } from "./coachActions";
+import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, buildParkTaskTasks, applyCoachActions, matchesUserIntent, buildActionReplyText, inferTaskMetadata, undoCoachAction } from "./coachActions";
 import { parseCheckinTag } from "./coachCheckin";
 import { getFocusWindows, getLociDayStr } from "./focusWindows";
 import { getLocalDateString } from "./lociAIContext";
@@ -1348,5 +1348,63 @@ describe("Coach Action Integrity Constraints (PR #269 Fixes)", () => {
     const response = buildActionReplyText(cleanText, results, "Set that as my Now Focus.");
     expect(response).not.toContain("All set");
     expect(response).toContain("Which task should I focus on?");
+  });
+});
+
+describe("Q50: actions are buttons the user taps", () => {
+  const base = () => ({
+    userId: "u",
+    config: {},
+    contributions: [{ dateString: "2026-10-01", count: 2 }],
+    tasks: [
+      { uuid: "a", title: "Pay the water tax", horizonLevel: "today", isNowFocus: true },
+      { uuid: "b", title: "Order medicine", horizonLevel: "today" },
+    ],
+  });
+
+  it("a tap skips the intent check; the reply alone would not", () => {
+    const actions = [{ type: "COMPLETE_TASK", title: "Order medicine" }];
+    const gated = applyCoachActions(base(), actions, { lociDateStr: "2026-10-01", localDateStr: "2026-10-01", lastUserMessage: "which one first?" });
+    expect(gated.results[0].matched).toBe(false);
+    const tapped = applyCoachActions(base(), actions, { lociDateStr: "2026-10-01", localDateStr: "2026-10-01", skipIntentCheck: true });
+    expect(tapped.results[0].matched).toBe(true);
+    expect(tapped.payload.tasks[1].isCompleted).toBe(true);
+  });
+
+  it("a proposed reply keeps the model's offer and never claims it happened", () => {
+    const results = [{ type: "COMPLETE_TASK", title: "Order medicine", matched: true, task: { title: "Order medicine" } }];
+    const text = buildActionReplyText("Want me to mark it done?", results, "I finished ordering the medicine", { proposed: true });
+    expect(text).toBe("Want me to mark it done?");
+    expect(text).not.toMatch(/Marked/);
+  });
+
+  it("a proposed reply still adds the notes for what it couldn't find", () => {
+    const results = [
+      { type: "COMPLETE_TASK", title: "Order medicine", matched: true, task: { title: "Order medicine" } },
+      { type: "COMPLETE_TASK", title: "Ghost task", matched: false },
+    ];
+    const text = buildActionReplyText("Mark it done?", results, "I finished both", { proposed: true });
+    expect(text).toMatch(/^Mark it done\? I couldn't find "Ghost task"/);
+  });
+
+  it("Undo of Mark done reopens it, takes the tick back and repins it", () => {
+    const { payload } = applyCoachActions(base(), [{ type: "COMPLETE_TASK", title: "Pay the water tax" }], { lociDateStr: "2026-10-01", localDateStr: "2026-10-01", skipIntentCheck: true });
+    const back = undoCoachAction(payload, { type: "COMPLETE_TASK", taskUuid: "a", prevPinnedUuid: "a", localDateStr: "2026-10-01" }, 5);
+    expect(back.tasks[0]).toMatchObject({ isCompleted: false, dateCompletedString: null, isNowFocus: true });
+    expect(back.contributions[0].count).toBe(2);
+  });
+
+  it("Undo of Make it the one thing puts the old pin back", () => {
+    const { payload } = applyCoachActions(base(), [{ type: "SET_NOW_FOCUS", title: "Order medicine" }], { skipIntentCheck: true });
+    const back = undoCoachAction(payload, { type: "SET_NOW_FOCUS", taskUuid: "b", prevPinnedUuid: "a" });
+    expect(back.tasks.map(t => !!t.isNowFocus)).toEqual([true, false]);
+  });
+
+  it("Undo of Add removes the new task; nothing to undo once it moved on", () => {
+    const { payload, results } = applyCoachActions(base(), [{ type: "ADD_TASK", title: "Call the bank" }], { skipIntentCheck: true });
+    const uuid = results[0].task.uuid;
+    expect(undoCoachAction(payload, { type: "ADD_TASK", taskUuid: uuid }).tasks.find(t => t.uuid === uuid).isDeleted).toBe(true);
+    const done = { ...payload, tasks: payload.tasks.map(t => (t.uuid === uuid ? { ...t, isCompleted: true } : t)) };
+    expect(undoCoachAction(done, { type: "ADD_TASK", taskUuid: uuid })).toBeNull();
   });
 });

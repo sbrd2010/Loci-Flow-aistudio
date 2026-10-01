@@ -9,10 +9,11 @@ import { profileToCoachContext } from "../utils/userProfile";
 import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociClosingContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociCategoryFilterContext, buildLociTodaySnapshotContext, getLocalDateString, isActiveLociTask } from "../utils/lociAIContext";
 import { getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
+import { safeUUID } from "../utils/uuid";
 import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, parseCheckinRequestFromMessage, buildCoachCheckinContext } from "../utils/coachCheckin";
-import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks, findTaskByTitle } from "../utils/coachActions";
+import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks, findTaskByTitle, undoCoachAction } from "../utils/coachActions";
 import { shouldDeliverPendingCoachNudge } from "../utils/coachNudge";
 import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
@@ -91,6 +92,9 @@ function getLastFullTaskTime(userId) {
 }
 
 const NO_MESSAGES = [];
+// Q50: the button under a reply, and what it reads once applied.
+const COACH_ACTION_LABELS = { COMPLETE_TASK: "Mark done", SET_NOW_FOCUS: "Make it the one thing", START_FOCUS: "Start focus", ADD_TASK: "Add to Today", PARK_TASK: "Park" };
+const COACH_ACTION_DONE = { COMPLETE_TASK: "Marked done", SET_NOW_FOCUS: "The one thing", START_FOCUS: "Focus started", ADD_TASK: "Added", PARK_TASK: "Parked" };
 const clockHHMM = (ms) => {
   const d = new Date(ms);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -420,6 +424,205 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       }
     })();
   }, [cloudSyncUnconfirmed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Applies what a tapped action button changed (Q50), with the same ledger
+  // and focus-session bookkeeping a Coach action has always had. `extraPatch`
+  // rides along in the same write (the reply's button state).
+  const commitCoachActions = (updatedPayload, results, now, extraPatch = {}) => {
+    const patch = { ...extraPatch };
+    if (updatedPayload.tasks !== tasksRef.current) patch.tasks = updatedPayload.tasks;
+    if (updatedPayload.contributions !== contributionsRef.current) patch.contributions = updatedPayload.contributions;
+    if (Object.keys(patch).length > 0) {
+      // Only ADD_TASK/COMPLETE_TASK/PARK_TASK map to a ledger event type —
+      // SET_NOW_FOCUS/START_FOCUS pin changes are handled separately below
+      // (focus session bookkeeping, not a tracked mutation type). Passing
+      // `now: now.getTime()` (the message-send time, same value already
+      // given to applyCoachActions above for lociDateStr/todayStr) keeps
+      // this event's lociDateString consistent with the core mutation's
+      // own dateCompletedString/contributions day — without it, a slow
+      // AI reply crossing a Loci-day boundary would date the ledger event
+      // under a LATER day than the mutation it describes.
+      const eventTypeByAction = { ADD_TASK: "task_created", COMPLETE_TASK: "task_completed", PARK_TASK: "task_parked" };
+      const events = results
+        .filter(r => r.matched && r.task && eventTypeByAction[r.type])
+        .map(r => buildTaskMutationEvent(eventTypeByAction[r.type], r.task, { windows, source: "coach_action", now: now.getTime() }));
+      // COMPLETE_TASK/PARK_TASK clear isNowFocus on the matched task
+      // (buildToggleCompletedTasks/buildParkTaskTasks) — if that task was
+      // the one actively focused, end its session here so the ledger
+      // isn't left open with no terminal event (same bug class fixed for
+      // TodayTab's handleToggleComplete/handleMoveToHorizon).
+      const focusEndingResult = results.find(r =>
+        r.matched && r.task?.isNowFocus && (r.type === "COMPLETE_TASK" || r.type === "PARK_TASK")
+        && typeof focusTimerRef.current.endFocusSession === "function"
+      );
+      if (focusEndingResult) {
+        const endedFocusSession = focusTimerRef.current.endFocusSession(focusEndingResult.type === "COMPLETE_TASK" ? "completed_task" : "user_abandoned");
+        if (endedFocusSession) {
+          // Use endedFocusSession.task, not focusEndingResult.task — if a
+          // pin-only path moved Now Focus while the open session still
+          // belonged to a previous task, this call actually closed out
+          // that older session, which may not be the matched task.
+          events.push(buildFocusTerminalEvent(
+            focusEndingResult.type === "COMPLETE_TASK" ? "focus_completed" : "focus_abandoned",
+            endedFocusSession.task, endedFocusSession.focusSessionId,
+            // No explicit `now` — default to a fresh Date.now() here, at
+            // the moment the session is actually ended, not `now` (the
+            // message-send time captured before `await callAI(...)`,
+            // which can take several real seconds).
+            { ...endedFocusSession, windows }
+          ));
+        }
+      }
+
+      // SET_NOW_FOCUS retargets the pin (buildSetNowFocusTasks) the same
+      // way applyTaskChip's 'focus'/'focus+today' chips do — if a
+      // different task's session was open before this action ran, end it
+      // too. (START_FOCUS's own retargeting is handled below, since it
+      // also needs to mint a new session rather than just closing the old
+      // one.) focusTimerRef.current.activeTask here still reflects the PRE-action
+      // pin, since `tasks` hasn't re-rendered from this synchronous block yet.
+      const setNowFocusResult = results.find(r => r.type === "SET_NOW_FOCUS" && r.matched);
+      if (setNowFocusResult && focusTimerRef.current.activeTask && focusTimerRef.current.activeTask.uuid !== setNowFocusResult.task.uuid && typeof focusTimerRef.current.endFocusSession === "function") {
+        const retargetedFocusSession = focusTimerRef.current.endFocusSession("user_abandoned");
+        // Retargeting to a DIFFERENT task doesn't make activeTask null,
+        // so the hook's own "stop timer when activeTask disappears"
+        // effects never fire.
+        if (retargetedFocusSession) {
+          focusTimerRef.current.setIsTimerRunning?.(false);
+          focusTimerRef.current.setIsFocusMode?.(false);
+          focusTimerRef.current.setFocusSessionActive?.(false);
+        }
+        if (retargetedFocusSession) {
+          // No explicit `now` — see the same fix above for why message-
+          // send time is wrong for an event built after `await callAI(...)`.
+          events.push(buildFocusTerminalEvent("focus_abandoned", retargetedFocusSession.task, retargetedFocusSession.focusSessionId, {
+            ...retargetedFocusSession, windows,
+          }));
+        }
+      }
+
+      const startFocus = results.find(r => r.type === "START_FOCUS" && r.matched);
+      // Captured so the saveSubPathsAsync(patch) rejection handler below
+      // can undo this exact session if the core pin write never confirms.
+      let startedFocusSession = null;
+      if (startFocus) {
+        const isSwitchingTask = focusTimerRef.current.activeTask?.uuid !== startFocus.task.uuid;
+        if (!focusTimerRef.current.isTimerRunning || isSwitchingTask) {
+          // A duration the Coach names, else one block (53e) — not the estimate.
+          const mins = Number(startFocus.durationMinutes) > 0 ? Number(startFocus.durationMinutes)
+            : focusBlockSeconds(config) / 60;
+          // Also mint a session when the target is already pinned but no
+          // session is currently open (e.g. it was only ever pinned via
+          // SET_NOW_FOCUS, or a prior session already ended) — not just
+          // when switching to a different task, or this Coach-started
+          // session would still go unlogged.
+          const needsNewSession = isSwitchingTask || !focusTimerRef.current.focusSessionId;
+          if (needsNewSession && typeof focusTimerRef.current.startFocusSession === "function") {
+            // A genuinely new focused task — mint a real ledger session for
+            // it (enterFocusMode: false so the chat stays open instead of
+            // being replaced by the full-screen Focus overlay), auto-closing
+            // whatever session was previously open the same way Day Map's
+            // "Start Focus" does. Collected into `events` below and written
+            // only once the core pin write (saveSubPathsAsync(patch))
+            // actually confirms, instead of immediately.
+            const session = focusTimerRef.current.startFocusSession(startFocus.task, { enterFocusMode: false, plannedSeconds: mins * 60 });
+            startedFocusSession = session;
+            if (session.priorSession && session.priorSession.task) {
+              // No explicit `now` — same fix as above.
+              events.push(buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
+                ...session.priorSession, windows,
+              }));
+            }
+            events.push(buildFocusStartedEvent(startFocus.task, session.focusSessionId, {
+              focusInitialPlannedSeconds: session.focusInitialPlannedSeconds, now: session.focusStartedAt, windows, source: "coach_action",
+            }));
+          } else if (typeof focusTimerRef.current.extendTimer === "function") {
+            // Same task, just resuming/restarting from a paused state — any
+            // ledger session already open for it stays open under its own
+            // focusSessionId, so don't mint a new one here.
+            focusTimerRef.current.extendTimer(mins);
+          }
+        }
+      }
+
+      saveSubPathsAsync(patch)
+        .then(() => { if (events.length > 0) writeActivityEvents(eventsPatch(uid, events)); })
+        .catch(() => {
+          // The core pin write never confirmed — undo the optimistic
+          // session start above, or it's left open with no focus_started
+          // event for a later endFocusSession call to surface as an
+          // orphaned terminal event. Only if nothing newer has already
+          // started (live-ref check, not a stale closure value).
+          if (startedFocusSession && focusTimerRef.current.focusSessionId === startedFocusSession.focusSessionId) {
+            focusTimerRef.current.endFocusSession?.("user_abandoned");
+            focusTimerRef.current.setIsTimerRunning?.(false);
+            focusTimerRef.current.setIsFocusMode?.(false);
+            focusTimerRef.current.setFocusSessionActive?.(false);
+          }
+        });
+    }
+  };
+
+  // Q50: a reply's action is a button. A tap applies it, and the button
+  // becomes "✓ Marked done · task" with Undo for this session.
+  const [actionUndo, setActionUndo] = useState({});
+  // Each offered action has its own id (indexes shift when old messages are
+  // trimmed). `update` maps that action, or every action of its reply.
+  const withActionState = (history, actionId, update, wholeReply = false) => history.map(m => (
+    m.isUser || !m.actions?.some(a => a.id === actionId) ? m
+      : { ...m, actions: m.actions.map(a => (wholeReply || a.id === actionId ? update(a) : a)) }
+  ));
+  const handleCoachAction = (actionId) => {
+    if (isSyncingFromCache || !actionId) return;
+    const history = chatHistoryRef.current;
+    const a = history.flatMap(m => (m.isUser ? [] : m.actions || [])).find(x => x.id === actionId);
+    if (!a || a.state !== "proposed") return;
+    const now = new Date();
+    const prevPinnedUuid = tasksRef.current.find(t => t.isNowFocus && !t.isDeleted && !t.isCompleted)?.uuid || null;
+    // The task as it is now (it may have been renamed since the reply).
+    const fresh = a.task?.uuid ? tasksRef.current.find(t => t.uuid === a.task.uuid && !t.isDeleted) : null;
+    const localDateStr = getLocalDateString(now);
+    const { payload: updatedPayload, results } = applyCoachActions(
+      { ...payload, tasks: tasksRef.current, config: configRef.current, contributions: contributionsRef.current },
+      [{ type: a.type, title: fresh?.title || a.task?.title || a.title, ...(a.durationMinutes != null ? { durationMinutes: a.durationMinutes } : {}) }],
+      { lociDateStr: getLociDayStr(now, getFocusWindows(configRef.current)), localDateStr, now: now.getTime(), skipIntentCheck: true }
+    );
+    const r = results[0];
+    const state = r?.matched ? "applied" : "gone";
+    const nextHistory = withActionState(history, actionId, x => ({ ...x, state }));
+    if (!r?.matched) { saveSubPathsAsync({ chatHistory: nextHistory }).catch(() => {}); return; }
+    commitCoachActions(updatedPayload, results, now, { chatHistory: nextHistory });
+    setActionUndo(u => ({ ...u, [actionId]: { type: a.type, taskUuid: r.task.uuid, prevPinnedUuid, localDateStr } }));
+  };
+  const handleUndoCoachAction = (actionId) => {
+    const key = actionId;
+    const rec = actionUndo[key];
+    if (!rec) return;
+    setActionUndo(u => { const next = { ...u }; delete next[key]; return next; });
+    const next = undoCoachAction({ ...payload, tasks: tasksRef.current, contributions: contributionsRef.current }, rec);
+    if (!next) return; // the task has moved on since; nothing to put back
+    if (rec.type === "START_FOCUS" && focusTimerRef.current.activeTask?.uuid === rec.taskUuid) {
+      const ended = focusTimerRef.current.endFocusSession?.("user_abandoned");
+      focusTimerRef.current.setIsTimerRunning?.(false);
+      focusTimerRef.current.setIsFocusMode?.(false);
+      focusTimerRef.current.setFocusSessionActive?.(false);
+      if (ended) writeActivityEvents(eventsPatch(uid, [buildFocusTerminalEvent("focus_abandoned", ended.task, ended.focusSessionId, { ...ended, windows })]));
+    }
+    const patch = {
+      chatHistory: withActionState(chatHistoryRef.current, actionId, x => ({ ...x, state: "proposed" })),
+      tasks: next.tasks,
+    };
+    if (next.contributions !== contributionsRef.current) patch.contributions = next.contributions;
+    const task = next.tasks.find(t => t.uuid === rec.taskUuid);
+    const eventType = { COMPLETE_TASK: "task_reopened", ADD_TASK: "task_deleted", PARK_TASK: "task_unparked" }[rec.type];
+    saveSubPathsAsync(patch)
+      .then(() => { if (eventType && task) writeActivityEvents(eventPatch(uid, buildTaskMutationEvent(eventType, task, { windows, source: "coach_action" }))); })
+      .catch(() => {});
+  };
+  // "Not needed": the reply's buttons go.
+  const handleDismissActions = (actionId) => {
+    saveSubPathsAsync({ chatHistory: withActionState(chatHistoryRef.current, actionId, a => (a.state === "proposed" ? { ...a, state: "dismissed" } : a), true) }).catch(() => {});
+  };
 
   const handleSendChat = async (e) => {
     e.preventDefault();
@@ -904,153 +1107,19 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
         // doesn't believe the mutation succeeded.
         replyText = "Hold on — still syncing your latest data. Mind asking that again in a moment?";
       } else if (actions.length > 0) {
-        const { payload: updatedPayload, results } = applyCoachActions(
+        // Q50: Coach never changes data by itself. The reply only checks which
+        // actions would apply; each shows as a button, applied on a tap.
+        const { results } = applyCoachActions(
           { ...payload, tasks: tasksRef.current, config: configRef.current, contributions: contributionsRef.current },
           actions,
           { lociDateStr: todayStr, localDateStr: getLocalDateString(now), lastUserMessage: userText, now: now.getTime() }
         );
-        actionResults = results;
-        if (updatedPayload.tasks) {
-          currentTasks = updatedPayload.tasks;
-        }
-
-        const patch = {};
-        if (updatedPayload.tasks !== tasksRef.current) patch.tasks = updatedPayload.tasks;
-        if (updatedPayload.contributions !== contributionsRef.current) patch.contributions = updatedPayload.contributions;
-        if (Object.keys(patch).length > 0) {
-          // Only ADD_TASK/COMPLETE_TASK/PARK_TASK map to a ledger event type —
-          // SET_NOW_FOCUS/START_FOCUS pin changes are handled separately below
-          // (focus session bookkeeping, not a tracked mutation type). Passing
-          // `now: now.getTime()` (the message-send time, same value already
-          // given to applyCoachActions above for lociDateStr/todayStr) keeps
-          // this event's lociDateString consistent with the core mutation's
-          // own dateCompletedString/contributions day — without it, a slow
-          // AI reply crossing a Loci-day boundary would date the ledger event
-          // under a LATER day than the mutation it describes.
-          const eventTypeByAction = { ADD_TASK: "task_created", COMPLETE_TASK: "task_completed", PARK_TASK: "task_parked" };
-          const events = results
-            .filter(r => r.matched && r.task && eventTypeByAction[r.type])
-            .map(r => buildTaskMutationEvent(eventTypeByAction[r.type], r.task, { windows, source: "coach_action", now: now.getTime() }));
-          // COMPLETE_TASK/PARK_TASK clear isNowFocus on the matched task
-          // (buildToggleCompletedTasks/buildParkTaskTasks) — if that task was
-          // the one actively focused, end its session here so the ledger
-          // isn't left open with no terminal event (same bug class fixed for
-          // TodayTab's handleToggleComplete/handleMoveToHorizon).
-          const focusEndingResult = results.find(r =>
-            r.matched && r.task?.isNowFocus && (r.type === "COMPLETE_TASK" || r.type === "PARK_TASK")
-            && typeof focusTimerRef.current.endFocusSession === "function"
-          );
-          if (focusEndingResult) {
-            const endedFocusSession = focusTimerRef.current.endFocusSession(focusEndingResult.type === "COMPLETE_TASK" ? "completed_task" : "user_abandoned");
-            if (endedFocusSession) {
-              // Use endedFocusSession.task, not focusEndingResult.task — if a
-              // pin-only path moved Now Focus while the open session still
-              // belonged to a previous task, this call actually closed out
-              // that older session, which may not be the matched task.
-              events.push(buildFocusTerminalEvent(
-                focusEndingResult.type === "COMPLETE_TASK" ? "focus_completed" : "focus_abandoned",
-                endedFocusSession.task, endedFocusSession.focusSessionId,
-                // No explicit `now` — default to a fresh Date.now() here, at
-                // the moment the session is actually ended, not `now` (the
-                // message-send time captured before `await callAI(...)`,
-                // which can take several real seconds).
-                { ...endedFocusSession, windows }
-              ));
-            }
-          }
-
-          // SET_NOW_FOCUS retargets the pin (buildSetNowFocusTasks) the same
-          // way applyTaskChip's 'focus'/'focus+today' chips do — if a
-          // different task's session was open before this action ran, end it
-          // too. (START_FOCUS's own retargeting is handled below, since it
-          // also needs to mint a new session rather than just closing the old
-          // one.) focusTimerRef.current.activeTask here still reflects the PRE-action
-          // pin, since `tasks` hasn't re-rendered from this synchronous block yet.
-          const setNowFocusResult = results.find(r => r.type === "SET_NOW_FOCUS" && r.matched);
-          if (setNowFocusResult && focusTimerRef.current.activeTask && focusTimerRef.current.activeTask.uuid !== setNowFocusResult.task.uuid && typeof focusTimerRef.current.endFocusSession === "function") {
-            const retargetedFocusSession = focusTimerRef.current.endFocusSession("user_abandoned");
-            // Retargeting to a DIFFERENT task doesn't make activeTask null,
-            // so the hook's own "stop timer when activeTask disappears"
-            // effects never fire.
-            if (retargetedFocusSession) {
-              focusTimerRef.current.setIsTimerRunning?.(false);
-              focusTimerRef.current.setIsFocusMode?.(false);
-              focusTimerRef.current.setFocusSessionActive?.(false);
-            }
-            if (retargetedFocusSession) {
-              // No explicit `now` — see the same fix above for why message-
-              // send time is wrong for an event built after `await callAI(...)`.
-              events.push(buildFocusTerminalEvent("focus_abandoned", retargetedFocusSession.task, retargetedFocusSession.focusSessionId, {
-                ...retargetedFocusSession, windows,
-              }));
-            }
-          }
-
-          const startFocus = results.find(r => r.type === "START_FOCUS" && r.matched);
-          // Captured so the saveSubPathsAsync(patch) rejection handler below
-          // can undo this exact session if the core pin write never confirms.
-          let startedFocusSession = null;
-          if (startFocus) {
-            const isSwitchingTask = focusTimerRef.current.activeTask?.uuid !== startFocus.task.uuid;
-            if (!focusTimerRef.current.isTimerRunning || isSwitchingTask) {
-              // A duration the Coach names, else one block (53e) — not the estimate.
-              const mins = Number(startFocus.durationMinutes) > 0 ? Number(startFocus.durationMinutes)
-                : focusBlockSeconds(config) / 60;
-              // Also mint a session when the target is already pinned but no
-              // session is currently open (e.g. it was only ever pinned via
-              // SET_NOW_FOCUS, or a prior session already ended) — not just
-              // when switching to a different task, or this Coach-started
-              // session would still go unlogged.
-              const needsNewSession = isSwitchingTask || !focusTimerRef.current.focusSessionId;
-              if (needsNewSession && typeof focusTimerRef.current.startFocusSession === "function") {
-                // A genuinely new focused task — mint a real ledger session for
-                // it (enterFocusMode: false so the chat stays open instead of
-                // being replaced by the full-screen Focus overlay), auto-closing
-                // whatever session was previously open the same way Day Map's
-                // "Start Focus" does. Collected into `events` below and written
-                // only once the core pin write (saveSubPathsAsync(patch))
-                // actually confirms, instead of immediately.
-                const session = focusTimerRef.current.startFocusSession(startFocus.task, { enterFocusMode: false, plannedSeconds: mins * 60 });
-                startedFocusSession = session;
-                if (session.priorSession && session.priorSession.task) {
-                  // No explicit `now` — same fix as above.
-                  events.push(buildFocusTerminalEvent("focus_abandoned", session.priorSession.task, session.priorSession.focusSessionId, {
-                    ...session.priorSession, windows,
-                  }));
-                }
-                events.push(buildFocusStartedEvent(startFocus.task, session.focusSessionId, {
-                  focusInitialPlannedSeconds: session.focusInitialPlannedSeconds, now: session.focusStartedAt, windows, source: "coach_action",
-                }));
-              } else if (typeof focusTimerRef.current.extendTimer === "function") {
-                // Same task, just resuming/restarting from a paused state — any
-                // ledger session already open for it stays open under its own
-                // focusSessionId, so don't mint a new one here.
-                focusTimerRef.current.extendTimer(mins);
-              }
-            }
-          }
-
-          saveSubPathsAsync(patch)
-            .then(() => { if (events.length > 0) writeActivityEvents(eventsPatch(uid, events)); })
-            .catch(() => {
-              // The core pin write never confirmed — undo the optimistic
-              // session start above, or it's left open with no focus_started
-              // event for a later endFocusSession call to surface as an
-              // orphaned terminal event. Only if nothing newer has already
-              // started (live-ref check, not a stale closure value).
-              if (startedFocusSession && focusTimerRef.current.focusSessionId === startedFocusSession.focusSessionId) {
-                focusTimerRef.current.endFocusSession?.("user_abandoned");
-                focusTimerRef.current.setIsTimerRunning?.(false);
-                focusTimerRef.current.setIsFocusMode?.(false);
-                focusTimerRef.current.setFocusSessionActive?.(false);
-              }
-            });
-        }
+        actionResults = results.map(r => (r.matched ? { ...r, id: safeUUID(), state: "proposed" } : r));
 
         // Assembles success/failure narration from the action results — see
         // buildActionReplyText for how blocked-but-stale tags are silently
         // dropped vs. surfaced as a clarifying question.
-        replyText = buildActionReplyText(cleanText, results, userText);
+        replyText = buildActionReplyText(cleanText, results, userText, { proposed: true });
       }
 
       // Extract and save lastCoachPlan
@@ -1652,20 +1721,37 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                   </svg>
                 )}
               </button>
-              {!m.isUser && m.actions && m.actions.length > 0 && (
-                <div className="coach-action-chips">
-                  {m.actions.map((a, i) => {
-                    const icons  = { COMPLETE_TASK: "✅", SET_NOW_FOCUS: "🎯", START_FOCUS: "🟢", ADD_TASK: "+", PARK_TASK: "🔵" };
-                    const labels = { COMPLETE_TASK: "Done", SET_NOW_FOCUS: "Focus", START_FOCUS: "Session", ADD_TASK: "Added", PARK_TASK: "Parked" };
-                    const title  = (a.task?.title || a.title || "").slice(0, 28);
-                    return (
-                      <span key={i} className="coach-action-chip">
-                        {icons[a.type] || "·"} {labels[a.type] || a.type}: {title}
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
+              {!m.isUser && m.actions && m.actions.length > 0 && (() => {
+                const proposed = m.actions.filter(a => a.state === "proposed");
+                return (
+                  <div className="coach-task-chips coach-reply-actions">
+                    {m.actions.map((a, i) => {
+                      const title = a.task?.title || a.title || "";
+                      if (a.state === "proposed") {
+                        return (
+                          <button key={i} type="button" className="coach-task-chip" disabled={chatLoading || isSyncingFromCache}
+                            onClick={() => handleCoachAction(a.id)}>
+                            {COACH_ACTION_LABELS[a.type] || a.type}{proposed.length > 1 ? ` · ${title}` : ""}
+                          </button>
+                        );
+                      }
+                      if (a.state === "dismissed" || a.state === "gone") return null;
+                      // Applied by a tap, or by Coach itself on replies from before Q50.
+                      return (
+                        <span key={i} className="coach-action-done">
+                          ✓ {COACH_ACTION_DONE[a.type] || a.type} · {title}
+                          {actionUndo[a.id] && (
+                            <button type="button" className="coach-action-undo" onClick={() => handleUndoCoachAction(a.id)}>Undo</button>
+                          )}
+                        </span>
+                      );
+                    })}
+                    {proposed.length > 0 && (
+                      <button type="button" className="coach-prompt-chip" onClick={() => handleDismissActions(proposed[0].id)}>Not needed</button>
+                    )}
+                  </div>
+                );
+              })()}
               {/* Phase A — prompt chips: last mentor message only, ephemeral */}
               {!m.isUser && idx === lastMentorIdx && (() => {
                 const chips = getPromptChips(m.text);
@@ -1682,7 +1768,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                 ) : null;
               })()}
               {/* Phase B — task-action chips: last mentor message, exactly one matched task */}
-              {!m.isUser && idx === lastMentorIdx && (() => {
+              {!m.isUser && idx === lastMentorIdx && !(m.actions || []).some(a => a.state === "proposed") && (() => {
                 const task = taskChipsFor(m.actions);
                 if (!task) return null;
                 const phaseB = [];

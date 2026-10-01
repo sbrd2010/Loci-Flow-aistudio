@@ -538,13 +538,15 @@ function buildCompleteTaskPayload(payload, task, lociDateStr, localDateStr) {
 // each step so e.g. "complete X, then focus on Y" composes correctly.
 // Returns { payload, results } where results mirrors `actions` with a
 // `matched` flag (and the matched `task`, where applicable) for each entry.
-export function applyCoachActions(payload, actions, { lociDateStr, localDateStr, lastUserMessage = "", now = Date.now() } = {}) {
+// skipIntentCheck: the user tapped the action's button (Q50), which is the
+// request itself.
+export function applyCoachActions(payload, actions, { lociDateStr, localDateStr, lastUserMessage = "", now = Date.now(), skipIntentCheck = false } = {}) {
   let nextPayload = payload;
   const results = [];
   const currentFocusTitle = (payload.tasks || []).find(t => isActiveLociTask(t) && t.isNowFocus)?.title || null;
 
   for (const action of actions) {
-    if (!matchesUserIntent(action.type, lastUserMessage, action.title, payload.chatHistory || [], currentFocusTitle)) {
+    if (!skipIntentCheck && !matchesUserIntent(action.type, lastUserMessage, action.title, payload.chatHistory || [], currentFocusTitle)) {
       results.push({ ...action, matched: false, blocked: true });
       continue;
     }
@@ -626,9 +628,12 @@ const CLARIFICATION_NOTES = {
 //  - failed-but-not-blocked tags (task not found, duplicate ADD_TASK, Evening
 //    Guard) always contribute a note, since these reflect a real outcome the
 //    user should know about.
-export function buildActionReplyText(cleanText, results = [], lastUserMessage = "") {
+// proposed (Q50): a matched action isn't applied yet — it shows as a button
+// under the reply — so the reply keeps the model's own offer and adds only
+// the notes, never a "Marked … complete." line.
+export function buildActionReplyText(cleanText, results = [], lastUserMessage = "", { proposed = false } = {}) {
   const userWantedAction = Object.keys(INTENT_PATTERNS).some(type => messageSeemsActionLike(type, lastUserMessage));
-  const successLines = results.filter(r => r.matched).map(r => {
+  const successLines = proposed ? [] : results.filter(r => r.matched).map(r => {
     const title = r.task ? r.task.title : r.title;
     switch (r.type) {
       case "SET_NOW_FOCUS": return `Switched your focus to "${title}".`;
@@ -682,8 +687,49 @@ export function buildActionReplyText(cleanText, results = [], lastUserMessage = 
   }
   notes.push(...clarifications);
 
+  if (proposed && results.some(r => r.matched)) return [cleanText, ...notes].filter(Boolean).join(" ");
   if (successLines.length === 0 && notes.length === 0) {
     notes.push("I couldn't save that action yet.");
   }
   return [...successLines, ...notes].join(" ");
+}
+
+// Q50: every change Coach makes is a button the user taps, with Undo for the
+// session. `record` is what the tap captured: the action, its task, the task
+// pinned before, and the day a completion counted on. Returns the payload with
+// the change put back, or null when the task has moved on since.
+export function undoCoachAction(payload, record, now = Date.now()) {
+  const tasks = payload.tasks || [];
+  const { type, taskUuid, prevPinnedUuid = null, localDateStr } = record;
+  const current = tasks.find(t => t.uuid === taskUuid && !t.isDeleted);
+  if (!current) return null;
+  const otherPinned = tasks.some(t => t.isNowFocus && t.uuid !== taskUuid && !t.isDeleted && !t.isCompleted);
+  const repinSelf = prevPinnedUuid === taskUuid && !otherPinned ? { isNowFocus: true } : {};
+  const put = (patch) => tasks.map(t => (t.uuid === taskUuid ? { ...t, ...patch, lastUpdated: now } : t));
+  if (type === "COMPLETE_TASK") {
+    if (!current.isCompleted) return null;
+    const contributions = [...(payload.contributions || [])];
+    const i = contributions.findIndex(c => c.dateString === localDateStr);
+    if (i !== -1 && contributions[i].count > 0) contributions[i] = { ...contributions[i], count: contributions[i].count - 1, lastUpdated: now };
+    return { ...payload, contributions, tasks: put({ isCompleted: false, dateCompletedString: null, ...repinSelf }) };
+  }
+  if (type === "SET_NOW_FOCUS" || type === "START_FOCUS") {
+    if (!current.isNowFocus) return null;
+    return {
+      ...payload,
+      tasks: tasks.map(t => {
+        const want = t.uuid === prevPinnedUuid && !t.isDeleted && !t.isCompleted;
+        return !!t.isNowFocus === want ? t : { ...t, isNowFocus: want, lastUpdated: now };
+      }),
+    };
+  }
+  if (type === "ADD_TASK") {
+    if (current.isCompleted) return null;
+    return { ...payload, tasks: put({ isDeleted: true, deletedAt: now, isNowFocus: false }) };
+  }
+  if (type === "PARK_TASK") {
+    if (!current.isParked) return null;
+    return { ...payload, tasks: put({ isParked: false, ...repinSelf }) };
+  }
+  return null;
 }
