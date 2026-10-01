@@ -10,6 +10,7 @@ import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext
 import { getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
 import { safeUUID } from "../utils/uuid";
+import CoachReview from "./CoachReview";
 import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, parseCheckinRequestFromMessage, buildCoachCheckinContext } from "../utils/coachCheckin";
@@ -1875,10 +1876,12 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
       </section>
       )}
 
-      {/* Review (Q51): the facts and Coach's brief come in C4; until then the
-          old brief sits here. */}
+      {/* Review (Q51): the facts; the old brief sits in the brief column
+          until Coach's brief replaces it. */}
       {coachTab === "review" && (
-      <section className="card" id="coach-panel-review" role="tabpanel" aria-labelledby="coach-tab-review">
+      <div id="coach-panel-review" role="tabpanel" aria-labelledby="coach-tab-review">
+      <CoachReview payload={payload} uid={uid} brief={(
+      <section className="card">
         <h2 style={{ margin: 0 }}>
           <button type="button" onClick={toggleBriefOpen} aria-expanded={briefOpen} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: briefOpen ? "4px" : 0 }}>
             <div>
@@ -2008,6 +2011,8 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
         </>
         )}
       </section>
+      )} />
+      </div>
       )}
     </div>
   );

@@ -544,8 +544,6 @@
   color: var(--ink-2);
 }
 
-/* Review tab keeps the page's own width. */
-#coach-panel-review { margin-top: 20px; }
 
 /* Phone (62i): buttons full width at 44px, Send a 44px icon button. */
 @media (max-width: 599px) {
