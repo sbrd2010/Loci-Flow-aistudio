@@ -36,6 +36,7 @@ import { useFocusTimer } from "./hooks/useFocusTimer";
 import { useLociDayStr } from "./hooks/useTodayStr";
 import HorizonReview from "./components/HorizonReview";
 import UndoToast, { UndoAnnouncer } from "./components/ui/UndoToast";
+import { letGoThought } from "./utils/thoughts";
 import { applyReview, detectReviews, pendingReviews, undoReviewOrSort } from "./utils/horizonReview";
 import { endLeftReviewMarks } from "./utils/normalizePayload";
 import CloseTheDay from "./components/CloseTheDay";
@@ -70,6 +71,9 @@ export default function App() {
   // Where + was tapped ("Today", "Plan · Quarter"), for Add task's note (45a).
   const [addOpenedFrom, setAddOpenedFrom] = useState(null);
   const [preselectedFrontId, setPreselectedFrontId] = useState(null);
+  // Q56: Add opens on Task or Thought; "Make it a task" opens it prefilled.
+  const [addMode, setAddMode] = useState({ mode: "task", title: "", fromThoughtId: null });
+  const [thoughtSaved, setThoughtSaved] = useState(null);
   // "light" | "dark" | "auto" — see utils/theme.js.
   const [theme, setTheme] = useState(() => {
     let stored = null;
@@ -90,7 +94,6 @@ export default function App() {
   }, []);
   const planView = planWide && roadmapView === "plan" ? "horizons" : roadmapView;
   const [editHorizonsOpen, setEditHorizonsOpen] = useState(false);
-  const [planFocusInbox, setPlanFocusInbox] = useState(false);
   // Feeling scattered has three doors (Today, Day map, Plan); its back link
   // returns through the one it came in by.
   const [scatteredFrom, setScatteredFrom] = useState("plan");
@@ -1017,7 +1020,7 @@ export default function App() {
     if (activeTab === "daymap") flushNow();
     if (tab === "mindbox") setMindBoxInitialPanel(null);
     if (tab === "settings") setSettingsInitialPage(null);
-    if (tab === "roadmap") { setRoadmapView("horizons"); setPlanFocusInbox(false); setPlanFrontId(null); }
+    if (tab === "roadmap") { setRoadmapView("horizons"); setPlanFrontId(null); }
     setActiveTab(tab);
   };
 
@@ -1026,14 +1029,6 @@ export default function App() {
   const openMindBox = (panel) => {
     handleTabSelect("mindbox");
     if (panel) setMindBoxInitialPanel(panel);
-  };
-
-  // Mind Box's "N notes waiting" opens Plan's Horizons, where the Inbox of
-  // notes heads the page — the one place they are browsable.
-  const openRoadmapInbox = () => {
-    handleTabSelect("roadmap");
-    setRoadmapView("horizons");
-    setPlanFocusInbox(true);
   };
 
   // Every way out of the Day map saves its pending edits first (the wordmark
@@ -1072,8 +1067,32 @@ export default function App() {
     setPreselectedHorizon(horizon);
     setPreselectedFrontId(frontId);
     setAddOpenedFrom(from);
+    setAddMode({ mode: "task", title: "", fromThoughtId: null });
     setShowAddTask(true);
   };
+  const openAddThought = () => {
+    openAddTask();
+    setAddMode({ mode: "thought", title: "", fromThoughtId: null });
+  };
+  const openThoughtAsTask = (thought) => {
+    openAddTask("today", "Mind Box");
+    setAddMode({ mode: "task", title: thought.text, fromThoughtId: thought.id });
+  };
+  // T, from anywhere (Q56): a thought, captured in two seconds. Not while
+  // typing, in a dialog, or in focus.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.repeat || e.key.toLowerCase() !== "t") return;
+      const el = e.target;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (showAddTask || document.querySelector('[role="dialog"]')) return;
+      if (!payload || (!user && !demoMode) || focusTimer.isFocusMode) return;
+      e.preventDefault();
+      openAddThought();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   // Plan's Fronts: the tab (45i), or the column beside the ladder ≥1600 (57a).
   const planTabProps = {
@@ -1525,7 +1544,6 @@ export default function App() {
             savePayload={savePayload}
             savePayloadAsync={savePayloadAsync}
             onOpenAddTask={(h) => openAddTask(h, `Plan · ${String(payload.config?.horizons?.[h]?.name || "").trim() || PLAN_COLUMN_NAMES[h] || h}`)}
-            focusInbox={planFocusInbox}
             uid={activityUid}
             writeActivityEvents={writeActivityEvents}
             focusTimer={focusTimer}
@@ -1536,7 +1554,7 @@ export default function App() {
           />
           </div>
         )}
-        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onOpenRoadmapInbox={openRoadmapInbox} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} uid={activityUid} writeActivityEvents={writeActivityEvents} focusTimer={focusTimer} />}
+        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onMakeThoughtTask={openThoughtAsTask} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} uid={activityUid} writeActivityEvents={writeActivityEvents} focusTimer={focusTimer} />}
         {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} stuck={coachStuck} onClearStuck={() => setCoachStuck(null)} onBackToFocus={focusTimer.focusSessionActive && focusTimer.activeTask ? handleReturnToFocus : null} onOpenPrivacy={() => { handleTabSelect("settings"); setSettingsInitialPage("privacy"); }} />}
         {activeTab === "settings" && (
           <SettingsTab
@@ -1636,6 +1654,19 @@ export default function App() {
           onClose={() => setReviewUndo(null)}
         />
       )}
+      <UndoAnnouncer message={thoughtSaved ? "Saved to Mind Box" : ""} />
+      {thoughtSaved && (
+        <UndoToast
+          key={thoughtSaved.at}
+          message="Saved to Mind Box"
+          onUndo={() => {
+            const gone = letGoThought(payloadRef.current, thoughtSaved.item.id);
+            if (gone) savePayload(gone.payload);
+            setThoughtSaved(null);
+          }}
+          onClose={() => setThoughtSaved(null)}
+        />
+      )}
       {showAddTask && (
         <AddTaskDialog
           email={demoMode ? "demo@loci.app" : user?.email}
@@ -1647,6 +1678,10 @@ export default function App() {
           defaultFrontId={preselectedFrontId}
           openedFrom={addOpenedFrom}
           onClose={() => setShowAddTask(false)}
+          initialMode={addMode.mode}
+          initialTitle={addMode.title}
+          fromThoughtId={addMode.fromThoughtId}
+          onThoughtSaved={item => setThoughtSaved({ item, at: Date.now() })}
           uid={activityUid}
           writeActivityEvents={writeActivityEvents}
           focusTimer={focusTimer}

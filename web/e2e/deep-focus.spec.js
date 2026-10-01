@@ -85,9 +85,8 @@ test("mobile reliability: Deep Focus overlay supports pause, resume, and brain-d
 
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Mind Box", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 8_000 });
-  // Brain dump items live in inbox only — open it to verify the captured thought is there
-  await page.getByTestId("brain-dump-inbox-btn").click();
-  await expect(page.getByText(thought)).toBeVisible({ timeout: 5_000 });
+  // Q56.2: thoughts live in Mind Box, newest first.
+  await expect(page.getByTestId("thought-row").first()).toContainText(thought, { timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
 });
 

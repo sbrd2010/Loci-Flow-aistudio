@@ -475,23 +475,6 @@
   border-radius: 6px;
 }
 
-/* ── Inbox: Mind Box's notes, until they are sent to a horizon ── */
-.plan-inbox { margin-bottom: 8px; }
-.plan-inbox-clear {
-  min-height: 44px;
-  margin-left: auto;
-  padding: 0 4px;
-  font: inherit;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: var(--coral-ink, var(--danger));
-  background: none;
-  border: 0;
-  cursor: pointer;
-}
-.plan-inbox-note { margin: 10px 0; font-size: 0.8125rem; color: var(--ink-2, var(--text-secondary)); }
-.plan-inbox-note.is-full { font-weight: 700; color: var(--coral-ink, var(--danger)); }
-
 /* Tablet (45j): two columns of horizons, the switch beside the title. */
 @media (min-width: 840px) {
   .plan-head { padding: 22px 36px 18px; }

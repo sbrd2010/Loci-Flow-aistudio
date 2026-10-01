@@ -289,17 +289,17 @@ export function buildLociDayMapContext(tasks = [], todayStr) {
 const BRAIN_DUMP_ITEMS_IN_PROMPT = 3;
 const BRAIN_DUMP_ITEM_MAX_LENGTH = 100;
 
-// Brain Dump backlog — always-on so the coach knows raw thoughts are waiting
-// to be organized, even before the behavioural profile kicks in. Surfaces the
-// first few item texts (oldest first, matching the FIFO queue) so the coach
-// can reference specific thoughts, not just a count.
+// Thoughts in Mind Box — always-on so the coach knows raw thoughts are
+// waiting, even before the behavioural profile kicks in. Surfaces the 3
+// newest (Q56.2; Settings › Coach › Privacy says so) so the coach can
+// reference specific thoughts, not just a count.
 export function buildLociBrainDumpContext(brainDump = []) {
   const items = brainDump || [];
   const count = items.length;
   if (count === 0) return "";
 
   const lines = [`BRAIN DUMP: ${count} unprocessed thought${count === 1 ? "" : "s"} waiting to be organized into tasks.`];
-  items.slice(0, BRAIN_DUMP_ITEMS_IN_PROMPT).forEach(item => {
+  items.slice(-BRAIN_DUMP_ITEMS_IN_PROMPT).reverse().forEach(item => {
     const text = String(item.text || "").replace(/\s+/g, " ").trim();
     if (!text) return;
     const truncated = text.length > BRAIN_DUMP_ITEM_MAX_LENGTH ? `${text.slice(0, BRAIN_DUMP_ITEM_MAX_LENGTH).trim()}...` : text;

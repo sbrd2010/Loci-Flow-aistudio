@@ -20,8 +20,7 @@ async function enterDemo(page) {
 }
 
 // Scoped to the main navigation so this never collides with in-page buttons that
-// happen to contain a tab's name in their own label (e.g. Mind Box's "N
-// notes → Roadmap Inbox" deep-link button).
+// happen to contain a tab's name in their own label.
 async function openTab(page, name) {
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name, exact: true }).click();
 }
@@ -113,30 +112,21 @@ test("reliability: pinning a task sets Now Focus", async ({ page }) => {
   await expect(pinnedSection).toContainText(title);
 });
 
-test("reliability: brain dump item survives tab switch and is browsable via Roadmap's Inbox", async ({ page }) => {
+test("reliability: a thought survives a tab switch and stays in Mind Box", async ({ page }) => {
   await enterDemo(page);
-
-  // Navigate to Mind Box and add a brain dump item via the inline form
   await openTab(page, "Mind Box");
   await expect(page.locator(".braindump-input").first()).toBeVisible({ timeout: 8_000 });
 
   const thought = "Test brain dump regression item";
   await page.locator(".braindump-input").first().fill(thought);
   await page.locator(".braindump-submit").first().click();
+  const row = page.getByTestId("thought-row").filter({ hasText: thought });
+  await expect(row).toBeVisible({ timeout: 5_000 });
 
-  // Mind Box's inbox button deep-links straight to Roadmap's Inbox — no
-  // browsable list of its own anymore.
-  await page.getByTestId("brain-dump-inbox-btn").click();
-  await expect(page.getByRole("heading", { name: "Plan", level: 1 })).toBeVisible({ timeout: 8_000 });
-  const dumpItem = page.locator('[data-testid="dump-item"]').filter({ hasText: thought });
-  await expect(dumpItem).toBeVisible({ timeout: 5_000 });
-
-  // Switch away and back — item must survive the tab switch
-  await openTab(page, "Mind Box");
+  // Switch away and back — the thought must survive the tab switch.
   await openTab(page, "Plan");
-  await page.getByRole("tab", { name: "Horizons" }).click();
-  await expect(page.getByRole("heading", { name: /^Inbox/ })).toBeVisible();
-  await expect(dumpItem).toBeVisible({ timeout: 5_000 });
+  await openTab(page, "Mind Box");
+  await expect(row).toBeVisible({ timeout: 5_000 });
 });
 
 test("reliability: All · Must-do filters the list to must-dos and back", async ({ page }) => {

@@ -44,7 +44,7 @@ async function expectNoHorizontalOverflow(page) {
   expect(widths.maxScrollWidth).toBeLessThanOrEqual(widths.innerWidth + 8);
 }
 
-test("mobile reliability: Brain Dump item is addable from Mind Box, browsable only from Roadmap Inbox (via a deep link), survives navigation, and can be deleted intentionally", async ({ page }) => {
+test("mobile reliability: a thought added in Mind Box is listed there, survives navigation, and Let go has Undo (Q56.2)", async ({ page }) => {
   await enterDemo(page);
   await openTab(page, "Mind Box");
   await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 8_000 });
@@ -55,44 +55,43 @@ test("mobile reliability: Brain Dump item is addable from Mind Box, browsable on
   await page.locator(".braindump-submit").first().click();
   await expect(input).toHaveValue("");
 
-  // Mind Box no longer has its own browsable list — its "N notes" button
-  // opens Plan's Horizons, whose Inbox holds them.
-  await expect(page.getByTestId("brain-dump-inbox-btn")).toContainText("Roadmap Inbox");
-  await expectNoHorizontalOverflow(page);
-  await page.getByTestId("brain-dump-inbox-btn").click();
-
-  await expect(page.getByRole("heading", { name: "Plan", level: 1 })).toBeVisible({ timeout: 8_000 });
-  const dumpItem = page.locator('[data-testid="dump-item"]').filter({ hasText: thought });
-  await expect(dumpItem).toBeVisible({ timeout: 5_000 });
+  // Thoughts live in Mind Box, newest first (demo seeds 4).
+  const rows = page.getByTestId("thought-row");
+  await expect(rows).toHaveCount(5);
+  await expect(rows.first()).toContainText(thought);
+  await expect(page.getByRole("heading", { name: /^THOUGHTS · 5/ })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  // Survives navigation away and back.
-  await openTab(page, "Today");
-  await expect(page.getByTestId("today-tasks-list")).toBeVisible({ timeout: 8_000 });
+  // Plan has no Inbox any more.
   await openTab(page, "Plan");
-  // The nav tab lands on Plan by design; the Inbox is a column on the horizon
-  // board behind it. (The "N notes waiting" deep link above goes straight
-  // there, which is why it needs no hop.)
-  await page.getByRole("tab", { name: "Horizons" }).click();
-  await expect(page.getByRole("heading", { name: /^Inbox/ })).toBeVisible();
-  await expect(dumpItem).toBeVisible({ timeout: 5_000 });
-
-  await dumpItem.getByText("🗑").click();
-  await expect(page.getByText("Delete this brain dump item?")).toBeVisible({ timeout: 5_000 });
-  await page.getByRole("button", { name: "Keep it", exact: true }).click();
-  await expect(dumpItem).toBeVisible({ timeout: 5_000 });
-
-  await dumpItem.getByText("🗑").click();
-  await expect(page.getByText("Delete this brain dump item?")).toBeVisible({ timeout: 5_000 });
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
-  await expect(dumpItem).not.toBeVisible({ timeout: 5_000 });
-
-  // Back in Mind Box, the count is back down to the demo seed's 4 items
-  // (bd1-bd4 in demoData.js) now that the one we added has been deleted.
+  await expect(page.getByRole("heading", { name: /^Inbox/ })).toHaveCount(0);
   await openTab(page, "Mind Box");
-  await expect(page.getByTestId("brain-dump-inbox-btn")).toContainText("4 notes");
-  await expectNoHorizontalOverflow(page);
+  await expect(rows.first()).toContainText(thought);
+
+  // With a mouse the actions show on hover (64a); on touch they're always there.
+  await rows.first().hover();
+  await rows.first().getByRole("button", { name: "Let go" }).click();
+  await expect(rows).toHaveCount(4);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(rows.first()).toContainText(thought);
 });
+
+test("mobile reliability: Make it a task opens Add prefilled, and the thought leaves once it's a task", async ({ page }) => {
+  await enterDemo(page);
+  await openTab(page, "Mind Box");
+  const row = page.getByTestId("thought-row").first();
+  const text = (await row.locator(".thought-text").innerText()).trim();
+  await row.hover();
+  await row.getByRole("button", { name: "Make it a task" }).click();
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("radiogroup", { name: "Add a" })).toHaveCount(0);
+  await expect(dialog.getByTestId("add-task-title")).toHaveValue(text);
+  await dialog.getByRole("button", { name: /^Add to/ }).click();
+  await expect(dialog).toHaveCount(0, { timeout: 5_000 });
+  await expect(page.getByTestId("thought-row").filter({ hasText: text })).toHaveCount(0);
+});
+
 test("Mind Box has no Progress, streak or Key Deadline Mirror (Q57)", async ({ page }) => {
   await enterDemo(page);
   await openTab(page, "Mind Box");
