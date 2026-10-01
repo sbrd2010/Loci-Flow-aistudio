@@ -1160,6 +1160,15 @@ describe("rule caps on config strings and chat messages (one over-long value mus
     expect(result[1].actions).toEqual([{ matched: true }]);
   });
 
+  it("keeps a message's numeric time stamp (Q50 kicker) and drops one the rules would reject", () => {
+    const result = sanitizeChatHistoryForRules([
+      { text: "hi", isUser: true, at: 1759300000000 },
+      { text: "yo", isUser: false, at: "09:35" },
+    ]);
+    expect(result[0]).toEqual({ text: "hi", isUser: true, at: 1759300000000 });
+    expect("at" in result[1]).toBe(false);
+  });
+
   it("chat messages with a missing or non-string text are coerced to a string, and non-objects are dropped", () => {
     const result = sanitizeChatHistoryForRules([{ isUser: false }, null, "junk", { text: 7, isUser: true }]);
     expect(result).toEqual([{ text: "", isUser: false }, { text: "7", isUser: true }]);
