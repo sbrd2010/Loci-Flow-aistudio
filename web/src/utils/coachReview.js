@@ -67,10 +67,14 @@ export function reviewFacts({ tasks = [], contributions = [], config = {}, focus
   // for day and differ only between midnight and the end of a late window.
   const ticks = sliceContributions(contributions, getDateRangeDays(period, now));
   const stats = computeRangeStats(ticks);
+  // Under each bar, the ticks of that same date, matched by date, not by
+  // position: after midnight in a late window the calendar has moved on
+  // while the Loci day hasn't, and a position match would shift every day.
+  const ticksOn = new Map(sliceContributions(contributions, days).map(d => [d.dateString, d.count]));
   const perDay = days.map((date, i) => ({
     date,
     minutes: ledger ? ledger.perDay[i]?.minutes || 0 : null,
-    ticks: ticks[i].count,
+    ticks: ticksOn.get(date) || 0,
   }));
 
   const byFront = ledger

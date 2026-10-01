@@ -50,8 +50,8 @@ function DayChart({ days, period }) {
             {dense ? (i % 5 === 0 || i === last ? parseDay(d.date).getDate() : "") : WEEKDAYS[parseDay(d.date).getDay()]}
           </span>
         ))}
-        {!dense && days.map(d => (
-          <span key={`t${d.date}`} className={d.ticks ? undefined : "is-quiet"}>{d.ticks ? `✓${d.ticks}` : "·"}</span>
+        {days.map(d => (
+          <span key={`t${d.date}`} className={d.ticks ? undefined : "is-quiet"}>{d.ticks ? (dense ? d.ticks : `✓${d.ticks}`) : "·"}</span>
         ))}
       </div>
     </div>
