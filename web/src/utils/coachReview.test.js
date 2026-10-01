@@ -118,6 +118,8 @@ describe("reviewFacts", () => {
     const f = reviewFacts({ tasks: [], contributions: [{ dateString: "2026-10-02", count: 1 }], period: "today", now: at1am, windows: late });
     expect(f.days[0].date).toBe("2026-10-01");
     expect(f.completed).toBe(1);
+    // The 2 Oct tick isn't put under the 1 Oct bar.
+    expect(f.days[0].ticks).toBe(0);
   });
 
   it("doesn't claim focus figures it couldn't read", () => {
