@@ -455,7 +455,7 @@ export default function App() {
       // before either tab's "coachCheckin: null" write propagates to the other —
       // skip appending if the resume message is already the last chat message.
       if (!isDuplicateCheckinResume(current.chatHistory, resumeText)) {
-        saveSubPath("chatHistory", [...(current.chatHistory || []), { text: resumeText, isUser: false }]);
+        saveSubPath("chatHistory", [...(current.chatHistory || []), { text: resumeText, isUser: false, at: Date.now() }]);
       }
       saveConfigPatch({ coachCheckin: null });
       cancelCoachCheckin();

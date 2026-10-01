@@ -281,7 +281,7 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
 
   const handleBadDayReset = () => {
     setConfirmDialog({
-      message: "Park all active tasks for today?\n\nThis is a restart without shame — everything moves to parked. You can restore tasks from the AI Coach tab whenever you're ready.",
+      message: "Park all active tasks for today?\n\nThis is a restart without shame — everything moves to parked. Restore them from Parked, at the bottom of Today's list, whenever you're ready.",
       confirmLabel: "Yes, restart", cancelLabel: "Not now",
       onConfirm: () => {
         // Only tasks that actually transition from unparked to parked count
@@ -309,7 +309,7 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
           // in TodayTab/RoadmapTab for why these can diverge.
           events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
         }
-        savePayloadAsync({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, parkedAt: Date.now(), isNowFocus: false, lastUpdated: Date.now() } : t) })
+        savePayloadAsync({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, parkedAt: t.isParked && t.parkedAt ? t.parkedAt : Date.now(), isNowFocus: false, lastUpdated: Date.now() } : t) })
           .then(() => writeActivityEvents(eventsPatch(uid, events)))
           .catch(() => {});
         setConfirmDialog(null);
