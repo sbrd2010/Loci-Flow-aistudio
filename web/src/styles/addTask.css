@@ -366,3 +366,57 @@
 @media (prefers-reduced-motion: reduce) {
   .add-block { transition: none; }
 }
+
+/* Q56 (64s–t): Task | Thought. The switch takes the heading's place; the
+   heading stays for screen readers. */
+.add-heading.is-sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.add-seg {
+  margin-right: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  flex: 1;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.add-seg-btn {
+  min-height: 40px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+}
+.add-seg-btn + .add-seg-btn { border-left: 1px solid var(--edge); }
+.add-seg-btn.is-on { background: var(--accent); color: var(--on-accent); }
+.add-seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.add-thought { display: flex; flex-direction: column; gap: 16px; }
+.add-thought-input {
+  min-height: 52px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1.5px solid var(--accent);
+  background: none;
+  font: inherit;
+  font-size: 17px;
+  color: var(--ink);
+  outline: none;
+}
+.add-thought-input::placeholder { color: var(--placeholder); }
+.add-thought-note { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.add-thought-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.add-thought-hint { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; color: var(--placeholder); }
+.add-thought-foot .add-btn-filled { min-height: 40px; padding: 0 18px; border-radius: 4px; font-size: 15px; font-weight: 700; cursor: pointer; }
+.add-thought-foot .add-btn-filled:disabled { opacity: 0.5; cursor: default; }
+@media (pointer: coarse) {
+  .add-thought-hint { display: none; }
+  .add-thought-foot .add-btn-filled { flex: 1; min-height: 48px; }
+}
+@media (max-width: 839px) {
+  .add-seg-btn { min-height: 48px; }
+}

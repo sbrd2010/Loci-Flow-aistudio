@@ -9,6 +9,7 @@ import { BUILT_IN_HORIZONS, horizonsFromConfig } from "../utils/horizons";
 import { frontsFromConfig, sortFronts } from "../utils/fronts";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { IconCheck, IconChevronRight, IconPencil, IconX } from "./ui/icons";
+import { THOUGHTS_MAX, addThought } from "../utils/thoughts";
 import "../styles/addTask.css";
 
 function defaultReminderDateTime() {
@@ -31,9 +32,13 @@ function parseManualSubSteps(raw) {
 // the save path has to tell "the user chose 25" from "nobody chose anything".
 const DEFAULT_ESTIMATE_MINUTES = 25;
 
-export default function AddTaskDialog({ email, payload, savePayload, savePayloadAsync, userProfile, defaultHorizon, defaultFrontId = null, openedFrom = null, onClose, uid, writeActivityEvents }) {
+export default function AddTaskDialog({ email, payload, savePayload, savePayloadAsync, userProfile, defaultHorizon, defaultFrontId = null, openedFrom = null, onClose, uid, writeActivityEvents, initialMode = "task", initialTitle = "", fromThoughtId = null, onThoughtSaved }) {
   const windows = getFocusWindows(payload.config || {});
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(initialTitle);
+  // Q56: Add opens with Task | Thought. A thought made into a task (Mind Box's
+  // "Make it a task") stays a task, so it shows no switch.
+  const [mode, setMode] = useState(fromThoughtId ? "task" : initialMode);
+  const [thoughtError, setThoughtError] = useState("");
   const [concreteStep, setConcreteStep] = useState("");
   const [horizonLevel, setHorizonLevel] = useState(defaultHorizon || "today");
   const [saved, setSaved] = useState(false);
@@ -280,7 +285,9 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     const event = buildTaskMutationEvent("task_created", freshTask, { windows });
     savePayloadAsync({
       ...payload,
-      tasks: updatedTasks
+      tasks: updatedTasks,
+      // Made from a thought: the thought is done with once it's a task.
+      ...(fromThoughtId ? { brainDump: (payload.brainDump || []).filter(d => d.id !== fromThoughtId) } : {}),
     })
       .then(() => writeActivityEvents(eventPatch(uid, event)))
       .catch(() => {});
@@ -316,6 +323,27 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
   const chip = (selected) => `add-chip${selected ? " is-selected" : ""}`;
 
+  // A thought is one line: Enter saves it to Mind Box, nothing to decide.
+  const saveThought = (e) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    const added = addThought(payload, title);
+    if (!added) { setThoughtError(`Mind Box holds ${THOUGHTS_MAX} thoughts. Let a few go first.`); return; }
+    savePayload(added.payload);
+    onThoughtSaved?.(added.item);
+    onClose();
+  };
+  const thoughtRef = useRef(null);
+  const switchMode = (next) => {
+    setMode(next);
+    setThoughtError("");
+  };
+  useEffect(() => {
+    if (mode === "thought") thoughtRef.current?.focus();
+    else cardRef.current?.querySelector(".add-title")?.focus();
+  }, [mode]);
+  const heading = mode === "thought" ? "New thought" : "New task";
+
   return (
     <div className="add-overlay" onClick={onClose}>
       <div
@@ -329,10 +357,38 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       >
         <span className="add-grabber" aria-hidden="true" />
         <div className="add-head">
-          <h2 id="add-task-heading" className="add-heading">New task</h2>
+          <h2 id="add-task-heading" className={`add-heading${fromThoughtId ? "" : " is-sr"}`}>{heading}</h2>
+          {!fromThoughtId && (
+            <div className="add-seg" role="radiogroup" aria-label="Add a">
+              {[["task", "Task"], ["thought", "Thought"]].map(([id, label]) => (
+                <button key={id} type="button" role="radio" aria-checked={mode === id}
+                  className={`add-seg-btn${mode === id ? " is-on" : ""}`} onClick={() => switchMode(id)}>{label}</button>
+              ))}
+            </div>
+          )}
           <button type="button" className="add-close" onClick={onClose} aria-label="Close"><IconX size={20} /></button>
         </div>
 
+        {mode === "thought" ? (
+          <form onSubmit={saveThought} className="add-body add-thought">
+            <input
+              ref={thoughtRef}
+              className="add-thought-input"
+              aria-label="Thought"
+              placeholder="What's on your mind?"
+              value={title}
+              maxLength={500}
+              onChange={e => { setTitle(e.target.value); setThoughtError(""); }}
+              onKeyDown={e => { if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); switchMode("task"); } }}
+            />
+            <p className="add-thought-note">Saved to Mind Box. No date, no front, nothing to decide now.</p>
+            {thoughtError && <p className="add-error-line" role="alert">{thoughtError}</p>}
+            <div className="add-thought-foot">
+              <span className="add-thought-hint" aria-hidden="true">ENTER SAVES · TAB SWITCHES · ESC CLOSES</span>
+              <button type="submit" className="add-btn-filled" disabled={!title.trim()}>Save thought</button>
+            </div>
+          </form>
+        ) : (
         <form ref={formRef} onSubmit={handleSubmit} className="add-body">
           {isEveningGuardBlocked(payload.config) && (
             <p className="add-warning">Evening Guard is on: adding tasks after 8 PM is blocked. Rest now.</p>
@@ -586,6 +642,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
             )}
           </div>
         </form>
+        )}
       </div>
     </div>
   );
