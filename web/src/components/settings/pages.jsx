@@ -230,7 +230,7 @@ export function KeyDeadlinePage({ config, saveConfigPatch, onBack }) {
   const left = daysLeft(config.deadlineDate);
   const hasGoal = !!(config.deadlineLabel || config.deadlineDate || config.deadlineAction || config.deadlineStartDate);
   return (
-    <SubPage title="Key deadline" onBack={onBack} lede="One goal with a date. It shows as the gold band on Today and the week in Mind Box.">
+    <SubPage title="Key deadline" onBack={onBack} lede="One goal with a date. It shows as the gold band on Today; tap the band for its record.">
       <label className="set-field">
         <span className="set-label">Goal</span>
         <input className="set-input" value={goal} onChange={e => setGoal(e.target.value)} onBlur={flushGoal} placeholder="e.g. Submit the thesis draft" />
@@ -251,6 +251,19 @@ export function KeyDeadlinePage({ config, saveConfigPatch, onBack }) {
         <input className="set-input" value={daily} onChange={e => setDaily(e.target.value)} onBlur={flushDaily} placeholder="e.g. 3 job apply + PRINCE2" aria-describedby="set-target-note" />
         <span className="set-note" id="set-target-note">The least you'll do each day toward this goal.</span>
       </label>
+      {/* The goal record's dots (Q57.2): 7 rolling days, or Mon–Fri with a
+          weekend day shown only as a bonus when a goal task was done. */}
+      <Group label="Count days">
+        <RadioList
+          label="Count days"
+          options={[
+            { value: "all", label: "All 7", sub: "The last 7 days" },
+            { value: "weekdays", label: "Weekdays only", sub: "Monday to Friday; a weekend day with a goal task done shows as a bonus" },
+          ]}
+          value={config.goalDaysMode === "weekdays" ? "weekdays" : "all"}
+          onChange={v => saveConfigPatch({ goalDaysMode: v })}
+        />
+      </Group>
       {/* The band's three lines, before you leave (Q49). */}
       <div className="set-preview" aria-label="Preview of the goal band">
         <div className="set-preview-head">
@@ -320,6 +333,37 @@ function shortDate(ts, dayStr) {
   const d = dayStr ? new Date(`${dayStr}T12:00:00`) : ts ? new Date(ts) : null;
   if (!d || isNaN(d)) return null;
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }).toUpperCase();
+}
+
+// Q54: exactly what a Coach message sends to the AI provider. The chat's
+// privacy line links here; if what's sent changes, change both together.
+const COACH_SENDS = [
+  { title: "Your lists", sub: "Open tasks on Today and in Plan with their steps, times and reminders, plus tasks finished or parked lately." },
+  { title: "Your goal", sub: "The key deadline, its date and its daily target." },
+  { title: "Your day", sub: "The Day map, the focus session running now, and how many tasks you finished each day." },
+  { title: "Parts of Mind Box", sub: "The first 3 Brain Dump thoughts and how many wait, your Daily Anchors, and a short note after Rescue Mode." },
+  { title: "Check-ins", sub: "Today's committed tasks, your evening reflection and your note for tomorrow." },
+  { title: "Coach's memory", sub: "The notes in Coach memory. Nothing when memory is off." },
+  { title: "About you", sub: "What you wrote in About you, and patterns such as how often you finish tasks." },
+  { title: "This conversation", sub: "Recent messages and a summary of older ones." },
+];
+
+export function CoachPrivacyPage({ onBack, backLabel }) {
+  return (
+    <SubPage title="Privacy" onBack={onBack} backLabel={backLabel}
+      lede="Each chat message to Coach sends these to your AI provider.">
+      <Group label="Coach sees">
+        {COACH_SENDS.map(item => (
+          <div key={item.title} className="set-row is-static">
+            <span className="set-row-text">
+              <span className="set-row-title">{item.title}</span>
+              <span className="set-row-sub">{item.sub}</span>
+            </span>
+          </div>
+        ))}
+      </Group>
+    </SubPage>
+  );
 }
 
 export function CoachMemoryPage({ config, saveConfigPatch, onBack, backLabel, onConfirm }) {

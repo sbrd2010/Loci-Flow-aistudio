@@ -13,7 +13,7 @@ import { isNativeApp, notifPermissionState, requestNotifPermission as nativeRequ
 import { IconX } from "./ui/icons";
 import { Group, Row, SubPage, SwitchRow } from "./settings/ui";
 import {
-  ANCHOR_MODES, AiProviderPage, AnchorsPage, CoachMemoryPage, CoachPage, DataPage, FocusWindowsPage,
+  ANCHOR_MODES, AiProviderPage, AnchorsPage, CoachMemoryPage, CoachPage, CoachPrivacyPage, DataPage, FocusWindowsPage,
   KeyDeadlinePage, NotificationsPage, ProfilePage, ReminderPage, TimerPage, coachName, providerLine,
 } from "./settings/pages";
 import "../styles/settings.css";
@@ -108,9 +108,9 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
   });
   const signOut = () => askConfirm({ message: "Sign out? Your data stays saved.", confirmLabel: "Sign out", onConfirm: () => onSignOut?.() });
   const resetTracking = () => askConfirm({
-    message: "Reset 7-day tracking?\n\nThis clears the week chart and the streak in Mind Box. Tasks stay. It can't be undone.",
+    message: "Reset 7-day tracking?\n\nThis clears the completed-task history in Coach › Review. Tasks stay. It can't be undone.",
     confirmLabel: "Reset",
-    onConfirm: () => { saveSubPath("contributions", []); saveConfigPatch({ visitStreakCount: 0 }); },
+    onConfirm: () => saveSubPath("contributions", []),
   });
   const requestPermission = async () => setPermission(await nativeRequestPermission());
 
@@ -135,9 +135,9 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
   const coachRows = (
     <>
       <Row title="Coach memory" sub={isMemoryEnabled(config) ? `${memoryCount} ${memoryCount === 1 ? "note" : "notes"}` : "Off"} onClick={() => open("memory")} />
-      <SwitchRow title="Proactive nudges" sub="Once a day, in Coach only" checked={config.coachNudgesEnabled !== false} onChange={v => saveConfigPatch({ coachNudgesEnabled: v })} />
       <SwitchRow title="Evening check-in" sub="A short reflection card at the end of the day" checked={config.dailyCheckinsEnabled !== false} onChange={v => saveConfigPatch({ dailyCheckinsEnabled: v })} />
       <Row title="AI provider" sub={providerLine()} onClick={() => open("ai")} />
+      <Row title="Privacy" sub="What Coach sees" onClick={() => open("privacy")} />
     </>
   );
   const appearanceGroup = (
@@ -182,6 +182,7 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
         {wide && <Group label="Coach">{coachRows}</Group>}
       </CoachPage>
     ),
+    privacy: () => <CoachPrivacyPage onBack={wide ? () => setPage("coach") : back} backLabel={wide ? "Coach" : backLabel} />,
     memory: () => <CoachMemoryPage config={config} saveConfigPatch={saveConfigPatch} onBack={back} onConfirm={askConfirm} />,
     ai: () => <AiProviderPage onBack={back} />,
     notifications: () => <NotificationsPage permission={permission} onRequest={requestPermission} onBack={back} />,
@@ -208,7 +209,7 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
 
   if (wide) {
     const current = page || "profile";
-    const section = DAY_PAGES.includes(current) ? "day" : current;
+    const section = DAY_PAGES.includes(current) ? "day" : current === "privacy" ? "coach" : current;
     return (
       <div className="set-wide">
         <nav className="set-nav" aria-label="Settings sections">

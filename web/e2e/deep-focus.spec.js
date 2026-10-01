@@ -323,9 +323,8 @@ test("mobile reliability: Opening Rescue chat without typing still hands off con
   await expect(page.getByText("Let's find one small step together.").first()).toBeVisible({ timeout: 8_000 });
 
   expect(groqRequestBodies.length).toBeGreaterThan(0);
-  // Coach now opens with its own proactive nudge (J3), so index 0 is that
-  // call, not this message. Pick the request that actually carries what was
-  // typed rather than assuming the user's turn is the first one out.
+  // Pick the request that actually carries what was typed rather than
+  // assuming the user's turn is the first one out.
   const mine = groqRequestBodies.find(b =>
     (b.messages || []).some(m => m.role === "user" && String(m.content).includes("scattered")));
   expect(mine).toBeDefined();

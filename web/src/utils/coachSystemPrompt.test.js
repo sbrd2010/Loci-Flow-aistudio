@@ -30,7 +30,6 @@ function baseCtx() {
     nowLabel: "Tue, Jun 17, 10:00 AM",
     timeOfDay: "morning",
     todayActiveCount: 3,
-    streakCount: 5,
     profileBlock: "",
   };
 }
