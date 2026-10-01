@@ -46,8 +46,6 @@ test("mobile reliability: Coach chat sends reasoning_effort low to Groq", async 
   await page.locator(".coach-composer-input").fill("I feel a bit scattered right now");
   await page.getByRole("button", { name: "Send" }).click();
 
-  // Two replies now carry this text: Coach opens with the proactive nudge (J3
-  // moved it off Today and onto Coach's first line), then answers the message.
   // The subject here is the request body, not which paragraph rendered.
   await expect(page.getByText("Let's pick one tiny next step.").first()).toBeVisible({ timeout: 8_000 });
 
@@ -100,9 +98,6 @@ test("mobile reliability: Coach chat never reaches the AI provider on crisis lan
   const composer = page.locator(".coach-composer-input");
   await expect(composer).toBeVisible({ timeout: 10_000 });
 
-  // A proactive nudge may legitimately call the provider on arrival; let it
-  // settle and ignore it, so the assertion below is about THIS message only.
-  await page.waitForTimeout(1500);
   hits.length = 0;
 
   await composer.fill("I want to kill myself");

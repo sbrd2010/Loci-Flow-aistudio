@@ -11,14 +11,6 @@ import { buildTaskMutationEvent, buildFocusTerminalEvent, eventsPatch } from "..
 import { isOnToday } from "../utils/deferral";
 import { isEventTask } from "../utils/dayMapRoute";
 
-function IconTrendingUp() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-      <polyline points="17 6 23 6 23 12"/>
-    </svg>
-  );
-}
 function IconSun() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -80,7 +72,7 @@ function IconChevronRight() {
 }
 
 export default function MindBoxTab({ payload, savePayload, savePayloadAsync, saveConfigPatch, userProfile, initialPanel, onOpenRoadmapInbox, isSyncingFromCache = false, syncWarning = null, uid, writeActivityEvents, focusTimer = {} }) {
-  const { tasks = [], config = {}, contributions = [] } = payload;
+  const { tasks = [], config = {} } = payload;
   const windows = getFocusWindows(config);
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -183,19 +175,6 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
   const hasAnyKey = hasAIKey();
 
   // ── Helper data ────────────────────────────────────────────────────────────
-  const getBentoDays = () => {
-    const days = [];
-    const d = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const past = new Date(d);
-      past.setDate(d.getDate() - i);
-      const dateStr = `${past.getFullYear()}-${String(past.getMonth() + 1).padStart(2, "0")}-${String(past.getDate()).padStart(2, "0")}`;
-      const contr = contributions.find((c) => c.dateString === dateStr);
-      days.push({ dateStr, label: past.toLocaleDateString("en-US", { weekday: "short" }).substring(0, 2), count: contr ? contr.count : 0 });
-    }
-    return days;
-  };
-  const bentoDays = getBentoDays();
   const dumpCount = (payload.brainDump || []).length;
 
   // ── Handlers ───────────────────────────────────────────────────────────────
@@ -804,67 +783,6 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
         </>
       )}
 
-      {/* ── Sub-view: 7-Day Progress */}
-      {toolPanel === "progress" && (() => {
-        const totalDone = tasks.filter(t => !t.isDeleted && t.isCompleted).length;
-        const activeDays = bentoDays.filter(d => d.count > 0).length;
-        return (
-          <>
-            <div className="mindbox-subview-header">
-              <button className="mindbox-back-btn" onClick={() => setToolPanel(null)}>← Back</button>
-              <h2 className="mindbox-subview-title">7-Day Progress</h2>
-            </div>
-
-            {/* Streak + bento */}
-            <div style={{ textAlign: "center", padding: "16px 0 20px" }}>
-              <span style={{ fontSize: "clamp(48px, 14vw, 72px)", fontWeight: "700", color: "var(--accent)", lineHeight: "1", fontFamily: "var(--font-mono)" }}>
-                {config.visitStreakCount || 0}
-              </span>
-              <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "4px", marginBottom: "20px" }}>
-                day streak 🔥
-              </div>
-              <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginBottom: "8px" }}>
-                {bentoDays.map((day, i) => {
-                  const isToday = i === 6;
-                  const count = day.count;
-                  const intensity = count === 0 ? 0 : count < 2 ? 0.45 : count < 4 ? 0.7 : 1;
-                  return (
-                    <div key={day.dateStr} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
-                      <div style={{
-                        width: isToday ? "36px" : "28px", height: isToday ? "36px" : "28px",
-                        borderRadius: "50%",
-                        background: count > 0 ? `rgba(99,102,241,${intensity})` : "var(--bg-secondary)",
-                        border: isToday ? "2.5px solid var(--accent)" : "2px solid var(--border)",
-                        transition: "all 0.2s",
-                        display: "flex", alignItems: "center", justifyContent: "center"
-                      }}>
-                        {count > 0 && <span style={{ fontSize: "9px", fontWeight: "800", color: "#fff" }}>{count}</span>}
-                      </div>
-                      <span style={{ fontSize: "9px", fontWeight: isToday ? "900" : "600", color: isToday ? "var(--accent)" : "var(--text-muted)", textTransform: "uppercase" }}>{day.label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" }}>Each circle shows tasks completed that day</p>
-            </div>
-
-            {/* Stats row */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-              {[
-                { label: "Tasks Done", value: totalDone, color: "var(--success)" },
-                { label: "Days Active", value: activeDays, color: "var(--text-primary)" }
-              ].map(stat => (
-                <div key={stat.label} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "12px 8px", textAlign: "center" }}>
-                  <div style={{ fontSize: "22px", fontWeight: "900", color: stat.color, fontFamily: "var(--font-mono)", lineHeight: 1 }}>{stat.value}</div>
-                  <div style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "4px" }}>{stat.label}</div>
-                </div>
-              ))}
-            </div>
-
-          </>
-        );
-      })()}
-
       {/* ── Sub-view: Morning Ritual */}
       {toolPanel === "ritual" && (
         <>
@@ -978,14 +896,6 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
 
           {/* 2×2 tool grid */}
           <div className="mindbox-grid">
-            <button className="mindbox-card" onClick={() => setToolPanel("progress")}>
-              <span className="mindbox-card-icon mindbox-card-icon--accent"><IconTrendingUp /></span>
-              <span className="mindbox-card-body">
-                <span className="mindbox-card-title">Progress</span>
-                <span className="mindbox-card-sub">{config.visitStreakCount || 0}-day streak</span>
-              </span>
-              <span className="mindbox-card-chevron"><IconChevronRight /></span>
-            </button>
             <button className="mindbox-card" onClick={() => setToolPanel("ritual")}>
               <span className="mindbox-card-icon mindbox-card-icon--warning"><IconSun /></span>
               <span className="mindbox-card-body">
