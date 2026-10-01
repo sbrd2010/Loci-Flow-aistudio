@@ -45,6 +45,7 @@ import TaskDetail from "./TaskDetail";
 import DayMapColumn from "./DayMapColumn";
 import { makeOneThing, undoOneThing } from "../utils/oneThing";
 import { addThought } from "../utils/thoughts";
+import { clearMyDay, undoClearMyDay } from "../utils/clearMyDay";
 import { buildGoalRecord, goalStartDay, goalTaskDoneToday, nextGoalTask } from "../utils/goalRecord";
 import { horizonsFromConfig } from "../utils/horizons";
 import { confirmedMinimumDay } from "../utils/minimumDay";
@@ -92,6 +93,9 @@ export default function TodayTab({
   closeLine = null, dayClosed = null, onOpenCloseDay = null,
   // Q49: the goal band opens Settings → Key deadline.
   onOpenKeyDeadline = null,
+  // Q55.3: Mind Box asks for Rescue here (where focus can start); Leave tells
+  // App, which goes back to where it was opened from.
+  rescueRequest = null, onRescueClosed,
   // The mini window's I'm stuck (59b → 59d).
   stuckPending = false, onStuckShown,
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft,
@@ -296,7 +300,12 @@ export default function TodayTab({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates, keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space", "Enter"] } })
   );
 
-  const openRescueMode = () => {
+  const [rescueInitialState, setRescueInitialState] = useState(null);
+  // Opened from Mind Box: Leave goes back there.
+  const [rescueFromMindBox, setRescueFromMindBox] = useState(false);
+  const openRescueMode = (initialState = null, fromMindBox = false) => {
+    setRescueInitialState(typeof initialState === "string" ? initialState : null);
+    setRescueFromMindBox(fromMindBox === true);
     if ((isFocusMode || isTimerRunning || focusSessionActive) && activeTask) {
       // Opened from inside an active Deep Focus session (the Stuck? button) —
       // rescue the task actually being focused on, even if it isn't in
@@ -1577,10 +1586,11 @@ export default function TodayTab({
 
 
 
-  const setRescueTaskAsNowFocus = ({ close = false } = {}) => {
+  const setRescueTaskAsNowFocus = ({ close = false, target = rescueTask } = {}) => {
     if (close) setRescueActive(false);
+    const rescueTask = target;
     // Q36.3: something at a set time is never the focus (Codex review of #431).
-    if (!rescueTask || isEventTask(rescueTask)) return;
+    if (!rescueTask || isEventTask(rescueTask)) return Promise.resolve();
     const now = Date.now();
     // Retargeting focus to rescueTask clears isNowFocus on whichever task
     // currently holds it — end that task's open session first, or it's left
@@ -1598,7 +1608,7 @@ export default function TodayTab({
     }
     // This can also unpark rescueTask (see below) — record that transition too.
     const wasParked = !!rescueTask.isParked;
-    savePayloadAsync({ ...payload, tasks: tasks.map(t => {
+    return savePayloadAsync({ ...payload, tasks: tasks.map(t => {
       const newFocus = t.uuid === rescueTask.uuid;
       if (!newFocus) {
         if (!t.isNowFocus) return t;
@@ -1622,6 +1632,72 @@ export default function TodayTab({
         if (events.length > 0) writeActivityEvents(eventsPatch(uid, events));
       })
       .catch(() => {});
+  };
+
+  // ── Rescue's actions (Q55.3) ──
+  // A state picked on Mind Box opens Rescue here.
+  useEffect(() => {
+    if (rescueRequest?.at) openRescueMode(rescueRequest.state || null, true);
+  }, [rescueRequest?.at]); // eslint-disable-line react-hooks/exhaustive-deps
+  const closeRescue = () => {
+    setRescueActive(false);
+    if (rescueFromMindBox) onRescueClosed?.();
+  };
+  // Back to it / One thing, N minutes: the one thing, pinned if it isn't yet,
+  // then a focus block of that length.
+  const startRescueFocus = (minutes) => {
+    setRescueActive(false);
+    const target = rescueTask;
+    if (!target || isEventTask(target)) return;
+    const pin = target.isNowFocus ? null : setRescueTaskAsNowFocus({ target });
+    startFocusAndLog(target, pin, { plannedSeconds: minutes * 60 });
+  };
+  // Clear my day (Q52): Today's open tasks only, with Undo.
+  const handleClearMyDay = (dest, keepUuid) => {
+    const now = Date.now();
+    const result = clearMyDay(tasks, { dest, todayStr, keepUuid, now });
+    if (!result) return null;
+    const movedOne = !keepUuid && result.before.some(t => t.isNowFocus);
+    const endedFocusSession = movedOne && focusSessionId ? endFocusSession("user_abandoned") : null;
+    if (endedFocusSession) {
+      setIsTimerRunning(false);
+      setIsFocusMode(false);
+      setFocusSessionActive(false);
+    }
+    const events = result.before.map(t => buildTaskMutationEvent(dest === "park" ? "task_parked" : "task_moved", t, {
+      ...(dest === "park" ? {} : { fromState: { horizonLevel: "today" }, toState: { horizonLevel: dest === "week" ? "week" : "today" } }),
+      windows, now,
+    }));
+    if (endedFocusSession) {
+      events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+    }
+    savePayloadAsync({ ...payload, tasks: result.tasks })
+      .then(() => writeActivityEvents(eventsPatch(uid, events)))
+      .catch(() => {});
+    return {
+      count: result.ids.length,
+      undo: () => savePayload({ ...latestPayloadRef.current, tasks: undoClearMyDay(latestPayloadRef.current.tasks || [], result) }),
+    };
+  };
+  const handleRescueThought = (text) => {
+    const added = addThought(payload, text);
+    if (!added) return false;
+    savePayload(added.payload);
+    return true;
+  };
+  const handleRescueFirstStep = (text) => {
+    if (!rescueTask) return;
+    savePayload({ ...payload, tasks: withNextStep(tasks, rescueTask, text) });
+  };
+  // Pick the easiest task: the smallest open task on Today becomes the one thing.
+  const handlePickEasiest = () => {
+    const open = todayTasksAll.filter(t => !t.isCompleted && !isEventTask(t));
+    const est = (t) => (Number(t.timeEstimateMinutes) > 0 ? Number(t.timeEstimateMinutes) : 25);
+    const easiest = [...open].sort((a, b) => est(a) - est(b) || (a.orderIndex ?? 0) - (b.orderIndex ?? 0))[0];
+    if (!easiest) return null;
+    if (!easiest.isNowFocus) setRescueTaskAsNowFocus({ target: easiest });
+    setRescueTask(easiest);
+    return easiest;
   };
 
   const parkRescueTask = () => {
@@ -2246,7 +2322,15 @@ export default function TodayTab({
           includeMemory={!(isSyncingFromCache || syncWarning === "offline")}
           isSyncingFromCache={isSyncingFromCache}
           syncWarning={syncWarning}
-          onDismiss={() => setRescueActive(false)}
+          initialState={rescueInitialState}
+          todayStr={todayStr}
+          onStartFocus={startRescueFocus}
+          onClearDay={handleClearMyDay}
+          onRememberDest={(dest) => { if (config.clearMyDayDest !== dest) saveConfigPatch?.({ clearMyDayDest: dest }); }}
+          onSaveThought={handleRescueThought}
+          onSetFirstStep={handleRescueFirstStep}
+          onPickEasiest={handlePickEasiest}
+          onDismiss={closeRescue}
           onHandoffSummary={(summary) => saveConfigPatch?.({ rescueHandoffSummary: summary })}
           onSetNowFocus={() => setRescueTaskAsNowFocus()}
           onParkTask={parkRescueTask}

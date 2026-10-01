@@ -2,56 +2,140 @@ import React, { useEffect, useState, useRef } from "react";
 import { callAI, getAIKeys, buildProviderOrder } from "../utils/aiCall";
 import { buildLocalSafetyReply, buildOfflineRescueReply, buildRescuePrompt, filterApplicableRescueActions, parseRescueActionTags } from "../utils/rescueCoachPrompt";
 import { buildRescueHandoffSummary } from "../utils/rescueHandoff";
+import { CLEAR_DESTINATIONS, clearMyDayPlan } from "../utils/clearMyDay";
+import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
+import "../styles/rescue.css";
 
-const REASONS = [
-  { id: "overwhelmed", emoji: "😵", label: "Too much going on",     color: "#f59e0b" },
-  { id: "tired",       emoji: "😴", label: "Low energy / fog",      color: "#60a5fa" },
-  { id: "anxious",     emoji: "😬", label: "Anxious / can't start", color: "#a78bfa" },
-  { id: "distracted",  emoji: "📱", label: "Got distracted",         color: "#34d399" },
+// Rescue (Q55.3, frames 64g–p): full screen in the current theme, nav hidden.
+// 1 What's happening → 2 one minute of box breathing → 3 three things to try
+// → 4 Where to now? (Back to it, or a 10-minute break). Clear my day (Q52)
+// opens inside step 3. The chat is the old Rescue chat, safety reply and all.
+
+export const RESCUE_STATES = [
+  { id: "overwhelmed", title: "Too much going on", sub: "Everything at once, nothing moving" },
+  { id: "tired", title: "Low energy, foggy", sub: "Tired, slow, can’t think" },
+  { id: "anxious", title: "Anxious, can’t start", sub: "Dread, avoiding the task" },
+  { id: "distracted", title: "Got distracted", sub: "Lost the thread, drifting" },
 ];
 
 const OPTIONS = {
   overwhelmed: [
-    { id: "single",    icon: "🎯", label: "Just one task",       desc: "Your pinned task — nothing else exists" },
-    { id: "braindump", icon: "🗒️", label: "Brain dump first",    desc: "Write it all out, then pick one thing" },
-    { id: "chat",      icon: "💬", label: "Talk to AI Coach",    desc: "Let's untangle this together" },
+    { id: "clear", title: "Clear my day", min: "1 MIN", sub: "Move what’s left so only one thing stays. Undo for 5 seconds." },
+    { id: "focus25", title: "One thing, 25 minutes", min: "25 MIN", sub: "Pick the task that matters most. Everything else waits." },
+    { id: "empty", title: "Empty your head", min: "2 MIN", sub: "Two minutes of writing every loose thought down. It all goes to Mind Box." },
   ],
   tired: [
-    { id: "break",  icon: "⏱️", label: "5-min break",         desc: "Short rest, then restart" },
-    { id: "water",  icon: "💧", label: "Water + stretch",      desc: "Physical reset in 2 mins" },
-    { id: "easy",   icon: "🪶", label: "Easiest task first",   desc: "Build momentum with a quick win" },
-    { id: "chat",   icon: "💬", label: "Talk to AI Coach",     desc: "Find the smallest possible start" },
+    { id: "break", title: "10-minute break", min: "10 MIN", sub: "Water, stand up, look away from the screen." },
+    { id: "focus5", title: "Make the step 5 minutes", min: "5 MIN", sub: "Five minutes on the one thing. Stop after if you need to." },
+    { id: "easiest", title: "Pick the easiest task", min: "1 MIN", sub: "The smallest open task becomes the one thing. A quick win first." },
   ],
   anxious: [
-    { id: "chat",    icon: "💬", label: "Talk it through",      desc: "AI check-in — no pressure, just chat" },
-    { id: "breathe", icon: "🌬️", label: "2-min breathing",      desc: "Box breathing: 4 in · 4 hold · 4 out" },
-    { id: "single",  icon: "🎯", label: "Just 2 minutes",       desc: "Set a timer — stop if needed after" },
+    { id: "worry", title: "Write the worry down", min: "2 MIN", sub: "Put it in words. It goes to Mind Box, out of your head." },
+    { id: "tiny", title: "Make the first step tiny", min: "1 MIN", sub: "A first step so small it can’t fail." },
+    { id: "chat", title: "Talk it through with Coach", min: "5 MIN", sub: "Say what’s in the way. Coach knows your task." },
   ],
   distracted: [
-    { id: "single",   icon: "✊", label: "Start right now",      desc: "Close everything else, begin the task" },
-    { id: "pomodoro", icon: "🍅", label: "25-min focus lock",    desc: "Commit to one Pomodoro" },
-    { id: "chat",     icon: "💬", label: "Talk to AI Coach",     desc: "What pulled you away?" },
+    { id: "park", title: "Park the thought", min: "1 MIN", sub: "Whatever pulled you away goes to Mind Box for later." },
+    { id: "focus10", title: "10-minute restart", min: "10 MIN", sub: "Ten minutes on the one thing, then decide." },
+    { id: "checklist", title: "Close everything but the task", min: "1 MIN", sub: "Other tabs, your phone, notifications." },
   ],
 };
 
-const TIMER_DURATIONS = { break: 5 * 60, water: 2 * 60, breathe: 2 * 60, pomodoro: 25 * 60 };
+const WRITE = {
+  empty: { kicker: "EMPTY YOUR HEAD · 2 MIN", title: "Empty your head.", line: "One loose thought per line. Enter saves it to Mind Box.", seconds: 120 },
+  worry: { kicker: "WRITE IT DOWN", title: "Write the worry down.", line: "Put it in words. Enter saves it to Mind Box." },
+  park: { kicker: "PARK IT", title: "Park the thought.", line: "Whatever pulled you away. Enter saves it to Mind Box for later." },
+};
+
+const CHECKLIST = ["Close other tabs", "Phone face down", "Notifications off"];
+
+// Box breathing 4-4-4-4, four rounds (~64 s).
+const PHASES = ["In", "Hold", "Out", "Hold"];
+const PHASE_S = 4;
+const ROUNDS = 4;
+
+const BREAK_S = 10 * 60;
 
 function fmt(secs) {
   return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
 }
 
-export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, onParkTask, onHandoffSummary, apiKey, firstName, allTasks, config = {}, entryPoint = "today", includeMemory = true, isSyncingFromCache = false, syncWarning = null }) {
+function useCountdown(seconds, running, onEnd) {
+  const [left, setLeft] = useState(seconds);
+  const endRef = useRef(onEnd);
+  endRef.current = onEnd;
+  useEffect(() => { setLeft(seconds); }, [seconds]);
+  useEffect(() => {
+    if (!running || left <= 0) return undefined;
+    const t = setTimeout(() => {
+      setLeft(s => {
+        if (s <= 1) { endRef.current?.(); return 0; }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [running, left]);
+  return left;
+}
+
+function Breathing({ onDone }) {
+  const total = PHASES.length * PHASE_S * ROUNDS;
+  const left = useCountdown(total, true, onDone);
+  const elapsed = total - left;
+  const phaseIndex = Math.floor(elapsed / PHASE_S) % PHASES.length;
+  const inPhase = elapsed % PHASE_S;
+  const round = Math.min(ROUNDS, Math.floor(elapsed / (PHASE_S * PHASES.length)) + 1);
+  const r = 88;
+  const c = 2 * Math.PI * r;
+  const fill = (inPhase + 1) / PHASE_S;
+  return (
+    <div className="rescue-breath" role="timer" aria-label={`${PHASES[phaseIndex]}, ${PHASE_S - inPhase} seconds. Round ${round} of ${ROUNDS}`}>
+      <svg className="rescue-ring" viewBox="0 0 200 200" aria-hidden="true">
+        <circle cx="100" cy="100" r={r} className="rescue-ring-track" />
+        <circle cx="100" cy="100" r={r} className="rescue-ring-fill" strokeDasharray={c} strokeDashoffset={c * (1 - fill)} transform="rotate(-90 100 100)" />
+      </svg>
+      <div className="rescue-breath-text">
+        <span className="rescue-breath-phase">{PHASES[phaseIndex]}</span>
+        <span className="rescue-breath-count">{PHASE_S - inPhase}</span>
+        <span className="rescue-kicker">ROUND {round} OF {ROUNDS}</span>
+      </div>
+    </div>
+  );
+}
+
+export default function RescueMode({
+  task, onDismiss, onAccept, onSetNowFocus, onParkTask, onHandoffSummary, apiKey, firstName, allTasks, config = {},
+  entryPoint = "today", includeMemory = true, isSyncingFromCache = false, syncWarning = null,
+  initialState = null, todayStr,
+  onStartFocus, onClearDay, onRememberDest, onSaveThought, onSetFirstStep, onPickEasiest,
+}) {
   // Mirrors CoachTab's cloudSyncUnconfirmed gate: cached/pre-sync payload data
   // can't be trusted to mutate tasks against yet — see applyRescueActions.
   const cloudSyncUnconfirmed = isSyncingFromCache || syncWarning === "offline";
-  const [step, setStep]       = useState("triage"); // triage | options | chat | timer
-  const [reason, setReason]   = useState(null);
+  // A state picked on Mind Box (or "Not sure") enters at the breathing.
+  const [step, setStep] = useState(initialState ? "breathe" : "state");
+  const [reason, setReason] = useState(initialState && initialState !== "unsure" ? initialState : null);
+  const [ownWords, setOwnWords] = useState("");
   const [messages, setMessages] = useState([]);
-  const [input, setInput]     = useState("");
+  const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [timerSecs, setTimerSecs] = useState(null);
+  const [doneLine, setDoneLine] = useState("");
+  const [whereLine, setWhereLine] = useState("");
+  const [clearOpen, setClearOpen] = useState(false);
+  const [clearDest, setClearDest] = useState(() => (CLEAR_DESTINATIONS.some(d => d.id === config.clearMyDayDest) ? config.clearMyDayDest : "week"));
+  const [keepOne, setKeepOne] = useState(true);
+  const [clearToast, setClearToast] = useState(null);
+  const [writeKind, setWriteKind] = useState(null);
+  const [written, setWritten] = useState([]);
+  const [draft, setDraft] = useState("");
+  const [checked, setChecked] = useState([]);
+  const [breakSecs, setBreakSecs] = useState(BREAK_S);
+  const [moreAsked, setMoreAsked] = useState(false);
+  const [elseOpen, setElseOpen] = useState(false);
   const endRef      = useRef(null);
   const inputRef    = useRef(null);
+  const headingRef  = useRef(null);
   const chatStarted = useRef(false);
   const sendingRef  = useRef(false);
   const userChattedRef = useRef(false);
@@ -72,9 +156,12 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
 
   useEffect(() => { document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = ""; }; }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-  useEffect(() => { if (step === "chat") setTimeout(() => inputRef.current?.focus(), 100); }, [step]);
+  useEffect(() => {
+    if (step === "chat") setTimeout(() => inputRef.current?.focus(), 100);
+    else headingRef.current?.focus();
+  }, [step]);
 
-  // Countdown
+  // Countdown for a timer the chat started (RESCUE_START_TIMER).
   useEffect(() => {
     if (timerSecs === null || timerSecs <= 0) return;
     const t = setTimeout(() => setTimerSecs(s => s - 1), 1000);
@@ -110,6 +197,13 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
     onAccept?.();
     saveHandoff("accepted");
   };
+
+  // Leave (Esc) from anywhere; the chat input's own Escape too.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); dismissRescue("dismissed"); } };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  });
 
   const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const effectiveGeminiKey = geminiKey || (apiKey || "").trim();
@@ -186,12 +280,13 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
     }
   };
 
-  const openChat = (r) => {
+  // `opener` is the user's own words from step 1, sent as the first turn.
+  const openChat = (r, opener = null) => {
     // Always navigate to the chat screen — chatStarted only guards the
     // opener message below. Without this split, a user who reaches "chat"
     // via an AI-started timer (RESCUE_START_TIMER sets step to "timer" while
-    // chatStarted is already true) and then taps "Skip timer" -> "Talk to AI
-    // Coach" would have this bail out on the guard and never return to chat.
+    // chatStarted is already true) and then taps "Skip timer" -> "Talk it
+    // through" would have this bail out on the guard and never return to chat.
     setStep("chat");
     if (chatStarted.current) return;
     chatStarted.current = true;
@@ -201,6 +296,17 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
     // anyone who opens chat and reads the reply/acts on it without typing
     // their own follow-up message.
     userChattedRef.current = true;
+    if (opener) {
+      const first = [{ role: "user", text: opener }];
+      setMessages(first);
+      if (!hasKey) {
+        setMessages([...first, { role: "ai", text: buildOfflineRescueReply(r, firstName, opener) }]);
+        return;
+      }
+      sendingRef.current = true;
+      aiCall(r, first);
+      return;
+    }
     if (!hasKey) {
       setMessages([{ role: "ai", text: buildOfflineRescueReply(r, firstName) }]);
       return;
@@ -225,227 +331,315 @@ export default function RescueMode({ task, onDismiss, onAccept, onSetNowFocus, o
     await aiCall(reason, updated);
   };
 
-  const handleOption = (optId) => {
-    if (optId === "chat")     { openChat(reason); return; }
-    if (optId === "single")   { acceptRescue(); return; }
-    if (optId === "easy")     { acceptRescue(); return; }
-    if (optId === "braindump"){ dismissRescue("dismissed"); return; }
-    if (TIMER_DURATIONS[optId]) { setTimerSecs(TIMER_DURATIONS[optId]); setStep("timer"); return; }
-    acceptRescue();
+  // ── Step 3 actions ─────────────────────────────────────────────────────────
+  const toWhere = (line) => { setDoneLine(line); setWhereLine(""); setStep("where"); };
+  const startFocus = (minutes) => {
+    saveHandoff("accepted");
+    onStartFocus?.(minutes);
+  };
+  const handleOption = (id) => {
+    if (id === "clear") { setClearOpen(o => !o); return; }
+    if (id === "focus25") { startFocus(25); return; }
+    if (id === "focus5") { startFocus(5); return; }
+    if (id === "focus10") { startFocus(10); return; }
+    if (id === "break") { setBreakSecs(BREAK_S); setStep("break"); return; }
+    if (id === "chat") { openChat(reason); return; }
+    if (id === "checklist") { setChecked([]); setStep("checklist"); return; }
+    if (id === "tiny") { setDraft(""); setStep("tiny"); return; }
+    if (id === "easiest") {
+      const picked = onPickEasiest?.();
+      toWhere(picked ? `DONE · ${picked.title.toUpperCase()} IS THE ONE THING` : "NOTHING EASIER WAITING");
+      return;
+    }
+    if (WRITE[id]) { setWriteKind(id); setWritten([]); setDraft(""); setStep("write"); }
   };
 
-  // ─── shared elements ────────────────────────────────────────────────────────
-  const overlay = { position: "fixed", inset: 0, background: "#000", zIndex: 9999,
-    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-    fontFamily: "var(--font-sans)", padding: "24px", overflowY: "auto" };
+  const plan = clearMyDayPlan(allTasks || [], { todayStr, keepUuid: keepOne && task?.isNowFocus ? task.uuid : null });
+  const destLabel = CLEAR_DESTINATIONS.find(d => d.id === clearDest)?.label || "This week";
+  const runClear = () => {
+    const result = onClearDay?.(clearDest, keepOne && task?.isNowFocus ? task.uuid : null);
+    if (!result) return;
+    onRememberDest?.(clearDest);
+    setClearOpen(false);
+    setClearToast({ ...result, label: destLabel, key: Date.now() });
+    const fixed = plan.fixedCount;
+    toWhere(`DONE · CLEARED ${result.count} TO ${destLabel.toUpperCase()}`);
+    setWhereLine(task?.isNowFocus && keepOne
+      ? `Your day now holds one thing${fixed ? ` and ${fixed} fixed ${fixed === 1 ? "time" : "times"}` : ""}. That’s enough.`
+      : "Today is clear. Pick one thing when you’re ready.");
+  };
 
-  const badge = (
-    <div style={{ background: "#fecb00", color: "#000", padding: "4px 14px", fontSize: "10px",
-      fontWeight: "800", letterSpacing: "0.12em", textTransform: "uppercase",
-      marginBottom: "28px", borderRadius: "2px", flexShrink: 0 }}>
-      ⚠ Rescue Mode
-    </div>
-  );
+  const saveDraft = (e) => {
+    e.preventDefault();
+    if (!draft.trim()) return;
+    if (onSaveThought?.(draft)) { setWritten(w => [...w, draft.trim()]); setDraft(""); }
+  };
 
-  const corners = ["tl","tr","bl","br"].map(c => (
-    <div key={c} style={{ position: "fixed",
-      top: c[0]==="t" ? 20 : "auto", bottom: c[0]==="b" ? 20 : "auto",
-      left: c[1]==="l" ? 20 : "auto", right: c[1]==="r" ? 20 : "auto",
-      width: 28, height: 28,
-      borderTop:    c[0]==="t" ? "2px solid rgba(255,255,255,0.1)" : "none",
-      borderBottom: c[0]==="b" ? "2px solid rgba(255,255,255,0.1)" : "none",
-      borderLeft:   c[1]==="l" ? "2px solid rgba(255,255,255,0.1)" : "none",
-      borderRight:  c[1]==="r" ? "2px solid rgba(255,255,255,0.1)" : "none",
-    }} />
-  ));
-
-  const exitBtn = (
-    <button onClick={() => dismissRescue("dismissed")} style={{ background: "none", border: "none",
-      color: "rgba(255,255,255,0.2)", fontSize: "11px", cursor: "pointer",
-      letterSpacing: "0.06em", textTransform: "uppercase", marginTop: "20px", flexShrink: 0 }}>
-      Exit rescue mode
-    </button>
-  );
-
-  // ─── STEP: TRIAGE ───────────────────────────────────────────────────────────
-  if (step === "triage") return (
-    <div style={overlay}>
-      {corners}{badge}
-      <h2 style={{ color: "#fff", fontSize: "clamp(18px,5vw,28px)", fontWeight: "900",
-        marginBottom: "8px", textAlign: "center" }}>
-        What's happening right now?
-      </h2>
-      <p style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px", marginBottom: "28px", textAlign: "center" }}>
-        Tap to get personalized help
-      </p>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", width: "100%", maxWidth: "380px" }}>
-        {REASONS.map(r => (
-          <button key={r.id} onClick={() => { setReason(r.id); setStep("options"); }}
-            style={{ background: "rgba(255,255,255,0.05)", border: "2px solid rgba(255,255,255,0.1)",
-              borderRadius: "12px", padding: "20px 12px", cursor: "pointer",
-              display: "flex", flexDirection: "column", alignItems: "center", gap: "10px",
-              transition: "border-color 0.15s, background 0.15s" }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = r.color; e.currentTarget.style.background = `${r.color}18`; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}>
-            <span style={{ fontSize: "32px" }}>{r.emoji}</span>
-            <span style={{ color: "#fff", fontSize: "12px", fontWeight: "700", textAlign: "center", lineHeight: "1.3" }}>{r.label}</span>
-          </button>
-        ))}
-      </div>
-      {exitBtn}
-    </div>
-  );
-
-  // ─── STEP: OPTIONS ──────────────────────────────────────────────────────────
-  if (step === "options") {
-    const r = REASONS.find(x => x.id === reason);
-    const opts = OPTIONS[reason] || [];
-    return (
-      <div style={overlay}>
-        {corners}{badge}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
-          <span style={{ fontSize: "28px" }}>{r?.emoji}</span>
-          <div>
-            <div style={{ color: r?.color, fontSize: "10px", fontWeight: "800", letterSpacing: "0.1em", textTransform: "uppercase" }}>You're feeling</div>
-            <div style={{ color: "#fff", fontSize: "17px", fontWeight: "800" }}>{r?.label}</div>
-          </div>
-        </div>
-        <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "13px", marginBottom: "16px", textAlign: "center" }}>
-          Choose what helps most right now:
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%", maxWidth: "380px" }}>
-          {opts.map(opt => (
-            <button key={opt.id} onClick={() => handleOption(opt.id)}
-              style={{ background: opt.id === "chat" ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)",
-                border: opt.id === "chat" ? "2px solid rgba(255,255,255,0.25)" : "1px solid rgba(255,255,255,0.1)",
-                borderRadius: "12px", padding: "14px 16px", cursor: "pointer",
-                display: "flex", alignItems: "center", gap: "14px", textAlign: "left",
-                transition: "border-color 0.15s, background 0.15s" }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = r?.color; e.currentTarget.style.background = `${r?.color}15`; }}
-              onMouseLeave={e => {
-                e.currentTarget.style.borderColor = opt.id === "chat" ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)";
-                e.currentTarget.style.background   = opt.id === "chat" ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)";
-              }}>
-              <span style={{ fontSize: "22px", flexShrink: 0 }}>{opt.icon}</span>
-              <div>
-                <div style={{ color: "#fff", fontSize: "14px", fontWeight: "700" }}>{opt.label}</div>
-                <div style={{ color: "rgba(255,255,255,0.38)", fontSize: "12px", marginTop: "2px" }}>{opt.desc}</div>
-              </div>
-            </button>
-          ))}
-        </div>
-        <button onClick={() => setStep("triage")} style={{ background: "none", border: "none",
-          color: "rgba(255,255,255,0.2)", fontSize: "11px", cursor: "pointer",
-          letterSpacing: "0.06em", textTransform: "uppercase", marginTop: "14px" }}>
-          ← Back
+  // ── Shell ──────────────────────────────────────────────────────────────────
+  const shell = (body, { wide = false } = {}) => (
+    <div className="rescue" role="dialog" aria-modal="true" aria-label="Rescue">
+      <header className="rescue-head">
+        <span className="rescue-head-title">Rescue</span>
+        <button type="button" className="rescue-leave" onClick={() => dismissRescue("dismissed")}>
+          Leave<span className="rescue-leave-key"> (Esc)</span>
         </button>
-        {exitBtn}
+      </header>
+      <div className="rescue-body">
+        <div className={`rescue-col${wide ? " is-wide" : ""}`}>{body}</div>
       </div>
-    );
-  }
+      <UndoAnnouncer message={clearToast ? `${clearToast.count} moved to ${clearToast.label}` : ""} />
+      {clearToast && (
+        <UndoToast
+          key={clearToast.key}
+          message={`${clearToast.count} moved to ${clearToast.label}`}
+          onUndo={() => { clearToast.undo(); setClearToast(null); setDoneLine(""); setWhereLine(""); }}
+          onClose={() => setClearToast(null)}
+        />
+      )}
+    </div>
+  );
+  const stateName = RESCUE_STATES.find(s => s.id === reason)?.title.toUpperCase();
+  const kicker = (n) => <span className="rescue-kicker">STEP {n} OF 3{stateName ? ` · ${stateName}` : ""}</span>;
+  const heading = (text) => <h2 className="rescue-title" tabIndex={-1} ref={headingRef}>{text}</h2>;
 
-  // ─── STEP: CHAT ─────────────────────────────────────────────────────────────
-  if (step === "chat") {
-    const r = REASONS.find(x => x.id === reason);
-    return (
-      <div style={{ ...overlay, justifyContent: "flex-start", padding: "16px" }}>
-        {corners}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-          width: "100%", maxWidth: "500px", marginBottom: "12px", flexShrink: 0 }}>
-          {badge}
-          <button onClick={() => setStep("options")} style={{ background: "none", border: "none",
-            color: "rgba(255,255,255,0.3)", fontSize: "12px", cursor: "pointer",
-            letterSpacing: "0.06em", textTransform: "uppercase" }}>
-            ← Back
-          </button>
-        </div>
-        <div style={{ width: "100%", maxWidth: "500px", marginBottom: "10px",
-          color: "rgba(255,255,255,0.4)", fontSize: "12px", flexShrink: 0 }}>
-          {r?.emoji} Rescue chat — {r?.label}
-        </div>
+  // ─── 1: What's happening ───────────────────────────────────────────────────
+  if (step === "state") return shell(<>
+    <span className="rescue-kicker">STEP 1 OF 3</span>
+    {heading("What's happening right now?")}
+    <p className="rescue-line">Pick the closest. Nothing here is a test.</p>
+    <div className="rescue-rows">
+      {RESCUE_STATES.map(s => (
+        <button key={s.id} type="button" className={`rescue-row${reason === s.id ? " is-on" : ""}`}
+          onClick={() => { setReason(s.id); setStep("breathe"); }}>
+          <span className="rescue-row-title">{s.title}</span>
+          <span className="rescue-row-sub">{s.sub}</span>
+        </button>
+      ))}
+    </div>
+    <form className="rescue-own" onSubmit={e => { e.preventDefault(); if (ownWords.trim()) openChat(reason, ownWords.trim()); }}>
+      <label className="rescue-kicker" htmlFor="rescue-own-words">OR SAY IT IN YOUR OWN WORDS</label>
+      <input id="rescue-own-words" className="rescue-input" value={ownWords} onChange={e => setOwnWords(e.target.value)} placeholder="I can’t start because…" />
+    </form>
+  </>);
 
-        {/* Messages */}
-        <div style={{ flex: 1, width: "100%", maxWidth: "500px", overflowY: "auto",
-          display: "flex", flexDirection: "column", gap: "10px", minHeight: 0, paddingBottom: "8px" }}>
-          {loading && messages.length === 0 && (
-            <div style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px", textAlign: "center", paddingTop: "40px" }}>
-              Your coach is here…
-            </div>
-          )}
-          {messages.map((m, i) => (
-            <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-              <div style={{ maxWidth: "85%", padding: "12px 16px", borderRadius: "16px",
-                background: m.role === "user" ? "#ff5545" : "rgba(255,255,255,0.1)",
-                color: "#fff", fontSize: "14px", lineHeight: "1.65",
-                borderBottomRightRadius: m.role === "user" ? "4px" : "16px",
-                borderBottomLeftRadius:  m.role === "ai"   ? "4px" : "16px" }}>
-                {m.text}
-              </div>
-            </div>
+  // ─── 2: Breathing ──────────────────────────────────────────────────────────
+  if (step === "breathe") return shell(<>
+    {kicker(2)}
+    {heading("First, one minute of breathing.")}
+    <p className="rescue-line">In for 4, hold for 4, out for 4, hold for 4. Follow the ring.</p>
+    <Breathing onDone={() => setStep(reason ? "options" : "state")} />
+    <button type="button" className="rescue-text-btn rescue-skip" onClick={() => setStep(reason ? "options" : "state")}>Skip</button>
+  </>);
+
+  // ─── 3: Try one of these ───────────────────────────────────────────────────
+  if (step === "options") {
+    const opts = OPTIONS[reason] || [];
+    const clearPanel = (
+      <div className="rescue-clear">
+        <p className="rescue-clear-line"><span className="rescue-figs">{plan.openCount}</span> open tasks in Today. Move them to:</p>
+        <div className="rescue-seg" role="radiogroup" aria-label="Move them to">
+          {CLEAR_DESTINATIONS.map(d => (
+            <button key={d.id} type="button" role="radio" aria-checked={clearDest === d.id}
+              className={`rescue-seg-btn${clearDest === d.id ? " is-on" : ""}`} onClick={() => setClearDest(d.id)}>{d.label}</button>
           ))}
-          {loading && messages.length > 0 && (
-            <div style={{ color: "rgba(255,255,255,0.3)", fontSize: "18px", paddingLeft: "4px", letterSpacing: "4px" }}>···</div>
-          )}
-          <div ref={endRef} />
         </div>
-
-        {/* Input */}
-        <div style={{ display: "flex", gap: "8px", width: "100%", maxWidth: "500px",
-          marginTop: "10px", flexShrink: 0 }}>
-          <input ref={inputRef} value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSend()}
-            placeholder="Tell me what's going on…"
-            style={{ flex: 1, background: "rgba(255,255,255,0.08)",
-              border: "1px solid rgba(255,255,255,0.15)", borderRadius: "10px",
-              padding: "12px 16px", color: "#fff", fontSize: "14px", outline: "none" }} />
-          <button onClick={handleSend} disabled={loading || !input.trim()}
-            style={{ background: "#ff5545", border: "none", borderRadius: "10px",
-              padding: "0 18px", color: "#fff", fontSize: "18px", cursor: "pointer",
-              opacity: loading || !input.trim() ? 0.4 : 1 }}>
-            ↑
+        {task?.isNowFocus && (
+          <label className="rescue-keep">
+            <input type="checkbox" checked={keepOne} onChange={e => setKeepOne(e.target.checked)} />
+            <span>Keep <strong>{task.title}</strong> as the one thing</span>
+          </label>
+        )}
+        <p className="rescue-note">Fixed times{plan.fixedCount ? ` (${plan.fixedCount} today)` : ""} and done tasks stay. Nothing is deleted.</p>
+        <div className="rescue-clear-actions">
+          <button type="button" className="rescue-btn-filled" onClick={runClear} disabled={!plan.movable.length}>
+            {plan.movable.length ? `Move ${plan.movable.length} to ${destLabel}` : "Nothing to move"}
           </button>
+          <button type="button" className="rescue-text-btn" onClick={() => setClearOpen(false)}>Back</button>
         </div>
-        {exitBtn}
       </div>
     );
+    const optionRow = (o) => (
+      <div key={o.id} className="rescue-option">
+        <button type="button" className={`rescue-row is-option${o.id === "clear" && clearOpen ? " is-on" : ""}`} aria-expanded={o.id === "clear" ? clearOpen : undefined} onClick={() => handleOption(o.id)}>
+          <span className="rescue-row-head"><span className="rescue-row-title">{o.title}</span><span className="rescue-min">{o.min}</span></span>
+          <span className="rescue-row-sub">{o.sub}</span>
+        </button>
+        {o.id === "clear" && clearOpen && clearPanel}
+      </div>
+    );
+    return shell(<>
+      {kicker(3)}
+      {heading("Try one of these.")}
+      <div className="rescue-rows">{opts.map(optionRow)}</div>
+      {elseOpen && reason !== "overwhelmed" && (
+        <div className="rescue-rows">{optionRow(OPTIONS.overwhelmed[0])}</div>
+      )}
+      <div className="rescue-links">
+        {reason === "overwhelmed" || elseOpen
+          ? <button type="button" className="rescue-text-btn" onClick={() => { setElseOpen(false); setClearOpen(false); setStep("state"); }}>Something else is going on</button>
+          : <button type="button" className="rescue-text-btn" onClick={() => setElseOpen(true)}>Something else is going on</button>}
+        {!opts.some(o => o.id === "chat") && (
+          <button type="button" className="rescue-text-btn" onClick={() => openChat(reason)}>Talk it through with Coach</button>
+        )}
+      </div>
+    </>);
   }
 
-  // ─── STEP: TIMER ────────────────────────────────────────────────────────────
+  // ─── 4: Where to now? ──────────────────────────────────────────────────────
+  if (step === "where") return shell(<>
+    {doneLine && <span className="rescue-kicker">{doneLine}</span>}
+    {heading("Where to now?")}
+    {whereLine && <p className="rescue-line">{whereLine}</p>}
+    <div className="rescue-where">
+      {task && !task.isCompleted ? (
+        <button type="button" className="rescue-btn-filled is-big" onClick={() => startFocus(10)}>
+          <span>Back to it · {task.title}</span>
+          <span className="rescue-btn-sub">STARTS A 10-MIN FOCUS BLOCK</span>
+        </button>
+      ) : (
+        <button type="button" className="rescue-btn-filled is-big" onClick={() => dismissRescue("accepted")}>Back to Today</button>
+      )}
+      <button type="button" className="rescue-btn-outline" onClick={() => { setBreakSecs(BREAK_S); setStep("break"); }}>Take a 10-minute break</button>
+    </div>
+    <div className="rescue-links">
+      <button type="button" className="rescue-text-btn" onClick={() => setStep(reason ? "options" : "state")}>Try something else</button>
+      <button type="button" className="rescue-text-btn" onClick={() => openChat(reason)}>Talk to Coach</button>
+    </div>
+  </>);
+
+  // ─── Write (Empty your head / the worry / park the thought) ────────────────
+  if (step === "write" && WRITE[writeKind]) {
+    const w = WRITE[writeKind];
+    return shell(<>
+      <span className="rescue-kicker">{w.kicker}</span>
+      {heading(w.title)}
+      <p className="rescue-line">{w.line}</p>
+      {w.seconds && <WriteClock seconds={w.seconds} />}
+      <form className="rescue-own" onSubmit={saveDraft}>
+        <input className="rescue-input" aria-label="Thought" value={draft} onChange={e => setDraft(e.target.value)} placeholder="What’s on your mind?" autoFocus />
+      </form>
+      {written.length > 0 && (
+        <ul className="rescue-written">{written.map((t, i) => <li key={i}>{t}</li>)}</ul>
+      )}
+      <div className="rescue-where">
+        <button type="button" className="rescue-btn-filled" onClick={() => toWhere(written.length ? `DONE · ${written.length} SAVED TO MIND BOX` : "")}>Done</button>
+      </div>
+    </>);
+  }
+
+  // ─── Make the first step tiny ──────────────────────────────────────────────
+  if (step === "tiny") return shell(<>
+    <span className="rescue-kicker">FIRST STEP</span>
+    {heading("Make the first step tiny.")}
+    <p className="rescue-line">{task ? `For ${task.title}: so small it can’t fail. Open the file. Write one line.` : "So small it can’t fail. Open the file. Write one line."}</p>
+    <form className="rescue-own" onSubmit={e => {
+      e.preventDefault();
+      if (!draft.trim() || !task) return;
+      onSetFirstStep?.(draft.trim());
+      toWhere("DONE · FIRST STEP SET");
+    }}>
+      <input className="rescue-input" aria-label="First step" value={draft} onChange={e => setDraft(e.target.value)} placeholder="Open the document" autoFocus />
+    </form>
+    <div className="rescue-links">
+      <button type="button" className="rescue-text-btn" onClick={() => setStep("options")}>Back</button>
+    </div>
+  </>);
+
+  // ─── Close everything but the task ─────────────────────────────────────────
+  if (step === "checklist") return shell(<>
+    <span className="rescue-kicker">CLEAR THE DESK</span>
+    {heading("Close everything but the task.")}
+    <div className="rescue-rows">
+      {CHECKLIST.map(item => (
+        <label key={item} className="rescue-check">
+          <input type="checkbox" checked={checked.includes(item)} onChange={e => setChecked(c => (e.target.checked ? [...c, item] : c.filter(x => x !== item)))} />
+          <span>{item}</span>
+        </label>
+      ))}
+    </div>
+    <div className="rescue-where">
+      <button type="button" className="rescue-btn-filled" onClick={() => toWhere("")}>Ready</button>
+    </div>
+  </>);
+
+  // ─── A 10-minute break, then 64k ───────────────────────────────────────────
+  if (step === "break") return shell(
+    <BreakTimer seconds={breakSecs} onEnd={() => setStep("breakOver")} onStop={() => setStep("breakOver")} headingRef={headingRef} />
+  );
+  if (step === "breakOver") return shell(<>
+    <span className="rescue-kicker">BREAK · 0:00</span>
+    {heading("Break’s over. Ready?")}
+    <p className="rescue-line">{task ? `${task.title} is still the one thing. Ten minutes, then decide.` : "Ten minutes, then decide."}</p>
+    <div className="rescue-where">
+      {task && <button type="button" className="rescue-btn-filled is-big" onClick={() => startFocus(10)}>Start 10 minutes</button>}
+      {!moreAsked && (
+        <button type="button" className="rescue-btn-outline" onClick={() => { setMoreAsked(true); setBreakSecs(5 * 60); setStep("break"); }}>5 more minutes</button>
+      )}
+    </div>
+    <div className="rescue-links">
+      <button type="button" className="rescue-text-btn" onClick={() => setStep(reason ? "options" : "state")}>Back to Rescue</button>
+    </div>
+  </>);
+
+  // ─── Chat ──────────────────────────────────────────────────────────────────
+  if (step === "chat") {
+    const r = RESCUE_STATES.find(x => x.id === reason);
+    return shell(<>
+      <span className="rescue-kicker">TALK IT THROUGH{r ? ` · ${r.title.toUpperCase()}` : ""}</span>
+      <div className="rescue-chat" aria-live="polite">
+        {loading && messages.length === 0 && <p className="rescue-line">Your coach is here…</p>}
+        {messages.map((m, i) => (
+          <div key={i} className={`rescue-msg ${m.role === "user" ? "is-you" : "is-coach"}`}>{m.text}</div>
+        ))}
+        {loading && messages.length > 0 && <p className="rescue-typing" aria-label="Coach is typing">···</p>}
+        <div ref={endRef} />
+      </div>
+      <form className="rescue-composer" onSubmit={e => { e.preventDefault(); handleSend(); }}>
+        <input ref={inputRef} className="rescue-input" value={input} onChange={e => setInput(e.target.value)}
+          placeholder="Tell me what's going on…" aria-label="Message" />
+        <button type="submit" className="rescue-btn-filled" disabled={loading || !input.trim()}>Send</button>
+      </form>
+      <div className="rescue-links">
+        <button type="button" className="rescue-text-btn" onClick={() => setStep(reason ? "options" : "state")}>Back</button>
+        <button type="button" className="rescue-text-btn" onClick={() => toWhere("")}>Where to now?</button>
+      </div>
+    </>, { wide: true });
+  }
+
+  // ─── A timer the chat started ──────────────────────────────────────────────
   if (step === "timer") {
     const done = timerSecs === 0;
-    return (
-      <div style={overlay}>
-        {corners}{badge}
-        <div style={{ textAlign: "center", marginBottom: "40px" }}>
-          <div style={{ fontSize: "clamp(64px,16vw,96px)", fontWeight: "900", color: "#fff",
-            fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>
-            {done ? "✓" : fmt(timerSecs)}
-          </div>
-          <div style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px", marginTop: "8px" }}>
-            {done ? "Time's up — ready to start?" : "Relax. You'll start when this ends."}
-          </div>
-        </div>
-        {done ? (
-          <button onClick={acceptRescue} style={{ width: "100%", maxWidth: "360px", height: "64px",
-            background: "#ff5545", border: "none", borderRadius: "8px",
-            color: "#fff", fontSize: "16px", fontWeight: "900",
-            letterSpacing: "0.05em", textTransform: "uppercase", cursor: "pointer" }}>
-            Start the task now ✊
-          </button>
-        ) : (
-          <button onClick={() => setStep("options")}
-            style={{ background: "none", border: "1px solid rgba(255,255,255,0.2)",
-              borderRadius: "8px", padding: "12px 28px",
-              color: "rgba(255,255,255,0.4)", fontSize: "12px", cursor: "pointer",
-              letterSpacing: "0.06em", textTransform: "uppercase" }}>
-            Skip timer
-          </button>
-        )}
-        {exitBtn}
+    return shell(<>
+      <span className="rescue-kicker">RESET</span>
+      <div className="rescue-clock" role="timer">{done ? "0:00" : fmt(timerSecs)}</div>
+      <p className="rescue-line">{done ? "Time’s up. Ready to start?" : "Relax. You'll start when this ends."}</p>
+      <div className="rescue-where">
+        {done
+          ? <button type="button" className="rescue-btn-filled is-big" onClick={acceptRescue}>Start the task now</button>
+          : <button type="button" className="rescue-btn-outline" onClick={() => setStep("options")}>Skip timer</button>}
       </div>
-    );
+    </>);
   }
 
   return null;
+}
+
+function WriteClock({ seconds }) {
+  const left = useCountdown(seconds, true, null);
+  return <span className="rescue-kicker" role="timer">{fmt(left)} LEFT</span>;
+}
+
+function BreakTimer({ seconds, onEnd, onStop, headingRef }) {
+  const left = useCountdown(seconds, true, onEnd);
+  return (
+    <>
+      <span className="rescue-kicker">BREAK · {fmt(left)}</span>
+      <h2 className="rescue-title" tabIndex={-1} ref={headingRef}>Take a break.</h2>
+      <p className="rescue-line">Water, stand up, look away from the screen. Loci will ask once when it ends.</p>
+      <div className="rescue-clock" role="timer" aria-label={`${fmt(left)} left`}>{fmt(left)}</div>
+      <div className="rescue-where">
+        <button type="button" className="rescue-btn-outline" onClick={onStop}>End the break now</button>
+      </div>
+    </>
+  );
 }

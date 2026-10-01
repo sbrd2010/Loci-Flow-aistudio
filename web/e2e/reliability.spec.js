@@ -68,32 +68,26 @@ test("reliability: today task can be moved to the roadmap", async ({ page }) => 
   await expect(page.getByText(title)).toBeVisible({ timeout: 5_000 });
 });
 
-test("reliability: parked roadmap tasks are hidden after Bad Day Reset", async ({ page }) => {
+test("reliability: Clear my day → Park takes Today's open tasks off the list, into Parked (Q52)", async ({ page }) => {
   await enterDemo(page);
 
   const title = "25-minute deep work block";
   const tasksList = page.getByTestId("today-tasks-list");
-  const row = taskRowByTitle(page, title);
-  await expect(row).toBeVisible({ timeout: 8_000 });
+  await expect(taskRowByTitle(page, title)).toBeVisible({ timeout: 8_000 });
 
-  // Opened, its Horizon picker moves it (50a).
-  await row.locator(".task-row-top").click();
-  const detail = page.getByTestId("task-detail");
-  await detail.getByRole("button", { name: /^Horizon/ }).click();
-  await detail.getByRole("radiogroup", { name: "Horizon" }).getByRole("radio", { name: "This Week" }).click();
+  const hide = page.locator(".today-list-hide");
+  if (await hide.isVisible()) await hide.click();
+  await page.getByRole("button", { name: "Open Rescue" }).click();
+  const rescue = page.getByRole("dialog", { name: "Rescue" });
+  await rescue.getByRole("button", { name: /^Too much going on/ }).click();
+  await rescue.getByRole("button", { name: "Skip", exact: true }).click();
+  await rescue.getByRole("button", { name: /^Clear my day/ }).click();
+  await rescue.getByRole("radio", { name: "Park" }).click();
+  await rescue.getByRole("button", { name: /^Move \d+ to Park$/ }).click();
+  await rescue.getByRole("button", { name: /^Leave/ }).click();
 
   await expect(tasksList.getByText(title)).not.toBeVisible({ timeout: 5_000 });
-  await openTab(page, "Plan");
-  await page.getByRole("tab", { name: "Horizons" }).click();
-  await expect(page.getByText(title)).toBeVisible({ timeout: 5_000 });
-
-  await openTab(page, "Mind Box");
-  await page.getByRole("button", { name: /Bad Day Reset/ }).click();
-  await page.getByRole("button", { name: "Yes, restart" }).click();
-
-  await openTab(page, "Plan");
-  await page.getByRole("tab", { name: "Horizons" }).click();
-  await expect(page.getByText(title)).not.toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".today-parked-kicker")).toContainText(/Parked · \d+/);
 });
 
 test("reliability: pinning a task sets Now Focus", async ({ page }) => {
