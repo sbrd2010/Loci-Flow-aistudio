@@ -1659,6 +1659,8 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
   const handleStarter = (text, send) => {
     if (!send) { setChatInput(text); chatInputRef.current?.focus(); return; }
     if (chatLoading) return;
+    // The starter replaces any draft, so nothing stale is left to send later.
+    setChatInput("");
     chipTextRef.current = text;
     chatFormRef.current?.requestSubmit();
   };
