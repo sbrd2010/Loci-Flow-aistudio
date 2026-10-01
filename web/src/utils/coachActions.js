@@ -725,7 +725,8 @@ export function undoCoachAction(payload, record, now = Date.now()) {
     return {
       ...payload,
       tasks: tasks.map(t => {
-        const want = t.uuid === prevPinnedUuid && !t.isDeleted && !t.isCompleted;
+        // Back only to a task still open: not one done, deleted or parked since.
+        const want = t.uuid === prevPinnedUuid && isActiveLociTask(t);
         return !!t.isNowFocus === want ? t : { ...t, isNowFocus: want, lastUpdated: now };
       }),
     };
