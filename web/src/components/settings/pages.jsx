@@ -230,7 +230,7 @@ export function KeyDeadlinePage({ config, saveConfigPatch, onBack }) {
   const left = daysLeft(config.deadlineDate);
   const hasGoal = !!(config.deadlineLabel || config.deadlineDate || config.deadlineAction || config.deadlineStartDate);
   return (
-    <SubPage title="Key deadline" onBack={onBack} lede="One goal with a date. It shows as the gold band on Today and the week in Mind Box.">
+    <SubPage title="Key deadline" onBack={onBack} lede="One goal with a date. It shows as the gold band on Today; tap the band for its record.">
       <label className="set-field">
         <span className="set-label">Goal</span>
         <input className="set-input" value={goal} onChange={e => setGoal(e.target.value)} onBlur={flushGoal} placeholder="e.g. Submit the thesis draft" />
@@ -251,6 +251,19 @@ export function KeyDeadlinePage({ config, saveConfigPatch, onBack }) {
         <input className="set-input" value={daily} onChange={e => setDaily(e.target.value)} onBlur={flushDaily} placeholder="e.g. 3 job apply + PRINCE2" aria-describedby="set-target-note" />
         <span className="set-note" id="set-target-note">The least you'll do each day toward this goal.</span>
       </label>
+      {/* The goal record's dots (Q57.2): 7 rolling days, or Mon–Fri with a
+          weekend day shown only as a bonus when a goal task was done. */}
+      <Group label="Count days">
+        <RadioList
+          label="Count days"
+          options={[
+            { value: "all", label: "All 7", sub: "The last 7 days" },
+            { value: "weekdays", label: "Weekdays only", sub: "Monday to Friday; a weekend day with a goal task done shows as a bonus" },
+          ]}
+          value={config.goalDaysMode === "weekdays" ? "weekdays" : "all"}
+          onChange={v => saveConfigPatch({ goalDaysMode: v })}
+        />
+      </Group>
       {/* The band's three lines, before you leave (Q49). */}
       <div className="set-preview" aria-label="Preview of the goal band">
         <div className="set-preview-head">

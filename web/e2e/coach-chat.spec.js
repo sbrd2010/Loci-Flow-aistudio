@@ -186,9 +186,7 @@ test("Coach Chat: empty state, starters, kicker and New conversation", async ({ 
   await expect(page.getByRole("tab", { name: "Chat", selected: true })).toBeVisible({ timeout: 8_000 });
   await expect(page.getByText("Reads your lists. Changes only what you tap.")).toBeVisible();
 
-  // The demo starts with a conversation; New conversation asks first.
-  await page.getByRole("button", { name: "New conversation" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "New conversation" }).click();
+  // Coach doesn't speak first (Q53), so the demo opens on the empty state.
   const empty = page.locator(".coach-empty");
   await expect(empty.getByRole("heading", { name: "What’s on your mind?" })).toBeVisible();
   await expect(page.locator(".coach-msg")).toHaveCount(0);

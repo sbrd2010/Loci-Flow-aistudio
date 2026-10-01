@@ -847,7 +847,7 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
         <>
           <div style={{ padding: "0 0 20px 0" }}>
             <h2 style={{ fontSize: "20px", fontWeight: "800", color: "var(--text-primary)", fontFamily: "var(--font-display)", letterSpacing: "-0.02em", margin: "0 0 4px" }}>Mind Box</h2>
-            <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>Tools, streaks &amp; resets.</p>
+            <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>Tools &amp; resets.</p>
           </div>
 
           {/* Brain Dump — always-live capture */}

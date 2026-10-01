@@ -182,7 +182,7 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
         {wide && <Group label="Coach">{coachRows}</Group>}
       </CoachPage>
     ),
-    privacy: () => <CoachPrivacyPage onBack={back} />,
+    privacy: () => <CoachPrivacyPage onBack={wide ? () => setPage("coach") : back} backLabel={wide ? "Coach" : backLabel} />,
     memory: () => <CoachMemoryPage config={config} saveConfigPatch={saveConfigPatch} onBack={back} onConfirm={askConfirm} />,
     ai: () => <AiProviderPage onBack={back} />,
     notifications: () => <NotificationsPage permission={permission} onRequest={requestPermission} onBack={back} />,
@@ -209,7 +209,7 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
 
   if (wide) {
     const current = page || "profile";
-    const section = DAY_PAGES.includes(current) ? "day" : current;
+    const section = DAY_PAGES.includes(current) ? "day" : current === "privacy" ? "coach" : current;
     return (
       <div className="set-wide">
         <nav className="set-nav" aria-label="Settings sections">
