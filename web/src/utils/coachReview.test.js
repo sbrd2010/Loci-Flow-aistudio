@@ -122,6 +122,12 @@ describe("reviewFacts", () => {
     expect(f.days[0].ticks).toBe(0);
   });
 
+  it("a Today task moved to tomorrow isn't counted under TODAY", () => {
+    const f = reviewFacts({ tasks: [{ uuid: "z", title: "Z", horizonLevel: "today", deferredUntil: "2026-10-02" }], period: "7d", now, windows });
+    expect(f.openNow.byHorizon.find(h => h.id === "today").count).toBe(0);
+    expect(f.openNow.byHorizon.find(h => h.id === "week").count).toBe(1);
+  });
+
   it("doesn't claim focus figures it couldn't read", () => {
     const blind = reviewFacts({ tasks, contributions, focusRaw: null, period: "7d", now, windows });
     expect(blind.focusedMinutes).toBeNull();

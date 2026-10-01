@@ -93,12 +93,16 @@ export function reviewFacts({ tasks = [], contributions = [], config = {}, focus
 
   // Open now, by horizon.
   const active = tasks.filter(isActiveLociTask);
+  const todayStr = getLociDayStr(now, windows);
   const counts = Object.fromEntries(HORIZON_GROUPS.map(g => [g.id, 0]));
   for (const t of active) {
-    const h = ["today", "week", "month", "quarter"].includes(t.horizonLevel) ? t.horizonLevel : "later";
+    // A Today task moved to tomorrow (deferredUntil) isn't on Today's list;
+    // it counts with the week, where its day falls.
+    const h = t.horizonLevel === "today"
+      ? (isOnToday(t, todayStr) ? "today" : "week")
+      : (["week", "month", "quarter"].includes(t.horizonLevel) ? t.horizonLevel : "later");
     counts[h] += 1;
   }
-  const todayStr = getLociDayStr(now, windows);
   const plannedTodayMin = active.filter(t => isOnToday(t, todayStr)).reduce((n, t) => n + estimateOf(t), 0);
   const leftMin = Math.max(0, Math.round(getRemainingFocusMinutes(now, windows)));
 

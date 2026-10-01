@@ -648,6 +648,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
   };
   // "Not needed": the reply's buttons go.
   const handleDismissActions = (actionId) => {
+    if (cloudSyncUnconfirmed) return;
     saveSubPathsAsync({ chatHistory: withActionState(chatHistoryRef.current, actionId, a => (a.state === "proposed" ? { ...a, state: "dismissed" } : a), true) }).catch(() => {});
   };
 
@@ -1803,7 +1804,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
                       );
                     })}
                     {proposed.length > 0 && (
-                      <button type="button" className="coach-prompt-chip" onClick={() => handleDismissActions(proposed[0].id)}>Not needed</button>
+                      <button type="button" className="coach-prompt-chip" disabled={cloudSyncUnconfirmed} onClick={() => handleDismissActions(proposed[0].id)}>Not needed</button>
                     )}
                   </div>
                 );
