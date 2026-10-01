@@ -23,7 +23,7 @@ export function patternSentence(summary, frontNameOf, period = "7d") {
   const { perDay, totalMinutes, totalMoves, daysMoved, byFront } = summary;
   const noun = NOUN[period] || NOUN["7d"];
   if (totalMoves === 0) {
-    return { before: `Nothing is logged ${noun}. `, bold: "That is a record too", after: ", not a gap." };
+    return { before: `No focus time logged ${noun}. `, bold: "That is a record too", after: ", not a gap." };
   }
   // byFront is only ever populated from events with countable minutes, so a
   // non-empty map guarantees totalMinutes > 0.

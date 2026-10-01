@@ -21,8 +21,8 @@ const text = (s) => `${s.before}${s.bold}${s.after}`;
 
 describe("patternSentence", () => {
   it("treats an empty period as a record, not a gap, in the period's words", () => {
-    expect(text(patternSentence(summary([day("2026-11-04", 0, 0)]), nameOf, "today"))).toBe("Nothing is logged today. That is a record too, not a gap.");
-    expect(text(patternSentence(summary([day("2026-11-04", 0, 0), day("2026-11-05", 0, 0)]), nameOf, "7d"))).toBe("Nothing is logged these 7 days. That is a record too, not a gap.");
+    expect(text(patternSentence(summary([day("2026-11-04", 0, 0)]), nameOf, "today"))).toBe("No focus time logged today. That is a record too, not a gap.");
+    expect(text(patternSentence(summary([day("2026-11-04", 0, 0), day("2026-11-05", 0, 0)]), nameOf, "7d"))).toBe("No focus time logged these 7 days. That is a record too, not a gap.");
   });
 
   it("names a front only when it really took more than half the time", () => {
