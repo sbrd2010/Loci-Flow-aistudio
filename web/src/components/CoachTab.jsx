@@ -11,6 +11,11 @@ import { getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
 import { safeUUID } from "../utils/uuid";
 import CoachReview from "./CoachReview";
+import CoachBrief from "./CoachBrief";
+import SplitTaskSheet from "./SplitTaskSheet";
+import { buildBriefInput, BRIEF_SYSTEM_PROMPT, parseBrief, moveTaskToHorizon, undoMoveTask, briefToText } from "../utils/coachBrief";
+import { buildSplit, undoSplit } from "../utils/splitTask";
+import { horizonsFromConfig } from "../utils/horizons";
 import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, parseCheckinRequestFromMessage, buildCoachCheckinContext } from "../utils/coachCheckin";
@@ -99,6 +104,12 @@ const COACH_ACTION_DONE = { COMPLETE_TASK: "Marked done", SET_NOW_FOCUS: "The on
 const clockHHMM = (ms) => {
   const d = new Date(ms);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
+// "Brief · 1 Oct 09:41" (62h).
+const briefChipLabel = (brief) => {
+  const d = new Date(brief.at);
+  return `${d.getDate()} ${d.toLocaleString("en-GB", { month: "short" })} ${clockHHMM(brief.at)}`;
 };
 
 export default function CoachTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveSubPaths, saveSubPathsAsync, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {}, uid, writeActivityEvents, stuck = null, onClearStuck, onBackToFocus }) {
@@ -893,6 +904,11 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       ? `STUCK IN A FOCUS SESSION: the user opened Coach from "I'm stuck" on "${stuck.title}"${stuck.step ? `, next step "${stuck.step}"` : ""}. The session is paused. This message is about what's in the way.`
       : "";
     if (stuck) onClearStuck?.();
+    // 62h: "Ask about this" attaches the brief to this message, then it clears.
+    const briefContext = briefChip
+      ? `COACH'S BRIEF the user is asking about (made ${briefChipLabel(briefChip)}):\n${briefToText(briefChip)}`
+      : "";
+    if (briefChip) setBriefChip(null);
 
     const userMessageCount = savedHistory.filter(m => m.isUser).length;
     const isEarlyConversation = userMessageCount <= 1;
@@ -925,7 +941,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       recentlyParkedContext,
       recentlyCompletedContext,
       categoryFilterContext,
-      rescueHandoffContext: [rescueHandoffContext, stuckContext].filter(Boolean).join("\n"),
+      rescueHandoffContext: [rescueHandoffContext, stuckContext, briefContext].filter(Boolean).join("\n"),
       isEarlyConversation,
       nowLabel,
       timeOfDay,
@@ -1511,101 +1527,106 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     }
   };
 
-  // -- Focus Briefing (AI task analysis across all horizons) -----------------
-  const [briefingLoading, setBriefingLoading] = useState(false);
-  const [briefingResult, setBriefingResult] = useState("");
-  const coachSectionOpenKey = (section) => `loci_coach_${section}_open_${auth?.currentUser?.uid || "signed-out"}`;
-  const [briefOpen, setBriefOpen] = useState(() => localStorage.getItem(coachSectionOpenKey("brief")) === "1");
-  const toggleBriefOpen = () => setBriefOpen(o => {
-    const next = !o;
-    localStorage.setItem(coachSectionOpenKey("brief"), next ? "1" : "0");
-    return next;
-  });
-
-  const handleFocusBriefing = async () => {
-    if (!hasAnyKey) return;
-    const backlog = tasks.filter(isActiveLociTask);
-    if (backlog.length === 0) {
-      setBriefingResult(`No tasks yet, ${firstName}. Tap + on the Home tab to add your first task, or use the Plan tab to map goals across horizons — then come back for your Focus Briefing.`);
-      return;
-    }
-
-    setBriefingLoading(true);
-    setBriefingResult("");
-
-    const challengeDesc =
-      config.challengeType === "overplanner"  ? "Overplanner — over-researches and plans but rarely starts; needs forced simplicity and execution bias" :
-      config.challengeType === "overwhelmed"  ? "Overwhelmed professional — backlog shame, fear of missing commitments; needs recovery, reassurance, reduced alert fatigue" :
-      config.challengeType === "initiation"   ? "Initiation block — knows what to do but freezes before starting; needs scaffolding, visual cues, micro-starts" :
-      config.challengeType === "momentum"     ? "Momentum seeker — high activation energy needed; needs quick wins and visible forward movement" :
-      config.challengeType === "starting"     ? "Overcoming inertia (struggles to start tasks)" :
-      config.challengeType === "focusing"     ? "Protecting focus sessions (gets distracted mid-task)" :
-      config.challengeType === "tracking"     ? "Time awareness (loses track of time, misses deadlines)" :
-      "Action over perfectionism (overthinks and delays finishing)";
-
+  // -- Coach's brief (Q51, 62a–g) --------------------------------------------
+  // Runs only on "Brief me"; only the latest is kept (synced, config.coachBrief).
+  const [briefStatus, setBriefStatus] = useState("idle");
+  const [briefError, setBriefError] = useState("");
+  // "Ask about this": the brief rides along with the next Chat message (62h).
+  const [briefChip, setBriefChip] = useState(null);
+  const handleBriefMe = async (focusRaw, frontNameOf) => {
+    if (briefStatus === "running") return;
+    if (!hasAnyKey) { setBriefStatus("error"); setBriefError("Add an AI key in Settings → AI provider to use Coach’s brief."); return; }
+    setBriefStatus("running");
+    setBriefError("");
     const now = new Date();
-    const hour = now.getHours();
-    const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
-    const energyNote = hour < 12 ? "peak cognitive energy — ideal for deep/complex work" : hour < 15 ? "post-lunch dip — prefer shorter, concrete tasks" : hour < 18 ? "second wind — good for creative or social tasks" : "low energy — protect recovery, do only simple tasks";
-
-    const todayTasks = backlog.filter(t => isOnToday(t, lociDayNow()));
-    const weekTasks = backlog.filter(t => t.horizonLevel === "week");
-    const totalTodayMins = todayTasks.reduce((sum, t) => sum + (Number(t.timeEstimateMinutes) || 25), 0);
-    const totalTodayHours = (totalTodayMins / 60).toFixed(1);
-    const p1Count = backlog.filter(t => t.priority === "P1").length;
-    const p1Ratio = p1Count / backlog.length;
-    const briefingAnchorContext = buildLociAnchorsContext(config.dailyAnchors || []);
-    const prompt = `You are ${config.mentorName || "Loci AI Coach"}, an expert productivity mentor inside Loci Focus — an app built to help people close the gap between intention and action.
-
-USER: ${config.userName || "friend"} | Challenge: ${challengeDesc}
-Time: ${timeOfDay} (${hour}:00) — ${energyNote}
-Streak: ${config.visitStreakCount || 0} days
-${profileToCoachContext(userProfile) ? profileToCoachContext(userProfile) + "\n" : ""}Today: ${todayTasks.length} tasks (${totalTodayHours}h estimated) | Week backlog: ${weekTasks.length} | Total active: ${backlog.length}
-Priority distribution: ${p1Count} P1 of ${backlog.length} total (${Math.round(p1Ratio * 100)}% P1)
-
-LOCI PHILOSOPHY: The app biases toward doing, not planning. Your briefing must close the activation gap — turn intentions into a specific first step. Never suggest "organize more" or "plan better." Suggest starting.
-
-FULL TASK LIST (key: [priority] [horizon] title | est minutes):
-${backlog.map(t => `[${t.priority}] [${t.horizonLevel === "today" && !isOnToday(t, lociDayNow()) ? "tomorrow" : t.horizonLevel}] ${t.title} | ${t.timeEstimateMinutes || 25}min | ${t.category || "–"}`).join("\n")}
-${briefingAnchorContext ? `\n${briefingAnchorContext}\n` : ""}
-PRODUCE A FOCUS BRIEFING with these sections:
-
-**📊 Load Check**
-- Is today overloaded? (flag if >6h estimated or >8 tasks today)
-- Any horizon packed? (flag if week>10 tasks or month>15 tasks with no quarter plan)
-- If overload: name 1-2 specific tasks to park or defer — use normalising language, no shame
-
-**🎯 Top 3 Right Now**
-For each task: bold the name, one sentence WHY (energy match + urgency + momentum), then "Start: [10-word door-handle action]"
-Pick based on: current energy level, momentum-first sequencing, urgency, and cascade value (doing X unblocks Y)
-
-**⏰ Time Awareness Check** (only if issues found)
-- Flag tasks that seem severely underestimated
-- Flag tasks placed in the wrong horizon (e.g., a P1 urgent item sitting in Quarter)
-- Give 1-2 specific move suggestions
-
-**🔥 Priority Note** (only if >35% of tasks are P1)
-- Flag priority inflation briefly. One sentence max.
-
-**One sentence of encouragement** — specific, warm, reference their streak or recent progress if visible. Never generic.
-
-RULES: Bold task names. Direct and concise. No filler. Punchy and actionable beats thorough but vague. Never shame a big backlog — treat it as ambition, not failure. Never use the word "ADHD" — use: overwhelm, execution support, momentum, micro-step, time awareness, reset.`;
-
+    const { refs, data } = buildBriefInput({
+      tasks: tasksRef.current, contributions: contributionsRef.current, config: configRef.current,
+      focusRaw, now, windows: getFocusWindows(configRef.current), frontNameOf,
+    });
     try {
       const reply = await callAI({
         groqKey, geminiKey, cerebrasKey, zaiKey,
-        systemPrompt: `${buildLociCoreInstruction({ firstName })}\n\nYou are ${config.mentorName || "a focus coach"}, an expert productivity coach.`,
-        messages: [{ role: "user", content: prompt }],
-        maxTokens: 800,
-        reasoningEffort: "low"
+        systemPrompt: BRIEF_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: JSON.stringify(data) }],
+        maxTokens: 900,
+        reasoningEffort: "low",
       });
-      setBriefingResult(reply);
+      const brief = parseBrief(reply, refs, Date.now());
+      if (!brief) throw new Error("unreadable brief");
+      saveConfigPatch({ coachBrief: brief });
+      setBriefStatus("idle");
     } catch (err) {
-      console.error("[CoachTab] Focus briefing failed:", err);
-      setBriefingResult(describeAIError(err));
-    } finally {
-      setBriefingLoading(false);
+      console.error("[CoachTab] Coach's brief failed:", err);
+      setBriefStatus("error");
+      setBriefError("Couldn’t reach Coach. Try again.");
     }
+  };
+  const handleAskAboutBrief = (brief) => {
+    setBriefChip(brief);
+    setCoachTab("chat");
+  };
+  // A brief's buttons (Q50): each applies on the tap and returns its Undo.
+  const handleBriefMove = (uuid, to) => {
+    const task = tasksRef.current.find(t => t.uuid === uuid);
+    const moved = moveTaskToHorizon(tasksRef.current, uuid, to);
+    if (!task || !moved) return null;
+    if (task.isNowFocus && focusTimerRef.current.activeTask?.uuid === uuid) {
+      const ended = focusTimerRef.current.endFocusSession?.("user_abandoned");
+      focusTimerRef.current.setIsTimerRunning?.(false);
+      focusTimerRef.current.setIsFocusMode?.(false);
+      focusTimerRef.current.setFocusSessionActive?.(false);
+      if (ended) writeActivityEvents(eventsPatch(uid, [buildFocusTerminalEvent("focus_abandoned", ended.task, ended.focusSessionId, { ...ended, windows })]));
+    }
+    const event = buildTaskMutationEvent("task_moved", task, { fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: to }, windows, source: "coach_action" });
+    saveSubPathsAsync({ tasks: moved.tasks }).then(() => writeActivityEvents(eventPatch(uid, event))).catch(() => {});
+    return () => {
+      const back = undoMoveTask(tasksRef.current, uuid, moved);
+      if (back) saveSubPathsAsync({ tasks: back }).catch(() => {});
+    };
+  };
+  const handleBriefOneThing = (uuid) => {
+    const task = tasksRef.current.find(t => t.uuid === uuid && !t.isDeleted && !t.isCompleted);
+    if (!task || isEventTask(task)) return null;
+    const now = new Date();
+    const prevPinnedUuid = tasksRef.current.find(t => t.isNowFocus && !t.isDeleted && !t.isCompleted)?.uuid || null;
+    const nextTasks = buildSetNowFocusTasks(tasksRef.current, uuid, now.getTime());
+    const pinned = nextTasks.find(t => t.uuid === uuid);
+    commitCoachActions({ ...payload, tasks: nextTasks, contributions: contributionsRef.current }, [{ type: "SET_NOW_FOCUS", matched: true, task: pinned }], now);
+    const rec = { type: "SET_NOW_FOCUS", taskUuid: uuid, prevPinnedUuid, appliedLastUpdated: pinned.lastUpdated };
+    return () => {
+      const back = undoCoachAction({ ...payload, tasks: tasksRef.current, contributions: contributionsRef.current }, rec);
+      if (back) saveSubPathsAsync({ tasks: back.tasks }).catch(() => {});
+    };
+  };
+  // Split it: the same sheet as Today's; the brief line shows the result.
+  const [splitFor, setSplitFor] = useState(null);
+  const handleBriefSplit = (uuid, markDone) => {
+    const task = tasksRef.current.find(t => t.uuid === uuid && !t.isDeleted && !t.isCompleted);
+    if (task) setSplitFor({ task, markDone });
+  };
+  const handleSplitDone = (steps) => {
+    const target = splitFor;
+    setSplitFor(null);
+    const original = target && tasksRef.current.find(t => t.uuid === target.task.uuid && !t.isDeleted);
+    if (!original || steps.length < 2) return;
+    const actionAt = Date.now();
+    const events = [];
+    if (original.isNowFocus && focusTimerRef.current.activeTask?.uuid === original.uuid) {
+      const ended = focusTimerRef.current.endFocusSession?.("user_abandoned");
+      focusTimerRef.current.setIsTimerRunning?.(false);
+      focusTimerRef.current.setIsFocusMode?.(false);
+      focusTimerRef.current.setFocusSessionActive?.(false);
+      if (ended) events.push(buildFocusTerminalEvent("focus_abandoned", ended.task, ended.focusSessionId, { ...ended, windows, now: actionAt }));
+    }
+    const { tasks: nextTasks, created } = buildSplit(tasksRef.current, original, steps, { now: actionAt, makeId: safeUUID });
+    events.push(
+      buildTaskMutationEvent("task_deleted", original, { windows, now: actionAt }),
+      ...created.map(t => buildTaskMutationEvent("task_created", t, { windows, now: actionAt })),
+    );
+    saveSubPathsAsync({ tasks: nextTasks }).then(() => writeActivityEvents(eventsPatch(uid, events))).catch(() => {});
+    target.markDone(`Split into ${created.length}`, () => {
+      saveSubPathsAsync({ tasks: undoSplit(tasksRef.current, original, created.map(t => t.uuid)) }).catch(() => {});
+    });
   };
 
   // -- Render ----------------------------------------------------------------
@@ -1821,6 +1842,12 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
             <button type="button" className="coach-back-focus" onClick={onBackToFocus}>← Back to focus</button>
           )}
           <form ref={chatFormRef} onSubmit={handleSendChat} className="chat-input-row coach-composer">
+            {briefChip && (
+              <span className="coach-stuck-chip">
+                Brief · {briefChipLabel(briefChip)}
+                <button type="button" className="coach-stuck-remove" onClick={() => setBriefChip(null)} aria-label="Remove the brief">×</button>
+              </span>
+            )}
             {stuck && (
               <span className="coach-stuck-chip">
                 Stuck on: {stuck.title}{stuck.step ? ` · next step: ${stuck.step}` : ""}
@@ -1837,7 +1864,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                     e.currentTarget.form?.requestSubmit();
                   }
                 }}
-                placeholder={stuck ? "What's in the way?" : `Ask ${coachName}…`}
+                placeholder={briefChip ? "Ask about the brief…" : stuck ? "What's in the way?" : `Ask ${coachName}…`}
                 disabled={chatLoading} />
               <button className="coach-send" type="submit" disabled={chatLoading || !chatInput.trim()} aria-label="Send">
                 <span className="coach-send-label">Send</span>
@@ -1853,144 +1880,26 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
       </section>
       )}
 
-      {/* Review (Q51): the facts; the old brief sits in the brief column
-          until Coach's brief replaces it. */}
+      {/* Review (Q51): the facts, and Coach's brief beside them. */}
       {coachTab === "review" && (
       <div id="coach-panel-review" role="tabpanel" aria-labelledby="coach-tab-review">
-      <CoachReview payload={payload} uid={uid} brief={(
-      <section className="card">
-        <h2 style={{ margin: 0 }}>
-          <button type="button" onClick={toggleBriefOpen} aria-expanded={briefOpen} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: briefOpen ? "4px" : 0 }}>
-            <div>
-              <span style={{ display: "block", fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", marginBottom: "2px", color: "var(--text-primary)" }}>
-                ⚡ AI Focus Brief
-              </span>
-              {!briefOpen && (
-                <div style={{ fontSize: "12px", fontWeight: "400", color: "var(--text-secondary)", marginTop: "2px" }}>
-                  Task snapshot & AI briefing
-                </div>
-              )}
-            </div>
-            <span style={{ fontSize: "16px", color: "var(--text-secondary)", transition: "transform 0.2s", transform: briefOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginInlineStart: "8px" }}>▼</span>
-          </button>
-        </h2>
-
-        {briefOpen && (
-        <>
-        <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "12px", marginBottom: "14px", lineHeight: "1.5" }}>
-          Your AI scans every task across all horizons — flags overload, catches time blindness, and briefs you on exactly what to tackle now.
-        </p>
-
-        {/* Task Snapshot — always-visible data viz */}
-        {(() => {
-          const active = tasks.filter(isActiveLociTask);
-          const horizons = ["today", "week", "month", "quarter", "halfyear", "office"];
-          const hLabels = { today: "Today", week: "Week", month: "Month", quarter: "Quarter", halfyear: "6 Mo.", office: "Work" };
-          const hCounts = horizons.map(h => active.filter(t => t.horizonLevel === h).length);
-          const maxHCount = Math.max(...hCounts, 1);
-          const priorities = ["P1", "P2", "P3", "P4"];
-          const pColors = { P1: "var(--danger)", P2: "var(--warning)", P3: "var(--accent)", P4: "var(--success)" };
-          const pCounts = Object.fromEntries(priorities.map(p => [p, active.filter(t => t.priority === p).length]));
-          const totalPriority = Math.max(Object.values(pCounts).reduce((a, b) => a + b, 0), 1);
-          const todayTasks = active.filter(t => isOnToday(t, lociDayNow()));
-          const todayMins = todayTasks.reduce((s, t) => s + (Number(t.timeEstimateMinutes) || 25), 0);
-          const loadPct = Math.min(100, Math.round((todayMins / 60) / 8 * 100));
-          return (
-            <div style={{ background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", padding: "12px 14px", marginBottom: "4px" }}>
-              <h3 style={{ fontSize: "10px", fontWeight: "900", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "10px" }}>
-                📊 Task Snapshot
-              </h3>
-              {/* Horizon bars */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "5px", marginBottom: "12px" }}>
-                {horizons.map((h, i) => {
-                  const count = hCounts[i];
-                  if (count === 0) return null;
-                  const pct = (count / maxHCount) * 100;
-                  return (
-                    <div key={h} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)", width: "46px", flexShrink: 0 }}>{hLabels[h]}</span>
-                      <div style={{ flex: 1, height: "6px", background: "var(--bg-card)", borderRadius: "3px", overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${pct}%`, background: "var(--accent)", borderRadius: "3px" }} />
-                      </div>
-                      <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-primary)", width: "14px", textAlign: "right" }}>{count}</span>
-                    </div>
-                  );
-                })}
-                {active.length === 0 && (
-                  <span style={{ fontSize: "11px", color: "var(--text-muted)", fontStyle: "italic" }}>No active tasks yet</span>
-                )}
-              </div>
-              {/* Priority mix bar */}
-              {active.length > 0 && (
-                <>
-                  <div style={{ display: "flex", height: "6px", borderRadius: "3px", overflow: "hidden", marginBottom: "6px", gap: "1px" }}>
-                    {priorities.map(p => {
-                      const count = pCounts[p];
-                      if (count === 0) return null;
-                      return (
-                        <div key={p} style={{ flex: count / totalPriority, background: pColors[p], minWidth: "4px" }} title={`${p}: ${count}`} />
-                      );
-                    })}
-                  </div>
-                  <div style={{ display: "flex", gap: "10px", marginBottom: "12px" }}>
-                    {priorities.map(p => pCounts[p] > 0 && (
-                      <span key={p} style={{ fontSize: "10px", fontWeight: "700", color: pColors[p] }}>{p} {pCounts[p]}</span>
-                    ))}
-                  </div>
-                </>
-              )}
-              {/* Today's load gauge */}
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                  <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--text-muted)" }}>Today's Load</span>
-                  <span style={{ fontSize: "10px", fontWeight: "800", color: loadPct > 100 ? "var(--danger)" : loadPct > 75 ? "var(--warning)" : "var(--success)" }}>
-                    {(todayMins / 60).toFixed(1)}h / 8h
-                  </span>
-                </div>
-                <div style={{ height: "6px", background: "var(--bg-card)", borderRadius: "3px", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${Math.min(loadPct, 100)}%`, background: loadPct > 100 ? "var(--danger)" : loadPct > 75 ? "var(--warning)" : "var(--success)", borderRadius: "3px" }} />
-                </div>
-                <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "3px", textAlign: "right" }}>
-                  {loadPct}% capacity{loadPct > 100 ? " — overloaded" : loadPct > 75 ? " — heavy day" : " — good"}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {!hasAnyKey ? (
-          <div style={{ background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", padding: "12px", fontSize: "12px", color: "var(--text-secondary)", textAlign: "center" }}>
-            🔑 Add an AI key in <strong>Settings → AI Keys</strong> to enable this.
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <button className="btn" onClick={handleFocusBriefing} disabled={briefingLoading} style={{ width: "100%" }}>
-              {briefingLoading ? "Analyzing your tasks…" : "Get AI Focus Brief"}
-            </button>
-            {briefingResult && (
-              <div className="coach-briefing-box">
-                <ReactMarkdown
-                  className="coach-md"
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeSanitize]}
-                  components={{
-                    a: ({ node, href, children, ...props }) => (
-                      <a href={href} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>
-                    ),
-                  }}
-                >
-                  {briefingResult}
-                </ReactMarkdown>
-              </div>
-            )}
-          </div>
-        )}
-        </>
-        )}
-      </section>
-      )} />
+        <CoachReview payload={payload} uid={uid} renderBrief={({ focusRaw, frontNameOf }) => (
+          <CoachBrief
+            brief={config.coachBrief || null}
+            status={briefStatus}
+            error={briefError}
+            tasks={tasks}
+            horizonName={(id) => horizonsFromConfig(config, lociDayNow()).find(h => h.id === id)?.name || id}
+            onBriefMe={() => handleBriefMe(focusRaw, frontNameOf)}
+            onAsk={handleAskAboutBrief}
+            onMove={handleBriefMove}
+            onMakeOneThing={handleBriefOneThing}
+            onSplit={handleBriefSplit}
+          />
+        )} />
       </div>
       )}
+      {splitFor && <SplitTaskSheet task={splitFor.task} onClose={() => setSplitFor(null)} onSplit={handleSplitDone} />}
     </div>
   );
 }

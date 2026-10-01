@@ -7,7 +7,8 @@ import { REVIEW_PERIODS, reviewFacts } from "../utils/coachReview";
 import "../styles/coachReview.css";
 
 // Coach → Review (Q51, 62a–g): the facts on the left, Coach's brief beside
-// them (`brief`). The period switch changes the facts only.
+// them (`renderBrief`, handed the same ledger read). The period switch
+// changes the facts only.
 
 const WEEKDAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -51,7 +52,7 @@ function DayChart({ days, period }) {
   );
 }
 
-export default function CoachReview({ payload = {}, uid, brief = null }) {
+export default function CoachReview({ payload = {}, uid, renderBrief = null }) {
   const config = payload.config || {};
   const windows = getFocusWindows(config);
   const [period, setPeriod] = useState("7d");
@@ -169,7 +170,11 @@ export default function CoachReview({ payload = {}, uid, brief = null }) {
             </div>
           </div>
         </section>
-        {brief && <aside className="rv-brief" aria-label="Coach's brief">{brief}</aside>}
+        {renderBrief && (
+          <aside className="rv-brief" aria-label="Coach's brief">
+            {renderBrief({ focusRaw: status === "ready" ? raw || {} : null, frontNameOf })}
+          </aside>
+        )}
       </div>
     </div>
   );
