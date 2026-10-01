@@ -80,7 +80,7 @@ for (const viewport of MOBILE_VIEWPORTS) {
 
     await openTab(page, "Mind Box");
     await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 8_000 });
-    await expect(page.locator(".braindump-input").first()).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator(".mbx-field").getByRole("textbox", { name: "Thought" })).toBeVisible({ timeout: 8_000 });
     await expectNoHorizontalOverflow(page);
 
     await openTab(page, "Coach");
