@@ -31,6 +31,13 @@ test("reliability: chatHistory messages accept the 'actions' field CoachTab atta
   expect(msgRules.actions[".validate"]).toBe(true);
 });
 
+test("reliability: chatHistory messages accept the 'at' time stamp shown in the kicker (Q50)", () => {
+  // Every new message carries `at` (ms) for "YOU · 09:35". Without a rule it
+  // falls through to $other: false and the whole chatHistory write is denied.
+  const msgRules = loadDatabaseRules().sync.$userId.chatHistory.$msgIdx;
+  expect(msgRules.at[".validate"]).toBe("!newData.exists() || newData.isNumber()");
+});
+
 test("reliability: activityLogs analytics data remains scoped to the signed-in uid", () => {
   // The analytics ledger lives at activityLogs/{uid}, a root deliberately
   // separate from sync/{uid} (so the normal payload listener never

@@ -163,6 +163,8 @@ export function sanitizeChatHistoryForRules(history) {
       const text = typeof m.text === "string" ? m.text : String(m.text ?? "");
       const msg = { text: text.slice(0, CHAT_TEXT_LIMIT), isUser: !!m.isUser };
       if (m.actions !== undefined) msg.actions = m.actions;
+      // The kicker's time (Q50); database.rules.json allows only a number.
+      if (Number.isFinite(m.at)) msg.at = m.at;
       return msg;
     });
 }

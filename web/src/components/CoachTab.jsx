@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { track, auth } from "../firebase";
 import { callAI, describeAIError, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { getCoachNudge, resolveCoachNudge, buildCoachNudgeDeliveredConfig } from "../utils/coachNudge";
@@ -90,6 +90,12 @@ function getLastFullTaskTime(userId) {
   return raw ? Number(raw) : 0;
 }
 
+const NO_MESSAGES = [];
+const clockHHMM = (ms) => {
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
 export default function CoachTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveSubPaths, saveSubPathsAsync, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {}, uid, writeActivityEvents, stuck = null, onClearStuck, onBackToFocus }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
   const windows = getFocusWindows(config);
@@ -122,14 +128,13 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     "Action over Perfectionism";
 
   const firstName = (config.userName || "").split(" ")[0] || "friend";
-  const defaultWelcome = [{
-    text: `Hey ${firstName}! I'm ${config.mentorName || "your AI coach"} — good to have you here. Before I dive into your tasks, tell me: what's going on for you today? Are you trying to get started, feeling stuck, or just need to think something through?`,
-    isUser: false
-  }];
-
-  const chatHistory = (payload.chatHistory && payload.chatHistory.length > 0)
-    ? payload.chatHistory
-    : defaultWelcome;
+  // 62j: an empty conversation shows its own empty state; Coach doesn't
+  // speak first.
+  const chatHistory = payload.chatHistory || NO_MESSAGES;
+  // Q50: "Coach" everywhere; Settings → Coach → Name replaces the word only
+  // in the kicker and the placeholder.
+  const coachName = config.mentorName || "Coach";
+  const [coachTab, setCoachTab] = useState("chat");
 
   const chatInput = chatDraft;
   const setChatInput = setChatDraft;
@@ -350,7 +355,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     saveConfigPatch(buildCoachNudgeDeliveredConfig(nudge, configRef.current, payload, new Date()));
 
     const deliver = (text, voiced) => {
-      const withReply = [...chatHistoryRef.current, { text, isUser: false }];
+      const withReply = [...chatHistoryRef.current, { text, isUser: false, at: Date.now() }];
       const { history: savedWithReply, removedCount } =
         trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, configRef.current.coachSessionSummary);
       saveSubPath("chatHistory", savedWithReply);
@@ -464,7 +469,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       // trimChatHistoryWithCursor before the reply's own trim reads it,
       // or the second trim clobbers/misreads a stale cursor (identical
       // bug class to the main path's loopcheck finding, PR #347).
-      const withUserForLocalReply = [...chatHistory, { text: userText, isUser: true }];
+      const withUserForLocalReply = [...chatHistory, { text: userText, isUser: true, at: Date.now() }];
       const { history: savedHistory, coachSessionSummary: summaryAfterLocalEarlyTrim, removedCount: localEarlyRemovedCount } =
         trimChatHistoryWithCursor(withUserForLocalReply, MAX_DB_HISTORY, config.coachSessionSummary);
       // Not persisted immediately — folded into the single decrement below
@@ -495,7 +500,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           localReplyText = `You don't have a Now Focus set right now. Want to set one, or should we look at your Today list?`;
         }
       }
-      const replyMsg = { text: localReplyText, isUser: false };
+      const replyMsg = { text: localReplyText, isUser: false, at: Date.now() };
       const withReply = [...savedHistory, replyMsg];
       const { history: savedWithReply, removedCount } =
         trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, summaryAfterLocalEarlyTrim);
@@ -529,7 +534,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     // deeper loopcheck finding — confirmed by simulation to permanently and
     // silently drop every coach reply once the 40-cap trim starts firing
     // regularly, not just an edge case).
-    const withUserForTrim = [...chatHistory, { text: userText, isUser: true }];
+    const withUserForTrim = [...chatHistory, { text: userText, isUser: true, at: Date.now() }];
     const { history: savedHistory, coachSessionSummary: summaryAfterEarlyTrim, removedCount: earlyRemovedCount } =
       trimChatHistoryWithCursor(withUserForTrim, MAX_DB_HISTORY, config.coachSessionSummary);
     saveSubPath("chatHistory", savedHistory);
@@ -551,7 +556,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     // in-memory regardless — only the immediate, separate persistence is
     // removed.
     if (!hasAnyKey) {
-      const replyMsg = { text: "🔑 Add an AI key in **Settings → AI Keys** to enable chat.", isUser: false };
+      const replyMsg = { text: "🔑 Add an AI key in **Settings → AI Keys** to enable chat.", isUser: false, at: Date.now() };
       const withReply = [...savedHistory, replyMsg];
       const { history: savedWithReply, removedCount } =
         trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, summaryAfterEarlyTrim);
@@ -1160,6 +1165,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       const replyMsg = {
         text: replyText || "Got it.",
         isUser: false,
+        at: Date.now(),
         ...(actionResults.some(r => r.matched) && { actions: actionResults.filter(r => r.matched) }),
       };
       const withReply = [...baseHistory, replyMsg];
@@ -1234,7 +1240,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
                          currentHistory[currentHistory.length - 1].text === userText;
       const baseHistory = hasUserMsg ? currentHistory : savedHistory;
 
-      const withError = [...baseHistory, { text: hint, isUser: false }];
+      const withError = [...baseHistory, { text: hint, isUser: false, at: Date.now() }];
       // No reply was generated this turn, so there's nothing to fold into
       // the summary — only the 40-cap trim (if any) can still apply.
       const { history: savedWithError, removedCount } =
@@ -1525,42 +1531,107 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
 
   // -- Render ----------------------------------------------------------------
 
+  const clearConversation = () => {
+    saveSubPath("chatHistory", null);
+    clearSessionSummaryDeferredIfNeeded();
+    const uId = auth?.currentUser?.uid || "signed-out";
+    localStorage.removeItem(`loci_last_coach_plan_${uId}`);
+    localStorage.removeItem(`loci_last_full_task_time_${uId}`);
+    localStorage.removeItem("loci_last_coach_plan");
+    localStorage.removeItem("loci_last_full_task_time");
+  };
+  const startNewConversation = () => setConfirmDialog({
+    message: "Start a new conversation? This one is cleared.",
+    confirmLabel: "New conversation",
+    onConfirm: () => { clearConversation(); setConfirmDialog(null); },
+    onCancel: () => setConfirmDialog(null),
+  });
+  // 62j: a starter chip puts its text in the composer; all but the first
+  // send at once, as if typed.
+  const handleStarter = (text, send) => {
+    if (!send) { setChatInput(text); chatInputRef.current?.focus(); return; }
+    if (chatLoading) return;
+    // The starter replaces any draft, so nothing stale is left to send later.
+    setChatInput("");
+    chipTextRef.current = text;
+    chatFormRef.current?.requestSubmit();
+  };
+  const hasConversation = !!(payload.chatHistory && payload.chatHistory.length > 0);
+  // The chat column fills the screen from where it starts down to the bottom
+  // tab bar (phone), so the messages scroll inside it and the page doesn't.
+  const chatColRef = useRef(null);
+  useLayoutEffect(() => {
+    const col = chatColRef.current;
+    if (!col) return undefined;
+    // Everything above the column, plus the page's own space below it (its
+    // bottom padding, which also clears the phone's tab bar).
+    const fit = () => {
+      const rect = col.getBoundingClientRect();
+      const below = Math.max(0, document.documentElement.scrollHeight - (rect.bottom + window.scrollY));
+      col.style.setProperty("--coach-chrome", `${Math.round(rect.top + window.scrollY + below)}px`);
+    };
+    fit();
+    // 62h: the newest message sits at the bottom; opening Chat starts there.
+    const win = col.querySelector(".chat-window");
+    if (win) win.scrollTop = win.scrollHeight;
+    window.addEventListener("resize", fit);
+    // Something appearing above the column (the offline banner) moves it
+    // without a window resize; the page's size changes, so re-fit then.
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(fit) : null;
+    ro?.observe(document.body);
+    return () => { window.removeEventListener("resize", fit); ro?.disconnect(); };
+  }, [coachTab]);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+    <div className="coach-page">
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
 
-      {/* 1 -- AI Mentor Chat */}
-      <section className="card coach-section-chat">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-          <div>
-            <h2 style={{ fontSize: "16px", fontWeight: "800", fontFamily: "var(--font-display)", color: "var(--text-primary)" }}>
-              🤖 Chat with {config.mentorName || "your Mentor"}
-            </h2>
-            <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
-              Your AI coach — ask about tasks, focus, overwhelm, or momentum.
-            </p>
-          </div>
-          {payload.chatHistory && payload.chatHistory.length > 0 && (
-            <button
-              onClick={() => setConfirmDialog({ message: "Clear all chat history?", confirmLabel: "Clear", danger: true, onConfirm: () => { saveSubPath("chatHistory", null); clearSessionSummaryDeferredIfNeeded(); const uId = auth?.currentUser?.uid || "signed-out"; localStorage.removeItem(`loci_last_coach_plan_${uId}`); localStorage.removeItem(`loci_last_full_task_time_${uId}`); localStorage.removeItem("loci_last_coach_plan"); localStorage.removeItem("loci_last_full_task_time"); setConfirmDialog(null); }, onCancel: () => setConfirmDialog(null) })}
-              style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "11px", fontWeight: "700", cursor: "pointer", padding: "4px 8px", flexShrink: 0 }}
-            >
-              Clear
-            </button>
-          )}
+      {/* Q51: Coach is two tabs, Chat (first) and Review. */}
+      <div className="coach-tabs">
+        <div className="coach-tabs-list" role="tablist" aria-label="Coach" onKeyDown={e => {
+          if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+          e.preventDefault();
+          const next = coachTab === "chat" ? "review" : "chat";
+          setCoachTab(next);
+          document.getElementById(`coach-tab-${next}`)?.focus();
+        }}>
+          <button type="button" role="tab" id="coach-tab-chat" aria-controls="coach-panel-chat" aria-selected={coachTab === "chat"} tabIndex={coachTab === "chat" ? 0 : -1} className="coach-tab" onClick={() => setCoachTab("chat")}>Chat</button>
+          <button type="button" role="tab" id="coach-tab-review" aria-controls="coach-panel-review" aria-selected={coachTab === "review"} tabIndex={coachTab === "review" ? 0 : -1} className="coach-tab" onClick={() => setCoachTab("review")}>Review</button>
         </div>
+        {coachTab === "chat" && (
+          <span className="coach-tabs-end">
+            <span className="coach-tabs-note">Reads your lists. Changes only what you tap.</span>
+            {hasConversation && (
+              <button type="button" className="coach-new-conversation" onClick={startNewConversation}>New conversation</button>
+            )}
+          </span>
+        )}
+      </div>
 
+      {coachTab === "chat" && (
+      <section ref={chatColRef} className="coach-chat-col" id="coach-panel-chat" role="tabpanel" aria-labelledby="coach-tab-chat">
         <div className="chat-window coach-chat">
+          {!hasConversation && !chatLoading && (
+            <div className="coach-empty">
+              <h2 className="coach-empty-title">What’s on your mind?</h2>
+              <p className="coach-empty-line">Tell Coach what you did, what’s in the way, or ask what to do next.</p>
+              <div className="coach-starters">
+                {[["I just finished…", false], ["What should I start with?", true], ["I’m overwhelmed", true]].map(([label, send]) => (
+                  <button key={label} type="button" className="coach-starter" disabled={chatLoading} onClick={() => handleStarter(send ? label : "I just finished ", send)}>{label}</button>
+                ))}
+              </div>
+            </div>
+          )}
           {(() => {
             const lastMentorIdx = chatHistory.reduce((last, m, i) => (!m.isUser ? i : last), -1);
             return chatHistory.map((m, idx) => (
-            <div key={idx} className={`chat-bubble ${m.isUser ? "chat-bubble-user" : "chat-bubble-mentor"}`}
-              style={m.isUser ? { alignSelf: "flex-end" } : undefined}>
+            <div key={idx} className={`coach-msg ${m.isUser ? "is-you" : "is-coach"}`}>
+              <span className="coach-msg-kicker">{m.isUser ? "You" : coachName}{m.at ? ` · ${clockHHMM(m.at)}` : ""}</span>
               {m.isUser ? (
-                <span>{m.text}</span>
+                <span className="coach-msg-text">{m.text}</span>
               ) : (
                 <ReactMarkdown
-                  className="coach-md"
+                  className="coach-md coach-msg-text"
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeSanitize]}
                   components={{
@@ -1652,54 +1723,59 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                   </div>
                 ) : null;
               })()}
-              <div className="chat-sender" style={{ color: m.isUser ? "rgba(255,255,255,0.7)" : "var(--text-muted)" }}>
-                {m.isUser ? "You" : config.mentorName || "Mentor"}
-              </div>
             </div>
           ));
           })()}
           {chatLoading && (
-            <div className="chat-bubble chat-bubble-mentor" style={{ fontStyle: "italic", color: "var(--text-muted)", alignSelf: "flex-start" }}>
-              <span>{config.mentorName || "Mentor"} is thinking…</span>
+            <div className="coach-msg is-coach is-thinking">
+              <span className="coach-msg-kicker">{coachName}</span>
+              <span className="coach-msg-text">Thinking…</span>
             </div>
           )}
           <div ref={chatBottomRef} />
         </div>
 
-        {(stuck || onBackToFocus) && (
-          <div className="coach-stuck-row">
-            {onBackToFocus && (
-              <button type="button" className="coach-back-focus" onClick={onBackToFocus}>← Back to focus</button>
-            )}
+        <div className="coach-composer-wrap">
+          {onBackToFocus && (
+            <button type="button" className="coach-back-focus" onClick={onBackToFocus}>← Back to focus</button>
+          )}
+          <form ref={chatFormRef} onSubmit={handleSendChat} className="chat-input-row coach-composer">
             {stuck && (
               <span className="coach-stuck-chip">
                 Stuck on: {stuck.title}{stuck.step ? ` · next step: ${stuck.step}` : ""}
                 <button type="button" className="coach-stuck-remove" onClick={() => onClearStuck?.()} aria-label="Remove the stuck task">×</button>
               </span>
             )}
+            <div className="coach-composer-row">
+              <textarea ref={chatInputRef} className="coach-composer-input" rows={1} value={chatInput}
+                aria-label={`Ask ${coachName}`}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    e.currentTarget.form?.requestSubmit();
+                  }
+                }}
+                placeholder={stuck ? "What's in the way?" : `Ask ${coachName}…`}
+                disabled={chatLoading} />
+              <button className="coach-send" type="submit" disabled={chatLoading || !chatInput.trim()} aria-label="Send">
+                <span className="coach-send-label">Send</span>
+                <span className="coach-send-icon" aria-hidden="true">↑</span>
+              </button>
+            </div>
+          </form>
+          <div className="coach-composer-hints">
+            <span className="coach-hint-keys">Enter sends · Shift+Enter new line</span>
+            <span>Coach sees: your lists, focus time, Mind Box and what it remembers</span>
           </div>
-        )}
-        <form ref={chatFormRef} onSubmit={handleSendChat} className="chat-input-row" style={{ marginTop: "8px" }}>
-          <textarea ref={chatInputRef} className="text-input" rows={3} value={chatInput}
-            onChange={e => setChatInput(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                e.currentTarget.form?.requestSubmit();
-              }
-            }}
-            placeholder={stuck ? "What's in the way?" : `Ask ${config.mentorName || "your mentor"}… (Shift+Enter for a new line)`}
-            disabled={chatLoading}
-            style={{ background: "var(--accent-ring)", border: "1.5px solid var(--accent-light)" }} />
-          {chatLoading
-            ? <span style={{ fontSize: "12px", color: "var(--text-muted)", padding: "0 10px" }}>…</span>
-            : <button className="btn" type="submit" disabled={!chatInput.trim()} style={{ padding: "10px 16px", fontSize: "13px" }}>Send</button>
-          }
-        </form>
+        </div>
       </section>
+      )}
 
-      {/* 2 -- Focus Briefing */}
-      <section className="card">
+      {/* Review (Q51): the facts and Coach's brief come in C4; until then the
+          old brief sits here. */}
+      {coachTab === "review" && (
+      <section className="card" id="coach-panel-review" role="tabpanel" aria-labelledby="coach-tab-review">
         <h2 style={{ margin: 0 }}>
           <button type="button" onClick={toggleBriefOpen} aria-expanded={briefOpen} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, marginBottom: briefOpen ? "4px" : 0 }}>
             <div>
@@ -1829,6 +1905,7 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
         </>
         )}
       </section>
+      )}
     </div>
   );
 }

@@ -133,7 +133,7 @@ test("a task added without choosing a time is saved with no estimate", async ({ 
 
   // Coach's task context writes "(Nmin)" after a title only when it has one.
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
-  await page.getByPlaceholder(/Shift\+Enter for a new line/).fill("what are my tasks");
+  await page.locator(".coach-composer-input").fill("what are my tasks");
   await page.getByRole("button", { name: "Send" }).click();
   await expect.poll(() => bodies.some(b => b.includes("Sort the museum receipts")), { timeout: 8_000 }).toBe(true);
   const body = bodies.find(b => b.includes("Sort the museum receipts"));
@@ -173,7 +173,7 @@ test("opening Other shows 25m chosen, and 25m is what is saved", async ({ page }
   await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
 
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
-  await page.getByPlaceholder(/Shift\+Enter for a new line/).fill("what are my tasks");
+  await page.locator(".coach-composer-input").fill("what are my tasks");
   await page.getByRole("button", { name: "Send" }).click();
   await expect.poll(() => bodies.some(b => b.includes("Label the seed trays")), { timeout: 8_000 }).toBe(true);
   expect(bodies.find(b => b.includes("Label the seed trays"))).toContain("Label the seed trays (25min)");

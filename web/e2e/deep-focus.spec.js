@@ -317,8 +317,8 @@ test("mobile reliability: Opening Rescue chat without typing still hands off con
 
   groqRequestBodies.length = 0;
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
-  await expect(page.getByRole("heading", { name: /Chat with/ })).toBeVisible({ timeout: 8_000 });
-  await page.getByPlaceholder(/Shift\+Enter for a new line/).fill("I feel a bit scattered right now");
+  await expect(page.getByRole("tab", { name: "Chat", selected: true })).toBeVisible({ timeout: 8_000 });
+  await page.locator(".coach-composer-input").fill("I feel a bit scattered right now");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByText("Let's find one small step together.").first()).toBeVisible({ timeout: 8_000 });
 
