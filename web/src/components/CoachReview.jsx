@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useFocusLedger } from "../hooks/useFocusLedger";
 import { formatMinutes } from "../utils/focusLedger";
 import { frontsFromConfig } from "../utils/fronts";
@@ -61,6 +61,13 @@ export default function CoachReview({ payload = {}, uid, brief = null }) {
   const config = payload.config || {};
   const windows = getFocusWindows(config);
   const [period, setPeriod] = useState("7d");
+  // A minute tick, so "left today" and the day ranges move on while Review
+  // stays open (and roll over at the end of the Loci day).
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(n => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
   const { raw, status } = useFocusLedger(uid, 30, windows);
   const fronts = useMemo(() => frontsFromConfig(payload.config || {}), [payload.config]);
   const frontNameOf = (id) => (!id ? "work on no front" : fronts.find(f => f.id === id)?.name || "a front you've closed");
