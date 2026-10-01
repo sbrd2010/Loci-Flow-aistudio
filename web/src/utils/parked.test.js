@@ -25,6 +25,11 @@ describe("parked", () => {
     expect(back).toMatchObject({ isParked: true, horizonLevel: "month", orderIndex: 1, deferredUntil: "2026-10-02" });
   });
 
+  it("undo keeps the parked date, also for a task parked before parkedAt", () => {
+    const { tasks: next, before } = restoreParked([T("p", { isParked: true, horizonLevel: "week", lastUpdated: 111 })], "p", 999);
+    expect(undoRestoreParked(next, "p", before, 1000)[0].parkedAt).toBe(111);
+  });
+
   it("undo leaves a task alone once it changed again", () => {
     const { tasks: next, before } = restoreParked([T("p", { isParked: true, horizonLevel: "week" })], "p");
     const done = next.map(t => ({ ...t, isCompleted: true }));
