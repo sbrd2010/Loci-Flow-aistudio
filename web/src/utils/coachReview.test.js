@@ -112,6 +112,14 @@ describe("reviewFacts", () => {
     expect(facts.openNow.over).toBe(false);
   });
 
+  it("counts a tick made after midnight on its calendar day, inside a late window", () => {
+    const late = getFocusWindows({ focusWindows: [{ start: "07:00", end: "02:00" }] });
+    const at1am = new Date(2026, 9, 2, 1, 0); // still the 1 Oct Loci day
+    const f = reviewFacts({ tasks: [], contributions: [{ dateString: "2026-10-02", count: 1 }], period: "today", now: at1am, windows: late });
+    expect(f.days[0].date).toBe("2026-10-01");
+    expect(f.completed).toBe(1);
+  });
+
   it("doesn't claim focus figures it couldn't read", () => {
     const blind = reviewFacts({ tasks, contributions, focusRaw: null, period: "7d", now, windows });
     expect(blind.focusedMinutes).toBeNull();
