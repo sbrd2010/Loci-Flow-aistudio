@@ -212,7 +212,11 @@ test("laptop: sections on the left, the chosen one on the right; The day's pages
   await expect(nav.getByRole("button", { name: "The day" })).toHaveAttribute("aria-current", "page");
   // Coach carries the coach's own rows (44j).
   await nav.getByRole("button", { name: "Coach", exact: true }).click();
-  await expect(page.getByRole("switch", { name: "Proactive nudges" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Coach memory/ })).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Proactive nudges" })).toHaveCount(0);
+  await page.getByRole("button", { name: /^Privacy What Coach sees/ }).click();
+  await expect(page.getByRole("heading", { name: "Privacy", level: 2 })).toBeVisible();
+  await expect(page.getByText("Parts of Mind Box")).toBeVisible();
 });
 
 test("settings names can be cleared and stay cleared after leaving their pages", async ({ page }) => {

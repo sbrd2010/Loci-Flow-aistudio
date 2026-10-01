@@ -322,6 +322,37 @@ function shortDate(ts, dayStr) {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }).toUpperCase();
 }
 
+// Q54: exactly what a Coach message sends to the AI provider. The chat's
+// privacy line links here; if what's sent changes, change both together.
+const COACH_SENDS = [
+  { title: "Your lists", sub: "Open tasks on Today and in Plan with their steps, times and reminders, plus tasks finished or parked lately." },
+  { title: "Your goal", sub: "The key deadline, its date and its daily target." },
+  { title: "Your day", sub: "The Day map, the focus session running now, and how many tasks you finished each day." },
+  { title: "Parts of Mind Box", sub: "The first 3 Brain Dump thoughts and how many wait, your Daily Anchors, and a short note after Rescue Mode." },
+  { title: "Check-ins", sub: "Today's committed tasks, your evening reflection and your note for tomorrow." },
+  { title: "Coach's memory", sub: "The notes in Coach memory. Nothing when memory is off." },
+  { title: "About you", sub: "What you wrote in About you, and patterns such as how often you finish tasks." },
+  { title: "This conversation", sub: "Recent messages and a summary of older ones." },
+];
+
+export function CoachPrivacyPage({ onBack, backLabel }) {
+  return (
+    <SubPage title="Privacy" onBack={onBack} backLabel={backLabel}
+      lede="Each chat message to Coach sends these to your AI provider.">
+      <Group label="Coach sees">
+        {COACH_SENDS.map(item => (
+          <div key={item.title} className="set-row is-static">
+            <span className="set-row-text">
+              <span className="set-row-title">{item.title}</span>
+              <span className="set-row-sub">{item.sub}</span>
+            </span>
+          </div>
+        ))}
+      </Group>
+    </SubPage>
+  );
+}
+
 export function CoachMemoryPage({ config, saveConfigPatch, onBack, backLabel, onConfirm }) {
   const on = isMemoryEnabled(config);
   const facts = config.coachMemory?.pinnedFacts || [];

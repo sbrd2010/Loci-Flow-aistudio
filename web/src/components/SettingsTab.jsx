@@ -13,7 +13,7 @@ import { isNativeApp, notifPermissionState, requestNotifPermission as nativeRequ
 import { IconX } from "./ui/icons";
 import { Group, Row, SubPage, SwitchRow } from "./settings/ui";
 import {
-  ANCHOR_MODES, AiProviderPage, AnchorsPage, CoachMemoryPage, CoachPage, DataPage, FocusWindowsPage,
+  ANCHOR_MODES, AiProviderPage, AnchorsPage, CoachMemoryPage, CoachPage, CoachPrivacyPage, DataPage, FocusWindowsPage,
   KeyDeadlinePage, NotificationsPage, ProfilePage, ReminderPage, TimerPage, coachName, providerLine,
 } from "./settings/pages";
 import "../styles/settings.css";
@@ -137,6 +137,7 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
       <Row title="Coach memory" sub={isMemoryEnabled(config) ? `${memoryCount} ${memoryCount === 1 ? "note" : "notes"}` : "Off"} onClick={() => open("memory")} />
       <SwitchRow title="Evening check-in" sub="A short reflection card at the end of the day" checked={config.dailyCheckinsEnabled !== false} onChange={v => saveConfigPatch({ dailyCheckinsEnabled: v })} />
       <Row title="AI provider" sub={providerLine()} onClick={() => open("ai")} />
+      <Row title="Privacy" sub="What Coach sees" onClick={() => open("privacy")} />
     </>
   );
   const appearanceGroup = (
@@ -181,6 +182,7 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
         {wide && <Group label="Coach">{coachRows}</Group>}
       </CoachPage>
     ),
+    privacy: () => <CoachPrivacyPage onBack={back} />,
     memory: () => <CoachMemoryPage config={config} saveConfigPatch={saveConfigPatch} onBack={back} onConfirm={askConfirm} />,
     ai: () => <AiProviderPage onBack={back} />,
     notifications: () => <NotificationsPage permission={permission} onRequest={requestPermission} onBack={back} />,

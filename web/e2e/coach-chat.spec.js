@@ -295,3 +295,17 @@ test("Coach Chat opens at the newest message", async ({ page }) => {
   const overflow = await win.evaluate(el => el.scrollHeight - el.clientHeight);
   expect(overflow).toBeGreaterThan(0);
 });
+
+// Q53: Coach never posts unprompted. Q54: the privacy line opens Privacy,
+// and touch screens drop the Enter hint.
+test("Coach stays quiet on open; the privacy line opens Settings › Coach › Privacy", async ({ page }) => {
+  await enterDemo(page);
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  await expect(page.locator(".coach-composer-input")).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(1000);
+  await expect(page.locator(".coach-msg.is-coach")).toHaveCount(0);
+  const line = page.getByRole("button", { name: "Coach sees your lists, goal, focus time, parts of Mind Box and its memory." });
+  await expect(line).toBeVisible();
+  await line.click();
+  await expect(page.getByRole("heading", { name: "Privacy", level: 2 })).toBeVisible();
+});

@@ -110,7 +110,7 @@ const briefChipLabel = (brief) => {
   return `${d.getDate()} ${d.toLocaleString("en-GB", { month: "short" })} ${clockHHMM(brief.at)}`;
 };
 
-export default function CoachTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveSubPaths, saveSubPathsAsync, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {}, uid, writeActivityEvents, stuck = null, onClearStuck, onBackToFocus }) {
+export default function CoachTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveSubPaths, saveSubPathsAsync, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {}, uid, writeActivityEvents, stuck = null, onClearStuck, onBackToFocus, onOpenPrivacy }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
   const windows = getFocusWindows(config);
   // "Today" is the Loci day: a task moved to tomorrow stays off it until the
@@ -1765,7 +1765,11 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
           </form>
           <div className="coach-composer-hints">
             <span className="coach-hint-keys">Enter sends · Shift+Enter new line</span>
-            <span>Coach sees: your lists, focus time, Mind Box and what it remembers</span>
+            {/* Q54: what each message sends; Settings › Coach › Privacy lists it
+                exactly. If what's sent changes, change this line and that page. */}
+            <button type="button" className="coach-privacy-link" onClick={onOpenPrivacy}>
+              Coach sees your lists, goal, focus time, parts of Mind Box and its memory.
+            </button>
           </div>
         </div>
       </section>
