@@ -531,12 +531,6 @@ export function useSync(uid, email) {
               .map(s => s.charAt(0).toUpperCase() + s.slice(1))
               .join(" ") || rawName;
 
-          const toDateStr = (d) => {
-            const m = String(d.getMonth() + 1).padStart(2, "0");
-            const day = String(d.getDate()).padStart(2, "0");
-            return `${d.getFullYear()}-${m}-${day}`;
-          };
-          const todayStr = toDateStr(new Date());
           const now = Date.now();
 
           // Three neutral starter tasks that teach the app's own moves (add,
@@ -592,8 +586,6 @@ export function useSync(uid, email) {
               challengeType: "starting",
               pomodoroDurationMinutes: 25,
               reminderNagIntervalMinutes: 15,
-              visitStreakCount: 1,
-              lastVisitDate: todayStr,
               intentionMessage: "Start tiny. One action. Right now.",
               isOnboardingCompleted: false,
               eveningGuardWindowActive: true,

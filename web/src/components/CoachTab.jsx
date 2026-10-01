@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
-import { track, auth } from "../firebase";
+import { auth } from "../firebase";
 import { callAI, describeAIError, getAIKeys, hasAIKey } from "../utils/aiCall";
-import { getCoachNudge, resolveCoachNudge, buildCoachNudgeDeliveredConfig } from "../utils/coachNudge";
 import { buildLocalSafetyReply } from "../utils/crisisSafety";
 import { isEventTask } from "../utils/dayMapRoute";
 import ConfirmDialog from "./ConfirmDialog";
@@ -18,9 +17,8 @@ import { buildSplit, undoSplit } from "../utils/splitTask";
 import { horizonsFromConfig } from "../utils/horizons";
 import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin } from "../utils/reminders";
-import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, isCheckinDue, parseCheckinRequestFromMessage, buildCoachCheckinContext } from "../utils/coachCheckin";
+import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, parseCheckinRequestFromMessage, buildCoachCheckinContext } from "../utils/coachCheckin";
 import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks, findTaskByTitle, undoCoachAction } from "../utils/coachActions";
-import { shouldDeliverPendingCoachNudge } from "../utils/coachNudge";
 import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
 import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFromMemory, isMemoryEnabled, parseMemoryTags, isResurrectedMemoryEntry } from "../utils/coachMemory";
@@ -237,7 +235,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   // or accumulates it in localStorage (added to whatever's already pending)
   // to apply in one shot once it is. Pass cloudSyncUnconfirmedRef.current
   // instead of the plain value from call sites that can run after an await
-  // (e.g. the nudge-delivery IIFE below), matching this file's existing
+  // (e.g. a chat reply's async handler), matching this file's existing
   // convention for those closures.
   const applyOrDeferCursorDecrement = (removedCount, isUnconfirmed) => {
     if (removedCount <= 0) return;
@@ -304,138 +302,6 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   // asked to delete something; applying it late is strictly better than
   // silently dropping it and re-injecting the "forgotten" entry into every
   // future prompt).
-
-  // Deliver a Proactive Coach Nudge (see utils/coachNudge.js) handed off from
-  // the Today tab — voiced by the AI when a key is available, falling back to
-  // the signal's own canned text otherwise. Runs on mount, and again once
-  // cloudSyncUnconfirmed flips to false (see the deferral below) so a nudge
-  // deferred during the cache-sync window is delivered as soon as sync
-  // confirms, instead of waiting for the next Coach remount.
-  const deliveredNudgeRef = useRef(null);
-  const deliveringNudgeRef = useRef(false);
-  useEffect(() => {
-    // Defer to App's Coach Check-In resume effect if it's also acting on
-    // this tick — both write a fresh `config`/`chatHistory` snapshot, so
-    // running both here would let one clobber the other. The nudge stays
-    // pending and is picked up on a later mount.
-    if (isCheckinDue(configRef.current.coachCheckin)) return;
-
-    // J3 moved the proactive nudge off Today: "it never appears unprompted on
-    // Today. The same logic renders as the first line of the Coach transcript
-    // when Coach is opened." Today used to compute it, show a card, and hand it
-    // over here only if tapped — so with that card gone, Coach has to derive it
-    // itself or the nudge would simply never reach anyone.
-    //
-    // A pending one still wins: it carries the context of whatever the user
-    // acted on, and it may name a reason that is no longer derivable.
-    //
-    // getCoachNudge already returns null under Low Energy and when the day's
-    // nudge has been cleared, so neither is re-checked here.
-    // resolveCoachNudge judges a pending hand-off stale BEFORE letting it win
-    // — see its comment for why that ordering is the whole point.
-    const pending = configRef.current.pendingCoachNudge;
-    const { nudge, pendingIsStale } = resolveCoachNudge({
-      pending,
-      derived: getCoachNudge(payload, new Date()),
-      payload,
-    });
-    if (!shouldDeliverPendingCoachNudge(nudge, deliveredNudgeRef.current)) {
-      // A stale hand-off with nothing to replace it still has to be swept, or
-      // it sits in config and is re-evaluated on every open forever.
-      if (pendingIsStale && !cloudSyncUnconfirmedRef.current) saveConfigPatch({ pendingCoachNudge: null });
-      return;
-    }
-    // Defer until cloud sync is confirmed — saveConfigPatch() before the
-    // first RTDB snapshot stamps a still-cached config as "newest" (see
-    // saveConfigPatch in useSync.js), which could overwrite newer config
-    // synced from another device. cloudSyncUnconfirmed is in this effect's
-    // deps, so once sync confirms this re-runs and delivers the still-pending
-    // nudge — it isn't dropped until the next mount.
-    if (cloudSyncUnconfirmedRef.current) return;
-    // A derived nudge is a fresh object on every effect invocation, so the
-    // identity check above cannot catch StrictMode's double-invoke the way it
-    // does for one read from config. This does. It is set only past the
-    // deferral above — setting it before would make a nudge deferred during
-    // the cache-sync window undeliverable when this re-runs.
-    if (deliveringNudgeRef.current) return;
-    deliveringNudgeRef.current = true;
-    deliveredNudgeRef.current = nudge;
-    // Clearing is what makes this once per loci day. Today used to write this
-    // when the card was dismissed or acted on; with the card gone, delivering
-    // here is the moment the day's nudge is spent. Without it getCoachNudge
-    // would hand back the same signal on every single open of this tab — a
-    // nudge that interrupts every visit is worse than the card ever was.
-    // Delivering is the moment the day's nudge is spent — and, for the
-    // expired-deadline follow-up, the moment it was asked. Today's deleted
-    // handler used to record both.
-    saveConfigPatch(buildCoachNudgeDeliveredConfig(nudge, configRef.current, payload, new Date()));
-
-    const deliver = (text, voiced) => {
-      const withReply = [...chatHistoryRef.current, { text, isUser: false, at: Date.now() }];
-      const { history: savedWithReply, removedCount } =
-        trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, configRef.current.coachSessionSummary);
-      saveSubPath("chatHistory", savedWithReply);
-      // The 40-cap can trim old messages off the front even on this
-      // no-AI-call nudge path — keep summarizedThroughIndex in sync so it
-      // doesn't drift relative to the now-shorter array (see
-      // trimChatHistoryWithCursor's doc comment). Recomputed against
-      // latestConfig rather than a pre-built value, so this doesn't clobber
-      // a same-session chat-send's own cursor write if the two land close
-      // together (loopcheck finding, PR #347).
-      //
-      // Uses the ref (not the mount-time cloudSyncUnconfirmed closure
-      // value) since deliver() can run from the async IIFE below, well
-      // after this effect's own cloudSyncUnconfirmedRef check at the top —
-      // sync could still be unconfirmed, or have become unconfirmed again,
-      // by the time the AI reply resolves.
-      applyOrDeferCursorDecrement(removedCount, cloudSyncUnconfirmedRef.current);
-      track("coach_nudge_delivered", { reason: nudge.reason, voiced });
-    };
-
-    if (!hasAnyKey) {
-      deliver(nudge.body, false);
-      return;
-    }
-
-    // Hold the composer while the opening line is in flight. handleSendChat
-    // bails on chatLoading, so this serializes the two paths: without it a
-    // message typed during the nudge's request produces two independent
-    // replies, each saving a whole chatHistory array built from its own
-    // (by then stale) chatHistoryRef — so the "opening" line can land after
-    // the exchange it was meant to open, or clobber the reply to it. Rare
-    // before J3, when the nudge only arrived if handed off from Today;
-    // routine now that Coach derives one on every open.
-    setChatLoading(true);
-    (async () => {
-      try {
-        // Read config/cloudSyncUnconfirmed via their refs (not the mount-time
-        // closure values) — this async IIFE can resolve well after mount, by
-        // which point Coach Memory may have been toggled off or cloud sync
-        // confirmed/lost on another device.
-        const memoryContext = (isMemoryEnabled(configRef.current) && !cloudSyncUnconfirmedRef.current) ? buildLociMemoryContext(configRef.current.coachMemory) : "";
-        const profileContext = buildProfileContext(configRef.current);
-        const systemInstruction = `${buildLociCoreInstruction({ firstName })}
-
-You are ${configRef.current.mentorName || "Loci AI Coach"}, ${firstName}'s productivity mentor inside Loci Focus. You are reaching out FIRST — ${firstName} hasn't said anything yet this conversation. Something you noticed about their day: "${nudge.title} — ${nudge.body}". Open the conversation with this observation and a concrete next step. Max 2 short sentences. Don't mention that this is automated or that you "noticed" via data — just speak as their coach.
-
-${buildPersonaInstruction(configRef.current, firstName)}
-${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryContext}\n` : ""}`;
-
-        const reply = await callAI({
-          groqKey, geminiKey, cerebrasKey, zaiKey,
-          systemPrompt: systemInstruction,
-          messages: [{ role: "user", content: "(Start the conversation.)" }],
-          maxTokens: 120,
-          reasoningEffort: "low"
-        });
-        deliver(reply.trim(), true);
-      } catch (_) {
-        deliver(nudge.body, false);
-      } finally {
-        setChatLoading(false);
-      }
-    })();
-  }, [cloudSyncUnconfirmed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Applies what a tapped action button changed (Q50), with the same ledger
   // and focus-session bookkeeping a Coach action has always had. `extraPatch`
@@ -953,7 +819,6 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       nowLabel,
       timeOfDay,
       todayActiveCount: todayActive.length,
-      streakCount: config.visitStreakCount || 0,
       profileBlock,
       lastCoachPlan: lastPlan,
       currentFocusTitle,
@@ -1283,7 +1148,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       // this whole try block resolves after `await callAI(...)`, which can
       // take several seconds, so sync can confirm or drop mid-flight —
       // exactly the staleness class cloudSyncUnconfirmedRef exists for
-      // elsewhere in this file (the nudge-delivery closure), missed here
+      // elsewhere in this file, missed here
       // across every previous round (code-review finding, PR #347).
       //
       // A fresh summary that can't be persisted right now (sync unconfirmed)
@@ -1323,8 +1188,8 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       // the decrement, permanently desyncing the cursor from chatHistory
       // (which is trimmed unconditionally via saveSubPath above) — code-
       // review finding, PR #347. Recomputed against latestConfig when
-      // applied immediately, so it can't clobber a same-session proactive-
-      // nudge save that also trimmed around the same time (loopcheck
+      // applied immediately, so it can't clobber a same-session save that
+      // also trimmed around the same time (loopcheck
       // finding, PR #347). Includes earlyRemovedCount (the early trim's own
       // decrement, never separately persisted — see its declaration above)
       // so this single write/deferral correctly reflects BOTH trims
