@@ -36,7 +36,7 @@ test("Brief me shows the groups; buttons apply with Undo; Ask about this goes to
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content } }] }) });
   });
   const brief = await openReview(page);
-  await expect(brief.getByText("Sends summary numbers and up to 10 task titles to your AI provider.")).toBeVisible();
+  await expect(brief.getByText("Sends summary numbers and up to 10 open tasks (title, first step, front and category) to your AI provider.")).toBeVisible();
   // Nothing runs until asked.
   const briefCalls = () => bodies.filter(b => b.messages.some(m => m.role === "system" && m.content.includes("Coach's brief")));
   expect(briefCalls()).toHaveLength(0);

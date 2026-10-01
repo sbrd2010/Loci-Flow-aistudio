@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { isEventTask } from "../utils/dayMapRoute";
 
 // Coach's brief (Q51, 62a–b): runs only on "Brief me", keeps only the latest,
 // and every action is a button with Undo (Q50). The groups show only when they
@@ -60,6 +61,7 @@ export default function CoachBrief({ brief, status = "idle", error = "", tasks =
     if (undo !== null && undo !== undefined) setDone(d => ({ ...d, [key]: { label, undo: typeof undo === "function" ? undo : null } }));
   };
   const undoLine = (key) => {
+    if (actionsDisabled) return;
     const entry = done[key];
     setDone(d => { const n = { ...d }; delete n[key]; return n; });
     entry?.undo?.();
@@ -68,7 +70,7 @@ export default function CoachBrief({ brief, status = "idle", error = "", tasks =
     ? (
       <span className="br-applied">
         ✓ {done[k].label}
-        {done[k].undo && <button type="button" className="br-link" onClick={() => undoLine(k)}>Undo</button>}
+        {done[k].undo && <button type="button" className="br-link" disabled={actionsDisabled} onClick={() => undoLine(k)}>Undo</button>}
       </span>
     )
     : <button type="button" className="br-link" disabled={actionsDisabled} onClick={() => apply(k, doneLabel, run)}>{label}</button>);
@@ -91,16 +93,16 @@ export default function CoachBrief({ brief, status = "idle", error = "", tasks =
           ? <p className="br-status" role="status">Reading 3 periods…</p>
           : <button type="button" className="br-run" onClick={onBriefMe}>Brief me</button>}
         {status === "error" && <p className="br-error" role="alert">{error || "Couldn’t reach Coach. Try again."}</p>}
-        <p className="br-privacy">Sends summary numbers and up to 10 task titles to your AI provider.</p>
+        <p className="br-privacy">Sends summary numbers and up to 10 open tasks (title, first step, front and category) to your AI provider.</p>
       </div>
     );
   }
 
   // A move the task already made (here or elsewhere) has nothing left to do.
   const movable = (uuid, to) => live(uuid) && live(uuid).horizonLevel !== to;
-  const tooMuch = brief.tooMuch ? { ...brief.tooMuch, items: brief.tooMuch.items.filter(i => movable(i.uuid, i.to) || done[`move:${i.uuid}`]) } : null;
+  const tooMuch = brief.tooMuch ? { ...brief.tooMuch, items: brief.tooMuch.items.filter(i => movable(i.uuid, i.to) || done[`move:${i.uuid}:${i.to}`]) } : null;
   // A split task is gone once split; its line stays to show "✓ Split" and Undo.
-  const estimates = (brief.estimates || []).filter(e => (e.action === "split" ? live(e.uuid) : movable(e.uuid, e.action)) || done[`split:${e.uuid}`] || done[`move:${e.uuid}`]);
+  const estimates = (brief.estimates || []).filter(e => (e.action === "split" ? live(e.uuid) : movable(e.uuid, e.action)) || done[`split:${e.uuid}`] || done[`move:${e.uuid}:${e.action}`]);
   const next = brief.next && live(brief.next.uuid) ? brief.next : null;
   const foldMiddle = small && (tooMuch?.items.length || estimates.length);
 
@@ -134,7 +136,9 @@ export default function CoachBrief({ brief, status = "idle", error = "", tasks =
           <div className="br-next-actions">
             {done[`one:${next.uuid}`]
               ? <Action k={`one:${next.uuid}`} />
-              : live(next.uuid).isNowFocus
+              : isEventTask(live(next.uuid))
+                ? null
+                : live(next.uuid).isNowFocus
                 ? <span className="br-applied">It’s the one thing now</span>
                 : <button type="button" className="br-run" disabled={actionsDisabled} onClick={() => apply(`one:${next.uuid}`, `The one thing · ${live(next.uuid).title}`, () => onMakeOneThing(next.uuid))}>Make it the one thing</button>}
             <button type="button" className="br-link br-ask" onClick={() => onAsk(brief)}>Ask about this →</button>
@@ -153,7 +157,7 @@ export default function CoachBrief({ brief, status = "idle", error = "", tasks =
           {tooMuch.items.map(i => (
             <React.Fragment key={i.uuid}>
               <span className="br-row-name">{live(i.uuid)?.title || i.title}{estimate(live(i.uuid))}</span>
-              <Action k={`move:${i.uuid}`} label={horizonName(i.to)} doneLabel={`Moved to ${horizonName(i.to)}`} run={() => onMove(i.uuid, i.to)} />
+              <Action k={`move:${i.uuid}:${i.to}`} label={horizonName(i.to)} doneLabel={`Moved to ${horizonName(i.to)}`} run={() => onMove(i.uuid, i.to)} />
             </React.Fragment>
           ))}
         </div>
@@ -171,7 +175,7 @@ export default function CoachBrief({ brief, status = "idle", error = "", tasks =
               ? (done[`split:${e.uuid}`]
                 ? <Action k={`split:${e.uuid}`} />
                 : <button type="button" className="br-link" disabled={actionsDisabled} onClick={() => onSplit(e.uuid, (label, undo) => setDone(d => ({ ...d, [`split:${e.uuid}`]: { label, undo } })))}>Split it</button>)
-              : <Action k={`move:${e.uuid}`} label={horizonName(e.action)} doneLabel={`Moved to ${horizonName(e.action)}`} run={() => onMove(e.uuid, e.action)} />}
+              : <Action k={`move:${e.uuid}:${e.action}`} label={horizonName(e.action)} doneLabel={`Moved to ${horizonName(e.action)}`} run={() => onMove(e.uuid, e.action)} />}
           </React.Fragment>
         ))}
       </div>
