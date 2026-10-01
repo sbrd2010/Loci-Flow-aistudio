@@ -62,8 +62,10 @@ export function reviewFacts({ tasks = [], contributions = [], config = {}, focus
   const days = lociDayWindow(span, now, windows);
   const ledger = focusRaw ? weekSummary(focusRaw, tasks, now, windows, span) : null;
 
-  // Ticks: contributions[] is the one authoritative count (see insightsContext).
-  const ticks = sliceContributions(contributions, days);
+  // Ticks: contributions[] is the one authoritative count (see insightsContext),
+  // stamped by calendar date. Focus is by Loci day; the two lists line up day
+  // for day and differ only between midnight and the end of a late window.
+  const ticks = sliceContributions(contributions, getDateRangeDays(period, now));
   const stats = computeRangeStats(ticks);
   const perDay = days.map((date, i) => ({
     date,

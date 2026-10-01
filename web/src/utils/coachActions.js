@@ -571,7 +571,10 @@ export function applyCoachActions(payload, actions, { lociDateStr, localDateStr,
       continue;
     }
 
-    const task = findTaskByTitle(nextPayload.tasks, action.title);
+    // A tapped button names its task by id (Q50); a reply's tag by title.
+    const task = action.taskUuid
+      ? (nextPayload.tasks || []).find(t => t.uuid === action.taskUuid && isActiveLociTask(t))
+      : findTaskByTitle(nextPayload.tasks, action.title);
     if (!task) {
       results.push({ ...action, matched: false });
       continue;

@@ -209,3 +209,7 @@
   .br-next-actions .br-run { width: 100%; min-height: 44px; }
 }
 .br-row-name.is-wrap { white-space: normal; overflow: visible; }
+.rv-daychart { position: relative; }
+.rv-chart-note { position: absolute; top: 40%; left: 0; right: 0; margin: 0; text-align: center; font-size: 13px; color: var(--ink-2); pointer-events: none; }
+.rv-footnote { margin: 0; font-size: 11.5px; color: var(--placeholder); }
+.br-link:disabled, .br-run:disabled { opacity: 0.45; cursor: default; }

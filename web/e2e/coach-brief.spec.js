@@ -30,7 +30,7 @@ test("Brief me shows the groups; buttons apply with Undo; Ask about this goes to
         howItWent: ["2 ticked this week, against 0 the week before."],
         patterns: ["Saturdays are your best day over 30 days."],
         tooMuch: { line: "1h15m on Today, 16h left.", items: [{ task: "T2", to: "week" }] },
-        next: { task: "T1", line: "First step: open the inbox." },
+        next: { task: "T2", line: "First step: close the other tabs." },
       })
       : "The brief says start with the first one.";
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content } }] }) });

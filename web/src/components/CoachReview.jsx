@@ -13,6 +13,7 @@ import "../styles/coachReview.css";
 const WEEKDAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 const DOW_KEYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const CATEGORY_ROWS = 5;
 const parseDay = (ds) => { const [y, m, d] = ds.split("-").map(Number); return new Date(y, m - 1, d); };
 const shortDate = (ds) => {
   const d = parseDay(ds);
@@ -21,11 +22,16 @@ const shortDate = (ds) => {
 
 function DayChart({ days, period }) {
   const peak = Math.max(1, ...days.map(d => d.minutes || 0));
+  const unread = days.every(d => d.minutes == null);
+  const empty = !unread && days.every(d => !d.minutes);
   const dense = period === "30d";
   const last = days.length - 1;
   return (
     <div className="rv-daychart" data-dense={dense || undefined}>
       <span className="rv-kicker">Each day · focus and ticks</span>
+      {(unread || empty) && (
+        <p className="rv-chart-note">{unread ? "Focus time isn’t read here, so only the ticks show." : "No focus time logged in these days."}</p>
+      )}
       <ol className="rv-bars" style={{ "--rv-cols": days.length }}>
         {days.map((d, i) => {
           const mins = d.minutes;
@@ -126,7 +132,7 @@ export default function CoachReview({ payload = {}, uid, renderBrief = null }) {
               <span className="rv-kicker rv-kicker-split">By category <span>Done · open</span></span>
               {facts.byCategory.length > 0 ? (
                 <div className="rv-rows rv-rows-cat">
-                  {facts.byCategory.map(c => (
+                  {facts.byCategory.slice(0, CATEGORY_ROWS).map(c => (
                     <React.Fragment key={c.name}>
                       <span className="rv-row-name">{c.name}</span>
                       <span className="rv-split">
@@ -138,6 +144,8 @@ export default function CoachReview({ payload = {}, uid, renderBrief = null }) {
                   ))}
                 </div>
               ) : <p className="rv-empty">No tasks yet.</p>}
+              {facts.byCategory.length > CATEGORY_ROWS && <p className="rv-empty">and {facts.byCategory.length - CATEGORY_ROWS} more</p>}
+              {facts.byCategory.length > 0 && <p className="rv-footnote">Done counts only tasks still on file.</p>}
             </div>
 
             <div className="rv-card">

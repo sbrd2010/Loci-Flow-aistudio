@@ -8,6 +8,13 @@ const clock = (ms) => {
   const d = new Date(ms);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
+// "09:41" today; "30 Sep 09:41" for an older brief, so it never reads as today's.
+const stamp = (ms) => {
+  const d = new Date(ms);
+  const today = new Date();
+  const sameDay = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
+  return sameDay ? clock(ms) : `${d.getDate()} ${d.toLocaleString("en-GB", { month: "short" })} ${clock(ms)}`;
+};
 const estimate = (t) => (Number(t?.timeEstimateMinutes) > 0 ? ` · ${Math.round(t.timeEstimateMinutes)}m` : "");
 
 function useMedia(query) {
@@ -40,7 +47,7 @@ function Group({ kicker, warn = false, folded = false, children }) {
   );
 }
 
-export default function CoachBrief({ brief, status = "idle", error = "", tasks = [], horizonName = (id) => id, onBriefMe, onAsk, onMove, onMakeOneThing, onSplit }) {
+export default function CoachBrief({ brief, status = "idle", error = "", tasks = [], horizonName = (id) => id, onBriefMe, onAsk, onMove, onMakeOneThing, onSplit, actionsDisabled = false }) {
   // What this session applied, by line: { label, undo }.
   const [done, setDone] = useState({});
   useEffect(() => { setDone({}); }, [brief?.at]);
@@ -64,13 +71,13 @@ export default function CoachBrief({ brief, status = "idle", error = "", tasks =
         {done[k].undo && <button type="button" className="br-link" onClick={() => undoLine(k)}>Undo</button>}
       </span>
     )
-    : <button type="button" className="br-link" onClick={() => apply(k, doneLabel, run)}>{label}</button>);
+    : <button type="button" className="br-link" disabled={actionsDisabled} onClick={() => apply(k, doneLabel, run)}>{label}</button>);
 
   const head = (
     <div className="br-head">
       <h2 className="br-title">Coach’s brief</h2>
       {brief && status !== "running" && (
-        <span className="br-stamp">{clock(brief.at)} <button type="button" className="br-link br-refresh" onClick={onBriefMe}>Refresh</button></span>
+        <span className="br-stamp">{stamp(brief.at)} <button type="button" className="br-link br-refresh" onClick={onBriefMe}>Refresh</button></span>
       )}
     </div>
   );
@@ -89,9 +96,11 @@ export default function CoachBrief({ brief, status = "idle", error = "", tasks =
     );
   }
 
-  const tooMuch = brief.tooMuch ? { ...brief.tooMuch, items: brief.tooMuch.items.filter(i => live(i.uuid)) } : null;
+  // A move the task already made (here or elsewhere) has nothing left to do.
+  const movable = (uuid, to) => live(uuid) && live(uuid).horizonLevel !== to;
+  const tooMuch = brief.tooMuch ? { ...brief.tooMuch, items: brief.tooMuch.items.filter(i => movable(i.uuid, i.to) || done[`move:${i.uuid}`]) } : null;
   // A split task is gone once split; its line stays to show "✓ Split" and Undo.
-  const estimates = (brief.estimates || []).filter(e => live(e.uuid) || done[`split:${e.uuid}`]);
+  const estimates = (brief.estimates || []).filter(e => (e.action === "split" ? live(e.uuid) : movable(e.uuid, e.action)) || done[`split:${e.uuid}`] || done[`move:${e.uuid}`]);
   const next = brief.next && live(brief.next.uuid) ? brief.next : null;
   const foldMiddle = small && (tooMuch?.items.length || estimates.length);
 
@@ -125,7 +134,9 @@ export default function CoachBrief({ brief, status = "idle", error = "", tasks =
           <div className="br-next-actions">
             {done[`one:${next.uuid}`]
               ? <Action k={`one:${next.uuid}`} />
-              : <button type="button" className="br-run" onClick={() => apply(`one:${next.uuid}`, `The one thing · ${live(next.uuid).title}`, () => onMakeOneThing(next.uuid))}>Make it the one thing</button>}
+              : live(next.uuid).isNowFocus
+                ? <span className="br-applied">It’s the one thing now</span>
+                : <button type="button" className="br-run" disabled={actionsDisabled} onClick={() => apply(`one:${next.uuid}`, `The one thing · ${live(next.uuid).title}`, () => onMakeOneThing(next.uuid))}>Make it the one thing</button>}
             <button type="button" className="br-link br-ask" onClick={() => onAsk(brief)}>Ask about this →</button>
           </div>
         </Group>
@@ -141,7 +152,7 @@ export default function CoachBrief({ brief, status = "idle", error = "", tasks =
         <div className="br-rows">
           {tooMuch.items.map(i => (
             <React.Fragment key={i.uuid}>
-              <span className="br-row-name">{live(i.uuid).title}{estimate(live(i.uuid))}</span>
+              <span className="br-row-name">{live(i.uuid)?.title || i.title}{estimate(live(i.uuid))}</span>
               <Action k={`move:${i.uuid}`} label={horizonName(i.to)} doneLabel={`Moved to ${horizonName(i.to)}`} run={() => onMove(i.uuid, i.to)} />
             </React.Fragment>
           ))}
@@ -159,7 +170,7 @@ export default function CoachBrief({ brief, status = "idle", error = "", tasks =
             {e.action === "split"
               ? (done[`split:${e.uuid}`]
                 ? <Action k={`split:${e.uuid}`} />
-                : <button type="button" className="br-link" onClick={() => onSplit(e.uuid, (label, undo) => setDone(d => ({ ...d, [`split:${e.uuid}`]: { label, undo } })))}>Split it</button>)
+                : <button type="button" className="br-link" disabled={actionsDisabled} onClick={() => onSplit(e.uuid, (label, undo) => setDone(d => ({ ...d, [`split:${e.uuid}`]: { label, undo } })))}>Split it</button>)
               : <Action k={`move:${e.uuid}`} label={horizonName(e.action)} doneLabel={`Moved to ${horizonName(e.action)}`} run={() => onMove(e.uuid, e.action)} />}
           </React.Fragment>
         ))}

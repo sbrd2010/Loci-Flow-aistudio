@@ -1371,6 +1371,14 @@ describe("Q50: actions are buttons the user taps", () => {
     expect(tapped.payload.tasks[1].isCompleted).toBe(true);
   });
 
+  it("a tapped button acts on its own task by id, never a namesake", () => {
+    const twins = { ...base(), tasks: [...base().tasks, { uuid: "c", title: "Order medicine", horizonLevel: "today", isCompleted: true }] };
+    const byId = applyCoachActions(twins, [{ type: "COMPLETE_TASK", title: "Order medicine", taskUuid: "b" }], { lociDateStr: "2026-10-01", localDateStr: "2026-10-01", skipIntentCheck: true });
+    expect(byId.payload.tasks.find(t => t.uuid === "b").isCompleted).toBe(true);
+    const goneId = applyCoachActions(base(), [{ type: "COMPLETE_TASK", title: "Order medicine", taskUuid: "zzz" }], { skipIntentCheck: true });
+    expect(goneId.results[0].matched).toBe(false);
+  });
+
   it("a proposed reply keeps the model's offer and never claims it happened", () => {
     const results = [{ type: "COMPLETE_TASK", title: "Order medicine", matched: true, task: { title: "Order medicine" } }];
     const text = buildActionReplyText("Want me to mark it done?", results, "I finished ordering the medicine", { proposed: true });
