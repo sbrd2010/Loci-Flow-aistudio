@@ -41,9 +41,9 @@ test("mobile reliability: Coach chat sends reasoning_effort low to Groq", async 
   await enterDemo(page);
 
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
-  await expect(page.getByRole("heading", { name: /Chat with/ })).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByRole("tab", { name: "Chat", selected: true })).toBeVisible({ timeout: 8_000 });
 
-  await page.getByPlaceholder(/Shift\+Enter for a new line/).fill("I feel a bit scattered right now");
+  await page.locator(".coach-composer-input").fill("I feel a bit scattered right now");
   await page.getByRole("button", { name: "Send" }).click();
 
   // Two replies now carry this text: Coach opens with the proactive nudge (J3
@@ -97,7 +97,7 @@ test("mobile reliability: Coach chat never reaches the AI provider on crisis lan
   await enterDemo(page);
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
 
-  const composer = page.getByPlaceholder(/Shift\+Enter for a new line/);
+  const composer = page.locator(".coach-composer-input");
   await expect(composer).toBeVisible({ timeout: 10_000 });
 
   // A proactive nudge may legitimately call the provider on arrival; let it
@@ -132,7 +132,7 @@ test("mobile reliability: Coach still reaches the provider for an ordinary messa
 
   await enterDemo(page);
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
-  const composer = page.getByPlaceholder(/Shift\+Enter for a new line/);
+  const composer = page.locator(".coach-composer-input");
   await expect(composer).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(1500);
   hits.length = 0;
@@ -165,11 +165,57 @@ test("a casual message to the coach still carries the task just marked done", as
   await page.locator(".today-wall .wall-action", { hasText: "Mark done" }).click();
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
   // Not a task question — the kind of message that got no task list at all.
-  await page.getByPlaceholder(/Shift\+Enter for a new line/).fill("I feel a bit scattered right now");
+  await page.locator(".coach-composer-input").fill("I feel a bit scattered right now");
   await page.getByRole("button", { name: "Send" }).click();
   await expect.poll(() => bodies.some(b => b.includes("TODAY SNAPSHOT")), { timeout: 8_000 }).toBe(true);
   const body = JSON.parse(bodies.filter(b => b.includes("TODAY SNAPSHOT")).pop());
   const system = body.messages[0].content;
   expect(system).toMatch(new RegExp(`\\[done \\d\\d:\\d\\d\\] ${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   expect(system).toContain("FOCUS SESSION:");
+});
+
+// Q51/62h–j: Coach opens on the Chat tab. An empty conversation shows its own
+// empty state with three starters, and no greeting from Coach; a message gets
+// a "YOU · HH:MM" kicker; New conversation asks first, then clears.
+test("Coach Chat: empty state, starters, kicker and New conversation", async ({ page }) => {
+  await page.route("https://api.groq.com/**", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ choices: [{ message: { content: "Start with the smallest open task." } }] }),
+  }));
+  await page.addInitScript(() => {
+    window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key");
+  });
+  await enterDemo(page, { width: 1600, height: 900 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Chat", selected: true })).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByText("Reads your lists. Changes only what you tap.")).toBeVisible();
+
+  // The demo starts with a conversation; New conversation asks first.
+  await page.getByRole("button", { name: "New conversation" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "New conversation" }).click();
+  const empty = page.locator(".coach-empty");
+  await expect(empty.getByRole("heading", { name: "What’s on your mind?" })).toBeVisible();
+  await expect(page.locator(".coach-msg")).toHaveCount(0);
+
+  // "I just finished…" waits for the rest.
+  await empty.getByRole("button", { name: "I just finished…" }).click();
+  await expect(page.locator(".coach-composer-input")).toHaveValue("I just finished ");
+  await page.locator(".coach-composer-input").fill("");
+
+  // The others send at once.
+  await empty.getByRole("button", { name: "What should I start with?" }).click();
+  const you = page.locator(".coach-msg.is-you").first();
+  await expect(you).toContainText("What should I start with?");
+  await expect(you.locator(".coach-msg-kicker")).toHaveText(/^You · \d\d:\d\d$/);
+  await expect(page.getByText("Start with the smallest open task.").first()).toBeVisible({ timeout: 8_000 });
+
+  await page.getByRole("button", { name: "New conversation" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "New conversation" }).click();
+  await expect(page.locator(".coach-msg")).toHaveCount(0);
+  await expect(empty).toBeVisible();
+
+  await page.getByRole("tab", { name: "Review" }).click();
+  await expect(page.getByRole("tab", { name: "Review", selected: true })).toBeVisible();
+  await expect(page.locator(".coach-composer-input")).toHaveCount(0);
 });

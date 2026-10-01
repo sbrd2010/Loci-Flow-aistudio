@@ -84,7 +84,10 @@ for (const viewport of MOBILE_VIEWPORTS) {
     await expectNoHorizontalOverflow(page);
 
     await openTab(page, "Coach");
-    await expect(page.getByRole("heading", { name: /Chat with/i })).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByRole("tab", { name: "Chat", selected: true })).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator(".coach-composer-input")).toBeVisible({ timeout: 8_000 });
+    await expectNoHorizontalOverflow(page);
+    await page.getByRole("tab", { name: "Review" }).click();
     await expect(page.getByRole("heading", { name: "AI Focus Brief" })).toBeVisible({ timeout: 8_000 });
     await expectNoHorizontalOverflow(page);
 
