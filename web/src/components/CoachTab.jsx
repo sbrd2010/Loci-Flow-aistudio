@@ -578,21 +578,26 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
       : { ...m, actions: m.actions.map(a => (wholeReply || a.id === actionId ? update(a) : a)) }
   ));
   const handleCoachAction = (actionId) => {
-    if (isSyncingFromCache || !actionId) return;
+    // Not until the cloud has answered once: a tap writes whole task lists,
+    // and from an unconfirmed cache that could overwrite newer changes made
+    // on another device.
+    if (cloudSyncUnconfirmed || !actionId) return;
     const history = chatHistoryRef.current;
     const a = history.flatMap(m => (m.isUser ? [] : m.actions || [])).find(x => x.id === actionId);
     if (!a || a.state !== "proposed") return;
     const now = new Date();
     const prevPinnedUuid = tasksRef.current.find(t => t.isNowFocus && !t.isDeleted && !t.isCompleted)?.uuid || null;
-    // The task as it is now (it may have been renamed since the reply).
-    const fresh = a.task?.uuid ? tasksRef.current.find(t => t.uuid === a.task.uuid && !t.isDeleted) : null;
+    // The very task the reply offered, by id (it may have been renamed). If it
+    // is done, deleted or parked since, the offer is gone: never re-match by
+    // title, which could hit another task.
+    const fresh = a.task?.uuid ? tasksRef.current.find(t => t.uuid === a.task.uuid && isActiveLociTask(t)) : null;
     const localDateStr = getLocalDateString(now);
     const { payload: updatedPayload, results } = applyCoachActions(
       { ...payload, tasks: tasksRef.current, config: configRef.current, contributions: contributionsRef.current },
-      [{ type: a.type, title: fresh?.title || a.task?.title || a.title, ...(a.durationMinutes != null ? { durationMinutes: a.durationMinutes } : {}) }],
+      [{ type: a.type, title: fresh?.title || a.title, ...(fresh ? { taskUuid: fresh.uuid } : {}), ...(a.durationMinutes != null ? { durationMinutes: a.durationMinutes } : {}) }],
       { lociDateStr: getLociDayStr(now, getFocusWindows(configRef.current)), localDateStr, now: now.getTime(), skipIntentCheck: true }
     );
-    const r = results[0];
+    const r = a.type !== "ADD_TASK" && !fresh ? null : results[0];
     const state = r?.matched ? "applied" : "gone";
     const nextHistory = withActionState(history, actionId, x => ({ ...x, state }));
     if (!r?.matched) { saveSubPathsAsync({ chatHistory: nextHistory }).catch(() => {}); return; }
@@ -1648,8 +1653,15 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
       col.style.setProperty("--coach-chrome", `${Math.round(rect.top + window.scrollY + below)}px`);
     };
     fit();
+    // 62h: the newest message sits at the bottom; opening Chat starts there.
+    const win = col.querySelector(".chat-window");
+    if (win) win.scrollTop = win.scrollHeight;
     window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
+    // Something appearing above the column (the offline banner) moves it
+    // without a window resize; the page's size changes, so re-fit then.
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(fit) : null;
+    ro?.observe(document.body);
+    return () => { window.removeEventListener("resize", fit); ro?.disconnect(); };
   }, [coachTab]);
 
   return (
@@ -1658,9 +1670,15 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
 
       {/* Q51: Coach is two tabs, Chat (first) and Review. */}
       <div className="coach-tabs">
-        <div className="coach-tabs-list" role="tablist" aria-label="Coach">
-          <button type="button" role="tab" id="coach-tab-chat" aria-controls="coach-panel-chat" aria-selected={coachTab === "chat"} className="coach-tab" onClick={() => setCoachTab("chat")}>Chat</button>
-          <button type="button" role="tab" id="coach-tab-review" aria-controls="coach-panel-review" aria-selected={coachTab === "review"} className="coach-tab" onClick={() => setCoachTab("review")}>Review</button>
+        <div className="coach-tabs-list" role="tablist" aria-label="Coach" onKeyDown={e => {
+          if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+          e.preventDefault();
+          const next = coachTab === "chat" ? "review" : "chat";
+          setCoachTab(next);
+          document.getElementById(`coach-tab-${next}`)?.focus();
+        }}>
+          <button type="button" role="tab" id="coach-tab-chat" aria-controls="coach-panel-chat" aria-selected={coachTab === "chat"} tabIndex={coachTab === "chat" ? 0 : -1} className="coach-tab" onClick={() => setCoachTab("chat")}>Chat</button>
+          <button type="button" role="tab" id="coach-tab-review" aria-controls="coach-panel-review" aria-selected={coachTab === "review"} tabIndex={coachTab === "review" ? 0 : -1} className="coach-tab" onClick={() => setCoachTab("review")}>Review</button>
         </div>
         {coachTab === "chat" && (
           <span className="coach-tabs-end">
@@ -1739,13 +1757,14 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                       const title = a.task?.title || a.title || "";
                       if (a.state === "proposed") {
                         return (
-                          <button key={i} type="button" className="coach-task-chip" disabled={chatLoading || isSyncingFromCache}
+                          <button key={i} type="button" className="coach-task-chip" disabled={chatLoading || cloudSyncUnconfirmed}
                             onClick={() => handleCoachAction(a.id)}>
                             {COACH_ACTION_LABELS[a.type] || a.type}{proposed.length > 1 ? ` · ${title}` : ""}
                           </button>
                         );
                       }
-                      if (a.state === "dismissed" || a.state === "gone") return null;
+                      if (a.state === "dismissed") return null;
+                      if (a.state === "gone") return <span key={i} className="coach-action-done is-gone">No longer on your list · {title}</span>;
                       // Applied by a tap, or by Coach itself on replies from before Q50.
                       return (
                         <span key={i} className="coach-action-done">
@@ -1785,9 +1804,9 @@ RULES: Bold task names. Direct and concise. No filler. Punchy and actionable bea
                 // Q36.3: something at a set time is never the focus.
                 if (isEventTask(task)) { /* no focus chip */ }
                 else if (isOnToday(task, lociDayNow()) && !task.isNowFocus)
-                  phaseB.push({ action: 'focus',       label: 'Set as Focus' });
+                  phaseB.push({ action: 'focus',       label: 'Make it the one thing' });
                 else if (!isOnToday(task, lociDayNow()) && !task.isNowFocus)
-                  phaseB.push({ action: 'focus+today', label: 'Move to Today & Focus' });
+                  phaseB.push({ action: 'focus+today', label: 'Today, as the one thing' });
                 if (!isOnToday(task, lociDayNow()))
                   phaseB.push({ action: 'today',       label: 'Move to Today' });
                 if (!task.isParked)

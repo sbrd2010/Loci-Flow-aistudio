@@ -582,3 +582,4 @@
   cursor: pointer;
 }
 .coach-action-undo:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.coach-msg .coach-action-done.is-gone { color: var(--ink-2); font-weight: 600; }
