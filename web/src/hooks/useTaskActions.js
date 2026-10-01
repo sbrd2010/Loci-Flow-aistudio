@@ -98,7 +98,7 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
     const endedFocusSession = task.isNowFocus && typeof focusTimer.endFocusSession === "function"
       ? focusTimer.endFocusSession("user_abandoned")
       : null;
-    savePayloadAsync({ ...payloadRef.current, tasks: latestTasks().map(t => t.uuid === task.uuid ? { ...t, isParked: true, isNowFocus: false, lastUpdated: Date.now() } : t) })
+    savePayloadAsync({ ...payloadRef.current, tasks: latestTasks().map(t => t.uuid === task.uuid ? { ...t, isParked: true, parkedAt: Date.now(), isNowFocus: false, lastUpdated: Date.now() } : t) })
       .then(() => {
         const events = [event];
         if (endedFocusSession) {

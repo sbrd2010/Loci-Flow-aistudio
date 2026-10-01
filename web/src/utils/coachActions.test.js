@@ -270,7 +270,7 @@ describe("buildParkTaskTasks", () => {
     const target = { uuid: "1", title: "A", isParked: false, isNowFocus: true };
     const other = { uuid: "2", title: "B", isParked: false, isNowFocus: false };
     const result = buildParkTaskTasks([target, other], "1", 1000);
-    expect(result[0]).toEqual({ uuid: "1", title: "A", isParked: true, isNowFocus: false, lastUpdated: 1000 });
+    expect(result[0]).toEqual({ uuid: "1", title: "A", isParked: true, parkedAt: 1000, isNowFocus: false, lastUpdated: 1000 });
     expect(result[1]).toBe(other);
   });
 });

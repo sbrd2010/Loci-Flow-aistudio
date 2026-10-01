@@ -49,6 +49,7 @@ import { currentDayMinutes, oneThingToNow, restoreRoute } from "../hooks/useDayR
 import { routeBreaks } from "../utils/dayMapBreaks";
 import { isEventTask } from "../utils/dayMapRoute";
 import { bringBack, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
+import { parkedTasks, parkedSince, restoreParked, undoRestoreParked } from "../utils/parked";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
 
 const PencilIcon = () => (
@@ -876,6 +877,17 @@ export default function TodayTab({
     setUndo({ kind: "bringback", task, before, at: Date.now() });
   };
   const [movedOpen, setMovedOpen] = useState(false);
+  // Parked (62d): Restore puts the task at the bottom of Today's list.
+  const [parkedOpen, setParkedOpen] = useState(false);
+  const handleRestoreParked = (task) => {
+    const { tasks: next, before } = restoreParked(tasks, task.uuid);
+    if (!before) return;
+    const event = buildTaskMutationEvent("task_unparked", task, { windows });
+    savePayloadAsync({ ...payload, tasks: next })
+      .then(() => writeActivityEvents(eventPatch(uid, event)))
+      .catch(() => {});
+    setUndo({ kind: "restore", task, before, at: Date.now() });
+  };
   const handleParkWithUndo = (task) => {
     setUndo({ kind: "park", task, wasPinned: !!task.isNowFocus, at: Date.now() });
     handleParkTask(task);
@@ -924,7 +936,7 @@ export default function TodayTab({
       return front ? `Put on ${front.name}: ${title}` : `Off its front: ${title}`;
     }
     if (u.kind === "swap") return u.previous ? `${u.previous.title} is back at the top of the list.` : `Made the one thing: ${title}`;
-    return `${{ done: "Marked done", delete: "Deleted", tomorrow: "Moved to tomorrow", bringback: "Brought back", park: "Parked", unpin: "Unpinned" }[u.kind]}: ${title}`;
+    return `${{ done: "Marked done", delete: "Deleted", tomorrow: "Moved to tomorrow", bringback: "Brought back", park: "Parked", restore: "Restored", unpin: "Unpinned" }[u.kind]}: ${title}`;
   };
   const undoText = undo ? undoMessage(undo) : "";
 
@@ -1036,6 +1048,10 @@ export default function TodayTab({
     }
     if (kind === "tomorrow" || kind === "bringback") {
       savePayload({ ...payload, tasks: restoreSchedule(tasks, undo.before) });
+      return;
+    }
+    if (kind === "restore") {
+      savePayload({ ...payload, tasks: undoRestoreParked(tasks, task.uuid, undo.before) });
       return;
     }
     if (kind === "park") {
@@ -1484,6 +1500,7 @@ export default function TodayTab({
   // Finished today — the same set the header's "N done" counts. A task done
   // on an earlier day keeps the Today horizon until something moves it, and
   // showing it here put "0 done" above a list of done rows.
+  const parkedList = parkedTasks(tasks);
   const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted && t.dateCompletedString === todayStr);
   // The wall's two figures are claims about the whole day, so they come from
   // todayTasksAll — the Must-Do and Low Energy filters narrow the LIST below,
@@ -1597,7 +1614,7 @@ export default function TodayTab({
     }
     savePayloadAsync({ ...payload, tasks: tasks.map(t => (
       t.uuid === rescueTask.uuid
-        ? { ...t, isParked: true, isNowFocus: false, lastUpdated: now }
+        ? { ...t, isParked: true, parkedAt: now, isNowFocus: false, lastUpdated: now }
         : t
     )) })
       .then(() => {
@@ -1942,14 +1959,37 @@ export default function TodayTab({
                   })() : null}
                 </DragOverlay>
               </DndContext>
-              {completedTasks.length > 0 && (
-                <>
-                  <div className="completed-section-title">Completed</div>
-                  {completedTasks.map(task => (
-                    <TaskRow key={task.uuid} task={task} onToggleComplete={handleToggleComplete} onDelete={handleDeleteTask} />
+            </>
+          )}
+          {/* 62d: parked tasks fold at the bottom of the list, above the
+              done ones; each is restored to Today or dropped. */}
+          {parkedList.length > 0 && (
+            <div className="today-parked">
+              <button type="button" className="today-parked-line" aria-expanded={parkedOpen} onClick={() => setParkedOpen(o => !o)}>
+                <span className="today-parked-kicker">Parked · {parkedList.length} {parkedOpen ? "▾" : "▸"}</span>
+                {parkedSince(parkedList[0]) > 0 && (
+                  <span className="today-parked-since">since {new Date(parkedSince(parkedList[0])).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
+                )}
+              </button>
+              {parkedOpen && (
+                <ul className="today-parked-list">
+                  {parkedList.map(task => (
+                    <li key={task.uuid} className="today-parked-row">
+                      <span className="today-parked-title">{task.title}</span>
+                      <button type="button" className="today-parked-restore" aria-label={`Restore: ${task.title}`} onClick={() => handleRestoreParked(task)}>Restore</button>
+                      <button type="button" className="today-parked-drop" aria-label={`Drop: ${task.title}`} onClick={() => handleDeleteTask(task)}>Drop</button>
+                    </li>
                   ))}
-                </>
+                </ul>
               )}
+            </div>
+          )}
+          {completedTasks.length > 0 && (
+            <>
+              <div className="completed-section-title">Completed</div>
+              {completedTasks.map(task => (
+                <TaskRow key={task.uuid} task={task} onToggleComplete={handleToggleComplete} onDelete={handleDeleteTask} />
+              ))}
             </>
           )}
           {/* 50g–h: the list closes with a quiet line for what was moved to
