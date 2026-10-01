@@ -427,7 +427,8 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
 
   // Applies what a tapped action button changed (Q50), with the same ledger
   // and focus-session bookkeeping a Coach action has always had. `extraPatch`
-  // rides along in the same write (the reply's button state).
+  // rides along in the same write (the reply's button state). Returns the
+  // focus session it started, or null.
   const commitCoachActions = (updatedPayload, results, now, extraPatch = {}) => {
     const patch = { ...extraPatch };
     if (updatedPayload.tasks !== tasksRef.current) patch.tasks = updatedPayload.tasks;
@@ -560,7 +561,10 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
             focusTimerRef.current.setFocusSessionActive?.(false);
           }
         });
+      // The session this commit started, if any — Undo may end only that one.
+      return startedFocusSession;
     }
+    return null;
   };
 
   // Q50: a reply's action is a button. A tap applies it, and the button
@@ -591,8 +595,13 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     const state = r?.matched ? "applied" : "gone";
     const nextHistory = withActionState(history, actionId, x => ({ ...x, state }));
     if (!r?.matched) { saveSubPathsAsync({ chatHistory: nextHistory }).catch(() => {}); return; }
-    commitCoachActions(updatedPayload, results, now, { chatHistory: nextHistory });
-    setActionUndo(u => ({ ...u, [actionId]: { type: a.type, taskUuid: r.task.uuid, prevPinnedUuid, localDateStr } }));
+    const started = commitCoachActions(updatedPayload, results, now, { chatHistory: nextHistory });
+    // Start focus on a task whose session was already open (running, or
+    // resumed from a pause) started nothing new, so there's nothing to undo.
+    if (a.type === "START_FOCUS" && !started) return;
+    // Undo puts back only this change: it checks the task is as the tap left it.
+    const appliedLastUpdated = updatedPayload.tasks.find(t => t.uuid === r.task.uuid)?.lastUpdated ?? null;
+    setActionUndo(u => ({ ...u, [actionId]: { type: a.type, taskUuid: r.task.uuid, prevPinnedUuid, localDateStr, appliedLastUpdated, focusSessionId: started?.focusSessionId || null } }));
   };
   const handleUndoCoachAction = (actionId) => {
     const key = actionId;
@@ -601,7 +610,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
     setActionUndo(u => { const next = { ...u }; delete next[key]; return next; });
     const next = undoCoachAction({ ...payload, tasks: tasksRef.current, contributions: contributionsRef.current }, rec);
     if (!next) return; // the task has moved on since; nothing to put back
-    if (rec.type === "START_FOCUS" && focusTimerRef.current.activeTask?.uuid === rec.taskUuid) {
+    if (rec.type === "START_FOCUS" && rec.focusSessionId && focusTimerRef.current.focusSessionId === rec.focusSessionId) {
       const ended = focusTimerRef.current.endFocusSession?.("user_abandoned");
       focusTimerRef.current.setIsTimerRunning?.(false);
       focusTimerRef.current.setIsFocusMode?.(false);

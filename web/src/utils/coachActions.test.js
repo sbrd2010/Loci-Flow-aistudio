@@ -1394,6 +1394,15 @@ describe("Q50: actions are buttons the user taps", () => {
     expect(back.contributions[0].count).toBe(2);
   });
 
+  it("Undo does nothing once the task changed again after the tap", () => {
+    const { payload } = applyCoachActions(base(), [{ type: "COMPLETE_TASK", title: "Order medicine" }], { lociDateStr: "2026-10-01", localDateStr: "2026-10-01", skipIntentCheck: true });
+    const applied = payload.tasks[1].lastUpdated;
+    // Reopened and done again elsewhere: same state, a newer edit.
+    const redone = { ...payload, tasks: payload.tasks.map(t => (t.uuid === "b" ? { ...t, lastUpdated: applied + 1000 } : t)) };
+    expect(undoCoachAction(redone, { type: "COMPLETE_TASK", taskUuid: "b", localDateStr: "2026-10-01", appliedLastUpdated: applied })).toBeNull();
+    expect(undoCoachAction(payload, { type: "COMPLETE_TASK", taskUuid: "b", localDateStr: "2026-10-01", appliedLastUpdated: applied }).tasks[1].isCompleted).toBe(false);
+  });
+
   it("Undo of Make it the one thing puts the old pin back", () => {
     const { payload } = applyCoachActions(base(), [{ type: "SET_NOW_FOCUS", title: "Order medicine" }], { skipIntentCheck: true });
     const back = undoCoachAction(payload, { type: "SET_NOW_FOCUS", taskUuid: "b", prevPinnedUuid: "a" });

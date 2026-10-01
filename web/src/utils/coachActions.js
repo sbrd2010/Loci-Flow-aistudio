@@ -696,13 +696,17 @@ export function buildActionReplyText(cleanText, results = [], lastUserMessage = 
 
 // Q50: every change Coach makes is a button the user taps, with Undo for the
 // session. `record` is what the tap captured: the action, its task, the task
-// pinned before, and the day a completion counted on. Returns the payload with
+// pinned before, the day a completion counted on, and the task's lastUpdated
+// right after the tap. Returns the payload with
 // the change put back, or null when the task has moved on since.
 export function undoCoachAction(payload, record, now = Date.now()) {
   const tasks = payload.tasks || [];
-  const { type, taskUuid, prevPinnedUuid = null, localDateStr } = record;
+  const { type, taskUuid, prevPinnedUuid = null, localDateStr, appliedLastUpdated = null } = record;
   const current = tasks.find(t => t.uuid === taskUuid && !t.isDeleted);
   if (!current) return null;
+  // Changed again since the tap (reopened and done again, edited…): that
+  // newer change isn't Coach's to take back.
+  if (appliedLastUpdated != null && current.lastUpdated !== appliedLastUpdated) return null;
   const otherPinned = tasks.some(t => t.isNowFocus && t.uuid !== taskUuid && !t.isDeleted && !t.isCompleted);
   const repinSelf = prevPinnedUuid === taskUuid && !otherPinned ? { isNowFocus: true } : {};
   const put = (patch) => tasks.map(t => (t.uuid === taskUuid ? { ...t, ...patch, lastUpdated: now } : t));
