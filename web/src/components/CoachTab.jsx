@@ -623,7 +623,8 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
   const handleUndoCoachAction = (actionId) => {
     const key = actionId;
     const rec = actionUndo[key];
-    if (!rec) return;
+    // Undo writes whole lists too: the same wait for the cloud as a tap.
+    if (!rec || cloudSyncUnconfirmed) return;
     setActionUndo(u => { const next = { ...u }; delete next[key]; return next; });
     const next = undoCoachAction({ ...payload, tasks: tasksRef.current, contributions: contributionsRef.current }, rec);
     if (!next) return; // the task has moved on since; nothing to put back
@@ -1796,7 +1797,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
                         <span key={i} className="coach-action-done">
                           ✓ {COACH_ACTION_DONE[a.type] || a.type} · {title}
                           {actionUndo[a.id] && (
-                            <button type="button" className="coach-action-undo" onClick={() => handleUndoCoachAction(a.id)}>Undo</button>
+                            <button type="button" className="coach-action-undo" disabled={cloudSyncUnconfirmed} onClick={() => handleUndoCoachAction(a.id)}>Undo</button>
                           )}
                         </span>
                       );
@@ -1898,7 +1899,7 @@ ${profileContext ? `\n${profileContext}\n` : ""}${memoryContext ? `\n${memoryCon
           </form>
           <div className="coach-composer-hints">
             <span className="coach-hint-keys">Enter sends · Shift+Enter new line</span>
-            <span>Coach sees: today’s list, plan, focus time</span>
+            <span>Coach sees: your lists, focus time, Mind Box and what it remembers</span>
           </div>
         </div>
       </section>

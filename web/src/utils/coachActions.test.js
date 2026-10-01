@@ -1411,6 +1411,13 @@ describe("Q50: actions are buttons the user taps", () => {
     expect(undoCoachAction(payload, { type: "COMPLETE_TASK", taskUuid: "b", localDateStr: "2026-10-01", appliedLastUpdated: applied }).tasks[1].isCompleted).toBe(false);
   });
 
+  it("Undo of Make it the one thing doesn't repin a task parked since", () => {
+    const { payload } = applyCoachActions(base(), [{ type: "SET_NOW_FOCUS", title: "Order medicine" }], { skipIntentCheck: true });
+    const parked = { ...payload, tasks: payload.tasks.map(t => (t.uuid === "a" ? { ...t, isParked: true } : t)) };
+    const back = undoCoachAction(parked, { type: "SET_NOW_FOCUS", taskUuid: "b", prevPinnedUuid: "a" });
+    expect(back.tasks.map(t => !!t.isNowFocus)).toEqual([false, false]);
+  });
+
   it("Undo of Make it the one thing puts the old pin back", () => {
     const { payload } = applyCoachActions(base(), [{ type: "SET_NOW_FOCUS", title: "Order medicine" }], { skipIntentCheck: true });
     const back = undoCoachAction(payload, { type: "SET_NOW_FOCUS", taskUuid: "b", prevPinnedUuid: "a" });
