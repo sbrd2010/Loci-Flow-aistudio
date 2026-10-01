@@ -20,7 +20,9 @@ export function restoreParked(tasks, uuid, now = Date.now()) {
   const bottom = tasks
     .filter(t => t.horizonLevel === "today" && !t.isDeleted && !t.isParked && t.uuid !== uuid)
     .reduce((max, t) => Math.max(max, Number(t.orderIndex) || 0), -1) + 1;
-  const before = { horizonLevel: task.horizonLevel, orderIndex: task.orderIndex ?? null, deferredUntil: task.deferredUntil ?? null };
+  // parkedAt keeps "since" (and the fold's order) through an Undo, also for a
+  // task parked before parkedAt existed.
+  const before = { horizonLevel: task.horizonLevel, orderIndex: task.orderIndex ?? null, deferredUntil: task.deferredUntil ?? null, parkedAt: parkedSince(task) || null };
   return {
     tasks: tasks.map(t => t.uuid === uuid
       ? { ...t, isParked: false, horizonLevel: "today", orderIndex: bottom, deferredUntil: null, lastUpdated: now }
