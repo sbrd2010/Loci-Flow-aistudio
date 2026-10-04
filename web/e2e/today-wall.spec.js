@@ -33,7 +33,7 @@ async function openSplit(page) {
     await more.click();
     await page.getByRole("dialog", { name: /^More:/ }).getByRole("button", { name: /^Split it/ }).click();
   } else {
-    await openSplit(page);
+    await page.locator(".wall-action:visible", { hasText: "Split it" }).click();
   }
 }
 

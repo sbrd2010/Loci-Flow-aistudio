@@ -1503,6 +1503,9 @@ export default function TodayTab({
     if (i < 0 && !(detailHidden && task.uuid === detailUuid)) return false;
     const next = i < 0 ? remainingTasks[dir > 0 ? 0 : remainingTasks.length - 1] : remainingTasks[i + dir];
     if (!next) return false;
+    // Up next shows three: stepping past them opens the rest, so the row
+    // focus goes to is there.
+    if (upNext && !upNextAll && remainingTasks.indexOf(next) >= 3) setUpNextAll(true);
     if (detailUuid) setDetailUuid(next.uuid);
     focusRow(next.uuid);
     return true;
