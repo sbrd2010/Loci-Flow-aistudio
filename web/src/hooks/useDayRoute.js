@@ -123,6 +123,38 @@ function byRouteOrder(a, b) {
   return (a.dayMapStartMinutes ?? 0) - (b.dayMapStartMinutes ?? 0);
 }
 
+// One order for the Today list and the Day map (Rohan, 4 Oct 2026). Each keeps
+// its own field (orderIndex for the list, dayMapOrder for the route), so a
+// drag in one is copied to the other: the tasks on both take the other's
+// slots, in the new order. Only flowing stops count: a fixed stop keeps its
+// time, and the one thing sits above the list and at NOW on the route.
+function sharedStops(tasks, todayStr) {
+  return tasks.filter(t => isOnRoute(t, todayStr) && !isFixedStop(t) && !t.isNowFocus);
+}
+function giveSlots(tasks, members, slotOf, field) {
+  if (members.length < 2) return tasks;
+  const slots = members.map(slotOf).sort((a, b) => a - b);
+  const next = new Map(members.map((t, i) => [getTaskId(t), slots[i]]));
+  const now = Date.now();
+  return tasks.map(t => {
+    const id = getTaskId(t);
+    return next.has(id) && t[field] !== next.get(id) ? { ...t, [field]: next.get(id), lastUpdated: now } : t;
+  });
+}
+// After a drag on Today: the route takes the list's order (moved from
+// yesterday first, as the list shows them).
+export function routeFollowsList(tasks, todayStr) {
+  const fromYesterday = (t) => (t.deferredUntil === todayStr ? 1 : 0);
+  const members = sharedStops(tasks, todayStr)
+    .sort((a, b) => (fromYesterday(b) - fromYesterday(a)) || ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)));
+  return giveSlots(tasks, members, t => t.dayMapOrder ?? 0, "dayMapOrder");
+}
+// After a drag on the Day map: the list takes the route's order.
+export function listFollowsRoute(tasks, todayStr) {
+  const members = sharedStops(tasks, todayStr).sort(byRouteOrder);
+  return giveSlots(tasks, members, t => t.orderIndex ?? 0, "orderIndex");
+}
+
 // Undo of a route change (Clear route, a one thing moved to NOW): the stops
 // come back first, in their old order, then anything added since; and the
 // whole route is timed again, so no two stops share an order or a start and
@@ -229,10 +261,11 @@ export function useDayRoute({ payload, savePayload }) {
   const latestTasks = () => payloadRef.current?.tasks || [];
 
   // Reflow ordered tasks from the start and save everything in one write.
-  const applyAndSave = (orderedScheduled, anchor, configPatch = null) => {
+  const applyAndSave = (orderedScheduled, anchor, configPatch = null, { listFollows = false } = {}) => {
     const reflowed = reflowRoute(orderedScheduled, anchor, todayStr, breaks);
     const p = payloadRef.current;
-    const update = { ...p, tasks: applyReflow(latestTasks(), reflowed), timestamp: Date.now() };
+    const laid = applyReflow(latestTasks(), reflowed);
+    const update = { ...p, tasks: listFollows ? listFollowsRoute(laid, todayStr) : laid, timestamp: Date.now() };
     if (configPatch) {
       update.config = { ...(p?.config || {}), ...configPatch, lastUpdated: Date.now() };
     }

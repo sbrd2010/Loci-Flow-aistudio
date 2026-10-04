@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getEstimate, oneThingToNow, restoreRoute, routeIsContiguous } from "./useDayRoute";
+import { getEstimate, listFollowsRoute, oneThingToNow, restoreRoute, routeFollowsList, routeIsContiguous } from "./useDayRoute";
 
 const DAY = "2026-09-29";
 const stop = (uuid, order, minutes, extra = {}) => ({
@@ -119,5 +119,57 @@ describe("getEstimate", () => {
     const b = { uuid: "b", dayMapOrder: 1, dayMapStartMinutes: 570, dayMapDurationMinutes: 25, timeEstimateMinutes: 25 };
     expect(routeIsContiguous([a, b])).toBe(true);
     expect(routeIsContiguous([{ ...a, timeEstimateMinutes: 60 }, b])).toBe(false);
+  });
+});
+
+describe("one order for the Today list and the Day map", () => {
+  const ids = (tasks, field) => [...tasks].filter(t => t[field] != null).sort((a, b) => a[field] - b[field]).map(t => t.uuid);
+
+  it("a drag on Today reorders the route the same way", () => {
+    // List: b, a, c (b dragged to the top). Route still a, b, c.
+    const tasks = [
+      stop("a", 0, 30, { orderIndex: 1 }),
+      stop("b", 1, 30, { orderIndex: 0 }),
+      stop("c", 2, 30, { orderIndex: 2 }),
+    ];
+    expect(ids(routeFollowsList(tasks, DAY), "dayMapOrder")).toEqual(["b", "a", "c"]);
+  });
+
+  it("a drag on the Day map reorders the list, leaving tasks off the route where they were", () => {
+    // Route: c, a, b. The list also holds u (unscheduled) at slot 1.
+    const tasks = [
+      stop("a", 1, 30, { orderIndex: 0 }),
+      { uuid: "u", horizonLevel: "today", orderIndex: 1 },
+      stop("b", 2, 30, { orderIndex: 2 }),
+      stop("c", 0, 30, { orderIndex: 3 }),
+    ];
+    expect(ids(listFollowsRoute(tasks, DAY), "orderIndex")).toEqual(["c", "u", "a", "b"]);
+  });
+
+  it("keeps the one thing and fixed stops out of the swap", () => {
+    const tasks = [
+      stop("n", 0, 30, { orderIndex: 5, isNowFocus: true }),
+      stop("f", 1, 30, { orderIndex: 0, dayMapFixedMinutes: 840 }),
+      stop("a", 2, 30, { orderIndex: 2 }),
+      stop("b", 3, 30, { orderIndex: 1 }),
+    ];
+    const t = byId(routeFollowsList(tasks, DAY));
+    expect([t.n.dayMapOrder, t.f.dayMapOrder]).toEqual([0, 1]);
+    expect([t.b.dayMapOrder, t.a.dayMapOrder]).toEqual([2, 3]);
+  });
+
+  it("puts tasks moved from yesterday first on the route, as the list shows them", () => {
+    const tasks = [
+      stop("a", 0, 30, { orderIndex: 0 }),
+      stop("y", 1, 30, { orderIndex: 5, deferredUntil: DAY }),
+    ];
+    expect(ids(routeFollowsList(tasks, DAY), "dayMapOrder")).toEqual(["y", "a"]);
+  });
+
+  it("changes nothing when the orders already agree", () => {
+    const tasks = [stop("a", 0, 30, { orderIndex: 0 }), stop("b", 1, 30, { orderIndex: 1 })];
+    const next = routeFollowsList(tasks, DAY);
+    expect(next[0]).toBe(tasks[0]);
+    expect(next[1]).toBe(tasks[1]);
   });
 });
