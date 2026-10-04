@@ -92,6 +92,8 @@ export default function TodayTab({
   closeLine = null, dayClosed = null, onOpenCloseDay = null,
   // Q49: the goal band opens Settings → Key deadline.
   onOpenKeyDeadline = null,
+  // The goal record's Edit goal for a goal that is a stored front: its page.
+  onOpenFront = null,
   // The mini window's I'm stuck (59b → 59d).
   stuckPending = false, onStuckShown,
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft,
@@ -810,7 +812,11 @@ export default function TodayTab({
     if (isEventTask(task)) return;
     // From the goal record (Q57.2) the task may be in Plan: it moves to Today
     // first, and Undo puts it back where it was.
-    const fromPlan = task.horizonLevel !== "today" ? { horizonLevel: task.horizonLevel ?? null, orderIndex: task.orderIndex ?? null } : null;
+    // A task moved to tomorrow is on the Today horizon but not on today: it
+    // comes back for now, and Undo returns it to tomorrow (Codex review of #466).
+    const fromPlan = !isOnToday(task, todayStr)
+      ? { horizonLevel: task.horizonLevel ?? null, orderIndex: task.orderIndex ?? null, deferredUntil: task.deferredUntil ?? null }
+      : null;
     const base = fromPlan ? tasks.map(t => (t.uuid === task.uuid ? { ...t, horizonLevel: "today", lastUpdated: Date.now() } : t)) : tasks;
     const { tasks: pinned, previous } = makeOneThing(base, task.uuid);
     if (pinned === base) return;
@@ -1773,7 +1779,9 @@ export default function TodayTab({
       <TodayWall
         task={pinnedFocusTask}
         goal={wallGoal}
-        onOpenGoal={onOpenKeyDeadline}
+        onOpenGoal={wallKickerFront && wallKickerFront.id !== LEGACY_DEADLINE_FRONT_ID
+          ? (onOpenFront ? () => onOpenFront(wallKickerFront.id) : null)
+          : onOpenKeyDeadline}
         goalRecord={goalRecordProps}
         anchors={config.anchorsOnToday === "off" ? [] : anchors.filter(a => a && typeof a.text === "string" && a.text.trim())}
         focusMinutes={focusBlockSeconds(config) / 60}

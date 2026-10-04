@@ -10,6 +10,7 @@
 import { LEGACY_DEADLINE_FRONT_ID } from "./fronts";
 import { isOnToday } from "./deferral";
 import { taskHorizonId } from "./horizons";
+import { isEventTask } from "./dayMapRoute";
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -93,10 +94,11 @@ export function buildGoalRecord({ tasks, goalId, todayStr, startDay = null, mode
 }
 
 // The next goal task: the first open one in Today's order, else in Plan's
-// nearest horizon. The current one thing is skipped: making it the one thing
-// again would do nothing.
+// nearest horizon. The current one thing is skipped (making it the one thing
+// again would do nothing), and so is a call at a set time, which is never the
+// one thing (Q36.3).
 export function nextGoalTask({ tasks, goalId, todayStr, horizons = [] }) {
-  const open = (tasks || []).filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked && !t.isNowFocus && t.frontId === goalId);
+  const open = (tasks || []).filter(t => t && !t.isDeleted && !t.isCompleted && !t.isParked && !t.isNowFocus && !isEventTask(t) && t.frontId === goalId);
   const rank = (t) => {
     if (isOnToday(t, todayStr)) return t.deferredUntil === todayStr ? 0 : 1;
     if (t.horizonLevel === "today") return 2;

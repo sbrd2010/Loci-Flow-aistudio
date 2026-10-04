@@ -93,6 +93,10 @@ describe("nextGoalTask", () => {
     const tasks = [t("m", { horizonLevel: "month", orderIndex: 0 }), t("w", { horizonLevel: "week", orderIndex: 5 }), t("x", { horizonLevel: "week", frontId: "front-other" })];
     expect(nextGoalTask({ tasks, goalId: G, todayStr: "2026-10-01", horizons }).uuid).toBe("w");
   });
+  it("skips a call at a set time, which is never the one thing", () => {
+    const tasks = [t("call", { horizonLevel: "today", orderIndex: 0, fixedKind: "event", dayMapFixedMinutes: 600 }), t("w", { horizonLevel: "week", orderIndex: 0 })];
+    expect(nextGoalTask({ tasks, goalId: G, todayStr: "2026-10-01", horizons }).uuid).toBe("w");
+  });
   it("returns null when there's none", () => {
     expect(nextGoalTask({ tasks: [t("p", { horizonLevel: "week", isParked: true })], goalId: G, todayStr: "2026-10-01", horizons })).toBe(null);
   });
