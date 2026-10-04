@@ -95,7 +95,7 @@ export default function TodayTab({
   onOpenKeyDeadline = null,
   // Q55.3: Mind Box asks for Rescue here (where focus can start); Leave tells
   // App, which goes back to where it was opened from.
-  rescueRequest = null, onRescueClosed,
+  rescueRequest = null, onRescueRequestOpened, onRescueClosed,
   // The goal record's Edit goal for a goal that is a stored front: its page.
   onOpenFront = null,
   // The mini window's I'm stuck (59b → 59d).
@@ -1641,9 +1641,12 @@ export default function TodayTab({
   };
 
   // ── Rescue's actions (Q55.3) ──
-  // A state picked on Mind Box opens Rescue here.
+  // A state picked on Mind Box opens Rescue here, once: the request is then
+  // cleared so a later visit to Today doesn't open it again.
   useEffect(() => {
-    if (rescueRequest?.at) openRescueMode(rescueRequest.state || null, true);
+    if (!rescueRequest?.at) return;
+    openRescueMode(rescueRequest.state || null, true);
+    onRescueRequestOpened?.();
   }, [rescueRequest?.at]); // eslint-disable-line react-hooks/exhaustive-deps
   const closeRescue = () => {
     setRescueActive(false);
