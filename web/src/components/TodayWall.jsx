@@ -333,7 +333,7 @@ export default function TodayWall({
   const links = (onScattered || onRescue) && (
     <div className="wall-links" data-flip="links">
       {onScattered && (
-        <button type="button" className="wall-link" onClick={onScattered}>Feeling scattered?</button>
+        <button type="button" className="wall-link is-scattered" onClick={onScattered}>Feeling scattered?</button>
       )}
       {onRescue && (
         <button type="button" className="wall-link" onClick={onRescue}>I’m stuck</button>

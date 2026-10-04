@@ -1120,6 +1120,8 @@
     cursor: pointer;
   }
 
+  /* Not on the phone in any state: Rescue's "Too much going on" covers it. */
+  .wall-link.is-scattered { display: none; }
   .has-quiet .wall-actions,
   .has-quiet .wall-foot > .wall-links,
   .has-quiet .wall-details,

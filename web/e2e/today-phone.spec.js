@@ -113,3 +113,14 @@ test("More: Move to leaves out a horizon hidden in Settings", async ({ page }) =
   await more(page).getByRole("button", { name: /^Move to…/ }).click();
   await expect(more(page).locator(".more-move")).toHaveText(["Tomorrow", "This month"]);
 });
+
+// Codex review of #474: "Feeling scattered?" is off the phone in every wall
+// state, not only beside the quiet row.
+test("phone: with no one thing, Feeling scattered isn't offered; I'm stuck is", async ({ page }) => {
+  await enterDemo(page);
+  await openMore(page);
+  await more(page).getByRole("button", { name: /^Not the one thing/ }).click();
+  await expect(page.locator(".wall-commit-field")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Feeling scattered?" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "I’m stuck" }).first()).toBeVisible();
+});
