@@ -1789,7 +1789,7 @@ export default function TodayTab({
   });
 
   const wallKeysBlocked = isFocusMode || isAddTaskDialogOpen || (!!detailUuid && !drawerViewport)
-    || rescueActive || !!frontPickerTask || !!splitTask || (!!dayClosed && !focusSessionActive);
+    || rescueActive || !!frontPickerTask || !!splitTask || moreOpen || (!!dayClosed && !focusSessionActive);
   useEffect(() => {
     if (wallKeysBlocked) return undefined;
     const onKey = (e) => {
@@ -2314,6 +2314,7 @@ export default function TodayTab({
           task={pinnedFocusTask}
           onSplit={() => setSplitTask(pinnedFocusTask)}
           onDetails={() => setDetailUuid(pinnedFocusTask.uuid)}
+          hiddenHorizons={horizonsFromConfig(config, todayStr).filter(h => h.hidden).map(h => h.id)}
           onMove={(dest) => (dest === "tomorrow" ? actOnTask(pinnedFocusTask, "t") : handleMoveWithUndo(pinnedFocusTask, dest))}
           onPark={() => handleParkWithUndo(pinnedFocusTask)}
           onUnpin={() => handleUnpinWithUndo(pinnedFocusTask)}
