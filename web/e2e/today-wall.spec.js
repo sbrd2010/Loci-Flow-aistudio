@@ -16,6 +16,13 @@ async function enterDemo(page) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
 }
 
+// 58.6 (67c): on a phone, done rows go into the Up next sheet's
+// "Done today" fold; open it to see them.
+async function openDone(page) {
+  const fold = page.locator(".today-done-fold .today-parked-line");
+  if (await fold.count() && (await fold.getAttribute("aria-expanded")) === "false") await fold.click();
+}
+
 // Q58 (67a, 67d): on a phone, Done sits in the quiet row and Split it in the
 // More sheet; wider, they are the wall's buttons.
 const markDone = (page) => page.locator(".wall-quiet-link:visible", { hasText: /^Done$/ })
@@ -773,6 +780,7 @@ test("mobile reliability: swipe right marks a row done, with Undo", async ({ pag
   const row = listRow(page, "10-minute walk");
   await swipe(page, row, 140);
   await expect(page.getByRole("status").filter({ hasText: "Marked done: 10-minute walk" })).toBeVisible();
+  await openDone(page);
   await expect(listRow(page, "10-minute walk")).toHaveClass(/completed/);
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(listRow(page, "10-minute walk")).not.toHaveClass(/completed/);
@@ -887,6 +895,7 @@ test("mobile reliability: in the default mode a hesitant swipe is still a swipe"
   await page.locator(".today-sheet-grabber").click();
   const row = listRow(page, "10-minute walk");
   await slide(page, row, { rest: 260 });
+  await openDone(page);
   await expect(listRow(page, "10-minute walk")).toHaveClass(/completed/);
 });
 
@@ -900,6 +909,7 @@ test("mobile reliability: a quick flick whose only move crosses the line still c
   await row.dispatchEvent("pointerdown", at(x));
   await row.dispatchEvent("pointermove", at(x + 150));
   await row.dispatchEvent("pointerup", at(x + 150));
+  await openDone(page);
   await expect(listRow(page, "10-minute walk")).toHaveClass(/completed/);
 });
 

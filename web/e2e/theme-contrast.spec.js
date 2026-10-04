@@ -98,7 +98,7 @@ for (const theme of THEMES) {
       [".wall-quiet-link:not(.is-muted)", "Done"],
       [".wall-first-step-label", "next step label"],
       [".wall-primary-figure", "timer on Start focus"],
-      [".wall-peek-label", "peek label"],
+      [".wall-peek-next-title", "Next strip"],
     ]) {
       await assertLegible(page.locator(sel).first(), what, theme);
     }
@@ -108,7 +108,7 @@ for (const theme of THEMES) {
 
     // The list (41a/37b): its quietest text, on the list's own ground.
     for (const [loc, what] of [
-      [page.locator(".today-list-count"), "list count"],
+      [page.locator(".today-upnext-hint"), "Up next hint"],
       [page.locator(".today-seg-opt[aria-pressed='false']"), "unselected segment"],
       [page.locator(".task-row-priority"), "row priority tag"],
       [page.locator(".today-list-link"), "Day map link"],

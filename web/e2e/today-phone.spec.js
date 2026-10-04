@@ -85,3 +85,42 @@ test("phone: a title past three lines is cut, and Full title and details opens i
   await page.getByRole("button", { name: "Full title and details" }).click();
   await expect(page.getByTestId("task-detail")).toBeVisible();
 });
+
+// 58.1/58.5 (67a): the Next strip sits on the tab bar with the next task; "+"
+// is a 56px circle at its right. 58.6 (67c): it opens Up next, the next 3,
+// then "All N tasks"; done tasks fold under "Done today".
+test("phone: the Next strip names the next task above the tabs, with a 56px +", async ({ page }) => {
+  await enterDemo(page);
+  const strip = page.locator(".wall-peek-row");
+  await expect(strip.locator(".wall-peek-next")).toHaveText(/^NEXT\s+\S/);
+  const tabs = await page.locator(".tab-bar").boundingBox();
+  const box = await strip.boundingBox();
+  expect(Math.abs(box.y + box.height - tabs.y)).toBeLessThanOrEqual(2);
+  const plus = await page.getByRole("button", { name: "Add a task to Today" }).first().boundingBox();
+  expect(Math.round(plus.width)).toBe(56);
+});
+
+test("phone: Up next shows 3, then All N opens the rest; done tasks fold under Done today", async ({ page }) => {
+  await enterDemo(page);
+  for (const title of ["Draft the methods outline", "Order printer ink"]) {
+    await page.getByRole("button", { name: "Add a task to Today" }).first().click();
+    await page.getByTestId("add-task-title").fill(title);
+    await page.getByTestId("add-task-submit").click();
+    await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
+  }
+  if (!(await page.locator(".today-list.is-sheet").isVisible())) await page.locator(".wall-peek").click();
+  const sheet = page.locator(".today-list.is-sheet");
+  await expect(sheet.locator(".today-list-title")).toHaveText("Up next");
+  await expect(sheet.locator(".today-upnext-hint")).toHaveText("Tap a task to open it. Drag to reorder.");
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
+  await expect(rows).toHaveCount(3);
+  await sheet.getByRole("button", { name: /^All \d+ tasks$/ }).click();
+  await expect(rows).toHaveCount(4);
+
+  await rows.first().getByTestId("task-checkbox").click();
+  const fold = sheet.locator(".today-done-fold .today-parked-line");
+  await expect(fold).toHaveText(/^Done today · 1/);
+  await expect(sheet.locator(".task-row.completed")).toHaveCount(0);
+  await fold.click();
+  await expect(sheet.locator(".task-row.completed")).toHaveCount(1);
+});

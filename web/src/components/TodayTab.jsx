@@ -907,6 +907,12 @@ export default function TodayTab({
   const [movedOpen, setMovedOpen] = useState(false);
   // Parked (62d): Restore puts the task at the bottom of Today's list.
   const [parkedOpen, setParkedOpen] = useState(false);
+  // 58.6 (67c): the phone's Up next shows the next 3, then "All N tasks",
+  // which opens the rest in place; Done today is a fold.
+  const [upNextAll, setUpNextAll] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
+  // Each opening starts from the short list again.
+  useEffect(() => { if (!peekOpen) setUpNextAll(false); }, [peekOpen]);
   const handleRestoreParked = (task) => {
     const { tasks: next, before } = restoreParked(tasks, task.uuid);
     if (!before) return;
@@ -1548,6 +1554,10 @@ export default function TodayTab({
   // showing it here put "0 done" above a list of done rows.
   const parkedList = parkedTasks(tasks);
   const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted && t.dateCompletedString === todayStr);
+  // 58.6: the phone's sheet under the one thing is "Up next": 3, then All N.
+  const upNext = sheetViewport && !!pinnedFocusTask;
+  const shownTasks = upNext && !upNextAll ? remainingTasks.slice(0, 3) : remainingTasks;
+  const upNextHidden = remainingTasks.length - shownTasks.length;
   // The wall's two figures are claims about the whole day, so they come from
   // todayTasksAll — the Must-Do and Low Energy filters narrow the LIST below,
   // not the day. Reading them off the filtered list let the wall say "0 more
@@ -1974,7 +1984,7 @@ export default function TodayTab({
             (37b). */}
         <div className="today-list-top">
         <div className="today-list-head">
-          <h2 className="today-list-title">After that</h2>
+          <h2 className="today-list-title">{upNext ? "Up next" : "After that"}</h2>
           <span className="today-list-count">{listAllCount} · {listDoneCount} done</span>
           <span className="today-list-head-end">
             {onOpenDayMap && (
@@ -2006,6 +2016,7 @@ export default function TodayTab({
         </div>
         </div>
 
+        {upNext && <p className="today-upnext-hint">Tap a task to open it. Drag to reorder.</p>}
         <div className="tasks-list" data-testid="today-tasks-list" onKeyDown={onListKeyDown}>
           {!wallIsAsking && todayTasksAll.length === 0 && (
             <p className="today-list-empty">Nothing else on Today.</p>
@@ -2032,10 +2043,10 @@ export default function TodayTab({
                 onDragCancel={() => setActiveTaskId(null)}
               >
                 <SortableContext
-                  items={remainingTasks.map(t => getTaskKey(t))}
+                  items={shownTasks.map(t => getTaskKey(t))}
                   strategy={verticalListSortingStrategy}
                 >
-                  {remainingTasks.map((task, idx) => (
+                  {shownTasks.map((task, idx) => (
                     <React.Fragment key={getTaskKey(task)}>
                       {fromYesterdayCount > 0 && idx === 0 && (
                         <h3 className="today-list-group">Moved from yesterday · {fromYesterdayCount}</h3>
@@ -2076,6 +2087,11 @@ export default function TodayTab({
                     </React.Fragment>
                   ))}
                 </SortableContext>
+                {upNextHidden > 0 && (
+                  <button type="button" className="today-upnext-all" onClick={() => setUpNextAll(true)}>
+                    All {remainingTasks.length} tasks
+                  </button>
+                )}
                 <DragOverlay dropAnimation={null}>
                   {activeTaskId ? (() => {
                     const activeTask = remainingTasks.find(t => getTaskKey(t) === activeTaskId);
@@ -2128,14 +2144,23 @@ export default function TodayTab({
               )}
             </div>
           )}
-          {completedTasks.length > 0 && (
+          {completedTasks.length > 0 && (upNext ? (
+            <div className="today-parked today-done-fold">
+              <button type="button" className="today-parked-line" aria-expanded={doneOpen} onClick={() => setDoneOpen(o => !o)}>
+                <span className="today-parked-kicker">Done today · {completedTasks.length} {doneOpen ? "▾" : "▸"}</span>
+              </button>
+              {doneOpen && completedTasks.map(task => (
+                <TaskRow key={task.uuid} task={task} onToggleComplete={handleToggleComplete} onDelete={handleDeleteTask} />
+              ))}
+            </div>
+          ) : (
             <>
               <div className="completed-section-title">Completed</div>
               {completedTasks.map(task => (
                 <TaskRow key={task.uuid} task={task} onToggleComplete={handleToggleComplete} onDelete={handleDeleteTask} />
               ))}
             </>
-          )}
+          ))}
           {/* 50g–h: the list closes with a quiet line for what was moved to
               tomorrow; it opens in place, each with Bring back. */}
           {movedToTomorrow.length > 0 && (
