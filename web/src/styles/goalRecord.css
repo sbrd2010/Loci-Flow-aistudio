@@ -1,0 +1,157 @@
+/* The goal record (Q57.2, frames 63a–l). */
+.goal-record {
+  --goal-dot-empty: #C8CDC2;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--ink);
+  box-sizing: border-box;
+  outline: none;
+}
+html[data-theme="dark"] .goal-record { --goal-dot-empty: var(--edge); }
+
+.gr-scrim { position: fixed; inset: 0; z-index: 40; }
+.gr-scrim.is-sheet { z-index: 149; background: var(--scrim); }
+
+/* 840 and wider (63a, 63i–l): 400 wide, 8px under the band's right edge. */
+.goal-record.is-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 41;
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  overflow-y: auto;
+  border: 1px solid var(--goal-dot-empty);
+  border-radius: 6px;
+  box-shadow: var(--shadow-md);
+}
+.goal-record.is-popover.is-above { top: auto; bottom: calc(100% + 8px); }
+.goal-record.is-popover .gr-body { padding: 18px 20px 16px; }
+
+/* Under 840 (63b, 63f–h): a bottom sheet, at most 88% of the screen; the
+   body scrolls and the buttons stay pinned. */
+.goal-record.is-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 150;
+  max-height: 88vh;
+  max-height: 88dvh;
+  border-radius: 14px 14px 0 0;
+  box-shadow: var(--shadow-lg);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.goal-record.is-sheet .gr-body { padding: 10px 16px 12px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.gr-foot { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 16px 14px; border-top: 1px solid var(--line); }
+.gr-foot .gr-make { width: 100%; min-height: 48px; }
+.gr-foot .gr-edit { min-height: 44px; }
+
+.gr-body { display: flex; flex-direction: column; gap: 14px; }
+.gr-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.gr-kicker {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--ink-2);
+}
+.gr-kicker.is-gold { color: var(--gold-label); }
+.gr-edit {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+}
+.gr-edit:hover { text-decoration: underline; }
+
+.gr-goal { display: flex; flex-direction: column; gap: 4px; }
+.gr-grip { align-self: center; width: 36px; height: 4px; margin-bottom: 8px; border-radius: 2px; background: var(--line); }
+.gr-goal-name { font-size: 17px; font-weight: 800; }
+.gr-goal-target { font-size: 13.5px; color: var(--ink-2); }
+
+.gr-days {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.gr-day { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.gr-dot { width: 18px; height: 18px; border-radius: 50%; box-sizing: border-box; }
+.gr-dot.is-done { background: var(--gold); }
+.gr-dot.is-empty { border: 1.5px solid var(--goal-dot-empty); }
+.gr-dot.is-today { border: 2px dashed var(--gold); }
+/* A weekend day in "Weekdays only", shown because a goal task was done. */
+.gr-day.is-bonus .gr-dot { width: 12px; height: 12px; margin: 3px 0; }
+.gr-lab { font-family: var(--font-mono); font-size: 11px; color: var(--ink-2); }
+.gr-lab.is-today { font-weight: 700; color: var(--gold-label); }
+.gr-lab-short { display: none; }
+
+.gr-sentence { margin: 0; font-family: var(--font-serif); font-size: 15px; line-height: 1.5; }
+.gr-figs { font-family: var(--font-mono); }
+.gr-done-today { margin: 0; font-size: 15px; font-weight: 700; }
+
+.gr-next { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.gr-next-title { font-size: 15px; font-weight: 700; }
+.gr-next-est { font-family: var(--font-mono); font-size: 12px; font-weight: 400; color: var(--ink-2); }
+.gr-make {
+  align-self: flex-start;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+}
+.gr-make:focus-visible,
+.gr-edit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Touch (63i): 48 targets. */
+@media (pointer: coarse) {
+  .goal-record.is-popover .gr-make { min-height: 48px; }
+  .goal-record.is-popover .gr-edit { min-height: 48px; }
+}
+/* 375–447 (63b, 63f): one-letter day names. */
+@media (max-width: 447px) {
+  .gr-lab-long { display: none; }
+  .gr-lab-short { display: inline; }
+}
+/* 448+ (63g): 22px margins, 22px dots, a 52px button. */
+@media (min-width: 448px) and (max-width: 839px) {
+  .goal-record.is-sheet .gr-body { padding: 12px 22px 14px; }
+  .gr-foot { padding: 8px 22px 16px; }
+  .goal-record.is-sheet .gr-dot { width: 22px; height: 22px; }
+  .goal-record.is-sheet .gr-day.is-bonus .gr-dot { width: 14px; height: 14px; margin: 4px 0; }
+  .gr-foot .gr-make { min-height: 52px; }
+}
+/* 640–839 (63h): the sheet is 640, centred, rounded, 16px off the bottom. */
+@media (min-width: 640px) and (max-width: 839px) {
+  .goal-record.is-sheet {
+    left: 50%;
+    right: auto;
+    bottom: 16px;
+    width: 640px;
+    transform: translateX(-50%);
+    border-radius: 14px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .goal-record.is-sheet { animation: gr-rise 180ms ease-out; }
+  @media (min-width: 640px) and (max-width: 839px) {
+    .goal-record.is-sheet { animation: none; }
+  }
+}
+@keyframes gr-rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* The band while its record is open (63a: "0 OF 2 ▴"). */
+.wall-goal-wrap { position: relative; }
+.wall-goal-caret { margin-left: 4px; }

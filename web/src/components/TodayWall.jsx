@@ -5,6 +5,7 @@ import { startLengthOptions, chosenStartOption } from "../utils/focusSession";
 import { formatEstimate } from "./TaskDetail";
 import { IconPin, IconPlus, IconChevronDown, IconCheck } from "./ui/icons";
 import { MiniRing } from "./FocusClock";
+import GoalRecord from "./GoalRecord";
 import "../styles/todayWall.css";
 
 // Today's wall (turns 37, 40, 41, 49): the goal band, one anchor line, then the
@@ -172,19 +173,27 @@ function goalFigures(goal) {
 }
 
 // Q49: tapping the band opens Settings → Key deadline, where it is set.
-function GoalBand({ goal, onOpen }) {
+function GoalBand({ goal, onOpen, record = null }) {
+  const [recordOpen, setRecordOpen] = useState(false);
+  const bandRef = useRef(null);
   const hasCount = goal.total > 0;
   const figures = goalFigures(goal);
   const label = `Your goal: ${goal.name}${figures ? `, ${figures}` : ""}${goal.target ? `. Target: ${goal.target}` : ""}`;
-  const open = onOpen ? {
+  // Q57.2: with a record, the band opens it; Edit goal is a link inside.
+  const act = record ? () => setRecordOpen(o => !o) : onOpen;
+  const closeRecord = () => { setRecordOpen(false); bandRef.current?.focus(); };
+  const open = act ? {
     role: "button",
     tabIndex: 0,
-    "aria-label": `${label}. Open Key deadline`,
-    onClick: onOpen,
-    onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } },
+    "aria-label": `${label}. ${record ? "Open goal record" : "Open Key deadline"}`,
+    ...(record ? { "aria-expanded": recordOpen, "aria-haspopup": "dialog" } : {}),
+    onClick: act,
+    onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); act(); } },
   } : { role: "group", "aria-label": label };
+  const caret = recordOpen ? <span className="wall-goal-caret" aria-hidden="true">▴</span> : null;
   return (
-    <div className={`wall-goal${onOpen ? " is-link" : ""}`} data-flip="goal" {...open}>
+    <div className="wall-goal-wrap">
+    <div ref={bandRef} className={`wall-goal${act ? " is-link" : ""}`} data-flip="goal" {...open}>
       <div className="wall-goal-head">
         <span className="wall-goal-kicker">
           YOUR GOAL
@@ -194,7 +203,7 @@ function GoalBand({ goal, onOpen }) {
             <span className="wall-goal-days"> · {goal.daysLeft} {goal.daysLeft === 1 ? "DAY" : "DAYS"}</span>
           )}
         </span>
-        {figures && <span className="wall-goal-figures">{figures}</span>}
+        {figures && <span className="wall-goal-figures">{figures}{caret}</span>}
         {hasCount && <span className="wall-goal-count">{goal.done} OF {goal.total}</span>}
       </div>
       <div className="wall-goal-name">{goal.name}</div>
@@ -205,6 +214,17 @@ function GoalBand({ goal, onOpen }) {
       <span className={`wall-goal-track${hasCount ? "" : " is-rule"}`} aria-hidden="true">
         {hasCount && <span className="wall-goal-fill" style={{ width: `${Math.round((goal.done / goal.total) * 100)}%` }} />}
       </span>
+    </div>
+    {record && recordOpen && (
+      <GoalRecord
+        goal={goal}
+        {...record}
+        bandRef={bandRef}
+        onClose={closeRecord}
+        onEditGoal={onOpen ? () => { setRecordOpen(false); onOpen(); } : null}
+        onMakeOneThing={(task) => { setRecordOpen(false); record.onMakeOneThing(task); }}
+      />
+    )}
     </div>
   );
 }
@@ -240,6 +260,7 @@ export default function TodayWall({
   task,
   goal = null,
   onOpenGoal = null,
+  goalRecord = null,
   anchors = [],
   focusMinutes = 25,
   startChoice,
@@ -279,7 +300,7 @@ export default function TodayWall({
 
   const top = (
     <>
-      {goal && <GoalBand goal={goal} onOpen={onOpenGoal} />}
+      {goal && <GoalBand goal={goal} onOpen={onOpenGoal} record={goalRecord} />}
       {anchors.length > 0 && <AnchorLine anchors={anchors} />}
     </>
   );

@@ -93,11 +93,12 @@ test("mobile reliability: Brain Dump item is addable from Mind Box, browsable on
   await expect(page.getByTestId("brain-dump-inbox-btn")).toContainText("4 notes");
   await expectNoHorizontalOverflow(page);
 });
-test("Mind Box Progress shows no XP (brief §2: XP removed)", async ({ page }) => {
+test("Mind Box has no Progress, streak or Key Deadline Mirror (Q57)", async ({ page }) => {
   await enterDemo(page);
   await openTab(page, "Mind Box");
-  await page.locator(".mindbox-card", { hasText: "Progress" }).click();
-  await expect(page.getByRole("heading", { name: "7-Day Progress" })).toBeVisible();
-  await expect(page.getByText("Tasks Done")).toBeVisible();
+  await expect(page.locator(".mindbox-card", { hasText: "Morning Ritual" })).toBeVisible();
+  await expect(page.locator(".mindbox-card", { hasText: "Progress" })).toHaveCount(0);
+  await expect(page.getByText(/streak/i)).toHaveCount(0);
+  await expect(page.getByTestId("deadline-progress-mirror")).toHaveCount(0);
   await expect(page.getByText(/\bXP\b/)).toHaveCount(0);
 });

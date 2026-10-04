@@ -33,7 +33,7 @@ import { endSessionTasks } from "./utils/focusEnd";
 import { minutesFromSeconds } from "./utils/focusLedger";
 import { formatClock24, nextDateStr } from "./utils/dayMapPlan";
 import { useFocusTimer } from "./hooks/useFocusTimer";
-import { useLociDayStr, useTodayStr } from "./hooks/useTodayStr";
+import { useLociDayStr } from "./hooks/useTodayStr";
 import HorizonReview from "./components/HorizonReview";
 import UndoToast, { UndoAnnouncer } from "./components/ui/UndoToast";
 import { applyReview, detectReviews, pendingReviews, undoReviewOrSort } from "./utils/horizonReview";
@@ -464,34 +464,6 @@ export default function App() {
     const id = setInterval(checkDue, 60000);
     return () => clearInterval(id);
   }, [payload?.config?.coachCheckin?.fireAt, isSyncingFromCache, syncWarning]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const todayStr = useTodayStr();
-
-  // Auto-increment visit streak on first open each day (real users only).
-  // Guard: skip while isSyncingFromCache — payload is from stale localStorage at that point.
-  // Without this guard, a second device opening the app would overwrite RTDB with the
-  // stale cache payload (timestamp = now > any recent edit), silently erasing brainDump
-  // items and other changes made on the first device since the cache was last written.
-  //
-  // That guard only covers a fresh mount's cache window, though: on a laptop
-  // resumed from sleep this tab mounted yesterday, so isSyncingFromCache is
-  // already false while payload still holds pre-sleep config. useTodayStr flips
-  // the date on its own 60s timer without waiting for RTDB, so this can fire
-  // against stale config before the reconnect delivers. saveConfigPatch keeps
-  // that harmless — it writes only the two streak keys onto the latest known
-  // config, so a Key Deadline (or anything else) edited elsewhere is untouched.
-  useEffect(() => {
-    if (!payload?.config || !user || demoMode || isSyncingFromCache) return;
-    const cfg = payload.config;
-    if (cfg.lastVisitDate === todayStr) return;
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = toLocalDateStr(yesterday);
-    saveConfigPatch((latestConfig) => ({
-      visitStreakCount: latestConfig.lastVisitDate === yesterdayStr ? (latestConfig.visitStreakCount || 0) + 1 : 1,
-      lastVisitDate: todayStr,
-    }));
-  }, [payload?.config?.lastVisitDate, user?.uid, isSyncingFromCache, todayStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Capture today's carryover snapshot once per Loci day (not calendar day —
   // deliberately a separate guard from the visit-streak effect above). A
@@ -1452,6 +1424,7 @@ export default function App() {
         {activeTab === "today" && (
           <TodayTab
             onOpenKeyDeadline={() => { handleTabSelect("settings"); setSettingsInitialPage("goal"); }}
+            onOpenFront={(id) => { handleTabSelect("roadmap"); setPlanFrontId(id); }}
             reviewLine={reviewLine}
             closeLine={closeLine}
             onOpenCloseDay={dayClosed ? null : () => setCloseDayOpen(true)}
@@ -1565,7 +1538,7 @@ export default function App() {
           </div>
         )}
         {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onOpenRoadmapInbox={openRoadmapInbox} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} uid={activityUid} writeActivityEvents={writeActivityEvents} focusTimer={focusTimer} />}
-        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} stuck={coachStuck} onClearStuck={() => setCoachStuck(null)} onBackToFocus={focusTimer.focusSessionActive && focusTimer.activeTask ? handleReturnToFocus : null} />}
+        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} stuck={coachStuck} onClearStuck={() => setCoachStuck(null)} onBackToFocus={focusTimer.focusSessionActive && focusTimer.activeTask ? handleReturnToFocus : null} onOpenPrivacy={() => { handleTabSelect("settings"); setSettingsInitialPage("privacy"); }} />}
         {activeTab === "settings" && (
           <SettingsTab
             initialPage={settingsInitialPage}

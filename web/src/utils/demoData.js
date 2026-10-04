@@ -79,8 +79,6 @@ export function createDemoPayload() {
       challengeType: "overplanner",
       pomodoroDurationMinutes: 25,
       reminderNagIntervalMinutes: 15,
-      visitStreakCount: 5,
-      lastVisitDate: todayStr,
       isOnboardingCompleted: true,
       eveningGuardWindowActive: true,
       dayStartHour: 7,

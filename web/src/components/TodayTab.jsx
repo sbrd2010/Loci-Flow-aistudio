@@ -44,6 +44,8 @@ import { IconPlus } from "./ui/icons";
 import TaskDetail from "./TaskDetail";
 import DayMapColumn from "./DayMapColumn";
 import { makeOneThing, undoOneThing } from "../utils/oneThing";
+import { buildGoalRecord, goalStartDay, goalTaskDoneToday, nextGoalTask } from "../utils/goalRecord";
+import { horizonsFromConfig } from "../utils/horizons";
 import { confirmedMinimumDay } from "../utils/minimumDay";
 import { currentDayMinutes, oneThingToNow, restoreRoute } from "../hooks/useDayRoute";
 import { routeBreaks } from "../utils/dayMapBreaks";
@@ -89,6 +91,8 @@ export default function TodayTab({
   closeLine = null, dayClosed = null, onOpenCloseDay = null,
   // Q49: the goal band opens Settings → Key deadline.
   onOpenKeyDeadline = null,
+  // The goal record's Edit goal for a goal that is a stored front: its page.
+  onOpenFront = null,
   // The mini window's I'm stuck (59b → 59d).
   stuckPending = false, onStuckShown,
   activeTask, isTimerRunning, setIsTimerRunning, timerSecondsLeft,
@@ -804,8 +808,16 @@ export default function TodayTab({
   const handleMakeOneThing = (task) => {
     // Q31: something at a set time (a call) is never the one thing.
     if (isEventTask(task)) return;
-    const { tasks: pinned, previous } = makeOneThing(tasks, task.uuid);
-    if (pinned === tasks) return;
+    // From the goal record (Q57.2) the task may be in Plan: it moves to Today
+    // first, and Undo puts it back where it was.
+    // A task moved to tomorrow is on the Today horizon but not on today: it
+    // comes back for now, and Undo returns it to tomorrow (Codex review of #466).
+    const fromPlan = !isOnToday(task, todayStr)
+      ? { horizonLevel: task.horizonLevel ?? null, orderIndex: task.orderIndex ?? null, deferredUntil: task.deferredUntil ?? null }
+      : null;
+    const base = fromPlan ? tasks.map(t => (t.uuid === task.uuid ? { ...t, horizonLevel: "today", lastUpdated: Date.now() } : t)) : tasks;
+    const { tasks: pinned, previous } = makeOneThing(base, task.uuid);
+    if (pinned === base) return;
     // On the Day map it moves to NOW: the route flows on from its end, fixed
     // stops stay (53–56). Undo puts the stops and the route's start back.
     const nowMinutes = currentDayMinutes(windows);
@@ -814,7 +826,7 @@ export default function TodayTab({
     });
     const next = moved ? moved.tasks : pinned;
     const route = moved && {
-      before: tasks.filter(t => moved.ids.includes(String(t.uuid || t.id))),
+      before: base.filter(t => moved.ids.includes(String(t.uuid || t.id))),
       config: { dayMapDate: config.dayMapDate, dayMapAnchorMinutes: config.dayMapAnchorMinutes },
     };
     // The pin moving off a task with an open session ends that session, as
@@ -835,7 +847,7 @@ export default function TodayTab({
       })
       .catch(() => {});
     if (previous) setTintUuid(previous.uuid);
-    setUndo({ kind: "swap", task, previous, route, at: now });
+    setUndo({ kind: "swap", task, previous, route, fromPlan, at: now });
   };
 
   // Tomorrow (50b, T): leaves today for the next Loci day, first in line there.
@@ -935,7 +947,7 @@ export default function TodayTab({
       const front = frontsFromConfig(config).find(f => f.id === u.to);
       return front ? `Put on ${front.name}: ${title}` : `Off its front: ${title}`;
     }
-    if (u.kind === "swap") return u.previous ? `${u.previous.title} is back at the top of the list.` : `Made the one thing: ${title}`;
+    if (u.kind === "swap") return u.previous ? `${u.previous.title} is back at the top of the list.` : `${u.fromPlan ? "Moved to Today and made the one thing" : "Made the one thing"}: ${title}`;
     return `${{ done: "Marked done", delete: "Deleted", tomorrow: "Moved to tomorrow", bringback: "Brought back", park: "Parked", restore: "Restored", unpin: "Unpinned" }[u.kind]}: ${title}`;
   };
   const undoText = undo ? undoMessage(undo) : "";
@@ -1015,7 +1027,11 @@ export default function TodayTab({
       // The route comes back only with the pin: if the pin has moved on
       // since, undoOneThing leaves it, and so does this.
       const stillPinned = tasks.some(t => t.uuid === task.uuid && t.isNowFocus);
-      const unpinned = undoOneThing(tasks, task.uuid, undo.previous);
+      const unpinnedOnly = undoOneThing(tasks, task.uuid, undo.previous);
+      // A task brought in from Plan goes back there, if the pin hasn't moved on.
+      const unpinned = undo.fromPlan && stillPinned
+        ? unpinnedOnly.map(t => (t.uuid === task.uuid ? { ...t, ...undo.fromPlan, lastUpdated: Date.now() } : t))
+        : unpinnedOnly;
       if (!undo.route || !stillPinned) {
         savePayload({ ...payload, tasks: unpinned });
         return;
@@ -1357,6 +1373,20 @@ export default function TodayTab({
     ? {
       name: wallKickerFront.name, daysLeft: wallDaysLeft, ...frontProgress(tasks, wallKickerFront.id),
       target: wallKickerFront.id === LEGACY_DEADLINE_FRONT_ID ? wallKickerFront.nextMove || null : null,
+    }
+    : null;
+  // Q57.2: the band opens the goal record. Its days follow the Loci day, as
+  // completions are stamped with it.
+  const goalRecordProps = wallKickerFront
+    ? {
+      record: buildGoalRecord({
+        tasks, goalId: wallKickerFront.id, todayStr,
+        startDay: goalStartDay(wallKickerFront, config), mode: config.goalDaysMode,
+      }),
+      weekdays: config.goalDaysMode === "weekdays",
+      next: nextGoalTask({ tasks, goalId: wallKickerFront.id, todayStr, horizons: horizonsFromConfig(config, todayStr) }),
+      doneToday: goalTaskDoneToday(tasks, wallKickerFront.id, todayStr),
+      onMakeOneThing: (task) => handleMakeOneThing(task),
     }
     : null;
   // A session left running behind the overlay is REOPENED by the wall, not
@@ -1747,7 +1777,10 @@ export default function TodayTab({
       <TodayWall
         task={pinnedFocusTask}
         goal={wallGoal}
-        onOpenGoal={onOpenKeyDeadline}
+        onOpenGoal={wallKickerFront && wallKickerFront.id !== LEGACY_DEADLINE_FRONT_ID
+          ? (onOpenFront ? () => onOpenFront(wallKickerFront.id) : null)
+          : onOpenKeyDeadline}
+        goalRecord={goalRecordProps}
         anchors={config.anchorsOnToday === "off" ? [] : anchors.filter(a => a && typeof a.text === "string" && a.text.trim())}
         focusMinutes={focusBlockSeconds(config) / 60}
         startChoice={config.focusStartChoice}

@@ -42,7 +42,7 @@ function buildFullTaskPrompt(ctx) {
     anchorContext, checkinContext, pendingCheckinContext, deadlineContext, brainDumpContext,
     velocityContext, recentlyParkedContext, recentlyCompletedContext, categoryFilterContext, rescueHandoffContext,
     isEarlyConversation, memorySectionEnabled, nowLabel, timeOfDay,
-    todayActiveCount, streakCount, profileBlock, sessionSummaryContext, pendingSummaryContext,
+    todayActiveCount, profileBlock, sessionSummaryContext, pendingSummaryContext,
   } = ctx;
 
   const staticPrefix = `${lociCoreInstruction}
@@ -164,7 +164,6 @@ ${todaySnapshotContext ? `${todaySnapshotContext}\n\n` : ""}${taskContext}
 ${rescueHandoffContext ? `${rescueHandoffContext}\n` : ""}${focusSessionContext ? `${focusSessionContext}\n` : ""}${nowFocusContext ? `${nowFocusContext}\n` : ""}${dayMapContext ? `${dayMapContext}\n` : ""}${remindersContext ? `${remindersContext}\n` : ""}${anchorContext ? `${anchorContext}\n` : ""}${checkinContext ? `${checkinContext}\n` : ""}${pendingCheckinContext ? `${pendingCheckinContext}\n` : ""}${deadlineContext ? `${deadlineContext}\n` : ""}${brainDumpContext ? `${brainDumpContext}\n` : ""}${velocityContext ? `${velocityContext}\n` : ""}${recentlyParkedContext ? `${recentlyParkedContext}\n` : ""}${recentlyCompletedContext ? `${recentlyCompletedContext}\n` : ""}${categoryFilterContext ? `${categoryFilterContext}\n` : ""}
 SESSION STATS:
 Current Time: ${nowLabel} (${timeOfDay})
-Streak: ${streakCount || 0}-day streak
 Active Tasks Today: ${todayActiveCount} active tasks today.`;
 
   return `${staticPrefix}\n${dynamicSuffix}`;
