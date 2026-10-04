@@ -1155,3 +1155,64 @@
   .wall-title,
   .wall-title[data-len] { font-size: 1.75rem; }
 }
+
+/* — Q58 (67a): the phone's Next strip, 60px above the tab bar: the handle,
+   "NEXT" and the next task, muted, one line; "+" a 56px circle at the right,
+   8px above the tab bar. The Now block sits centred in the space left. — */
+.wall-peek-next { display: none; }
+@media (max-width: 839px) {
+  .today-layout:has(.today-wall.has-quiet:not(.is-open)),
+  .today-layout:has(.today-wall.has-quiet:not(.is-open)) .today-layout-main,
+  .today-wall.has-quiet:not(.is-open) { flex: 1 0 auto; }
+  .today-wall.has-quiet:not(.is-open) .wall-hero { margin-block: auto; }
+  .today-wall.has-quiet:not(.is-open) .wall-foot { min-height: 60px; }
+  .today-wall.has-quiet:not(.is-open) .wall-peek-row {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    z-index: 90;
+    height: 60px;
+    background: var(--bg);
+    border-top: 1px solid var(--line);
+  }
+  .today-wall.has-quiet:not(.is-open) .wall-peek {
+    position: relative;
+    flex-direction: row;
+    justify-content: flex-start;
+    height: 100%;
+    padding: 0 88px 0 20px;
+  }
+  .today-wall.has-quiet:not(.is-open) .wall-peek-grabber {
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .today-wall.has-quiet:not(.is-open) .wall-peek-label { display: none; }
+  .today-wall.has-quiet:not(.is-open) .wall-peek-next {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+    font-size: 0.9375rem;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .wall-peek-next-kicker {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    color: var(--ink-2);
+  }
+  .wall-peek-next-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .today-wall.has-quiet:not(.is-open) .wall-peek-add {
+    right: 16px;
+    bottom: 8px;
+    width: 56px;
+    height: 56px;
+    background: var(--surface);
+    box-shadow: 0 4px 14px rgba(15, 31, 22, 0.12);
+  }
+}

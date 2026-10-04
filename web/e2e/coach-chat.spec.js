@@ -262,11 +262,14 @@ test("Coach actions: the tap really marks the task done on Today", async ({ page
   await expect(reply.getByRole("button", { name: "Mark done" })).toBeVisible();
   // Before the tap, nothing has changed on Today.
   await nav.getByRole("button", { name: "Today", exact: true }).click();
-  await expect(page.locator(".completed-section-title")).toHaveCount(0);
+  await expect(page.locator(".completed-section-title, .today-done-fold")).toHaveCount(0);
   await nav.getByRole("button", { name: "Coach", exact: true }).click();
   await page.locator(".coach-msg.is-coach").last().getByRole("button", { name: "Mark done" }).click();
   await nav.getByRole("button", { name: "Today", exact: true }).click();
-  await expect(page.locator(".completed-section-title")).toBeVisible();
+  await expect(page.locator(".completed-section-title, .today-done-fold")).toBeVisible();
+  // 58.6: on a phone the done task is in the "Done today" fold.
+  const fold = page.locator(".today-done-fold .today-parked-line");
+  if (await fold.count()) await fold.click();
   await expect(page.getByTestId("today-tasks-list")).toContainText(task);
 });
 

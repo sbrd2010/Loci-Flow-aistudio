@@ -382,6 +382,8 @@ test("mobile reliability: the Completed section and 'N done' agree across a day 
   await list.locator("[data-testid='task-row']", { hasText: title }).getByTestId("task-checkbox").click();
   const done = await page.locator(".today-list-count").innerText();
   const doneToday = Number(done.split("·")[1].trim().split(" ")[0]);
+  // 58.6: on a phone the done rows sit in the "Done today" fold.
+  await page.locator(".today-done-fold .today-parked-line").click();
   await expect(list.locator(".task-row.completed")).toHaveCount(doneToday);
 
   // Next day: re-render (flip the filter) and look again.
