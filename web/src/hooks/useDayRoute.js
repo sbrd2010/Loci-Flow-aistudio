@@ -35,8 +35,11 @@ export function getPeriodForMinutes(m) {
   return "night";
 }
 
+// The task's estimate is the one duration: an edit on Today or in the task
+// sheet reaches the Day map. dayMapDurationMinutes is the route's stored copy
+// (written as this value), read only when a task has no estimate.
 export function getEstimate(task) {
-  const raw = Number(task.dayMapDurationMinutes || task.timeEstimateMinutes || task.estimateMinutes || 25);
+  const raw = Number(task.timeEstimateMinutes || task.dayMapDurationMinutes || task.estimateMinutes || 25);
   return clamp(Number.isFinite(raw) ? raw : 25, 10, 360);
 }
 
