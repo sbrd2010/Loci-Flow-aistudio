@@ -124,3 +124,31 @@ test("phone: Up next shows 3, then All N opens the rest; done tasks fold under D
   await fold.click();
   await expect(sheet.locator(".task-row.completed")).toHaveCount(1);
 });
+
+// Codex review of #474: More is modal. Today's keys wait, Tab stays in it,
+// and a horizon hidden in Settings isn't offered.
+test("More: Today's keys don't reach the wall behind it, and Tab stays inside", async ({ page }) => {
+  await enterDemo(page);
+  const title = (await page.locator(".wall-title").innerText()).trim();
+  await openMore(page);
+  await page.keyboard.press("d");
+  await expect(more(page)).toBeVisible();
+  await expect(page.locator(".wall-title")).toHaveText(title);
+  for (let i = 0; i < 8; i++) {
+    await page.keyboard.press("Tab");
+    expect(await more(page).evaluate(el => el.contains(document.activeElement))).toBe(true);
+  }
+});
+
+test("More: Move to leaves out a horizon hidden in Settings", async ({ page }) => {
+  await enterDemo(page);
+  await page.getByRole("button", { name: "Plan", exact: true }).first().click();
+  await page.getByRole("button", { name: "Edit horizons" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit horizons" });
+  await dialog.getByRole("button", { name: "Hide This week" }).click();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Today", exact: true }).first().click();
+  await openMore(page);
+  await more(page).getByRole("button", { name: /^Move to…/ }).click();
+  await expect(more(page).locator(".more-move")).toHaveText(["Tomorrow", "This month"]);
+});

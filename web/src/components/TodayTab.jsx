@@ -49,7 +49,7 @@ import { clearMyDay, undoClearMyDay } from "../utils/clearMyDay";
 import { buildGoalRecord, goalStartDay, goalTaskDoneToday, nextGoalTask } from "../utils/goalRecord";
 import { horizonsFromConfig } from "../utils/horizons";
 import { confirmedMinimumDay } from "../utils/minimumDay";
-import { currentDayMinutes, oneThingToNow, restoreRoute } from "../hooks/useDayRoute";
+import { currentDayMinutes, oneThingToNow, restoreRoute, routeFollowsList } from "../hooks/useDayRoute";
 import MoreSheet from "./MoreSheet";
 import { routeBreaks } from "../utils/dayMapBreaks";
 import { isEventTask } from "../utils/dayMapRoute";
@@ -1249,9 +1249,10 @@ export default function TodayTab({
     if (isFromYesterday(remainingTasks[oldIndex]) !== isFromYesterday(remainingTasks[newIndex])) return;
     const reordered = arrayMove([...remainingTasks], oldIndex, newIndex);
     const orderMap = new Map(reordered.map((t, i) => [getTaskKey(t), i]));
-    savePayload({ ...payload, tasks: tasks.map(t =>
+    // The Day map follows: one order for both.
+    savePayload({ ...payload, tasks: routeFollowsList(tasks.map(t =>
       orderMap.has(getTaskKey(t)) ? { ...t, orderIndex: orderMap.get(getTaskKey(t)), lastUpdated: Date.now() } : t
-    )});
+    ), todayStr, { config, nowMinutes: currentDayMinutes(windows), breaks: routeBreaks(windows, config, todayStr) })});
   };
 
   // One bounded subscription for both figures the wall needs from the ledger:
@@ -1799,7 +1800,7 @@ export default function TodayTab({
   });
 
   const wallKeysBlocked = isFocusMode || isAddTaskDialogOpen || (!!detailUuid && !drawerViewport)
-    || rescueActive || !!frontPickerTask || !!splitTask || (!!dayClosed && !focusSessionActive);
+    || rescueActive || !!frontPickerTask || !!splitTask || moreOpen || (!!dayClosed && !focusSessionActive);
   useEffect(() => {
     if (wallKeysBlocked) return undefined;
     const onKey = (e) => {
@@ -2339,6 +2340,7 @@ export default function TodayTab({
           task={pinnedFocusTask}
           onSplit={() => setSplitTask(pinnedFocusTask)}
           onDetails={() => setDetailUuid(pinnedFocusTask.uuid)}
+          hiddenHorizons={horizonsFromConfig(config, todayStr).filter(h => h.hidden).map(h => h.id)}
           onMove={(dest) => (dest === "tomorrow" ? actOnTask(pinnedFocusTask, "t") : handleMoveWithUndo(pinnedFocusTask, dest))}
           onPark={() => handleParkWithUndo(pinnedFocusTask)}
           onUnpin={() => handleUnpinWithUndo(pinnedFocusTask)}

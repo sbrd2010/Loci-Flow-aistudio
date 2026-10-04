@@ -469,7 +469,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const oldIndex = shown.findIndex(t => getTaskId(t) === active.id);
     const newIndex = shown.findIndex(t => getTaskId(t) === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
-    applyAndSave(arrayMove(shown, oldIndex, newIndex), anchorMinutes);
+    applyAndSave(arrayMove(shown, oldIndex, newIndex), anchorMinutes, null, { listFollows: true });
   };
 
   const n = plan.wontFit.length;
