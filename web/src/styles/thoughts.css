@@ -42,10 +42,12 @@
 }
 /* With a mouse, the actions take the age's place on hover or focus (65a). */
 @media (hover: hover) and (pointer: fine) {
-  .thought-actions { display: none; }
+  /* Visually hidden, not display: none, so Tab still reaches them and
+     focus-within shows them. */
+  .thought-actions { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .thought-row:hover, .thought-row:focus-within { background: var(--surface); }
   .thought-row:hover .thought-age, .thought-row:focus-within .thought-age { display: none; }
-  .thought-row:hover .thought-actions, .thought-row:focus-within .thought-actions { display: flex; }
+  .thought-row:hover .thought-actions, .thought-row:focus-within .thought-actions { position: static; width: auto; height: auto; overflow: visible; clip-path: none; display: flex; }
   .thought-btn { min-height: 32px; }
 }
 /* On touch, each row carries its actions under the text. */
