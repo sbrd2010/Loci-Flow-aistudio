@@ -209,6 +209,14 @@ describe("joinRoute (Q59: every open Today task is on the route)", () => {
     expect(next.find(t => t.uuid === "old").dayMapStartMinutes).toBeUndefined();
   });
 
+  it("keeps an old-format one thing (a period, no order) ahead of a task that joins", () => {
+    const tasks = [
+      today("one", 0, { isNowFocus: true, dayMapDate: DAY, dayMapPeriod: "morning", dayMapStartMinutes: 540 }),
+      today("n", 1),
+    ];
+    expect(ids(joinRoute(tasks, DAY))).toEqual(["one", "n"]);
+  });
+
   it("leaves out done, parked, deleted and moved-to-tomorrow tasks, and does nothing when all are on", () => {
     const tasks = [
       stop("a", 0, 30, { orderIndex: 0 }),

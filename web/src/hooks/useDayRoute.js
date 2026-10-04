@@ -213,12 +213,19 @@ export function oneThingToNow(allTasks, uuid, { todayStr, nowMinutes, breaks = [
 export function joinRoute(allTasks, todayStr) {
   const off = allTasks.filter(t => isOnToday(t, todayStr) && !t.isDeleted && !t.isCompleted && !t.isParked && !isOnRoute(t, todayStr));
   if (!off.length) return null;
-  const orders = allTasks.filter(t => isOnRoute(t, todayStr)).map(t => t.dayMapOrder).filter(Number.isFinite);
+  // Old-format stops (a period, no order) are numbered as the route stands
+  // first, so a task joining goes after them, not ahead (Codex review of #476).
+  const route = allTasks.filter(t => isOnRoute(t, todayStr)).sort(byRouteOrder);
+  const routeOrders = route.map(t => t.dayMapOrder);
+  const base = routeOrders.some(o => o == null) || new Set(routeOrders).size < routeOrders.length
+    ? applyReflow(allTasks, route.map((t, i) => ({ ...t, dayMapOrder: i })))
+    : allTasks;
+  const orders = base.filter(t => isOnRoute(t, todayStr)).map(t => t.dayMapOrder);
   const lo = orders.length ? Math.min(...orders) : 0;
   const hi = orders.length ? Math.max(...orders) : -1;
   const slot = new Map(off.map((t, i) => [getTaskId(t), t.isNowFocus ? lo - 1 : hi + 1 + i]));
   const now = Date.now();
-  const joined = allTasks.map(t => {
+  const joined = base.map(t => {
     if (!slot.has(getTaskId(t))) return t;
     const { dayMapPeriod, dayMapStartMinutes, dayMapFixedMinutes, ...rest } = t;
     return { ...rest, dayMapDate: todayStr, dayMapOrder: slot.get(getTaskId(t)), lastUpdated: now };
