@@ -1,15 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
-import RescueMode from "./RescueMode";
-import ConfirmDialog from "./ConfirmDialog";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTaskSubSteps, CATEGORY_ICONS } from "../utils/taskOps";
 import { submitOnEnter } from "../utils/formEvents";
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
-import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
-import { buildTaskMutationEvent, buildFocusTerminalEvent, eventsPatch } from "../utils/activityLog";
-import { isOnToday } from "../utils/deferral";
-import { isEventTask } from "../utils/dayMapRoute";
+import { getFocusWindows } from "../utils/focusWindows";
+import { buildTaskMutationEvent, eventsPatch } from "../utils/activityLog";
 import { THOUGHTS_MAX, addThought, letGoThought, restoreThought } from "../utils/thoughts";
 import ThoughtsList from "./ThoughtsList";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
@@ -42,23 +38,6 @@ function IconLifeBuoy() {
     </svg>
   );
 }
-function IconRefreshCw() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="23 4 23 10 17 10"/>
-      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-    </svg>
-  );
-}
-function IconFeather() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/>
-      <line x1="16" y1="8" x2="2" y2="22"/>
-      <line x1="17.5" y1="15" x2="9" y2="15"/>
-    </svg>
-  );
-}
 function IconInbox() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -75,8 +54,8 @@ function IconChevronRight() {
   );
 }
 
-export default function MindBoxTab({ payload, savePayload, savePayloadAsync, saveConfigPatch, userProfile, initialPanel, onMakeThoughtTask, isSyncingFromCache = false, syncWarning = null, uid, writeActivityEvents, focusTimer = {} }) {
-  const { tasks = [], config = {} } = payload;
+export default function MindBoxTab({ payload, savePayload, savePayloadAsync, saveConfigPatch, userProfile, initialPanel, onMakeThoughtTask, onOpenRescue, isSyncingFromCache = false, syncWarning = null, uid, writeActivityEvents, focusTimer = {} }) {
+  const { config = {} } = payload;
   const windows = getFocusWindows(config);
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -94,10 +73,7 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
   const stepEndAtRef = useRef(null);
   const [showRescue, setShowRescue] = useState(false);
   const [rescueStepIndex, setRescueStepIndex] = useState(0);
-  const [rescueActive, setRescueActive] = useState(false);
-  const [rescueTask, setRescueTask] = useState(null);
   const [brainDumpText, setBrainDumpText] = useState("");
-  const [confirmDialog, setConfirmDialog] = useState(null);
   const [organizeLoading, setOrganizeLoading] = useState(false);
   const [organizeResults, setOrganizeResults] = useState([]);
   // Tracked separately from organizeResults — updateOrganizeResult/moveOrganizeResult
@@ -182,145 +158,8 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
   const dumpCount = (payload.brainDump || []).length;
 
   // ── Handlers ───────────────────────────────────────────────────────────────
-  const openRescueMode = () => {
-    const pinned = tasks.find(t => !t.isDeleted && !t.isCompleted && t.isNowFocus);
-    // Q36.3: a call at a set time is never Rescue's one task.
-    const first = tasks.find(t => !t.isDeleted && !t.isCompleted && !isEventTask(t));
-    setRescueTask(pinned || first || null);
-    setRescueActive(true);
-  };
-
-
-  const setRescueTaskAsNowFocus = ({ close = false } = {}) => {
-    if (close) setRescueActive(false);
-    // Q36.3: something at a set time is never the focus (Codex review of #431).
-    if (!rescueTask || isEventTask(rescueTask)) return;
-    const now = Date.now();
-    // Retargeting focus to rescueTask clears isNowFocus on whichever task
-    // currently holds it — end that task's open session first, or it's left
-    // orphaned with no terminal event (same gap fixed for Coach's focus chips).
-    const previouslyFocused = tasks.find(t => t.uuid !== rescueTask.uuid && t.isNowFocus);
-    const endedFocusSession = previouslyFocused && typeof focusTimer.endFocusSession === "function"
-      ? focusTimer.endFocusSession("user_abandoned")
-      : null;
-    // Retargeting to a DIFFERENT task doesn't make activeTask null, so the
-    // hook's own "stop timer when activeTask disappears" effects never fire.
-    if (endedFocusSession) {
-      focusTimer.setIsTimerRunning?.(false);
-      focusTimer.setIsFocusMode?.(false);
-      focusTimer.setFocusSessionActive?.(false);
-    }
-    // This can also unpark rescueTask (see below) — record that transition too.
-    const wasParked = !!rescueTask.isParked;
-    savePayloadAsync({ ...payload, tasks: tasks.map(t => {
-      const newFocus = t.uuid === rescueTask.uuid;
-      if (!newFocus) {
-        if (!t.isNowFocus) return t;
-        return { ...t, isNowFocus: false, lastUpdated: now };
-      }
-      // Also clear isParked — a task Rescue parked earlier in the same
-      // session (or previously) would otherwise become a hidden focus task:
-      // todayTasksAll filters parked tasks out of view, but useFocusTimer
-      // still treats any non-deleted, non-completed isNowFocus task as active.
-      if (t.isNowFocus && !t.isParked) return t;
-      return { ...t, isNowFocus: true, isParked: false, lastUpdated: now };
-    }) })
-      .then(() => {
-        const events = [];
-        if (endedFocusSession) {
-          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
-        }
-        if (wasParked) {
-          events.push(buildTaskMutationEvent("task_unparked", rescueTask, { windows, now }));
-        }
-        if (events.length > 0) writeActivityEvents(eventsPatch(uid, events));
-      })
-      .catch(() => {});
-  };
-
-  const parkRescueTask = () => {
-    if (!rescueTask) return;
-    const now = Date.now();
-    const event = buildTaskMutationEvent("task_parked", rescueTask, { windows, now });
-    // Rescue often opens on the actively focused task — parking it clears
-    // isNowFocus below without ending its session, same gap fixed elsewhere.
-    const endedFocusSession = rescueTask.isNowFocus && typeof focusTimer.endFocusSession === "function"
-      ? focusTimer.endFocusSession("user_abandoned")
-      : null;
-    savePayloadAsync({ ...payload, tasks: tasks.map(t => (
-      t.uuid === rescueTask.uuid
-        ? { ...t, isParked: true, parkedAt: now, isNowFocus: false, lastUpdated: now }
-        : t
-    )) })
-      .then(() => {
-        const events = [event];
-        if (endedFocusSession) {
-          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
-        }
-        writeActivityEvents(eventsPatch(uid, events));
-      })
-      .catch(() => {});
-  };
-
-  const handleBadDayReset = () => {
-    setConfirmDialog({
-      message: "Park all active tasks for today?\n\nThis is a restart without shame — everything moves to parked. Restore them from Parked, at the bottom of Today's list, whenever you're ready.",
-      confirmLabel: "Yes, restart", cancelLabel: "Not now",
-      onConfirm: () => {
-        // Only tasks that actually transition from unparked to parked count
-        // as a task_parked event — a task already parked before this reset
-        // isn't changed by it (the core write below is a harmless no-op for
-        // it), so including it here would overcount parking actions.
-        const actionAt = Date.now();
-        const affected = tasks.filter(t => !t.isCompleted && !t.isDeleted && !t.isParked);
-        const events = affected.map((t) => buildTaskMutationEvent("task_parked", t, { windows, now: actionAt }));
-        // This batch parks every active task, including whichever one is
-        // actively focused — end its session or it's left open with no
-        // terminal event. Search ALL non-completed/non-deleted tasks here,
-        // not just `affected` — `affected` deliberately excludes tasks
-        // already parked (to avoid overcounting task_parked events), but the
-        // core write below clears isNowFocus on every non-completed/
-        // non-deleted task regardless of prior isParked state, and a task can
-        // legitimately be isParked && isNowFocus at once (see the same
-        // "hidden focus task" note in setRescueTaskAsNowFocus below).
-        const focusedTask = tasks.find(t => !t.isCompleted && !t.isDeleted && t.isNowFocus);
-        const endedFocusSession = focusedTask && typeof focusTimer.endFocusSession === "function"
-          ? focusTimer.endFocusSession("user_abandoned")
-          : null;
-        if (endedFocusSession) {
-          // Use endedFocusSession.task, not focusedTask — see the same fix
-          // in TodayTab/RoadmapTab for why these can diverge.
-          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now: actionAt }));
-        }
-        savePayloadAsync({ ...payload, tasks: tasks.map(t => (!t.isCompleted && !t.isDeleted) ? { ...t, isParked: true, parkedAt: t.isParked && t.parkedAt ? t.parkedAt : Date.now(), isNowFocus: false, lastUpdated: Date.now() } : t) })
-          .then(() => writeActivityEvents(eventsPatch(uid, events)))
-          .catch(() => {});
-        setConfirmDialog(null);
-      },
-      onCancel: () => setConfirmDialog(null)
-    });
-  };
-
-  const handleCleanSlate = () => {
-    setConfirmDialog({
-      message: "Move today's unfinished tasks to this week?\n\nNothing is lost — you'll find them in Roadmap → This Week. Fresh start, no shame.",
-      confirmLabel: "Fresh start", cancelLabel: "Keep today",
-      onConfirm: () => {
-        const affected = tasks.filter(t => !t.isCompleted && !t.isDeleted && isOnToday(t, getLociDayStr(new Date(), windows)));
-        const events = affected.map((t) => buildTaskMutationEvent("task_moved", t, {
-          fromState: { horizonLevel: "today" }, toState: { horizonLevel: "week" }, windows,
-        }));
-        savePayloadAsync({ ...payload, tasks: tasks.map(t =>
-          (!t.isCompleted && !t.isDeleted && isOnToday(t, getLociDayStr(new Date(), windows)))
-            ? { ...t, horizonLevel: "week", lastUpdated: Date.now() } : t
-        )})
-          .then(() => writeActivityEvents(eventsPatch(uid, events)))
-          .catch(() => {});
-        setConfirmDialog(null);
-      },
-      onCancel: () => setConfirmDialog(null)
-    });
-  };
+  // Rescue opens over Today, where focus can start (Q55.3); Leave comes back.
+  const openRescueMode = () => onOpenRescue?.();
 
   const handleOrganizeDump = async () => {
     const brainDumpItems = payload.brainDump || [];
@@ -918,14 +757,6 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
               </span>
               <span className="mindbox-card-chevron"><IconChevronRight /></span>
             </button>
-            <button className="mindbox-card" onClick={handleBadDayReset}>
-              <span className="mindbox-card-icon mindbox-card-icon--secondary"><IconRefreshCw /></span>
-              <span className="mindbox-card-body">
-                <span className="mindbox-card-title">Bad Day Reset</span>
-                <span className="mindbox-card-sub">Restart without shame</span>
-              </span>
-              <span className="mindbox-card-chevron"><IconChevronRight /></span>
-            </button>
             <button className="mindbox-card" onClick={() => setToolPanel("anchors")} style={{ gridColumn: "span 2" }}>
               <span className="mindbox-card-icon mindbox-card-icon--accent" style={{ fontSize: "18px", lineHeight: 1 }}>&#128204;</span>
               <span className="mindbox-card-body">
@@ -935,14 +766,6 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
                     ? "Add your daily principles"
                     : `${(config.dailyAnchors || []).length} anchor${(config.dailyAnchors || []).length === 1 ? "" : "s"}`}
                 </span>
-              </span>
-              <span className="mindbox-card-chevron"><IconChevronRight /></span>
-            </button>
-            <button className="mindbox-card" onClick={handleCleanSlate} style={{ gridColumn: "span 2" }}>
-              <span className="mindbox-card-icon mindbox-card-icon--success"><IconFeather /></span>
-              <span className="mindbox-card-body">
-                <span className="mindbox-card-title">Clean Slate</span>
-                <span className="mindbox-card-sub">Move today's tasks to this week — nothing lost, fresh start</span>
               </span>
               <span className="mindbox-card-chevron"><IconChevronRight /></span>
             </button>
@@ -968,27 +791,6 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
         </div>
       )}
 
-      {/* Rescue Mode v2 */}
-      {rescueActive && (
-        <RescueMode
-          task={rescueTask}
-          allTasks={tasks}
-          firstName={(config.userName || "").split(" ")[0] || "friend"}
-          config={config}
-          entryPoint="mindbox"
-          includeMemory={!(isSyncingFromCache || syncWarning === "offline")}
-          isSyncingFromCache={isSyncingFromCache}
-          syncWarning={syncWarning}
-          apiKey={getAIKeys().geminiKey}
-          onDismiss={() => setRescueActive(false)}
-          onHandoffSummary={(summary) => saveConfigPatch?.({ rescueHandoffSummary: summary })}
-          onSetNowFocus={() => setRescueTaskAsNowFocus()}
-          onParkTask={parkRescueTask}
-          onAccept={() => setRescueTaskAsNowFocus({ close: true })}
-        />
-      )}
-
-      {confirmDialog && <ConfirmDialog {...confirmDialog} />}
       <UndoAnnouncer message={letGoUndo ? (letGoUndo.full ? "Mind Box is full. Let one go to bring this back" : `Let go: ${letGoUndo.item.text}`) : ""} />
       {letGoUndo && (
         <UndoToast

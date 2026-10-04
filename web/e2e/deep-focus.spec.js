@@ -28,6 +28,13 @@ async function openRescue(page) {
   await page.getByRole("button", { name: "Open Rescue" }).click();
 }
 
+// Rescue (Q55.3): pick a state, skip the minute of breathing, land on step 3.
+async function pickState(page, name) {
+  await page.getByRole("button", { name }).click();
+  await page.getByRole("button", { name: "Skip", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Try one of these." })).toBeVisible({ timeout: 5_000 });
+}
+
 async function expectNoHorizontalOverflow(page) {
   const widths = await page.evaluate(() => {
     const measured = [
@@ -97,7 +104,7 @@ test("mobile reliability: Rescue Mode is reachable from Today, and I'm stuck ins
   // Today: Open Rescue opens the same triage flow Mind Box's button opens.
   await openRescue(page);
   await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
-  await page.getByText("Exit rescue mode").click();
+  await page.getByRole("button", { name: /^Leave/ }).click();
   await expect(page.getByRole("heading", { name: "What's happening right now?" })).not.toBeVisible({ timeout: 5_000 });
 
   // Start a Deep Focus session, then reach Rescue Mode from inside it.
@@ -148,8 +155,8 @@ test("mobile reliability: Rescue chat never reaches the AI provider on crisis la
 
   await openRescue(page);
   await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
-  await page.getByText("Anxious / can't start").click();
-  await page.getByText("Talk it through").click();
+  await pickState(page, /^Anxious, can/);
+  await page.getByRole("button", { name: /^Talk it through with Coach/ }).click();
 
   // Opening chat sends a non-crisis opener ("I'm stuck and need help.") that legitimately
   // reaches the AI — wait for that real call to land before testing the safety short-circuit.
@@ -174,8 +181,8 @@ test("mobile reliability: Rescue chat action tag starts an in-rescue timer", asy
   });
 
   await openRescue(page);
-  await page.getByText("Low energy / fog").click();
-  await page.getByText("Talk to AI Coach").click();
+  await pickState(page, /^Low energy, foggy/);
+  await page.getByRole("button", { name: "Talk it through with Coach" }).click();
 
   await expect(page.getByText("Relax. You'll start when this ends.")).toBeVisible({ timeout: 5_000 });
 });
@@ -191,13 +198,13 @@ test("mobile reliability: Rescue chat is reachable again after skipping an AI-st
   });
 
   await openRescue(page);
-  await page.getByText("Low energy / fog").click();
-  await page.getByText("Talk to AI Coach").click();
+  await pickState(page, /^Low energy, foggy/);
+  await page.getByRole("button", { name: "Talk it through with Coach" }).click();
   // The action tag moves the user from chat to the timer screen.
   await expect(page.getByText("Relax. You'll start when this ends.")).toBeVisible({ timeout: 5_000 });
 
   await page.getByRole("button", { name: "Skip timer" }).click();
-  await page.getByText("Talk to AI Coach").click();
+  await page.getByRole("button", { name: "Talk it through with Coach" }).click();
   // Regression: chatStarted only guards the opener message, not navigation —
   // this must actually land back on the chat screen, not silently no-op.
   await expect(page.getByPlaceholder("Tell me what's going on…")).toBeVisible({ timeout: 5_000 });
@@ -221,11 +228,11 @@ test("mobile reliability: Rescue does not park the task on an unprompted action 
   // message ("I'm stuck and need help.") never asks to park/defer/skip it —
   // filterApplicableRescueActions (rescueCoachPrompt.js) must block the tag.
   await openRescue(page);
-  await page.getByText("Too much going on").click();
-  await page.getByText("Talk to AI Coach").click();
+  await pickState(page, /^Too much going on/);
+  await page.getByRole("button", { name: "Talk it through with Coach" }).click();
   await expect(page.getByText("Let's take a break from it.")).toBeVisible({ timeout: 5_000 });
 
-  await page.getByText("Exit rescue mode").click();
+  await page.getByRole("button", { name: /^Leave/ }).click();
   await expect(pinnedSection).toContainText("Reply to the important message sitting in your inbox", { timeout: 5_000 });
 });
 
@@ -246,15 +253,15 @@ test("mobile reliability: Rescue ignores an action tag that resolves after the u
   await expect(pinnedSection).toContainText("Reply to the important message sitting in your inbox");
 
   await openRescue(page);
-  await page.getByText("Too much going on").click();
-  await page.getByText("Talk to AI Coach").click();
+  await pickState(page, /^Too much going on/);
+  await page.getByRole("button", { name: "Talk it through with Coach" }).click();
 
   // A message that DOES match park intent — if the reply arrived before exit,
   // this would legitimately park the task. It resolves only after Rescue is
   // dismissed below, so the mountedRef guard in RescueMode.jsx must drop it.
   await page.getByPlaceholder("Tell me what's going on…").fill("let's park this for later");
-  await page.getByRole("button", { name: "↑" }).click();
-  await page.getByText("Exit rescue mode").click();
+  await page.getByRole("button", { name: "Send" }).click();
+  await page.getByRole("button", { name: /^Leave/ }).click();
 
   await page.waitForTimeout(2_000);
   await expect(pinnedSection).toContainText("Reply to the important message sitting in your inbox", { timeout: 5_000 });
@@ -273,12 +280,12 @@ test("mobile reliability: Rescue safety short-circuit does not call AI again", a
   });
 
   await openRescue(page);
-  await page.getByText("Anxious / can't start").click();
-  await page.getByText("Talk it through").click();
+  await pickState(page, /^Anxious, can/);
+  await page.getByRole("button", { name: /^Talk it through with Coach/ }).click();
   await expect(page.getByText("I’m here with you.")).toBeVisible({ timeout: 5_000 });
 
   await page.getByPlaceholder("Tell me what's going on…").fill("I might hurt myself");
-  await page.getByRole("button", { name: "↑" }).click();
+  await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByText("emergency services")).toBeVisible({ timeout: 5_000 });
   expect(aiCalls).toBe(1);
 });
@@ -306,12 +313,12 @@ test("mobile reliability: Opening Rescue chat without typing still hands off con
 
   await openRescue(page);
   await expect(page.getByRole("heading", { name: "What's happening right now?" })).toBeVisible({ timeout: 5_000 });
-  await page.getByText("Too much going on").click();
-  await page.getByText("Talk to AI Coach").click();
+  await pickState(page, /^Too much going on/);
+  await page.getByRole("button", { name: "Talk it through with Coach" }).click();
 
   // Wait for the opener's real AI call to land, then leave without typing anything.
   await expect.poll(() => groqRequestBodies.length, { timeout: 8_000 }).toBeGreaterThan(0);
-  await page.getByText("Exit rescue mode").click();
+  await page.getByRole("button", { name: /^Leave/ }).click();
   await expect(page.getByRole("heading", { name: "What's happening right now?" })).not.toBeVisible({ timeout: 5_000 });
 
   groqRequestBodies.length = 0;

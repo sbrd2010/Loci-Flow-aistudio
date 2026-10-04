@@ -63,6 +63,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("today");
   const [pendingCheckinSlot, setPendingCheckinSlot] = useState(null);
   const [mindBoxInitialPanel, setMindBoxInitialPanel] = useState(null);
+  // Q55.3: Mind Box opens Rescue over Today; Leave comes back to Mind Box.
+  const [rescueRequest, setRescueRequest] = useState(null);
   // Settings opened at a page (Q49: the goal band opens Key deadline); the
   // gear opens its list.
   const [settingsInitialPage, setSettingsInitialPage] = useState(null);
@@ -1443,6 +1445,9 @@ export default function App() {
         {activeTab === "today" && (
           <TodayTab
             onOpenKeyDeadline={() => { handleTabSelect("settings"); setSettingsInitialPage("goal"); }}
+            rescueRequest={rescueRequest}
+            onRescueRequestOpened={() => setRescueRequest(null)}
+            onRescueClosed={() => handleTabSelect("mindbox")}
             onOpenFront={(id) => { handleTabSelect("roadmap"); setPlanFrontId(id); }}
             reviewLine={reviewLine}
             closeLine={closeLine}
@@ -1555,7 +1560,7 @@ export default function App() {
           />
           </div>
         )}
-        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onMakeThoughtTask={openThoughtAsTask} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} uid={activityUid} writeActivityEvents={writeActivityEvents} focusTimer={focusTimer} />}
+        {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onMakeThoughtTask={openThoughtAsTask} onOpenRescue={(state) => { handleTabSelect("today"); setRescueRequest({ at: Date.now(), state: typeof state === "string" ? state : null }); }} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} uid={activityUid} writeActivityEvents={writeActivityEvents} focusTimer={focusTimer} />}
         {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} stuck={coachStuck} onClearStuck={() => setCoachStuck(null)} onBackToFocus={focusTimer.focusSessionActive && focusTimer.activeTask ? handleReturnToFocus : null} onOpenPrivacy={() => { handleTabSelect("settings"); setSettingsInitialPage("privacy"); }} />}
         {activeTab === "settings" && (
           <SettingsTab
