@@ -123,6 +123,61 @@ function byRouteOrder(a, b) {
   return (a.dayMapStartMinutes ?? 0) - (b.dayMapStartMinutes ?? 0);
 }
 
+// One order for the Today list and the Day map (Rohan, 4 Oct 2026). Each keeps
+// its own field (orderIndex for the list, dayMapOrder for the route), so a
+// drag in one is copied to the other: the tasks on both take the other's
+// slots, in the new order. Only flowing stops count: a fixed stop keeps its
+// time, and the one thing sits above the list and at NOW on the route.
+function sharedStops(tasks, todayStr) {
+  return tasks.filter(t => isOnRoute(t, todayStr) && !isFixedStop(t) && !t.isNowFocus);
+}
+function giveSlots(tasks, members, slotOf, field) {
+  if (members.length < 2) return tasks;
+  const slots = members.map(slotOf).sort((a, b) => a - b);
+  const next = new Map(members.map((t, i) => [getTaskId(t), slots[i]]));
+  const now = Date.now();
+  return tasks.map(t => {
+    const id = getTaskId(t);
+    return next.has(id) && t[field] !== next.get(id) ? { ...t, [field]: next.get(id), lastUpdated: now } : t;
+  });
+}
+// Where the route starts: From if set today, else its earliest flowing stop,
+// else now; never before now.
+export function routeAnchor(scheduled, config, todayStr, now) {
+  if (config.dayMapDate === todayStr && config.dayMapAnchorMinutes != null) {
+    return Math.max(now, Number(config.dayMapAnchorMinutes));
+  }
+  // The earliest stop that flows: a fixed one keeps its own time, and a
+  // pulled-forward one can start before the first in the route's order.
+  const starts = scheduled.filter(t => !isFixedStop(t) && t.dayMapStartMinutes != null).map(t => Number(t.dayMapStartMinutes));
+  return starts.length > 0 ? Math.max(now, Math.min(...starts)) : now;
+}
+
+// After a drag on Today: the route takes the list's order (moved from
+// yesterday first, as the list shows them), and is timed again from its
+// start, so no stored time (which Coach reads) is left on the old order.
+export function routeFollowsList(tasks, todayStr, { config = {}, nowMinutes, breaks = [] } = {}) {
+  const route = tasks.filter(t => isOnRoute(t, todayStr)).sort(byRouteOrder);
+  // Old-format stops (a period, no order) share no slots to swap: number the
+  // route as it stands first.
+  const orders = route.map(t => t.dayMapOrder);
+  const numbered = orders.some(o => o == null) || new Set(orders).size < orders.length
+    ? applyReflow(tasks, route.map((t, i) => ({ ...t, dayMapOrder: i })))
+    : tasks;
+  const fromYesterday = (t) => (t.deferredUntil === todayStr ? 1 : 0);
+  const members = sharedStops(numbered, todayStr)
+    .sort((a, b) => (fromYesterday(b) - fromYesterday(a)) || ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)));
+  const next = giveSlots(numbered, members, t => t.dayMapOrder, "dayMapOrder");
+  if (nowMinutes == null || next.every((t, i) => t === tasks[i])) return next;
+  const reordered = next.filter(t => isOnRoute(t, todayStr)).sort(byRouteOrder);
+  return applyReflow(next, reflowRoute(reordered, routeAnchor(route, config, todayStr, nowMinutes), todayStr, breaks));
+}
+// After a drag on the Day map: the list takes the route's order.
+export function listFollowsRoute(tasks, todayStr) {
+  const members = sharedStops(tasks, todayStr).sort(byRouteOrder);
+  return giveSlots(tasks, members, t => t.orderIndex ?? 0, "orderIndex");
+}
+
 // Undo of a route change (Clear route, a one thing moved to NOW): the stops
 // come back first, in their old order, then anything added since; and the
 // whole route is timed again, so no two stops share an order or a start and
@@ -189,17 +244,9 @@ export function useDayRoute({ payload, savePayload }) {
 
   // Start: config-persisted → inferred from the first stop → now. Clamped to
   // now so a stored past value never produces a past start time.
-  const anchorMinutes = useMemo(() => {
-    const now = currentDayMinutes(windows);
-    if (config.dayMapDate === todayStr && config.dayMapAnchorMinutes != null) {
-      return Math.max(now, Number(config.dayMapAnchorMinutes));
-    }
-    // The earliest stop that flows: a fixed one keeps its own time, and a
-    // pulled-forward one can start before the first in the route's order.
-    const starts = scheduledTasks.filter(t => !isFixedStop(t) && t.dayMapStartMinutes != null).map(t => Number(t.dayMapStartMinutes));
-    if (starts.length > 0) return Math.max(now, Math.min(...starts));
-    return now;
-  }, [config.dayMapDate, config.dayMapAnchorMinutes, scheduledTasks, todayStr, windows]);
+  const anchorMinutes = useMemo(() => (
+    routeAnchor(scheduledTasks, config, todayStr, currentDayMinutes(windows))
+  ), [config.dayMapDate, config.dayMapAnchorMinutes, scheduledTasks, todayStr, windows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The route as laid out: its rows (stops, breaks, free time) in time order,
   // and its stops in that order, each with where it starts and ends (a task
@@ -229,10 +276,11 @@ export function useDayRoute({ payload, savePayload }) {
   const latestTasks = () => payloadRef.current?.tasks || [];
 
   // Reflow ordered tasks from the start and save everything in one write.
-  const applyAndSave = (orderedScheduled, anchor, configPatch = null) => {
+  const applyAndSave = (orderedScheduled, anchor, configPatch = null, { listFollows = false } = {}) => {
     const reflowed = reflowRoute(orderedScheduled, anchor, todayStr, breaks);
     const p = payloadRef.current;
-    const update = { ...p, tasks: applyReflow(latestTasks(), reflowed), timestamp: Date.now() };
+    const laid = applyReflow(latestTasks(), reflowed);
+    const update = { ...p, tasks: listFollows ? listFollowsRoute(laid, todayStr) : laid, timestamp: Date.now() };
     if (configPatch) {
       update.config = { ...(p?.config || {}), ...configPatch, lastUpdated: Date.now() };
     }

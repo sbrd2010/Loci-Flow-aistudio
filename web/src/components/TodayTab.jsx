@@ -49,7 +49,7 @@ import { clearMyDay, undoClearMyDay } from "../utils/clearMyDay";
 import { buildGoalRecord, goalStartDay, goalTaskDoneToday, nextGoalTask } from "../utils/goalRecord";
 import { horizonsFromConfig } from "../utils/horizons";
 import { confirmedMinimumDay } from "../utils/minimumDay";
-import { currentDayMinutes, oneThingToNow, restoreRoute } from "../hooks/useDayRoute";
+import { currentDayMinutes, oneThingToNow, restoreRoute, routeFollowsList } from "../hooks/useDayRoute";
 import { routeBreaks } from "../utils/dayMapBreaks";
 import { isEventTask } from "../utils/dayMapRoute";
 import { bringBack, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
@@ -1240,9 +1240,10 @@ export default function TodayTab({
     if (isFromYesterday(remainingTasks[oldIndex]) !== isFromYesterday(remainingTasks[newIndex])) return;
     const reordered = arrayMove([...remainingTasks], oldIndex, newIndex);
     const orderMap = new Map(reordered.map((t, i) => [getTaskKey(t), i]));
-    savePayload({ ...payload, tasks: tasks.map(t =>
+    // The Day map follows: one order for both.
+    savePayload({ ...payload, tasks: routeFollowsList(tasks.map(t =>
       orderMap.has(getTaskKey(t)) ? { ...t, orderIndex: orderMap.get(getTaskKey(t)), lastUpdated: Date.now() } : t
-    )});
+    ), todayStr, { config, nowMinutes: currentDayMinutes(windows), breaks: routeBreaks(windows, config, todayStr) })});
   };
 
   // One bounded subscription for both figures the wall needs from the ledger:
