@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { oneThingToNow, restoreRoute } from "./useDayRoute";
+import { getEstimate, oneThingToNow, restoreRoute, routeIsContiguous } from "./useDayRoute";
 
 const DAY = "2026-09-29";
 const stop = (uuid, order, minutes, extra = {}) => ({
@@ -104,5 +104,20 @@ describe("hasHeadGap", () => {
   });
   it("no flowing stops, no gap", () => {
     expect(hasHeadGap([], 900, DAY, lunch)).toBe(false);
+  });
+});
+
+describe("getEstimate", () => {
+  it("reads the task's estimate before the route's stored copy", () => {
+    // Estimate changed on Today (45) after the route stored 25.
+    expect(getEstimate({ timeEstimateMinutes: 45, dayMapDurationMinutes: 25 })).toBe(45);
+    expect(getEstimate({ dayMapDurationMinutes: 30 })).toBe(30);
+    expect(getEstimate({})).toBe(25);
+  });
+  it("a changed estimate makes the stored route out of date, so it is timed again", () => {
+    const a = { uuid: "a", dayMapOrder: 0, dayMapStartMinutes: 540, dayMapDurationMinutes: 25, timeEstimateMinutes: 25 };
+    const b = { uuid: "b", dayMapOrder: 1, dayMapStartMinutes: 570, dayMapDurationMinutes: 25, timeEstimateMinutes: 25 };
+    expect(routeIsContiguous([a, b])).toBe(true);
+    expect(routeIsContiguous([{ ...a, timeEstimateMinutes: 60 }, b])).toBe(false);
   });
 });
