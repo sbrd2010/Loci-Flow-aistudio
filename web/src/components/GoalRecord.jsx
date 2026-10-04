@@ -76,6 +76,9 @@ export default function GoalRecord({ goal, record, weekdays = false, next = null
   // scrolled, a downward drag scrolls it back instead.
   const drag = useRef(null);
   const onPointerDown = (e) => {
+    // A gesture the browser took over for scrolling ends in pointercancel,
+    // not pointerup: start each one clean so an old start can't close it.
+    drag.current = null;
     if (!wide && !(panelRef.current?.querySelector(".gr-body")?.scrollTop > 0)) drag.current = e.clientY;
   };
   const onPointerUp = (e) => {
@@ -100,6 +103,7 @@ export default function GoalRecord({ goal, record, weekdays = false, next = null
         style={maxHeight != null ? { maxHeight } : undefined}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
+        onPointerCancel={() => { drag.current = null; }}
       >
         <div className="gr-body">
           {!wide && (
