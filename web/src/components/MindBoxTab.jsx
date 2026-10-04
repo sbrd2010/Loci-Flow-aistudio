@@ -2,57 +2,15 @@ import React, { useState, useEffect, useRef } from "react";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTaskSubSteps, CATEGORY_ICONS } from "../utils/taskOps";
-import { submitOnEnter } from "../utils/formEvents";
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
 import { getFocusWindows } from "../utils/focusWindows";
 import { buildTaskMutationEvent, eventsPatch } from "../utils/activityLog";
 import { THOUGHTS_MAX, addThought, letGoThought, restoreThought } from "../utils/thoughts";
 import ThoughtsList from "./ThoughtsList";
+import { RESCUE_STATES } from "./RescueMode";
+import "../styles/mindBox.css";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import "../styles/thoughts.css";
-
-function IconSun() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="5"/>
-      <line x1="12" y1="1" x2="12" y2="3"/>
-      <line x1="12" y1="21" x2="12" y2="23"/>
-      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
-      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-      <line x1="1" y1="12" x2="3" y2="12"/>
-      <line x1="21" y1="12" x2="23" y2="12"/>
-      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-    </svg>
-  );
-}
-function IconLifeBuoy() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10"/>
-      <circle cx="12" cy="12" r="4"/>
-      <line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/>
-      <line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/>
-      <line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/>
-      <line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/>
-    </svg>
-  );
-}
-function IconInbox() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
-      <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
-    </svg>
-  );
-}
-function IconChevronRight() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="9 18 15 12 9 6"/>
-    </svg>
-  );
-}
 
 export default function MindBoxTab({ payload, savePayload, savePayloadAsync, saveConfigPatch, userProfile, initialPanel, onMakeThoughtTask, onOpenRescue, isSyncingFromCache = false, syncWarning = null, uid, writeActivityEvents, focusTimer = {} }) {
   const { config = {} } = payload;
@@ -71,8 +29,6 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
   const [ritualSuccess, setRitualSuccess] = useState(false);
   const ritualIntervalRef = useRef(null);
   const stepEndAtRef = useRef(null);
-  const [showRescue, setShowRescue] = useState(false);
-  const [rescueStepIndex, setRescueStepIndex] = useState(0);
   const [brainDumpText, setBrainDumpText] = useState("");
   const [organizeLoading, setOrganizeLoading] = useState(false);
   const [organizeResults, setOrganizeResults] = useState([]);
@@ -94,14 +50,6 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
     { name: "Pick your very first action NOW", seconds: 30 }
   ];
   const formatRitualTime = secs => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
-
-  // ── Rescue steps ───────────────────────────────────────────────────────────
-  const rescueSteps = [
-    "Take one deep breath. Breathe in for 4, hold for 4, out for 4.",
-    "What is the laughably smallest first step? A single sentence counts.",
-    "Close all tabs that aren't this task right now.",
-    "Commit to just 2 minutes. You can stop after that."
-  ];
 
   useEffect(() => {
     setEditedAnchors(config.dailyAnchors || []);
@@ -144,11 +92,12 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
 
   useEffect(() => {
     if (ritualDone) {
+      saveConfigPatch?.({ morningRitualDoneAt: Date.now() });
       setRitualDone(false);
       setRitualSuccess(true);
       setTimeout(() => setRitualSuccess(false), 3500);
     }
-  }, [ritualDone]);
+  }, [ritualDone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── AI keys ────────────────────────────────────────────────────────────────
   const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
@@ -158,9 +107,6 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
   const dumpCount = (payload.brainDump || []).length;
 
   // ── Handlers ───────────────────────────────────────────────────────────────
-  // Rescue opens over Today, where focus can start (Q55.3); Leave comes back.
-  const openRescueMode = () => onOpenRescue?.();
-
   const handleOrganizeDump = async () => {
     const brainDumpItems = payload.brainDump || [];
     if (!brainDumpItems.length) return;
@@ -325,11 +271,6 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
     setLetGoUndo({ item: gone.item, at: gone.at, key: Date.now() });
   };
 
-  const handleNextRescueStep = () => {
-    if (rescueStepIndex < rescueSteps.length - 1) setRescueStepIndex(rescueStepIndex + 1);
-    else { setShowRescue(false); setRescueStepIndex(0); }
-  };
-
   const handleAdvanceRitualStep = () => {
     clearInterval(ritualIntervalRef.current);
     const { done, nextIndex } = nextRitualStep(ritualStepIndex, ritualSteps.length);
@@ -358,6 +299,25 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
     setRitualStepIndex(-1);
     setRitualSecondsLeft(0);
   };
+
+  // Morning ritual (55.1): first while not done and before noon; after that
+  // it sits below Anchors, saying when it was done.
+  const ritualDoneToday = Number.isFinite(config.morningRitualDoneAt)
+    && new Date(config.morningRitualDoneAt).toDateString() === new Date().toDateString();
+  const ritualFirst = !ritualDoneToday && new Date().getHours() < 12;
+  const ritualStatus = ritualDoneToday
+    ? `Done today ${new Date(config.morningRitualDoneAt).toTimeString().slice(0, 5)}`
+    : ritualFirst ? "Not done today · 7 min" : "Tomorrow morning · 7 min";
+  const ritualRow = (
+    <div className={`mbx-ritual${ritualFirst ? " is-first" : ""}`}>
+      <div className="mbx-ritual-text">
+        <h3 className="mbx-h-small">Morning ritual</h3>
+        <span className="mbx-quiet-line">{ritualStatus}</span>
+      </div>
+      <button type="button" className="mbx-begin" onClick={() => setToolPanel("ritual")}>{ritualDoneToday ? "Again" : "Begin"}</button>
+    </div>
+  );
+  const anchorList = (config.dailyAnchors || []).filter(a => a && typeof a.text === "string" && a.text.trim());
 
   // ── Render ─────────────────────────────────────────────────────────────────
   const handleAddAnchor = () => {
@@ -696,97 +656,72 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
         </>
       )}
 
-      {/* ── Main grid view */}
+      {/* ── The page (Q55.1a, frames 65a–f): Rescue, then Empty your head,
+          then the quiet column (Morning ritual, Anchors). One focal point. */}
       {!toolPanel && (
-        <>
-          <div style={{ padding: "0 0 20px 0" }}>
-            <h2 style={{ fontSize: "20px", fontWeight: "800", color: "var(--text-primary)", fontFamily: "var(--font-display)", letterSpacing: "-0.02em", margin: "0 0 4px" }}>Mind Box</h2>
-            <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>Tools &amp; resets.</p>
+        <div className="mbx">
+          <div className="mbx-title">
+            <h2 className="mbx-name">Mind Box</h2>
+            <span className="mbx-sub">For your head, not your tasks.</span>
           </div>
+          <div className="mbx-grid">
+            <section className="mbx-rescue" aria-labelledby="mbx-rescue-title">
+              <span className="mbx-kicker">RESCUE · 3 MIN</span>
+              <h3 className="mbx-rescue-title" id="mbx-rescue-title">Head not ready to work?</h3>
+              <p className="mbx-rescue-line">Pick what’s closest.</p>
+              <div className="mbx-states">
+                {RESCUE_STATES.map(st => (
+                  <button key={st.id} type="button" className="mbx-state" onClick={() => onOpenRescue?.(st.id)}>
+                    <span className="mbx-state-title">{st.title}</span>
+                    <span className="mbx-state-sub">{st.sub}</span>
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="mbx-link" onClick={() => onOpenRescue?.("unsure")}>Not sure. Just help me settle →</button>
+            </section>
 
-          {/* Brain Dump — always-live capture */}
-          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "14px 16px", marginBottom: "16px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
-              <span className="mindbox-card-icon mindbox-card-icon--secondary" style={{ width: "36px", height: "36px", borderRadius: "9px" }}>
-                <IconInbox />
-              </span>
-              <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)" }}>Brain Dump</span>
-            </div>
-            <form className="braindump-form" onSubmit={handleBrainDumpSubmit}>
-              <textarea className="braindump-input" rows={3}
-                placeholder="What's on your mind? (Shift+Enter for a new line)"
-                value={brainDumpText}
-                onChange={e => setBrainDumpText(e.target.value)}
-                onKeyDown={submitOnEnter}
-                disabled={dumpCount >= THOUGHTS_MAX} />
-              <button type="submit" className="braindump-submit" disabled={dumpCount >= THOUGHTS_MAX}>➔</button>
-            </form>
-            <ThoughtsList thoughts={payload.brainDump || []} onMakeTask={t => onMakeThoughtTask?.(t)} onLetGo={handleLetGo} />
-            {dumpCount > 0 && hasAnyKey && (
-              <button
-                type="button"
-                onClick={handleOrganizeDump}
-                disabled={organizeLoading}
-                style={{
-                  marginTop: "10px", width: "100%", padding: "9px",
-                  background: "var(--accent-ring, rgba(99,102,241,0.08))", color: "var(--accent)",
-                  border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)",
-                  fontSize: "13px", fontWeight: "700", cursor: "pointer"
-                }}
-              >
-                ✨ Organize into tasks with AI
-              </button>
-            )}
-          </div>
+            <section className="mbx-dump" aria-labelledby="mbx-dump-title">
+              <div className="mbx-dump-head">
+                <h3 className="mbx-h" id="mbx-dump-title">Empty your head</h3>
+                <p className="mbx-dump-line">Get it out now. Sort it later.</p>
+              </div>
+              <form className="mbx-field" onSubmit={handleBrainDumpSubmit}>
+                <input
+                  className="mbx-input"
+                  aria-label="Thought"
+                  placeholder="What’s on your mind?"
+                  value={brainDumpText}
+                  onChange={e => setBrainDumpText(e.target.value)}
+                  disabled={dumpCount >= THOUGHTS_MAX}
+                />
+                <span className="mbx-hint" aria-hidden="true">T · ENTER</span>
+                <button type="submit" className="mbx-sr" disabled={dumpCount >= THOUGHTS_MAX}>Save thought</button>
+              </form>
+              <ThoughtsList thoughts={payload.brainDump || []} onMakeTask={t => onMakeThoughtTask?.(t)} onLetGo={handleLetGo} />
+              {dumpCount > 0 && hasAnyKey && (
+                <button type="button" className="mbx-link" onClick={handleOrganizeDump} disabled={organizeLoading}>
+                  {organizeLoading ? "Organizing…" : "Organize into tasks with AI"}
+                </button>
+              )}
+            </section>
 
-          {/* 2×2 tool grid */}
-          <div className="mindbox-grid">
-            <button className="mindbox-card" onClick={() => setToolPanel("ritual")}>
-              <span className="mindbox-card-icon mindbox-card-icon--warning"><IconSun /></span>
-              <span className="mindbox-card-body">
-                <span className="mindbox-card-title">Morning Ritual</span>
-                <span className="mindbox-card-sub">7 min</span>
-              </span>
-              <span className="mindbox-card-chevron"><IconChevronRight /></span>
-            </button>
-            <button className="mindbox-card mindbox-card--rescue" onClick={openRescueMode}>
-              <span className="mindbox-card-icon mindbox-card-icon--danger"><IconLifeBuoy /></span>
-              <span className="mindbox-card-body">
-                <span className="mindbox-card-title">Rescue Mode</span>
-                <span className="mindbox-card-sub">Step-by-step reset</span>
-              </span>
-              <span className="mindbox-card-chevron"><IconChevronRight /></span>
-            </button>
-            <button className="mindbox-card" onClick={() => setToolPanel("anchors")} style={{ gridColumn: "span 2" }}>
-              <span className="mindbox-card-icon mindbox-card-icon--accent" style={{ fontSize: "18px", lineHeight: 1 }}>&#128204;</span>
-              <span className="mindbox-card-body">
-                <span className="mindbox-card-title">Daily Anchors</span>
-                <span className="mindbox-card-sub">
-                  {(config.dailyAnchors || []).length === 0
-                    ? "Add your daily principles"
-                    : `${(config.dailyAnchors || []).length} anchor${(config.dailyAnchors || []).length === 1 ? "" : "s"}`}
-                </span>
-              </span>
-              <span className="mindbox-card-chevron"><IconChevronRight /></span>
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* ── Stuck Rescue Modal */}
-      {showRescue && (
-        <div className="rescue-overlay" onClick={() => setShowRescue(false)}>
-          <div className="rescue-card card" onClick={e => e.stopPropagation()}>
-            <span className="rescue-icon">⚠️</span>
-            <h3 className="rescue-title">Rescue Mode</h3>
-            <span className="rescue-step-badge">Step {rescueStepIndex + 1} of {rescueSteps.length}</span>
-            <p className="rescue-step-text">{rescueSteps[rescueStepIndex]}</p>
-            <button className="btn" onClick={handleNextRescueStep} style={{ width: "100%", marginTop: "10px" }}>
-              {rescueStepIndex === rescueSteps.length - 1 ? "I'm ready to try again" : "Next →"}
-            </button>
-            <button className="btn btn-cancel" onClick={() => setShowRescue(false)} style={{ width: "100%" }}>
-              Close
-            </button>
+            <aside className="mbx-quiet" aria-label="Morning ritual and anchors">
+              {ritualFirst && ritualRow}
+              <div className="mbx-anchors">
+                <div className="mbx-row-head">
+                  <h3 className="mbx-h-small">Anchors</h3>
+                  <button type="button" className="mbx-link" onClick={() => setToolPanel("anchors")}>Edit</button>
+                </div>
+                {anchorList.length ? (
+                  <ul className="mbx-anchor-list">
+                    {anchorList.map(a => <li key={a.id || a.text} className="mbx-anchor">{a.text}</li>)}
+                  </ul>
+                ) : (
+                  <p className="mbx-quiet-line">Small daily reminders. Add a few.</p>
+                )}
+              </div>
+              {!ritualFirst && ritualRow}
+            </aside>
           </div>
         </div>
       )}

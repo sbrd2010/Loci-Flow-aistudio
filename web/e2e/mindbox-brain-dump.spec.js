@@ -31,7 +31,7 @@ async function expectNoHorizontalOverflow(page) {
       document.body?.scrollWidth || 0,
     ];
     document.querySelectorAll(
-      ".app-container, .screen-content, .mindbox-grid, .mindbox-card, .braindump-form, .mindbox-subview-header"
+      ".app-container, .screen-content, .mbx, .mbx-grid, .mbx-field, .mindbox-subview-header"
     ).forEach((el) => {
       measured.push(el.scrollWidth);
     });
@@ -50,16 +50,16 @@ test("mobile reliability: a thought added in Mind Box is listed there, survives 
   await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 8_000 });
 
   const thought = "Call the pharmacy after lunch";
-  const input = page.locator(".braindump-input").first();
+  const input = page.locator(".mbx-field").getByRole("textbox", { name: "Thought" });
   await input.fill(thought);
-  await page.locator(".braindump-submit").first().click();
+  await input.press("Enter");
   await expect(input).toHaveValue("");
 
   // Thoughts live in Mind Box, newest first (demo seeds 4).
   const rows = page.getByTestId("thought-row");
   await expect(rows).toHaveCount(5);
   await expect(rows.first()).toContainText(thought);
-  await expect(page.getByRole("heading", { name: /^THOUGHTS · 5/ })).toBeVisible();
+  await expect(page.getByText(/^5 thoughts/)).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   // Plan has no Inbox any more.
@@ -95,9 +95,26 @@ test("mobile reliability: Make it a task opens Add prefilled, and the thought le
 test("Mind Box has no Progress, streak or Key Deadline Mirror (Q57)", async ({ page }) => {
   await enterDemo(page);
   await openTab(page, "Mind Box");
-  await expect(page.locator(".mindbox-card", { hasText: "Morning Ritual" })).toBeVisible();
-  await expect(page.locator(".mindbox-card", { hasText: "Progress" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Morning ritual" })).toBeVisible();
+  await expect(page.getByText("Progress", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/streak/i)).toHaveCount(0);
   await expect(page.getByTestId("deadline-progress-mirror")).toHaveCount(0);
   await expect(page.getByText(/\bXP\b/)).toHaveCount(0);
+});
+
+// Q55.1a (65a–f): Rescue first, Empty your head, then Morning ritual and
+// Anchors read in place; "Not sure" enters Rescue at the breathing.
+test("Mind Box: the three levels, and Not sure opens Rescue at the breathing", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await openTab(page, "Mind Box");
+  await expect(page.getByRole("heading", { name: "Head not ready to work?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Empty your head" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Anchors" })).toBeVisible();
+  await expect(page.locator(".mbx-anchor").first()).toBeVisible();
+  // Laptop: two columns, the quiet one on the right.
+  const rescueBox = await page.locator(".mbx-rescue").boundingBox();
+  const quietBox = await page.locator(".mbx-quiet").boundingBox();
+  expect(quietBox.x).toBeGreaterThan(rescueBox.x + rescueBox.width);
+  await page.getByRole("button", { name: "Not sure. Just help me settle →" }).click();
+  await expect(page.getByRole("dialog", { name: "Rescue" }).getByText("ROUND 1 OF 4")).toBeVisible();
 });

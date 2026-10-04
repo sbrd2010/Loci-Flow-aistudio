@@ -109,11 +109,12 @@ test("reliability: pinning a task sets Now Focus", async ({ page }) => {
 test("reliability: a thought survives a tab switch and stays in Mind Box", async ({ page }) => {
   await enterDemo(page);
   await openTab(page, "Mind Box");
-  await expect(page.locator(".braindump-input").first()).toBeVisible({ timeout: 8_000 });
+  const field = page.locator(".mbx-field").getByRole("textbox", { name: "Thought" });
+  await expect(field).toBeVisible({ timeout: 8_000 });
 
   const thought = "Test brain dump regression item";
-  await page.locator(".braindump-input").first().fill(thought);
-  await page.locator(".braindump-submit").first().click();
+  await field.fill(thought);
+  await field.press("Enter");
   const row = page.getByTestId("thought-row").filter({ hasText: thought });
   await expect(row).toBeVisible({ timeout: 5_000 });
 

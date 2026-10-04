@@ -51,6 +51,6 @@ test("Mind Box no longer offers Insights", async ({ page }) => {
   await page.goto("/");
   await page.getByTestId("demo-btn").click();
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Mind Box", exact: true }).click();
-  await expect(page.getByRole("button", { name: /Morning Ritual/ })).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByRole("heading", { name: "Morning ritual" })).toBeVisible({ timeout: 8_000 });
   await expect(page.getByRole("button", { name: /Insights/ })).toHaveCount(0);
 });

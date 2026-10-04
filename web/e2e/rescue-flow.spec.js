@@ -102,8 +102,9 @@ test("Mind Box opens Rescue; Leave comes back to Mind Box; the reset tiles are g
   await nav(page).getByRole("button", { name: "Mind Box", exact: true }).click();
   await expect(page.getByText("Bad Day Reset")).toHaveCount(0);
   await expect(page.getByText("Clean Slate")).toHaveCount(0);
-  await page.locator(".mindbox-card--rescue").click();
-  await expect(rescue(page).getByRole("heading", { name: "What's happening right now?" })).toBeVisible();
+  // A state picked on Mind Box enters Rescue at the breathing (65a).
+  await page.getByRole("button", { name: /^Got distracted/ }).click();
+  await expect(rescue(page).getByText("STEP 2 OF 3 · GOT DISTRACTED")).toBeVisible();
   // Full screen: the tab bar is under it.
   const box = await rescue(page).boundingBox();
   expect(Math.round(box.height)).toBe(915);
