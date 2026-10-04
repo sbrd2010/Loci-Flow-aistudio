@@ -1652,11 +1652,16 @@ export default function TodayTab({
     setRescueActive(false);
     if (rescueFromMindBox) onRescueClosed?.();
   };
+  // Rescue works on the task as it is now: after Clear my day moves it off
+  // Today (or Undo brings it back), the stored copy is stale.
+  const rescueTaskLive = rescueTask
+    ? tasks.find(t => t.uuid === rescueTask.uuid && !t.isDeleted && !t.isParked && isOnToday(t, todayStr)) || null
+    : null;
   // Back to it / One thing, N minutes: the one thing, pinned if it isn't yet,
   // then a focus block of that length.
   const startRescueFocus = (minutes) => {
     setRescueActive(false);
-    const target = rescueTask;
+    const target = rescueTaskLive;
     if (!target || isEventTask(target)) return;
     const pin = target.isNowFocus ? null : setRescueTaskAsNowFocus({ target });
     startFocusAndLog(target, pin, { plannedSeconds: minutes * 60 });
@@ -1673,8 +1678,10 @@ export default function TodayTab({
       setIsFocusMode(false);
       setFocusSessionActive(false);
     }
+    const fromState = { horizonLevel: "today" };
+    const toState = { horizonLevel: dest === "week" ? "week" : "today" };
     const events = result.before.map(t => buildTaskMutationEvent(dest === "park" ? "task_parked" : "task_moved", t, {
-      ...(dest === "park" ? {} : { fromState: { horizonLevel: "today" }, toState: { horizonLevel: dest === "week" ? "week" : "today" } }),
+      ...(dest === "park" ? {} : { fromState, toState }),
       windows, now,
     }));
     if (endedFocusSession) {
@@ -1685,7 +1692,23 @@ export default function TodayTab({
       .catch(() => {});
     return {
       count: result.ids.length,
-      undo: () => savePayload({ ...latestPayloadRef.current, tasks: undoClearMyDay(latestPayloadRef.current.tasks || [], result) }),
+      // Undo logs the way back for each task it restores, so the activity
+      // ledger doesn't keep them as moved or parked.
+      undo: () => {
+        const current = latestPayloadRef.current.tasks || [];
+        const restored = new Set(current.filter(t => t.lastUpdated === result.appliedAt).map(t => t.uuid));
+        const back = result.before.filter(t => restored.has(t.uuid));
+        savePayloadAsync({ ...latestPayloadRef.current, tasks: undoClearMyDay(current, result) })
+          .then(() => {
+            if (!back.length) return;
+            const at = Date.now();
+            writeActivityEvents(eventsPatch(uid, back.map(t => buildTaskMutationEvent(dest === "park" ? "task_unparked" : "task_moved", t, {
+              ...(dest === "park" ? {} : { fromState: toState, toState: fromState }),
+              windows, now: at,
+            }))));
+          })
+          .catch(() => {});
+      },
     };
   };
   const handleRescueThought = (text) => {
@@ -2325,7 +2348,7 @@ export default function TodayTab({
       {/* Rescue Mode — triggered by the Rescue chip or Deep Focus's Stuck? button */}
       {rescueActive && (
         <RescueMode
-          task={rescueTask}
+          task={rescueTaskLive}
           allTasks={tasks}
           firstName={(config.userName || "").split(" ")[0] || "friend"}
           config={config}
