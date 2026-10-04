@@ -574,10 +574,13 @@ export default function TodayWall({
             aria-expanded={peekOpen}
           >
             <span className="wall-peek-grabber" aria-hidden="true" />
-            {/* 58.1 (67a): the phone's Next strip, "NEXT" and the next task. */}
-            {!peekOpen && nextTitle && (
+            {/* 58.1 (67a): the phone's Next strip, "NEXT" and the next task;
+                with none, it still says what it opens. */}
+            {!peekOpen && (nextTitle ? (
               <span className="wall-peek-next"><span className="wall-peek-next-kicker">NEXT</span> <span className="wall-peek-next-title">{nextTitle}</span></span>
-            )}
+            ) : (
+              <span className="wall-peek-next"><span className="wall-peek-next-title">{remainingCount > 0 ? `After that · ${remainingCount}` : "Nothing else on Today"}</span></span>
+            ))}
             <span className="wall-peek-label">
               {peekOpen ? "Hide list" : nextTitle ? `Up next · ${nextTitle}` : `After that · ${remainingCount}`}
             </span>

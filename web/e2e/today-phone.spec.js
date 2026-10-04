@@ -163,3 +163,34 @@ test("phone: with no one thing, Feeling scattered isn't offered; I'm stuck is", 
   await expect(page.getByRole("button", { name: "Feeling scattered?" })).toBeHidden();
   await expect(page.getByRole("button", { name: "I’m stuck" }).first()).toBeVisible();
 });
+
+// Codex review of #475: with nothing after the one thing the strip still says
+// what it opens; and ↓ past Up next's three opens the rest, focus following.
+test("phone: the Next strip with nothing after the one thing still reads, and opens the list", async ({ page }) => {
+  await enterDemo(page);
+  await page.locator(".wall-peek").click();
+  const open = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
+  while (await open.count()) await open.first().getByTestId("task-checkbox").click();
+  await page.locator(".today-list.is-sheet").getByRole("button", { name: "Hide list" }).click();
+  await expect(page.locator(".wall-peek-next")).toHaveText("Nothing else on Today");
+  await expect(page.locator(".wall-peek")).toHaveAccessibleName(/Nothing else on Today/);
+});
+
+test("phone: ↓ past Up next's three opens the rest and focuses the fourth", async ({ page }) => {
+  await enterDemo(page);
+  for (const title of ["Draft the methods outline", "Order printer ink"]) {
+    await page.getByRole("button", { name: "Add a task to Today" }).first().click();
+    await page.getByTestId("add-task-title").fill(title);
+    await page.getByTestId("add-task-submit").click();
+    await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
+  }
+  if (!(await page.locator(".today-list.is-sheet").isVisible())) await page.locator(".wall-peek").click();
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
+  await expect(rows).toHaveCount(3);
+  await rows.first().focus();
+  for (let i = 1; i <= 3; i++) {
+    await page.keyboard.press("ArrowDown");
+    await expect(rows.nth(i)).toBeFocused();
+  }
+  await expect(rows).toHaveCount(4);
+});
