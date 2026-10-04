@@ -97,6 +97,10 @@ test("Mind Box opens Rescue; Leave comes back to Mind Box; the reset tiles are g
   expect(Math.round(box.height)).toBe(915);
   await rescue(page).getByRole("button", { name: /^Leave/ }).click();
   await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible();
+  // The request is spent: Today opens as Today, not Rescue again.
+  await nav(page).getByRole("button", { name: "Today", exact: true }).click();
+  await expect(page.locator(".wall-title")).toBeVisible();
+  await expect(rescue(page)).toHaveCount(0);
 });
 
 test("a 10-minute break ends on 'Break's over. Ready?', asked once", async ({ page }) => {

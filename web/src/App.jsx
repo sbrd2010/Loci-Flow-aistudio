@@ -1446,6 +1446,7 @@ export default function App() {
           <TodayTab
             onOpenKeyDeadline={() => { handleTabSelect("settings"); setSettingsInitialPage("goal"); }}
             rescueRequest={rescueRequest}
+            onRescueRequestOpened={() => setRescueRequest(null)}
             onRescueClosed={() => handleTabSelect("mindbox")}
             onOpenFront={(id) => { handleTabSelect("roadmap"); setPlanFrontId(id); }}
             reviewLine={reviewLine}
