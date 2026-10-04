@@ -1,5 +1,5 @@
 import React from "react";
-import { THOUGHTS_NOTE_AT } from "../utils/thoughts";
+import { THOUGHTS_NOTE_AT, newestThoughtsFirst } from "../utils/thoughts";
 
 // Thoughts in Mind Box (Q56.2): newest first, each with its age, "Make it a
 // task" (Add, prefilled) and "Let go" (gone, with Undo).
@@ -13,7 +13,7 @@ export function thoughtAge(createdAt, now = Date.now()) {
 
 export default function ThoughtsList({ thoughts = [], onMakeTask, onLetGo, now = Date.now() }) {
   if (!thoughts.length) return null;
-  const newestFirst = [...thoughts].reverse();
+  const newestFirst = newestThoughtsFirst(thoughts);
   const oldest = thoughts.reduce((m, t) => (Number.isFinite(t.createdAt) ? Math.min(m, t.createdAt) : m), Infinity);
   const oldestDays = Number.isFinite(oldest) ? Math.floor((now - oldest) / DAY_MS) : 0;
   return (

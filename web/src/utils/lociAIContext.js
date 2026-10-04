@@ -4,6 +4,7 @@ import { buildDeadlineProgressMirror } from "./deadlineProgressMirror";
 import { formatMinutesToTime, getFocusWindows, getLociDayStr } from "./focusWindows";
 import { isDeferred } from "./deferral";
 import { isEventTask } from "./dayMapRoute";
+import { newestThoughtsFirst } from "./thoughts";
 
 // "tomorrow" is not a horizon: it is Today's tasks moved to tomorrow
 // (deferral.js), listed apart so the Coach neither loses them nor offers
@@ -299,7 +300,7 @@ export function buildLociBrainDumpContext(brainDump = []) {
   if (count === 0) return "";
 
   const lines = [`BRAIN DUMP: ${count} unprocessed thought${count === 1 ? "" : "s"} waiting to be organized into tasks.`];
-  items.slice(-BRAIN_DUMP_ITEMS_IN_PROMPT).reverse().forEach(item => {
+  newestThoughtsFirst(items).slice(0, BRAIN_DUMP_ITEMS_IN_PROMPT).forEach(item => {
     const text = String(item.text || "").replace(/\s+/g, " ").trim();
     if (!text) return;
     const truncated = text.length > BRAIN_DUMP_ITEM_MAX_LENGTH ? `${text.slice(0, BRAIN_DUMP_ITEM_MAX_LENGTH).trim()}...` : text;

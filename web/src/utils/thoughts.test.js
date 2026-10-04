@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { THOUGHTS_MAX, addThought, letGoThought, restoreThought } from "./thoughts";
+import { THOUGHTS_MAX, addThought, letGoThought, newestThoughtsFirst, restoreThought } from "./thoughts";
 
 describe("thoughts", () => {
   it("adds a trimmed one-line thought at the end", () => {
@@ -19,5 +19,13 @@ describe("thoughts", () => {
     expect(restoreThought(gone.payload, gone.item, gone.at).brainDump.map(d => d.id)).toEqual(["a", "b", "c"]);
     expect(letGoThought(p, "zz")).toBe(null);
     expect(restoreThought(p, { id: "a" }, 0)).toBe(p);
+  });
+  it("won't restore a let-go thought into a list that filled up again", () => {
+    const full = { brainDump: Array.from({ length: THOUGHTS_MAX }, (_, i) => ({ id: `t${i}`, text: "x" })) };
+    expect(restoreThought(full, { id: "gone", text: "y" }, 3)).toBe(null);
+  });
+  it("orders newest first by createdAt, not by stored order", () => {
+    const list = [{ id: "a", createdAt: 10 }, { id: "b", createdAt: 30 }, { id: "c", createdAt: 20 }, { id: "d" }];
+    expect(newestThoughtsFirst(list).map(t => t.id)).toEqual(["b", "c", "a", "d"]);
   });
 });
