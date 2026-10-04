@@ -16,7 +16,8 @@ async function enterDemo(page) {
   await page.addInitScript(() => {
     try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
   });
-  await page.setViewportSize({ width: 375, height: 812 });
+  // 58.1 takes the scattered link off the phone's Today; it stays from 840px.
+  await page.setViewportSize({ width: 900, height: 900 });
   await page.goto("/");
   await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
   await expect(page.getByTestId("demo-btn")).toBeVisible({ timeout: 25_000 });

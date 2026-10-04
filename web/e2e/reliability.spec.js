@@ -77,7 +77,7 @@ test("reliability: Clear my day → Park takes Today's open tasks off the list, 
 
   const hide = page.locator(".today-list-hide");
   if (await hide.isVisible()) await hide.click();
-  await page.getByRole("button", { name: "Open Rescue" }).click();
+  await page.getByRole("button", { name: "I’m stuck" }).click();
   const rescue = page.getByRole("dialog", { name: "Rescue" });
   await rescue.getByRole("button", { name: /^Too much going on/ }).click();
   await rescue.getByRole("button", { name: "Skip", exact: true }).click();

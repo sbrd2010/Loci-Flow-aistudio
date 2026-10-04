@@ -189,11 +189,15 @@ test("Key deadline: a preview of the band, and Clear goal", async ({ page }) => 
 
 test("Anchors on Today: Off takes the anchor line off Today", async ({ page }) => {
   await enterDemo(page);
+  // Q58 follow-up 7: the anchor line shows from 840px (not on a phone's Today).
+  await page.setViewportSize({ width: 900, height: 900 });
   await expect(page.locator(".wall-anchor")).toBeVisible();
+  await page.setViewportSize({ width: 375, height: 812 });
   await openTab(page, "Settings");
   await page.getByRole("button", { name: /^Anchors on Today/ }).click();
   await page.getByRole("radio", { name: /^Off/ }).click();
   await openTab(page, "Today");
+  await page.setViewportSize({ width: 900, height: 900 });
   await expect(page.locator(".wall-anchor")).toHaveCount(0);
 });
 

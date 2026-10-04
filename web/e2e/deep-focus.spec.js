@@ -25,7 +25,7 @@ async function enterDemo(page, viewport = { width: 375, height: 812 }) {
 async function openRescue(page) {
   const hide = page.locator(".today-list-hide");
   if (await hide.isVisible()) await hide.click();
-  await page.getByRole("button", { name: "Open Rescue" }).click();
+  await page.getByRole("button", { name: "I’m stuck" }).click();
 }
 
 // Rescue (Q55.3): pick a state, skip the minute of breathing, land on step 3.

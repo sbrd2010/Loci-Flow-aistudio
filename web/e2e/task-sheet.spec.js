@@ -18,8 +18,15 @@ async function enterDemo(page, viewport = { width: 1280, height: 800 }) {
 const sheet = (page) => page.getByTestId("task-detail");
 const stepValues = (page) => sheet(page).locator(".detail-step-input").evaluateAll(els => els.map(el => el.value));
 
+// Q58: on a phone Details is in the More sheet; wider, "Details ›" is on the wall.
 async function openFromDetails(page) {
-  await page.locator(".wall-details").click();
+  const more = page.locator(".wall-quiet-link:visible", { hasText: /^More$/ });
+  if (await more.count()) {
+    await more.click();
+    await page.getByRole("dialog", { name: /^More:/ }).getByRole("button", { name: /^Details/ }).click();
+  } else {
+    await page.locator(".wall-details").click();
+  }
   await expect(sheet(page)).toBeVisible();
 }
 
@@ -38,10 +45,10 @@ async function withKey(page) {
 }
 
 for (const [name, viewport] of [["phone", { width: 375, height: 812 }], ["laptop", { width: 1280, height: 800 }]]) {
-  test(`${name}: "Details ›" on the one thing opens its sheet, whose footer has no Done`, async ({ page }) => {
+  test(`${name}: Details on the one thing opens its sheet, whose footer has no Done`, async ({ page }) => {
     await enterDemo(page, viewport);
     const title = (await page.locator(".wall-title").innerText()).trim();
-    await expect(page.locator(".wall-first-step .wall-details")).toHaveText("Details ›");
+    if (name === "laptop") await expect(page.locator(".wall-first-step .wall-details")).toHaveText("Details ›");
     await openFromDetails(page);
     await expect(sheet(page)).toHaveAttribute("aria-label", `Task: ${title}`);
     // Done is the title's circle, not a footer action.

@@ -157,7 +157,8 @@ test("a casual message to the coach still carries the task just marked done", as
   // away first, as someone would. Clicking straight away only ever landed
   // while the sheet was still sliding in.
   await page.locator(".today-list-hide").click();
-  await page.locator(".today-wall .wall-action", { hasText: "Mark done" }).click();
+  // Q58: on a phone Done is in the wall's quiet row.
+  await page.locator(".today-wall .wall-quiet-link", { hasText: /^Done$/ }).click();
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
   // Not a task question — the kind of message that got no task list at all.
   await page.locator(".coach-composer-input").fill("I feel a bit scattered right now");

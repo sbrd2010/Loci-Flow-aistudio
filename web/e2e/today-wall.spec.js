@@ -16,6 +16,20 @@ async function enterDemo(page) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
 }
 
+// Q58 (67a, 67d): on a phone, Done sits in the quiet row and Split it in the
+// More sheet; wider, they are the wall's buttons.
+const markDone = (page) => page.locator(".wall-quiet-link:visible", { hasText: /^Done$/ })
+  .or(page.locator(".wall-action:visible", { hasText: "Mark done" })).first().click();
+async function openSplit(page) {
+  const more = page.locator(".wall-quiet-link:visible", { hasText: /^More$/ });
+  if (await more.count()) {
+    await more.click();
+    await page.getByRole("dialog", { name: /^More:/ }).getByRole("button", { name: /^Split it/ }).click();
+  } else {
+    await openSplit(page);
+  }
+}
+
 test("mobile reliability: Today opens on the wall, with the list put away", async ({ page }) => {
   await enterDemo(page);
 
@@ -83,21 +97,19 @@ test("mobile reliability: Start focus starts a focus session on the commitment",
   await expect(overlay.getByRole("heading", { name: title })).toBeVisible();
 });
 
-// 53f: on a phone the goal is a thin line — the days join the gold kicker, a
-// 2px rule runs under the name, and there is no card. Addendum M: the demo
-// has a Key Deadline and no front, so it names the deadline, with its days
-// and no count (nothing countable).
-test("mobile reliability: the goal is a thin gold line on a phone, with its days", async ({ page }) => {
+// Q58 (58.2, 67a): on a phone the goal is one gold line, 44px: "name · N
+// days ›". Addendum M: the demo has a Key Deadline and no front, so it names
+// the deadline, with its days and no count (nothing countable).
+test("mobile reliability: the goal is one gold line on a phone, with its days", async ({ page }) => {
   await enterDemo(page);
   const band = page.locator(".wall-goal");
   await expect(band).toBeVisible();
-  await expect(band.locator(".wall-goal-name")).toHaveText("Project launch");
-  await expect(band.locator(".wall-goal-kicker")).toHaveText(/^YOUR GOAL · \d+ DAYS$/);
-  await expect(band.locator(".wall-goal-count")).toHaveCount(0);
-  await expect(band.locator(".wall-goal-figures")).toBeHidden();
-  expect(await band.evaluate(el => getComputedStyle(el).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
-  const rule = await band.locator(".wall-goal-track").boundingBox();
-  expect(rule.height).toBe(2);
+  await expect(band.locator(".wall-goal-line")).toBeVisible();
+  await expect(band.locator(".wall-goal-line")).toHaveText(/^Project launch\s·\s\d+ days›$/);
+  await expect(band.locator(".wall-goal-name")).toBeHidden();
+  await expect(band.locator(".wall-goal-kicker")).toBeHidden();
+  expect(await band.evaluate(el => getComputedStyle(el).backgroundColor)).toBe("rgb(241, 223, 178)");
+  expect(Math.round((await band.boundingBox()).height)).toBe(44);
 });
 
 // Laptop and wider keep 51's look: the filled gold card, its figures on the
@@ -112,8 +124,12 @@ test("laptop: the goal keeps its gold card and figures", async ({ page }) => {
 });
 
 // 40a: one anchor, the day's own, and a tap shows the next.
-test("mobile reliability: the anchor line shows one anchor and a tap moves to the next", async ({ page }) => {
+// Q58 follow-up 7: the anchor line is off the phone's Today and stays from
+// 840px.
+test("the anchor line shows one anchor and a tap moves to the next (840 and wider; not on a phone)", async ({ page }) => {
   await enterDemo(page);
+  await expect(page.locator(".wall-anchor")).toBeHidden();
+  await page.setViewportSize({ width: 900, height: 900 });
 
   const line = page.locator(".wall-anchor");
   await expect(line).toBeVisible();
@@ -164,8 +180,10 @@ test("mobile reliability: there is no Low energy switch on Today or in Settings"
   await expect(page.getByText("Low energy", { exact: true })).toHaveCount(0);
 });
 
-test("mobile reliability: the scattered door on the desk reaches screen 14", async ({ page }) => {
+// 58.1 takes the link off the phone's Today; from 840px it stays.
+test("the scattered door on the desk reaches screen 14 (840 and wider)", async ({ page }) => {
   await enterDemoWithPeek(page);
+  await page.setViewportSize({ width: 900, height: 900 });
 
   await page.locator(".today-list-hide").click();
   const door = page.locator(".wall-link", { hasText: "Feeling scattered?" });
@@ -297,7 +315,8 @@ test("mobile reliability: typing on the empty wall creates and commits a task", 
   await expect(page.locator(".wall-empty-title")).toHaveText("Nothing committed yet.");
   // Nothing committed, but the Key Deadline's band and the anchor stay (L1).
   await expect(page.locator(".today-wall.is-empty .wall-goal-name")).toHaveText("Project launch");
-  await expect(page.locator(".today-wall.is-empty .wall-anchor")).toBeVisible();
+  // Q58 follow-up 7: no anchor line on the phone's Today.
+  await expect(page.locator(".today-wall.is-empty .wall-anchor")).toBeHidden();
   await page.locator(".wall-commit-field").fill("Write the membrane paper intro");
   await page.locator(".wall-commit-field").press("Enter");
 
@@ -311,7 +330,7 @@ test("mobile reliability: typing on the empty wall creates and commits a task", 
   // L1: no front, but the demo has a Key Deadline set — so the goal band names
   // THAT, rather than suppressing a countdown the user already has.
   await expect(page.locator(".wall-goal-name")).toHaveText("Project launch");
-  await expect(page.locator(".wall-goal-days")).toBeVisible();
+  await expect(page.locator(".wall-goal-line")).toContainText(/\d+ days/);
   // And no first step: concreteStep is OMITTED rather than set empty, so
   // normalizePayload does not substitute its "Do first tiny step" default.
   await expect(page.locator(".wall-first-step")).toHaveCount(0);
@@ -343,7 +362,7 @@ test("mobile reliability: finishing the commitment gives the done state, not the
   await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
   const title = (await page.locator(".wall-title").innerText()).trim();
 
-  await page.locator(".wall-action", { hasText: "Mark done" }).click();
+  await markDone(page);
 
   // The closing line is the hero; the finished title is struck above it.
   await expect(page.locator(".wall-done-line")).toBeVisible({ timeout: 8_000 });
@@ -358,7 +377,7 @@ test("mobile reliability: finishing the commitment gives the done state, not the
 test("mobile reliability: the proposal never auto-commits, and Not now holds", async ({ page }) => {
   await enterDemo(page);
   await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
-  await page.locator(".wall-action", { hasText: "Mark done" }).click();
+  await markDone(page);
 
   const proposal = page.locator(".wall-proposal");
   await expect(proposal).toBeVisible({ timeout: 8_000 });
@@ -378,7 +397,7 @@ test("mobile reliability: the proposal never auto-commits, and Not now holds", a
 test("mobile reliability: Commit to this makes the proposal the new commitment", async ({ page }) => {
   await enterDemo(page);
   await expect(page.locator(".wall-hero")).toBeVisible({ timeout: 10_000 });
-  await page.locator(".wall-action", { hasText: "Mark done" }).click();
+  await markDone(page);
 
   const proposal = page.locator(".wall-proposal");
   await expect(proposal).toBeVisible({ timeout: 8_000 });
@@ -464,7 +483,7 @@ test("mobile reliability: the done state keeps the finished task's own countdown
   const figures = page.locator(".wall-goal-figures").first();
   const before = await figures.innerText();
 
-  await page.locator(".wall-action", { hasText: "Mark done" }).click();
+  await markDone(page);
   await expect(page.locator(".wall-done-line")).toBeVisible({ timeout: 8_000 });
 
   await expect(figures).toHaveText(before);
@@ -1109,7 +1128,7 @@ test("Split it: steps from the task's own sub-steps; Split replaces it, the pin 
   await enterDemoWithPeek(page);
   const original = (await page.locator(".wall-title").innerText()).trim();
   await page.locator(".today-list-hide").click();
-  await page.locator(".wall-action", { hasText: "Split it" }).click();
+  await openSplit(page);
 
   const dialog = page.getByRole("dialog", { name: "Split a task" });
   await expect(dialog).toBeVisible();
@@ -1140,7 +1159,7 @@ test("Split it with no sub-steps and no AI key: write the steps; two are needed;
   await page.locator(".wall-commit-field").press("Enter");
   await expect(page.locator(".wall-title")).toContainText("Prepare the Brightlab slides", { timeout: 8_000 });
   await page.locator(".today-list-hide").click();
-  await page.locator(".wall-action", { hasText: "Split it" }).click();
+  await openSplit(page);
 
   const dialog = page.getByRole("dialog", { name: "Split a task" });
   await expect(dialog.locator(".split-lede")).toHaveText("Break it into steps of 45 minutes or less. Reorder or remove any.");
@@ -1165,8 +1184,9 @@ test("Split a task takes focus on open and gives it back on close", async ({ pag
   await page.locator(".wall-commit-field").press("Enter");
   await expect(page.locator(".wall-title")).toContainText("Prepare the Brightlab slides", { timeout: 8_000 });
   await page.locator(".today-list-hide").click();
-  const opener = page.locator(".wall-action", { hasText: "Split it" });
-  await opener.click();
+  // On a phone Split it is in the More sheet, and focus comes back to More.
+  const opener = page.locator(".wall-quiet-link", { hasText: /^More$/ });
+  await openSplit(page);
   const dialog = page.getByRole("dialog", { name: "Split a task" });
   await expect(dialog.locator(":focus")).toHaveCount(1);
   await page.keyboard.press("Escape");
@@ -1198,7 +1218,7 @@ test("Split a task: rows are locked while the AI works, and an answer outside tw
   await page.locator(".wall-commit-field").press("Enter");
   await expect(page.locator(".wall-title")).toContainText("Prepare the Brightlab slides", { timeout: 8_000 });
   await page.locator(".today-list-hide").click();
-  await page.locator(".wall-action", { hasText: "Split it" }).click();
+  await openSplit(page);
 
   const dialog = page.getByRole("dialog", { name: "Split a task" });
   await expect(dialog.locator(".split-lede")).toHaveText("Finding steps of 45 minutes or less…");
@@ -1280,7 +1300,7 @@ test("laptop: with the list hidden, the task and the Day map sit side by side on
   await expect(show).toBeVisible();
   await expect(add).toHaveText(/Add a task/);
   const [showBox, addBox, rescue] = await Promise.all([show.boundingBox(), add.boundingBox(),
-    foot.getByRole("button", { name: "Open Rescue" }).boundingBox()]);
+    foot.getByRole("button", { name: "I’m stuck" }).boundingBox()]);
   expect(Math.round(addBox.y + addBox.height / 2)).toBe(Math.round(showBox.y + showBox.height / 2));
   expect(addBox.x).toBeGreaterThan(showBox.x + showBox.width);
   expect(Math.abs(rescue.x + rescue.width - (band.x + band.width))).toBeLessThan(1);
