@@ -44,6 +44,7 @@ import { IconPlus } from "./ui/icons";
 import TaskDetail from "./TaskDetail";
 import DayMapColumn from "./DayMapColumn";
 import { makeOneThing, undoOneThing } from "../utils/oneThing";
+import { addThought } from "../utils/thoughts";
 import { buildGoalRecord, goalStartDay, goalTaskDoneToday, nextGoalTask } from "../utils/goalRecord";
 import { horizonsFromConfig } from "../utils/horizons";
 import { confirmedMinimumDay } from "../utils/minimumDay";
@@ -539,9 +540,10 @@ export default function TodayTab({
   // "N parked this session": counted per focus session.
   const [parked, setParked] = useState({ sessionId: null, n: 0 });
   const handleFocusBrainDump = (text) => {
-    if (!text.trim()) return;
-    const newItem = { id: `bd_${Date.now()}`, text: text.trim(), createdAt: Date.now() };
-    savePayload({ ...payload, brainDump: [...(payload.brainDump || []), newItem] });
+    // Q56.2: a parked thought lands in Mind Box, under the same 50 cap.
+    const added = addThought(payload, text);
+    if (!added) return;
+    savePayload(added.payload);
     setParked(p => ({ sessionId: focusSessionId, n: p.sessionId === focusSessionId ? p.n + 1 : 1 }));
   };
 

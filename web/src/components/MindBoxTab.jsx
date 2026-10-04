@@ -10,6 +10,10 @@ import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import { buildTaskMutationEvent, buildFocusTerminalEvent, eventsPatch } from "../utils/activityLog";
 import { isOnToday } from "../utils/deferral";
 import { isEventTask } from "../utils/dayMapRoute";
+import { THOUGHTS_MAX, addThought, letGoThought, restoreThought } from "../utils/thoughts";
+import ThoughtsList from "./ThoughtsList";
+import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
+import "../styles/thoughts.css";
 
 function IconSun() {
   return (
@@ -71,7 +75,7 @@ function IconChevronRight() {
   );
 }
 
-export default function MindBoxTab({ payload, savePayload, savePayloadAsync, saveConfigPatch, userProfile, initialPanel, onOpenRoadmapInbox, isSyncingFromCache = false, syncWarning = null, uid, writeActivityEvents, focusTimer = {} }) {
+export default function MindBoxTab({ payload, savePayload, savePayloadAsync, saveConfigPatch, userProfile, initialPanel, onMakeThoughtTask, isSyncingFromCache = false, syncWarning = null, uid, writeActivityEvents, focusTimer = {} }) {
   const { tasks = [], config = {} } = payload;
   const windows = getFocusWindows(config);
 
@@ -465,10 +469,21 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
   const handleBrainDumpSubmit = (e) => {
     e.preventDefault();
     if (!brainDumpText.trim()) return;
-    const currentDump = payload.brainDump || [];
-    if (currentDump.length >= 50) return;
-    savePayload({ ...payload, brainDump: [...currentDump, { id: safeUUID(), text: brainDumpText.trim(), createdAt: Date.now() }] });
+    const added = addThought(payload, brainDumpText);
+    if (!added) return;
+    savePayload(added.payload);
     setBrainDumpText("");
+  };
+
+  // Let go (Q56.2): the thought goes at once, with Undo.
+  const [letGoUndo, setLetGoUndo] = useState(null);
+  const handleLetGo = (thought) => {
+    const gone = letGoThought(payload, thought.id);
+    if (!gone) return;
+    // An Undo that found Mind Box full comes back into the freed place.
+    const waiting = letGoUndo?.full ? restoreThought(gone.payload, letGoUndo.item, letGoUndo.at) : null;
+    savePayload(waiting || gone.payload);
+    setLetGoUndo({ item: gone.item, at: gone.at, key: Date.now() });
   };
 
   const handleNextRescueStep = () => {
@@ -857,16 +872,6 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
                 <IconInbox />
               </span>
               <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-primary)" }}>Brain Dump</span>
-              {dumpCount > 0 && (
-                <button
-                  type="button"
-                  data-testid="brain-dump-inbox-btn"
-                  onClick={() => onOpenRoadmapInbox?.()}
-                  style={{ fontSize: "11px", color: dumpCount >= 50 ? "var(--danger)" : "var(--accent)", fontWeight: "700", marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: "10px 12px", minHeight: "44px", textAlign: "right" }}
-                >
-                  {dumpCount} note{dumpCount === 1 ? "" : "s"} → Roadmap Inbox
-                </button>
-              )}
             </div>
             <form className="braindump-form" onSubmit={handleBrainDumpSubmit}>
               <textarea className="braindump-input" rows={3}
@@ -874,9 +879,10 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
                 value={brainDumpText}
                 onChange={e => setBrainDumpText(e.target.value)}
                 onKeyDown={submitOnEnter}
-                disabled={dumpCount >= 50} />
-              <button type="submit" className="braindump-submit" disabled={dumpCount >= 50}>➔</button>
+                disabled={dumpCount >= THOUGHTS_MAX} />
+              <button type="submit" className="braindump-submit" disabled={dumpCount >= THOUGHTS_MAX}>➔</button>
             </form>
+            <ThoughtsList thoughts={payload.brainDump || []} onMakeTask={t => onMakeThoughtTask?.(t)} onLetGo={handleLetGo} />
             {dumpCount > 0 && hasAnyKey && (
               <button
                 type="button"
@@ -983,6 +989,20 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
       )}
 
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
+      <UndoAnnouncer message={letGoUndo ? (letGoUndo.full ? "Mind Box is full. Let one go to bring this back" : `Let go: ${letGoUndo.item.text}`) : ""} />
+      {letGoUndo && (
+        <UndoToast
+          key={letGoUndo.key}
+          message={letGoUndo.full ? `Mind Box is full. Let one go to bring this back.` : `Let go: ${letGoUndo.item.text}`}
+          onUndo={() => {
+            const back = restoreThought(payload, letGoUndo.item, letGoUndo.at);
+            if (!back) { setLetGoUndo(u => ({ ...u, full: true, key: Date.now() })); return; }
+            savePayload(back);
+            setLetGoUndo(null);
+          }}
+          onClose={() => setLetGoUndo(null)}
+        />
+      )}
     </>
   );
 }

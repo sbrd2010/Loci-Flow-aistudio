@@ -341,7 +341,7 @@ const COACH_SENDS = [
   { title: "Your lists", sub: "Open tasks on Today and in Plan with their steps, times and reminders, plus tasks finished or parked lately." },
   { title: "Your goal", sub: "The key deadline, its date and its daily target." },
   { title: "Your day", sub: "The Day map, the focus session running now, and how many tasks you finished each day." },
-  { title: "Parts of Mind Box", sub: "The first 3 Brain Dump thoughts and how many wait, your Daily Anchors, and a short note after Rescue Mode." },
+  { title: "Parts of Mind Box", sub: "Your 3 newest thoughts and how many wait, your Daily Anchors, and a short note after Rescue Mode." },
   { title: "Check-ins", sub: "Today's committed tasks, your evening reflection and your note for tomorrow." },
   { title: "Coach's memory", sub: "The notes in Coach memory. Nothing when memory is off." },
   { title: "About you", sub: "What you wrote in About you, and patterns such as how often you finish tasks." },
