@@ -178,3 +178,42 @@ test("opening Other shows 25m chosen, and 25m is what is saved", async ({ page }
   await expect.poll(() => bodies.some(b => b.includes("Label the seed trays")), { timeout: 8_000 }).toBe(true);
   expect(bodies.find(b => b.includes("Label the seed trays"))).toContain("Label the seed trays (25min)");
 });
+
+// Q56.1 (64s–t): Add opens with Task | Thought. T opens on Thought from any
+// tab; Enter saves it to Mind Box with a toast; Tab switches to Task.
+test("T opens a thought anywhere; Enter saves it to Mind Box; Tab switches to Task", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  await page.locator("body").click({ position: { x: 5, y: 400 } });
+  await page.keyboard.press("t");
+  const dialog = page.getByRole("dialog", { name: "New thought" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("radio", { name: "Thought" })).toHaveAttribute("aria-checked", "true");
+  const field = dialog.getByLabel("Thought");
+  await expect(field).toBeFocused();
+  await field.fill("Ask the gym about the Friday class");
+  await page.keyboard.press("Enter");
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "Saved to Mind Box" })).toBeVisible();
+
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Mind Box", exact: true }).click();
+  await expect(page.getByTestId("thought-row").first()).toContainText("Ask the gym about the Friday class");
+
+  // Tab carries the text over to a task.
+  await page.locator("body").click({ position: { x: 5, y: 400 } });
+  await page.keyboard.press("t");
+  await page.getByRole("dialog", { name: "New thought" }).getByLabel("Thought").fill("Book the dentist");
+  await page.keyboard.press("Tab");
+  const task = page.getByRole("dialog", { name: "New task" });
+  await expect(task.getByRole("radio", { name: "Task" })).toHaveAttribute("aria-checked", "true");
+  await expect(task.getByTestId("add-task-title")).toHaveValue("Book the dentist");
+});
+
+test("N and + open on Task; the switch is there", async ({ page }) => {
+  await enterDemo(page);
+  await openFromToday(page);
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await expect(dialog.getByRole("radio", { name: "Task" })).toHaveAttribute("aria-checked", "true");
+  await dialog.getByRole("radio", { name: "Thought" }).click();
+  await expect(page.getByRole("dialog", { name: "New thought" }).getByRole("button", { name: "Save thought" })).toBeDisabled();
+});

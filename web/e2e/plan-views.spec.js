@@ -131,14 +131,6 @@ test("Horizons: the circle marks a task done; Work shows only when it holds task
   await expect(page.locator(".plan-rung-older")).toHaveCount(0);
 });
 
-test("Mind Box's notes link lands on Plan's Inbox", async ({ page }) => {
-  await enterDemo(page);
-  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Mind Box", exact: true }).click();
-  await page.getByTestId("brain-dump-inbox-btn").click();
-  await expect(page.getByRole("tab", { name: "Horizons" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("heading", { name: /^Inbox/ })).toBeInViewport();
-});
-
 // Codex review of #410: in Drag anywhere mode the row is the drag handle, so
 // Space or Enter on its circle must mark the task done, not pick the row up.
 test("Horizons in Drag anywhere mode: Space and Enter on the circle mark the task done", async ({ page }) => {

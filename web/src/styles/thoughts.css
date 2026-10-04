@@ -1,0 +1,43 @@
+/* Thoughts in Mind Box (Q56.2). Mind Box's own layout (65a–f) comes later. */
+.thoughts { margin-top: 14px; }
+.thoughts-kicker {
+  margin: 0 0 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--ink-2);
+}
+.thoughts-note { margin: 0 0 6px; font-size: 13px; color: var(--ink-2); }
+.thoughts-list { margin: 0; padding: 0; list-style: none; }
+.thought-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.thought-text { font-size: 15px; color: var(--ink); overflow-wrap: anywhere; }
+.thought-age { font-family: var(--font-mono); font-size: 11px; color: var(--ink-2); }
+.thought-actions { grid-column: 1 / -1; display: flex; gap: 16px; }
+.thought-btn {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+}
+.thought-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* With a mouse, the actions show on hover or focus (64a). */
+@media (hover: hover) and (pointer: fine) {
+  /* Hidden but still in the tab order, so a keyboard can reach them. */
+  .thought-actions { opacity: 0; }
+  .thought-row:hover .thought-actions,
+  .thought-row:focus-within .thought-actions { opacity: 1; }
+  .thought-btn { min-height: 32px; }
+}

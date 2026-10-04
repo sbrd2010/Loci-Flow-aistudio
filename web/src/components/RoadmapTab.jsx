@@ -1,15 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
-import ConfirmDialog from "./ConfirmDialog";
-import { safeUUID } from "../utils/uuid";
-import { getAIKeys, callAI, hasAIKey, extractJsonArray } from "../utils/aiCall";
-import { sanitizeTaskField, CATEGORY_ICONS, byPriorityThenOrder } from "../utils/taskOps";
+import { CATEGORY_ICONS, byPriorityThenOrder } from "../utils/taskOps";
 import { getFocusWindows } from "../utils/focusWindows";
 import { useLociDayStr } from "../hooks/useTodayStr";
 import { horizonsFromConfig, WORK_OLDER_ID } from "../utils/horizons";
 import { leftoverTags, pendingReviews, applySort, undoReviewOrSort } from "../utils/horizonReview";
 import HorizonReview from "./HorizonReview";
 import { dayLabel, doneTasks, horizonChoices, isOpenPlanTask, ladderRungs, listTasks, openingRung, runwayLabelsShown, runwayTicks, workOlderCount } from "../utils/planLadder";
-import { buildTaskMutationEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import useTaskActions from "../hooks/useTaskActions";
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor,
@@ -281,7 +277,7 @@ const RUNG_KEY = "loci_plan_rung";
 const readRung = () => { try { return localStorage.getItem(RUNG_KEY); } catch { return null; } };
 const writeRung = (id) => { try { localStorage.setItem(RUNG_KEY, id); } catch { /* private mode */ } };
 
-export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, focusInbox = false, uid, writeActivityEvents, focusTimer = {}, frontId = null, frontsColumn = null, frontOpen = false, onCloseFront, onOpenReview }) {
+export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onOpenAddTask, uid, writeActivityEvents, focusTimer = {}, frontId = null, frontsColumn = null, frontOpen = false, onCloseFront, onOpenReview }) {
   const { tasks = [], config = {} } = payload;
   const windows = getFocusWindows(config);
 
@@ -325,7 +321,6 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
 
   // A task, opened (52h): the same sheet as Today's, with Plan's footer.
   const [detailUuid, setDetailUuid] = useState(null);
-  const [confirmDialog, setConfirmDialog] = useState(null);
   // The one Undo toast (done, delete, park, today, step), as on Today.
   const {
     undo, setUndo, undoText, handleUndo,
@@ -338,299 +333,20 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
-  // Brain dump deletion is confirmed via a deferred onConfirm callback — by the
-  // time the user clicks "Delete", `payload` in that closure may be stale (e.g.
-  // a background save landed while the dialog was open). Track the latest
-  // payload in a ref so the delete reads/writes current data, not a snapshot.
+  // Undo and a review's sort read the latest payload, not this render's.
   const payloadRef = useRef(payload);
   payloadRef.current = payload;
-  const [longDumpWarning, setLongDumpWarning] = useState(null); // {id, horizon}
-  const [aiBreakdownSuggestion, setAiBreakdownSuggestion] = useState(null); // {id, items: [{title, concreteStep}], noKey, error}
-  const [aiBreakdownLoading, setAiBreakdownLoading] = useState(null); // item.id
-  const [editingDumpItem, setEditingDumpItem] = useState(null); // {id, text}
-
-  // Mind Box's "N notes waiting" lands here: bring the Inbox into view.
-  const inboxRef = useRef(null);
-  useEffect(() => {
-    if (focusInbox) inboxRef.current?.scrollIntoView({ block: "start" });
-  }, [focusInbox]);
 
   const openTask = (task) => setDetailUuid(task.uuid);
 
   const isVisibleRoadmapTask = (t) => !t.isDeleted && !t.isCompleted && !t.isParked;
 
-  const doTriageBrainDump = (item, horizon, overrideText) => {
-    const userId = payload.userId || payload.config?.userId || "";
-    const titleText = overrideText !== undefined ? overrideText : item.text;
-    const freshTask = {
-      id: Date.now(), userId, uuid: safeUUID(),
-      title: sanitizeTaskField(titleText, 1000) || "Untitled task",
-      concreteStep: "Do first tiny step",
-      horizonLevel: horizon, priority: "P3", category: "Personal",
-      timeEstimateMinutes: 25, deadlineTimestamp: null,
-      isCompleted: false, isParked: false, isNowFocus: false,
-      orderIndex: tasks.filter(t => t.horizonLevel === horizon && isVisibleRoadmapTask(t)).length,
-      dateCompletedString: null, isDeleted: false, lastUpdated: Date.now()
-    };
-    const event = buildTaskMutationEvent("task_created", freshTask, { windows });
-    savePayloadAsync({ ...payload, tasks: [...tasks, freshTask], brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) })
-      .then(() => writeActivityEvents(eventPatch(uid, event)))
-      .catch(() => {});
-    setLongDumpWarning(null);
-    setAiBreakdownSuggestion(null);
-    setEditingDumpItem(null);
-  };
-
-  const handleTriageBrainDump = (item, horizon) => {
-    const text = editingDumpItem?.id === item.id ? editingDumpItem.text : item.text;
-    const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
-    if (wordCount > 20) {
-      setLongDumpWarning({ id: item.id, horizon });
-      return;
-    }
-    doTriageBrainDump(item, horizon, editingDumpItem?.id === item.id ? editingDumpItem.text : undefined);
-  };
-
-  const handleDeleteBrainDump = (item) => {
-    setConfirmDialog({
-      message: "Delete this brain dump item?",
-      confirmLabel: "Delete", cancelLabel: "Keep it", danger: true,
-      onConfirm: () => {
-        const latest = payloadRef.current;
-        savePayload({ ...latest, brainDump: (latest.brainDump || []).filter(d => d.id !== item.id) });
-        setConfirmDialog(null);
-      },
-      onCancel: () => setConfirmDialog(null)
-    });
-  };
-
-  const MAX_BREAKDOWN_ITEMS = 6;
-
-  const handleAIBreakdown = async (item) => {
-    const textToBreakdown = editingDumpItem?.id === item.id ? editingDumpItem.text : item.text;
-    if (!hasAIKey()) {
-      setAiBreakdownSuggestion({ id: item.id, items: [], noKey: true });
-      return;
-    }
-    setAiBreakdownLoading(item.id);
-    try {
-      const keys = getAIKeys();
-      const prompt = `Here is a raw brain dump note:
-"${textToBreakdown}"
-
-Turn it into 1-${MAX_BREAKDOWN_ITEMS} clear, atomic, actionable tasks — one task per distinct action in the note. If the note only contains one real action, return a single task; don't pad the list with filler.
-
-Hard rules:
-- Never merge unrelated points into one task, and never write a vague catch-all title
-- Titles are action-style and specific (max 60 chars) — keep the concrete subject: names, dates, amounts, tools, places
-- Every task has a concreteStep: the single easiest first physical/digital action (max 60 chars)
-- Preserve concrete details from the note in the concreteStep or a follow-up task rather than dropping them just to keep a title short
-
-Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}, no markdown, no explanation.`;
-      const result = await callAI({
-        ...keys,
-        systemPrompt: "You are a productivity assistant. Respond ONLY with a valid JSON array, no markdown. Preserve every concrete detail from the input — never compress or summarize away names, dates, deadlines, amounts, or other specifics to save space.",
-        messages: [{ role: "user", content: prompt }],
-        // Headroom for up to MAX_BREAKDOWN_ITEMS title+concreteStep objects —
-        // 600 was tight enough that a truncated mid-array response (non-empty,
-        // so no provider retries it) would silently collapse to the one-item
-        // fallback below, defeating the point of asking for multiple tasks.
-        maxTokens: 1500,
-        reasoningEffort: "low",
-      });
-      let parsed;
-      try {
-        parsed = extractJsonArray(result);
-      } catch {
-        parsed = [{ title: textToBreakdown.substring(0, 60), concreteStep: "Do first tiny step" }];
-      }
-      const items = parsed
-        .filter(t => t && typeof t.title === "string" && t.title.trim())
-        .slice(0, MAX_BREAKDOWN_ITEMS)
-        .map(t => ({
-          title: sanitizeTaskField(t.title, 1000) || textToBreakdown.substring(0, 60),
-          concreteStep: sanitizeTaskField(t.concreteStep, 300) || "Do first tiny step"
-        }));
-      setAiBreakdownSuggestion({
-        id: item.id,
-        items: items.length ? items : [{ title: textToBreakdown.substring(0, 60), concreteStep: "Do first tiny step" }]
-      });
-    } catch {
-      setAiBreakdownSuggestion({ id: item.id, items: [], error: true });
-    }
-    setAiBreakdownLoading(null);
-  };
-
-  const handleConfirmAISuggestion = (item) => {
-    if (!aiBreakdownSuggestion || aiBreakdownSuggestion.id !== item.id || !aiBreakdownSuggestion.items?.length) return;
-    const horizon = longDumpWarning?.horizon || "today";
-    const userId = payload.userId || payload.config?.userId || "";
-    const baseOrderIndex = tasks.filter(t => t.horizonLevel === horizon && isVisibleRoadmapTask(t)).length;
-    const freshTasks = aiBreakdownSuggestion.items.map((suggestion, i) => ({
-      id: Date.now() + i, userId, uuid: safeUUID(),
-      title: suggestion.title,
-      concreteStep: suggestion.concreteStep || "Do first tiny step",
-      horizonLevel: horizon, priority: "P3", category: "Personal",
-      timeEstimateMinutes: 25, deadlineTimestamp: null,
-      isCompleted: false, isParked: false, isNowFocus: false,
-      orderIndex: baseOrderIndex + i,
-      dateCompletedString: null, isDeleted: false, lastUpdated: Date.now()
-    }));
-    const events = freshTasks.map((t) => buildTaskMutationEvent("task_created", t, { windows }));
-    savePayloadAsync({ ...payload, tasks: [...tasks, ...freshTasks], brainDump: (payload.brainDump || []).filter(d => d.id !== item.id) })
-      .then(() => writeActivityEvents(eventsPatch(uid, events)))
-      .catch(() => {});
-    setLongDumpWarning(null);
-    setAiBreakdownSuggestion(null);
-    setEditingDumpItem(null);
-  };
-
-  // Delete goes at once, with Undo (50: Undo, not confirm).
-  const handleClearAllBrainDump = () => {
-    setConfirmDialog({
-      message: `Clear all ${(payload.brainDump || []).length} brain dump items?\n\nThis cannot be undone.`,
-      confirmLabel: "Clear all", cancelLabel: "Cancel", danger: true,
-      onConfirm: () => { savePayload({ ...payload, brainDump: [] }); setConfirmDialog(null); },
-      onCancel: () => setConfirmDialog(null)
-    });
-  };
-
-  const renderDumpItem = (item) => {
-    const isWarning = longDumpWarning?.id === item.id;
-    const isLoadingAI = aiBreakdownLoading === item.id;
-    const hasSuggestion = aiBreakdownSuggestion?.id === item.id;
-    const isEditing = editingDumpItem?.id === item.id;
-    const showHorizonBtns = !isWarning && !isLoadingAI && !hasSuggestion;
-
-    return (
-      <div key={item.id} data-testid="dump-item" style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px", marginBottom: "8px" }}>
-        {isEditing ? (
-          <textarea
-            value={editingDumpItem.text}
-            onChange={e => setEditingDumpItem({ id: item.id, text: e.target.value })}
-            style={{ width: "100%", fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", background: "var(--bg-card)", border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)", padding: "6px 8px", marginBottom: "8px", resize: "vertical", minHeight: "60px", fontFamily: "inherit", boxSizing: "border-box" }}
-          />
-        ) : (
-          <p style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "8px" }}>{item.text}</p>
-        )}
-
-        {isWarning && !hasSuggestion && !isLoadingAI && (
-          <div style={{ marginBottom: "8px" }}>
-            <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "6px" }}>
-              {isEditing ? "Edited above — break it down or move as-is." : "This note is long. Edit first, break it down, or move as-is."}
-            </p>
-            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-              {!isEditing && (
-                <button
-                  onClick={() => setEditingDumpItem({ id: item.id, text: item.text })}
-                  style={{ fontSize: "11px", padding: "5px 10px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--text-primary)", cursor: "pointer" }}>
-                  ✏ Edit first
-                </button>
-              )}
-              <button
-                onClick={() => handleAIBreakdown(item)}
-                style={{ fontSize: "11px", padding: "5px 10px", background: "var(--accent)", border: "none", borderRadius: "var(--radius-sm)", color: "#fff", cursor: "pointer" }}>
-                ✦ Break down
-              </button>
-              <button
-                onClick={() => doTriageBrainDump(item, longDumpWarning.horizon, isEditing ? editingDumpItem.text : undefined)}
-                style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--text-secondary)", cursor: "pointer" }}>
-                Move as-is
-              </button>
-              <button
-                onClick={() => { setLongDumpWarning(null); setEditingDumpItem(null); }}
-                style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {isLoadingAI && (
-          <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "8px" }}>✦ Breaking down with AI...</p>
-        )}
-
-        {hasSuggestion && (
-          <div style={{ marginBottom: "8px" }}>
-            {aiBreakdownSuggestion.items?.length ? (
-              <>
-                <p style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" }}>
-                  AI suggestion{aiBreakdownSuggestion.items.length > 1 ? ` (${aiBreakdownSuggestion.items.length} tasks)` : ""}
-                </p>
-                {aiBreakdownSuggestion.items.map((suggestion, i) => (
-                  <div key={i} style={{ background: "var(--bg-card)", border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)", padding: "8px 10px", marginBottom: "6px" }}>
-                    <p style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "2px" }}>{suggestion.title}</p>
-                    {suggestion.concreteStep && (
-                      <p style={{ fontSize: "11px", color: "var(--text-secondary)" }}>⚡ {suggestion.concreteStep}</p>
-                    )}
-                  </div>
-                ))}
-              </>
-            ) : aiBreakdownSuggestion.noKey ? (
-              <p style={{ fontSize: "11px", color: "var(--text-secondary)", marginBottom: "6px" }}>🔑 Add an AI key in Settings → AI Keys to use this. Edit or move as-is.</p>
-            ) : (
-              <p style={{ fontSize: "11px", color: "var(--danger)", marginBottom: "6px" }}>AI unavailable. Edit or move as-is.</p>
-            )}
-            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-              {aiBreakdownSuggestion.items?.length > 0 && (
-                <button
-                  onClick={() => handleConfirmAISuggestion(item)}
-                  style={{ fontSize: "11px", padding: "5px 12px", background: "var(--accent)", border: "none", borderRadius: "var(--radius-sm)", color: "#fff", cursor: "pointer", fontWeight: "700" }}>
-                  {aiBreakdownSuggestion.items.length > 1 ? `Use these (${aiBreakdownSuggestion.items.length}) →` : "Use this →"}
-                </button>
-              )}
-              <button
-                onClick={() => doTriageBrainDump(item, longDumpWarning?.horizon || "today", editingDumpItem?.id === item.id ? editingDumpItem.text : undefined)}
-                style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--text-secondary)", cursor: "pointer" }}>
-                Move as-is
-              </button>
-              <button
-                onClick={() => { setAiBreakdownSuggestion(null); setLongDumpWarning(null); setEditingDumpItem(null); }}
-                style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {showHorizonBtns && (
-          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-            {[["today","Today"],["week","Week"],["month","Month"],["quarter","Qtr"]].map(([h, label]) => (
-              <button key={h} className="btn" onClick={() => handleTriageBrainDump(item, h)}
-                style={{ fontSize: "11px", padding: "5px 10px", background: "var(--bg-card)", color: "var(--accent)", border: "1px solid var(--accent)" }}>
-                → {label}
-              </button>
-            ))}
-            <button onClick={() => handleDeleteBrainDump(item)}
-              style={{ fontSize: "11px", padding: "5px 10px", background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--danger)", cursor: "pointer" }}>
-              🗑
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const brainDump = payload.brainDump || [];
   // GOAL: the same rule as Today's rows — the front the wall's kicker names.
   const fronts = frontsFromConfig(config);
   const goalFront = commitmentKickerFront(frontForCommitment(tasks.find(t => t.isNowFocus && !t.isDeleted && !t.isCompleted), fronts), config);
   const isGoal = (task) => !!goalFront && task.frontId === goalFront.id;
   // A front's page names the front once, in its title, not on every row.
   const frontNameOf = (task) => (frontId ? null : fronts.find(f => f.id === task.frontId)?.name || null);
-
-  const inbox = brainDump.length > 0 && (
-    <section className="plan-inbox" aria-labelledby="plan-inbox-title" ref={inboxRef}>
-      <div className="plan-horizon-head">
-        <h3 className="plan-horizon-name" id="plan-inbox-title">Inbox <span className="plan-horizon-count">{brainDump.length}</span></h3>
-        <button type="button" className="plan-inbox-clear" onClick={handleClearAllBrainDump}>Clear all</button>
-      </div>
-      <p className={`plan-inbox-note${brainDump.length >= 50 ? " is-full" : ""}`}>
-        {brainDump.length}/50 {brainDump.length >= 50 ? "— the inbox is full. Send some on before adding more." : `${brainDump.length === 1 ? "note" : "notes"} from Mind Box. Send each to a horizon.`}
-      </p>
-      <div className="plan-inbox-items">{brainDump.map(item => renderDumpItem(item))}</div>
-    </section>
-  );
 
   const shownColumns = frontId
     ? columns
@@ -852,7 +568,6 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
         </>
       )}
       {/* Mind Box's notes wait below the horizons (45h has none on top). */}
-      {!frontId && inbox}
 
       {/* A task, opened (52h): the sheet on phones and tablets, the drawer
           from 1024px. */}
@@ -880,8 +595,6 @@ Return ONLY a JSON array of objects like {"title": "...", "concreteStep": "..."}
           />
         </div>
       )}
-
-      {confirmDialog && <ConfirmDialog {...confirmDialog} />}
 
       {sorting && (
         <HorizonReview

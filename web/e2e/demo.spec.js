@@ -184,64 +184,6 @@ test("10. Demo banner is visible and clearly says data is not saved", async ({ p
   await expect(banner).toContainText("not saved");
 });
 
-test("13. Brain dump long-note gate — move as-is lands in horizon", async ({ page }) => {
-  await enterDemo(page);
-
-  // Navigate to Roadmap and open Brain Dump Inbox
-  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  await page.getByRole("tab", { name: "Horizons" }).click();
-  await expect(page.getByRole("heading", { name: /^Inbox/ })).toBeVisible();
-
-  // Demo item bd4 is > 20 words — it should be in the inbox
-  const longItemText = "I need to decide whether to keep the current plan";
-  const dumpItem = page.locator('[data-testid="dump-item"]').filter({ hasText: longItemText });
-  await expect(dumpItem).toBeVisible({ timeout: 5_000 });
-
-  // Clicking "→ Week" should trigger the long-note gate, not move immediately
-  await dumpItem.getByRole("button", { name: "→ Week" }).click();
-  await expect(dumpItem.getByText("This note is long")).toBeVisible({ timeout: 3_000 });
-
-  // Item still in inbox (not yet moved — waiting for user decision)
-  await expect(dumpItem).toBeVisible();
-
-  // Choose "Move as-is" — task should land in Week, item should leave inbox
-  await dumpItem.getByRole("button", { name: "Move as-is" }).click();
-  await expect(dumpItem).not.toBeVisible({ timeout: 5_000 });
-
-  // It lands in This week, shown with the other horizons.
-  const week = page.locator(".plan-open", { has: page.getByRole("heading", { name: /^This week/ }) });
-  await expect(week.getByText(longItemText)).toBeVisible({ timeout: 5_000 });
-});
-
-test("14. Brain dump inbox delete (Roadmap) requires confirmation before removing an item", async ({ page }) => {
-  await enterDemo(page);
-
-  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  await page.getByRole("tab", { name: "Horizons" }).click();
-  await expect(page.getByRole("heading", { name: /^Inbox/ })).toBeVisible();
-
-  const firstDumpItem = page.locator('[data-testid="dump-item"]').first();
-  await expect(firstDumpItem).toBeVisible({ timeout: 5_000 });
-  const itemText = await firstDumpItem.locator("p").innerText();
-  const dumpItem = page.locator('[data-testid="dump-item"]').filter({ hasText: itemText });
-
-  // One click on the trash button must NOT delete immediately — it opens a confirm dialog
-  await dumpItem.getByText("🗑").click();
-  await expect(page.getByText("Delete this brain dump item?")).toBeVisible({ timeout: 5_000 });
-  await expect(dumpItem).toBeVisible();
-
-  // Cancelling keeps the item
-  await page.getByRole("button", { name: "Keep it", exact: true }).click();
-  await expect(dumpItem).toBeVisible();
-
-  // Confirming removes it
-  await dumpItem.getByText("🗑").click();
-  await expect(page.getByText("Delete this brain dump item?")).toBeVisible({ timeout: 5_000 });
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
-  await expect(dumpItem).not.toBeVisible({ timeout: 5_000 });
-});
-
-// Helper: open Day Map, auto-fill, and return it ready for toggle tests
 async function openDayMapWithTasks(page) {
   await enterDemo(page);
   await page.getByRole("button", { name: "Day map →" }).click();
