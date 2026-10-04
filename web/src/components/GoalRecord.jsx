@@ -65,16 +65,22 @@ export default function GoalRecord({ goal, record, weekdays = false, next = null
     const aboveRoom = band.bottom - headerBottom - 8 - 12;
     if (natural <= below || below >= aboveRoom) {
       setAbove(false);
-      setMaxHeight(natural > below ? Math.max(160, below) : null);
+      setMaxHeight(natural > below ? Math.max(0, below) : null);
     } else {
       setAbove(true);
-      setMaxHeight(natural > aboveRoom ? Math.max(160, aboveRoom) : null);
+      setMaxHeight(natural > aboveRoom ? Math.max(0, aboveRoom) : null);
     }
   }, [wide, bandRef]);
 
-  // Swipe down on the sheet's top closes it (63b).
+  // Swipe down on the sheet's top closes it (63b). Once the body has
+  // scrolled, a downward drag scrolls it back instead.
   const drag = useRef(null);
-  const onPointerDown = (e) => { if (!wide) drag.current = e.clientY; };
+  const onPointerDown = (e) => {
+    // A gesture the browser took over for scrolling ends in pointercancel,
+    // not pointerup: start each one clean so an old start can't close it.
+    drag.current = null;
+    if (!wide && !(panelRef.current?.querySelector(".gr-body")?.scrollTop > 0)) drag.current = e.clientY;
+  };
   const onPointerUp = (e) => {
     if (drag.current != null && e.clientY - drag.current > 60) onClose();
     drag.current = null;
@@ -94,9 +100,10 @@ export default function GoalRecord({ goal, record, weekdays = false, next = null
         role="dialog"
         aria-label={`Goal record: ${goal.name}`}
         tabIndex={-1}
-        style={maxHeight ? { maxHeight } : undefined}
+        style={maxHeight != null ? { maxHeight } : undefined}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
+        onPointerCancel={() => { drag.current = null; }}
       >
         <div className="gr-body">
           {!wide && (

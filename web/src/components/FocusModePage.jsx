@@ -11,6 +11,7 @@ import EndSessionDialog from "./EndSessionDialog";
 import StuckSheet from "./StuckSheet";
 import LinkifyText from "./LinkifyText";
 import { IconCheck, IconX } from "./ui/icons";
+import { THOUGHTS_MAX } from "../utils/thoughts";
 import "../styles/focusMode.css";
 
 const PIP_SUPPORTED = "documentPictureInPicture" in window;
@@ -140,6 +141,7 @@ export default function FocusModePage({
 
   const [dumpText, setDumpText] = useState("");
   const [dumpSaved, setDumpSaved] = useState(false);
+  const [dumpFull, setDumpFull] = useState(false);
   const dumpInputRef = useRef(null);
   const [showSoundsDrawer, setShowSoundsDrawer] = useState(false);
   // 59h: the End session question.
@@ -161,7 +163,7 @@ export default function FocusModePage({
 
   const submitDump = () => {
     if (!dumpText.trim()) return;
-    onAddBrainDump?.(dumpText.trim());
+    if (onAddBrainDump?.(dumpText.trim()) === false) { setDumpFull(true); return; }
     setDumpText("");
     setDumpSaved(true);
     setTimeout(() => setDumpSaved(false), 1500);
@@ -376,7 +378,7 @@ export default function FocusModePage({
         className="focus-mode-dump-input"
         placeholder="A stray thought? Park it here"
         value={dumpText}
-        onChange={e => setDumpText(e.target.value)}
+        onChange={e => { setDumpText(e.target.value); setDumpFull(false); }}
         onKeyDown={e => { if (e.key === "Enter") submitDump(); }}
         aria-label="Capture a thought to Brain Dump"
       />
@@ -388,6 +390,7 @@ export default function FocusModePage({
       >
         {dumpSaved ? "Saved" : "Save"}
       </button>
+      {dumpFull && <p className="fm-parked" role="alert">Mind Box holds {THOUGHTS_MAX} thoughts. Let a few go first.</p>}
       {parkedCount > 0 && <p className="fm-parked" aria-live="polite">{parkedCount} parked this session</p>}
     </div>
   );

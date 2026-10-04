@@ -550,10 +550,12 @@ export default function TodayTab({
   const [parked, setParked] = useState({ sessionId: null, n: 0 });
   const handleFocusBrainDump = (text) => {
     // Q56.2: a parked thought lands in Mind Box, under the same 50 cap.
+    // False when Mind Box is full, so Focus keeps the text and says so.
     const added = addThought(payload, text);
-    if (!added) return;
+    if (!added) return false;
     savePayload(added.payload);
     setParked(p => ({ sessionId: focusSessionId, n: p.sessionId === focusSessionId ? p.n + 1 : 1 }));
+    return true;
   };
 
   // 59d, I'm stuck. A smaller step goes ahead of the steps still open.
