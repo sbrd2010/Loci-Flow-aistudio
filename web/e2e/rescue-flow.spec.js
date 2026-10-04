@@ -54,6 +54,19 @@ test("the four steps, Clear my day to This week, and Undo", async ({ page }) => 
   await expect(page.locator(".wall-title")).toContainText("Reply to the important message");
 });
 
+test("after Clear my day moves the one thing away, Back to it doesn't offer it", async ({ page }) => {
+  await enterDemo(page);
+  await openFromToday(page);
+  await rescue(page).getByRole("button", { name: /^Too much going on/ }).click();
+  await rescue(page).getByRole("button", { name: "Skip", exact: true }).click();
+  await rescue(page).getByRole("button", { name: /^Clear my day/ }).click();
+  await rescue(page).getByRole("checkbox", { name: /as the one thing/ }).uncheck();
+  await rescue(page).getByRole("button", { name: /^Move \d+ to This week$/ }).click();
+  await expect(rescue(page).getByRole("heading", { name: "Where to now?" })).toBeVisible();
+  await expect(rescue(page).getByRole("button", { name: /^Back to it/ })).toHaveCount(0);
+  await expect(rescue(page).getByRole("button", { name: "Back to Today" })).toBeVisible();
+});
+
 test("Back to it starts a 10-minute focus block on the one thing", async ({ page }) => {
   await enterDemo(page);
   await openFromToday(page);
