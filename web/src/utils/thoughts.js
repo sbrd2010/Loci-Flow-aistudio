@@ -27,10 +27,19 @@ export function letGoThought(payload, id) {
   return { payload: { ...payload, brainDump: dump.filter(d => d.id !== id) }, item: dump[at], at };
 }
 
+// Null when Mind Box filled up again in the meantime: Undo can't add a 51st.
 export function restoreThought(payload, item, at) {
   const dump = thoughtsOf(payload);
   if (!item || dump.some(d => d.id === item.id)) return payload;
+  if (dump.length >= THOUGHTS_MAX) return null;
   const next = [...dump];
   next.splice(Math.min(Math.max(0, at), next.length), 0, item);
   return { ...payload, brainDump: next };
+}
+
+// Newest first by createdAt. Stored order isn't time order after a sync
+// merge appends the other device's thoughts.
+export function newestThoughtsFirst(list) {
+  const at = t => (Number.isFinite(t?.createdAt) ? t.createdAt : -Infinity);
+  return [...(list || [])].reverse().sort((a, b) => at(b) - at(a));
 }

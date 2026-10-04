@@ -319,7 +319,9 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
   const handleLetGo = (thought) => {
     const gone = letGoThought(payload, thought.id);
     if (!gone) return;
-    savePayload(gone.payload);
+    // An Undo that found Mind Box full comes back into the freed place.
+    const waiting = letGoUndo?.full ? restoreThought(gone.payload, letGoUndo.item, letGoUndo.at) : null;
+    savePayload(waiting || gone.payload);
     setLetGoUndo({ item: gone.item, at: gone.at, key: Date.now() });
   };
 
@@ -789,12 +791,17 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
         </div>
       )}
 
-      <UndoAnnouncer message={letGoUndo ? `Let go: ${letGoUndo.item.text}` : ""} />
+      <UndoAnnouncer message={letGoUndo ? (letGoUndo.full ? "Mind Box is full. Let one go to bring this back" : `Let go: ${letGoUndo.item.text}`) : ""} />
       {letGoUndo && (
         <UndoToast
           key={letGoUndo.key}
-          message={`Let go: ${letGoUndo.item.text}`}
-          onUndo={() => { savePayload(restoreThought(payload, letGoUndo.item, letGoUndo.at)); setLetGoUndo(null); }}
+          message={letGoUndo.full ? `Mind Box is full. Let one go to bring this back.` : `Let go: ${letGoUndo.item.text}`}
+          onUndo={() => {
+            const back = restoreThought(payload, letGoUndo.item, letGoUndo.at);
+            if (!back) { setLetGoUndo(u => ({ ...u, full: true, key: Date.now() })); return; }
+            savePayload(back);
+            setLetGoUndo(null);
+          }}
           onClose={() => setLetGoUndo(null)}
         />
       )}

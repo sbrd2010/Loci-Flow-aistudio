@@ -35,8 +35,9 @@
 .thought-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* With a mouse, the actions show on hover or focus (64a). */
 @media (hover: hover) and (pointer: fine) {
-  .thought-actions { display: none; }
+  /* Hidden but still in the tab order, so a keyboard can reach them. */
+  .thought-actions { opacity: 0; }
   .thought-row:hover .thought-actions,
-  .thought-row:focus-within .thought-actions { display: flex; }
+  .thought-row:focus-within .thought-actions { opacity: 1; }
   .thought-btn { min-height: 32px; }
 }
