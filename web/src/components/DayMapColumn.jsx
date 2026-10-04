@@ -8,20 +8,18 @@ import DayClockBar from "./DayClockBar";
 import DayMapFrom from "./DayMapFrom";
 import DidItHappen from "./DidItHappen";
 import FixTimeSheet from "./FixTimeSheet";
-import { IconChevronDown, IconLock, IconPin, IconPlus } from "./ui/icons";
+import { IconLock, IconPin } from "./ui/icons";
 import "../styles/dayMap.css";
 
-// Today's Day map column (54a/c/e): how far over the day is, the route's
-// controls (From · Auto-fill · Clear route), the day clock, the route's stops
-// with the one thing at NOW and the DAY ENDS line where it falls, "Move N to
-// tomorrow", and Unscheduled. A stop opens that task; the heading opens the
-// Day map page. Clear route's Undo is Today's (onRouteCleared).
-export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpenTask, onDone, onMoveToTomorrow, onRouteCleared, covered = false }) {
+// Today's Day map column (54a/c/e): how far over the day is, From, the day
+// clock, the route's stops (every open Today task, Q59) with the one thing at
+// NOW and the DAY ENDS line where it falls, and "Move N to tomorrow". A stop
+// opens that task; the heading opens the Day map page.
+export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpenTask, onDone, onMoveToTomorrow, covered = false }) {
   const {
-    windows, scheduledTasks, unscheduledTasks, anchorMinutes, rows, routeTasks, plan,
-    setAnchor, addToRoute, autoFill, clearRoute, applyAndSave, breaks,
+    windows, todayStr, scheduledTasks, anchorMinutes, rows, routeTasks, plan,
+    setAnchor, applyAndSave, breaks,
   } = useDayRoute({ payload, savePayload });
-  const [poolOpen, setPoolOpen] = useState(false);
   const [picking, setPicking] = useState(null); // "Did it happen?" → Pick a time…
 
   const progress = dayProgress(new Date(), windows);
@@ -91,6 +89,7 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
           <span className="tdm-title">
             {task.title}{r.continued ? " · continued" : ""}
             {r.fixed && <span className="dm-lock"><IconLock size={13} /></span>}
+            {task.deferredUntil === todayStr && !r.continued && <span className="from-yesterday">FROM YESTERDAY</span>}
             {oneThing && (
               <span className="tdm-one-thing"><IconPin size={12} />THE ONE THING · UNTIL {formatClock24(until)}</span>
             )}
@@ -128,21 +127,12 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
       {scheduledTasks.length > 0 && (
         <div className="tdm-controls">
           <DayMapFrom anchorMinutes={anchorMinutes} onChangeAnchor={setAnchor} windows={windows} />
-          <span className="tdm-controls-end">
-            <button type="button" className="dm-text-btn" onClick={autoFill} disabled={!unscheduledTasks.length}>Auto-fill</button>
-            <button type="button" className="dm-text-btn" onClick={() => { const before = clearRoute(); if (before) onRouteCleared(before); }}>Clear route</button>
-          </span>
         </div>
       )}
       {progress && <div className="tdm-clock"><DayClockBar progress={progress} /></div>}
 
       {scheduledTasks.length === 0 ? (
-        <p className="tdm-empty">
-          Nothing on the route yet
-          {unscheduledTasks.length > 0
-            ? <> · <button type="button" className="tdm-empty-link" onClick={autoFill}>Auto-fill</button></>
-            : "."}
-        </p>
+        <p className="tdm-empty">Nothing on Today yet.</p>
       ) : (
         <>
           <ol className="tdm-route" aria-label="Today's route">
@@ -166,31 +156,9 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
           )}
         </>
       )}
-      {unscheduledTasks.length > 0 && (
-        <section className="tdm-pool" aria-label="Unscheduled">
-          <button type="button" className="tdm-pool-toggle" aria-expanded={poolOpen} onClick={() => setPoolOpen(o => !o)}>
-            <span className="tdm-pool-name">Unscheduled <span className="tdm-pool-count">{unscheduledTasks.length}</span></span>
-            <IconChevronDown size={18} />
-          </button>
-          {poolOpen && (
-            <ul className="tdm-pool-list">
-              {unscheduledTasks.map(t => (
-                <li key={getTaskId(t)} className="tdm-pool-row">
-                  <span className="tdm-pool-title">{t.title}</span>
-                  <span className="tdm-dur">{formatSpan(getEstimate(t))}</span>
-                  <button type="button" className="dm-pool-add" aria-label={`Add to route: ${t.title}`} onClick={() => addToRoute(getTaskId(t))}>
-                    <IconPlus size={18} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
       {picking && (
         <FixTimeSheet
           routeTasks={routeTasks}
-          unscheduledTasks={unscheduledTasks}
           stops={scheduledTasks}
           task={picking}
           from={anchorMinutes}

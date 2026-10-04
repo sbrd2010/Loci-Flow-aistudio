@@ -293,19 +293,6 @@
   outline-offset: -2px;
 }
 
-/* 50i–j: the next morning, tasks moved from yesterday head the list under a
-   quiet heading, and the rest sit under "Today" — for that one day only. */
-.today-list-group {
-  margin: 14px 0 2px;
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-2);
-}
-.today-list-group:first-child { margin-top: 6px; }
-
 /* 50g–h: a quiet line closes the list; it opens in place. */
 .today-moved { border-bottom: 1px solid var(--line); }
 .today-moved-line {

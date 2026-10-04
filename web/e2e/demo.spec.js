@@ -188,12 +188,6 @@ async function openDayMapWithTasks(page) {
   await enterDemo(page);
   await page.getByRole("button", { name: "Day map →" }).click();
   await expect(page.locator(".day-map-page")).toBeVisible({ timeout: 8_000 });
-  const autoFill = page.getByRole("button", { name: "Auto-fill" });
-  const autoFillVisible = await autoFill.isVisible();
-  if (autoFillVisible) {
-    const disabled = await autoFill.isDisabled();
-    if (!disabled) await autoFill.click();
-  }
 }
 
 test("11. Day Map route timeline — always visible, no view toggle", async ({ page }) => {

@@ -50,7 +50,7 @@ export default function TaskDetail({
   onClose, onPatch, onToggleMVD, onSetSteps,
   onMakeOneThing, onDone, onTomorrow, onPark, onDelete, editTitleSignal = 0,
   isNow = false, onLetGo,
-  onShowAll, kicker = null, onMoveToToday, onTogglePin, onRemoveFromRoute, onFixTime, onUnfix, fixedAt = null,
+  onShowAll, kicker = null, onMoveToToday, onTogglePin, onFixTime, onUnfix, fixedAt = null,
   horizonChoices = null,
 }) {
   const [picker, setPicker] = useState(null);
@@ -220,8 +220,8 @@ export default function TaskDetail({
     : ESTIMATES;
 
   const isHorizon = typeof onMoveToToday === "function";
-  // Opened from a Day map stop: its footer takes the stop off the route.
-  const isRoute = typeof onRemoveFromRoute === "function";
+  // Opened from a Day map stop: its footer fixes the stop's time.
+  const isRoute = typeof onFixTime === "function";
   const kbd = k => isDrawer && !isHorizon && !isRoute && <kbd className="wall-key detail-key" aria-hidden="true">{k}</kbd>;
 
   // The phone sheet is modal: Tab stays inside it, as in the other sheets.
@@ -532,7 +532,6 @@ export default function TaskDetail({
             </button>
           )}
           {onUnfix && <button type="button" className="detail-one" onClick={onUnfix}>Unfix</button>}
-          <button type="button" className="detail-one" onClick={onRemoveFromRoute}>Remove from route</button>
           <div className="detail-actions">
             <button type="button" className="detail-action" onClick={onPark}>Park</button>
             <button type="button" className="detail-action is-quiet" onClick={onDelete}>Delete</button>

@@ -59,7 +59,7 @@ export const ROADMAP_HORIZONS = [
 // MUST / GOAL tags. Tapping the row opens the task (50a–b); the list moves
 // keyboard focus between rows (one tab stop, ↑/↓). On a laptop a pin shows at
 // the row's right on hover or focus: "Make the one thing · P" (50d).
-export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, isMin = false, fixedAt = null, fromTag = null, onSwipeDone, onSwipeTomorrow, onPutOnFront }) {
+export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, isMin = false, fixedAt = null, fromTag = null, fromYesterday = false, onSwipeDone, onSwipeTomorrow, onPutOnFront }) {
   const { title, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
 
   const hasActions = !isCompleted && !!onOpen;
@@ -234,6 +234,8 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
             </span>
           )}
         </div>
+        {/* Q7: moved here from yesterday; the tag lasts the day. */}
+        {fromYesterday && !isCompleted && <span className="from-yesterday">FROM YESTERDAY</span>}
         {reminderAt && !isCompleted && (
           <span className={`task-row-meta${reminderAt < Date.now() ? " is-overdue" : ""}`}>
             Reminder · {formatReminderLabel(reminderAt)}{reminderAt < Date.now() ? " (overdue)" : ""}

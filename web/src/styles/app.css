@@ -2057,3 +2057,15 @@ html[data-theme="dark"] {
 }
 
 
+
+/* Q7: a task moved here from yesterday, for the day: its own line under the
+   title, in Today's list and on the Day map. */
+.from-yesterday {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--gold-label);
+}

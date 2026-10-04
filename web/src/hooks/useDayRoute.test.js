@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getEstimate, listFollowsRoute, oneThingToNow, restoreRoute, routeFollowsList, routeIsContiguous } from "./useDayRoute";
+import { getEstimate, joinRoute, listFollowsRoute, oneThingToNow, restoreRoute, routeFollowsList, routeIsContiguous } from "./useDayRoute";
 
 const DAY = "2026-09-29";
 const stop = (uuid, order, minutes, extra = {}) => ({
@@ -158,12 +158,12 @@ describe("one order for the Today list and the Day map", () => {
     expect([t.b.dayMapOrder, t.a.dayMapOrder]).toEqual([2, 3]);
   });
 
-  it("puts tasks moved from yesterday first on the route, as the list shows them", () => {
+  it("Q7: a task moved from yesterday is an ordinary row; the list's order decides", () => {
     const tasks = [
-      stop("a", 0, 30, { orderIndex: 0 }),
-      stop("y", 1, 30, { orderIndex: 5, deferredUntil: DAY }),
+      stop("y", 0, 30, { orderIndex: 5, deferredUntil: DAY }),
+      stop("a", 1, 30, { orderIndex: 0 }),
     ];
-    expect(ids(routeFollowsList(tasks, DAY), "dayMapOrder")).toEqual(["y", "a"]);
+    expect(ids(routeFollowsList(tasks, DAY), "dayMapOrder")).toEqual(["a", "y"]);
   });
 
   it("orders old-format stops (a period, no order) too", () => {
@@ -186,5 +186,38 @@ describe("one order for the Today list and the Day map", () => {
     const next = routeFollowsList(tasks, DAY);
     expect(next[0]).toBe(tasks[0]);
     expect(next[1]).toBe(tasks[1]);
+  });
+});
+
+describe("joinRoute (Q59: every open Today task is on the route)", () => {
+  const ids = (tasks) => tasks.filter(t => t.dayMapDate === DAY && t.dayMapOrder != null).sort((a, b) => a.dayMapOrder - b.dayMapOrder).map(t => t.uuid);
+  const today = (uuid, orderIndex, extra = {}) => ({ uuid, title: uuid, horizonLevel: "today", timeEstimateMinutes: 30, orderIndex, ...extra });
+
+  it("puts a task not on the route on it, in the list's order", () => {
+    const tasks = [stop("a", 0, 30, { orderIndex: 0 }), today("n", 1), stop("b", 1, 30, { orderIndex: 2 })];
+    expect(ids(joinRoute(tasks, DAY))).toEqual(["a", "n", "b"]);
+  });
+
+  it("takes yesterday's stops onto today's route, and the one thing at its head", () => {
+    const tasks = [
+      stop("a", 0, 30, { orderIndex: 0 }),
+      today("old", 1, { dayMapDate: "2026-09-28", dayMapOrder: 0, dayMapStartMinutes: 600 }),
+      today("one", 2, { isNowFocus: true }),
+    ];
+    const next = joinRoute(tasks, DAY);
+    expect(ids(next)).toEqual(["one", "a", "old"]);
+    expect(next.find(t => t.uuid === "old").dayMapStartMinutes).toBeUndefined();
+  });
+
+  it("leaves out done, parked, deleted and moved-to-tomorrow tasks, and does nothing when all are on", () => {
+    const tasks = [
+      stop("a", 0, 30, { orderIndex: 0 }),
+      today("d", 1, { isCompleted: true }),
+      today("p", 2, { isParked: true }),
+      today("x", 3, { isDeleted: true }),
+      today("t", 4, { deferredUntil: "2026-09-30", dayMapDate: "2026-09-30", dayMapOrder: -1 }),
+      today("w", 5, { horizonLevel: "week" }),
+    ];
+    expect(joinRoute(tasks, DAY)).toBeNull();
   });
 });

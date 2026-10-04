@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-// Fixed time (58c–e). Demo mode at 11:35: Auto-fill lays three 25-minute
+// Fixed time (58c–e). Demo mode at 11:35: the route holds three 25-minute
 // stops from 11:35 (11:35, 12:05, 12:35). Nothing reaches Firebase.
 
 async function openDayMap(page, viewport = { width: 1280, height: 800 }) {
@@ -11,7 +11,6 @@ async function openDayMap(page, viewport = { width: 1280, height: 800 }) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
   await page.locator("body").click({ position: { x: 5, y: 300 } });
   await page.keyboard.press("m");
-  await page.getByRole("button", { name: "Auto-fill" }).click();
   await expect(page.locator(".dm-stop")).toHaveCount(3);
 }
 
@@ -53,8 +52,7 @@ test("Something else, fixed at 12:30: the route flows around it, moved stops say
   // Undo: the call is gone (it was made for this), and the route is as it was.
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
   await expect(route(page).locator(".dm-stop", { hasText: "Call with the recruiter" })).toHaveCount(0);
-  // Gone from Today altogether, not left waiting in Unscheduled.
-  await expect(page.locator(".dm-pool-count:visible").first()).toHaveText("0");
+  // Gone from Today altogether.
   expect(await times(page)).toEqual(["NOW", "12:05", "12:35"]);
   await expect(route(page).getByText(/^WAS /)).toHaveCount(0);
 });
@@ -166,7 +164,6 @@ test("Evening Guard: after 20:00 Something else is blocked, fixing an existing s
   await page.getByRole("banner").getByRole("button", { name: "Today", exact: true }).click();
   await page.locator("body").click({ position: { x: 5, y: 300 } });
   await page.keyboard.press("m");
-  await page.getByRole("button", { name: "Auto-fill" }).click();
 
   await page.getByRole("button", { name: "Fixed time" }).click();
   await page.getByRole("dialog", { name: "Fix a time" }).getByRole("button", { name: /Something else/ }).click();

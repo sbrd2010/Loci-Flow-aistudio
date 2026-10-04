@@ -27,7 +27,7 @@ function parseClock(text) {
 }
 
 export default function FixTimeSheet({
-  routeTasks, unscheduledTasks, stops, task: initialTask, from, breaks, nowMins, dayStart, dayEnd, durationOf, getTaskId, onFix, onClose, newBlocked = false,
+  routeTasks, stops, task: initialTask, from, breaks, nowMins, dayStart, dayEnd, durationOf, getTaskId, onFix, onClose, newBlocked = false,
   breakDefault, laterAt, busy = [], breakItem = null, onBreak, onRemoveBreak, onTomorrow,
 }) {
   const [task, setTask] = useState(initialTask || null);
@@ -105,18 +105,6 @@ export default function FixTimeSheet({
                   <button type="button" className="fx-option" onClick={() => pick(t)}>
                     <span className="fx-option-title">{t.title}</span>
                     <span className="fx-option-meta">{toClock(t.dayMapStartMinutes)} · {formatSpan(durationOf(t))}</span>
-                    <IconChevronRight size={16} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {unscheduledTasks.length > 0 && <h3 className="fx-group">UNSCHEDULED</h3>}
-            <ul className="fx-list">
-              {unscheduledTasks.map(t => (
-                <li key={getTaskId(t)}>
-                  <button type="button" className="fx-option" onClick={() => pick(t)}>
-                    <span className="fx-option-title">{t.title}</span>
-                    <span className="fx-option-meta">{formatSpan(durationOf(t))}</span>
                     <IconChevronRight size={16} />
                   </button>
                 </li>

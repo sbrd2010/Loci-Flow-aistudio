@@ -27,7 +27,7 @@ test("phone: the Day map keeps the bottom nav with Today current, and its own he
   await expect(page.locator(".shell-header")).toBeHidden();
 
   // 56c: the factual line, then the day bar with NOW on it.
-  await expect(page.locator(".dm-fact")).toHaveText("Nothing on the route.");
+  await expect(page.locator(".dm-fact")).toHaveText(/^On track: done by \d{2}:\d{2}\.$/);
   await expect(page.getByRole("img", { name: /^The day so far: it runs 07:00 to 02:00; now 11:35$/ })).toBeVisible();
   await expect(page.locator(".dm-daybar-labels")).toContainText("11:35 NOW");
 
@@ -44,7 +44,7 @@ test("laptop: the app header stays with Today current; ‹ Today and Esc go back
   await expect(header.getByRole("button", { name: "Today", exact: true })).toHaveAttribute("aria-current", "page");
   const back = page.getByRole("button", { name: "Back to Today" });
   await expect(back).toContainText("Today");
-  await expect(page.locator(".dm-fact")).toHaveText("Nothing on the route.");
+  await expect(page.locator(".dm-fact")).toHaveText(/^On track: done by \d{2}:\d{2}\.$/);
 
   // Esc in the From picker is the picker's own; on the page it goes back.
   const from = page.locator(".dm-from-select");
@@ -105,7 +105,6 @@ test("laptop: the Loci wordmark leaves the Day map for Today", async ({ page }) 
 test("a task marked done shows in the folded Done so far today, and the line says where the day stands", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 800 });
   await openDayMapByKey(page);
-  await page.getByRole("button", { name: "Auto-fill" }).click();
   await expect(page.locator(".dm-fact")).toHaveText(/^On track: done by \d{2}:\d{2}\.$/);
   // The one thing, at NOW, until its stop ends.
   await expect(page.locator(".dm-stop.is-now .dm-one-thing")).toHaveText(/^THE ONE THING · UNTIL \d{2}:\d{2}$/);
@@ -133,7 +132,6 @@ test("the minimum day: Change picks, Confirm makes it one line with MIN on the r
   const picked = (await page.getByTestId("today-tasks-list").locator("[data-testid='task-row'] .task-title-text").allInnerTexts()).map(t => t.trim());
   expect(picked.length).toBe(2);
   await openDayMapByKey(page);
-  await page.getByRole("button", { name: "Auto-fill" }).click();
   const min = page.getByRole("region", { name: "Minimum day" });
   await expect(min).toContainText("If today goes wrong, do these");
 
@@ -163,7 +161,6 @@ test("the minimum day: Change picks, Confirm makes it one line with MIN on the r
 test("with every task done, Done so far today stays on the page", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 800 });
   await openDayMapByKey(page);
-  await page.getByRole("button", { name: "Auto-fill" }).click();
   for (let i = 0; i < 3; i += 1) {
     const title = (await page.locator(".dm-stop .dm-title").first().innerText()).split("\n")[0].trim();
     await page.locator(".dm-stop .dm-main").first().click();

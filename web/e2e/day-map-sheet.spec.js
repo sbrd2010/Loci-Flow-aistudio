@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 
 // A Day map stop opens the task sheet (52; the user's pick over the inline
-// panel): the sheet on a phone, the drawer from 1024px, with Remove from
-// route in its footer. Demo mode, so nothing reaches Firebase.
+// panel): the sheet on a phone, the drawer from 1024px, with Fix time in its
+// footer. Demo mode, so nothing reaches Firebase.
 
 async function openDayMap(page, viewport) {
   await page.addInitScript(() => {
@@ -16,7 +16,6 @@ async function openDayMap(page, viewport) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
   await page.getByRole("button", { name: "Day map →" }).click();
   await expect(page.locator(".day-map-page")).toBeVisible();
-  await page.getByRole("button", { name: "Auto-fill" }).click();
 }
 
 const sheet = (page) => page.getByTestId("task-detail");
@@ -24,40 +23,32 @@ const stops = (page) => page.locator(".dm-stop .dm-main");
 const titles = (page) => page.locator(".dm-stop .dm-title").allInnerTexts().then(ts => ts.map(t => t.trim()));
 const times = (page) => page.locator(".dm-stop .dm-time").allInnerTexts();
 
-test("Remove from route: the stop goes, the route is timed again, and Undo puts it back where it was", async ({ page }) => {
+// Q59: every open Today task is on the route, so a stop can't be taken off
+// it; the footer is Fix time, Park and Delete.
+test("a stop's sheet: Fix time, Park, Delete; no Remove from route, no Today-only actions", async ({ page }) => {
   await openDayMap(page, { width: 375, height: 812 });
-  const before = await titles(page);
-  const beforeTimes = await times(page);
-  expect(before.length).toBe(3);
-
+  expect((await titles(page)).length).toBe(3);
   await stops(page).nth(1).click();
   await expect(sheet(page).locator(".detail-kicker").first()).toHaveText("DAY MAP · 2 OF 3");
-  // A Day map footer: no Today-only actions.
+  await expect(sheet(page).getByRole("button", { name: "Remove from route" })).toHaveCount(0);
   await expect(sheet(page).getByRole("button", { name: /Make this the one thing/ })).toHaveCount(0);
   await expect(sheet(page).getByRole("button", { name: /^Tomorrow/ })).toHaveCount(0);
-  await sheet(page).getByRole("button", { name: "Remove from route" }).click();
-
-  await expect(sheet(page)).toHaveCount(0);
-  await expect.poll(() => titles(page)).toEqual([before[0], before[2]]);
-  // The third stop now starts where the second did.
-  await expect.poll(() => times(page)).toEqual([beforeTimes[0], beforeTimes[1]]);
-  // Focus goes to the stop that took its place.
-  await expect(stops(page).nth(1)).toBeFocused();
-  await expect(page.locator(".undo-toast")).toContainText(`Removed from route: ${before[1]}`);
-
-  await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
-  await expect.poll(() => titles(page)).toEqual(before);
-  await expect.poll(() => times(page)).toEqual(beforeTimes);
+  await expect(sheet(page).getByRole("button", { name: "Fix time" })).toBeVisible();
+  await expect(sheet(page).getByRole("button", { name: "Park" })).toBeVisible();
 });
 
 test("the sheet's circle marks the stop done, with Undo; one toast shows, the latest", async ({ page }) => {
   await openDayMap(page, { width: 375, height: 812 });
   const before = await titles(page);
 
-  // A route Undo first…
-  await stops(page).nth(2).click();
-  await sheet(page).getByRole("button", { name: "Remove from route" }).click();
-  await expect(page.locator(".undo-toast")).toContainText("Removed from route");
+  // A route Undo first (a fixed time)…
+  const fixLast = async () => {
+    await stops(page).last().click();
+    await sheet(page).getByRole("button", { name: /^(Fix time|Fixed at .* · Change time)$/ }).click();
+    await page.getByRole("dialog", { name: /^Fix a time: / }).getByRole("textbox", { name: "At" }).press("Enter");
+  };
+  await fixLast();
+  await expect(page.locator(".undo-toast")).toContainText(`${before[2]} fixed at`);
 
   // …then Done: its toast replaces the route's, and Undo undoes Done only.
   await stops(page).nth(0).click();
@@ -65,19 +56,19 @@ test("the sheet's circle marks the stop done, with Undo; one toast shows, the la
   await expect(sheet(page)).toHaveCount(0);
   await expect(page.locator(".undo-toast")).toHaveCount(1);
   await expect(page.locator(".undo-toast")).toContainText(`Marked done: ${before[0]}`);
-  await expect.poll(() => titles(page)).toEqual([before[1]]);
+  await expect.poll(() => titles(page)).toEqual([before[1], before[2]]);
 
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
-  await expect.poll(() => titles(page)).toEqual([before[0], before[1]]);
+  await expect.poll(() => titles(page)).toEqual(before);
   // The route's older Undo does not come back once Done's is spent.
   await expect(page.locator(".undo-toast")).toHaveCount(0);
 
   // And the other way round: Done, then a route action — the route's shows.
   await stops(page).nth(0).click();
   await sheet(page).getByRole("button", { name: `Mark done: ${before[0]}` }).click();
-  await stops(page).nth(0).click();
-  await sheet(page).getByRole("button", { name: "Remove from route" }).click();
-  await expect(page.locator(".undo-toast")).toContainText(`Removed from route: ${before[1]}`);
+  await fixLast();
+  await expect(page.locator(".undo-toast")).toHaveCount(1);
+  await expect(page.locator(".undo-toast")).toContainText(`${before[2]} fixed at`);
 });
 
 test("laptop: the drawer; ↑/↓ walk the route; Esc closes it before the page, wherever focus is", async ({ page }) => {
@@ -189,7 +180,6 @@ test("moving the one thing off Today from the sheet ends its focus session", asy
 
   await page.getByRole("button", { name: "Day map →" }).click();
   await expect(floating.getByRole("button", { name: /^Back to focus/ })).toBeVisible();
-  await page.getByRole("button", { name: "Auto-fill" }).click();
   await page.locator(".dm-stop .dm-main", { hasText: wallTitle }).click();
   await sheet(page).getByRole("button", { name: /^Horizon/ }).click();
   await sheet(page).getByRole("radio", { name: "This week" }).click();
@@ -203,8 +193,9 @@ test("moving the one thing off Today from the sheet ends its focus session", asy
 });
 
 // Codex review of #415: a stop moved to a later horizon leaves the route for
-// good; brought back to Today it waits in Unscheduled, not in its old slot.
-test("a stop moved off Today and back waits in Unscheduled, not in its old slot", async ({ page }) => {
+// good; brought back to Today it joins the route again (Q59), timed with the
+// rest.
+test("a stop moved off Today and back joins the route again, timed with the rest", async ({ page }) => {
   await openDayMap(page, { width: 1280, height: 800 });
   const before = await titles(page);
   await stops(page).nth(1).click();
@@ -220,10 +211,11 @@ test("a stop moved off Today and back waits in Unscheduled, not in its old slot"
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
   await page.getByRole("button", { name: "Day map →" }).click();
 
-  await expect.poll(() => titles(page)).toEqual([before[0], before[2]]);
-  // Unscheduled is a row, folded while the route has stops (57b answer 1).
-  await page.locator(".dm-pool-toggle").click();
-  await expect(page.locator(".dm-pool .dm-pool-list")).toContainText(before[1]);
+  // Its slot is the end of Today's list, wherever that falls in the order;
+  // it is on the route again, and no two stops share a start.
+  await expect.poll(() => titles(page).then(t => [...t].sort())).toEqual([...before].sort());
+  const starts = await times(page);
+  expect(new Set(starts).size).toBe(starts.length);
 });
 
 // Codex review of #415: a horizon changed in a stop's sheet takes the one
@@ -248,7 +240,6 @@ test("the one thing moved off Today from its stop's sheet ends its session and l
 
   await page.getByRole("button", { name: "Day map →" }).click();
   await expect(floating.getByRole("button", { name: /^Back to focus/ })).toBeVisible();
-  await page.getByRole("button", { name: "Auto-fill" }).click();
   const before = await titles(page);
   await page.locator(".dm-stop .dm-main", { hasText: wallTitle }).click();
   await sheet(page).getByRole("button", { name: /^Horizon/ }).click();

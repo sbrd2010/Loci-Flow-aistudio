@@ -1698,16 +1698,15 @@ test("laptop: moved tasks close the list in a quiet line; Bring back returns one
   await expect(page.getByRole("button", { name: /^1 moved to tomorrow/ })).toBeVisible();
 });
 
-// 50i–j: the next morning they head the list under "Moved from yesterday",
-// the rest under "Today"; the day after, the headings are gone.
-test("the next morning, moved tasks head the list under their own heading, for that day only (50i–j)", async ({ page }) => {
+// Q7 (reverses part of 50i–j): the next morning they head the list, tagged
+// FROM YESTERDAY, with no headings; the day after, the tag is gone.
+test("the next morning, moved tasks head the list tagged FROM YESTERDAY, for that day only (Q7)", async ({ page }) => {
   await laptopListOpen(page);
   const list = page.getByTestId("today-tasks-list");
   const rows = list.locator("[data-testid='task-row']:not(.completed)");
   const last = (await rows.last().locator(".task-title-text").innerText()).trim();
   await rows.last().focus();
   await page.keyboard.press("t");
-  await expect(list.locator(".today-list-group")).toHaveCount(0);
 
   const rerender = async () => {
     await page.getByRole("button", { name: /^Must-do · \d+$/ }).click();
@@ -1715,15 +1714,17 @@ test("the next morning, moved tasks head the list under their own heading, for t
   };
   await page.clock.setFixedTime(new Date("2024-06-16T10:00:00"));
   await rerender();
-  const groups = list.locator(".today-list-group");
-  await expect(groups).toHaveText(["Moved from yesterday · 1", "Today"]);
+  const tags = list.locator(".from-yesterday");
+  await expect(list.locator(".today-list-group")).toHaveCount(0);
   await expect(rows.first().locator(".task-title-text")).toHaveText(last);
+  await expect(tags).toHaveCount(1);
+  await expect(rows.first().locator(".from-yesterday")).toHaveText("FROM YESTERDAY");
   // Not pinned automatically.
   await expect(page.locator(".wall-title")).not.toHaveText(last);
 
   await page.clock.setFixedTime(new Date("2024-06-17T10:00:00"));
   await rerender();
-  await expect(groups).toHaveCount(0);
+  await expect(tags).toHaveCount(0);
   await expect(list.getByText(last)).toBeVisible();
 });
 
@@ -1915,10 +1916,9 @@ test("narrow laptop: the drawer opens over the task column and leaves the list u
   expect(Math.round(wide.x + wide.width)).toBe(1280);
 });
 
-// Codex review of #407: a drag across the "Today" heading is not taken — the
-// groups are ordered apart, so a saved cross-group order would only surface
-// the day after, when the heading is gone.
-test("a moved-from-yesterday task can't be dragged across the Today heading (50i)", async ({ page }) => {
+// Q7: a task moved from yesterday is an ordinary row: it drags like any
+// other, keeps its tag for the day, and the order holds the day after.
+test("a moved-from-yesterday task drags like any other row and keeps its tag (Q7)", async ({ page }) => {
   await laptopListOpen(page);
   const list = page.getByTestId("today-tasks-list");
   const rows = list.locator("[data-testid='task-row']:not(.completed)");
@@ -1941,13 +1941,13 @@ test("a moved-from-yesterday task can't be dragged across the Today heading (50i
   await page.keyboard.press("ArrowDown");
   await announced(/Draggable item (\S+) was moved over droppable area (?!\1\b)\S+/);
   await page.keyboard.press("Space");
-  await expect(rows.first().locator(".task-title-text")).toHaveText(last);
+  await expect(rows.nth(1).locator(".task-title-text")).toHaveText(last);
+  await expect(rows.nth(1).locator(".from-yesterday")).toHaveText("FROM YESTERDAY");
 
-  // The day after, with no headings, the order is still as it was shown.
+  // The day after, the order is still as it was shown.
   await page.clock.setFixedTime(new Date("2024-06-17T10:00:00"));
   await rerender();
-  await expect(list.locator(".today-list-group")).toHaveCount(0);
-  await expect(rows.first().locator(".task-title-text")).toHaveText(last);
+  await expect(rows.nth(1).locator(".task-title-text")).toHaveText(last);
 });
 
 // Q49: the Key Deadline's Target is the band's third line, with nothing

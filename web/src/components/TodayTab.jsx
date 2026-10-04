@@ -957,7 +957,6 @@ export default function TodayTab({
   const undoMessage = (u) => {
     if (u.count) return `${u.count} ${u.count === 1 ? "task" : "tasks"} moved to tomorrow`;
     if (u.kind === "step") return `Step removed: ${u.step.text}`;
-    if (u.kind === "route") return "Route cleared";
     const title = u.task.title;
     if (u.kind === "move") {
       // Its name as Plan shows it: renamed and custom horizons too.
@@ -1072,16 +1071,6 @@ export default function TodayTab({
         }),
         config: restoredConfig,
       });
-      return;
-    }
-    if (kind === "route") {
-      // From the route's start as it stands: From if set today, else now.
-      const now = currentDayMinutes(windows);
-      const anchorMinutes = config.dayMapDate === todayStr && config.dayMapAnchorMinutes != null
-        ? Math.max(now, Number(config.dayMapAnchorMinutes)) : now;
-      savePayload({ ...payload, tasks: restoreRoute(tasks, undo.before, {
-        todayStr, anchorMinutes, breaks: routeBreaks(windows, config, todayStr),
-      }) });
       return;
     }
     if (kind === "tomorrow" || kind === "bringback") {
@@ -1244,9 +1233,6 @@ export default function TodayTab({
     const oldIndex = remainingTasks.findIndex(t => getTaskKey(t) === active.id);
     const newIndex = remainingTasks.findIndex(t => getTaskKey(t) === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
-    // "Moved from yesterday" and "Today" are ordered apart (50i): a drop
-    // across the heading would be undone by the sort on screen, yet saved.
-    if (isFromYesterday(remainingTasks[oldIndex]) !== isFromYesterday(remainingTasks[newIndex])) return;
     const reordered = arrayMove([...remainingTasks], oldIndex, newIndex);
     const orderMap = new Map(reordered.map((t, i) => [getTaskKey(t), i]));
     // The Day map follows: one order for both.
@@ -1422,13 +1408,13 @@ export default function TodayTab({
     ? `${String(Math.floor(Math.max(0, timerSecondsLeft) / 60)).padStart(2, "0")}:${String(Math.max(0, timerSecondsLeft) % 60).padStart(2, "0")}`
     : null;
 
-  // 50i–j: tasks moved here from yesterday head the list under their own
-  // heading, for this one Loci day; after it they sort like any other.
+  // Q7: tasks moved here from yesterday arrive at the top (moveToTomorrow
+  // gave them the lowest orders) and are then ordinary rows in the one
+  // order, tagged FROM YESTERDAY for this Loci day.
   const isFromYesterday = (t) => t.deferredUntil === todayStr;
   const remainingTasks = todayTasksFiltered
     .filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid)
-    .sort((a, b) => (isFromYesterday(b) - isFromYesterday(a)) || ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)));
-  const fromYesterdayCount = remainingTasks.filter(isFromYesterday).length;
+    .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
   // 59d, Switch to the next task: the list's first, never one at a set time.
   // The session ends (its minutes are saved); the next task is the one thing,
   // not yet started, and this one heads the list.
@@ -2049,12 +2035,6 @@ export default function TodayTab({
                 >
                   {shownTasks.map((task, idx) => (
                     <React.Fragment key={getTaskKey(task)}>
-                      {fromYesterdayCount > 0 && idx === 0 && (
-                        <h3 className="today-list-group">Moved from yesterday · {fromYesterdayCount}</h3>
-                      )}
-                      {fromYesterdayCount > 0 && idx === fromYesterdayCount && (
-                        <h3 className="today-list-group">Today</h3>
-                      )}
                       <SortableTaskItem id={getTaskKey(task)}>
                         {({ dragHandleListeners, dragHandleAttributes, dragActivatorRef }) => (
                           <TaskRow
@@ -2065,6 +2045,7 @@ export default function TodayTab({
                             onMakeOneThing={handleMakeOneThing}
                             isMin={minimumDayIds.has(String(task.uuid))}
                             fromTag={task.reviewFrom?.day === todayStr ? task.reviewFrom.label : null}
+                            fromYesterday={isFromYesterday(task)}
                             fixedAt={task.dayMapDate === todayStr ? task.dayMapFixedMinutes ?? null : null}
                             tabStop={task.uuid === rovingUuid}
                             isTinted={task.uuid === tintUuid}
@@ -2205,7 +2186,6 @@ export default function TodayTab({
           onOpenTask={openFromDayMap}
           onDone={(task) => handleToggleComplete(task)}
           onMoveToTomorrow={handleMoveManyToTomorrow}
-          onRouteCleared={(before) => setUndo({ kind: "route", before, at: Date.now() })}
           covered={!!detailTask}
         />
       )}
