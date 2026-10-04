@@ -1447,6 +1447,7 @@ export default function App() {
             onOpenKeyDeadline={() => { handleTabSelect("settings"); setSettingsInitialPage("goal"); }}
             rescueRequest={rescueRequest}
             onRescueClosed={() => handleTabSelect("mindbox")}
+            onOpenFront={(id) => { handleTabSelect("roadmap"); setPlanFrontId(id); }}
             reviewLine={reviewLine}
             closeLine={closeLine}
             onOpenCloseDay={dayClosed ? null : () => setCloseDayOpen(true)}
