@@ -1424,6 +1424,7 @@ export default function App() {
         {activeTab === "today" && (
           <TodayTab
             onOpenKeyDeadline={() => { handleTabSelect("settings"); setSettingsInitialPage("goal"); }}
+            onOpenFront={(id) => { handleTabSelect("roadmap"); setPlanFrontId(id); }}
             reviewLine={reviewLine}
             closeLine={closeLine}
             onOpenCloseDay={dayClosed ? null : () => setCloseDayOpen(true)}
