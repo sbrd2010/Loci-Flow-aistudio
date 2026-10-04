@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import LinkifyText from "./LinkifyText";
 import { taskSteps } from "../utils/taskSteps";
 import { startLengthOptions, chosenStartOption } from "../utils/focusSession";
@@ -207,6 +207,13 @@ function GoalBand({ goal, onOpen, record = null }) {
         {hasCount && <span className="wall-goal-count">{goal.done} OF {goal.total}</span>}
       </div>
       <div className="wall-goal-name">{goal.name}</div>
+      {/* 58.2: on a phone the band is one line, "name · 14 days · 0 of 2 ›";
+          only the name gives way when it is long. */}
+      <div className="wall-goal-line" aria-hidden="true">
+        <span className="wall-goal-line-name">{goal.name}</span>
+        {figures && <span className="wall-goal-line-figures">&nbsp;· {figures}</span>}
+        {act && <span className="wall-goal-line-caret">›</span>}
+      </div>
       {/* Q49: the least you'll do each day toward it. */}
       {goal.target && (
         <div className="wall-goal-target"><span className="wall-goal-target-label">Target ·</span> {goal.target}</div>
@@ -291,10 +298,27 @@ export default function TodayWall({
   onOpenMindBox,
   onScattered,
   onRescue,
+  // Q58: open Today tasks, the one thing included (the phone's NOW · 1 OF N),
+  // and the phone's More sheet.
+  nowCount = 0,
+  onMore = null,
 }) {
   // Only the empty wall uses this, but hooks cannot sit behind its early
   // return.
   const [draft, setDraft] = useState("");
+  // 58.4: whether the title is cut (three lines on the phone), measured after
+  // layout and again when the window changes size.
+  const titleRef = useRef(null);
+  const [clamped, setClamped] = useState(false);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = titleRef.current;
+      setClamped(!!el && el.scrollHeight - el.clientHeight > 2);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [task?.title]);
   // timerLabel is supplied only while a session is already running on this
   // task, where the button has to name what tapping will resume.
 
@@ -309,10 +333,10 @@ export default function TodayWall({
   const links = (onScattered || onRescue) && (
     <div className="wall-links" data-flip="links">
       {onScattered && (
-        <button type="button" className="wall-link" onClick={onScattered}>Feeling scattered?</button>
+        <button type="button" className="wall-link is-scattered" onClick={onScattered}>Feeling scattered?</button>
       )}
       {onRescue && (
-        <button type="button" className="wall-link" onClick={onRescue}>Open Rescue</button>
+        <button type="button" className="wall-link" onClick={onRescue}>I’m stuck</button>
       )}
     </div>
   );
@@ -422,16 +446,19 @@ export default function TodayWall({
   const nextIndex = steps.findIndex(s => s && !s.done && s.text);
   const nextStep = nextIndex === -1 ? null : steps[nextIndex];
   const meta = kickerMeta(task, steps, nextIndex);
+  // Q58: the phone's quiet row (I'm stuck · Done · More) stands in for the
+  // action buttons and links while no session runs.
+  const quiet = !!onMore && !timerLabel;
 
   return (
-    <section className={`today-wall${peekOpen ? " is-open" : ""}`}>
+    <section className={`today-wall${peekOpen ? " is-open" : ""}${quiet ? " has-quiet" : ""}`}>
       {top}
 
       <div className="wall-hero">
         <div className="wall-kicker-row" data-flip="kicker">
           <span className="wall-kicker">
             <span className="wall-kicker-wide">TODAY, ONE THING</span>
-            <span className="wall-kicker-phone">TODAY · THE ONE THING</span>
+            <span className="wall-kicker-phone">{nowCount > 0 ? `NOW · 1 OF ${nowCount}` : "NOW"}</span>
           </span>
           {meta && <span className="wall-kicker-meta">{meta}</span>}
         </div>
@@ -439,6 +466,7 @@ export default function TodayWall({
             A link inside the title keeps its own click. */}
         <h2
           className={`wall-title${onOpenTask ? " is-openable" : ""}`}
+          ref={titleRef}
           data-len={titleLength(task.title)}
           data-flip="title"
           tabIndex={onOpenTask ? -1 : undefined}
@@ -447,6 +475,10 @@ export default function TodayWall({
         >
           <LinkifyText text={task.title} />
         </h2>
+        {/* 58.4: a title cut at three lines on the phone says so. */}
+        {clamped && onOpenTask && (
+          <button type="button" className="wall-full-title" onClick={onOpenTask}>Full title and details</button>
+        )}
         {/* "Details ›" (52a, 57b answer 15): touch has no hover, so the
             title's sheet gets a visible way in — at the end of the step
             line, or under the title when there is no step. */}
@@ -482,6 +514,16 @@ export default function TodayWall({
           timerLabel={timerLabel}
           live={live}
         />
+
+        {quiet && (
+          <div className="wall-quiet" data-flip="quiet">
+            {onRescue && <button type="button" className="wall-quiet-link is-muted" onClick={onRescue}>I’m stuck</button>}
+            <span className="wall-quiet-end">
+              <button type="button" className="wall-quiet-link" onClick={onMarkDone}>Done</button>
+              <button type="button" className="wall-quiet-link" onClick={onMore} aria-haspopup="dialog">More</button>
+            </span>
+          </div>
+        )}
 
         {!timerLabel && <StartHelper task={task} blockMinutes={focusMinutes} startChoice={startChoice} />}
 

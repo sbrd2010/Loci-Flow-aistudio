@@ -232,3 +232,8 @@
 @media (min-width: 2200px) {
   .shell-header.is-today { padding: 0 max(48px, calc((100% - 2240px) / 2)); }
 }
+
+/* 58.2: on a phone, Today's header keeps only the time left. */
+@media (max-width: 839px) {
+  .shell-header.is-today .shell-clock-date { display: none; }
+}

@@ -50,6 +50,7 @@ import { buildGoalRecord, goalStartDay, goalTaskDoneToday, nextGoalTask } from "
 import { horizonsFromConfig } from "../utils/horizons";
 import { confirmedMinimumDay } from "../utils/minimumDay";
 import { currentDayMinutes, oneThingToNow, restoreRoute, routeFollowsList } from "../hooks/useDayRoute";
+import MoreSheet from "./MoreSheet";
 import { routeBreaks } from "../utils/dayMapBreaks";
 import { isEventTask } from "../utils/dayMapRoute";
 import { bringBack, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
@@ -214,6 +215,8 @@ export default function TodayTab({
   const [sheetFull, setSheetFull] = useState(false);
   const [sheetViewport, setSheetViewport] = useState(() => typeof window !== "undefined" && window.innerWidth < 840);
   // A task, opened (50a–b): a sheet below 1024px, a non-modal drawer above.
+  // Q58: the phone's More sheet for the one thing (67d).
+  const [moreOpen, setMoreOpen] = useState(false);
   const [drawerViewport, setDrawerViewport] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1024);
   // From 1600px the Day map is Today's third column while the list is open (54e).
   const [wideViewport, setWideViewport] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1600);
@@ -1787,7 +1790,7 @@ export default function TodayTab({
   });
 
   const wallKeysBlocked = isFocusMode || isAddTaskDialogOpen || (!!detailUuid && !drawerViewport)
-    || rescueActive || !!frontPickerTask || !!splitTask || (!!dayClosed && !focusSessionActive);
+    || rescueActive || !!frontPickerTask || !!splitTask || moreOpen || (!!dayClosed && !focusSessionActive);
   useEffect(() => {
     if (wallKeysBlocked) return undefined;
     const onKey = (e) => {
@@ -1920,6 +1923,8 @@ export default function TodayTab({
         onOpenMindBox={onOpenMindBox}
         onScattered={onScattered}
         onRescue={openRescueMode}
+        nowCount={pinnedFocusTask ? todayTasksAll.filter(t => !t.isCompleted).length : 0}
+        onMore={pinnedFocusTask ? () => setMoreOpen(true) : null}
       />
 
       </div>
@@ -2303,6 +2308,21 @@ export default function TodayTab({
           </div>
         );
       })()}
+
+      {/* ── The one thing's More sheet (Q58, 67d) */}
+      {moreOpen && pinnedFocusTask && (
+        <MoreSheet
+          task={pinnedFocusTask}
+          onSplit={() => setSplitTask(pinnedFocusTask)}
+          onDetails={() => setDetailUuid(pinnedFocusTask.uuid)}
+          hiddenHorizons={horizonsFromConfig(config, todayStr).filter(h => h.hidden).map(h => h.id)}
+          onMove={(dest) => (dest === "tomorrow" ? actOnTask(pinnedFocusTask, "t") : handleMoveWithUndo(pinnedFocusTask, dest))}
+          onPark={() => handleParkWithUndo(pinnedFocusTask)}
+          onUnpin={() => handleUnpinWithUndo(pinnedFocusTask)}
+          onDelete={() => actOnTask(pinnedFocusTask, "delete")}
+          onClose={() => setMoreOpen(false)}
+        />
+      )}
 
       {/* ── A task, opened (50a–b) */}
       {detailTask && !drawerViewport && <div className="task-detail-scrim" onClick={closeDetail} aria-hidden="true" />}

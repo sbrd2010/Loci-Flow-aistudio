@@ -1060,3 +1060,98 @@
 .wall-primary .fm-mini-ring { flex: 0 0 auto; }
 .wall-primary .fm-mini-ring .fm-ring-track { stroke: rgba(255, 255, 255, 0.3); }
 .wall-primary .fm-mini-ring .fm-ring-arc { stroke: var(--on-accent); }
+
+/* — Q58 (67a): the phone's Today, one thing and one button. Below 840: a
+   one-line gold band, no anchor line, "NOW · 1 OF N", the title at 32px cut
+   at three lines (28px at 360 and under), and a quiet row (I'm stuck ·
+   Done · More) in place of the action buttons and links. — */
+.wall-goal-line,
+.wall-quiet,
+.wall-full-title { display: none; }
+@media (max-width: 839px) {
+  .wall-goal {
+    flex-direction: row;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 14px;
+    background: var(--gold-band);
+    border-radius: 6px;
+  }
+  .wall-goal-head,
+  .wall-goal-name,
+  .wall-goal-target,
+  .wall-goal-track,
+  .wall-goal-track.is-rule { display: none; }
+  .wall-goal-line {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    font-size: 0.875rem;
+    font-weight: 800;
+    color: var(--gold-label);
+    white-space: nowrap;
+  }
+  .wall-goal-line-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .wall-goal-line-figures { flex: 0 0 auto; }
+  .wall-goal-line-caret { flex: 0 0 auto; margin-left: auto; padding-left: 12px; }
+
+  .wall-anchor { display: none; }
+
+  .wall-kicker-wide { display: none; }
+  .wall-kicker-phone { display: inline; }
+  .wall-kicker-meta { display: none; }
+
+  .wall-title,
+  .wall-title[data-len] { font-size: 2rem; -webkit-line-clamp: 3; }
+  .wall-full-title {
+    display: inline-flex;
+    align-self: flex-start;
+    align-items: center;
+    min-height: 44px;
+    margin-top: -10px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--accent);
+    cursor: pointer;
+  }
+
+  /* Not on the phone in any state: Rescue's "Too much going on" covers it. */
+  .wall-link.is-scattered { display: none; }
+  .has-quiet .wall-actions,
+  .has-quiet .wall-foot > .wall-links,
+  .has-quiet .wall-details,
+  .has-quiet .wall-details-line { display: none; }
+  .wall-quiet {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: -4px;
+  }
+  .wall-quiet-end { display: flex; gap: 20px; }
+  .wall-quiet-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 0.9375rem;
+    font-weight: 800;
+    color: var(--accent);
+    cursor: pointer;
+  }
+  .wall-quiet-link.is-muted { color: var(--ink-2); }
+  .wall-quiet-link:focus-visible,
+  .wall-full-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+}
+@media (max-width: 360px) {
+  .wall-title,
+  .wall-title[data-len] { font-size: 1.75rem; }
+}

@@ -90,11 +90,12 @@ for (const theme of THEMES) {
     // Today's wall: the smallest text on it, on its own grounds — the gold
     // kicker on the gold band is the tightest pair (4.82:1 by calculation).
     for (const [sel, what] of [
-      [".wall-goal-kicker", "goal kicker"],
-      [".wall-goal-name", "goal name"],
-      [".wall-anchor-count", "anchor count"],
-      [".wall-kicker", "TODAY, ONE THING"],
-      [".wall-kicker-meta", "kicker's estimate and step count"],
+      // Q58 (67a): the phone's one-line goal band, NOW · 1 OF N, and the
+      // quiet row (I'm stuck muted, Done and More in the accent).
+      [".wall-goal-line", "goal line"],
+      [".wall-kicker", "NOW kicker"],
+      [".wall-quiet-link.is-muted", "I'm stuck"],
+      [".wall-quiet-link:not(.is-muted)", "Done"],
       [".wall-first-step-label", "next step label"],
       [".wall-primary-figure", "timer on Start focus"],
       [".wall-peek-label", "peek label"],

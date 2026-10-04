@@ -19,7 +19,7 @@ const rescue = (page) => page.getByRole("dialog", { name: "Rescue" });
 async function openFromToday(page) {
   const hide = page.locator(".today-list-hide");
   if (await hide.isVisible()) await hide.click();
-  await page.getByRole("button", { name: "Open Rescue" }).click();
+  await page.getByRole("button", { name: "I’m stuck" }).click();
   await expect(rescue(page)).toBeVisible();
 }
 
