@@ -1243,7 +1243,7 @@ export default function TodayTab({
     // The Day map follows: one order for both.
     savePayload({ ...payload, tasks: routeFollowsList(tasks.map(t =>
       orderMap.has(getTaskKey(t)) ? { ...t, orderIndex: orderMap.get(getTaskKey(t)), lastUpdated: Date.now() } : t
-    ), todayStr)});
+    ), todayStr, { config, nowMinutes: currentDayMinutes(windows), breaks: routeBreaks(windows, config, todayStr) })});
   };
 
   // One bounded subscription for both figures the wall needs from the ledger:

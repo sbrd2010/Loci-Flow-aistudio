@@ -166,6 +166,21 @@ describe("one order for the Today list and the Day map", () => {
     expect(ids(routeFollowsList(tasks, DAY), "dayMapOrder")).toEqual(["y", "a"]);
   });
 
+  it("orders old-format stops (a period, no order) too", () => {
+    const old = (uuid, start, orderIndex) => ({ uuid, horizonLevel: "today", timeEstimateMinutes: 30, dayMapDate: DAY, dayMapPeriod: "morning", dayMapStartMinutes: start, orderIndex });
+    const tasks = [old("a", 540, 1), old("b", 570, 0), old("c", 600, 2)];
+    expect(ids(routeFollowsList(tasks, DAY), "dayMapOrder")).toEqual(["b", "a", "c"]);
+  });
+
+  it("times the route again from its start, so no stored time is left on the old order", () => {
+    const tasks = [
+      stop("a", 0, 30, { orderIndex: 1, dayMapStartMinutes: 540 }),
+      stop("b", 1, 30, { orderIndex: 0, dayMapStartMinutes: 570 }),
+    ];
+    const t = byId(routeFollowsList(tasks, DAY, { nowMinutes: 480 }));
+    expect([t.b.dayMapStartMinutes, t.a.dayMapStartMinutes]).toEqual([540, 575]); // 5 min buffer between stops
+  });
+
   it("changes nothing when the orders already agree", () => {
     const tasks = [stop("a", 0, 30, { orderIndex: 0 }), stop("b", 1, 30, { orderIndex: 1 })];
     const next = routeFollowsList(tasks, DAY);
