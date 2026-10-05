@@ -12,7 +12,6 @@ async function openDayMapWithPastCall(page) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
   await page.locator("body").click({ position: { x: 5, y: 300 } });
   await page.keyboard.press("m");
-  await page.getByRole("button", { name: "Auto-fill" }).click();
   // A 30-minute call at 11:00: it ended at 11:30.
   await page.getByRole("button", { name: "Fixed time" }).click();
   await page.getByRole("dialog", { name: "Fix a time" }).getByRole("button", { name: /Something else/ }).click();

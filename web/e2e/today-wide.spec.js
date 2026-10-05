@@ -17,21 +17,16 @@ async function enterDemo(page, viewport, time = "2024-06-15T11:35:00") {
   await expect(page.getByTestId("today-tasks-list")).toBeVisible();
 }
 
-// Lays every Today task on the route (the Day map page's Auto-fill), then back.
-async function autoFillRoute(page) {
-  await page.locator("body").click({ position: { x: 5, y: 300 } });
-  await page.keyboard.press("m");
-  await page.getByRole("button", { name: "Auto-fill" }).click();
-  await page.getByRole("button", { name: "Back to Today" }).click();
-  await expect(page.locator(".day-map-page")).toHaveCount(0);
-}
-
 const column = (page) => page.getByRole("complementary", { name: "Day map" });
+
+// Every open Today task is on the route (Q59): the column lays it out.
+async function routeReady(page) {
+  await expect(column(page).locator("button.tdm-stop")).toHaveCount(3);
+}
 
 test("1680: task 480 · list · Day map 520; hiding the list widens the Day map to 620 and keeps it (54a, 54e)", async ({ page }) => {
   await enterDemo(page, { width: 1680, height: 1000 });
   await expect(column(page)).toBeVisible();
-  await expect(column(page)).toContainText("Nothing on the route yet · Auto-fill");
 
   const band = await page.locator(".wall-goal").boundingBox();
   const list = await page.locator("section.today-list").boundingBox();
@@ -42,7 +37,7 @@ test("1680: task 480 · list · Day map 520; hiding the list widens the Day map 
   expect(map.x).toBeGreaterThan(list.x + list.width);
   expect(map.x + map.width).toBeLessThanOrEqual(1680 - 40);
 
-  await autoFillRoute(page);
+  await routeReady(page);
   const stops = column(page).getByRole("list", { name: "Today's route" }).getByRole("button");
   await expect(stops).toHaveCount(3);
   await expect(stops.first()).toHaveAccessibleName(/^Now to /);
@@ -131,7 +126,7 @@ test("2400: the header and the drawer follow the 2240px cap", async ({ page }) =
   const wall = await page.locator(".today-layout").boundingBox();
   const brand = await page.getByRole("banner").getByRole("button", { name: "Loci" }).boundingBox();
   expect(Math.abs(brand.x - wall.x)).toBeLessThan(2);
-  await autoFillRoute(page);
+  await routeReady(page);
   const columnBox = await column(page).boundingBox();
   await column(page).getByRole("list", { name: "Today's route" }).getByRole("button").nth(1).click();
   const drawer = page.locator(".task-detail.is-drawer");
@@ -146,7 +141,7 @@ test("won't fit: Move N to tomorrow moves the stops past the day's end, with Tod
   // 01:00, an hour before the demo's day ends at 02:00: the third stop starts
   // at 02:00, so it won't fit.
   await enterDemo(page, { width: 1680, height: 1000 }, "2024-06-16T01:00:00");
-  await autoFillRoute(page);
+  await routeReady(page);
   await expect(column(page).locator(".tdm-status")).toHaveText("25m over");
   await expect(column(page).getByRole("heading", { name: /^WON’T FIT TODAY · 25m$/ })).toBeVisible();
   const late = column(page).getByRole("list", { name: "Won't fit today" }).getByRole("button");
@@ -167,7 +162,7 @@ test("won't fit: Move N to tomorrow moves the stops past the day's end, with Tod
 
 test("a stop opens its task in a drawer in the map column's place, clear of the list; Esc goes back to the stop", async ({ page }) => {
   await enterDemo(page, { width: 1680, height: 1000 });
-  await autoFillRoute(page);
+  await routeReady(page);
   const stop = column(page).getByRole("list", { name: "Today's route" }).getByRole("button").nth(1);
   const columnBox = await column(page).boundingBox();
   await stop.click();
@@ -189,7 +184,7 @@ test("a stop opens its task in a drawer in the map column's place, clear of the 
 
 test("1600: the drawer takes the column's 520px, clear of the list, its footer on one row", async ({ page }) => {
   await enterDemo(page, { width: 1600, height: 900 });
-  await autoFillRoute(page);
+  await routeReady(page);
   await column(page).getByRole("list", { name: "Today's route" }).getByRole("button").nth(1).click();
   const drawer = page.locator(".task-detail.is-drawer");
   await expect(drawer).toBeVisible();
@@ -210,7 +205,7 @@ test("1600: the drawer takes the column's 520px, clear of the list, its footer o
 
 test("a stop the Must-do filter hides opens anyway, the filter stays; Show all, and ↑/↓ into the filtered list", async ({ page }) => {
   await enterDemo(page, { width: 1680, height: 1000 });
-  await autoFillRoute(page);
+  await routeReady(page);
   const list = page.getByTestId("today-tasks-list");
   const drawer = page.locator(".task-detail.is-drawer");
   const kicker = drawer.locator(".detail-kicker").first();
@@ -238,32 +233,17 @@ test("a stop the Must-do filter hides opens anyway, the filter stays; Show all, 
   await expect(drawer.getByRole("button", { name: "Show all" })).toHaveCount(0);
 });
 
-test("the column's own route controls: Auto-fill from the empty state, Clear route with Undo, Unscheduled's + (54e)", async ({ page }) => {
+test("the column's own route controls: From only; no Auto-fill, Clear route or Unscheduled (Q59)", async ({ page }) => {
   await enterDemo(page, { width: 1680, height: 1000 });
-  const stops = column(page).getByRole("list", { name: "Today's route" }).getByRole("button");
-  await column(page).getByRole("button", { name: "Auto-fill" }).click();
-  await expect(stops).toHaveCount(3);
+  await routeReady(page);
   await expect(column(page).getByLabel("Route start time")).toBeVisible();
-
-  await column(page).getByRole("button", { name: "Clear route" }).click();
-  await expect(page.locator(".undo-toast")).toContainText("Route cleared");
-  await expect(stops).toHaveCount(0);
-  await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
-  await expect(stops).toHaveCount(3);
-
-  await column(page).getByRole("button", { name: "Clear route" }).click();
-  const pool = column(page).getByRole("region", { name: "Unscheduled" });
-  const toggle = pool.getByRole("button", { name: /^Unscheduled 3/ });
-  await expect(toggle).toHaveAttribute("aria-expanded", "false");
-  await toggle.click();
-  await pool.getByRole("button", { name: /^Add to route: / }).first().click();
-  await expect(stops).toHaveCount(1);
-  await expect(pool.getByRole("button", { name: /^Unscheduled 2/ })).toBeVisible();
+  await expect(column(page).getByRole("button", { name: /Auto-fill|Clear route/ })).toHaveCount(0);
+  await expect(column(page).getByRole("region", { name: "Unscheduled" })).toHaveCount(0);
 });
 
 test("made the one thing, a task moves to NOW on the route; the rest flows after it; Undo puts it back (53–56)", async ({ page }) => {
   await enterDemo(page, { width: 1680, height: 1000 });
-  await autoFillRoute(page);
+  await routeReady(page);
   const stops = column(page).getByRole("list", { name: "Today's route" }).getByRole("button");
   await expect(stops).toHaveCount(3);
   const firstBefore = (await stops.first().locator(".tdm-title").textContent()).trim();

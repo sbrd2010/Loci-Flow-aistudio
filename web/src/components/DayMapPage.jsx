@@ -6,8 +6,6 @@ import {
   KeyboardSensor,
   MouseSensor,
   TouchSensor,
-  useDraggable,
-  useDroppable,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
@@ -24,7 +22,7 @@ import { mergeWindowSpans } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
 import {
   applyReflow, currentDayMinutes, getEstimate, getTaskId,
-  hasHeadGap, normalizePriority, reflowRoute, removeScheduleFields, routeIsContiguous, useDayRoute,
+  hasHeadGap, normalizePriority, reflowRoute, routeIsContiguous, useDayRoute,
 } from "../hooks/useDayRoute";
 import { isEventTask, isFixedStop } from "../utils/dayMapRoute";
 import { eventAsks } from "../utils/fixedTime";
@@ -44,7 +42,7 @@ import TaskDetail from "./TaskDetail";
 import FixTimeSheet from "./FixTimeSheet";
 import useTaskActions from "../hooks/useTaskActions";
 import { frontsFromConfig, frontsOnOffer } from "../utils/fronts";
-import { IconCheck, IconChevronDown, IconChevronLeft, IconLock, IconPin, IconPlus, IconX } from "./ui/icons";
+import { IconCheck, IconChevronDown, IconChevronLeft, IconLock, IconPin } from "./ui/icons";
 import { useFocusLedger } from "../hooks/useFocusLedger";
 import { dayBar, doneToday, factualLine } from "../utils/dayMapFacts";
 import "../styles/dayMap.css";
@@ -53,15 +51,13 @@ import "../styles/dayMap.css";
 // as a flat list: the time each starts, the task, how long. The day ends when
 // the focus time left runs out: a red DAY ENDS line, and what starts after it
 // is listed under WON'T FIT TODAY. "Move N to tomorrow" puts those at the top
-// of tomorrow's route (nothing is deleted), with Undo. Above the route:
-// From · Auto-fill · Clear route; the route never builds itself. Tasks not on
-// it wait in Unscheduled — a card on the right (laptop), a bar that opens a
-// sheet (phone) — and "+" adds one to the end of the route.
+// of tomorrow's route (nothing is deleted), with Undo. Every open Today task
+// is on the route, in the list's order (Q59); above it: From · Fixed time.
 
 // `row` is the stop as the route engine laid it out (utils/dayMapRoute): its
 // start and end, and whether it is fixed, late, pulled forward, or stops for
 // a break. A fixed stop keeps its time, so it is not dragged.
-function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus, until = null, min = null, was = null, flash = false, asks = null }) {
+function RouteStop({ task, row, fromYesterday = false, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus, until = null, min = null, was = null, flash = false, asks = null }) {
   const taskId = getTaskId(task);
   const {
     attributes, listeners, setActivatorNodeRef,
@@ -123,6 +119,7 @@ function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFo
           {/* Q33.1: a dotted MIN while the minimum day is suggested; the
               green one once it's confirmed. */}
           {min && <span className={`task-tag is-min${min === "suggested" ? " is-suggested" : ""}`}>MIN</span>}
+          {fromYesterday && <span className="from-yesterday">FROM YESTERDAY</span>}
         </span>
         <span className="dm-dur">{formatSpan(end - start)}</span>
         {/* 56a: the one thing, at NOW, until the end of its stop. */}
@@ -141,39 +138,8 @@ function RouteStop({ task, row, isNow, isOver, isGoal, isOpen, onOpen, onStartFo
   );
 }
 
-// An Unscheduled task (52e): its title, how long, and a 40px "+" that adds it
-// to the end of the route. On a laptop it can also be dragged into the route.
-function PoolRow({ task, onAdd, draggable = false }) {
-  const taskId = getTaskId(task);
-  const { setNodeRef, listeners, isDragging } = useDraggable({ id: `pool:${taskId}`, disabled: !draggable });
-  return (
-    <li ref={setNodeRef} className={`dm-pool-row${isDragging ? " is-dragging" : ""}`} {...(draggable ? listeners : {})}>
-      <span className="dm-pool-title">{task.title}</span>
-      <span className="dm-dur">{formatSpan(getEstimate(task))}</span>
-      <button
-        type="button"
-        className="dm-pool-add"
-        aria-label={`Add to route: ${task.title}`}
-        onClick={() => onAdd(taskId)}
-        onPointerDown={e => e.stopPropagation()}
-        onMouseDown={e => e.stopPropagation()}
-        // Its own keys (Space, Enter) press it; they never start the row's drag.
-        onKeyDown={e => { if (e.key === " " || e.key === "Enter") e.stopPropagation(); }}
-      >
-        <IconPlus size={18} />
-      </button>
-    </li>
-  );
-}
-
-// The end of the route takes a dropped task, even when the route is empty.
-function RouteDrop({ children }) {
-  const { setNodeRef, isOver } = useDroppable({ id: "route-end" });
-  return <div ref={setNodeRef} className={`dm-route-wrap${isOver ? " is-drop" : ""}`}>{children}</div>;
-}
-
 export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onEndFocus, onAddTask, onHelpChoose, onCloseDay, dayClock, flushNow = () => {}, backLabel = "Today", uid, writeActivityEvents, focusTimer }) {
-  // A stop, opened (52): the task sheet, with Remove from route.
+  // A stop, opened (52): the task sheet.
   const [detailId, setDetailId] = useState(null);
   // The route's own Undo: { message, before, at } — before is what to put back.
   const [routeUndo, setRouteUndo] = useState(null);
@@ -205,15 +171,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const t = setTimeout(() => setFlashId(null), 600);
     return () => clearTimeout(t);
   }, [flashId]);
-  // Phone (52d): Unscheduled is a bar that opens this sheet.
-  const [poolOpen, setPoolOpen] = useState(false);
-  // Laptop (57b answer 1): Unscheduled is a row that opens in place — open
-  // while the route is empty, folded once it has stops, unless you choose.
-  const [poolShown, setPoolShown] = useState(null);
   // "Done so far today" (56a–c): open on a monitor, folded below 1600px.
   const [doneOpen, setDoneOpen] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1600);
-  const [dragTitle, setDragTitle] = useState(null);
-  // The phone's bar and action sit right on the nav, whatever its height.
+  // The phone's action sits right on the nav, whatever its height.
   const [navHeight, setNavHeight] = useState(0);
   useEffect(() => {
     const nav = document.querySelector(".tab-bar");
@@ -225,9 +185,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
 
   const {
     tasks, config: routeConfig, windows, breaks, todayStr, tomorrowStr, payloadRef,
-    activeTodayTasks, scheduledTasks, tomorrowTasks, unscheduledTasks,
+    activeTodayTasks, scheduledTasks, tomorrowTasks,
     anchorMinutes, rows, routeTasks, plan, isGoal, sortableIds, latestTasks, applyAndSave,
-    setAnchor, addToRoute, autoFill, clearRoute: clearRouteTasks, setAddedBreaks,
+    setAnchor, setAddedBreaks,
   } = useDayRoute({ payload, savePayload });
 
   // A drag ends in a click on the row it dropped; that click must not open it.
@@ -244,32 +204,12 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     })
   );
 
-  const removeFromRoute = (taskId) => {
-    const reflowed = reflowRoute(scheduledTasks.filter(t => getTaskId(t) !== taskId), anchorMinutes, todayStr, breaks);
-    const p = payloadRef.current;
-    const nextTasks = latestTasks().map(t => {
-      if (getTaskId(t) === taskId) return removeScheduleFields(t);
-      return reflowed.find(r => getTaskId(r) === getTaskId(t)) || t;
-    });
-    savePayload({ ...p, tasks: nextTasks, timestamp: Date.now() });
-    const task = latestTasks().find(t => getTaskId(t) === taskId);
-    if (task) setUndo({ message: `Removed from route: ${task.title}`, before: [task], at: Date.now() });
-  };
-
   // The sheet's estimate is the stop's duration: both fields change, and the
   // route is timed again.
   const changeDuration = (taskId, duration) => {
     applyAndSave(scheduledTasks.map(t =>
       getTaskId(t) === taskId ? { ...t, dayMapDurationMinutes: duration || null, timeEstimateMinutes: duration || null } : t
     ), anchorMinutes);
-  };
-
-  // 52: Clear route has Undo, no confirm.
-  const clearRoute = () => {
-    const before = clearRouteTasks();
-    if (!before) return;
-    setDetailId(null);
-    setUndo({ kind: "clear", message: "Route cleared", before, at: Date.now() });
   };
 
   // The pinned task is what you are doing now, and may have a focus session
@@ -284,8 +224,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   };
 
   // Undo puts the tasks back, then times the whole route again: the route may
-  // have changed since (a task added after Clear route, say), and restored
-  // stops must not share an order or a start time with it.
+  // have changed since, and restored stops must not share an order or a
+  // start time with it.
   const handleUndo = () => {
     if (!undo) return;
     // Breaks are one day's: past midnight, Undo has nothing to put back.
@@ -297,10 +237,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const byOrder = (a, b) => ((a.dayMapOrder ?? Infinity) - (b.dayMapOrder ?? Infinity))
       || (put.has(getTaskId(b)) - put.has(getTaskId(a)))
       || ((a.dayMapStartMinutes ?? 0) - (b.dayMapStartMinutes ?? 0));
-    // After Clear route, what was added since goes after what comes back.
-    const route = undo.kind === "clear"
-      ? [...onRoute.filter(t => put.has(getTaskId(t))).sort(byOrder), ...onRoute.filter(t => !put.has(getTaskId(t))).sort(byOrder)]
-      : [...onRoute].sort(byOrder);
+    const route = [...onRoute].sort(byOrder);
     // A stop made for a fixed time ("Something else") goes again.
     const kept = undo.created ? restored.filter(t => getTaskId(t) !== undo.created) : restored;
     const next = { ...payloadRef.current, tasks: applyReflow(kept, reflowRoute(route.filter(t => getTaskId(t) !== undo.created), anchorMinutes, todayStr, breaks)), timestamp: Date.now() };
@@ -452,16 +389,6 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
 
   const handleDragEnd = ({ active, over }) => {
     if (!over || active.id === over.id) return;
-    // From Unscheduled (52e): in before the stop it was dropped on, or at the end.
-    if (String(active.id).startsWith("pool:")) {
-      const task = latestTasks().find(t => getTaskId(t) === String(active.id).slice(5));
-      if (!task) return;
-      const at = scheduledTasks.findIndex(t => getTaskId(t) === over.id);
-      const next = [...scheduledTasks];
-      next.splice(at === -1 ? next.length : at, 0, task);
-      applyAndSave(next, anchorMinutes);
-      return;
-    }
     // The drop is read on the route as it shows (a stop pulled forward sits
     // ahead of its place in the order), and that order is what is kept
     // (Codex review of #421).
@@ -533,12 +460,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const cut = plan.overIndex === -1 ? rows.length
     : rows.findIndex(r => r.kind === "stop" && routeIndex.get(getTaskId(r.task)) >= plan.overIndex);
   const rowIsOver = (r) => rows.indexOf(r) >= cut;
-  // Minimum day (56a–b): today's open tasks in the order they come — the
-  // route as it shows, then the rest.
-  const openToday = [
-    ...routeTasks.map(t => scheduledTasks.find(s => getTaskId(s) === getTaskId(t))).filter(Boolean),
-    ...unscheduledTasks,
-  ];
+  // Minimum day (56a–b): today's open tasks in the order they come, the
+  // route as it shows.
+  const openToday = routeTasks.map(t => scheduledTasks.find(s => getTaskId(s) === getTaskId(t))).filter(Boolean);
   const minDay = minimumDay({ config: routeConfig, todayStr, ordered: openToday, isGoal });
   const minIds = new Set(minDay.ids);
   const timeOf = (id) => {
@@ -625,6 +549,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         key={id}
         task={task}
         row={r}
+        fromYesterday={task.deferredUntil === todayStr}
         isNow={isNowRow}
         min={minIds.has(id) ? minDay.state : null}
         until={isNowRow && task.isNowFocus ? routeTasks.find(t => getTaskId(t) === id)?.routeEndMinutes ?? null : null}
@@ -712,79 +637,24 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  // 52d–e / 56a–b: From · Auto-fill · Fixed time · Clear route. Above the
-  // route on a phone; in the right column from 1024px.
+  // 52d / 56a–b: From · Fixed time. Above the route on a phone; in the
+  // right column from 1024px.
   const controls = (
-            <div className="dm-controls">
+    <div className="dm-controls">
       <DayMapFrom anchorMinutes={anchorMinutes} onChangeAnchor={setAnchor} windows={windows} />
-      <button type="button" className="dm-text-btn" onClick={autoFill} disabled={!unscheduledTasks.length}>Auto-fill</button>
       <button type="button" className="dm-text-btn" onClick={() => setFixing({})}>Fixed time</button>
-      {/* 56a–b label it "Clear"; its name stays "Clear route". */}
-      <button type="button" className="dm-text-btn" onClick={clearRoute} disabled={!scheduledTasks.length} aria-label="Clear route">Clear</button>
     </div>
   );
 
-  const poolRows = (
-    <ul className="dm-pool-list">
-      {/* Adding from the open row keeps it open: the next + is where it was. */}
-      {unscheduledTasks.map(t => <PoolRow key={getTaskId(t)} task={t} onAdd={(id) => { setPoolShown(true); addToRoute(id); }} draggable />)}
-    </ul>
-  );
-
   const close = () => { flushNow(); onClose(); };
-  // The phone's sheet closes back to its bar.
-  const closePool = () => {
-    setPoolOpen(false);
-    requestAnimationFrame(() => document.querySelector(".dm-pool-bar")?.focus());
-  };
-  // Its last task added, the sheet has nothing left: it closes, and focus
-  // goes to the first stop (the bar is disabled with nothing to add).
-  useEffect(() => {
-    if (!poolOpen || unscheduledTasks.length > 0) return;
-    setPoolOpen(false);
-    requestAnimationFrame(() => document.querySelector(".dm-route .dm-stop .dm-main")?.focus());
-  }, [poolOpen, unscheduledTasks.length]);
-  // The sheet is the phone's and tablet's: crossing into the laptop layout
-  // (a tablet turned, a window widened) closes it rather than hiding it.
-  useEffect(() => {
-    if (!poolOpen) return undefined;
-    const close = () => {
-      if (window.innerWidth < 1024) return;
-      // Focus in the sheet goes to what takes its place: the card's first +.
-      // (The laptop's CSS hides the sheet first, and a hidden element loses
-      // focus to the page, so focus on the page counts as the sheet's.)
-      const el = document.activeElement;
-      const hadFocus = !el || el === document.body || !!el.closest(".dm-pool-sheet");
-      setPoolOpen(false);
-      if (hadFocus) requestAnimationFrame(() => (document.querySelector(".dm-pool .dm-pool-add") || document.querySelector(".dm-route .dm-stop .dm-main"))?.focus());
-    };
-    close();
-    window.addEventListener("resize", close);
-    return () => window.removeEventListener("resize", close);
-  }, [poolOpen]);
-  const poolOpenRef = useRef(poolOpen);
-  poolOpenRef.current = poolOpen;
-  // "+" in the sheet takes its row away; focus goes to the next row's "+".
-  const addFromSheet = (taskId) => {
-    const buttons = [...document.querySelectorAll(".dm-pool-sheet .dm-pool-add")];
-    const i = buttons.findIndex(b => b === document.activeElement);
-    addToRoute(taskId);
-    requestAnimationFrame(() => {
-      const left = [...document.querySelectorAll(".dm-pool-sheet .dm-pool-add")];
-      (left[Math.min(Math.max(i, 0), left.length - 1)] || document.querySelector(".dm-pool-sheet .dm-sheet-close"))?.focus();
-    });
-  };
   // Esc goes back (50e–f), unless a dialog or a field is taking it.
   const closeRef = useRef(close);
   closeRef.current = close;
-  const closePoolRef = useRef(closePool);
-  closePoolRef.current = closePool;
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
       const el = e.target;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
-      if (poolOpenRef.current) { closePoolRef.current(); return; }
       // An open drawer takes Esc before the page does, wherever focus is.
       if (detailOpenRef.current) { closeDetailRef.current(); return; }
       if (document.querySelector("[role='dialog'][aria-modal='true']")) return;
@@ -866,26 +736,20 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       ) : (
         <DndContext
           sensors={sensors}
-          onDragStart={({ active }) => {
-            draggingRef.current = true;
-            const id = String(active.id);
-            if (id.startsWith("pool:")) setDragTitle(unscheduledTasks.find(t => getTaskId(t) === id.slice(5))?.title || null);
-          }}
-          onDragEnd={(e) => { setTimeout(() => { draggingRef.current = false; }, 0); setDragTitle(null); handleDragEnd(e); }}
-          onDragCancel={() => { setTimeout(() => { draggingRef.current = false; }, 0); setDragTitle(null); }}
+          onDragStart={() => { draggingRef.current = true; }}
+          onDragEnd={(e) => { setTimeout(() => { draggingRef.current = false; }, 0); handleDragEnd(e); }}
+          onDragCancel={() => { setTimeout(() => { draggingRef.current = false; }, 0); }}
         >
           <div className="dm-layout">
             {bar && (
               <DayBar bar={bar} now={nowMins} doneMinutes={doneMinutes} plannedMinutes={barPlanned} overBy={barOverBy} />
             )}
-            {/* 52d–e: From · Auto-fill · Clear route, as text, above the route. */}
+            {/* 52d: From · Fixed time, as text, above the route. */}
             {!drawerViewport && controls}
 
-            <RouteDrop>
+            <div className="dm-route-wrap">
               {doneFold}
-              {scheduledTasks.length === 0 ? (
-                <p className="dm-route-empty">Nothing on the route yet. Add a task from Unscheduled, or use Auto-fill.</p>
-              ) : (
+              {scheduledTasks.length > 0 && (
                 <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
                   <ol className="dm-route" aria-label="Today's route">
                     {rows.filter(r => !rowIsOver(r)).map(renderRow)}
@@ -905,10 +769,10 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
               {(isOver || plan.overBy > 0) && onHelpChoose && (
                 <button type="button" className="dm-text-btn is-alert dm-help" onClick={onHelpChoose}>Help me choose</button>
               )}
-            </RouteDrop>
+            </div>
 
-            {/* The action, then the pool: a card on a laptop (52e); on a
-                phone a bar above the action that opens a sheet (52d). */}
+            {/* The action: a card on a laptop (52e); on a phone a button
+                above the nav (52d). */}
             <div className="dm-side" style={navHeight ? { "--dm-nav-h": `${navHeight}px` } : undefined}>
               {drawerViewport && openToday.length > 0 && (
                 <MinimumDay state={minDay.state} ids={minDay.ids} tasks={openToday} timeOf={timeOf} onConfirm={confirmMin} />
@@ -925,81 +789,17 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
               ) : (
                 <button type="button" className="dm-move" onClick={moveOverToTomorrow}>Move {movable.length} to tomorrow</button>
               ))}
-              <section className="dm-pool" aria-labelledby="dm-pool-title">
-                <h2 className="dm-pool-name" id="dm-pool-title">
-                  <button
-                    type="button"
-                    className="dm-pool-toggle"
-                    aria-expanded={poolShown ?? !scheduledTasks.length}
-                    onClick={() => setPoolShown(!(poolShown ?? !scheduledTasks.length))}
-                  >
-                    Unscheduled <span className="dm-pool-count">{unscheduledTasks.length}</span>
-                    <IconChevronDown size={18} />
-                  </button>
-                </h2>
-                {(poolShown ?? !scheduledTasks.length) && (unscheduledTasks.length > 0 ? (
-                  <>
-                    <span className="dm-pool-hint" aria-hidden="true">+ OR DRAG IN</span>
-                    {poolRows}
-                  </>
-                ) : <p className="dm-pool-empty">All of today’s tasks are on the route.</p>)}
-              </section>
-              <button
-                type="button"
-                className="dm-pool-bar"
-                aria-haspopup="dialog"
-                aria-expanded={poolOpen}
-                onClick={() => setPoolOpen(true)}
-                disabled={!unscheduledTasks.length}
-              >
-                <span className="dm-pool-name">Unscheduled <span className="dm-pool-count">{unscheduledTasks.length}</span></span>
-                {unscheduledTasks.length > 0 && <span className="dm-pool-bar-add">Add to route</span>}
-              </button>
             </div>
           </div>
-          <DragOverlay dropAnimation={null}>
-            {dragTitle ? <div className="dm-drag-ghost">{dragTitle}</div> : null}
-          </DragOverlay>
+          {/* Empty, yet needed: without an overlay, a keyboard drag's drop
+              often lands back where it started. */}
+          <DragOverlay dropAnimation={null} />
         </DndContext>
-      )}
-
-      {poolOpen && (
-        <>
-          <div className="dm-sheet-scrim" onClick={closePool} aria-hidden="true" />
-          <div
-            className="dm-pool-sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Unscheduled"
-            onKeyDown={e => {
-              if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closePool(); return; }
-              // Modal: Tab and Shift+Tab stay among the sheet's buttons.
-              if (e.key !== "Tab") return;
-              const items = [...e.currentTarget.querySelectorAll("button:enabled")];
-              if (!items.length) return;
-              const i = items.indexOf(document.activeElement);
-              const next = e.shiftKey ? (i <= 0 ? items.length - 1 : i - 1) : (i === items.length - 1 ? 0 : i + 1);
-              e.preventDefault();
-              items[next].focus();
-            }}
-          >
-            <div className="dm-pool-head">
-              <h2 className="dm-pool-name">Unscheduled <span className="dm-pool-count">{unscheduledTasks.length}</span></h2>
-              <button type="button" className="dm-sheet-close" onClick={closePool} aria-label="Close" autoFocus>
-                <IconX size={20} />
-              </button>
-            </div>
-            <ul className="dm-pool-list">
-              {unscheduledTasks.map(t => <PoolRow key={getTaskId(t)} task={t} onAdd={addFromSheet} />)}
-            </ul>
-          </div>
-        </>
       )}
 
       {fixing && (
         <FixTimeSheet
           routeTasks={routeTasks}
-          unscheduledTasks={unscheduledTasks}
           stops={scheduledTasks}
           task={fixing.task}
           breakItem={fixing.breakItem}
@@ -1052,7 +852,6 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
             }}
             onSetSteps={(steps, meta) => { if (meta?.removed) setRouteUndo(null); actions.handleSetSteps(detailTask, steps, meta); }}
             onDone={() => leaving(act(actions.handleMarkDone))}
-            onRemoveFromRoute={() => leaving(removeFromRoute, detailId)}
             fixedAt={isFixedStop(detailTask) ? formatClock24(detailTask.dayMapFixedMinutes) : null}
             onFixTime={() => { const t = detailTask; setDetailId(null); setFixing({ task: t }); }}
             onUnfix={isFixedStop(detailTask) ? () => unfix(detailId) : undefined}

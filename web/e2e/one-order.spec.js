@@ -35,7 +35,6 @@ async function backToToday(page) {
 test("a reorder on Today shows on the Day map", async ({ page }) => {
   await enterDemo(page);
   await openDayMap(page);
-  await page.getByRole("button", { name: "Auto-fill" }).click();
   await expect.poll(() => routeTitles(page).then(t => t.length)).toBeGreaterThan(1);
   await backToToday(page);
 
@@ -58,7 +57,6 @@ test("a reorder on Today shows on the Day map", async ({ page }) => {
 test("a reorder on the Day map shows on Today", async ({ page }) => {
   await enterDemo(page);
   await openDayMap(page);
-  await page.getByRole("button", { name: "Auto-fill" }).click();
   const stops = page.locator(".dm-stop:not(.is-now) .dm-main");
   await expect.poll(() => stops.count()).toBeGreaterThan(1);
   const before = await routeTitles(page);

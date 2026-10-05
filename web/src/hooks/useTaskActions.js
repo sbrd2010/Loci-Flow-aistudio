@@ -74,7 +74,8 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
       ? focusTimer.endFocusSession("user_abandoned")
       : null;
     // Off Today it is off the Day map too: without its old slot, a return to
-    // Today lands in Unscheduled rather than over the stop now in that slot.
+    // Today joins the route in list order rather than over the stop now in
+    // that slot.
     const offRoute = (t) => (t.horizonLevel === "today" ? removeScheduleFields(t) : t);
     savePayloadAsync({ ...payloadRef.current, tasks: latestTasks().map(t => t.uuid === task.uuid ? { ...offRoute(t), horizonLevel: horizon, orderIndex, isNowFocus: false, lastUpdated: now } : t) })
       .then(() => {

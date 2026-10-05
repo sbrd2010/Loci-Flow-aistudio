@@ -77,20 +77,19 @@ test("Horizons: on a phone a rung pushes its list; wider, the ladder sits beside
   await expect.poll(side).toBe(true);
 });
 
-// 50f, 52e: Day map rows are time · task · how long, and the Unscheduled
-// rows task · how long · +. No priority tag is drawn there, so none can carry
-// the four old priority colours; the lengths share one colour everywhere.
+// 50f: Day map rows are time · task · how long. No priority tag is drawn
+// there, so none can carry the four old priority colours; the lengths share
+// one colour.
 test("Day Map draws no priority tags, and its lengths share one colour", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await enterDemo(page);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.getByRole("button", { name: "Day map →" }).click();
   await expect(page.locator(".day-map-page")).toBeVisible();
-  const color = (loc) => loc.first().evaluate(el => getComputedStyle(el).color);
-  const poolLength = await color(page.locator(".dm-pool-row .dm-dur"));
-  await page.getByRole("button", { name: /auto-fill/i }).click();
   await expect(page.locator(".dm-stop:not(.is-now)").first()).toBeVisible();
-  expect(await color(page.locator(".dm-stop:not(.is-now) .dm-dur"))).toBe(poolLength);
+  const colors = await page.locator(".dm-stop:not(.is-now) .dm-dur").evaluateAll(els => els.map(el => getComputedStyle(el).color));
+  expect(colors.length).toBeGreaterThan(1);
+  expect(new Set(colors).size).toBe(1);
   await expect(page.locator(".day-map-page .dm-p, .day-map-page .task-row-priority")).toHaveCount(0);
 });
 

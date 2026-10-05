@@ -191,8 +191,6 @@
 .dm-main:focus-visible,
 .dm-start:focus-visible,
 .dm-move:focus-visible,
-.dm-pool-add:focus-visible,
-.dm-pool-bar:focus-visible,
 .dm-sheet-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── The route: time · task · how long ── */
@@ -344,15 +342,8 @@
 .dm-wontfit { padding: 4px 0 2px; }
 .dm-tomorrow-note { margin: 10px 0 0; font-size: 0.8125rem; color: var(--ink-2); }
 .dm-help { display: block; }
-.dm-route-wrap.is-drop { outline: 2px dashed var(--accent); outline-offset: 6px; border-radius: 6px; }
-.dm-route-empty {
-  margin: 0;
-  padding: 16px 0;
-  font-size: 0.875rem;
-  color: var(--ink-2);
-}
 
-/* ── The side: Move N to tomorrow, then Unscheduled ── */
+/* ── The side: Move N to tomorrow ── */
 .dm-side { display: flex; flex-direction: column; gap: 12px; }
 .dm-move {
   min-height: 52px;
@@ -366,89 +357,7 @@
   box-shadow: 0 2px 0 var(--accent-edge);
   cursor: pointer;
 }
-.dm-pool-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--line);
-}
-.dm-pool-name { margin: 0; font-size: 1rem; font-weight: 800; }
-.dm-pool-count {
-  margin-left: 4px;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--ink-2);
-}
-.dm-pool-hint {
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--ink-2);
-}
-.dm-pool-list { margin: 0; padding: 0; list-style: none; }
-.dm-pool-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 40px;
-  gap: 10px;
-  align-items: center;
-  min-height: 52px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--line);
-}
-.dm-pool-row.is-dragging { opacity: 0.4; }
-.dm-pool-title { font-size: 0.875rem; font-weight: 700; overflow-wrap: anywhere; }
-.dm-pool-add {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  cursor: pointer;
-}
-.dm-pool-row:hover .dm-pool-add,
-.dm-pool-add:hover { color: var(--accent); border-color: var(--accent); }
-.dm-pool-empty { margin: 10px 0 0; font-size: 0.8125rem; color: var(--ink-2); }
-.dm-drag-ghost {
-  padding: 10px 14px;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1.5px solid var(--accent);
-  border-radius: 6px;
-  box-shadow: var(--shadow-md);
-}
-
-/* Phone and tablet (52d): the card gives way to a bar above the action, and
-   both stay at the bottom, over the nav. */
-.dm-pool { display: none; }
-.dm-pool-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 52px;
-  padding: 0 4px;
-  font: inherit;
-  color: var(--ink);
-  background: none;
-  border: 0;
-  border-top: 1px solid var(--line);
-  cursor: pointer;
-  order: -1;
-}
-.dm-pool-bar:disabled { cursor: default; }
-.dm-pool-bar-add { font-size: 0.875rem; font-weight: 800; color: var(--accent); }
-.dm-pool-bar-add::after { content: " ⌃"; }
+/* Phone and tablet (52d): the action stays at the bottom, over the nav. */
 .dm-side {
   position: fixed;
   left: 50%;
@@ -461,30 +370,18 @@
   border-top: 1px solid var(--line);
   transform: translateX(-50%);
 }
-/* Room under the route for the bar and the action above the nav. */
-.day-map-page:has(.dm-side) { padding-bottom: 200px; }
+/* With nothing to move, there is no action. */
+.dm-side:empty { display: none; }
+/* Room under the route for the action above the nav. */
+.day-map-page:has(.dm-side:not(:empty)) { padding-bottom: 120px; }
 /* With a session on, the focus bar (59e) sits above the nav: the action
    stack goes above the bar, never under it (Codex review of #434). */
 @media (max-width: 1023px) {
   body:has(.focus-bar) .dm-side { bottom: calc(var(--dm-nav-h, 64px) + 80px + env(safe-area-inset-bottom, 0px)); }
-  body:has(.focus-bar) .day-map-page:has(.dm-side) { padding-bottom: 280px; }
+  body:has(.focus-bar) .day-map-page:has(.dm-side:not(:empty)) { padding-bottom: 200px; }
 }
-.dm-pool-bar { border-top: 0; }
-
-/* The phone's sheet of Unscheduled tasks. */
+/* A sheet's scrim (Fixed time on a phone). */
 .dm-sheet-scrim { position: fixed; inset: 0; z-index: 149; background: var(--scrim); }
-.dm-pool-sheet {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 150;
-  max-height: 70dvh;
-  overflow-y: auto;
-  padding: 16px 20px calc(16px + env(safe-area-inset-bottom, 0px));
-  background: var(--surface);
-  border-radius: 16px 16px 0 0;
-}
 .dm-sheet-close {
   display: inline-flex;
   align-items: center;
@@ -547,17 +444,7 @@
     border: 0;
     transform: none;
   }
-  .day-map-page:has(.dm-side) { padding-bottom: 80px; }
-  .dm-pool {
-    display: block;
-    padding: 0;
-    background: none;
-    border-bottom: 1px solid var(--line);
-  }
-  .dm-pool-list .dm-pool-row { cursor: grab; }
-  .dm-pool-list .dm-pool-row:last-child { border-bottom: 0; }
-  .dm-pool-bar,
-  .dm-pool-sheet,
+  .day-map-page:has(.dm-side:not(:empty)) { padding-bottom: 80px; }
   .dm-sheet-scrim { display: none; }
 }
 
@@ -730,7 +617,7 @@
     border-radius: 12px;
     transform: translate(-50%, -50%);
   }
-  /* The laptop hides the pool sheet's scrim; the dialog keeps its own. */
+  /* The laptop hides the sheet scrim; the dialog keeps its own. */
   .fx-scrim { display: block; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -858,25 +745,6 @@
 .dm-over-text { margin: 0; font-size: 0.9375rem; line-height: 1.35; }
 .dm-over-text strong { color: var(--coral); }
 .dm-side .dm-controls { gap: 4px 14px; border-bottom: 1px solid var(--line); }
-.dm-pool-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  min-height: 52px;
-  padding: 0;
-  font: inherit;
-  font-weight: 800;
-  color: var(--ink);
-  background: none;
-  border: 0;
-  cursor: pointer;
-}
-.dm-pool-toggle svg { margin-left: auto; transition: transform 150ms; }
-.dm-pool-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
-.dm-pool-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .dm-pool-toggle svg { transition: none; } }
-
 /* Q36.3 / Q47.5 (frame 60): a call still open 5 minutes after it ended
    asks on a second line: Done (outlined) and Move (text), 32px on a laptop
    and 44px on a phone. Move's choices open under the row; on a phone, a

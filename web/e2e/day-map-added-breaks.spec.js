@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 // Q31: "Fixed time → A break" and "Something else". Demo mode at 11:35:
-// Auto-fill lays three 25-minute stops (11:35, 12:05, 12:35). Nothing
+// The route holds three 25-minute stops (11:35, 12:05, 12:35). Nothing
 // reaches Firebase.
 
 async function openDayMap(page) {
@@ -12,7 +12,6 @@ async function openDayMap(page) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
   await page.locator("body").click({ position: { x: 5, y: 300 } });
   await page.keyboard.press("m");
-  await page.getByRole("button", { name: "Auto-fill" }).click();
   await expect(page.locator(".dm-stop")).toHaveCount(3);
 }
 

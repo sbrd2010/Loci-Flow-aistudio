@@ -62,7 +62,6 @@ test("mobile reliability: Day Map auto-fill persists route anchor and reflows du
   await anchorSelect.selectOption("660");
   await expect(anchorSelect).toHaveValue("660");
 
-  await page.getByRole("button", { name: "Auto-fill" }).click();
   await expect(taskStops(page).first()).toBeVisible({ timeout: 5_000 });
   await expect.poll(() => taskStops(page).count()).toBeGreaterThanOrEqual(2);
   await expectStopTime(taskStops(page).first(), "11:00");

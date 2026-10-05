@@ -30,7 +30,6 @@ async function openDayMapWithLunch(page, viewport = { width: 412, height: 892 },
   await page.getByRole("textbox", { name: "Break name" }).blur();
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
   await page.getByRole("button", { name: "Day map →" }).click();
-  await page.getByRole("button", { name: "Auto-fill" }).click();
 }
 
 test("a task that runs into the break stops for it and continues after; the next stop follows it", async ({ page }) => {

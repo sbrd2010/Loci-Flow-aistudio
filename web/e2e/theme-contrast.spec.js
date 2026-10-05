@@ -128,11 +128,8 @@ for (const theme of THEMES) {
 
     await page.getByRole("button", { name: "Day map →" }).click();
 
-    // Day map (50f, 52d): its smallest text — the Unscheduled count on the
-    // phone's bar, then the route's times and lengths, and the red DAY ENDS
-    // line on the page's ground.
-    await assertLegible(page.locator(".dm-pool-bar .dm-pool-count"), "Unscheduled count", theme);
-    await page.getByRole("button", { name: /auto-fill/i }).click();
+    // Day map (50f, 52d): its smallest text — the route's times and
+    // lengths, and the red DAY ENDS line on the page's ground.
     await expect(page.locator(".dm-stop").first()).toBeVisible();
     await assertLegible(page.locator(".dm-stop:not(.is-now) .dm-time").first(), "route stop time", theme);
     await assertLegible(page.locator(".dm-stop .dm-dur").first(), "route stop length", theme);
