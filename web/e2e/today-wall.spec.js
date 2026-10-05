@@ -1233,7 +1233,7 @@ test("laptop: no phone-card frame; content capped at 1200px, centred", async ({ 
   expect(Math.round(list.x + list.width)).toBe(1320);
 });
 
-// 50k: from 1600px the cap is 1760px, centred. (Not zoomed below 2400px.)
+// 50k: from 1600px the cap is 1760px, centred. (Not zoomed.)
 test("wide: from 1600px the cap is 1760px, centred (50k)", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/");

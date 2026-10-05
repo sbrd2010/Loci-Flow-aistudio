@@ -30,7 +30,7 @@ test("laptop: the band opens a 400px popover under its right edge; Esc and the b
   await expect(record(page).locator(".gr-sentence")).toHaveText("Today: not yet.");
   const b = await band(page).boundingBox();
   const r = await record(page).boundingBox();
-  // 72: from 1600 the page is zoomed (1.125 here); boxes are screen px.
+  // Boxes are screen px, so sizes divide by the page's zoom (1 today).
   const z = await page.evaluate(() => document.documentElement.currentCSSZoom);
   expect(Math.round(r.width / z)).toBe(400);
   expect(Math.abs((r.x + r.width) - (b.x + b.width))).toBeLessThanOrEqual(1);
