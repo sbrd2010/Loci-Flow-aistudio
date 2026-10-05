@@ -1938,6 +1938,11 @@ export default function TodayTab({
         onScattered={onScattered}
         onRescue={openRescueMode}
         nowCount={pinnedFocusTask ? todayTasksAll.filter(t => !t.isCompleted).length : 0}
+        nowUntil={pinnedFocusTask ? route.routeTasks.find(t => getTaskId(t) === String(pinnedFocusTask.uuid))?.routeEndMinutes ?? null : null}
+        then={pinnedFocusTask && !peekOpen ? (() => {
+          const next = route.routeTasks.find(t => getTaskId(t) !== String(pinnedFocusTask.uuid) && !cut.overIds.has(getTaskId(t)));
+          return { at: next ? Number(next.dayMapStartMinutes) : null, title: next?.title || null, dayEnd: route.plan.dayEnd };
+        })() : null}
         onMore={pinnedFocusTask ? () => setMoreOpen(true) : null}
       />
 
@@ -1992,7 +1997,7 @@ export default function TodayTab({
           <span className="today-list-head-end">
             {onOpenAddTask && (
               <button type="button" className="today-list-add" title="Add task · N" onClick={onOpenAddTask}>
-                + Add task
+                + Add<span className="today-list-add-word">{"\u00a0"}task</span>
               </button>
             )}
             {/* Q59: List | Day map, two views of one plan. */}
@@ -2183,9 +2188,15 @@ export default function TodayTab({
       {/* ── Momentum (J4). Below the ledger, never beside the hero. Hidden
            entirely by the Settings switch, and absent on its own with no
            history — an empty frame is a scoreboard of what you haven't done. ── */}
-      {config.momentumEnabled !== false && momentum && (
-        <Momentum bars={momentum.bars} sentence={momentum.sentence} />
-      )}
+      {/* 72: the footer from 840px: the streak, and "N OF M DONE TODAY". */}
+      <div className="today-foot">
+        {config.momentumEnabled !== false && momentum && (
+          <Momentum bars={momentum.bars} sentence={momentum.sentence} />
+        )}
+        {!closedView && (listDoneCount > 0 || todayTasksAll.some(t => !t.isCompleted)) && (
+          <span className="today-foot-done">{listDoneCount} OF {listDoneCount + todayTasksAll.filter(t => !t.isCompleted).length} DONE TODAY</span>
+        )}
+      </div>
 
       {/* ── Full-Screen Focus Mode Overlay */}
       {isFocusMode && activeTask && (() => {

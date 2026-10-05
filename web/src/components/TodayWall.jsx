@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import LinkifyText from "./LinkifyText";
 import { taskSteps } from "../utils/taskSteps";
+import { formatClock24 } from "../utils/dayMapPlan";
 import { startLengthOptions, chosenStartOption } from "../utils/focusSession";
 import { formatEstimate } from "./TaskDetail";
 import { IconPin, IconPlus, IconChevronDown, IconChevronLeft, IconCheck } from "./ui/icons";
@@ -211,7 +212,7 @@ function GoalBand({ goal, onOpen, record = null }) {
           only the name gives way when it is long. */}
       <div className="wall-goal-line" aria-hidden="true">
         <span className="wall-goal-line-name">{goal.name}</span>
-        {figures && <span className="wall-goal-line-figures">&nbsp;· {figures}</span>}
+        {figures && <span className="wall-goal-line-figures"><span className="wall-goal-line-dot">&nbsp;· </span>{figures}</span>}
         {act && <span className="wall-goal-line-caret">›</span>}
       </div>
       {/* Q49: the least you'll do each day toward it. */}
@@ -302,6 +303,10 @@ export default function TodayWall({
   // and the phone's More sheet.
   nowCount = 0,
   onMore = null,
+  // Q59 (72): the one thing's stop ends at nowUntil (Loci minutes); with the
+  // list away, then = { at, title, dayEnd }: the next stop and the day's end.
+  nowUntil = null,
+  then = null,
 }) {
   // Only the empty wall uses this, but hooks cannot sit behind its early
   // return.
@@ -457,7 +462,7 @@ export default function TodayWall({
       <div className="wall-hero">
         <div className="wall-kicker-row" data-flip="kicker">
           <span className="wall-kicker">
-            <span className="wall-kicker-wide">TODAY, ONE THING</span>
+            <span className="wall-kicker-wide">{nowUntil != null ? `NOW · UNTIL ${formatClock24(nowUntil)}` : "NOW"}</span>
             <span className="wall-kicker-phone">{nowCount > 0 ? `NOW · 1 OF ${nowCount}` : "NOW"}</span>
           </span>
           {meta && <span className="wall-kicker-meta">{meta}</span>}
@@ -495,9 +500,11 @@ export default function TodayWall({
               onClick={() => onStepDone?.(nextStep.id)}
             />
             <p className="wall-first-step-text">
-              <span className="wall-first-step-label">Next step</span> — <LinkifyText text={nextStep.text} />
+              <span className="wall-first-step-label">Next step<span className="wall-first-step-dash"> — </span></span><LinkifyText text={nextStep.text} />
               {onOpenTask && <>{" "}<button type="button" className="wall-details" onClick={onOpenTask}>Details ›</button></>}
             </p>
+            {/* 72: where it is in the steps, "1 / 4". */}
+            <span className="wall-step-count" aria-hidden="true">{nextIndex + 1} / {steps.length}</span>
           </div>
         ) : onOpenTask && (
           <p className="wall-details-line" data-flip="step">
@@ -505,6 +512,8 @@ export default function TodayWall({
           </p>
         )}
 
+        {/* 72: Start, Mark done and Split it share one row from 840px. */}
+        <div className="wall-buttons">
         <StartButton
           task={task}
           blockMinutes={focusMinutes}
@@ -515,17 +524,6 @@ export default function TodayWall({
           live={live}
         />
 
-        {quiet && (
-          <div className="wall-quiet" data-flip="quiet">
-            {onRescue && <button type="button" className="wall-quiet-link is-muted" onClick={onRescue}>I’m stuck</button>}
-            <span className="wall-quiet-end">
-              <button type="button" className="wall-quiet-link" onClick={onMarkDone}>Done</button>
-              <button type="button" className="wall-quiet-link" onClick={onMore} aria-haspopup="dialog">More</button>
-            </span>
-          </div>
-        )}
-
-        {!timerLabel && <StartHelper task={task} blockMinutes={focusMinutes} startChoice={startChoice} />}
 
         <div className="wall-actions" data-flip="actions">
           {/* 59f: with a session running, Pause (or Resume) and Mark done. At
@@ -550,6 +548,27 @@ export default function TodayWall({
             </button>
           )}
         </div>
+        </div>
+        {!timerLabel && <StartHelper task={task} blockMinutes={focusMinutes} startChoice={startChoice} />}
+
+        {quiet && (
+          <div className="wall-quiet" data-flip="quiet">
+            {onRescue && <button type="button" className="wall-quiet-link is-muted" onClick={onRescue}>I’m stuck</button>}
+            <span className="wall-quiet-end">
+              <button type="button" className="wall-quiet-link" onClick={onMarkDone}>Done</button>
+              <button type="button" className="wall-quiet-link" onClick={onMore} aria-haspopup="dialog">More</button>
+            </span>
+          </div>
+        )}
+
+        {/* 72c: with the list away, what comes next and where the day ends. */}
+        {then && (
+          <p className="wall-then">
+            <span className="wall-then-kicker">THEN</span>
+            {then.title ? <> {formatClock24(then.at)} · {then.title} · </> : " "}
+            DAY ENDS {formatClock24(then.dayEnd)}
+          </p>
+        )}
 
         {/* Laptop, list shown (51a): the Day map link sits under the task. */}
         {onOpenDayMap && (

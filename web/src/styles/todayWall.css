@@ -593,6 +593,31 @@
   .wall-key { display: inline-block; }
 }
 
+/* — Today's footer (72): the streak, and from 840px "N OF M DONE TODAY" at
+   the right, under one full-width hairline. — */
+.today-foot-done { display: none; }
+@media (min-width: 840px) {
+  .today-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 14px;
+    padding: 18px 0 4px;
+    border-top: 1px solid var(--divider, var(--border));
+  }
+  .today-foot .momentum { margin: 0; padding: 0; border: 0; }
+  .today-foot-done {
+    display: inline;
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--ink-2);
+  }
+}
+
 /* — Momentum: Today's footer (J4/K5) — */
 .momentum {
   display: flex;
@@ -1177,4 +1202,131 @@
     background: var(--surface);
     box-shadow: 0 4px 14px rgba(15, 31, 22, 0.12);
   }
+}
+
+/* — Q59 (72): the task side, from 840px. The goal in one 44px line; the
+   kicker "NOW · UNTIL 14:00"; the next step as circle · muted text · "1 / 4";
+   Start, Mark done and Split it on one row; "I'm stuck" and "More" as quiet
+   links under them. No helper line, no Day map link, no Feeling scattered.
+   With the list away (1024+), one THEN line and no bottom bar. — */
+.wall-buttons { display: contents; }
+.wall-step-count,
+.wall-then { display: none; }
+@media (min-width: 840px) {
+  .wall-goal {
+    flex-direction: row;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 16px;
+    border-radius: 6px;
+  }
+  .wall-goal-head,
+  .wall-goal-name,
+  .wall-goal-target,
+  .wall-goal-track,
+  .wall-goal-track.is-rule { display: none; }
+  .wall-goal-line {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    font-size: 0.9375rem;
+    font-weight: 800;
+    color: var(--gold-label);
+    white-space: nowrap;
+  }
+  .wall-goal-line-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .wall-goal-line-figures {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding-left: 12px;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .wall-goal-line-caret { flex: 0 0 auto; padding-left: 8px; }
+  .wall-goal-line-dot { display: none; }
+
+  .wall-kicker-meta,
+  .wall-first-step-label,
+  .wall-first-step .wall-details,
+  .wall-start-helper,
+  .wall-daymap,
+  .wall-link.is-scattered { display: none; }
+  .wall-first-step-text { color: var(--ink-2); }
+  .wall-step-count {
+    display: inline;
+    align-self: center;
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding-left: 12px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--ink-2);
+  }
+
+  .wall-buttons { display: flex; align-items: center; gap: 10px; }
+  .wall-buttons .wall-start { flex: 1 1 auto; min-width: 0; }
+  .wall-buttons .wall-actions { flex: 0 0 auto; }
+  .wall-buttons .wall-action { flex: 0 0 auto; padding-inline: 18px; }
+
+  .has-quiet .wall-foot > .wall-links { display: none; }
+  .has-quiet .wall-quiet {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    margin-top: -2px;
+  }
+  .wall-quiet-end { display: flex; gap: 24px; }
+  /* Mark done is a box here: the quiet Done is the phone's. */
+  .wall-quiet-end > .wall-quiet-link:first-child { display: none; }
+  .wall-quiet-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--ink-2);
+    cursor: pointer;
+  }
+  .wall-quiet-link:hover { color: var(--ink); }
+  .wall-quiet-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+}
+/* 1024–1279 (71g): Start drops its minutes and the boxes slim, so the
+   three stay on one row. */
+@media (min-width: 840px) and (max-width: 1279px) {
+  .wall-buttons .wall-action { padding-inline: 14px; }
+  .wall-buttons .wall-primary-figure,
+  .wall-buttons .wall-start .wall-key { display: none; }
+}
+@media (min-width: 1024px) {
+  /* 72: the task side flexes; the day's column is 380 (1024) or 480 (1280),
+     with a 44px gap. The task is centred in its height. */
+  .today-layout.is-list-open { grid-template-columns: minmax(0, 1fr) 380px; gap: 44px; }
+  .today-wall:not(.is-done):not(.is-empty) { min-height: calc(100dvh - 190px); }
+  .today-wall:not(.is-done):not(.is-empty) .wall-hero { margin-block: auto; }
+  .today-wall:not(.is-open):not(.is-done):not(.is-empty) .wall-hero { margin-top: auto; }
+
+  .today-wall.has-quiet:not(.is-open) .wall-peek-add,
+  .today-wall.is-open .wall-daymap { display: none; }
+  .today-wall.has-quiet:not(.is-open) .wall-foot { border-top: 0; padding-top: 0; }
+  .today-wall:not(.is-open) .wall-then {
+    display: block;
+    margin: 6px 0 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--ink-2);
+  }
+  .wall-then-kicker { margin-right: 10px; color: var(--accent); }
+}
+@media (min-width: 1280px) {
+  .today-layout.is-list-open { grid-template-columns: minmax(0, 1fr) 480px; }
 }

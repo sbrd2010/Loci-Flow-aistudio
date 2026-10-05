@@ -62,7 +62,7 @@ test("mobile reliability: Deep Focus overlay supports pause, resume, and brain-d
   const pinnedSection = page.locator(".today-wall");
   await pinnedSection.scrollIntoViewIfNeeded();
   await expect(pinnedSection).toBeVisible({ timeout: 8_000 });
-  await expect(pinnedSection).toContainText("TODAY, ONE THING");
+  await expect(pinnedSection.locator(".wall-kicker")).toContainText(/^NOW/);
 
   // Open full-screen timer via Start focus (starts timer immediately)
   await pinnedSection.locator(".wall-primary").click();

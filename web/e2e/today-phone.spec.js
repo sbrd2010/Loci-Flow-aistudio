@@ -34,9 +34,10 @@ test("phone: the quiet row stands in for the buttons and links; Start is the onl
   await expect(page.getByRole("dialog", { name: "Rescue" })).toBeVisible();
 });
 
-test("laptop: no quiet row; the wall's buttons and links stay, Rescue's link reads I'm stuck", async ({ page }) => {
+test("laptop (72): the wall's buttons stay, with I'm stuck · More under them and no quiet Done", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 800 });
-  await expect(quiet(page)).toBeHidden();
+  await expect(quiet(page).getByRole("button")).toHaveText(["I’m stuck", "More"], { useInnerText: true });
+  await expect(quiet(page).getByRole("button", { name: "Done", exact: true })).toBeHidden();
   await expect(page.locator(".wall-action", { hasText: "Mark done" })).toBeVisible();
   await expect(page.locator(".shell-clock-date")).toBeVisible();
 });

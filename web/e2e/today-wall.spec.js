@@ -187,17 +187,14 @@ test("mobile reliability: there is no Low energy switch on Today or in Settings"
   await expect(page.getByText("Low energy", { exact: true })).toHaveCount(0);
 });
 
-// 58.1 takes the link off the phone's Today; from 840px it stays.
-test("the scattered door on the desk reaches screen 14 (840 and wider)", async ({ page }) => {
+// 72: Today has no "Feeling scattered?" at any size: Rescue's "Too much
+// going on" covers that moment, and the Day map's "Help me choose" opens it.
+test("no Feeling scattered on Today, on a tablet or a laptop (72)", async ({ page }) => {
   await enterDemoWithPeek(page);
-  await page.setViewportSize({ width: 900, height: 900 });
-
-  await page.locator(".today-list-hide").click();
-  const door = page.locator(".wall-link", { hasText: "Feeling scattered?" });
-  await expect(door).toBeVisible({ timeout: 8_000 });
-  await door.click();
-
-  await expect(page.locator(".scattered")).toBeVisible({ timeout: 8_000 });
+  for (const width of [900, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.getByRole("button", { name: "Feeling scattered?" })).toBeHidden();
+  }
 });
 
 // A session already running on the task only resumes: Start names it and
@@ -651,13 +648,13 @@ test("mobile reliability: the one thing can be let go from its sheet, and Undo p
   await expect(page.locator(".wall-title")).toHaveText(title, { timeout: 8_000 });
 });
 
-// A + is on screen at every width: on a laptop with the list hidden, too.
-test("laptop: the peek's + is there with the list hidden", async ({ page }) => {
+// 72c: with the list away there is no bar of buttons; N adds to Today.
+test("laptop: with the list hidden, N adds a task to Today", async ({ page }) => {
   await enterLaptop(page);
   await expect(page.locator(".tasks-section")).toBeHidden();
-  const add = page.getByRole("button", { name: "Add a task to Today" });
-  await expect(add).toBeVisible();
-  await add.click();
+  await expect(page.getByRole("button", { name: "Add a task to Today" })).toBeHidden();
+  await page.evaluate(() => document.activeElement?.blur?.());
+  await page.keyboard.press("n");
   await expect(page.getByRole("heading", { name: "New task" })).toBeVisible({ timeout: 5_000 });
 });
 
@@ -1268,7 +1265,7 @@ test("wide: from 1600px the cap is 1760px, centred (50k)", async ({ page }) => {
   expect(Math.round(list.x + list.width)).toBe(1840);
 });
 
-test("laptop: with the list hidden, the task sits on one left edge, with the bottom bar (54c)", async ({ page }) => {
+test("laptop: with the list hidden, the task sits on one left edge, its links and THEN line under it (72c)", async ({ page }) => {
   await enterLaptop(page);
   // The 51b bug: goal, kicker, title and buttons share one left edge.
   const [band, anchor, kicker, title, start, done, split] = await Promise.all([
@@ -1280,32 +1277,33 @@ test("laptop: with the list hidden, the task sits on one left edge, with the bot
     page.getByRole("button", { name: /^Mark done/ }).boundingBox(),
     page.getByRole("button", { name: /^Split it/ }).boundingBox(),
   ]);
-  for (const box of [kicker, title, start, done]) expect(Math.abs(box.x - band.x)).toBeLessThan(1);
-  expect(Math.round(start.width)).toBe(Math.round(band.width));
+  for (const box of [kicker, title, start]) expect(Math.abs(box.x - band.x)).toBeLessThan(1);
+  // 72: Start, Mark done and Split it on one row, to the goal's right edge.
+  expect(done.x).toBeGreaterThan(start.x + start.width);
   expect(Math.round(split.x + split.width)).toBe(Math.round(band.x + band.width));
+  expect(Math.abs((done.y + done.height / 2) - (start.y + start.height / 2))).toBeLessThan(4);
   expect(Math.round(done.y)).toBe(Math.round(split.y));
-  // The task block sits at most 120px under the goal.
-  expect(kicker.y - (anchor.y + anchor.height)).toBeLessThanOrEqual(121);
-  // A tall screen too, where 10% of the height passes the cap.
+  // 72: the task block is centred in its height: on a taller screen it
+  // sits lower under the goal.
   await page.setViewportSize({ width: 1280, height: 1400 });
   const [anchorTall, kickerTall] = await Promise.all([page.locator(".wall-anchor").boundingBox(), page.locator(".wall-kicker").boundingBox()]);
-  expect(kickerTall.y - (anchorTall.y + anchorTall.height)).toBeLessThanOrEqual(121);
+  expect(kickerTall.y - (anchorTall.y + anchorTall.height)).toBeGreaterThan(kicker.y - (anchor.y + anchor.height) + 100);
   await page.setViewportSize({ width: 1280, height: 800 });
 
-  // The bottom bar: "+ Add a task" on the left, Rescue on the right. Show
+  // 72c: no bottom bar. I'm stuck and More are quiet links under the
+  // buttons, and one THEN line says what's next and where the day ends. Show
   // list is an arrow at the top right edge (Rohan: as a chat app's sidebar).
-  const foot = page.locator(".wall-foot");
   const show = page.getByRole("button", { name: /^Show list · \d+/ });
-  const add = foot.getByRole("button", { name: "Add a task to Today" });
   await expect(show).toBeVisible();
-  await expect(add).toHaveText(/Add a task/);
-  const [showBox, addBox, rescue, layout] = await Promise.all([show.boundingBox(), add.boundingBox(),
-    foot.getByRole("button", { name: "I’m stuck" }).boundingBox(), page.locator(".today-layout").boundingBox()]);
-  expect(Math.round(addBox.y + addBox.height / 2)).toBe(Math.round(rescue.y + rescue.height / 2));
+  await expect(page.locator(".wall-foot").getByRole("button", { name: "Add a task to Today" })).toBeHidden();
+  const quiet = page.locator(".wall-quiet");
+  await expect(quiet.getByRole("button", { name: "I’m stuck" })).toBeVisible();
+  await expect(quiet.getByRole("button", { name: "More" })).toBeVisible();
+  await expect(page.locator(".wall-then")).toHaveText(/^THEN \d\d:\d\d · .+ · DAY ENDS \d\d:\d\d$/);
+  const [showBox, layout] = await Promise.all([show.boundingBox(), page.locator(".today-layout").boundingBox()]);
   expect(Math.abs(showBox.x + showBox.width - (layout.x + layout.width))).toBeLessThan(2);
   expect(showBox.y).toBeLessThan(band.y + band.height);
   expect(showBox.x).toBeGreaterThan(band.x + band.width);
-  expect(Math.abs(rescue.x + rescue.width - (band.x + band.width))).toBeLessThan(1);
 
   // L swaps the Day map column for the list (54c).
   await show.click();
@@ -1331,7 +1329,7 @@ test("laptop: the header's + Add task adds to Today; M opens the Day map (72)", 
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("add-task-title")).toBeHidden();
 
-  await expect(page.locator(".wall-daymap")).toBeVisible();
+  await expect(page.locator(".wall-daymap")).toBeHidden();
   await page.locator("body").click({ position: { x: 5, y: 300 } });
   await page.keyboard.press("m");
   await expect(page.getByRole("heading", { name: /Day map/i }).first()).toBeVisible();
@@ -1370,13 +1368,7 @@ test("laptop: show/hide glides with transform and opacity, reverses mid-move and
 // 320ms. Both are read in the same task as the click, so timing can't flake.
 test("laptop: the leaving controls fade out, and hiding lets the task finish its glide (51f)", async ({ page }) => {
   await enterLaptop(page);
-  const ghostsAfterShow = await page.evaluate(() => {
-    document.querySelector(".wall-peek-wide").click();
-    return [...document.body.children]
-      .filter(c => c.style.position === "fixed" && c.getAttribute("aria-hidden") === "true")
-      .filter(c => c.getAnimations().some(a => a.playState === "running")).length;
-  });
-  expect(ghostsAfterShow).toBeGreaterThan(0);
+  await page.locator(".wall-peek").click();
   await page.waitForFunction(() => document.getAnimations().length === 0);
 
   const hide = await page.evaluate(async () => {
@@ -1841,25 +1833,6 @@ test("laptop: with no one thing, the list's Day map view still opens the Day map
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Day map", exact: true }).click();
   await page.getByRole("button", { name: "Day map page ›" }).click();
   await expect(page.getByRole("heading", { name: /Day map/i }).first()).toBeVisible();
-});
-
-// Codex review of #405: reversed mid-fade, what leaves fades out from where
-// it is, not from fully opaque.
-test("laptop: a toggle reversed mid-fade fades the leaving link from its current opacity", async ({ page }) => {
-  await enterLaptop(page);
-  const start = await page.evaluate(() => {
-    document.querySelector(".wall-peek").click();
-    const link = document.querySelector(".wall-daymap");
-    const enter = link.getAnimations()[0];
-    enter.currentTime = 60 + 110; // halfway through its 220ms fade-in, after the 60ms delay
-    const now = Number(getComputedStyle(link).opacity);
-    document.querySelector(".today-list-hide").click();
-    const ghost = [...document.body.children].find(c => c.style.position === "fixed" && c.getAttribute("aria-hidden") === "true" && c.classList.contains("wall-daymap"));
-    return { now, from: ghost?.getAnimations()[0]?.effect.getKeyframes()[0].opacity };
-  });
-  expect(start.now).toBeGreaterThan(0.05);
-  expect(start.now).toBeLessThan(0.95);
-  expect(Number(start.from)).toBeCloseTo(start.now, 2);
 });
 
 // Codex review of #406: an estimate the chips don't carry (25m, the default)
