@@ -160,7 +160,8 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   // The mini window (59b): Document Picture-in-Picture, 360 wide, in the
   // app's own tokens (Dark when the app is Dark, Light otherwise; no cyan).
   // A 132 ring with fitted digits, the title on one line, and Pause · +5 ·
-  // I'm stuck · Done (filled). Restart is gone; shuffle became I'm stuck.
+  // I'm stuck · Done (filled). Restart is gone. Shuffle came back beside
+  // I'm stuck (Rohan, 5 Oct): shown only while a sound with variations plays.
   // It follows the window's size, live (as the pre-59b pop-up did, #314):
   // the ring and its digits grow and shrink with it; too small for a ring,
   // the time becomes one line; smaller still, the time alone fills it.
@@ -191,6 +192,8 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
       arc.style.display = seconds > 0 ? "" : "none";
     }
     doc.body.className = running ? "" : "is-paused";
+    const shuffleBtn = doc.getElementById("pip-shuffle");
+    if (shuffleBtn) shuffleBtn.hidden = !pipActionsRef?.current?.canShuffle?.();
   };
 
   const handleOpenPiP = async () => {
@@ -238,16 +241,16 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
         #pt-secs { font-size: 0.58em; font-weight: 400; opacity: 0.72; }
         #pt-secs.is-last { font-size: 1em; font-weight: 700; opacity: 1; }
         #pl { max-width: 100%; overflow: hidden; font-size: 14px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
-        #pip-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: 100%; }
-        #pip-btns button { min-height: 36px; padding: 0 6px; font: inherit; font-size: 12px; font-weight: 700;
+        #pip-btns { display: flex; gap: 6px; width: 100%; }
+        #pip-btns button { flex: 1 1 auto; min-height: 36px; padding: 0 6px; font: inherit; font-size: 12px; font-weight: 700;
           color: var(--ink); background: var(--surface); border: 1px solid var(--control-edge); border-radius: 6px;
           cursor: pointer; white-space: nowrap; }
         #pip-btns #pip-done { color: var(--on-accent); background: var(--accent); border-color: var(--accent-edge); }
+        #pip-btns button[hidden] { display: none; }
         #pip-btns button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         /* Narrow: Pause and Done only. */
         @media (max-width: 299px) {
-          #pip-btns { grid-template-columns: 1fr 1fr; }
-          #pip-add5, #pip-stuck { display: none; }
+          #pip-add5, #pip-shuffle, #pip-stuck { display: none; }
         }
         /* Too small for a ring: the time on one line, large; no title. */
         @media (max-height: 259px), (max-width: 179px) {
@@ -255,8 +258,8 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
           #ring { container-type: normal; width: 100%; height: auto; aspect-ratio: auto; }
           #ring svg, #pl { display: none; }
           #pt, #pt.is-hours { font-size: clamp(24px, min(34vh, 21vw), 120px); }
-          #pip-btns { grid-template-columns: 1fr 1fr; max-width: 280px; }
-          #pip-add5, #pip-stuck { display: none; }
+          #pip-btns { max-width: 280px; }
+          #pip-add5, #pip-shuffle, #pip-stuck { display: none; }
         }
         /* Smaller still: the time alone fills the window. */
         @media (max-height: 139px), (max-width: 139px) {
@@ -313,6 +316,9 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
       // the main window's (Codex review of #439).
       button("pip-play", "Pause", () => { if (!sessionCompletePendingRef.current) setIsTimerRunning(r => !r); });
       button("pip-add5", "+5", () => addTimeToSession(5));
+      // Shuffle plays another variation of the sound that's on (as the
+      // focus page's "Another" does); hidden when nothing can shuffle.
+      button("pip-shuffle", "Shuffle", () => pipActionsRef?.current?.onShuffle?.());
       // I'm stuck opens the main window on the focus page (its I'm stuck
       // panel, 59d, arrives with 6c).
       button("pip-stuck", "I’m stuck", () => { try { window.focus(); } catch (_) {} pipActionsRef?.current?.onStuck?.(); });
