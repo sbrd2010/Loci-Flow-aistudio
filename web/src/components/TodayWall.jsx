@@ -294,9 +294,15 @@ export default function TodayWall({
   onCommitProposal,
   onDismissProposal,
   commitBlocked = false,
-  onCommitNewTask,
-  mindBoxCount = 0,
-  onOpenMindBox,
+  // 67i/67j: with no one thing, the top three open tasks to pick from (each
+  // { uuid, title, minutes }), how many are open, and This week's count.
+  picks = [],
+  openCount = 0,
+  onPick,
+  onShowAll,
+  onAddTask,
+  weekCount = 0,
+  onFromWeek,
   onScattered,
   onRescue,
   // Q58: open Today tasks, the one thing included (the phone's NOW · 1 OF N),
@@ -308,9 +314,6 @@ export default function TodayWall({
   nowUntil = null,
   then = null,
 }) {
-  // Only the empty wall uses this, but hooks cannot sit behind its early
-  // return.
-  const [draft, setDraft] = useState("");
   // 58.4: whether the title is cut (three lines on the phone), measured after
   // layout and again when the window changes size.
   const titleRef = useRef(null);
@@ -382,65 +385,69 @@ export default function TodayWall({
     );
   }
 
-  // — nothing committed yet (37f) —
+  // — no one thing (67i), or nothing in Today (67j) —
   //
-  // The field takes free text and CREATES a task, because the thing you commit
-  // to may not exist in the app yet — without that, first launch has no exit.
-  // Enter commits. What already exists is one tap away: the Today list below,
-  // and Mind Box.
+  // With open tasks, the top three (in the list's order) are one tap from
+  // being the one thing, with Undo; the rest are a link away. No Start: the
+  // choice comes first. With none, Add a task, or bring some in from This
+  // week. Evening Guard (after 8pm) says why nothing new can be added.
   if (!task) {
-    const commit = () => {
-      const title = draft.trim();
-      if (!title) return;
-      // The handler decides, and the draft is cleared only if it accepted.
-      // commitBlocked is a render-time value that can be up to a minute
-      // stale, so a wall left open across 20:00 would otherwise swallow what
-      // the user typed: cleared here, rejected there, nothing to show for it.
-      if (onCommitNewTask?.(title) === false) return;
-      setDraft("");
-    };
     return (
       <section className="today-wall is-empty">
         {/* The goal band and the anchor stay with nothing committed too: a
             Key Deadline you set always shows (L1). */}
         {top}
-        <div className="wall-empty">
-          <div className="wall-kicker">TODAY, ONE THING</div>
-          <h2 className="wall-empty-title">Nothing committed yet.</h2>
-          <p className="wall-empty-line">
-            {commitBlocked
-              ? "Evening Guard is on — no new tasks after 8pm. Rest; this will be here tomorrow."
-              : "Pick one thing. Just one. The rest can wait in Mind Box."}
-          </p>
-          <form
-            className="wall-commit"
-            onSubmit={(e) => { e.preventDefault(); commit(); }}
-          >
-            <label className="wall-commit-box">
-              <IconPlus size={20} />
-              <input
-                type="text"
-                className="wall-commit-field"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder="What's the one thing today?"
-                aria-label="Today's one thing"
-                enterKeyHint="done"
-                autoComplete="off"
-                maxLength={1000}
-              />
-            </label>
-          </form>
-          {mindBoxCount > 0 && onOpenMindBox && (
-            <p className="wall-empty-or">
-              Or{" "}
-              <button type="button" className="wall-link" onClick={() => onOpenMindBox()}>
-                pick from Mind Box ({mindBoxCount})
+        {openCount > 0 && picks.length === 0 ? (
+          // Only set-time things open (47.6): none can be the one thing.
+          <div className="wall-empty">
+            <h2 className="wall-empty-title">Only set-time things left</h2>
+            {onShowAll && (
+              <button type="button" className="wall-link wall-pick-all" onClick={onShowAll}>
+                All {openCount} {openCount === 1 ? "task" : "tasks"}
               </button>
-            </p>
-          )}
-          {links}
-        </div>
+            )}
+            {links}
+          </div>
+        ) : picks.length > 0 ? (
+          <div className="wall-empty wall-pick">
+            <h2 className="wall-empty-title">Pick the one thing</h2>
+            <ul className="wall-pick-list">
+              {picks.map(t => (
+                <li key={t.uuid}>
+                  <button type="button" className="wall-pick-row" onClick={() => onPick?.(t)}>
+                    <span className="wall-pick-title">{t.title}</span>
+                    {t.minutes > 0 && <span className="wall-pick-dur">{t.minutes} MIN</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {onShowAll && (
+              <button type="button" className="wall-link wall-pick-all" onClick={onShowAll}>
+                All {openCount} {openCount === 1 ? "task" : "tasks"}
+              </button>
+            )}
+            {links}
+          </div>
+        ) : (
+          <div className="wall-empty">
+            <h2 className="wall-empty-title">Nothing in Today yet</h2>
+            {commitBlocked ? (
+              <p className="wall-empty-line">Evening Guard is on — no new tasks after 8pm. Rest; this will be here tomorrow.</p>
+            ) : (
+              <>
+                {onAddTask && (
+                  <button type="button" className="wall-empty-add" onClick={onAddTask}>Add a task</button>
+                )}
+                {weekCount > 0 && onFromWeek && (
+                  <button type="button" className="wall-link wall-empty-week" onClick={onFromWeek}>
+                    From This week · {weekCount}
+                  </button>
+                )}
+              </>
+            )}
+            {links}
+          </div>
+        )}
       </section>
     );
   }

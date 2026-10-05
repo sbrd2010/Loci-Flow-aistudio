@@ -335,3 +335,46 @@ test("1920 (zoom 1.35): a row moved by keyboard drag lands where its copy shows"
   await page.keyboard.press("Space");
   await expect.poll(titles).toEqual([second, first]);
 });
+
+// Codex review of #486: a pick from "Pick the one thing" goes to NOW on the
+// Day map too, not only to the wall.
+test("no one thing: picking the second task puts it at NOW on the Day map", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 900 }, "2024-06-15T10:00:00");
+  await page.locator(".wall-title").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await expect(page.locator(".wall-pick")).toBeVisible();
+  const second = (await page.locator(".wall-pick-title").nth(1).innerText()).trim();
+  await page.locator(".wall-pick-row").nth(1).click();
+  await expect(page.locator(".wall-title")).toHaveText(second);
+  await routeReady(page);
+  await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText(second);
+  await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText("THE ONE THING");
+});
+
+// Loopcheck of #486: with only set-time things open (a call can't be the one
+// thing), the wall says so, not "Nothing in Today yet" over a list that has
+// tasks in it.
+test("no one thing, only set-time things open: the wall says so", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 900 });
+  // A call at a set time, made on the Day map page (as in the fixed-time test).
+  await openDayMapPage(page);
+  await page.getByRole("button", { name: "Fixed time" }).click();
+  await page.getByRole("dialog", { name: "Fix a time" }).getByRole("button", { name: /Something else/ }).click();
+  const step2 = page.getByRole("dialog", { name: /^Fix a time: Something else/ });
+  await step2.getByRole("textbox", { name: "What" }).fill("Call with the recruiter");
+  await step2.getByRole("radio", { name: "12:00" }).click();
+  await step2.getByRole("button", { name: "Fix at 12:00" }).click();
+  await page.locator(".dm-back").click();
+  await page.locator(".wall-title").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
+  const others = rows.filter({ hasNotText: "Call with the recruiter" });
+  while (await others.count()) {
+    await others.first().locator(".task-title-text").click();
+    await page.getByTestId("task-detail").getByRole("button", { name: "Park", exact: true }).click();
+    await expect(page.getByTestId("task-detail")).toHaveCount(0);
+  }
+  await expect(rows).toHaveCount(1);
+  await expect(page.locator(".wall-empty-title")).toHaveText("Only set-time things left");
+  await expect(page.locator(".wall-pick-all")).toHaveText("All 1 task");
+});

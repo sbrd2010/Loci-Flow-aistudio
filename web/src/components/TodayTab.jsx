@@ -55,6 +55,8 @@ import { routeBreaks } from "../utils/dayMapBreaks";
 import { isEventTask, isFixedStop } from "../utils/dayMapRoute";
 import { bringBack, formatClock24, formatSpanCaps, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
 import { parkedTasks, parkedSince, restoreParked, undoRestoreParked } from "../utils/parked";
+import { weekTasks, pullFromWeek, undoPullFromWeek, takesPinFrom } from "../utils/fromWeek";
+import FromWeekSheet from "./FromWeekSheet";
 import { cssZoom, unzoomTransform } from "../utils/cssZoom";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
 
@@ -90,7 +92,7 @@ function SortableTaskItem({ id, isOver = false, disabled = false, children }) {
 }
 
 export default function TodayTab({
-  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenMindBox, onOpenPlan, onOpenCoach, onScattered, onOpenAddTask,
+  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenPlan, onOpenCoach, onScattered, onOpenAddTask,
   // 57f: "September ended · 2 left · Review" until the review is done.
   reviewLine = null,
   // 55d–e, Q47: "Day ends 17:30 · Close the day"; and the closed day.
@@ -484,82 +486,6 @@ export default function TodayTab({
     return pinPromise;
   };
 
-  // K1: the empty wall creates a task from free text. The record is
-  // deliberately sparse — no front, no estimate, no subtask — and pinned
-  // immediately, which is a legal task under Addendum C.
-  //
-  // concreteStep is OMITTED rather than set empty: normalizePayload only
-  // rewrites the field when the key is present, and would substitute "Do first
-  // tiny step" for an empty string — putting a subtask on the one task that is
-  // specified not to have one. The rules accept its absence
-  // (!newData.exists() || ...), and Firebase rejects an explicit undefined.
-  const handleCommitNewTask = (title) => {
-    const clean = String(title || "").trim().slice(0, 1000);
-    if (!clean) return;
-    // The wall is a third creation path, and Evening Guard is a setting the
-    // user switched on for themselves — a path that quietly ignores it is a
-    // way around their own decision. The wall disables Commit and says why,
-    // so this is a backstop rather than the only check.
-    if (isEveningGuardBlocked(config)) return false;
-    const now = Date.now();
-    const freshTask = {
-      id: now,
-      userId: config.userId || "",
-      uuid: safeUUID(),
-      title: clean,
-      horizonLevel: "today",
-      priority: "P3",
-      // The canonical value every other creation path stores. Lowercase made a
-      // second bucket in Insights and lost the row's category icon, because
-      // consumers compare the stored string directly.
-      category: "Personal",
-      frontId: null,
-      // timeEstimateMinutes is OMITTED, not set to 25: K1 says no estimate,
-      // and writing one would have lists and Coach present an unsized task as
-      // a deliberate 25-minute one. Every focus-time caller already falls back
-      // to 25 at runtime when the field is absent.
-      deadlineTimestamp: null,
-      reminderAt: null,
-      isCompleted: false,
-      isParked: false,
-      isNowFocus: true,
-      orderIndex: todayTasksAll.length,
-      dateCompletedString: null,
-      isDeleted: false,
-      lastUpdated: now,
-      subSteps: [],
-    };
-    // Exclusive, like every other pin (J5): whatever held isNowFocus lets go.
-    // And ending its session is part of letting go — handlePinTask has done
-    // this since it was written, and clearing the flag without it leaves a
-    // session open against the OLD task while the timer retargets to the new
-    // one, so the eventual terminal event credits the wrong task. The pinned
-    // task can be outside Today (Coach and Mind Box can pin a week task), so
-    // this looks at every task, not just today's.
-    const previouslyFocused = (tasks || []).find(t => t.isNowFocus);
-    const endedFocusSession = previouslyFocused ? endFocusSession("user_abandoned") : null;
-    if (endedFocusSession) {
-      setIsTimerRunning(false);
-      setIsFocusMode(false);
-      setFocusSessionActive(false);
-    }
-    const tasks_ = (tasks || []).map(t => (t.isNowFocus ? { ...t, isNowFocus: false, lastUpdated: now } : t));
-    savePayloadAsync({ ...payload, tasks: [...tasks_, freshTask] })
-      .then(() => {
-        // Built with the `now` captured when the user acted, not when the
-        // debounced write confirmed: savePayloadAsync can land 1.5s later, or
-        // later still on a retry, and defaulting the timestamp here files a
-        // task created at 01:59 under the following Loci day.
-        const events = [buildTaskMutationEvent("task_created", freshTask, { windows, now })];
-        if (endedFocusSession) {
-          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
-        }
-        writeActivityEvents(eventsPatch(uid, events));
-      })
-      .catch(() => {});
-    return true;
-  };
-
   // "N parked this session": counted per focus session.
   const [parked, setParked] = useState({ sessionId: null, n: 0 });
   const handleFocusBrainDump = (text) => {
@@ -943,6 +869,32 @@ export default function TodayTab({
       .catch(() => {});
     setUndo({ kind: "parkmany", ids, at: now });
   };
+  // 67j/67s: This week tasks into Today, the first as the one thing, with
+  // Undo; logged as moves, as the task sheet's Horizon picker logs them.
+  const [weekPickerOpen, setWeekPickerOpen] = useState(false);
+  const handleFromWeek = (uuids) => {
+    const now = Date.now();
+    const { tasks: next, before } = pullFromWeek(tasks, uuids, now);
+    if (!before.length) return;
+    // Whatever held the one thing (Coach can pin a week task) lets go, and
+    // its open session ends with it, as handlePinTask does.
+    const endedFocusSession = takesPinFrom(tasks, next) ? endFocusSession("user_abandoned") : null;
+    if (endedFocusSession) {
+      setIsTimerRunning(false);
+      setIsFocusMode(false);
+      setFocusSessionActive(false);
+    }
+    const events = before.map(b => buildTaskMutationEvent("task_moved", tasks.find(t => t.uuid === b.uuid), {
+      fromState: { horizonLevel: b.horizonLevel }, toState: { horizonLevel: "today" }, windows, now,
+    }));
+    if (endedFocusSession) {
+      events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+    }
+    savePayloadAsync({ ...payload, tasks: next })
+      .then(() => writeActivityEvents(eventsPatch(uid, events)))
+      .catch(() => {});
+    setUndo({ kind: "fromweek", before, moved: before.length, at: now });
+  };
   const handleParkWithUndo = (task) => {
     setUndo({ kind: "park", task, wasPinned: !!task.isNowFocus, at: Date.now() });
     handleParkTask(task);
@@ -978,6 +930,7 @@ export default function TodayTab({
   const undoMessage = (u) => {
     if (u.count) return `${u.count} ${u.count === 1 ? "task" : "tasks"} moved to tomorrow`;
     if (u.kind === "parkmany") return `${u.ids.length} parked`;
+    if (u.kind === "fromweek") return `${u.moved} moved to Today`;
     if (u.kind === "reorder") return `Doesn’t fit before ${formatClock24(u.fixedAt)} · placed after`;
     if (u.kind === "step") return `Step removed: ${u.step.text}`;
     const title = u.task.title;
@@ -1102,6 +1055,31 @@ export default function TodayTab({
     }
     if (kind === "restore") {
       savePayload({ ...payload, tasks: undoRestoreParked(tasks, task.uuid, undo.before) });
+      return;
+    }
+    if (kind === "fromweek") {
+      const now = Date.now();
+      const next = undoPullFromWeek(tasks, undo.before, now);
+      const back = next.filter(t => t.lastUpdated === now && undo.before.some(b => b.uuid === t.uuid));
+      // Sending the one thing back to This week ends its session, as every
+      // other move off Today does (Codex review of #486).
+      const endedFocusSession = takesPinFrom(tasks, next) ? endFocusSession("user_abandoned") : null;
+      if (endedFocusSession) {
+        setIsTimerRunning(false);
+        setIsFocusMode(false);
+        setFocusSessionActive(false);
+      }
+      savePayloadAsync({ ...payload, tasks: next })
+        .then(() => {
+          const events = back.map(t => buildTaskMutationEvent("task_moved", t, {
+            fromState: { horizonLevel: "today" }, toState: { horizonLevel: t.horizonLevel }, windows, now,
+          }));
+          if (endedFocusSession) {
+            events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+          }
+          if (events.length) writeActivityEvents(eventsPatch(uid, events));
+        })
+        .catch(() => {});
       return;
     }
     if (kind === "parkmany") {
@@ -1945,9 +1923,20 @@ export default function TodayTab({
         onCommitProposal={() => wallProposal && handlePinTask(wallProposal)}
         onDismissProposal={() => saveConfigPatch({ wallProposalDismissedDate: todayStr })}
         commitBlocked={isEveningGuardBlocked(config)}
-        onCommitNewTask={handleCommitNewTask}
-        mindBoxCount={(payload.brainDump || []).length}
-        onOpenMindBox={onOpenMindBox}
+        picks={wallIsAsking ? remainingTasks.filter(t => !isEventTask(t)).slice(0, 3).map(t => ({
+          uuid: t.uuid, title: t.title, minutes: Number(t.timeEstimateMinutes) || 0,
+        })) : []}
+        openCount={remainingTasks.length}
+        // 67i: a pick is "make this the one thing": it moves to NOW on the Day
+        // map too, with that Undo (Codex review of #486).
+        onPick={(pick) => { const t = tasks.find(x => x.uuid === pick.uuid); if (t) handleMakeOneThing(t); }}
+        onShowAll={() => {
+          sheetRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+          sheetRef.current?.querySelector("[data-testid='task-row']")?.focus({ preventScroll: true });
+        }}
+        onAddTask={onOpenAddTask}
+        weekCount={wallIsAsking ? weekTasks(tasks).length : 0}
+        onFromWeek={() => setWeekPickerOpen(true)}
         onScattered={onScattered}
         onRescue={openRescueMode}
         nowCount={pinnedFocusTask ? todayTasksAll.filter(t => !t.isCompleted).length : 0}
@@ -2329,6 +2318,14 @@ export default function TodayTab({
       })()}
 
       {/* ── The one thing's More sheet (Q58, 67d) */}
+      {weekPickerOpen && (
+        <FromWeekSheet
+          tasks={weekTasks(tasks)}
+          onMove={handleFromWeek}
+          onOpenPlan={onOpenPlan}
+          onClose={() => setWeekPickerOpen(false)}
+        />
+      )}
       {moreOpen && pinnedFocusTask && (
         <MoreSheet
           task={pinnedFocusTask}
