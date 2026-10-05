@@ -53,7 +53,8 @@ export default function MinimumDay({ state, ids, tasks, timeOf, onConfirm }) {
   return (
     <section className="dm-min" aria-label="Minimum day">
       <div className="dm-min-head">
-        <h2 className="dm-min-title">If today goes wrong, do these {picked.length || MINIMUM_DAY_SIZE}</h2>
+        {/* Turn 76 (d): N is how many fit, 1 to 3. */}
+        <h2 className="dm-min-title">If today goes wrong, {picked.length === 1 ? "do this one" : `do these ${picked.length || MINIMUM_DAY_SIZE}`}</h2>
         <span className="dm-min-kicker">SUGGESTED</span>
       </div>
       {picked.length > 0 ? (

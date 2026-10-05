@@ -18,6 +18,19 @@ describe("minimum day (56a–b, 57b answer 6)", () => {
     expect(suggestMinimumDay([call, ...ordered], isGoal)).toEqual(["pharm", "hale", "cv"]);
   });
 
+  // Turn 76 (d): only tasks that fit before the day ends; fewer than three
+  // when fewer fit (75f had Prof. Anupam at 03:25, past 02:00).
+  it("suggests only tasks that fit before the day ends, so maybe fewer than three", () => {
+    const fits = (t) => t.uuid !== "hale" && t.uuid !== "cv";
+    expect(suggestMinimumDay(ordered, isGoal, fits)).toEqual(["pharm", "prince"]);
+    expect(minimumDay({ config: {}, todayStr: DAY, ordered, isGoal, fits })).toEqual({ state: "suggested", ids: ["pharm", "prince"] });
+  });
+
+  it("keeps a confirmed pick even if it no longer fits: it's your choice", () => {
+    const config = confirmMinimumDay({}, DAY, ["hale"]);
+    expect(minimumDay({ config, todayStr: DAY, ordered, isGoal, fits: () => false })).toEqual({ state: "confirmed", ids: ["hale"] });
+  });
+
   it("uses today's confirmed pick, in today's order, and only open tasks", () => {
     const config = confirmMinimumDay({}, DAY, ["dad", "gone", "cv"]);
     expect(minimumDay({ config, todayStr: DAY, ordered, isGoal })).toEqual({ state: "confirmed", ids: ["cv", "dad"] });

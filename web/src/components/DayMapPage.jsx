@@ -22,7 +22,7 @@ import { mergeWindowSpans } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
 import {
   applyReflow, currentDayMinutes, getEstimate, getTaskId,
-  hasHeadGap, normalizePriority, reflowRoute, routeIsContiguous, useDayRoute,
+  hasHeadGap, normalizePriority, reflowRoute, routeCut, routeIsContiguous, useDayRoute,
 } from "../hooks/useDayRoute";
 import { isEventTask, isFixedStop } from "../utils/dayMapRoute";
 import { eventAsks } from "../utils/fixedTime";
@@ -407,11 +407,12 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
 
   // The route (50f): the rows as laid out — stops, breaks, free time — the
   // DAY ENDS line where it falls, then what won't fit today.
-  const fitting = isOver ? routeTasks.slice(0, plan.overIndex) : routeTasks;
-  const lastFitting = fitting[fitting.length - 1];
-  // Free from the later of the last stop's end and the route's start: a
-  // fixed stop the day has passed ends before now (Codex review of #421).
-  const free = lastFitting ? plan.dayEnd - Math.max(lastFitting.routeEndMinutes, plan.dayEnd - plan.dayLeft) : 0;
+  // Turn 76 (c): one cut for Today and the Day map. A task fits whole or
+  // not; what doesn't fit is told as its total; the gap left before the day
+  // ends is free time.
+  const fitCut = routeCut(routeTasks, plan);
+  const free = fitCut.spare;
+  const wontFit = { count: plan.wontFit.length, minutes: fitCut.wontFitMinutes };
 
   // 56a–c: what was done today (focus sessions, and tasks ticked done), the
   // factual line, and the day bar. With no ledger to read (demo, a refused
@@ -441,6 +442,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     dayEnd,
     now: nowMins,
     left: { count: leftStops.length, minutes: leftStops.reduce((sum, t) => sum + getEstimate(t), 0) },
+    wontFit,
   });
   const windowStart = mergeWindowSpans(windows)[0]?.[0];
   const firstSession = done.find(r => r.kind === "session");
@@ -464,7 +466,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   // Minimum day (56a–b): today's open tasks in the order they come, the
   // route as it shows.
   const openToday = routeTasks.map(t => scheduledTasks.find(s => getTaskId(s) === getTaskId(t))).filter(Boolean);
-  const minDay = minimumDay({ config: routeConfig, todayStr, ordered: openToday, isGoal });
+  // Turn 76 (d): only tasks that fit before the day ends are suggested.
+  const minDay = minimumDay({ config: routeConfig, todayStr, ordered: openToday, isGoal, fits: (t) => !fitCut.overIds.has(getTaskId(t)) });
   const minIds = new Set(minDay.ids);
   const timeOf = (id) => {
     const r = rows.find(x => x.kind === "stop" && getTaskId(x.task) === id);
@@ -743,7 +746,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         >
           <div className="dm-layout">
             {bar && (
-              <DayBar bar={bar} now={nowMins} doneMinutes={doneMinutes} plannedMinutes={barPlanned} overBy={barOverBy} />
+              <DayBar bar={bar} now={nowMins} doneMinutes={doneMinutes} plannedMinutes={barPlanned} overBy={barOverBy} wontFitMinutes={wontFit.count > 0 ? wontFit.minutes : null} />
             )}
             {/* 52d: From · Fixed time, as text, above the route. */}
             {!drawerViewport && controls}
@@ -782,8 +785,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
               {movable.length > 0 && (drawerViewport ? (
                 <div className="dm-over">
                   <p className="dm-over-text">
-                    <strong>Over by {formatSpan(plan.overBy)}.</strong>{" "}
-                    {wontFitCount <= 10 ? NUMBER_WORDS[wontFitCount] : wontFitCount} {wontFitCount === 1 ? "task won’t" : "tasks won’t"} fit.
+                    <strong>{wontFitCount <= 10 ? NUMBER_WORDS[wontFitCount] : wontFitCount} {wontFitCount === 1 ? "task won’t" : "tasks won’t"} fit · {formatSpan(wontFit.minutes)}.</strong>
                   </p>
                   <button type="button" className="dm-btn-outline" onClick={moveOverToTomorrow}>Move {movable.length} to tomorrow</button>
                 </div>

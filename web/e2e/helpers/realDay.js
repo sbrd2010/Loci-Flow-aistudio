@@ -32,14 +32,16 @@ export async function loadRealDay(page) {
           t({ title: "Gmail: Check and sort out", timeEstimateMinutes: 15, ...fromYesterday }),
           t({ title: "PRINCE2: Check the latest Prince2 study material prepared by chatgpt", timeEstimateMinutes: 15, ...fromYesterday }),
           t({ title: "Dutch Course: Update the A1.1 and A1.2 files in project files", timeEstimateMinutes: 15, ...fromYesterday }),
-          t({ title: "Electricity connection: Renew it", timeEstimateMinutes: 25, priority: "P1", ...fromYesterday }),
+          t({ title: "Electricity connection: Renew it", timeEstimateMinutes: 25, priority: "P1", isMVD: true, ...fromYesterday }),
           t({ title: "Clean Dishwasher", timeEstimateMinutes: 25, ...fromYesterday }),
           t({ title: "Prepare CV- Avery denison, Tesa", timeEstimateMinutes: 120, subSteps: steps(0, 4, "Pick the two strongest projects"),
             reviewFrom: { label: "FROM WEEK TO 4 OCT", day: today, horizon: "week" } }),
-          t({ title: "Prof. Anupam: Reply him URGENT!!", timeEstimateMinutes: 25, priority: "P1" }),
           t({ title: "Call Ahilan", timeEstimateMinutes: 60 }),
           t({ title: "Dad: Check if money has been sent?", timeEstimateMinutes: 15 }),
           t({ title: "CleanHYPRO: Modification of PAP PLAN", timeEstimateMinutes: 180, subSteps: steps(1, 7, "Redo the PAP flow sheet") }),
+          // After 02:00, as on 5 Oct (03:25 there, after breaks): a must-do that
+          // doesn't fit.
+          t({ title: "Prof. Anupam: Reply him URGENT!!", timeEstimateMinutes: 25, priority: "P1", isMVD: true }),
           t({ title: "Renew the library books", isParked: true, parkedAt: now - 5 * 86400_000 }),
           t({ title: "Sort the photo backup", isParked: true, parkedAt: now - 5 * 86400_000 }),
           t({ title: "Apply: Polymer scientist, Nouryon", horizonLevel: "week", timeEstimateMinutes: 60 }),

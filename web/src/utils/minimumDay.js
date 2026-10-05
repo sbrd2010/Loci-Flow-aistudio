@@ -21,8 +21,10 @@ export function confirmedMinimumDay(config, todayStr) {
 // the goal front.
 // Something at a set time (Q36.3) is never suggested as work (Codex review
 // of #431); it can still be picked by hand.
-export function suggestMinimumDay(ordered, isGoal) {
-  ordered = ordered.filter(t => !isEventTask(t));
+// Turn 76 (d): only tasks that fit before the day ends (`fits`), so it may
+// suggest fewer than three.
+export function suggestMinimumDay(ordered, isGoal, fits = () => true) {
+  ordered = ordered.filter(t => !isEventTask(t) && fits(t));
   const must = ordered.filter(t => t.isMVD);
   const goal = ordered.filter(t => !t.isMVD && isGoal(t));
   return [...must, ...goal].slice(0, MINIMUM_DAY_SIZE).map(idOf);
@@ -30,13 +32,14 @@ export function suggestMinimumDay(ordered, isGoal) {
 
 // What the page shows: the confirmed pick (open ones only, in today's
 // order), or the suggestion. `state` is "confirmed" or "suggested".
-export function minimumDay({ config, todayStr, ordered, isGoal }) {
+// A confirmed pick stays as chosen, fitting or not.
+export function minimumDay({ config, todayStr, ordered, isGoal, fits }) {
   const confirmed = confirmedMinimumDay(config, todayStr);
   if (confirmed) {
     const set = new Set(confirmed);
     return { state: "confirmed", ids: ordered.map(idOf).filter(id => set.has(id)) };
   }
-  return { state: "suggested", ids: suggestMinimumDay(ordered, isGoal) };
+  return { state: "suggested", ids: suggestMinimumDay(ordered, isGoal, fits) };
 }
 
 // The config patch that confirms `ids` for today (at most three).
