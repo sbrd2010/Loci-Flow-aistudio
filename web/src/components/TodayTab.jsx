@@ -1277,6 +1277,7 @@ export default function TodayTab({
     focusActive: isTimerRunning || isFocusMode || focusSessionActive,
     ledgerRaw,
     onOpenRescue: (state) => openRescueMode(state),
+    syncing: isSyncingFromCache,
   });
   const listMotionActive = () => !!pinnedFocusTask && listMotionMode() !== "none";
 

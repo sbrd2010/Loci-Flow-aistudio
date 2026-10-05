@@ -18,7 +18,7 @@ function writeJSON(key, value) {
   try { window.localStorage.setItem(key, JSON.stringify(value)); } catch { /* private mode */ }
 }
 
-export function useRescueHint({ config, saveConfigPatch, todayStr, windows, oneThing, focusActive, ledgerRaw, onOpenRescue }) {
+export function useRescueHint({ config, saveConfigPatch, todayStr, windows, oneThing, focusActive, ledgerRaw, onOpenRescue, syncing = false }) {
   const oneThingId = oneThing ? String(oneThing.uuid || oneThing.id) : null;
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [visible, setVisible] = useState(() => typeof document === "undefined" || document.visibilityState !== "hidden");
@@ -65,17 +65,21 @@ export function useRescueHint({ config, saveConfigPatch, todayStr, windows, oneT
     setStuck(next);
   }, [oneThingId, todayStr]);
 
-  // A day that ended with the hint untapped counts as ignored, once.
+  // A day that ended with the hint untapped counts as ignored, once. Not
+  // while the cloud copy is still loading: the cached config may be older,
+  // and a patch from it would overwrite what another device saved (Codex
+  // review of #487).
   const settledFor = useRef(null);
   useEffect(() => {
-    if (settledFor.current === todayStr) return;
+    if (syncing || settledFor.current === todayStr) return;
     settledFor.current = todayStr;
     const patch = settleShown(config, todayStr);
     if (patch) saveConfigPatch(patch);
-  }, [todayStr, config, saveConfigPatch]);
+  }, [syncing, todayStr, config, saveConfigPatch]);
 
   const lociNow = getLociNowMinutes(new Date(nowMs), windows);
-  const hint = rescueHint({
+  // Nothing shows (or is remembered as shown) until the cloud copy is in.
+  const hint = syncing ? null : rescueHint({
     config, todayStr, nowMs, lociNow,
     dayStart: getOverallSpan(windows).startMin,
     inWindow: mergeWindowSpans(windows).some(([s, e]) => lociNow >= s && lociNow < e),
