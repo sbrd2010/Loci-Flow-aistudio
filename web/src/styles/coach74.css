@@ -59,7 +59,7 @@
 .coach-show-all::before { content: ""; position: absolute; inset: -13px -10px; }
 
 /* The scroll anchor at the end of the messages adds no gap of its own. */
-.coach-chat-col .chat-window > div:empty:last-child { margin-top: -20px; }
+.coach-chat-col .chat-window > div:empty:last-child { margin-top: calc(-1 * var(--coach-gap, 20px)); }
 
 /* Chips: 40px outlined pills in a row (74b, 74c). */
 .coach-msg .coach-prompt-chips,
@@ -84,7 +84,7 @@
   .coach-chat-col { max-width: 720px; }
   /* 20 between messages (74c's 24 leaves 55-word replies a few px short of
      2 + 2 at 1280×720), none above, 12 below. */
-  .coach-chat-col .chat-window { gap: 20px; padding: 0 0 12px; }
+  .coach-chat-col .chat-window { --coach-gap: 20px; gap: var(--coach-gap); padding: 0 0 12px; }
   .coach-msg.is-you { max-width: 75%; }
   .coach-msg.is-you .coach-msg-text { padding: 12px 18px; font-size: 16px; line-height: 1.5; }
   .coach-msg.is-coach { max-width: 100%; }
@@ -101,6 +101,16 @@
     letter-spacing: 0;
     text-transform: none;
   }
+}
+/* A short laptop screen (1280×720): two 55-word replies in Lora run four
+   lines each, so the text and the composer tighten to keep 2 + 2 in view. */
+@media (min-width: 840px) and (max-height: 760px) {
+  .coach-chat-col .chat-window { padding-bottom: 4px; }
+  .coach-msg.is-you .coach-msg-text { padding: 10px 16px; font-size: 15px; line-height: 1.45; }
+  .coach-msg.is-coach .coach-msg-text.coach-md,
+  .coach-reply.is-clamped { font-size: 16px; line-height: 1.55; }
+  .coach-composer-wrap { padding: 10px 0 12px; }
+  .chat-input-row.coach-composer { min-height: 52px; padding: 4px 4px 4px 16px; }
 }
 
 /* — The phone (74b): the Chat | Review row (56) takes the app header's
@@ -121,7 +131,7 @@
   .coach-tabs-note { display: none; }
   .coach-new-long { display: none; }
   .coach-new-short { display: inline; }
-  .coach-chat-col .chat-window { gap: 20px; padding: 0 0 4px; }
+  .coach-chat-col .chat-window { --coach-gap: 16px; gap: var(--coach-gap); padding: 0 0 4px; }
   .coach-msg.is-coach { max-width: 100%; align-self: stretch; }
   .coach-msg.is-you { max-width: 82%; }
   .coach-msg.is-you .coach-msg-text { font-size: 15px; line-height: 1.45; }
