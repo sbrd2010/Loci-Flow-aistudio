@@ -3,8 +3,9 @@ name: Firebase Rules Tests
 on:
   push:
     branches: [main]
+  # redesign-75 collects this round's PRs (73–76) before one merge to main.
   pull_request:
-    branches: [main]
+    branches: [main, redesign-75]
 
 jobs:
   rules:

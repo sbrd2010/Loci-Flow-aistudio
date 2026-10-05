@@ -1218,28 +1218,29 @@ test("Split a task: rows are locked while the AI works, and an answer outside tw
   await expect(dialog.getByLabel("Step 1", { exact: true })).toHaveValue("");
 });
 
-// Laptop, 1024px and up (Addendum X3; 35e/36c): edge to edge, content capped
-// at 1200px and centred; with the list hidden, the task has its own column
-// with the Day map beside it (54c). From 1600px the cap is 1760px (54a, 54e,
-// today-wide.spec.js).
-test("laptop: no phone-card frame; content capped at 1200px, centred", async ({ page }) => {
+// From 1280px (75a–b, Turn 76) Today runs edge to edge with 40px gutters —
+// no centred cap — and the page grows with the window by the smaller of
+// width ÷ 1422 and height ÷ 800, so the gutters grow with it.
+const scaleOf = (w, h) => Math.min(28.5 / 16, Math.max(1, Math.min(w / 1422, h / 800)));
+
+test("laptop: no phone-card frame; the task and the list run edge to edge with 40px gutters", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1080 });
   await page.goto("/");
   await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
   await page.getByTestId("demo-btn").click();
   const frame = await page.locator(".app-container").boundingBox();
   expect(Math.round(frame.width)).toBe(1440);
-  // With the list shown the two columns span the 1200px cap, centred.
   await page.keyboard.press("l");
   await expect(page.locator(".tasks-section")).toBeVisible();
-  await page.waitForTimeout(500);
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
   const [band, list] = await Promise.all([page.locator(".wall-goal").boundingBox(), page.locator(".tasks-section").boundingBox()]);
-  expect(Math.round(band.x)).toBe(120);
-  expect(Math.round(list.x + list.width)).toBe(1320);
+  const gutter = 40 * scaleOf(1440, 1080);
+  expect(Math.abs(band.x - gutter)).toBeLessThan(2);
+  expect(Math.abs(list.x + list.width - (1440 - gutter))).toBeLessThan(2);
 });
 
-// 50k: from 1600px the cap is 1760px, centred. (Not zoomed.)
-test("wide: from 1600px the cap is 1760px, centred (50k)", async ({ page }) => {
+// No cap on a 1920 monitor either: ×1.35 at 1920×1080, gutters 54px.
+test("wide: 1920×1080 is ×1.35 and edge to edge, no 1760px cap (Turn 76)", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/");
   await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
@@ -1247,10 +1248,10 @@ test("wide: from 1600px the cap is 1760px, centred (50k)", async ({ page }) => {
   await page.keyboard.press("l");
   await expect(page.locator(".tasks-section")).toBeVisible();
   await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(1.35, 3);
   const [band, list] = await Promise.all([page.locator(".wall-goal").boundingBox(), page.locator(".tasks-section").boundingBox()]);
-  // (1920 − 1760) / 2 = 80 each side.
-  expect(Math.round(band.x)).toBe(80);
-  expect(Math.round(list.x + list.width)).toBe(1840);
+  expect(Math.round(band.x)).toBe(54);
+  expect(Math.round(list.x + list.width)).toBe(1920 - 54);
 });
 
 test("laptop: with the list hidden, the task sits on one left edge, its links and THEN line under it (72c)", async ({ page }) => {
@@ -1266,9 +1267,12 @@ test("laptop: with the list hidden, the task sits on one left edge, its links an
     page.getByRole("button", { name: /^Split it/ }).boundingBox(),
   ]);
   for (const box of [kicker, title, start]) expect(Math.abs(box.x - band.x)).toBeLessThan(1);
-  // 72: Start, Mark done and Split it on one row, to the goal's right edge.
+  // 75 (PART5 §5): Start, Mark done and Split it on one row; Start is sized
+  // to its words, never stretched to the column (narrower than 22rem).
   expect(done.x).toBeGreaterThan(start.x + start.width);
-  expect(Math.round(split.x + split.width)).toBe(Math.round(band.x + band.width));
+  expect(split.x).toBeGreaterThan(done.x + done.width);
+  expect(start.width).toBeLessThan(22 * 16);
+  expect(split.x + split.width).toBeLessThan(band.x + band.width);
   expect(Math.abs((done.y + done.height / 2) - (start.y + start.height / 2))).toBeLessThan(4);
   expect(Math.round(done.y)).toBe(Math.round(split.y));
   // 72: the task block is centred in its height: on a taller screen it

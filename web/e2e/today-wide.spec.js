@@ -44,29 +44,28 @@ test("1680: no third column; the switch shows the Day map in the list's place, a
   await expect(page.getByTestId("today-tasks-list")).toBeVisible();
 });
 
-// Nothing is zoomed: a 2130 screen (a 1920 monitor at 90% browser zoom)
-// stops at the 1760 cap.
-test("2130: not zoomed; the content stops at 1760px and the margins take the rest", async ({ page }) => {
+// Turn 76: the page grows with the window, by the smaller of width ÷ 1422
+// and height ÷ 800 (×1.25 at 2130×1000), and runs edge to edge: no cap.
+test("2130×1000: ×1.25, edge to edge with 40px gutters (no 1760 cap)", async ({ page }) => {
   await enterDemo(page, { width: 2130, height: 1000 });
-  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBe(1);
+  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(1.25, 3);
   const wall = await page.locator(".today-layout").boundingBox();
-  expect(Math.round(wall.width)).toBeLessThanOrEqual(1760);
-  expect(Math.round(wall.width)).toBeGreaterThanOrEqual(1740);
+  expect(Math.round(wall.x)).toBe(50);
+  expect(Math.round(wall.x + wall.width)).toBe(2130 - 50);
   const brand = await page.getByRole("banner").getByRole("button", { name: "Loci" }).boundingBox();
   expect(Math.abs(brand.x - wall.x)).toBeLessThan(2);
 });
 
-// 2400 is a 1920 monitor at 80% browser zoom: not zoomed back up (Codex
-// review of #490), and the title keeps the laptop's sizes.
-test("2400: not zoomed, and the title keeps its laptop size, list shown or hidden", async ({ page }) => {
+// 75a: the title is 46 (its length steps below that), list shown or hidden.
+test("2400×1200: ×1.5, and the title keeps its size, list shown or hidden", async ({ page }) => {
   await enterDemo(page, { width: 2400, height: 1200 });
-  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBe(1);
+  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(1.5, 3);
   const shown = await page.locator(".wall-title").evaluate(el => [el.dataset.len, parseFloat(getComputedStyle(el).fontSize)]);
   await page.locator("body").click({ position: { x: 5, y: 300 } });
   await page.keyboard.press("l");
   await expect(page.locator("section.today-list")).toBeHidden();
   const hidden = await page.locator(".wall-title").evaluate(el => parseFloat(getComputedStyle(el).fontSize));
-  const size = { s: 52, m: 44, l: 36, xl: 32 }[shown[0]];
+  const size = { s: 46, m: 46, l: 36, xl: 32 }[shown[0]];
   expect([shown[1], hidden]).toEqual([size, size]);
 });
 
@@ -313,7 +312,8 @@ test("72: the task side reads goal · NOW · UNTIL · title · step · buttons, 
 // The widest screens: the dragged copy lands on the row it is moved to.
 test("2560: a row moved by keyboard drag lands where its copy shows", async ({ page }) => {
   await enterDemo(page, { width: 2560, height: 1440 }, "2024-06-15T10:00:00");
-  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBe(1);
+  // The largest scale (28.5/16): the copy still lands on the row.
+  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(28.5 / 16, 3);
   const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']");
   const titles = async () => (await rows.locator(".task-title-text").allInnerTexts()).map(t => t.trim());
   const [first, second] = await titles();

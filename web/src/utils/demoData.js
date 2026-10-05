@@ -33,6 +33,10 @@ const t = (overrides) => ({
 });
 
 export function createDemoPayload() {
+  // Layout checks load a realistic day (e2e/helpers/realDay.js) in place of
+  // the sample one. Only demo mode reads it, and nothing is ever saved.
+  const fixture = typeof window !== "undefined" ? window.__LOCI_DEMO_FIXTURE__ : null;
+  if (typeof fixture === "function") return fixture();
   return {
     userId: "demo",
     tasks: [

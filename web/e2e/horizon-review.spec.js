@@ -37,7 +37,9 @@ test("the week ends: the review opens, each leftover gets a place, and Undo puts
   await expect(list.getByText(titles[2], { exact: true })).toHaveCount(0);
   await nav.getByRole("button", { name: "Today", exact: true }).click();
   const row = page.getByTestId("today-tasks-list").locator("[data-task-uuid]", { hasText: titles[1] });
-  await expect(row.locator(".task-tag.is-from")).toHaveText("FROM WEEK TO 16 JUN");
+  // Turn 76: it heads Today's list, and the review's tag isn't shown there.
+  await expect(page.getByTestId("today-tasks-list").locator("[data-task-uuid]").first()).toContainText(titles[1]);
+  await expect(row.locator(".task-tag.is-from")).toHaveCount(0);
 
   // Undo: both are back in the week, and the review waits on Today's line.
   await page.locator(".undo-toast").getByRole("button", { name: /Undo/ }).click();
@@ -45,7 +47,7 @@ test("the week ends: the review opens, each leftover gets a place, and Undo puts
 });
 
 // Q48.1: leaving Today ends the review's mark; undoing that brings it back.
-test("a task the review sent to Today keeps its tag through Delete → Undo", async ({ page }) => {
+test("a task the review sent to Today keeps its place through Delete → Undo", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.clock.install({ time: new Date("2024-06-15T10:00:00") }); // Sat
   await page.goto("/");
@@ -67,14 +69,18 @@ test("a task the review sent to Today keeps its tag through Delete → Undo", as
   await page.clock.fastForward("00:11");
   await expect(page.locator(".undo-toast")).toHaveCount(0);
   await nav.getByRole("button", { name: "Today", exact: true }).click();
-  const row = page.getByTestId("today-tasks-list").locator("[data-task-uuid]", { hasText: title });
-  await expect(row.locator(".task-tag.is-from")).toHaveText("FROM WEEK TO 16 JUN");
+  const rows = page.getByTestId("today-tasks-list").locator("[data-task-uuid]");
+  const row = rows.filter({ hasText: title });
+  // Turn 76: the tag isn't shown on Today; the task heads the list.
+  await expect(rows.first()).toContainText(title);
+  await expect(row.locator(".task-tag.is-from")).toHaveCount(0);
   await page.getByRole("button", { name: /^Show list/ }).click();
   await row.getByText(title, { exact: true }).click();
   await page.getByTestId("task-detail").getByRole("button", { name: /^Delete/ }).click();
   await expect(row).toHaveCount(0);
   await page.locator(".undo-toast").getByRole("button", { name: /Undo/ }).click();
-  await expect(row.locator(".task-tag.is-from")).toHaveText("FROM WEEK TO 16 JUN");
+  // Back where it was: at the head of Today's list.
+  await expect(rows.first()).toContainText(title);
 });
 
 // Two Undos at once (a review's, then a Delete's): they stack, newest at the
