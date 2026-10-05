@@ -1,0 +1,46 @@
+// "From This week" (67j, 67s): with nothing in Today, chosen This week tasks
+// move to Today in the order picked, at the bottom of the list (and so of the
+// route), and the first becomes the one thing. `before` holds what Undo needs.
+
+export function weekTasks(tasks = []) {
+  return tasks
+    .filter(t => t.horizonLevel === "week" && !t.isDeleted && !t.isCompleted && !t.isParked)
+    .sort((a, b) => (Number(a.orderIndex) || 0) - (Number(b.orderIndex) || 0));
+}
+
+export function pullFromWeek(tasks, uuids, now = Date.now()) {
+  const chosen = uuids.filter(u => tasks.some(t => t.uuid === u && t.horizonLevel === "week" && !t.isDeleted && !t.isCompleted));
+  if (!chosen.length) return { tasks, before: [] };
+  const bottom = tasks
+    .filter(t => t.horizonLevel === "today" && !t.isDeleted)
+    .reduce((max, t) => Math.max(max, Number(t.orderIndex) || 0), -1) + 1;
+  const before = chosen.map(u => {
+    const t = tasks.find(x => x.uuid === u);
+    return { uuid: u, horizonLevel: t.horizonLevel, orderIndex: t.orderIndex ?? null };
+  });
+  const first = chosen[0];
+  return {
+    tasks: tasks.map(t => {
+      const i = chosen.indexOf(t.uuid);
+      if (i === -1) {
+        // The one thing is exclusive: whatever held it lets go.
+        return t.isNowFocus ? { ...t, isNowFocus: false, lastUpdated: now } : t;
+      }
+      // It joins the route anew, as Restore does.
+      const { dayMapDate, dayMapPeriod, dayMapStartMinutes, dayMapDurationMinutes, dayMapOrder, dayMapFixedMinutes, ...rest } = t;
+      return { ...rest, horizonLevel: "today", orderIndex: bottom + i, isNowFocus: t.uuid === first, lastUpdated: now };
+    }),
+    before,
+  };
+}
+
+// Undo: back to This week, where they were, only the ones still in Today as
+// the move left them (not done or moved since).
+export function undoPullFromWeek(tasks, before, appliedAt, now = Date.now()) {
+  const byId = new Map(before.map(b => [b.uuid, b]));
+  return tasks.map(t => {
+    const b = byId.get(t.uuid);
+    if (!b || t.isDeleted || t.isCompleted || t.horizonLevel !== "today" || t.lastUpdated !== appliedAt) return t;
+    return { ...t, horizonLevel: b.horizonLevel, orderIndex: b.orderIndex, isNowFocus: false, lastUpdated: now };
+  });
+}

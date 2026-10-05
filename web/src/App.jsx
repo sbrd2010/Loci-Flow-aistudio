@@ -1462,7 +1462,6 @@ export default function App() {
             saveConfigPatch={saveConfigPatch}
             onOpenAddTask={() => openAddTask("today", "Today")}
             onOpenDayMap={openDayMap}
-            onOpenMindBox={openMindBox}
             onOpenPlan={() => handleTabSelect("roadmap")}
             // 59d / Q39.1: Talk it through arrives with its chip.
             onOpenCoach={(opts) => { if (opts?.stuck) setCoachStuck(opts.stuck); setActiveTab("coach"); }}

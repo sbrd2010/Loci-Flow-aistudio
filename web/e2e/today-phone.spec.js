@@ -79,8 +79,15 @@ test("phone: a title past three lines is cut, and Full title and details opens i
   await openMore(page);
   await more(page).getByRole("button", { name: /^Not the one thing/ }).click();
   const long = "Write the long methods section on membrane durability testing with every pressure cycling condition spelled out in full";
-  await page.locator(".wall-commit-field").fill(long);
-  await page.locator(".wall-commit-field").press("Enter");
+  // 67i: added through Add, then made the one thing from its sheet.
+  const listAdd = page.locator(".today-list-add");
+  if (await listAdd.isVisible()) await listAdd.click();
+  else await page.getByRole("button", { name: "Add a task to Today" }).first().click();
+  const add = page.getByRole("dialog", { name: "New task" });
+  await add.getByTestId("add-task-title").fill(long);
+  await add.getByTestId("add-task-submit").click();
+  await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: "Write the long methods" }).locator(".task-title-text").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
   await expect(page.locator(".wall-title")).toContainText("Write the long methods");
   expect(await page.locator(".wall-title").evaluate(el => getComputedStyle(el).webkitLineClamp)).toBe("3");
   await page.getByRole("button", { name: "Full title and details" }).click();
@@ -158,7 +165,7 @@ test("phone: with no one thing, Feeling scattered isn't offered; I'm stuck is", 
   await enterDemo(page);
   await openMore(page);
   await more(page).getByRole("button", { name: /^Not the one thing/ }).click();
-  await expect(page.locator(".wall-commit-field")).toBeVisible();
+  await expect(page.locator(".wall-pick")).toBeVisible();
   await expect(page.getByRole("button", { name: "Feeling scattered?" })).toBeHidden();
   await expect(page.getByRole("button", { name: "I’m stuck" }).first()).toBeVisible();
 });

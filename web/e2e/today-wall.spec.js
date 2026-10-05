@@ -302,6 +302,25 @@ async function editWallTask(page) {
   return page.getByTestId("task-detail");
 }
 
+// 67i: the wall no longer takes free text; a task to work with is added
+// through Add, then made the one thing from its sheet.
+async function makeOneThing(page, title) {
+  for (const sel of [".wall-empty-add", ".today-list-add"]) {
+    const b = page.locator(sel);
+    if (await b.isVisible()) { await b.click(); break; }
+  }
+  if (!(await page.getByRole("dialog", { name: "New task" }).isVisible())) {
+    await page.getByRole("button", { name: "Add a task to Today" }).first().click();
+  }
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByTestId("add-task-title").fill(title);
+  await dialog.getByTestId("add-task-submit").click();
+  await expect(dialog).toHaveCount(0);
+  await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: title }).locator(".task-title-text").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await expect(page.locator(".wall-title")).toContainText(title, { timeout: 8_000 });
+}
+
 async function emptyTheWall(page) {
   await page.addInitScript(() => {
     try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
@@ -309,54 +328,63 @@ async function emptyTheWall(page) {
   await enterDemo(page);
   await expect(page.locator(".wall-title")).toBeVisible({ timeout: 10_000 });
   await unpinFromList(page);
-  await expect(page.locator(".wall-commit-field")).toBeVisible({ timeout: 8_000 });
+  await expect(page.locator(".wall-pick")).toBeVisible({ timeout: 8_000 });
 }
 
-test("mobile reliability: typing on the empty wall creates and commits a task", async ({ page }) => {
+// 67i: with no one thing, the top three open tasks, in the list's order, are
+// one tap from being the one thing, with Undo. No Start.
+test("mobile reliability: no one thing: pick from the top three, with Undo", async ({ page }) => {
   await emptyTheWall(page);
-
-  // 37f: the field is the whole form; Enter commits.
-  await expect(page.locator(".wall-empty-title")).toHaveText("Nothing committed yet.");
-  // Nothing committed, but the Key Deadline's band and the anchor stay (L1).
+  await expect(page.locator(".wall-empty-title")).toHaveText("Pick the one thing");
+  // The Key Deadline's band stays (L1); no Start while nothing is chosen.
   await expect(page.locator(".today-wall.is-empty .wall-goal-name")).toHaveText("Project launch");
-  // Q58 follow-up 7: no anchor line on the phone's Today.
-  await expect(page.locator(".today-wall.is-empty .wall-anchor")).toBeHidden();
-  await page.locator(".wall-commit-field").fill("Write the membrane paper intro");
-  await page.locator(".wall-commit-field").press("Enter");
+  await expect(page.locator(".today-wall .wall-primary")).toHaveCount(0);
+  const listTitles = (await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed) .task-title-text").allInnerTexts()).map(t => t.trim());
+  const picks = page.locator(".wall-pick-row");
+  await expect(picks).toHaveCount(Math.min(3, listTitles.length));
+  await expect(page.locator(".wall-pick-title")).toHaveText(listTitles.slice(0, 3));
+  await expect(page.locator(".wall-pick-all")).toHaveText(`All ${listTitles.length} tasks`);
 
-  // It becomes the commitment: the wall stops asking and the task IS the hero.
-  await expect(page.locator(".wall-commit-field")).toHaveCount(0);
-  await expect(page.locator(".wall-title")).toContainText("Write the membrane paper intro");
-
-  // The task is created with the canonical "Personal" category and NO
-  // estimate, so no duration is rendered for it as if the user had chosen one.
-  await expect(page.locator(".wall-title")).not.toContainText("25m");
-  // L1: no front, but the demo has a Key Deadline set — so the goal band names
-  // THAT, rather than suppressing a countdown the user already has.
-  await expect(page.locator(".wall-goal-name")).toHaveText("Project launch");
-  await expect(page.locator(".wall-goal-line")).toContainText(/\d+ days/);
-  // And no first step: concreteStep is OMITTED rather than set empty, so
-  // normalizePayload does not substitute its "Do first tiny step" default.
-  await expect(page.locator(".wall-first-step")).toHaveCount(0);
+  const second = listTitles[1];
+  await picks.nth(1).click();
+  await expect(page.locator(".wall-title")).toHaveText(second);
+  await expect(page.getByRole("status").filter({ hasText: `Made the one thing: ${second}` })).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(".wall-pick")).toBeVisible({ timeout: 8_000 });
 });
 
-test("mobile reliability: Enter commits, without touching the button", async ({ page }) => {
+// 67j/67s: nothing in Today: Add a task, or bring some in from This week; the
+// first one ticked is the one thing, and Undo takes them all back.
+test("mobile reliability: nothing in Today: From This week moves the ticked tasks in, the first as the one thing, with Undo", async ({ page }) => {
   await emptyTheWall(page);
-
-  await page.locator(".wall-commit-field").fill("Reply to the supervisor");
-  await page.locator(".wall-commit-field").press("Enter");
-
-  await expect(page.locator(".wall-title")).toContainText("Reply to the supervisor");
-});
-
-// 37f: what already exists is one tap away — Mind Box, with its count.
-test("mobile reliability: the empty wall offers Mind Box with its count", async ({ page }) => {
-  await emptyTheWall(page);
-
-  const link = page.locator(".wall-link", { hasText: /^pick from Mind Box \(\d+\)$/ });
-  await expect(link).toBeVisible();
-  await link.click();
-  await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 8_000 });
+  // Empty Today: every open task off it.
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
+  while (await rows.count()) {
+    await rows.first().locator(".task-title-text").click();
+    await page.getByTestId("task-detail").getByRole("button", { name: "Park", exact: true }).click();
+    await expect(page.getByTestId("task-detail")).toHaveCount(0);
+  }
+  await expect(page.locator(".wall-empty-title")).toHaveText("Nothing in Today yet");
+  await expect(page.locator(".wall-empty-add")).toHaveText("Add a task");
+  const from = page.getByRole("button", { name: /^From This week · \d+$/ });
+  await from.click();
+  const sheet = page.getByRole("dialog", { name: "From This week" });
+  const move = sheet.getByRole("button", { name: /^Move \d+ to Today$/ });
+  await expect(move).toHaveText("Move 0 to Today");
+  await expect(move).toBeDisabled();
+  const boxes = sheet.getByRole("checkbox");
+  const names = (await sheet.locator(".week-sheet-title").allInnerTexts()).map(t => t.trim());
+  // Ticked second first: the first ticked is the one thing.
+  await boxes.nth(1).check();
+  await boxes.nth(0).check();
+  await move.click();
+  await expect(sheet).toHaveCount(0);
+  await expect(page.locator(".wall-title")).toHaveText(names[1]);
+  await expect(page.getByRole("status").filter({ hasText: "2 moved to Today" })).toBeVisible();
+  await expect(page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: names[0] })).toHaveCount(1);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(".wall-empty-title")).toHaveText("Nothing in Today yet", { timeout: 8_000 });
+  await expect(from).toHaveText(`From This week · ${names.length}`);
 });
 
 // ── J2b / Addendum K2, K3: the commitment, finished ───────────────────────
@@ -374,8 +402,8 @@ test("mobile reliability: finishing the commitment gives the done state, not the
   // K2: no session was run, so zero minutes — the line is a bare "Done.",
   // never "0m logged".
   await expect(page.locator(".wall-done-line")).toHaveText("Done.");
-  // And NOT the empty wall's field, which would be asking the question again.
-  await expect(page.locator(".wall-commit-field")).toHaveCount(0);
+  // And NOT the empty wall, which would be asking the question again.
+  await expect(page.locator(".wall-pick")).toHaveCount(0);
 });
 
 test("mobile reliability: the proposal never auto-commits, and Not now holds", async ({ page }) => {
@@ -431,50 +459,8 @@ test("mobile reliability: Momentum does not render an empty frame", async ({ pag
 test("mobile reliability: the empty wall does not compete with the old onboarding panel", async ({ page }) => {
   await emptyTheWall(page);
 
-  await expect(page.locator(".wall-commit-field")).toBeVisible();
+  await expect(page.locator(".wall-pick")).toBeVisible();
   await expect(page.getByText("tap + to add your first task", { exact: false })).toHaveCount(0);
-});
-
-// TodayWall stays mounted, so a draft left in the field would reappear if the
-// committed task is ever unpinned — and an accidental Enter then creates a
-// duplicate of it.
-test("mobile reliability: committing clears the typed draft", async ({ page }) => {
-  await emptyTheWall(page);
-
-  await page.locator(".wall-commit-field").fill("Call the landlord");
-  await page.locator(".wall-commit-field").press("Enter");
-  await expect(page.locator(".wall-title")).toContainText("Call the landlord", { timeout: 8_000 });
-
-  // Unpin it and the field comes back — empty, not holding the old query.
-  await unpinFromList(page);
-
-  await expect(page.locator(".wall-commit-field")).toHaveValue("", { timeout: 8_000 });
-});
-
-// A task committed from the wall has no estimate and no subtask by design
-// (K1). Editing it must not quietly materialise the form's defaults: renaming
-// it should not give it a 25-minute estimate and a "Do first tiny step" it
-// never had.
-test("mobile reliability: editing a wall task keeps its no-estimate, no-subtask state", async ({ page }) => {
-  await emptyTheWall(page);
-
-  await page.locator(".wall-commit-field").fill("Draft the membrane abstract");
-  await page.locator(".wall-commit-field").press("Enter");
-  await expect(page.locator(".wall-title")).toContainText("Draft the membrane abstract", { timeout: 8_000 });
-  // No first step to begin with.
-  await expect(page.locator(".wall-first-step")).toHaveCount(0);
-
-  // Open the editor for the wall's task and change ONLY the title.
-  const detail = await editWallTask(page);
-  await detail.locator(".detail-title").click();
-  await detail.getByLabel("Title").fill("Draft the abstract properly");
-  await detail.getByLabel("Title").press("Enter");
-  await detail.getByRole("button", { name: "Close", exact: true }).click();
-
-  await expect(page.locator(".wall-title")).toContainText("Draft the abstract properly", { timeout: 8_000 });
-  // Still no invented subtask, and still no duration presented as chosen.
-  await expect(page.locator(".wall-first-step")).toHaveCount(0);
-  await expect(page.getByText("Do first tiny step")).toHaveCount(0);
 });
 
 // A regression guard for the header not lurching when the commitment is
@@ -491,28 +477,6 @@ test("mobile reliability: the done state keeps the finished task's own countdown
   await expect(page.locator(".wall-done-line")).toBeVisible({ timeout: 8_000 });
 
   await expect(figures).toHaveText(before);
-});
-
-// The selector shows 25 for a task that has none, so choosing 25 has to be
-// distinguishable from never touching it — otherwise the estimate cannot be
-// set on a wall-created task at all.
-test("mobile reliability: an estimate can still be chosen for a wall task", async ({ page }) => {
-  await emptyTheWall(page);
-
-  await page.locator(".wall-commit-field").fill("Size this one properly");
-  await page.locator(".wall-commit-field").press("Enter");
-  await expect(page.locator(".wall-title")).toContainText("Size this one properly", { timeout: 8_000 });
-
-  const detail = await editWallTask(page);
-  await detail.getByRole("button", { name: /^Estimate/ }).click();
-  await detail.getByRole("radio", { name: "30m" }).click();
-  await detail.getByRole("button", { name: "Close", exact: true }).click();
-
-  // It sticks: the task's sheet shows the length the user chose. (The start
-  // control runs one block, not the estimate — 53e.)
-  await page.locator(".wall-title").click();
-  await expect(page.getByTestId("task-detail").getByRole("button", { name: /^Estimate/ }).locator(".detail-value")).toHaveText("30m");
-  await expect(page.locator(".wall-primary")).toContainText("25:00");
 });
 
 // 37l / 41a: laptop keys on the wall — Space starts focus, D marks done, S
@@ -641,7 +605,7 @@ test("mobile reliability: the one thing can be let go from its sheet, and Undo p
   const detail = page.getByTestId("task-detail");
   await expect(detail.locator(".detail-kicker").first()).toHaveText("TODAY · THE ONE THING");
   await detail.getByRole("button", { name: /^Not the one thing now/ }).click();
-  await expect(page.locator(".wall-commit-field")).toBeVisible({ timeout: 8_000 });
+  await expect(page.locator(".wall-pick")).toBeVisible({ timeout: 8_000 });
   await expect(page.getByRole("status").filter({ hasText: `Unpinned: ${title}` })).toBeVisible();
 
   await page.getByRole("button", { name: "Undo" }).click();
@@ -1154,9 +1118,7 @@ test("Split it: steps from the task's own sub-steps; Split replaces it, the pin 
 
 test("Split it with no sub-steps and no AI key: write the steps; two are needed; Escape closes", async ({ page }) => {
   await emptyTheWall(page);
-  await page.locator(".wall-commit-field").fill("Prepare the Brightlab slides");
-  await page.locator(".wall-commit-field").press("Enter");
-  await expect(page.locator(".wall-title")).toContainText("Prepare the Brightlab slides", { timeout: 8_000 });
+  await makeOneThing(page, "Prepare the Brightlab slides");
   await page.locator(".today-list-hide").click();
   await openSplit(page);
 
@@ -1179,9 +1141,7 @@ test("Split it with no sub-steps and no AI key: write the steps; two are needed;
 // Tab work at once, and gives it back when it closes.
 test("Split a task takes focus on open and gives it back on close", async ({ page }) => {
   await emptyTheWall(page);
-  await page.locator(".wall-commit-field").fill("Prepare the Brightlab slides");
-  await page.locator(".wall-commit-field").press("Enter");
-  await expect(page.locator(".wall-title")).toContainText("Prepare the Brightlab slides", { timeout: 8_000 });
+  await makeOneThing(page, "Prepare the Brightlab slides");
   await page.locator(".today-list-hide").click();
   // On a phone Split it is in the More sheet, and focus comes back to More.
   const opener = page.locator(".wall-quiet-link", { hasText: /^More$/ });
@@ -1213,9 +1173,7 @@ test("Split a task: rows are locked while the AI works, and an answer outside tw
     });
   });
   await emptyTheWall(page);
-  await page.locator(".wall-commit-field").fill("Prepare the Brightlab slides");
-  await page.locator(".wall-commit-field").press("Enter");
-  await expect(page.locator(".wall-title")).toContainText("Prepare the Brightlab slides", { timeout: 8_000 });
+  await makeOneThing(page, "Prepare the Brightlab slides");
   await page.locator(".today-list-hide").click();
   await openSplit(page);
 
@@ -1607,7 +1565,7 @@ test("mobile reliability: making the one thing on an empty wall offers Undo", as
   await expect(page.locator(".wall-title")).toHaveText(title);
   await expect(page.getByRole("status").filter({ hasText: `Made the one thing: ${title}` })).toBeVisible();
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect(page.locator(".wall-commit-field")).toBeVisible({ timeout: 8_000 });
+  await expect(page.locator(".wall-pick")).toBeVisible({ timeout: 8_000 });
 });
 
 // Codex review of #406: P on a row sends it to the wall, and focus follows
@@ -1831,7 +1789,7 @@ test("laptop: with no one thing, the list's Day map view still opens the Day map
   await enterLaptop(page);
   await page.locator(".wall-title").click();
   await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
-  await expect(page.locator(".wall-commit-field")).toBeVisible();
+  await expect(page.locator(".wall-pick")).toBeVisible();
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Day map", exact: true }).click();
   await page.getByRole("button", { name: "Day map page ›" }).click();
   await expect(page.getByRole("heading", { name: /Day map/i }).first()).toBeVisible();
