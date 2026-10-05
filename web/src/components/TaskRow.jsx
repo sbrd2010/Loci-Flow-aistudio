@@ -1,9 +1,8 @@
 import React, { useState, useRef, useCallback } from "react";
 import { formatReminderLabel } from "../utils/reminders";
 import LinkifyText from "./LinkifyText";
-import { formatClock24 } from "../utils/dayMapPlan";
+import { formatClock24, formatSpanCaps } from "../utils/dayMapPlan";
 import { isEventTask } from "../utils/dayMapRoute";
-import { IconLock } from "./ui/icons";
 import "../styles/taskRow.css";
 
 const GripIcon = () => (
@@ -54,18 +53,21 @@ export const ROADMAP_HORIZONS = [
   { key: "office",   label: "Work" },
 ];
 
-// A Today row (41a; Addendum AA): a 20px circle in a 44px tap area (tap it to
-// mark done), a mono priority tag, a title that wraps and grows the row, and
-// MUST / GOAL tags. Tapping the row opens the task (50a–b); the list moves
-// keyboard focus between rows (one tab stop, ↑/↓). On a laptop a pin shows at
-// the row's right on hover or focus: "Make the one thing · P" (50d).
-export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, onSubStepToggle, onDeleteSubStep, isBreakingDown, breakdownError, breakdownNoKey, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, isMin = false, fixedAt = null, fromTag = null, fromYesterday = false, onSwipeDone, onSwipeTomorrow, onPutOnFront }) {
-  const { title, priority, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
+// A Today row (Q59, 70a): circle · title · how long. The 20px circle sits in
+// a 44px tap area (tap it to mark done); the title wraps and grows the row,
+// with one quiet line under it: "2 / 5 steps", MUST, GOAL, MIN, FROM
+// YESTERDAY. A fixed time shows its span on the right instead (it isn't
+// dragged). Tapping the row opens the task (50a–b), where its steps are; the
+// list moves keyboard focus between rows (one tab stop, ↑/↓). On a laptop the
+// grip shows on hover (70f), and a pin at the right: "Make the one thing · P"
+// (50d); a row past the day's end offers Tomorrow · Park there (69e).
+export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, isBreakingDown, breakdownError, breakdownNoKey, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, isMin = false, fixedAt = null, minutes = null, overActions = null, fromTag = null, fromYesterday = false, onSwipeDone, onSwipeTomorrow, onPutOnFront }) {
+  const { title, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
 
   const hasActions = !isCompleted && !!onOpen;
-  const activeSubSteps = subSteps?.filter(s => !s.done) ?? [];
-  const doneSubSteps = subSteps?.filter(s => s.done) ?? [];
+  const stepsDone = subSteps?.filter(s => s.done).length ?? 0;
   const hasSubSteps = subSteps && subSteps.length > 0;
+  const fixed = fixedAt != null && !isCompleted;
   const isDragAnywhere = interactionStyle === "dragAnywhere" && !!dragHandleListeners;
   // Swipe (touch only; 37c): right past a threshold marks done; left opens
   // "Tomorrow" and "Front" behind the row (50). The same actions are in the task
@@ -156,7 +158,7 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
 
   const row = (
     <div
-      className={`task-row ${isCompleted ? "completed" : ""}${isTinted ? " is-tinted" : ""}`}
+      className={`task-row ${isCompleted ? "completed" : ""}${isTinted ? " is-tinted" : ""}${fixed ? " is-fixed" : ""}`}
       data-testid="task-row"
       data-task-uuid={task.uuid}
       ref={setRowRef}
@@ -180,8 +182,8 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
         ...(isDragAnywhere ? { cursor: "grab" } : {}),
       }}
     >
-      {/* Grip handle */}
-      {dragHandleListeners && !isDragAnywhere && (
+      {/* Grip handle: on hover only (70f); a fixed time isn't dragged. */}
+      {dragHandleListeners && !isDragAnywhere && !fixed && (
         <button
           {...dragHandleListeners}
           {...(dragHandleAttributes || {})}
@@ -212,68 +214,25 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
         </span>
       </button>
 
-      {priority && (
-        <span className="task-row-priority" aria-label={`Priority ${priority.replace(/\D/g, "")}`}>{priority}</span>
-      )}
-
       <div className="task-middle">
-        <div className="task-row-top">
-          <span className="task-title-text"><LinkifyText text={title} /></span>
-          {/* Q31, Q36.4: a task at a set time shows its lock and time. */}
-          {fixedAt != null && !isCompleted && (
-            <span className="task-row-fixed" aria-label={`Fixed at ${formatClock24(fixedAt)}`}><IconLock size={12} /> {formatClock24(fixedAt)}</span>
-          )}
-          {!isCompleted && (isNowFocus || isMVD || isGoal || isMin || fromTag) && (
-            <span className="task-row-tags">
-              {isNowFocus && <span className="task-tag is-now" aria-label="Today's one thing">NOW</span>}
-              {isMVD && <span className="task-tag is-must" aria-label="Must-do">MUST</span>}
-              {isGoal && <span className="task-tag is-goal" aria-label="Goal task">GOAL</span>}
-              {isMin && <span className="task-tag is-min" aria-label="Minimum day">MIN</span>}
-              {/* Q44.5: moved here by a horizon review, for the day. */}
-              {fromTag && <span className="task-tag is-from">{fromTag}</span>}
-            </span>
-          )}
-        </div>
-        {/* Q7: moved here from yesterday; the tag lasts the day. */}
-        {fromYesterday && !isCompleted && <span className="from-yesterday">FROM YESTERDAY</span>}
+        <span className="task-title-text"><LinkifyText text={title} /></span>
+        {!isCompleted && (hasSubSteps || isNowFocus || isMVD || isGoal || isMin || fromTag || fromYesterday) && (
+          <span className="task-row-tags">
+            {hasSubSteps && <span className="task-row-steps">{stepsDone} / {subSteps.length} steps</span>}
+            {isNowFocus && <span className="task-tag is-now" aria-label="Today's one thing">NOW</span>}
+            {isMVD && <span className="task-tag is-must" aria-label="Must-do">MUST</span>}
+            {isGoal && <span className="task-tag is-goal" aria-label="Goal task">GOAL</span>}
+            {isMin && <span className="task-tag is-min" aria-label="Minimum day">MIN</span>}
+            {/* Q44.5: moved here by a horizon review, for the day. */}
+            {fromTag && <span className="task-tag is-from">{fromTag}</span>}
+            {/* Q7: moved here from yesterday; the tag lasts the day. */}
+            {fromYesterday && <span className="from-yesterday">FROM YESTERDAY</span>}
+          </span>
+        )}
         {reminderAt && !isCompleted && (
           <span className={`task-row-meta${reminderAt < Date.now() ? " is-overdue" : ""}`}>
             Reminder · {formatReminderLabel(reminderAt)}{reminderAt < Date.now() ? " (overdue)" : ""}
           </span>
-        )}
-
-        {/* Sub-steps checklist */}
-        {hasSubSteps && (
-          <div className="task-substeps">
-            {[...activeSubSteps, ...doneSubSteps].map(step => (
-              <div key={step.id} className="task-substep">
-                <div
-                  className="task-substep-main"
-                  onClick={e => { e.stopPropagation(); onSubStepToggle && onSubStepToggle(task, step.id); }}
-                  onMouseDown={e => e.stopPropagation()}
-                  onTouchStart={e => e.stopPropagation()}
-                  style={{ cursor: onSubStepToggle ? "pointer" : "default" }}
-                >
-                  <span className={`task-substep-box${step.done ? " is-done" : ""}`}>
-                    {step.done && <CheckIcon />}
-                  </span>
-                  <span className={`task-substep-text${step.done ? " is-done" : ""}`}>{step.text}</span>
-                </div>
-                {onDeleteSubStep && (
-                  <button
-                    className="task-substep-remove"
-                    tabIndex={hasActions ? -1 : undefined}
-                    onClick={e => { e.stopPropagation(); onDeleteSubStep(task, step.id); }}
-                    onMouseDown={e => e.stopPropagation()}
-                    onTouchStart={e => e.stopPropagation()}
-                    title="Remove step"
-                    aria-label="Remove step"
-                  >×</button>
-                )}
-              </div>
-            ))}
-            <div className="task-row-meta">{doneSubSteps.length}/{subSteps.length} steps done</div>
-          </div>
         )}
 
         {isBreakingDown && (
@@ -298,6 +257,20 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
         )}
       </div>
 
+      {/* Q1: a fixed time shows its span in --act; else how long it takes. */}
+      {!isCompleted && (fixed || minutes != null) && (
+        <span className={`task-row-dur${fixed ? " is-fixed" : ""}`}>
+          {fixed ? `${formatClock24(fixedAt)}–${formatClock24(fixedAt + (minutes || 0))}` : formatSpanCaps(minutes)}
+        </span>
+      )}
+      {/* 69e: past the day's end, Tomorrow · Park on hover (a laptop). */}
+      {overActions && !isCompleted && (
+        <span className="task-row-over-actions">
+          <button type="button" tabIndex={-1} onClick={e => { e.stopPropagation(); overActions.onTomorrow(task); }} onMouseDown={e => e.stopPropagation()}>Tomorrow</button>
+          <span aria-hidden="true">·</span>
+          <button type="button" tabIndex={-1} onClick={e => { e.stopPropagation(); overActions.onPark(task); }} onMouseDown={e => e.stopPropagation()}>Park</button>
+        </span>
+      )}
       {onMakeOneThing && !isCompleted && !isNowFocus && !isEventTask(task) && (
         <button
           type="button"

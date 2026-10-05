@@ -40,7 +40,7 @@ async function openTaskMenu(page, title) {
   const row = todayRow(page, title);
   await row.scrollIntoViewIfNeeded();
   await expect(row).toBeVisible({ timeout: 5_000 });
-  await row.locator(".task-row-top").click();
+  await row.locator(".task-title-text").click();
 }
 
 async function expectNoHorizontalOverflow(page) {
@@ -172,9 +172,12 @@ test("mobile reliability: Add Task accepts manual sub-steps from pasted bullets"
   await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   const row = todayRow(page, title);
   await expect(row).toBeVisible({ timeout: 5_000 });
-  await expect(row).toContainText("Check visa rules");
-  await expect(row).toContainText("Book refundable hotel");
-  await expect(row).not.toContainText("Compare flight prices");
+  // Q59 (70a): the row counts its steps; its sheet lists them.
+  await expect(row.locator(".task-row-steps")).toHaveText("0 / 2 steps");
+  await row.locator(".task-title-text").click();
+  const steps = page.getByTestId("task-detail").locator(".detail-step");
+  await expect(steps).toContainText(["Check visa rules", "Book refundable hotel"]);
+  await expect(page.getByTestId("task-detail")).not.toContainText("Compare flight prices");
 });
 
 test("mobile reliability: Add Task flushes an in-progress sub-step edit on submit", async ({ page }) => {
@@ -199,7 +202,8 @@ test("mobile reliability: Add Task flushes an in-progress sub-step edit on submi
   await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   const row = todayRow(page, title);
   await expect(row).toBeVisible({ timeout: 5_000 });
-  await expect(row).toContainText("Compare flight and train prices");
+  await row.locator(".task-title-text").click();
+  await expect(page.getByTestId("task-detail").locator(".detail-step")).toContainText(["Compare flight and train prices"]);
 });
 
 async function addTaskWithSubSteps(page, title, subStepLines) {
@@ -212,7 +216,7 @@ async function addTaskWithSubSteps(page, title, subStepLines) {
   await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
 }
 
-test("mobile reliability: a Today row shows every sub-step, not capped at 3", async ({ page }) => {
+test("mobile reliability: a Today row counts every sub-step, and its sheet lists them all", async ({ page }) => {
   await enterDemo(page);
 
   const title = "Row substep count seed task";
@@ -220,10 +224,9 @@ test("mobile reliability: a Today row shows every sub-step, not capped at 3", as
   await addTaskWithSubSteps(page, title, steps);
   const row = todayRow(page, title);
   await expect(row).toBeVisible({ timeout: 5_000 });
-
-  for (const step of steps) {
-    await expect(row.locator(".task-substep", { hasText: step })).toBeVisible({ timeout: 5_000 });
-  }
+  await expect(row.locator(".task-row-steps")).toHaveText("0 / 5 steps");
+  await row.locator(".task-title-text").click();
+  await expect(page.getByTestId("task-detail").locator(".detail-step")).toHaveCount(5);
 });
 
 test("mobile reliability: a Today row has no horizontal overflow with several long sub-step strings", async ({ page }) => {
@@ -238,9 +241,7 @@ test("mobile reliability: a Today row has no horizontal overflow with several lo
   await addTaskWithSubSteps(page, title, longSteps);
   const row = todayRow(page, title);
   await expect(row).toBeVisible({ timeout: 5_000 });
-  for (const step of longSteps) {
-    await expect(row.locator(".task-substep", { hasText: step })).toBeVisible({ timeout: 5_000 });
-  }
+  await expect(row.locator(".task-row-steps")).toHaveText("0 / 3 steps");
 
   await expectNoHorizontalOverflow(page);
 });
@@ -285,24 +286,28 @@ test("mobile reliability: editing the wall's task off Today clears its focus/pin
   await expect(page.locator(".wall-title")).toHaveCount(0);
 });
 
-// 52: a step goes at once, with Undo — never "Are you sure?".
-test("mobile reliability: deleting a sub-step from its row removes it at once, with Undo", async ({ page }) => {
+// 52: a step goes at once, with Undo — never "Are you sure?". Its steps are
+// in the task's sheet (Q59: the row only counts them).
+test("mobile reliability: deleting a sub-step in the sheet removes it at once, with Undo", async ({ page }) => {
   await enterDemo(page);
 
   const title = "Substep delete undo seed task";
   await addTaskWithSubSteps(page, title, ["Keep this step", "Remove this step"]);
   const row = todayRow(page, title);
   await expect(row).toBeVisible({ timeout: 5_000 });
-  await expect(row).toContainText("Remove this step");
+  await row.locator(".task-title-text").click();
+  const sheet = page.getByTestId("task-detail");
+  const steps = sheet.locator(".detail-step");
+  await expect(steps).toContainText(["Keep this step", "Remove this step"]);
 
-  await row.getByRole("button", { name: "Remove step" }).nth(1).click();
+  await sheet.getByRole("button", { name: "Remove step Remove this step" }).click();
   await expect(page.getByText("Remove this step?", { exact: false })).toHaveCount(0);
-  await expect(row).not.toContainText("Remove this step");
-  await expect(row).toContainText("Keep this step");
+  await expect(steps).toContainText(["Keep this step"]);
+  await expect(sheet).not.toContainText("Remove this step");
   await expect(page.locator(".undo-toast")).toContainText("Step removed: Remove this step");
 
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
-  await expect(row.locator(".task-substep")).toContainText(["Keep this step", "Remove this step"]);
+  await expect(steps).toContainText(["Keep this step", "Remove this step"]);
 });
 
 // The toast's live region is always on the page and only its text changes —

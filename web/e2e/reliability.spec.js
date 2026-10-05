@@ -40,7 +40,7 @@ test("reliability: deleted today task can be undone", async ({ page }) => {
   const row = taskRowByTitle(page, title);
   await expect(row).toBeVisible({ timeout: 8_000 });
 
-  await row.locator(".task-row-top").click();
+  await row.locator(".task-title-text").click();
   await page.getByTestId("task-detail").getByRole("button", { name: /^Delete/ }).click();
 
   await expect(tasksList.getByText(title)).not.toBeVisible({ timeout: 5_000 });
@@ -57,7 +57,7 @@ test("reliability: today task can be moved to the roadmap", async ({ page }) => 
   await expect(row).toBeVisible({ timeout: 8_000 });
 
   // Opened, its Horizon picker moves it (50a).
-  await row.locator(".task-row-top").click();
+  await row.locator(".task-title-text").click();
   const detail = page.getByTestId("task-detail");
   await detail.getByRole("button", { name: /^Horizon/ }).click();
   await detail.getByRole("radiogroup", { name: "Horizon" }).getByRole("radio", { name: "This Week" }).click();
@@ -97,7 +97,7 @@ test("reliability: pinning a task sets Now Focus", async ({ page }) => {
   const row = taskRowByTitle(page, title);
   await expect(row).toBeVisible({ timeout: 8_000 });
 
-  await row.locator(".task-row-top").click();
+  await row.locator(".task-title-text").click();
   await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
 
   // The task becomes the wall's one thing — the overlay does not auto-open on pin
@@ -135,7 +135,7 @@ test("reliability: All · Must-do filters the list to must-dos and back", async 
 
   const title = "10-minute walk";
   const row = taskRowByTitle(page, title);
-  await row.locator(".task-row-top").click();
+  await row.locator(".task-title-text").click();
   await page.getByTestId("task-detail").getByRole("switch", { name: "Must-do" }).click();
   await page.keyboard.press("Escape");
   await expect(row.locator(".task-tag.is-must")).toHaveText("MUST", { timeout: 5_000 });

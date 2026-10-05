@@ -822,7 +822,7 @@ test("mobile reliability: Front puts a row on a front, with Undo; the menu offer
 
   // Parity: the same action from the task sheet (50a), for screen readers
   // and mice.
-  await listRow(page, "10-minute walk").locator(".task-row-top").click();
+  await listRow(page, "10-minute walk").locator(".task-title-text").click();
   const detail = page.getByTestId("task-detail");
   await detail.getByRole("button", { name: /^Front/ }).click();
   await detail.getByRole("radio", { name: "Project launch" }).click();
@@ -1008,7 +1008,7 @@ test("mobile reliability: pinning a longer task with the sheet open re-measures 
   await page.getByTestId("add-task-submit").click();
   await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: "A very long task title" });
-  await row.locator(".task-row-top").click();
+  await row.locator(".task-title-text").click();
   await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
   await expect(page.getByTestId("task-detail")).toHaveCount(0);
   await expect(page.locator(".wall-title")).toHaveText(long);
@@ -1504,7 +1504,7 @@ test("the task sheet saves as you type: priority, note and title (50a)", async (
   await row.locator(".task-title-text").click();
   const detail = page.getByTestId("task-detail");
   await detail.getByRole("radio", { name: "Priority 1" }).click();
-  await expect(row.locator(".task-row-priority")).toHaveText("P1");
+  await expect(detail.getByRole("radio", { name: "Priority 1" })).toHaveAttribute("aria-checked", "true");
   await detail.getByPlaceholder("Add a note…").fill("Around the block, no phone.");
   await page.waitForTimeout(900);
   await page.keyboard.press("Escape");
@@ -1602,7 +1602,7 @@ test("Tomorrow on the one thing ends its running session (50b)", async ({ page }
 test("mobile reliability: Tab stays inside the open task sheet", async ({ page }) => {
   await enterDemo(page);
   await openSheet(page);
-  await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first().locator(".task-row-top").click();
+  await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first().locator(".task-title-text").click();
   const detail = page.getByTestId("task-detail");
   await expect(detail).toHaveAttribute("aria-modal", "true");
   const inside = () => page.evaluate(() => !!document.activeElement?.closest("[data-testid='task-detail']"));
@@ -1622,7 +1622,7 @@ test("mobile reliability: making the one thing on an empty wall offers Undo", as
   await emptyTheWall(page);
   const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first();
   const title = (await row.locator(".task-title-text").innerText()).trim();
-  await row.locator(".task-row-top").click();
+  await row.locator(".task-title-text").click();
   await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
   await expect(page.locator(".wall-title")).toHaveText(title);
   await expect(page.getByRole("status").filter({ hasText: `Made the one thing: ${title}` })).toBeVisible();
@@ -1834,7 +1834,6 @@ test("laptop: E edits the title of that task only; the next one opens normally",
 test("the task sheet keeps a P4 task's priority on offer", async ({ page }) => {
   await laptopListOpen(page);
   const row = listRow(page, "10-minute walk");
-  await expect(row.locator(".task-row-priority")).toHaveText("P4");
   await row.locator(".task-title-text").click();
   const group = page.getByTestId("task-detail").getByRole("radiogroup", { name: "Priority" });
   await expect(group.getByRole("radio", { name: "Priority 4" })).toHaveAttribute("aria-checked", "true");

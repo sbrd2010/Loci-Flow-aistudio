@@ -121,7 +121,7 @@ test("7. User can edit a task", async ({ page }) => {
 
   // The row opens the task sheet (52: it edits in place, no separate
   // editor); the title is edited there.
-  await firstRow.locator(".task-row-top").click();
+  await firstRow.locator(".task-title-text").click();
   const sheet = page.getByTestId("task-detail");
   await sheet.locator(".detail-title").click();
   const editedTitle = "Edited by Playwright";
@@ -143,7 +143,7 @@ test("8. User can delete a task", async ({ page }) => {
   const taskTitle = await firstRow.locator(".task-title-text").textContent();
 
   // Open ⋮ menu and click Delete
-  await firstRow.locator(".task-row-top").click();
+  await firstRow.locator(".task-title-text").click();
   const deleteBtn = page.getByTestId("task-detail").getByRole("button", { name: /^Delete/ });
   await expect(deleteBtn).toBeVisible({ timeout: 3_000 });
   await deleteBtn.click();
