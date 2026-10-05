@@ -161,6 +161,10 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   // app's own tokens (Dark when the app is Dark, Light otherwise; no cyan).
   // A 132 ring with fitted digits, the title on one line, and Pause · +5 ·
   // I'm stuck · Done (filled). Restart is gone; shuffle became I'm stuck.
+  // It follows the window's size, live (as the pre-59b pop-up did, #314):
+  // the ring and its digits grow and shrink with it; too small for a ring,
+  // the time becomes one line; smaller still, the time alone fills it.
+  // PIP_RING is the drawing's own size; the ring is scaled from it.
   const PIP_RING = 132;
 
   const updatePiPUI = (pipWin, seconds, maxSeconds, running, title) => {
@@ -172,7 +176,9 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     const sEl = doc.getElementById("pt-secs");
     if (sEl) { sEl.textContent = ss; sEl.className = lastMinute ? "is-last" : ""; }
     const tEl = doc.getElementById("pt");
-    if (tEl) tEl.style.fontSize = `${ringGeometry(PIP_RING, seconds, maxSeconds, hours).fontSize}px`;
+    // Fitted to the ring as ringGeometry fits it (0.21, or 0.16 with hours),
+    // in units of the ring's own size so it scales with it.
+    if (tEl) tEl.className = hours ? "is-hours" : "";
     const labelEl = doc.getElementById("pl");
     if (labelEl) labelEl.textContent = title;
     const playBtn = doc.getElementById("pip-play");
@@ -220,13 +226,15 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
         body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
           height: 100vh; padding: 16px; font-family: Manrope, system-ui, sans-serif; color: var(--ink);
           background: var(--bg); user-select: none; overflow: hidden; }
-        #ring { position: relative; width: ${PIP_RING}px; height: ${PIP_RING}px; display: grid; place-items: center; flex: 0 0 auto; }
-        #ring svg { position: absolute; inset: 0; }
+        #ring { position: relative; display: grid; place-items: center; flex: 0 0 auto; container-type: size;
+          width: clamp(72px, min(calc(100vh - 188px), calc(100vw - 32px)), 320px); aspect-ratio: 1; height: auto; }
+        #ring svg { position: absolute; inset: 0; width: 100%; height: 100%; }
         #pr-bg { fill: none; stroke: var(--panel); }
         #pr-fg { fill: none; stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
         body.is-paused #pr-fg { stroke: var(--edge); }
         #pt { position: relative; font-family: 'Space Mono', ui-monospace, monospace; font-weight: 700;
-          line-height: 1; font-variant-numeric: tabular-nums; color: var(--ink); }
+          line-height: 1; font-variant-numeric: tabular-nums; color: var(--ink); font-size: 21cqmin; white-space: nowrap; }
+        #pt.is-hours { font-size: 16cqmin; }
         #pt-secs { font-size: 0.58em; font-weight: 400; opacity: 0.72; }
         #pt-secs.is-last { font-size: 1em; font-weight: 700; opacity: 1; }
         #pl { max-width: 100%; overflow: hidden; font-size: 14px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
@@ -236,6 +244,26 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
           cursor: pointer; white-space: nowrap; }
         #pip-btns #pip-done { color: var(--on-accent); background: var(--accent); border-color: var(--accent-edge); }
         #pip-btns button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        /* Narrow: Pause and Done only. */
+        @media (max-width: 299px) {
+          #pip-btns { grid-template-columns: 1fr 1fr; }
+          #pip-add5, #pip-stuck { display: none; }
+        }
+        /* Too small for a ring: the time on one line, large; no title. */
+        @media (max-height: 259px), (max-width: 179px) {
+          body { gap: 8px; padding: 8px 12px; }
+          #ring { container-type: normal; width: 100%; height: auto; aspect-ratio: auto; }
+          #ring svg, #pl { display: none; }
+          #pt, #pt.is-hours { font-size: clamp(24px, min(34vh, 21vw), 120px); }
+          #pip-btns { grid-template-columns: 1fr 1fr; max-width: 280px; }
+          #pip-add5, #pip-stuck { display: none; }
+        }
+        /* Smaller still: the time alone fills the window. */
+        @media (max-height: 139px), (max-width: 139px) {
+          body { padding: 4px 8px; }
+          #pip-btns { display: none; }
+          #pt, #pt.is-hours { font-size: clamp(16px, min(70vh, 22vw), 140px); }
+        }
       `;
       doc.head.appendChild(style);
 
@@ -243,8 +271,6 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
       const ring = doc.createElement("div");
       ring.id = "ring";
       const svg = doc.createElementNS(svgNS, "svg");
-      svg.setAttribute("width", String(PIP_RING));
-      svg.setAttribute("height", String(PIP_RING));
       svg.setAttribute("viewBox", `0 0 ${PIP_RING} ${PIP_RING}`);
       svg.setAttribute("aria-hidden", "true");
       const mid = String(PIP_RING / 2);
