@@ -1,4 +1,4 @@
-import { useLayoutEffect } from "react";
+import { useInsertionEffect, useLayoutEffect } from "react";
 
 // Turn 76 (75, PART5 §2): from 1280px the app grows with the window, by the
 // smaller of width ÷ 1422 and height ÷ 800 (×1.175 on a 1903×940 24″), never
@@ -22,7 +22,10 @@ export function useAppScale(activeTab) {
     window.addEventListener("resize", apply);
     return () => window.removeEventListener("resize", apply);
   }, []);
-  useLayoutEffect(() => {
+  // Before any page's layout effects: a page that measures itself on
+  // arrival (Coach's chat) must see the route's own layout, not the one it
+  // replaced (React runs a child's layout effects before its parent's).
+  useInsertionEffect(() => {
     const root = document.documentElement;
     if (SCALED_TABS.has(activeTab)) root.dataset.scaleRoute = activeTab;
     else delete root.dataset.scaleRoute;

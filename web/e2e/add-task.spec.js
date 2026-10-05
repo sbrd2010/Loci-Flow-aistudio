@@ -16,11 +16,28 @@ async function enterDemo(page, viewport = { width: 412, height: 892 }) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
 }
 
+// On a phone the open list is a sheet over the wall, and it can cover the
+// wall's "+" (the test used to win a race with the sheet sliding up). Once the
+// sheet settles: the "+" if nothing covers it, else N, which opens the same.
+async function openAddFromPhone(page) {
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+  const plus = page.getByRole("button", { name: "Add a task to Today" }).first();
+  const reachable = await plus.evaluate(el => {
+    const r = el.getBoundingClientRect();
+    return !!document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2)?.closest(".wall-peek-add");
+  });
+  if (reachable) await plus.click();
+  else {
+    await page.evaluate(() => document.activeElement?.blur?.());
+    await page.keyboard.press("n");
+  }
+}
+
 async function openFromToday(page) {
   // The list's "+ Add task" (72); on a phone the wall's + (70a).
   const add = page.locator(".today-list-add");
   if (await add.isVisible()) await add.click();
-  else await page.getByRole("button", { name: "Add a task to Today" }).first().click();
+  else await openAddFromPhone(page);
   await expect(page.getByRole("dialog", { name: "New task" })).toBeVisible({ timeout: 5_000 });
 }
 
