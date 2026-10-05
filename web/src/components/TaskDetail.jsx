@@ -50,7 +50,7 @@ export default function TaskDetail({
   onClose, onPatch, onToggleMVD, onSetSteps,
   onMakeOneThing, onDone, onTomorrow, onPark, onDelete, editTitleSignal = 0,
   isNow = false, onLetGo,
-  onShowAll, kicker = null, onMoveToToday, onTogglePin, onFixTime, onUnfix, fixedAt = null,
+  kicker = null, onMoveToToday, onTogglePin, onFixTime, onUnfix, fixedAt = null,
   horizonChoices = null,
 }) {
   const [picker, setPicker] = useState(null);
@@ -252,8 +252,7 @@ export default function TaskDetail({
       <div className="detail-top">
         {/* A Day map stop the Must-do filter hides (52): it opens anyway,
             and the filter stays the user's to change. */}
-        <span className="detail-kicker">{kicker || (isNow ? "TODAY · THE ONE THING" : onShowAll ? "TODAY · HIDDEN BY MUST-DO" : `TODAY · ${index + 1} OF ${total}`)}</span>
-        {onShowAll && <button type="button" className="detail-showall" onClick={onShowAll}>Show all</button>}
+        <span className="detail-kicker">{kicker || (isNow ? "TODAY · THE ONE THING" : `TODAY · ${index + 1} OF ${total}`)}</span>
         {isDrawer && !isNow && (
           <span className="detail-keys" aria-hidden="true">
             <kbd className="wall-key detail-key">↑ ↓</kbd><kbd className="wall-key detail-key">Esc</kbd>

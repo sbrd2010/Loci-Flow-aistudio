@@ -32,7 +32,10 @@ function todayRow(page, title) {
 }
 
 async function openAddTask(page) {
-  await page.locator(".today-list-add").click();
+  // The list's "+ Add task" (72); on a phone the wall's + (70a).
+  const add = page.locator(".today-list-add");
+  if (await add.isVisible()) await add.click();
+  else await page.getByRole("button", { name: "Add a task to Today" }).first().click();
   await expect(page.getByRole("heading", { name: "New task" })).toBeVisible({ timeout: 5_000 });
 }
 
@@ -378,23 +381,23 @@ test("mobile reliability: in Drag anywhere mode Enter opens the task and Escape 
   await expect(row).toBeFocused();
 });
 
-// "N done" counts what was finished today, and the Completed section shows
-// the same set — a task done yesterday that still sits on Today is neither.
-test("mobile reliability: the Completed section and 'N done' agree across a day change", async ({ page }) => {
+// "Done today · N" counts what was finished today, and the fold shows the
+// same set — a task done yesterday that still sits on Today is neither.
+test("mobile reliability: the Done today fold and its count agree across a day change", async ({ page }) => {
   await enterDemo(page);
   const list = page.getByTestId("today-tasks-list");
   const title = "10-minute walk between tasks to reset your focus";
   await list.locator("[data-testid='task-row']", { hasText: title }).getByTestId("task-checkbox").click();
-  const done = await page.locator(".today-list-count").innerText();
-  const doneToday = Number(done.split("·")[1].trim().split(" ")[0]);
-  // 58.6: on a phone the done rows sit in the "Done today" fold.
-  await page.locator(".today-done-fold .today-parked-line").click();
+  // 58.6: the done rows sit in the "Done today · N" fold.
+  const fold = page.locator(".today-done-fold .today-parked-line");
+  const doneToday = Number((await fold.innerText()).match(/Done today · (\d+)/i)[1]);
+  await fold.click();
   await expect(list.locator(".task-row.completed")).toHaveCount(doneToday);
 
-  // Next day: re-render (flip the filter) and look again.
+  // Next day: re-render (flip the view) and look again.
   await page.clock.setFixedTime(new Date("2024-06-16T10:00:00"));
-  await page.getByRole("button", { name: /^Must-do · \d+$/ }).click();
-  await page.getByRole("button", { name: /^All · \d+$/ }).click();
-  await expect(page.locator(".today-list-count")).toContainText("· 0 done");
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Day map", exact: true }).click();
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "List" }).click();
+  await expect(page.locator(".today-done-fold")).toHaveCount(0);
   await expect(list.locator(".task-row.completed")).toHaveCount(0);
 });

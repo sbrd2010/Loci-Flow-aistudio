@@ -40,8 +40,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { isDeferred, isOnToday } from "../utils/deferral";
-import { IconPlus } from "./ui/icons";
 import TaskDetail from "./TaskDetail";
+import { IconChevronRight } from "./ui/icons";
 import DayMapColumn from "./DayMapColumn";
 import { makeOneThing, undoOneThing } from "../utils/oneThing";
 import { addThought } from "../utils/thoughts";
@@ -207,7 +207,6 @@ export default function TodayTab({
   const [rescueActive, setRescueActive] = useState(false);
   const [rescueTask, setRescueTask] = useState(null);
   const [rescueEntryPoint, setRescueEntryPoint] = useState("today");
-  const [isMVDMode, setIsMVDMode] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState(null);
   // "peekOpen is persisted to localStorage." Closed by default — the wall is
   // the default state, and the peek is how you ask for the rest.
@@ -1378,7 +1377,6 @@ export default function TodayTab({
       .catch(() => {});
   }, [leftToday?.uuid]); // eslint-disable-line react-hooks/exhaustive-deps
   // Must-do is the list's one filter (Y4).
-  const todayTasksFiltered = isMVDMode ? todayTasksAll.filter(t => t.isMVD) : todayTasksAll;
   // — values the wall's header and kicker read —
   // The kicker is the front name OR nothing. Never "Uncategorised": a task with
   // no front is a first-class task (Addendum C).
@@ -1454,7 +1452,7 @@ export default function TodayTab({
   // where they fall; a task not on the route yet goes by its own order.
   const route = useDayRoute({ payload, savePayload });
   const routeIndex = new Map(route.routeTasks.map((t, i) => [getTaskId(t), i]));
-  const remainingTasks = todayTasksFiltered
+  const remainingTasks = todayTasksAll
     .filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid)
     .sort((a, b) => ((routeIndex.get(getTaskId(a)) ?? Infinity) - (routeIndex.get(getTaskId(b)) ?? Infinity))
       || ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)));
@@ -1482,11 +1480,8 @@ export default function TodayTab({
   // The one thing opens here too (its title on the wall, or E): it is the
   // only way to edit or let go of it now the list has no NOW row.
   const detailIsNow = !!detailUuid && detailUuid === pinnedFocusTask?.uuid;
-  // A Day map stop the Must-do filter hides opens too (52), from all of Today.
-  const detailTask = detailUuid ? (detailIsNow ? pinnedFocusTask : remainingTasks.find(t => t.uuid === detailUuid)
-    || (isMVDMode && todayTasksAll.find(t => t.uuid === detailUuid && !t.isCompleted)) || null) : null;
+  const detailTask = detailUuid ? (detailIsNow ? pinnedFocusTask : remainingTasks.find(t => t.uuid === detailUuid) || null) : null;
   const detailIndex = detailTask && !detailIsNow ? remainingTasks.indexOf(detailTask) : -1;
-  const detailHidden = !!detailTask && !detailIsNow && detailIndex === -1;
   useEffect(() => {
     // Done, moved, parked or deleted: the task left the list, so it closes.
     if (detailUuid && !detailTask) setDetailUuid(null);
@@ -1546,9 +1541,8 @@ export default function TodayTab({
   };
   const stepTask = (task, dir) => {
     const i = remainingTasks.findIndex(t => t.uuid === task.uuid);
-    // From a task the filter hides, ↑/↓ step into the filtered list.
-    if (i < 0 && !(detailHidden && task.uuid === detailUuid)) return false;
-    const next = i < 0 ? remainingTasks[dir > 0 ? 0 : remainingTasks.length - 1] : remainingTasks[i + dir];
+    if (i < 0) return false;
+    const next = remainingTasks[i + dir];
     if (!next) return false;
     if (detailUuid) setDetailUuid(next.uuid);
     focusRow(next.uuid);
@@ -1587,9 +1581,7 @@ export default function TodayTab({
   // on an earlier day keeps the Today horizon until something moves it, and
   // showing it here put "0 done" above a list of done rows.
   const parkedList = parkedTasks(tasks);
-  const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted && t.dateCompletedString === todayStr);
-  // 58.6: the phone's sheet under the one thing is "Up next".
-  const upNext = sheetViewport && !!pinnedFocusTask;
+  const completedTasks = todayTasksAll.filter((t) => t.isCompleted && t.dateCompletedString === todayStr);
   // The wall's two figures are claims about the whole day, so they come from
   // todayTasksAll — the Must-Do and Low Energy filters narrow the LIST below,
   // not the day. Reading them off the filtered list let the wall say "0 more
@@ -1604,11 +1596,8 @@ export default function TodayTab({
   const listOpenRows = remainingTasks.length;
   // App's floating timer (shown for a session left running behind the
   // overlay) sits over the sheet's bottom edge; the sheet makes room for it.
-  // The list header's figures (41a: "11 · 0 done", "All · 11", "Must-do · 2").
-  // "Done" is done TODAY — a finished task keeps the Today horizon until
-  // something moves it.
-  const listAllCount = wallRemainingCount;
-  const listMustCount = todayTasksAll.filter((t) => t.isMVD && !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid).length;
+  // The list header's figure (72: "2 DONE"). Done is done TODAY — a
+  // finished task keeps the Today horizon until something moves it.
   const listDoneCount = todayTasksAll.filter((t) => t.isCompleted && t.dateCompletedString === todayStr).length;
   // What the empty wall's "Or pick one" rows draw from — the same pool the
   // peek shows, so the near-duplicate the user is about to retype is the one
@@ -2007,45 +1996,30 @@ export default function TodayTab({
             </div>
           </>
         )}
-        {/* One header row on a laptop (51a): title, count, the filter, Hide
-            list. Phones and tablets keep the tools on a second line under it
-            (37b). */}
-        <div className="today-list-top">
+        {/* 72: one header row: Up next · N DONE · + Add (N) · List | Day map ·
+            Hide list (L). On the phone (70a): Up next and the switch. */}
         <div className="today-list-head">
-          <h2 className="today-list-title">{upNext ? "Up next" : "After that"}</h2>
-          <span className="today-list-count">{listAllCount} · {listDoneCount} done</span>
+          <h2 className="today-list-title">Up next</h2>
+          {listDoneCount > 0 && <span className="today-list-count">{listDoneCount} DONE</span>}
           <span className="today-list-head-end">
             {onOpenAddTask && (
-              <button type="button" className="today-list-add" onClick={onOpenAddTask}>
-                + Add <kbd className="wall-key" aria-hidden="true">N</kbd>
+              <button type="button" className="today-list-add" title="Add task · N" onClick={onOpenAddTask}>
+                + Add task
               </button>
             )}
+            {/* Q59: List | Day map, two views of one plan. */}
+            <span className="today-view-switch" role="group" aria-label="View">
+              <button type="button" className="today-view-opt" aria-pressed={listView === "list"} onClick={() => setListView("list")}>List</button>
+              <button type="button" className="today-view-opt" aria-pressed={listView === "daymap"} onClick={() => setListView("daymap")}>Day map</button>
+            </span>
             {pinnedFocusTask && (
-              <button type="button" className="today-list-hide" onClick={() => (listMotionActive() ? toggleList(false) : closeSheet())}>
-                Hide list <kbd className="wall-key" aria-hidden="true">L</kbd>
+              <button type="button" className="today-list-hide" aria-label="Hide list" title="Hide list · L" onClick={() => (listMotionActive() ? toggleList(false) : closeSheet())}>
+                <IconChevronRight size={20} />
               </button>
             )}
           </span>
         </div>
 
-        <div className="today-list-tools">
-          {/* Must-do is a filter on the list (Y4). */}
-          <div className="today-seg" role="group" aria-label="Show">
-            <button type="button" className="today-seg-opt" aria-pressed={!isMVDMode} onClick={() => setIsMVDMode(false)}>
-              All · {listAllCount}
-            </button>
-            <button type="button" className="today-seg-opt" aria-pressed={isMVDMode} onClick={() => setIsMVDMode(true)}>
-              Must-do · {listMustCount}
-            </button>
-          </div>
-        </div>
-        </div>
-
-        {/* Q59: List | Day map, two views of one plan. */}
-        <div className="today-view-switch" role="group" aria-label="View">
-          <button type="button" className="today-view-opt" aria-pressed={listView === "list"} onClick={() => setListView("list")}>List</button>
-          <button type="button" className="today-view-opt" aria-pressed={listView === "daymap"} onClick={() => setListView("daymap")}>Day map</button>
-        </div>
         {listView === "daymap" ? (
           <DayMapColumn
             route={route}
@@ -2061,7 +2035,7 @@ export default function TodayTab({
             <p className="today-list-empty">Nothing else on Today.</p>
           )}
           {/* A light day (57b answer 17): the one thing is all that is open. */}
-          {pinnedFocusTask && !isMVDMode && remainingTasks.length === 0 && (
+          {pinnedFocusTask && remainingTasks.length === 0 && (
             <p className="today-list-empty">
               One task today. Add another, or{" "}
               {onOpenPlan
@@ -2069,10 +2043,7 @@ export default function TodayTab({
                 : "pull from This week."}
             </p>
           )}
-          {todayTasksAll.length > 0 && todayTasksFiltered.length === 0 && isMVDMode && (
-            <p className="today-list-empty">No must-dos yet. Open a task and turn on Must-do.</p>
-          )}
-          {todayTasksFiltered.length > 0 && (
+          {todayTasksAll.length > 0 && (
             <>
               <DndContext
                 sensors={sensors}
@@ -2185,7 +2156,7 @@ export default function TodayTab({
               )}
             </div>
           )}
-          {completedTasks.length > 0 && (upNext ? (
+          {completedTasks.length > 0 && (
             <div className="today-parked today-done-fold">
               <button type="button" className="today-parked-line" aria-expanded={doneOpen} onClick={() => setDoneOpen(o => !o)}>
                 <span className="today-parked-kicker">Done today · {completedTasks.length} {doneOpen ? "▾" : "▸"}</span>
@@ -2194,14 +2165,7 @@ export default function TodayTab({
                 <TaskRow key={task.uuid} task={task} onToggleComplete={handleToggleComplete} onDelete={handleDeleteTask} />
               ))}
             </div>
-          ) : (
-            <>
-              <div className="completed-section-title">Completed</div>
-              {completedTasks.map(task => (
-                <TaskRow key={task.uuid} task={task} onToggleComplete={handleToggleComplete} onDelete={handleDeleteTask} />
-              ))}
-            </>
-          ))}
+          )}
           {/* 50g–h: the list closes with a quiet line for what was moved to
               tomorrow; it opens in place, each with Bring back. */}
           {movedToTomorrow.length > 0 && (
@@ -2225,18 +2189,6 @@ export default function TodayTab({
           )}
         </div>
         </>)}
-        {/* Laptop (51a): the list's last line adds to Today. It pins to the
-            bottom of the card when the list is longer than the screen. */}
-        {onOpenAddTask && (
-          <div className="today-list-addbar">
-            <button type="button" className="today-list-addrow" onClick={() => onOpenAddTask()} aria-label="Add a task to Today">
-              <IconPlus size={18} />
-              <span className="today-list-addrow-label">Add a task</span>
-              <span className="today-list-addrow-where" aria-hidden="true">to Today</span>
-              <kbd className="wall-key" aria-hidden="true">N</kbd>
-            </button>
-          </div>
-        )}
       </section>
       </div>
 
@@ -2403,7 +2355,6 @@ export default function TodayTab({
             onTomorrow={() => actOnTask(detailTask, "t")}
             onPark={() => { const next = neighbourOf(detailTask); handleParkWithUndo(detailTask); focusRow(next); }}
             onDelete={() => actOnTask(detailTask, "delete")}
-            onShowAll={detailHidden ? () => setIsMVDMode(false) : undefined}
           />
         </div>
       )}

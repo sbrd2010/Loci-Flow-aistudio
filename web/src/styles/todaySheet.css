@@ -72,8 +72,11 @@
   .today-list.is-sheet .today-list-head { padding-top: 4px; }
   /* The sheet has its own way down (drag or Hide); the wall's peek row sits
      under it. */
+  /* 70a: the phone's sheet header is Up next, the switch and the arrow
+     that puts the list away (down, here); + is on the wall. */
+  .today-list.is-sheet .today-list-add { display: none; }
   .today-list.is-sheet .today-list-hide { display: inline-flex; }
-  .today-list.is-sheet .today-list-hide .wall-key { display: none; }
+  .today-list.is-sheet .today-list-hide svg { transform: rotate(90deg); }
 
   .today-list.is-sheet.is-full .today-sheet-now,
   .today-list.is-sheet[data-covers-start="1"] .today-sheet-now {

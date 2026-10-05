@@ -59,8 +59,8 @@ test("4. User can complete a task", async ({ page }) => {
   // Click the checkbox to mark complete
   await incompleteRow.getByTestId("task-checkbox").click();
 
-  // A "Completed" section header should now appear
-  await expect(tasksList.locator(".completed-section-title")).toBeVisible({ timeout: 5_000 });
+  // The "Done today" fold should now appear
+  await expect(tasksList.locator(".today-done-fold")).toBeVisible({ timeout: 5_000 });
 });
 
 test("5. Confetti/completion does not crash the app", async ({ page }) => {
@@ -95,8 +95,8 @@ test("6. User can create a new task", async ({ page }) => {
   const tasksList = page.getByTestId("today-tasks-list");
   const beforeCount = await tasksList.locator(".task-row:not(.completed)").count();
 
-  // Open add-task dialog from the list's last row (51a; laptop viewport)
-  await page.locator(".today-list-addrow").click();
+  // Open add-task dialog from the list header's + Add (72; laptop viewport)
+  await page.locator(".today-list-add").click();
   await expect(page.locator(".add-card")).toBeVisible({ timeout: 5_000 });
 
   // Fill in the title and submit

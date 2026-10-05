@@ -17,7 +17,10 @@ async function enterDemo(page, viewport = { width: 412, height: 892 }) {
 }
 
 async function openFromToday(page) {
-  await page.locator(".today-list-add").click();
+  // The list's "+ Add task" (72); on a phone the wall's + (70a).
+  const add = page.locator(".today-list-add");
+  if (await add.isVisible()) await add.click();
+  else await page.getByRole("button", { name: "Add a task to Today" }).first().click();
   await expect(page.getByRole("dialog", { name: "New task" })).toBeVisible({ timeout: 5_000 });
 }
 

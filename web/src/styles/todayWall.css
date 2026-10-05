@@ -665,7 +665,8 @@
   flex-direction: column;
   gap: 14px;
 }
-.wall-peek-wide { display: none; }
+.wall-peek-wide,
+.wall-peek-edge { display: none; }
 
 /* Laptop, list hidden (54a, 54c): the goal, the kicker, the title, the step
    and the buttons share one column and one left edge (the 51b bug); the task
@@ -730,22 +731,36 @@
     text-decoration: none;
   }
   .today-wall:not(.is-open) .wall-peek-row { gap: 12px; }
+  /* The list put away: a round ‹ at the layout's top right edge brings it
+     back from the right ("Show list · N · L" is its name). */
+  .today-layout { position: relative; }
+  .today-wall:not(.is-open) .wall-peek-row { position: static; }
+  .today-wall:not(.is-open):not(.is-done):not(.is-empty) { padding-right: 56px; }
   .today-wall:not(.is-open) .wall-peek {
-    flex-direction: row;
-    width: auto;
-    min-height: 48px;
-    padding: 0 12px 0 18px;
-    border: 1.5px solid var(--control-edge);
-    border-radius: 24px;
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 2;
+    justify-content: center;
+    width: 40px;
+    min-height: 40px;
+    padding: 0;
+    color: var(--ink);
+    border: 1px solid var(--edge);
+    border-radius: 50%;
   }
+  .today-wall:not(.is-open) .wall-peek:hover { background: var(--panel); }
   .today-wall:not(.is-open) .wall-peek-grabber,
   .today-wall:not(.is-open) .wall-peek-label { display: none; }
+  .today-wall:not(.is-open) .wall-peek-edge { display: inline-flex; }
   .today-wall:not(.is-open) .wall-peek-wide {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 0.90625rem;
-    font-weight: 800;
+    display: inline;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   /* "+ Add a task · N" in words, not a round "+". */
   .today-wall:not(.is-open) .wall-peek-add {

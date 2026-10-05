@@ -51,7 +51,7 @@ test("the route is Today's list, in its order; a task added to Today joins it at
   await announced(/Draggable item (\S+) was moved over droppable area (?!\1\b)\S+/);
   await page.keyboard.press("Space");
   await expect(rows.first().locator(".task-title-text")).toHaveText(second);
-  await page.getByRole("button", { name: "Add a task to Today" }).first().click();
+  await page.locator(".today-list-add").click();
   await page.getByTestId("add-task-title").fill("Order printer ink");
   await page.getByTestId("add-task-submit").click();
   await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
