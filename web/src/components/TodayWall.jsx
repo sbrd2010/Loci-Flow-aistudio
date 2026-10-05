@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import LinkifyText from "./LinkifyText";
 import { taskSteps } from "../utils/taskSteps";
-import { formatClock24 } from "../utils/dayMapPlan";
+import { formatClock24, formatSpanCaps } from "../utils/dayMapPlan";
 import { startLengthOptions, chosenStartOption } from "../utils/focusSession";
 import { formatEstimate } from "./TaskDetail";
 import { IconPin, IconPlus, IconChevronDown, IconChevronLeft, IconCheck } from "./ui/icons";
@@ -285,6 +285,7 @@ export default function TodayWall({
   onStepDone,
   remainingCount = 0,
   nextTitle = null,
+  nextMinutes = null,
   onStartFocus,
   onMarkDone,
   onSplit,
@@ -469,6 +470,8 @@ export default function TodayWall({
       {top}
 
       <div className="wall-hero">
+        {/* 75a, 75c: the mantra, above the kicker. */}
+        <p className="wall-mantra" data-flip="mantra">ONE task at a time.</p>
         <div className="wall-kicker-row" data-flip="kicker">
           <span className="wall-kicker">
             <span className="wall-kicker-wide">{nowUntil != null ? `NOW · UNTIL ${formatClock24(nowUntil)}` : "NOW"}</span>
@@ -621,7 +624,11 @@ export default function TodayWall({
             {/* 58.1 (67a): the phone's Next strip, "NEXT" and the next task;
                 with none, it still says what it opens. */}
             {!peekOpen && (nextTitle ? (
-              <span className="wall-peek-next"><span className="wall-peek-next-kicker">NEXT</span> <span className="wall-peek-next-title">{nextTitle}</span></span>
+              <span className="wall-peek-next">
+                <span className="wall-peek-next-kicker">NEXT</span> <span className="wall-peek-next-title">{nextTitle}</span>
+                {/* 75c: how long it takes. */}
+                {nextMinutes > 0 && <span className="wall-peek-next-dur">{formatSpanCaps(nextMinutes)}</span>}
+              </span>
             ) : (
               <span className="wall-peek-next"><span className="wall-peek-next-title">{remainingCount > 0 ? `After that · ${remainingCount}` : "Nothing else on Today"}</span></span>
             ))}

@@ -42,7 +42,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { isDeferred, isOnToday } from "../utils/deferral";
 import TaskDetail from "./TaskDetail";
-import { IconChevronRight } from "./ui/icons";
 import DayMapColumn from "./DayMapColumn";
 import { makeOneThing, undoOneThing } from "../utils/oneThing";
 import { addThought } from "../utils/thoughts";
@@ -60,6 +59,8 @@ import { weekTasks, pullFromWeek, undoPullFromWeek, takesPinFrom } from "../util
 import FromWeekSheet from "./FromWeekSheet";
 import { cssZoom, unzoomTransform } from "../utils/cssZoom";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
+// 75 (Turn 76): the 1280+ Today, last so it wins the cascade.
+import "../styles/today75.css";
 
 const PencilIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1920,6 +1921,7 @@ export default function TodayTab({
         onOpenTask={() => pinnedFocusTask && setDetailUuid(pinnedFocusTask.uuid)}
         remainingCount={wallRemainingCount}
         nextTitle={remainingTasks[0]?.title || null}
+        nextMinutes={remainingTasks[0] ? getEstimate(remainingTasks[0]) : null}
         onStepDone={(stepId) => pinnedFocusTask && handleSubStepToggle(pinnedFocusTask, stepId)}
         timerLabel={wallLiveTimerLabel}
         live={wallSessionLive ? {
@@ -2023,7 +2025,8 @@ export default function TodayTab({
             </span>
             {pinnedFocusTask && (
               <button type="button" className="today-list-hide" aria-label="Hide list" title="Hide list · L" onClick={() => (listMotionActive() ? toggleList(false) : closeSheet())}>
-                <IconChevronRight size={20} />
+                {/* PART5 §3: an →| glyph, no circle. */}
+                <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M11 4l5 5-5 5M3 3v12" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
               </button>
             )}
           </span>
@@ -2079,7 +2082,9 @@ export default function TodayTab({
                             onOpen={openDetail}
                             onMakeOneThing={handleMakeOneThing}
                             isMin={minimumDayIds.has(String(task.uuid))}
-                            fromTag={task.reviewFrom?.day === todayStr ? task.reviewFrom.label : null}
+                            // Turn 76: the horizon-review tag ("FROM WEEK TO …") isn't
+                            // shown on Today; the task still heads the list.
+                            reminderDot
                             fromYesterday={isFromYesterday(task)}
                             fixedAt={task.dayMapDate === todayStr ? task.dayMapFixedMinutes ?? null : null}
                             minutes={getEstimate(task)}
