@@ -313,6 +313,8 @@ export default function TodayWall({
   // list away, then = { at, title, dayEnd }: the next stop and the day's end.
   nowUntil = null,
   then = null,
+  // Q55.2: { line, onOpen, onNotToday } while the Rescue hint shows.
+  rescueHint = null,
 }) {
   // 58.4: whether the title is cut (three lines on the phone), measured after
   // layout and again when the window changes size.
@@ -555,6 +557,19 @@ export default function TodayWall({
               <button type="button" className="wall-quiet-link" onClick={onMore} aria-haspopup="dialog">More</button>
             </span>
           </div>
+        )}
+
+        {/* Q55.2: the Rescue hint, under the buttons and their links. It
+            stays until tapped, so it doesn't take the quiet row's place
+            (66e): that would hide Done and More all day. */}
+        {rescueHint && (
+          <p className="wall-hint" role="status">
+            <span className="wall-hint-line">{rescueHint.line}</span>
+            <span className="wall-hint-actions">
+              <button type="button" className="wall-hint-open" onClick={rescueHint.onOpen}>Open Rescue →</button>
+              <button type="button" className="wall-hint-later" onClick={rescueHint.onNotToday}>Not today</button>
+            </span>
+          </p>
         )}
 
         {/* 72c: with the list away, what comes next and where the day ends. */}
