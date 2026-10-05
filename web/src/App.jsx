@@ -1444,7 +1444,7 @@ export default function App() {
       />
 
       {/* Main Tab Screen Router */}
-      <main className={`screen-content${activeTab === "daymap" ? " screen-content-day-map" : activeTab === "today" ? " screen-content-today" : activeTab === "roadmap" ? " screen-content-plan" : activeTab === "mindbox" ? " screen-content-mindbox" : ""}`}>
+      <main className={`screen-content${activeTab === "daymap" ? " screen-content-day-map" : activeTab === "today" ? " screen-content-today" : activeTab === "roadmap" ? " screen-content-plan" : activeTab === "mindbox" ? " screen-content-mindbox" : activeTab === "coach" ? " screen-content-coach" : ""}`}>
         {syncWarning === "offline" && (
           <div className="offline-banner" role="status">
             <IconWifiOff size={18} />

@@ -1,0 +1,147 @@
+/* Coach, turns 73–74 (PART6, PART7; README Turn 76). Chat keeps your last
+   two messages and Coach's last two replies on screen: a 720 column,
+   tighter chrome, replies cut at four lines with "Show all". On a phone the
+   Chat | Review row stands in for the app header. */
+
+/* — Messages — */
+.coach-msg.is-coach .coach-msg-kicker {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--accent);
+}
+.coach-msg.is-coach .coach-msg-sep { display: none; }
+.coach-msg.is-coach .coach-msg-time { font-size: 12.5px; font-weight: 500; color: var(--ink-3, var(--ink-2)); }
+/* Your own messages need no name: they're the tinted ones on the right. */
+.coach-msg.is-you .coach-msg-kicker {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.coach-msg { gap: 6px; }
+.coach-msg.is-you .coach-msg-text { border-radius: 10px; padding: 10px 14px; }
+
+/* A long reply: four lines, then "Show all". */
+.coach-reply.is-clamped {
+  max-height: 4lh;
+  overflow: hidden;
+  line-height: 1.55;
+}
+.coach-reply .coach-md > :first-child { margin-top: 0; }
+.coach-reply-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.coach-show-all {
+  position: relative;
+  flex: none;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.coach-show-all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* A 44px target round the small link, without making the row taller. */
+.coach-show-all::before { content: ""; position: absolute; inset: -13px -10px; }
+
+/* The scroll anchor at the end of the messages adds no gap of its own. */
+.coach-chat-col .chat-window > div:empty:last-child { margin-top: -20px; }
+
+/* Chips: 40px outlined pills in a row (74b, 74c). */
+.coach-msg .coach-prompt-chips,
+.coach-msg .coach-task-chips { flex-direction: row; flex-wrap: wrap; gap: 8px; padding-top: 2px; }
+.coach-msg .coach-prompt-chip,
+.coach-msg .coach-task-chip {
+  width: auto;
+  height: 40px;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  border: 1px solid var(--edge);
+  border-radius: 20px;
+}
+
+.coach-new-short { display: none; }
+
+/* — Laptop and wider (74c): tab row 52, a 720 column, gaps of 24, the
+   composer 16 above and 20 below, its field 60 tall. — */
+@media (min-width: 840px) {
+  .coach-chat-col { max-width: 720px; }
+  /* 20 between messages (74c's 24 leaves 55-word replies a few px short of
+     2 + 2 at 1280×720), none above, 12 below. */
+  .coach-chat-col .chat-window { gap: 20px; padding: 0 0 12px; }
+  .coach-msg.is-you { max-width: 75%; }
+  .coach-msg.is-you .coach-msg-text { padding: 12px 18px; font-size: 16px; line-height: 1.5; }
+  .coach-msg.is-coach { max-width: 100%; }
+  .coach-msg.is-coach .coach-msg-kicker { font-size: 14px; }
+  .coach-msg.is-coach .coach-msg-text.coach-md { font-size: 17px; line-height: 1.6; }
+  .coach-reply.is-clamped { line-height: 1.6; }
+  .coach-composer-wrap { padding: 16px 0 20px; }
+  .chat-input-row.coach-composer { min-height: 60px; justify-content: center; padding: 8px 8px 8px 18px; }
+  .coach-composer-input { font-family: var(--font-serif); font-size: 17px; }
+  .chat-input-row .coach-send { height: 44px; padding: 0 20px; font-size: 15px; }
+  .coach-composer-hints {
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+}
+
+/* — The phone (74b): the Chat | Review row (56) takes the app header's
+   place, "New" at its right; gaps of 20; no key hint. — */
+@media (max-width: 839px) {
+  .shell-header.is-coach { display: none; }
+  .coach-tabs {
+    flex-wrap: nowrap;
+    align-items: stretch;
+    min-height: 56px;
+    padding: 0 4px;
+  }
+  .coach-tabs-list { display: flex; gap: 22px; flex: none; }
+  .coach-tab { height: 56px; font-size: 15px; }
+  .coach-tabs-end { order: 0; width: auto; min-height: 56px; margin-left: auto; }
+  .coach-tabs-note { display: none; }
+  .coach-new-long { display: none; }
+  .coach-new-short { display: inline; }
+  .coach-chat-col .chat-window { gap: 20px; padding: 0 0 4px; }
+  .coach-msg.is-coach { max-width: 100%; align-self: stretch; }
+  .coach-msg.is-you { max-width: 82%; }
+  .coach-msg.is-you .coach-msg-text { font-size: 15px; line-height: 1.45; }
+  .coach-msg.is-coach .coach-msg-text.coach-md { font-size: 15.5px; line-height: 1.55; }
+  .coach-msg .coach-task-chips,
+  .coach-msg .coach-prompt-chips { flex-direction: row; }
+  .coach-msg .coach-task-chip,
+  .coach-msg .coach-prompt-chip { width: auto; height: 40px; }
+  .coach-composer-wrap { padding: 8px 0 10px; gap: 6px; }
+  .chat-input-row.coach-composer { min-height: 52px; padding: 4px 4px 4px 14px; }
+  .coach-hint-keys { display: none; }
+  /* In a conversation the privacy line gives its room to the messages; it
+     shows before the first message, and in Settings › Coach › Privacy. */
+  .coach-chat-col.has-conversation .coach-composer-hints { display: none; }
+}
+
+/* The chat column runs to the window's bottom: the page's own padding
+   above and below it would only take the messages' room (74c). */
+@media (min-width: 840px) {
+  .screen-content.screen-content-coach { padding-top: 0; padding-bottom: 0; }
+}
+/* On a phone the chat runs down to the tab bar (64 and the safe area). */
+@media (max-width: 839px) {
+  .screen-content.screen-content-coach { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+}

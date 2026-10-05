@@ -40,6 +40,9 @@ import "../styles/coachUI.css";
 import { isOnToday } from "../utils/deferral";
 import { focusBlockSeconds } from "../utils/focusSession";
 import { cssZoom } from "../utils/cssZoom";
+import ClampedReply from "./ClampedReply";
+// 73–74 (Turn 76): Chat and Review, last so they win the cascade.
+import "../styles/coach74.css";
 
 // Visible/stored chat history cap (was 20) — the raw window actually sent to
 // the LLM stays at historyLimitForMode's 3/10, unaffected by this; the
@@ -1545,19 +1548,43 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       // Rects and scrollY are screen px, scrollHeight is CSS px (cssZoom.js).
       const z = cssZoom();
       const rect = col.getBoundingClientRect();
-      const below = Math.max(0, document.documentElement.scrollHeight - (rect.bottom + window.scrollY) / z);
+      // What's below is the page's own bottom padding (it clears the phone's
+      // tab bar). Not the gap under the column: a column started too short
+      // would measure its own shortfall as "below" and stay short.
+      const main = col.closest(".screen-content");
+      const below = main ? Number.parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
       col.style.setProperty("--coach-chrome", `${Math.round((rect.top + window.scrollY) / z + below)}px`);
     };
     fit();
     // 62h: the newest message sits at the bottom; opening Chat starts there.
     const win = col.querySelector(".chat-window");
     if (win) win.scrollTop = win.scrollHeight;
+    // 74: and it stays pinned there while the messages settle (a long reply
+    // is cut to four lines after it first lays out) or grow, unless you
+    // have scrolled up to read.
+    let pinned = true;
+    const onScroll = () => { pinned = win.scrollHeight - win.clientHeight - win.scrollTop < 8; };
+    const pin = () => { if (pinned) win.scrollTop = win.scrollHeight; };
+    const contentRo = win && typeof ResizeObserver === "function" ? new ResizeObserver(pin) : null;
+    const watch = () => { if (contentRo) [...win.children].forEach(c => contentRo.observe(c)); };
+    const added = win && typeof MutationObserver === "function" ? new MutationObserver(() => { watch(); pin(); }) : null;
+    if (win) {
+      win.addEventListener("scroll", onScroll, { passive: true });
+      watch();
+      added?.observe(win, { childList: true });
+    }
     window.addEventListener("resize", fit);
     // Something appearing above the column (the offline banner) moves it
     // without a window resize; the page's size changes, so re-fit then.
     const ro = typeof ResizeObserver === "function" ? new ResizeObserver(fit) : null;
     ro?.observe(document.body);
-    return () => { window.removeEventListener("resize", fit); ro?.disconnect(); };
+    return () => {
+      window.removeEventListener("resize", fit);
+      ro?.disconnect();
+      contentRo?.disconnect();
+      added?.disconnect();
+      win?.removeEventListener("scroll", onScroll);
+    };
   }, [coachTab]);
 
   return (
@@ -1580,14 +1607,16 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
           <span className="coach-tabs-end">
             <span className="coach-tabs-note">Reads your lists. Changes only what you tap.</span>
             {hasConversation && (
-              <button type="button" className="coach-new-conversation" onClick={startNewConversation}>New conversation</button>
+              <button type="button" className="coach-new-conversation" aria-label="New conversation" onClick={startNewConversation}>
+                <span className="coach-new-long">New conversation</span><span className="coach-new-short" aria-hidden="true">New</span>
+              </button>
             )}
           </span>
         )}
       </div>
 
       {coachTab === "chat" && (
-      <section ref={chatColRef} className="coach-chat-col" id="coach-panel-chat" role="tabpanel" aria-labelledby="coach-tab-chat">
+      <section ref={chatColRef} className={`coach-chat-col${hasConversation ? " has-conversation" : ""}`} id="coach-panel-chat" role="tabpanel" aria-labelledby="coach-tab-chat">
         <div className="chat-window coach-chat">
           {!hasConversation && !chatLoading && (
             <div className="coach-empty">
@@ -1604,10 +1633,16 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
             const lastMentorIdx = chatHistory.reduce((last, m, i) => (!m.isUser ? i : last), -1);
             return chatHistory.map((m, idx) => (
             <div key={idx} className={`coach-msg ${m.isUser ? "is-you" : "is-coach"}`}>
-              <span className="coach-msg-kicker">{m.isUser ? "You" : coachName}{m.at ? ` · ${clockHHMM(m.at)}` : ""}</span>
+              {(() => {
+                const kicker = <span className="coach-msg-kicker"><span className="coach-msg-name">{m.isUser ? "You" : coachName}</span>{m.at ? <><span className="coach-msg-sep"> · </span><span className="coach-msg-time">{clockHHMM(m.at)}</span></> : null}</span>;
+                return m.isUser ? kicker : null;
+              })()}
               {m.isUser ? (
                 <span className="coach-msg-text">{m.text}</span>
               ) : (
+                // 74: a reply longer than four lines shows four and "Show all";
+                // its action buttons and chips stay in view under it.
+                <ClampedReply text={m.text} head={<span className="coach-msg-kicker"><span className="coach-msg-name">{coachName}</span>{m.at ? <><span className="coach-msg-sep"> · </span><span className="coach-msg-time">{clockHHMM(m.at)}</span></> : null}</span>}>
                 <ReactMarkdown
                   className="coach-md coach-msg-text"
                   remarkPlugins={[remarkGfm]}
@@ -1620,6 +1655,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
                 >
                   {m.text}
                 </ReactMarkdown>
+                </ClampedReply>
               )}
               <button
                 type="button"
