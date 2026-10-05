@@ -41,6 +41,7 @@ test("the route is Today's list, in its order; a task added to Today joins it at
   // Move the P2 row below the P4 one (Space picks it up, ↓, Space drops it),
   // so the list's order is not the priority order.
   const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']");
+  const second = (await rows.nth(1).locator(".task-title-text").innerText()).trim();
   const announced = (re) => page.waitForFunction((src) =>
     [...document.querySelectorAll("[id^='DndLiveRegion']")].some(el => new RegExp(src).test(el.textContent)), re.source);
   await rows.first().focus();
@@ -49,7 +50,7 @@ test("the route is Today's list, in its order; a task added to Today joins it at
   await page.keyboard.press("ArrowDown");
   await announced(/Draggable item (\S+) was moved over droppable area (?!\1\b)\S+/);
   await page.keyboard.press("Space");
-  await expect(rows.first().locator(".task-row-priority")).toHaveText("P4");
+  await expect(rows.first().locator(".task-title-text")).toHaveText(second);
   await page.getByRole("button", { name: "Add a task to Today" }).first().click();
   await page.getByTestId("add-task-title").fill("Order printer ink");
   await page.getByTestId("add-task-submit").click();

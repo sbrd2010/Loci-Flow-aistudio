@@ -111,7 +111,7 @@ for (const theme of THEMES) {
     for (const [loc, what] of [
       [page.locator(".today-view-opt[aria-pressed='false']"), "unselected view"],
       [page.locator(".today-seg-opt[aria-pressed='false']"), "unselected segment"],
-      [page.locator(".task-row-priority"), "row priority tag"],
+      [page.locator(".task-row-dur"), "row length"],
       [page.locator(".today-dayend"), "Day ends line"],
     ]) {
       await assertLegible(loc.first(), what, theme);

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openDayMapPage } from "./helpers/today";
 
 // 54a, 54e: from 1600px the cap is 1760px (2240px from 2200px). Q59: no
 // Day map column of its own; the List | Day map switch shows the Day map in
@@ -209,4 +210,95 @@ test("the List shows where the day ends; the row past it is muted, and Sort in D
   await sort.getByRole("button", { name: "Sort in Day map ›" }).click();
   await expect(column(page).getByRole("button", { name: "Move 1 to tomorrow" })).toBeVisible();
   await expect(column(page).getByRole("button", { name: "Park 1" })).toBeVisible();
+});
+
+// Q59 rows (70a, 70f): circle · title · how long; the grip only on hover.
+test("a row is circle · title · how long, with the grip only on hover", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 900 });
+  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']").first();
+  await expect(row.locator(".task-row-dur")).toHaveText("25 MIN");
+  await expect(row.locator(".task-row-priority")).toHaveCount(0);
+  const grip = row.locator(".task-row-grip");
+  await page.mouse.move(5, 5);
+  expect(await grip.evaluate(el => getComputedStyle(el).opacity)).toBe("0");
+  await row.hover();
+  await expect.poll(() => grip.evaluate(el => getComputedStyle(el).opacity)).toBe("1");
+});
+
+// Codex review of #478: the swipe wrapper clipped the grip in the gutter, so
+// it showed (opacity 1) but couldn't be seen or grabbed. With a mouse it
+// takes the pointer and drags the row.
+test("the hover grip is grabbable: a mouse drag by it reorders the list", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 900 }, "2024-06-15T10:00:00");
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']");
+  const titles = async () => (await rows.locator(".task-title-text").allInnerTexts()).map(t => t.trim());
+  const [first, second] = await titles();
+  await rows.nth(1).hover();
+  const grip = rows.nth(1).locator(".task-row-grip");
+  const g = await grip.boundingBox();
+  const x = g.x + g.width / 2, y = g.y + g.height / 2;
+  expect(await page.evaluate(([px, py]) => !!document.elementFromPoint(px, py)?.closest(".task-row-grip"), [x, y])).toBe(true);
+  const target = await rows.nth(0).boundingBox();
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y - 12, { steps: 3 });
+  await page.mouse.move(x, target.y + 4, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(titles).toEqual([second, first]);
+});
+
+// 69e: past the day's end, Tomorrow · Park take the length's place on hover.
+test("a row past the day's end offers Tomorrow · Park on hover", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 900 }, "2024-06-16T01:00:00");
+  const over = page.getByTestId("today-tasks-list").locator(".today-row-over [data-testid='task-row']");
+  const title = (await over.locator(".task-title-text").innerText()).trim();
+  await over.hover();
+  await over.getByRole("button", { name: "Park" }).click();
+  await expect(page.locator(".undo-toast")).toContainText(`Parked: ${title}`);
+  await expect(page.getByTestId("today-tasks-list").locator(".today-row-over")).toHaveCount(0);
+});
+
+// Q1 (69c, 70c): a fixed time sits at its time, shows its span and isn't
+// dragged; a task dropped above it that can't finish first goes after it.
+test("a fixed time shows its span and stays put; a task dropped above it that won't fit goes after, with Undo", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 900 });
+  await openDayMapPage(page);
+  await page.getByRole("button", { name: "Fixed time" }).click();
+  await page.getByRole("dialog", { name: "Fix a time" }).getByRole("button", { name: /Something else/ }).click();
+  const step2 = page.getByRole("dialog", { name: /^Fix a time: Something else/ });
+  await step2.getByRole("textbox", { name: "What" }).fill("Call with the recruiter");
+  await step2.getByRole("radio", { name: "12:00" }).click();
+  await step2.getByRole("button", { name: "Fix at 12:00" }).click();
+  await page.locator(".dm-back").click();
+
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']");
+  const call = rows.filter({ hasText: "Call with the recruiter" });
+  await expect(call.locator(".task-row-dur")).toHaveText("12:00–12:30");
+  // The one thing runs 11:35–12:00, so the call heads the list.
+  await expect(rows.first()).toContainText("Call with the recruiter");
+  await call.hover();
+  await expect(call.locator(".task-row-grip")).toHaveCount(0);
+
+  // The last row, dropped above the call: no room before 12:00.
+  const last = (await rows.last().locator(".task-title-text").innerText()).trim();
+  const announced = (re) => page.waitForFunction((src) =>
+    [...document.querySelectorAll("[id^='DndLiveRegion']")].some(el => new RegExp(src).test(el.textContent)), re.source);
+  // Each key waits for dnd-kit to say what it did: a key before it has
+  // measured the list is ignored.
+  const live = () => page.evaluate(() => [...document.querySelectorAll("[id^='DndLiveRegion']")].map(el => el.textContent).join("|"));
+  await rows.last().focus();
+  await page.keyboard.press("Space");
+  await announced(/Picked up|was moved over/);
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+  for (let i = 0; i < 2; i++) {
+    const before = await live();
+    await page.keyboard.press("ArrowUp");
+    await expect.poll(live).not.toBe(before);
+  }
+  await page.keyboard.press("Space");
+  await expect(page.locator(".undo-toast")).toContainText("Doesn’t fit before 12:00 · placed after");
+  await expect(rows.first()).toContainText("Call with the recruiter");
+  await expect(rows.nth(1).locator(".task-title-text")).toHaveText(last);
+  await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
+  await expect(rows.last().locator(".task-title-text")).toHaveText(last);
 });

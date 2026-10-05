@@ -822,7 +822,7 @@ test("mobile reliability: Front puts a row on a front, with Undo; the menu offer
 
   // Parity: the same action from the task sheet (50a), for screen readers
   // and mice.
-  await listRow(page, "10-minute walk").locator(".task-row-top").click();
+  await listRow(page, "10-minute walk").locator(".task-title-text").click();
   const detail = page.getByTestId("task-detail");
   await detail.getByRole("button", { name: /^Front/ }).click();
   await detail.getByRole("radio", { name: "Project launch" }).click();
@@ -963,6 +963,30 @@ test("the front picker opened from the swipe gives focus to the row, not the hid
   expect(title.length).toBeGreaterThan(0);
 });
 
+// Codex review of #478: on a real touch phone ((hover: none)) every row is
+// drag-anywhere, and the swipe must still work. Real touch events, so the
+// drag's long-press listener sees the gesture too.
+test.describe("on a touch phone", () => {
+  test.use({ hasTouch: true, isMobile: true });
+  test("mobile reliability: drag-anywhere rows still swipe right to Done", async ({ page, context }) => {
+    await enterDemo(page);
+    expect(await page.evaluate(() => matchMedia("(hover: none)").matches)).toBe(true);
+    await openSheet(page);
+    await page.locator(".today-sheet-grabber").click();
+    await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+    const row = listRow(page, "10-minute walk");
+    const r = await row.boundingBox();
+    const cdp = await context.newCDPSession(page);
+    const y = r.y + Math.min(24, r.height / 2);
+    let x = r.x + r.width / 2 - 70;
+    const touch = (type) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x, y }] });
+    await touch("touchStart");
+    for (let i = 0; i < 7; i++) { x += 20; await touch("touchMove"); await page.waitForTimeout(16); }
+    await touch("touchEnd");
+    await expect(page.getByRole("status").filter({ hasText: "Marked done: 10-minute walk" })).toBeVisible();
+  });
+});
+
 test("mobile reliability: a gesture on the drag grip is never a swipe", async ({ page }) => {
   await enterDemoWithPeek(page);
   await page.locator(".today-sheet-grabber").click();
@@ -1008,7 +1032,7 @@ test("mobile reliability: pinning a longer task with the sheet open re-measures 
   await page.getByTestId("add-task-submit").click();
   await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: "A very long task title" });
-  await row.locator(".task-row-top").click();
+  await row.locator(".task-title-text").click();
   await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
   await expect(page.getByTestId("task-detail")).toHaveCount(0);
   await expect(page.locator(".wall-title")).toHaveText(long);
@@ -1504,7 +1528,7 @@ test("the task sheet saves as you type: priority, note and title (50a)", async (
   await row.locator(".task-title-text").click();
   const detail = page.getByTestId("task-detail");
   await detail.getByRole("radio", { name: "Priority 1" }).click();
-  await expect(row.locator(".task-row-priority")).toHaveText("P1");
+  await expect(detail.getByRole("radio", { name: "Priority 1" })).toHaveAttribute("aria-checked", "true");
   await detail.getByPlaceholder("Add a note…").fill("Around the block, no phone.");
   await page.waitForTimeout(900);
   await page.keyboard.press("Escape");
@@ -1602,7 +1626,7 @@ test("Tomorrow on the one thing ends its running session (50b)", async ({ page }
 test("mobile reliability: Tab stays inside the open task sheet", async ({ page }) => {
   await enterDemo(page);
   await openSheet(page);
-  await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first().locator(".task-row-top").click();
+  await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first().locator(".task-title-text").click();
   const detail = page.getByTestId("task-detail");
   await expect(detail).toHaveAttribute("aria-modal", "true");
   const inside = () => page.evaluate(() => !!document.activeElement?.closest("[data-testid='task-detail']"));
@@ -1622,7 +1646,7 @@ test("mobile reliability: making the one thing on an empty wall offers Undo", as
   await emptyTheWall(page);
   const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first();
   const title = (await row.locator(".task-title-text").innerText()).trim();
-  await row.locator(".task-row-top").click();
+  await row.locator(".task-title-text").click();
   await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
   await expect(page.locator(".wall-title")).toHaveText(title);
   await expect(page.getByRole("status").filter({ hasText: `Made the one thing: ${title}` })).toBeVisible();
@@ -1834,7 +1858,6 @@ test("laptop: E edits the title of that task only; the next one opens normally",
 test("the task sheet keeps a P4 task's priority on offer", async ({ page }) => {
   await laptopListOpen(page);
   const row = listRow(page, "10-minute walk");
-  await expect(row.locator(".task-row-priority")).toHaveText("P4");
   await row.locator(".task-title-text").click();
   const group = page.getByTestId("task-detail").getByRole("radiogroup", { name: "Priority" });
   await expect(group.getByRole("radio", { name: "Priority 4" })).toHaveAttribute("aria-checked", "true");

@@ -49,10 +49,10 @@ import { clearMyDay, undoClearMyDay } from "../utils/clearMyDay";
 import { buildGoalRecord, goalStartDay, goalTaskDoneToday, nextGoalTask } from "../utils/goalRecord";
 import { horizonsFromConfig } from "../utils/horizons";
 import { confirmedMinimumDay } from "../utils/minimumDay";
-import { currentDayMinutes, getTaskId, oneThingToNow, restoreRoute, routeCut, routeFollowsList, useDayRoute } from "../hooks/useDayRoute";
+import { currentDayMinutes, getEstimate, getTaskId, oneThingToNow, restoreRoute, routeCut, routeFollowsList, useDayRoute } from "../hooks/useDayRoute";
 import MoreSheet from "./MoreSheet";
 import { routeBreaks } from "../utils/dayMapBreaks";
-import { isEventTask } from "../utils/dayMapRoute";
+import { isEventTask, isFixedStop } from "../utils/dayMapRoute";
 import { bringBack, formatClock24, formatSpanCaps, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
 import { parkedTasks, parkedSince, restoreParked, undoRestoreParked } from "../utils/parked";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
@@ -63,8 +63,8 @@ const PencilIcon = () => (
   </svg>
 );
 
-function SortableTaskItem({ id, isOver = false, children }) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
+function SortableTaskItem({ id, isOver = false, disabled = false, children }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id, disabled });
   return (
     <div
       ref={setNodeRef}
@@ -115,7 +115,9 @@ export default function TodayTab({
   uid, writeActivityEvents,
 }) {
   const { tasks = [], config = {}, contributions = [] } = payload;
-  const taskRowInteractionStyle = config.taskRowInteractionStyle === "dragAnywhere" ? "dragAnywhere" : "classic";
+  // 70: on touch the grip is gone and a long-press lifts the row.
+  const coarsePointer = typeof window !== "undefined" && !!window.matchMedia?.("(hover: none)").matches;
+  const taskRowInteractionStyle = coarsePointer || config.taskRowInteractionStyle === "dragAnywhere" ? "dragAnywhere" : "classic";
   const windows = getFocusWindows(config);
 
   // Live (non-stale) read of focusSessionId for async callbacks (e.g.
@@ -976,6 +978,7 @@ export default function TodayTab({
   const undoMessage = (u) => {
     if (u.count) return `${u.count} ${u.count === 1 ? "task" : "tasks"} moved to tomorrow`;
     if (u.kind === "parkmany") return `${u.ids.length} parked`;
+    if (u.kind === "reorder") return `Doesn’t fit before ${formatClock24(u.fixedAt)} · placed after`;
     if (u.kind === "step") return `Step removed: ${u.step.text}`;
     const title = u.task.title;
     if (u.kind === "move") {
@@ -1093,7 +1096,7 @@ export default function TodayTab({
       });
       return;
     }
-    if (kind === "tomorrow" || kind === "bringback") {
+    if (kind === "tomorrow" || kind === "bringback" || kind === "reorder") {
       savePayload({ ...payload, tasks: restoreSchedule(tasks, undo.before) });
       return;
     }
@@ -1197,13 +1200,6 @@ export default function TodayTab({
     handleSetSteps(task.uuid, steps);
   };
 
-  const handleDeleteSubStep = (task, stepId) => {
-    const steps = taskSteps(task);
-    const at = steps.findIndex(st => st.id === stepId);
-    if (at === -1) return;
-    handleSetSteps(task.uuid, steps.filter(st => st.id !== stepId), { removed: steps[at], atIndex: at });
-  };
-
   const handleMoveToHorizon = (task, horizon) => {
     const count = tasks.filter(t => t.horizonLevel === horizon && !t.isDeleted).length;
     const actionAt = Date.now();
@@ -1270,9 +1266,17 @@ export default function TodayTab({
     const reordered = arrayMove([...remainingTasks], oldIndex, newIndex);
     const orderMap = new Map(reordered.map((t, i) => [getTaskKey(t), i]));
     // The Day map follows: one order for both.
-    savePayload({ ...payload, tasks: routeFollowsList(tasks.map(t =>
+    const next = routeFollowsList(tasks.map(t =>
       orderMap.has(getTaskKey(t)) ? { ...t, orderIndex: orderMap.get(getTaskKey(t)), lastUpdated: Date.now() } : t
-    ), todayStr, { config, nowMinutes: currentDayMinutes(windows), breaks: routeBreaks(windows, config, todayStr) })});
+    ), todayStr, { config, nowMinutes: currentDayMinutes(windows), breaks: routeBreaks(windows, config, todayStr) });
+    savePayload({ ...payload, tasks: next });
+    // Q1 (69c): dropped above a fixed time it can't finish before, a task
+    // goes after it whole (never split), and says so, with Undo.
+    const fixedNext = reordered.slice(newIndex + 1).find(t => isFixedStop(t) && t.dayMapDate === todayStr);
+    const moved = next.find(t => getTaskKey(t) === active.id);
+    if (fixedNext && moved?.dayMapStartMinutes != null && Number(moved.dayMapStartMinutes) > Number(fixedNext.dayMapFixedMinutes)) {
+      setUndo({ kind: "reorder", fixedAt: Number(fixedNext.dayMapFixedMinutes), before: todayTasksAll, at: Date.now() });
+    }
   };
 
   // One bounded subscription for both figures the wall needs from the ledger:
@@ -2086,7 +2090,7 @@ export default function TodayTab({
                       {idx === firstOver && (
                         <p className="today-dayend" aria-label={`Day ends at ${formatClock24(route.plan.dayEnd)}`}>DAY ENDS {formatClock24(route.plan.dayEnd)}</p>
                       )}
-                      <SortableTaskItem id={getTaskKey(task)} isOver={firstOver !== -1 && idx >= firstOver}>
+                      <SortableTaskItem id={getTaskKey(task)} isOver={firstOver !== -1 && idx >= firstOver} disabled={isFixedStop(task) && task.dayMapDate === todayStr}>
                         {({ dragHandleListeners, dragHandleAttributes, dragActivatorRef }) => (
                           <TaskRow
                             task={task}
@@ -2098,14 +2102,14 @@ export default function TodayTab({
                             fromTag={task.reviewFrom?.day === todayStr ? task.reviewFrom.label : null}
                             fromYesterday={isFromYesterday(task)}
                             fixedAt={task.dayMapDate === todayStr ? task.dayMapFixedMinutes ?? null : null}
+                            minutes={getEstimate(task)}
+                            overActions={cut.overIds.has(getTaskId(task)) && !task.isNowFocus ? { onTomorrow: handleTomorrow, onPark: handleParkWithUndo } : null}
                             tabStop={task.uuid === rovingUuid}
                             isTinted={task.uuid === tintUuid}
                             onSwipeDone={handleToggleComplete}
                             onSwipeTomorrow={handleTomorrow}
                             onPutOnFront={openFrontPicker}
                             onBreakdown={handleBreakdown}
-                            onSubStepToggle={handleSubStepToggle}
-                            onDeleteSubStep={handleDeleteSubStep}
                             isBreakingDown={breakdownLoadingUuid === task.uuid}
                             breakdownError={breakdownErrorUuid === task.uuid}
                             breakdownNoKey={breakdownNoKeyUuid === task.uuid}
