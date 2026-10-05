@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rescueHint, settleShown, earlyEndsInLastHour, hintLine, RESCUE_STATE } from "./rescueHint";
+import { rescueHint, settleShown, earlyEndsInLastHour, hintLine, rescueHintSwitchPatch, RESCUE_STATE } from "./rescueHint";
 
 const MIN = 60000;
 const base = {
@@ -66,5 +66,15 @@ describe("words and states", () => {
     expect(hintLine("stuck")).toBe("You’ve hit a wall on this one twice.");
     expect(hintLine("early")).toBe("Two blocks ended early this hour.");
     expect(RESCUE_STATE).toEqual({ idle: "anxious", stuck: "overwhelmed", early: "distracted" });
+  });
+});
+
+describe("rescueHintSwitchPatch", () => {
+  it("back on clears a left-over hint, so it doesn't count as ignored at once", () => {
+    const config = { rescueHintOff: true, rescueHintIgnored: 2, rescueHintShown: { date: "2024-06-10", acted: false } };
+    const on = { ...config, ...rescueHintSwitchPatch(true) };
+    expect(on).toMatchObject({ rescueHintOff: false, rescueHintIgnored: 0, rescueHintShown: null });
+    expect(settleShown(on, "2024-06-15")).toBeNull();
+    expect(rescueHintSwitchPatch(false)).toEqual({ rescueHintOff: true });
   });
 });

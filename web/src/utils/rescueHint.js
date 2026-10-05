@@ -64,3 +64,10 @@ export function rescueHint({
   if (idle >= IDLE_MINUTES) return { kind: "idle", minutes: idle, isNew: true };
   return null;
 }
+
+// Settings › The day › Rescue hint. Back on is a fresh start: no ignored
+// days, and no hint left over from before it was off (Codex review of #487),
+// which would otherwise count as ignored straight away.
+export function rescueHintSwitchPatch(on) {
+  return on ? { rescueHintOff: false, rescueHintIgnored: 0, rescueHintShown: null } : { rescueHintOff: true };
+}

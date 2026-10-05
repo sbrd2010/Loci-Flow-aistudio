@@ -77,3 +77,21 @@ test("laptop: the hint sits under the buttons; Settings › The day turns it off
   await expect(page.locator(".wall-title")).toBeVisible();
   await expect(hint(page)).toHaveCount(0);
 });
+
+// Codex review of #487: a task that stops being the one thing and comes back
+// starts a new no-start clock, not the old one.
+test("the no-start clock restarts when the one thing is cleared and chosen again", async ({ page }) => {
+  await enterDemo(page, { viewport: { width: 1280, height: 900 }, idleMinutes: 40 });
+  await expect(hint(page)).toHaveCount(0);
+  const title = (await page.locator(".wall-title").innerText()).trim();
+  await page.locator(".wall-title").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await expect(page.locator(".wall-pick")).toBeVisible();
+  await page.locator(".wall-pick-row", { hasText: title }).click();
+  await expect(page.locator(".wall-title")).toHaveText(title);
+  // Ten minutes later: 10 on the new clock, 50 on the old one.
+  await page.clock.setFixedTime(new Date(AT + 10 * 60000));
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await page.waitForTimeout(300);
+  await expect(hint(page)).toHaveCount(0);
+});

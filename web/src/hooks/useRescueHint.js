@@ -32,6 +32,18 @@ export function useRescueHint({ config, saveConfigPatch, todayStr, windows, oneT
   // The clock for "no start": it restarts when the one thing changes and
   // while a session runs on it, so it counts from the session's end.
   const [since, setSince] = useState(() => readJSON(SINCE_KEY));
+  // A one thing cleared while the app is open lets its clock go, so choosing
+  // it again starts a new one (Codex review of #487). Only a clear seen here:
+  // on load there's briefly no one thing, and that mustn't reset it.
+  const prevOneThing = useRef(null);
+  useEffect(() => {
+    const was = prevOneThing.current;
+    prevOneThing.current = oneThingId;
+    if (was && !oneThingId) {
+      try { window.localStorage.removeItem(SINCE_KEY); } catch { /* private mode */ }
+      setSince(null);
+    }
+  }, [oneThingId]);
   useEffect(() => {
     if (!oneThingId) return;
     if (focusActive || since?.uuid !== oneThingId) {
