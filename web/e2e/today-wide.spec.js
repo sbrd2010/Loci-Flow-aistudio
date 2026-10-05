@@ -335,3 +335,18 @@ test("1920 (zoom 1.35): a row moved by keyboard drag lands where its copy shows"
   await page.keyboard.press("Space");
   await expect.poll(titles).toEqual([second, first]);
 });
+
+// Codex review of #486: a pick from "Pick the one thing" goes to NOW on the
+// Day map too, not only to the wall.
+test("no one thing: picking the second task puts it at NOW on the Day map", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 900 }, "2024-06-15T10:00:00");
+  await page.locator(".wall-title").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await expect(page.locator(".wall-pick")).toBeVisible();
+  const second = (await page.locator(".wall-pick-title").nth(1).innerText()).trim();
+  await page.locator(".wall-pick-row").nth(1).click();
+  await expect(page.locator(".wall-title")).toHaveText(second);
+  await routeReady(page);
+  await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText(second);
+  await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText("THE ONE THING");
+});

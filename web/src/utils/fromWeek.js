@@ -34,13 +34,16 @@ export function pullFromWeek(tasks, uuids, now = Date.now()) {
   };
 }
 
-// Undo: back to This week, where they were, only the ones still in Today as
-// the move left them (not done or moved since).
-export function undoPullFromWeek(tasks, before, appliedAt, now = Date.now()) {
+// Undo: back to This week, where they were — the ones still open in Today.
+// lastUpdated can't tell a user's change from the route taking them in
+// (joinRoute stamps it at once), so it isn't checked; Undo lasts 5 seconds.
+// The route fields they picked up go with them.
+export function undoPullFromWeek(tasks, before, now = Date.now()) {
   const byId = new Map(before.map(b => [b.uuid, b]));
   return tasks.map(t => {
     const b = byId.get(t.uuid);
-    if (!b || t.isDeleted || t.isCompleted || t.horizonLevel !== "today" || t.lastUpdated !== appliedAt) return t;
-    return { ...t, horizonLevel: b.horizonLevel, orderIndex: b.orderIndex, isNowFocus: false, lastUpdated: now };
+    if (!b || t.isDeleted || t.isCompleted || t.horizonLevel !== "today") return t;
+    const { dayMapDate, dayMapPeriod, dayMapStartMinutes, dayMapDurationMinutes, dayMapOrder, dayMapFixedMinutes, ...rest } = t;
+    return { ...rest, horizonLevel: b.horizonLevel, orderIndex: b.orderIndex, isNowFocus: false, lastUpdated: now };
   });
 }
